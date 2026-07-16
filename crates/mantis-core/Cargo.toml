@@ -1,0 +1,14 @@
+[package]
+name = "mantis-core"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "smoke_bench"
+harness = false

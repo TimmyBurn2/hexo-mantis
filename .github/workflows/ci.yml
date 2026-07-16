@@ -1,0 +1,61 @@
+name: ci
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5          # libpython for `cargo test` linking pyo3
+        with: { python-version: "3.11" }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-unknown-unknown }
+      - name: "gate 2a: cargo test workspace"
+        run: cargo test --workspace --locked
+      - name: "gate 2b: clippy (pedantic=warn baseline, default lints deny)"
+        run: cargo clippy --workspace --all-targets --locked -- -D clippy::all
+      - name: "gate 4: wasm check (mantis-graph dep-free)"
+        run: make check.wasm
+      - name: "gate 5: bench smoke (stub criterion bench)"
+        run: make bench
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+        with: { python-version: "3.11" }
+      - name: "gate 1: fresh-clone uv sync builds the extension"
+        run: |
+          uv sync --locked
+          uv run python -c "from mantis import _engine; assert _engine.__doc__; print(_engine.__doc__)"
+      - name: "gate 3a: pytest default tier"
+        run: uv run pytest -m "not integration and not slow"
+      - name: "gate 3b: pytest integration tier"
+        run: uv run pytest -m integration
+      - name: "gate 3c: collected-test count non-decreasing"
+        run: bash tools/ci_gates/test_count_gate.sh
+      - name: "gate 7: every configs/ file schema-validates"
+        run: uv run python tools/ci_gates/validate_configs.py
+      - name: "gate 8: registry sha handshake + audit (auto-arming; WP3 debt)"
+        run: bash tools/ci_gates/registry_gate.sh
+      - name: "gate 9: import-DAG check"
+        run: uv run python tools/check_import_dag.py src/mantis
+      - name: "supplementary: ruff"
+        run: uv run ruff check .
+      - name: "supplementary: pyright"
+        run: uv run pyright
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: "gate 6: artifact rejection"
+        run: python3 tools/ci_gates/artifact_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
+      - name: "gate 10: no Makefile/doc reference to untracked paths"
+        run: python3 tools/ci_gates/check_tracked_refs.py

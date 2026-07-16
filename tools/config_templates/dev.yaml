@@ -1,0 +1,8 @@
+# TEMPLATE — not a runtime input; configs are minted from it via tools/mint_config.py
+# (repo_design §5).
+schema_version: 1
+run_id: template_dev
+seed: 20260716
+identity:
+  encoding: gnn_axis_v1
+  representation: graph

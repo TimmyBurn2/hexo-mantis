@@ -1,0 +1,10 @@
+# Canonical dev fixture manifest (repo_design §8). The manifest test FAILS — never
+# skips — when any required fixture is absent or its hash drifts. The WP that ports
+# an oracle bank appends its rows here in the same commit.
+# Row shape:
+#   [[required]]
+#   path = "opening_books/example.bin"   # relative to tests/fixtures/
+#   sha256 = "<64 hex chars>"
+#   added_by = "<work package id>"
+schema = 1
+required = []

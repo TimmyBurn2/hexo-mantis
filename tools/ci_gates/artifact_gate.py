@@ -1,0 +1,83 @@
+"""CI gate 6: artifact rejection.
+
+CLI: artifact_gate.py [--base REF]; base defaults to $ARTIFACT_GATE_BASE, else HEAD~1;
+an all-zeros/invalid base falls back to HEAD~1. Violations over merge-base(BASE, HEAD)
+.. HEAD:
+  (1) any changed path under reports/, checkpoints/, logs/, benchmarks/;
+  (2) any ADDED file whose blob size is > 1,000,000 bytes;
+  (3) any ADDED *.jsonl outside tests/fixtures/.
+Prints one `VIOLATION <reason>: <path>` line each; exit 1 if any, 0 clean, 2 on git error.
+"""
+import argparse
+import os
+import subprocess
+import sys
+
+ARTIFACT_DIRS = ("reports/", "checkpoints/", "logs/", "benchmarks/")
+MAX_ADDED_BYTES = 1_000_000
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], check=True, capture_output=True, text=True
+    ).stdout
+
+
+def _resolve_base(candidate: str) -> str:
+    if not candidate or set(candidate) == {"0"}:
+        return "HEAD~1"
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+        capture_output=True, text=True, check=False,
+    )
+    return candidate if probe.returncode == 0 else "HEAD~1"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", default=os.environ.get("ARTIFACT_GATE_BASE", ""))
+    args = parser.parse_args(argv)
+
+    try:
+        mb = _git("merge-base", _resolve_base(args.base), "HEAD").strip()
+        raw = _git("diff", "--name-status", "-z", mb, "HEAD")
+    except subprocess.CalledProcessError as exc:
+        print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
+        return 2
+
+    fields = raw.split("\0")
+    changed: list[tuple[str, str]] = []  # (status, path)
+    i = 0
+    while i < len(fields) and fields[i]:
+        status = fields[i]
+        if status[0] in ("R", "C"):
+            old, new = fields[i + 1], fields[i + 2]
+            changed.append((status[0], old))
+            changed.append((status[0], new))
+            i += 3
+        else:
+            changed.append((status[0], fields[i + 1]))
+            i += 2
+
+    violations = 0
+    for status, path in changed:
+        if path.startswith(ARTIFACT_DIRS):
+            print(f"VIOLATION artifact-dir: {path}")
+            violations += 1
+        if status == "A":
+            try:
+                size = int(_git("cat-file", "-s", f"HEAD:{path}").strip())
+            except subprocess.CalledProcessError as exc:
+                print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
+                return 2
+            if size > MAX_ADDED_BYTES:
+                print(f"VIOLATION large-file: {path}")
+                violations += 1
+            if path.endswith(".jsonl") and not path.startswith("tests/fixtures/"):
+                print(f"VIOLATION jsonl-outside-fixtures: {path}")
+                violations += 1
+    return 1 if violations else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

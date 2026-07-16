@@ -1,0 +1,13 @@
+[package]
+name = "mantis-selfplay"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mantis-core = { path = "../mantis-core" }
+mantis-encoding = { path = "../mantis-encoding" }
+mantis-graph = { path = "../mantis-graph" }
+mantis-search = { path = "../mantis-search" }

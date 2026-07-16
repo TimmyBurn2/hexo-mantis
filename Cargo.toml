@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mantis-core",
+    "crates/mantis-graph",
+    "crates/mantis-encoding",
+    "crates/mantis-search",
+    "crates/mantis-selfplay",
+    "crates/mantis-bridge",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+pyo3 = { version = "0.28", features = ["abi3-py311"] }
+criterion = "0.5"
+
+[workspace.lints.clippy]
+pedantic = "warn"
+
+# Portable by default: no target-cpu anywhere in committed config (make build.native
+# opt-in via env). panic="unwind" is a hard rule: Rust panics cross the FFI boundary
+# as PanicException, never a process abort (repo_design §7).
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "unwind"
+strip = "symbols"
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = "none"

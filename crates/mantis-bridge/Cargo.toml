@@ -1,0 +1,24 @@
+[package]
+name = "mantis-bridge"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "mantis_bridge"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { workspace = true }
+mantis-core = { path = "../mantis-core" }
+mantis-graph = { path = "../mantis-graph" }
+mantis-encoding = { path = "../mantis-encoding" }
+mantis-search = { path = "../mantis-search" }
+mantis-selfplay = { path = "../mantis-selfplay" }
+
+[features]
+# Enabled by maturin only (bridge pyproject). `cargo test --workspace` builds WITHOUT
+# it so the test binary links libpython normally (PyO3 FAQ pattern).
+extension-module = ["pyo3/extension-module"]
+
+[lints]
+workspace = true

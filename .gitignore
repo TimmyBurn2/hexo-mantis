@@ -1,0 +1,15 @@
+/target/
+/.venv/
+__pycache__/
+*.pyc
+/dist/
+/vendor/external/
+.pytest_cache/
+.ruff_cache/
+# maturin editable builds drop the compiled extension next to its type stub
+/crates/mantis-bridge/python/mantis/_engine.abi3.so
+# artifact dirs are never tracked (CI gate 6 is the enforcement; this is defense in depth)
+/reports/
+/checkpoints/
+/logs/
+/benchmarks/

@@ -1,0 +1,10 @@
+# vendor/pins.toml — the single vendoring mechanism (repo_design §7). No submodules,
+# no loose weights. Each external pin:
+#   [pins.<name>]
+#   url   = "https://..."        # public git URL
+#   sha   = "<40-hex commit>"    # exact commit
+#   patch = "vendor/patches/<name>.patch"   # optional, tracked
+# `make vendor` (tools/vendor_fetch.sh) clones each pin into vendor/external/<name>
+# (gitignored) at its sha and applies the patch. Features that need an unfetched
+# vendor must skip loudly and name `make vendor`.
+[pins]

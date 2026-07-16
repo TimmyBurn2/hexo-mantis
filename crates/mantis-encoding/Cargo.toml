@@ -1,0 +1,11 @@
+[package]
+name = "mantis-encoding"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mantis-core = { path = "../mantis-core" }
+mantis-graph = { path = "../mantis-graph" }
