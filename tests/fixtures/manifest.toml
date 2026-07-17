@@ -12,3 +12,8 @@ schema = 1
 path = "graph_parity/manifest.tsv"
 sha256 = "6684ae7e27f69bdd4cec1c9f7d5d60fc14d59a73e13c96f323ba1c3799199e88"
 added_by = "WP1"
+
+[[required]]
+path = "board/board_replay_golden_v1.json"
+sha256 = "71b356f3420b12fc6c106d053085bf2e7e8e1a126398451bf690e330cb93a18c"
+added_by = "WP2"

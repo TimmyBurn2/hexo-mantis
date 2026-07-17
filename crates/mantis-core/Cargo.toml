@@ -6,9 +6,22 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[dependencies]
+# External utility crate (no in-workspace deps in mantis-core).
+fxhash = "0.2"
+
 [dev-dependencies]
 criterion = { workspace = true }
+proptest = "1"
+# Golden-replay fixture parsing + legal-set digests (test-only).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 
 [[bench]]
 name = "smoke_bench"
+harness = false
+
+[[bench]]
+name = "board_bench"
 harness = false
