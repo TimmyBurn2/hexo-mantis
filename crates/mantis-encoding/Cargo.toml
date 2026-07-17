@@ -3,9 +3,18 @@ name = "mantis-encoding"
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+mantis-core = { path = "../mantis-core" }     # Board, geometry consts, Ply — encode kernels
+mantis-graph = { path = "../mantis-graph" }   # NODE_FEAT_DIM/EDGE_FEAT_DIM/WIN_AXES/BUILDER_IMPL_NATIVE — graph invariants
+toml = "0.9"                                   # registry.toml + manifests.toml parse (old engine dep; same version)
+sha2 = "0.10"                                  # registry_sha() runtime export — sha256 of embedded registry.toml
+
+[dev-dependencies]
+criterion = { workspace = true }               # authored encode bench
+
+[[bench]]
+name = "encode_bench"
+harness = false
+
 [lints]
 workspace = true
-
-[dependencies]
-mantis-core = { path = "../mantis-core" }
-mantis-graph = { path = "../mantis-graph" }

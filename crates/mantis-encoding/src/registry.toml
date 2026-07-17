@@ -1,0 +1,183 @@
+# mantis-encoding registry.toml
+#
+# Canonical encoding registry — the single source of truth for every encoding
+# this codebase registers. Parsed at compile time (include_str!) into immutable
+# RegistrySpec records keyed by name. `all_specs()` is the SOLE name source (no
+# hand-synced name list anywhere).
+#
+# Pruned registered set (4 entries): v6, v6w25, v6_live2_ls, gnn_axis_v1.
+#
+# Every entry carries `representation` (REQUIRED — no default): "grid" | "graph".
+# An absent representation is a parse error (LAW-11), never a grid/dense default.
+# `n_chain_planes` is a REQUIRED field (= 6 on all current encodings: 3 hex axes
+# × 2 players); it is the sole authority for the chain-plane stride (no source
+# constant / replay reach-through).
+#
+# Adding a new encoding:
+#   1. Append an [encodings.<name>] table with all required keys.
+#   2. Bump `schema_version` only if the schema itself changes (a key added /
+#      removed / renamed across all encodings).
+#   3. Run `python -m mantis.encoding audit` to confirm parse + validation.
+#
+# Schema invariants (validated at parse time):
+#   - representation ∈ {grid, graph} (required)
+#   - n_chain_planes >= 1 (required)
+#   - grid: len(plane_layout) == n_planes;
+#           policy_logit_count == board_size² + (1 if has_pass_slot else 0);
+#           len(kept_plane_indices) == n_planes; all kept unique;
+#           max(kept_plane_indices) < n_source_planes; n_source_planes >= n_planes;
+#           grid must not set any graph-only key
+#   - graph: node/edge/win_axes == builder-schema constants; win_length,
+#            graph_radius present + positive; contract_version == 1;
+#            builder_impl_required == native; n_planes == 0; empty plane_layout /
+#            kept_plane_indices; n_source_planes == 0
+#   - is_multi_window=false ⇒ cluster_window_size="none", cluster_threshold="none",
+#                            value_pool="none", policy_pool="none"
+#   - is_multi_window=true  ⇒ cluster_window_size, cluster_threshold are ints,
+#                            value_pool ∈ {min,max,mean},
+#                            policy_pool ∈ {scatter_max,scatter_mean,legal_set_scatter_max}
+#   - trunk_size == cluster_window_size if is_multi_window else board_size
+#
+# ── kept_plane_indices convention ───────────────────────────────────────────
+# The grid encodings keep the canonical "X+history, O+history" block from the
+# 18-plane source tensor:
+#   [0, 1, 2, 3]   → current-player (X side): t0, t-1, t-2, t-3
+#   [8, 9, 10, 11] → opponent (O side):        t0, t-1, t-2, t-3
+# The 4-plane live-on-both set additionally uses the turn-phase scalars:
+#   16 → moves_remaining_bcast   17 → ply_parity_bcast
+# and keeps only [0, 8, 16, 17].
+
+# ---------------------------------------------------------------------------
+# v6 — canonical 19×19 single-window, 8 planes (history-only).
+# ---------------------------------------------------------------------------
+[encodings.v6]
+representation          = "grid"
+board_size              = 19
+trunk_size              = 19
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 5
+n_planes                = 8
+plane_layout            = [
+  # 4× current-player history (most-recent first)
+  "current_player_t0", "current_player_t-1", "current_player_t-2", "current_player_t-3",
+  # 4× opponent history (most-recent first)
+  "opponent_t0",       "opponent_t-1",       "opponent_t-2",       "opponent_t-3",
+]
+policy_logit_count      = 362            # 19*19 + 1 (last = pass)
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"
+# kept_plane_indices: canonical X+history, O+history (see header comment).
+kept_plane_indices      = [0, 1, 2, 3, 8, 9, 10, 11]
+n_source_planes         = 18
+k_max                   = 1            # single-window → 1 cluster view per leaf
+n_chain_planes          = 6            # 3 hex axes × 2 players
+schema_version          = 3
+notes                   = "Canonical 19x19 single-window 8-plane history encoding."
+
+# ---------------------------------------------------------------------------
+# v6w25 — K-cluster 25×25 windows, matched-perception variant.
+# board_size widens to 25 (canvas == cluster window for K-cluster encodings).
+# ---------------------------------------------------------------------------
+[encodings.v6w25]
+representation          = "grid"
+board_size              = 25
+trunk_size              = 25            # = cluster_window_size for multi-window
+cluster_window_size     = 25
+cluster_threshold       = 8
+legal_move_radius       = 8
+n_planes                = 8
+plane_layout            = [
+  "current_player_t0", "current_player_t-1", "current_player_t-2", "current_player_t-3",
+  "opponent_t0",       "opponent_t-1",       "opponent_t-2",       "opponent_t-3",
+]
+policy_logit_count      = 626            # 25*25 + 1
+has_pass_slot           = true
+is_multi_window         = true
+value_pool              = "min"          # K-invariant value head
+policy_pool             = "scatter_max"  # per-move cluster dispatch
+sym_table_id            = "size_25"
+# kept_plane_indices: canonical X+history, O+history (see header comment).
+kept_plane_indices      = [0, 1, 2, 3, 8, 9, 10, 11]
+n_source_planes         = 18
+k_max                   = 8            # multi-window cap; head-room over observed K_avg
+n_chain_planes          = 6
+schema_version          = 3
+notes                   = "K-cluster 25x25 matched-perception variant; multi-window future re-entry target."
+
+# ---------------------------------------------------------------------------
+# v6_live2_ls — legal-set treatment. 4-plane production shape (362 head,
+# kept [0,8,16,17]; weights load no-reshape) but MULTI-WINDOW (K>1) with the
+# no-drop legal-set action policy. is_multi_window=true forces value_pool=min +
+# k_max=8. The ragged action policy is engine-internal (per-cluster-local 362
+# buffer rows); buffer / persist / symmetry / trainer are unchanged.
+# ---------------------------------------------------------------------------
+[encodings.v6_live2_ls]
+representation          = "grid"
+board_size              = 19
+trunk_size              = 19
+cluster_window_size     = 19
+cluster_threshold       = 5
+legal_move_radius       = 5
+n_planes                = 4
+plane_layout            = [
+  "current_player_t0",       # source plane 0
+  "opponent_t0",             # source plane 8
+  "moves_remaining_bcast",   # source plane 16: moves_remaining == 2 ? 1 : 0
+  "ply_parity_bcast",        # source plane 17: ply % 2
+]
+policy_logit_count      = 362            # 19*19 + 1 (last = pass); head shape preserved
+has_pass_slot           = true
+is_multi_window         = true
+value_pool              = "min"
+policy_pool             = "legal_set_scatter_max"
+sym_table_id            = "size_19"
+kept_plane_indices      = [0, 8, 16, 17]
+n_source_planes         = 18
+k_max                   = 8            # multi-window → up to K cluster views per leaf
+n_chain_planes          = 6
+schema_version          = 3
+notes                   = "Legal-set treatment: 4-plane live-on-both shape + K-window legal-set (no off-window drop)."
+
+# ---------------------------------------------------------------------------
+# gnn_axis_v1 — GNN axis-graph encoding (representation="graph", schema v4).
+# Whole-board axis graph (no K-cluster windows); per-legal-node policy with no
+# off-window drop. The dense-plane fields are inert for a graph (n_planes=0,
+# empty plane_layout / kept_plane_indices, n_source_planes=0); the axis-graph
+# geometry lives in the schema-v4 graph fields, which the builder reads into its
+# BuildParams — zero scattered 6/11/5 literals on the build path. Action space
+# is unchanged: a graph plays the identical 19×19+pass board, so
+# policy_logit_count stays 362. Builder = native (BUILDER_IMPL_NATIVE=1).
+# ---------------------------------------------------------------------------
+[encodings.gnn_axis_v1]
+representation          = "graph"
+board_size              = 19          # action-space board (19×19+pass)
+trunk_size              = 19          # window_flat_idx origin for policy_dst_slot
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 6           # matches graph_radius
+n_planes                = 0           # graph carries no dense planes
+plane_layout            = []
+policy_logit_count      = 362         # 19*19 + 1 — UNCHANGED action space
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"   # D6 aug reuses axis_perm
+kept_plane_indices      = []
+n_source_planes         = 0
+k_max                   = 1           # whole-board: one graph per leaf
+# ── schema-v4 graph fields (representation="graph" only) ──
+node_feat_dim           = 11          # relative-7 + threat-4 (mantis_graph::NODE_FEAT_DIM)
+edge_feat_dim           = 5           # axis one-hot(3) + signed_dist + src_player
+win_length              = 6
+graph_radius            = 6
+win_axes                = 3
+contract_version        = 1           # ragged-payload contract this encoding speaks
+builder_impl_required   = 1           # native tag the resolver asserts
+n_chain_planes          = 6
+schema_version          = 4
+notes                   = "GNN axis-graph encoding. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy, no off-window drop. Builder = native axis-graph."

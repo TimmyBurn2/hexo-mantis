@@ -1,0 +1,38 @@
+# mantis-encoding manifests.toml
+#
+# Corpus / anchor / held-out artifact pins, moved out of the old Python resolver
+# dicts into a loud-parsed sibling TOML (registry.toml stays pure encoding-shape;
+# the artifact pins live here with the same loud-parse discipline). Pruned to the
+# registered set (4 blocks). Every path is repo-relative (no host / provider /
+# old-repo term); the sha values are content hashes.
+#
+# These are DECLARATIVE runtime pins the audit checks on disk — NOT build-time
+# references (the paths point at gitignored artifact dirs data/ and checkpoints/).
+schema_version = 1
+
+[encodings.v6]
+corpus_path = "data/bootstrap_corpus.npz"
+anchor_path = "checkpoints/bootstrap_model_v6.pt"
+# corpus_sha256 optional — absent = "no launch pin enforced" (not an error).
+
+[encodings.v6w25]
+corpus_path = "data/bootstrap_corpus_v6w25.npz"
+anchor_path = "checkpoints/bootstrap_model_v6w25.pt"
+
+[encodings.v6_live2_ls]
+corpus_path = "data/bootstrap_corpus_v6_live2_ls.npz"
+# CAUTION: the anchor FILE is named bootstrap_model_v6_live2.pt but is consumed
+# AS v6_live2_ls (the 4-plane / 362 weights load no-reshape into v6_live2_ls).
+# Do NOT "fix" this path to a *_v6_live2_ls.pt — the file on disk is
+# bootstrap_model_v6_live2.pt.
+anchor_path = "checkpoints/bootstrap_model_v6_live2.pt"
+corpus_sha256 = "3813edc2fb10a7c5ab976a0293e38cbba0fd6b84e5295630f339ca421b345c97"  # the sole launch pin
+
+[encodings.gnn_axis_v1]
+corpus_path = "data/gnn_corpus_v1.hexg"
+anchor_path = "checkpoints/bootstrap_model_gnn_axis_v1.pt"   # placeholder; deliberately unpinned (no corpus_sha256)
+
+[[held_out]]                        # held-out set — never enters a training load (assert_not_heldout)
+label = "s5_post20260704"
+sha256 = "88f99c2b5fea7495484e4e9cc1af831d1e053221dc7e0f9c8f5d3ab6f27aa69e"
+size_bytes = 12872280

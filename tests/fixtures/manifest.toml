@@ -17,3 +17,8 @@ added_by = "WP1"
 path = "board/board_replay_golden_v1.json"
 sha256 = "71b356f3420b12fc6c106d053085bf2e7e8e1a126398451bf690e330cb93a18c"
 added_by = "WP2"
+
+[[required]]
+path = "encode_parity/manifest.tsv"
+sha256 = "6135df7495485fdcd9e19d824913c56198898442796e2e572426834a988c33fd"
+added_by = "WP3"

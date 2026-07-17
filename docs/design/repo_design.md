@@ -103,7 +103,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 ## 3. Representation extensibility (the registry-kind axis)
 
 - `crates/mantis-encoding/registry.toml` is the single source of truth for encoding and
-  shape. Every entry carries `representation` (required, no default): `"dense" | "graph"`
+  shape. Every entry carries `representation` (required, no default): `"grid" | "graph"`
   today; the set is extensible. Unknown TOML keys are a parse ERROR; missing required
   keys are a parse error; the validator collects ALL errors before reporting.
 - Rust: representation is a closed enum on `RegistrySpec`; dense-only or graph-only code
@@ -113,7 +113,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   (`model.build_net.model_representation`, buffer facade, batcher ctor). Reading arch
   attributes off live `nn.Module` instances is banned; arch metadata travels on declared
   dataclasses.
-- No dense-by-default anywhere: an absent representation is an error, never `"dense"`.
+- No dense-by-default anywhere: an absent representation is an error, never `"grid"`.
 - The compiled module exposes `registry_sha()` (sha256 of the embedded TOML).
   `mantis.encoding` hashes the on-disk TOML at import in dev/test and hard-errors on
   mismatch — a stale extension cannot silently serve a stale registry.
