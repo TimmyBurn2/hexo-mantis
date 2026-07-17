@@ -504,10 +504,14 @@ dependencies = [
 name = "mantis-selfplay"
 version = "0.1.0"
 dependencies = [
+ "criterion",
+ "fxhash",
+ "half",
  "mantis-core",
  "mantis-encoding",
  "mantis-graph",
  "mantis-search",
+ "rand 0.10.2",
 ]
 
 [[package]]

@@ -1,6 +1,8 @@
 //! mantis-selfplay: runner, worker loop, inference queues, replay buffers.
 //! WP0 scaffold: compiles empty; selfplay port lands with its work package.
 
+pub mod replay;
+
 pub const CRATE_NAME: &str = "mantis-selfplay";
 
 #[cfg(test)]

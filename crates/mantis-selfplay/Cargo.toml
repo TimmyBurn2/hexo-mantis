@@ -11,3 +11,19 @@ mantis-core = { path = "../mantis-core" }
 mantis-encoding = { path = "../mantis-encoding" }
 mantis-graph = { path = "../mantis-graph" }
 mantis-search = { path = "../mantis-search" }
+# f16 weight math + f16-bit round-trips (the `numpy`+half feature is NOT pulled —
+# the replay crate is pyo3/numpy-free, R6/LAW-17).
+half = "2"
+# HEXG sample vmap (FxHashMap over rotated visit-map keys).
+fxhash = "0.2"
+# HARD pin: major MUST match mantis-search (StdRng via chacha20 + rand_core 0.10).
+# A silent resolve to rand 0.9 breaks the fixed-seed sample streams the bench +
+# O-31 depend on.
+rand = "0.10"
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "replay_sample_bench"
+harness = false

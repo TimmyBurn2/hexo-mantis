@@ -32,3 +32,13 @@ added_by = "WP4"
 path = "search_golden/temperature/temperature_parity_golden.csv"
 sha256 = "20103593d33093ce3ce9161742c6223e41406225fe57d9bff86e86c1ae7b6f72"
 added_by = "WP4"
+
+[[required]]
+path = "replay/hexb_v9_golden.hexb"
+sha256 = "b15c729f14db42e25a7b4bc74331b55838b0dd1a60ec978c00b006e0ddd37602"
+added_by = "WP5"
+
+[[required]]
+path = "replay/hexg_v1_golden.hexg"
+sha256 = "97ce1faf4a8de32a3a0de17ee1613c3820034c1a3a9685d342ba574d774840ef"
+added_by = "WP5"
