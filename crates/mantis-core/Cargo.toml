@@ -6,6 +6,13 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Test-only public stone-planting builder (`Board::from_stones`). Empty feature
+# with no code effect when OFF (the default) — the gated impl + its unit test are
+# simply not compiled. Enabled via `[dev-dependencies]` in downstream crates
+# (e.g. mantis-search) that need non-legal-cadence board fixtures for their tests.
+test-fixtures = []
+
 [dependencies]
 # External utility crate (no in-workspace deps in mantis-core).
 fxhash = "0.2"

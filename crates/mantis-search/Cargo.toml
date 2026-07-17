@@ -9,3 +9,21 @@ workspace = true
 [dependencies]
 mantis-core = { path = "../mantis-core" }
 mantis-encoding = { path = "../mantis-encoding" }
+# Legal-set / node-pool maps + child dedup (hash-over-FxHashSet, inline dedup).
+fxhash = "0.2"
+# HARD pin: the seeded S3/S4 completed-Q goldens depend on this exact major set.
+# rand 0.10 backs StdRng via chacha20 + rand_core 0.10 (NOT rand_chacha). A silent
+# resolve to the transitive rand 0.9 would break the seeded byte-exact streams.
+rand = "0.10"
+rand_distr = "0.6"
+
+[dev-dependencies]
+# Feature-unifies `test-fixtures` ON for mantis-search test/bench targets (enables
+# the mantis-core `Board::from_stones` builder the in-src tactics/mcts suites need);
+# OFF for `cargo build -p mantis-search` (the lib never references from_stones).
+mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "mcts_bench"
+harness = false

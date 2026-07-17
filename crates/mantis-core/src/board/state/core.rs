@@ -678,6 +678,118 @@ impl Clone for Board {
 // on INV-1..INV-4 (see the `legal_cache` field doc). A fourth `unsafe` block
 // touching the cache is a review failure.
 
+// ── Test-fixture builder (feature `test-fixtures`, OFF by default) ─────────────
+//
+// A public stone-planting builder that reproduces the frozen `static_board` /
+// `fwm_board` construction exactly. Additive + feature-gated: when the feature
+// is OFF (the default for `cargo build`) this block is not compiled and no
+// existing path can reference it, so production behaviour is byte-untouched.
+// Consumed only by test/bench targets in downstream crates (e.g. the search
+// crate's tactics soundness fuzz + mcts unit suite) that need non-legal-cadence
+// positions the public `apply_move` cadence cannot reach.
+#[cfg(feature = "test-fixtures")]
+impl Board {
+    /// Test-only static-position builder. Plants `stones` (bbox recomputed from
+    /// their min/max), marks the legal cache dirty (so `legal_moves_set()`
+    /// rebuilds on demand), and sets the turn-structure fields explicitly.
+    ///
+    /// `ply` is explicit because consumers vary it (`static_board` passes
+    /// `stones.len()`; the mcts quiescence/CF-1 fixtures pass a specific ply).
+    /// `last_move` is `Some(..)` only for a terminal-win fixture — `check_win`
+    /// reads `last_move` alone, so a fixture asserting `check_win()` must supply
+    /// the completing cell, and one asserting `!check_win()` leaves it `None`.
+    pub fn from_stones(
+        stones: &[((i32, i32), Cell)],
+        to_move: Player,
+        moves_remaining: u8,
+        ply: u32,
+        last_move: Option<(i32, i32)>,
+    ) -> Board {
+        let mut b = Board::new();
+        let (mut lq, mut hq, mut lr, mut hr) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+        for &((q, r), c) in stones {
+            b.cells.insert((q, r), c);
+            lq = lq.min(q);
+            hq = hq.max(q);
+            lr = lr.min(r);
+            hr = hr.max(r);
+        }
+        if !stones.is_empty() {
+            b.has_stones = true;
+            b.min_q = lq;
+            b.max_q = hq;
+            b.min_r = lr;
+            b.max_r = hr;
+        }
+        b.mark_cache_dirty();
+        b.current_player = to_move;
+        b.moves_remaining = moves_remaining;
+        b.ply = Ply::new(ply);
+        b.last_move = last_move;
+        b
+    }
+}
+
+#[cfg(all(test, feature = "test-fixtures"))]
+mod from_stones_tests {
+    use super::*;
+    use crate::board::WIN_LENGTH;
+
+    #[test]
+    fn from_stones_sets_expected_state() {
+        // A P1 3-in-a-row along the E axis, off-origin so the bbox is non-trivial.
+        let stones = [
+            ((2, 1), Cell::P1),
+            ((3, 1), Cell::P1),
+            ((4, 1), Cell::P1),
+        ];
+        let b = Board::from_stones(&stones, Player::Two, 2, 7, Some((4, 1)));
+
+        // cells present.
+        assert_eq!(b.get(2, 1), Cell::P1);
+        assert_eq!(b.get(3, 1), Cell::P1);
+        assert_eq!(b.get(4, 1), Cell::P1);
+        assert_eq!(b.cells.len(), 3);
+
+        // bbox == stone min/max; has_stones set.
+        assert!(b.has_stones);
+        assert_eq!((b.min_q, b.max_q, b.min_r, b.max_r), (2, 4, 1, 1));
+
+        // turn-structure fields set as passed.
+        assert_eq!(b.current_player, Player::Two);
+        assert_eq!(b.moves_remaining, 2);
+        assert_eq!(b.ply, Ply::new(7));
+        assert_eq!(b.last_move, Some((4, 1)));
+
+        // mark_cache_dirty => legal_moves_set rebuilds against the planted stones
+        // (non-empty; excludes the occupied cells; radius-5 ball around them).
+        let legal = b.legal_moves_set();
+        assert!(!legal.is_empty(), "legal set must rebuild from planted stones");
+        assert!(!legal.contains(&(2, 1)), "occupied cell is not legal");
+        assert!(legal.contains(&(5, 1)), "empty neighbour must be legal");
+    }
+
+    #[test]
+    fn from_stones_terminal_win_reads_last_move() {
+        // A 6-in-a-row with last_move on the line makes check_win() true (it reads
+        // last_move only); no last_move leaves it false.
+        let six: Vec<((i32, i32), Cell)> =
+            (0..WIN_LENGTH as i32).map(|q| ((q, 0), Cell::P1)).collect();
+        let win = Board::from_stones(&six, Player::One, 1, 11, Some((5, 0)));
+        assert!(win.check_win(), "6-in-a-row with last_move on the line is a win");
+
+        let no_last = Board::from_stones(&six, Player::One, 1, 11, None);
+        assert!(!no_last.check_win(), "check_win reads last_move; None => not a win");
+    }
+
+    #[test]
+    fn from_stones_empty_leaves_default_bbox() {
+        let b = Board::from_stones(&[], Player::One, 1, 0, None);
+        assert!(!b.has_stones);
+        assert_eq!(b.cells.len(), 0);
+    }
+}
+
 #[cfg(test)]
 mod geometry_tests {
     //! Re-anchored geometry-ctor pins (2 of the predecessor's 9 spec-ctor

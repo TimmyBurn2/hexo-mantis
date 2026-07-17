@@ -22,3 +22,13 @@ added_by = "WP2"
 path = "encode_parity/manifest.tsv"
 sha256 = "6135df7495485fdcd9e19d824913c56198898442796e2e572426834a988c33fd"
 added_by = "WP3"
+
+[[required]]
+path = "search_golden/completed_q/golden_bits.txt"
+sha256 = "b4f0bdcc07dc87c509c76efa37cd8d83d28a6007aa8a5fe5b78338265967152e"
+added_by = "WP4"
+
+[[required]]
+path = "search_golden/temperature/temperature_parity_golden.csv"
+sha256 = "20103593d33093ce3ce9161742c6223e41406225fe57d9bff86e86c1ae7b6f72"
+added_by = "WP4"
