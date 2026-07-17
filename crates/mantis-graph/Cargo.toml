@@ -3,5 +3,24 @@ name = "mantis-graph"
 version.workspace = true
 edition.workspace = true
 
+# Dep-free by contract: the [dependencies] table is EMPTY and must stay empty —
+# the wasm gate (make check.wasm) checks this crate alone. Dev-dependencies are
+# bench/test-only and are never linked into the lib or seen by consumers.
+[dependencies]
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[features]
+# Native surface gate (parallelism_hint); ON by default. The wasm32 target needs
+# no feature at all: native-only items are target-gated, so
+# `cargo check -p mantis-graph --target wasm32-unknown-unknown` passes plain.
+default = ["native"]
+native = []
+
+[[bench]]
+name = "build_bench"
+harness = false
+
 [lints]
 workspace = true

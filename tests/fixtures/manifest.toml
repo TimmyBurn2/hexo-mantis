@@ -7,4 +7,8 @@
 #   sha256 = "<64 hex chars>"
 #   added_by = "<work package id>"
 schema = 1
-required = []
+
+[[required]]
+path = "graph_parity/manifest.tsv"
+sha256 = "6684ae7e27f69bdd4cec1c9f7d5d60fc14d59a73e13c96f323ba1c3799199e88"
+added_by = "WP1"
