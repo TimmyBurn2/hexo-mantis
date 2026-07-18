@@ -14,6 +14,19 @@ mantis-graph = { path = "../mantis-graph" }
 mantis-encoding = { path = "../mantis-encoding" }
 mantis-search = { path = "../mantis-search" }
 mantis-selfplay = { path = "../mantis-selfplay" }
+# numpy marshaling (`into_pyarray`/`PyReadonlyArray` on the dense + GraphWire paths).
+# Crate-local: numpy is ABSENT workspace-wide by design (root [workspace.dependencies]
+# is out of scope — CI gate 6). Versions pinned to the frozen engine: numpy 0.28
+# (matches pyo3 0.28), half 2 (matches mantis-selfplay). The `half` feature bridges
+# f16-bit ReplayBuffer push borrows to numpy `float16`.
+numpy = { version = "0.28", features = ["half"] }
+half = "2"
+
+[dev-dependencies]
+# DEV-ONLY test-fixtures (Resolved-3): the `Board::from_stones` static-position builder
+# for Rust-side bridge tests. The production extension does NOT enable test-fixtures —
+# it must NOT appear in [dependencies], only here, so the shipped `.so` never carries it.
+mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
 
 [features]
 # Enabled by maturin only (bridge pyproject). `cargo test --workspace` builds WITHOUT

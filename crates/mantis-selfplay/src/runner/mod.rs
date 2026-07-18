@@ -52,6 +52,44 @@ pub type WorkerResultRow = (Vec<f32>, Vec<f32>, Vec<f32>, f32, usize, Vec<u8>, b
 /// model_version_distinct, seeded, solver_fires)`.
 pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32, u8, u32);
 
+/// Flat snapshot of the runner's 21 LAW-18 in-run counter atomics, each read once
+/// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
+/// counters — see the module doc). RAW cumulative counts ONLY: the fixed-point
+/// ×1_000_000 accumulators (`*_accum`) are handed back UNDIVIDED so the WP7 bridge
+/// derives the 4 means itself (`accum / (count × 1e6)`, `count == 0 → 0.0`; the
+/// SEAM does NOT compute means). Every field maps 1:1 to a [`SelfPlayRunner`]
+/// counter of the same name. Cumulative since `start()`; monotone across calls.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RunnerStatsSnapshot {
+    // ── win / throughput ──
+    pub games_completed: usize,
+    pub positions_generated: usize,
+    pub x_wins: u64,
+    pub o_wins: u64,
+    pub draws: u64,
+    pub positions_dropped: u64,
+    // ── MCTS-health accumulators (`*_accum` are fixed-point ×1e6; the bridge
+    //    derives `mcts_mean_depth` / `mcts_mean_root_concentration` from these) ──
+    pub mcts_depth_accum: u64,
+    pub mcts_conc_accum: u64,
+    pub mcts_stat_count: u64,
+    pub mcts_quiescence_fires: u64,
+    // `cluster_value_std_accum` / `cluster_policy_disagreement_accum` are ×1e6;
+    // `cluster_variance_samples` is the shared divisor count for both means.
+    pub cluster_value_std_accum: u64,
+    pub cluster_policy_disagreement_accum: u64,
+    pub cluster_variance_samples: u64,
+    // ── D-WS3V3 in-run solver fire-rate counters ──
+    pub solver_moves_eligible: u64,
+    pub solver_win_proven: u64,
+    pub solver_injected: u64,
+    pub solver_injected_offwindow: u64,
+    pub solver_budget_exhausted: u64,
+    pub solver_moves_eligible_seeded: u64,
+    pub solver_injected_seeded: u64,
+    pub seeded_games_started: u64,
+}
+
 /// Pure-Rust self-play runner core. Spawns worker threads (`spawn.rs`) that run
 /// full games, stream training rows into the result queues, and track win stats
 /// plus MCTS/solver fire-rate counters. Every worker OWNS its `Board`
@@ -271,6 +309,77 @@ impl SelfPlayRunner {
         self.radius_override.store(radius, Ordering::SeqCst);
     }
 
+    // ── WP7 SEAM (pure-additive, zero-behaviour) ────────────────────────────────
+    // Narrow pub read/drain faces the WP7 `mantis-bridge` producer pyclasses build
+    // over; the frozen `collect_data` / `collect_graph_data` / `#[getter]` /
+    // `bump_model_version` pymethods are dropped to the bridge (R6/LAW-17). None of
+    // these mutate self beyond the drain queues they own; existing behaviour is
+    // untouched.
+
+    /// Drain and return all buffered training rows since the last call — the
+    /// `collect_data` producer face (frozen pymethod dropped to WP7). Rows arrive in
+    /// FIFO push order. Mirrors [`Self::drain_game_results`].
+    pub fn drain_training_rows(&self) -> Vec<WorkerResultRow> {
+        let mut rows = self.results.lock().expect("results lock poisoned");
+        rows.drain(..).collect()
+    }
+
+    /// Drain and return all buffered graph training records since the last call —
+    /// the `collect_graph_data` producer face (frozen pymethod dropped to WP7).
+    /// FIFO push order. Mirrors [`Self::drain_game_results`].
+    pub fn drain_graph_records(&self) -> Vec<GraphRecord> {
+        let mut rows = self.graph_results.lock().expect("graph_results lock poisoned");
+        rows.drain(..).collect()
+    }
+
+    /// WP7 NN seam — set the shared model-version snapshot workers read once per
+    /// move (dedup-pushed into the drain tuple `mv_min/mv_max/mv_distinct`). The
+    /// frozen `InferenceBatcher.bump_model_version` writes through here. `0` = no-NN.
+    /// Mirrors [`Self::set_radius_override`].
+    pub fn set_model_version(&self, version: u64) {
+        self.model_version.store(version, Ordering::SeqCst);
+    }
+
+    /// Current NN model-version snapshot (`0` = no-NN) — the read side of
+    /// [`Self::set_model_version`] (frozen `InferenceBatcher.model_version` getter).
+    #[must_use]
+    pub fn model_version(&self) -> u64 {
+        self.model_version.load(Ordering::SeqCst)
+    }
+
+    /// Snapshot the 21 LAW-18 in-run counter atomics with one `Relaxed` load each.
+    /// Returns RAW cumulative counts (the `*_accum` fixed-point ×1e6 sums are NOT
+    /// divided here — the WP7 bridge derives the 4 means, DESIGN §c.6). See
+    /// [`RunnerStatsSnapshot`].
+    #[must_use]
+    pub fn stats_snapshot(&self) -> RunnerStatsSnapshot {
+        RunnerStatsSnapshot {
+            games_completed: self.games_completed.load(Ordering::Relaxed),
+            positions_generated: self.positions_generated.load(Ordering::Relaxed),
+            x_wins: self.x_wins.load(Ordering::Relaxed),
+            o_wins: self.o_wins.load(Ordering::Relaxed),
+            draws: self.draws.load(Ordering::Relaxed),
+            positions_dropped: self.positions_dropped.load(Ordering::Relaxed),
+            mcts_depth_accum: self.mcts_depth_accum.load(Ordering::Relaxed),
+            mcts_conc_accum: self.mcts_conc_accum.load(Ordering::Relaxed),
+            mcts_stat_count: self.mcts_stat_count.load(Ordering::Relaxed),
+            mcts_quiescence_fires: self.mcts_quiescence_fires.load(Ordering::Relaxed),
+            cluster_value_std_accum: self.cluster_value_std_accum.load(Ordering::Relaxed),
+            cluster_policy_disagreement_accum: self
+                .cluster_policy_disagreement_accum
+                .load(Ordering::Relaxed),
+            cluster_variance_samples: self.cluster_variance_samples.load(Ordering::Relaxed),
+            solver_moves_eligible: self.solver_moves_eligible.load(Ordering::Relaxed),
+            solver_win_proven: self.solver_win_proven.load(Ordering::Relaxed),
+            solver_injected: self.solver_injected.load(Ordering::Relaxed),
+            solver_injected_offwindow: self.solver_injected_offwindow.load(Ordering::Relaxed),
+            solver_budget_exhausted: self.solver_budget_exhausted.load(Ordering::Relaxed),
+            solver_moves_eligible_seeded: self.solver_moves_eligible_seeded.load(Ordering::Relaxed),
+            solver_injected_seeded: self.solver_injected_seeded.load(Ordering::Relaxed),
+            seeded_games_started: self.seeded_games_started.load(Ordering::Relaxed),
+        }
+    }
+
     /// Spec-derived state (feature) stride — drives inv23 (P-02).
     #[must_use]
     pub fn feature_len(&self) -> usize {
@@ -307,5 +416,162 @@ impl SelfPlayRunner {
 impl Drop for SelfPlayRunner {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+/// WP7 SEAM round-trip gate — proves the pure-additive pub read/drain faces return
+/// exactly what the private queues / counter atomics hold. No workers are spawned
+/// (`new()` does not `start()`), so the private state is populated deterministically
+/// in-test and read back through the new pub API only. Uses distinct per-field
+/// values so a getter crosswired to the wrong atomic FAILS.
+#[cfg(test)]
+mod seam_roundtrip {
+    use std::sync::atomic::Ordering;
+
+    use crate::replay::hexg::GraphRecord;
+
+    use super::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig, WorkerResultRow};
+
+    /// Minimal valid runner: only the identity key is required by `new()`; the
+    /// default sim budget passes validation and no worker is started.
+    fn runner() -> SelfPlayRunner {
+        SelfPlayRunner::new(SelfPlayRunnerConfig {
+            encoding_name: Some("v6".to_string()),
+            ..Default::default()
+        })
+        .expect("v6 must resolve via the registry")
+    }
+
+    #[test]
+    fn drain_training_rows_returns_pushed_rows_then_empties() {
+        let r = runner();
+        assert!(
+            r.drain_training_rows().is_empty(),
+            "fresh runner has no training rows"
+        );
+
+        let row0: WorkerResultRow =
+            (vec![1.0, 2.0], vec![3.0], vec![0.5], 1.0, 7, vec![9u8], true, 4u16, 1u8);
+        let row1: WorkerResultRow =
+            (vec![-1.0], vec![], vec![0.25, 0.75], -0.1, 3, vec![], false, 2u16, 0u8);
+        {
+            let mut q = r.results.lock().expect("results lock poisoned");
+            q.push_back(row0.clone());
+            q.push_back(row1.clone());
+        }
+
+        assert_eq!(
+            r.drain_training_rows(),
+            vec![row0, row1],
+            "drain returns the FIFO-ordered private rows"
+        );
+        assert!(
+            r.drain_training_rows().is_empty(),
+            "a second drain is empty (the queue was drained, not copied)"
+        );
+    }
+
+    #[test]
+    fn drain_graph_records_returns_pushed_records_then_empties() {
+        let r = runner();
+        assert!(r.drain_graph_records().is_empty());
+
+        let g0 = GraphRecord {
+            stones: vec![(1i16, 2i16, 1i8)],
+            visits: vec![(1i16, 2i16, 0.5f32)],
+            current_player: 1,
+            moves_remaining: 2,
+            ply_index: 4,
+            is_full_search: true,
+            outcome: 1.0,
+            value_valid: true,
+            game_length: 8,
+        };
+        let g1 = GraphRecord {
+            current_player: -1,
+            ply_index: 5,
+            ..GraphRecord::default()
+        };
+        {
+            let mut q = r.graph_results.lock().expect("graph_results lock poisoned");
+            q.push_back(g0.clone());
+            q.push_back(g1.clone());
+        }
+
+        assert_eq!(r.drain_graph_records(), vec![g0, g1]);
+        assert!(r.drain_graph_records().is_empty());
+    }
+
+    #[test]
+    fn stats_snapshot_reads_back_each_private_atomic() {
+        let r = runner();
+        assert_eq!(
+            r.stats_snapshot(),
+            RunnerStatsSnapshot::default(),
+            "a fresh runner reports all-zero counters"
+        );
+
+        // Distinct values 1..=21, one per atomic, in struct-field order — a getter
+        // wired to the wrong atomic would read the wrong number and fail.
+        r.games_completed.store(1, Ordering::Relaxed);
+        r.positions_generated.store(2, Ordering::Relaxed);
+        r.x_wins.store(3, Ordering::Relaxed);
+        r.o_wins.store(4, Ordering::Relaxed);
+        r.draws.store(5, Ordering::Relaxed);
+        r.positions_dropped.store(6, Ordering::Relaxed);
+        r.mcts_depth_accum.store(7, Ordering::Relaxed);
+        r.mcts_conc_accum.store(8, Ordering::Relaxed);
+        r.mcts_stat_count.store(9, Ordering::Relaxed);
+        r.mcts_quiescence_fires.store(10, Ordering::Relaxed);
+        r.cluster_value_std_accum.store(11, Ordering::Relaxed);
+        r.cluster_policy_disagreement_accum.store(12, Ordering::Relaxed);
+        r.cluster_variance_samples.store(13, Ordering::Relaxed);
+        r.solver_moves_eligible.store(14, Ordering::Relaxed);
+        r.solver_win_proven.store(15, Ordering::Relaxed);
+        r.solver_injected.store(16, Ordering::Relaxed);
+        r.solver_injected_offwindow.store(17, Ordering::Relaxed);
+        r.solver_budget_exhausted.store(18, Ordering::Relaxed);
+        r.solver_moves_eligible_seeded.store(19, Ordering::Relaxed);
+        r.solver_injected_seeded.store(20, Ordering::Relaxed);
+        r.seeded_games_started.store(21, Ordering::Relaxed);
+
+        let expected = RunnerStatsSnapshot {
+            games_completed: 1,
+            positions_generated: 2,
+            x_wins: 3,
+            o_wins: 4,
+            draws: 5,
+            positions_dropped: 6,
+            mcts_depth_accum: 7,
+            mcts_conc_accum: 8,
+            mcts_stat_count: 9,
+            mcts_quiescence_fires: 10,
+            cluster_value_std_accum: 11,
+            cluster_policy_disagreement_accum: 12,
+            cluster_variance_samples: 13,
+            solver_moves_eligible: 14,
+            solver_win_proven: 15,
+            solver_injected: 16,
+            solver_injected_offwindow: 17,
+            solver_budget_exhausted: 18,
+            solver_moves_eligible_seeded: 19,
+            solver_injected_seeded: 20,
+            seeded_games_started: 21,
+        };
+        assert_eq!(
+            r.stats_snapshot(),
+            expected,
+            "snapshot maps each atomic 1:1 with no crosswiring"
+        );
+    }
+
+    #[test]
+    fn model_version_setter_and_getter_roundtrip() {
+        let r = runner();
+        assert_eq!(r.model_version(), 0, "default model version is 0 (no-NN)");
+        r.set_model_version(42);
+        assert_eq!(r.model_version(), 42);
+        r.set_model_version(7);
+        assert_eq!(r.model_version(), 7, "a later set overwrites");
     }
 }

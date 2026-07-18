@@ -2,7 +2,8 @@
 
 - version: v1
 - owner: crate mantis-encoding / mantis-bridge
-- status: v1 — kernels ported in WP3 (bridge marshaling lands in WP7)
+- status: v1 — bridge marshaling ported in WP7
+- WP7: the numpy marshaling face (`into_pyarray` out / `PyReadonlyArray::as_slice` in on `ReplayBuffer` push/sample, `SelfPlayRunner.collect_data`, `Board.to_tensor`) landed in mantis-bridge over the WP3 kernels. No stride/byte-layout change (v1 semantics unchanged).
 
 ## Summary
 Fixed `[n, feature_len]` f32 batches; strides SPEC-DERIVED; shape-checked both sides.

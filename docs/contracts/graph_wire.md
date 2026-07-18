@@ -2,7 +2,8 @@
 
 - version: v1
 - owner: crate mantis-selfplay (wire types) / mantis-bridge
-- status: v1 — filled by the self-play queue port (WP6)
+- status: v1 — filled by the self-play queue port (WP6); pyclass + numpy getter face ported in WP7
+- WP7: the `GraphWire` pyclass + its 13 per-array numpy COPY getters + the Python single-read `take()` latch (second read → `WireAlreadyConsumed`) landed in mantis-bridge. No wire-format/version change (v1 semantics unchanged).
 
 ## Summary
 

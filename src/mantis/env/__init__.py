@@ -1,1 +1,4 @@
-"""Thin GameState wrapper over the compiled engine; skeleton, port lands with its work package."""
+"""mantis.env — thin GameState snapshot over the compiled engine Board."""
+from mantis.env.game_state import GameState
+
+__all__ = ["GameState"]

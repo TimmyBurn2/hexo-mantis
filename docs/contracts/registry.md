@@ -2,13 +2,14 @@
 
 - version: v1
 - owner: crate mantis-encoding + mantis.encoding
-- status: v1 — ported in WP3
+- status: v1 — ported in WP3; Filesystem/torch/npz audit sections + Python CLI + sha handshake ported in WP7
+- WP7: `_engine.{all_specs,registry_sha,registry_sha_hex}` bindings + the import-time registry-sha handshake landed; FS/torch/npz audit sections + the `python -m mantis.encoding audit` CLI port over the WP3 Rust backend (§1/§6). No schema/version change (v1 semantics unchanged).
 
 ## Summary
 TOML schema + validator invariants + audit backend exit codes (0/1/2).
 
 ## Schema
-`crates/mantis-encoding/registry.toml` is the single source of truth for encoding and
+`crates/mantis-encoding/src/registry.toml` is the single source of truth for encoding and
 shape. Each `[encodings.<name>]` table carries `representation` (REQUIRED, no default),
 spelled `"grid" | "graph"`, plus its shape fields and `n_chain_planes` (≥ 1). Unknown TOML
 keys are a parse error; missing required keys are a parse error; the validator collects ALL
