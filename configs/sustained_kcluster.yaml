@@ -1,0 +1,15 @@
+# minted-by: tools/mint_config.py
+# template: grid
+# delta: run_id: template_grid -> sustained_kcluster
+# delta: seed: 20260716 -> 20260720
+schema_version: 1
+run_id: sustained_kcluster
+seed: 20260720
+identity:
+  encoding: v6_live2_ls
+  representation: grid
+eval:
+  random_model_sims: 96
+  sealbot_model_sims: 128
+selfplay:
+  legal_move_radius_schedule: null

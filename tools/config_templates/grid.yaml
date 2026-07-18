@@ -1,12 +1,12 @@
 # TEMPLATE — not a runtime input; configs are minted from it via tools/mint_config.py
-# (repo_design §5). Carries every WP8 field so minted configs are complete (CI gate 7).
-# gnn_axis_v1 / graph identity lineage.
+# (repo_design §5). Grid-identity (v6_live2_ls) lineage — the real 19x19 CNN production
+# encoding; keeps grid-lineage mint deltas small.
 schema_version: 1
-run_id: template_dev
+run_id: template_grid
 seed: 20260716
 identity:
-  encoding: gnn_axis_v1
-  representation: graph
+  encoding: v6_live2_ls
+  representation: grid
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128

@@ -1,18 +1,28 @@
-"""One-key-diff assert: verify two configs differ exactly where claimed.
+"""Config delta assertions: two-file --expect diff, and a self-contained --from-header check.
 
-CLI: uv run python tools/config_diff.py A.yaml B.yaml --expect dotted.key [--expect k2 ...]
+Two-file mode (unchanged):
+    uv run python tools/config_diff.py A.yaml B.yaml --expect dotted.key [--expect k2 ...]
+  Exit 0 iff {keys whose values differ} == {expected}; exit 1 on any mismatch; exit 2 on load error.
 
-Both inputs must schema-validate (an invalid config can't be "diff-asserted").
-Exit 0 iff {keys whose values differ} == {expected} (prints MATCH + keys); exit 1 with
-the symmetric difference printed otherwise; exit 2 on load/validation error.
+Lying-header mode (B3, red-team #3):
+    uv run python tools/config_diff.py --from-header <config.yaml>
+  Parses the config's stamped header (`# template:` + `# delta:` lines) → the CLAIMED delta-key
+  set, re-diffs the config against tools/config_templates/<t>.yaml, and asserts claimed == actual.
+  Exit 0 MATCH; exit 1 naming the lie (an omitted real diff OR a claimed-but-unchanged key); exit 2
+  on load/parse error (missing template, unparseable header, invalid config).
+
+Both configs must schema-validate (an invalid config can't be diff-asserted).
 """
 import argparse
 import sys
+from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
 from mantis.config.loader import load_config
+
+TEMPLATES_DIR = Path(__file__).resolve().parent / "config_templates"
 
 
 def _flatten(node: object, prefix: str = "") -> dict[str, object]:
@@ -25,33 +35,104 @@ def _flatten(node: object, prefix: str = "") -> dict[str, object]:
     return {prefix: node}
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config_a")
-    parser.add_argument("config_b")
-    parser.add_argument(
-        "--expect", action="append", required=True, metavar="dotted.key",
-        help="key expected to differ (repeatable); the diff must be exactly this set",
-    )
-    args = parser.parse_args(argv)
+def _diff_keys(flat_a: dict[str, object], flat_b: dict[str, object]) -> set[str]:
+    return {k for k in set(flat_a) | set(flat_b) if flat_a.get(k) != flat_b.get(k)}
 
+
+def _parse_header(text: str) -> tuple[str | None, set[str]]:
+    """Return (template_name, claimed_delta_keys) from a stamped mint header.
+
+    Reads leading `#`-comment lines only (header ends at the first non-comment line). A
+    `# delta: <dotted>: <old> -> <new>` line contributes its <dotted> key.
+    """
+    template: str | None = None
+    claimed: set[str] = set()
+    for line in text.splitlines():
+        if not line.startswith("#"):
+            break
+        if line.startswith("# template:"):
+            template = line.split(":", 1)[1].strip()
+        elif line.startswith("# delta:"):
+            key = line[len("# delta:") :].strip().split(":", 1)[0].strip()
+            if key:
+                claimed.add(key)
+    return template, claimed
+
+
+def _run_from_header(config_path: str) -> int:
+    path = Path(config_path)
     try:
-        flat_a = _flatten(load_config(args.config_a).model_dump())
-        flat_b = _flatten(load_config(args.config_b).model_dump())
+        text = path.read_text()
+    except OSError as exc:
+        print(f"cannot read config: {exc}", file=sys.stderr)
+        return 2
+    template, claimed = _parse_header(text)
+    if not template:
+        print("unparseable header: no '# template:' line found", file=sys.stderr)
+        return 2
+    template_path = TEMPLATES_DIR / f"{template}.yaml"
+    if not template_path.is_file():
+        print(f"missing template: {template_path}", file=sys.stderr)
+        return 2
+    try:
+        flat_cfg = _flatten(load_config(path).model_dump())
+        flat_tmpl = _flatten(load_config(template_path).model_dump())
     except (ValidationError, yaml.YAMLError, OSError, TypeError) as exc:
         print(f"load/validation error: {exc}", file=sys.stderr)
         return 2
+    actual = _diff_keys(flat_cfg, flat_tmpl)
+    if actual == claimed:
+        print("MATCH:", ", ".join(sorted(actual)))
+        return 0
+    for k in sorted(actual - claimed):
+        print(f"HEADER OMITS a real diff on {k}: {flat_tmpl.get(k)!r} -> {flat_cfg.get(k)!r}")
+    for k in sorted(claimed - actual):
+        print(f"HEADER CLAIMS {k} but it is unchanged vs template")
+    return 1
 
-    diff_keys = {k for k in flat_a if flat_a[k] != flat_b[k]}
-    expected = set(args.expect)
+
+def _run_expect(config_a: str, config_b: str, expect: list[str]) -> int:
+    try:
+        flat_a = _flatten(load_config(config_a).model_dump())
+        flat_b = _flatten(load_config(config_b).model_dump())
+    except (ValidationError, yaml.YAMLError, OSError, TypeError) as exc:
+        print(f"load/validation error: {exc}", file=sys.stderr)
+        return 2
+    diff_keys = _diff_keys(flat_a, flat_b)
+    expected = set(expect)
     if diff_keys == expected:
         print("MATCH:", ", ".join(sorted(diff_keys)))
         return 0
     for k in sorted(diff_keys - expected):
-        print(f"UNCLAIMED diff on {k}: {flat_a[k]!r} -> {flat_b[k]!r}")
+        print(f"UNCLAIMED diff on {k}: {flat_a.get(k)!r} -> {flat_b.get(k)!r}")
     for k in sorted(expected - diff_keys):
         print(f"expected diff on {k} but values are identical")
     return 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--from-header", dest="from_header", metavar="CONFIG",
+        help="re-diff a config against its header-named template; assert claimed == actual",
+    )
+    parser.add_argument("config_a", nargs="?")
+    parser.add_argument("config_b", nargs="?")
+    parser.add_argument(
+        "--expect", action="append", metavar="dotted.key", default=[],
+        help="key expected to differ (repeatable); the diff must be exactly this set",
+    )
+    args = parser.parse_args(argv)
+
+    if args.from_header:
+        return _run_from_header(args.from_header)
+    if not (args.config_a and args.config_b and args.expect):
+        print(
+            "usage: config_diff.py A B --expect KEY [...]  |  config_diff.py --from-header CONFIG",
+            file=sys.stderr,
+        )
+        return 2
+    return _run_expect(args.config_a, args.config_b, args.expect)
 
 
 if __name__ == "__main__":

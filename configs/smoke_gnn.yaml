@@ -1,9 +1,10 @@
 # minted-by: tools/mint_config.py
 # template: dev
-# delta: run_id: template_dev -> dev_example
+# delta: run_id: template_dev -> smoke_gnn
+# delta: seed: 20260716 -> 20260719
 schema_version: 1
-run_id: dev_example
-seed: 20260716
+run_id: smoke_gnn
+seed: 20260719
 identity:
   encoding: gnn_axis_v1
   representation: graph

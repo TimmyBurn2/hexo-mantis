@@ -1,0 +1,45 @@
+"""Resolver family — one module per regime knob (mantis.config.resolve.*).
+
+Each rule is the single authority both the self-play and eval callers import when they land, so
+train/eval cannot re-derive a knob divergently (CONTEXT bug-class #3). None of these modules pull
+torch (config → encoding, util only — DAG).
+"""
+from mantis.config.resolve.amp import resolve_amp_dtype
+from mantis.config.resolve.bootstrap import (
+    BootstrapNotFoundError,
+    ResolvedBootstrap,
+    resolve_bootstrap,
+)
+from mantis.config.resolve.encoding import (
+    UNSPECIFIED,
+    AbsentEncodingError,
+    EncodingConflictError,
+    EncodingResolution,
+    normalize_declared,
+    normalize_stamp,
+    reconcile_encoding,
+)
+from mantis.config.resolve.nsims import resolve_eval_model_sims
+from mantis.config.resolve.radius import (
+    OfflineRadiusUnresolvableError,
+    require_offline_radius,
+    resolve_radius_from_schedule,
+)
+
+__all__ = [
+    "UNSPECIFIED",
+    "AbsentEncodingError",
+    "BootstrapNotFoundError",
+    "EncodingConflictError",
+    "EncodingResolution",
+    "OfflineRadiusUnresolvableError",
+    "ResolvedBootstrap",
+    "normalize_declared",
+    "normalize_stamp",
+    "reconcile_encoding",
+    "require_offline_radius",
+    "resolve_amp_dtype",
+    "resolve_bootstrap",
+    "resolve_eval_model_sims",
+    "resolve_radius_from_schedule",
+]

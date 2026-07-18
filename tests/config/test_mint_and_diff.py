@@ -1,4 +1,6 @@
-"""Mint/diff tool behavior tests (exit-code contracts per the config tooling design)."""
+"""Mint/diff tool behavior tests (exit-code contracts) + O8 one-key-diff over the grown
+(nested) template. The dev template now carries every WP8 field, so mint/diff must handle
+dotted nested keys (eval.random_model_sims) and list deltas (radius schedule)."""
 import subprocess
 import sys
 from pathlib import Path
@@ -39,6 +41,13 @@ def test_mint_stamps_template_and_delta_header(tmp_path):
     assert head[2] == "# delta: run_id: template_dev -> mint_check"
 
 
+def test_mint_nested_key_delta(tmp_path):
+    out, proc = _mint(tmp_path, "minted.yaml", "run_id=nn", "eval.random_model_sims=64")
+    assert proc.returncode == 0, proc.stderr
+    cfg = load_config(out)
+    assert cfg.eval.random_model_sims == 64
+
+
 def test_mint_rejects_unknown_delta_key(tmp_path):
     out, proc = _mint(tmp_path, "minted.yaml", "identity.bogus=1")
     assert proc.returncode == 2
@@ -50,6 +59,14 @@ def test_diff_exit_0_on_exactly_claimed_one_key_diff(tmp_path):
     out, proc = _mint(tmp_path, "b.yaml", "run_id=diff_check")
     assert proc.returncode == 0, proc.stderr
     res = _run(str(DIFF), str(TEMPLATE), str(out), "--expect", "run_id")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "MATCH" in res.stdout
+
+
+def test_diff_exit_0_on_nested_key_diff(tmp_path):
+    out, proc = _mint(tmp_path, "b.yaml", "eval.random_model_sims=64")
+    assert proc.returncode == 0, proc.stderr
+    res = _run(str(DIFF), str(TEMPLATE), str(out), "--expect", "eval.random_model_sims")
     assert res.returncode == 0, res.stdout + res.stderr
     assert "MATCH" in res.stdout
 
