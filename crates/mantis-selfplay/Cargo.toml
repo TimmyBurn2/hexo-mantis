@@ -23,7 +23,15 @@ rand = "0.10"
 
 [dev-dependencies]
 criterion = { workspace = true }
+# `Board::from_stones` static-position builder for the ported in-src record
+# tests (o1/ls/dws3) — test-only, additive, OFF for `cargo build` (R2 clean).
+mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
 
 [[bench]]
 name = "replay_sample_bench"
+harness = false
+
+# WP6 Metric (1) — the gated build_leaf_graph microbench (WP6-owned wrapper).
+[[bench]]
+name = "graph_build_bench"
 harness = false

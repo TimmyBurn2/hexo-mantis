@@ -157,6 +157,20 @@ impl MCTSTree {
         self.next_free
     }
 
+    /// Set the Gumbel Sequential-Halving forced root child (or clear it). The selfplay
+    /// worker-loop driver steers Gumbel by forcing sims into a candidate then clearing;
+    /// exposed for cross-crate driving (mantis-selfplay). Pure state set — no search logic.
+    pub fn set_forced_root_child(&mut self, child: Option<u32>) {
+        self.forced_root_child = child;
+    }
+
+    /// Configure quiescence once per worker from run config (mirrors the old worker's
+    /// post-construction set). Pure state set — no search logic.
+    pub fn configure_quiescence(&mut self, enabled: bool, blend_2: f32) {
+        self.quiescence_enabled = enabled;
+        self.quiescence_blend_2 = blend_2;
+    }
+
     pub fn reset(&mut self) {
         let mr = self.pool[0].moves_remaining;
         let board = self.root_board.clone();

@@ -42,3 +42,47 @@ added_by = "WP5"
 path = "replay/hexg_v1_golden.hexg"
 sha256 = "97ce1faf4a8de32a3a0de17ee1613c3820034c1a3a9685d342ba574d774840ef"
 added_by = "WP5"
+
+# WP6 Stage B ⊕ oracle-first old-side capture (wp/WP6/CAPTURE_LOG.md). Dispatcher-
+# stamped shas of the FROZEN hexo_rl (rev 750b599) PUB pyo3-free record/finalize
+# producers over PINNED inputs; the P-04/P-09 pins assert the ported new-side
+# producers reproduce these byte-for-byte.
+[[required]]
+path = "worker/aggregate_policy.bin"
+sha256 = "fc32b722e31364a91fb4d0e9a1bdcf096b8fc340bb612906bcc7cd18a280ebe1"
+added_by = "WP6"
+
+[[required]]
+path = "worker/aggregate_policy_to_local.bin"
+sha256 = "0b585bdc70f63d1c997d7eeea086b0cfdcc853af2c55b218a3abe6ba3d45698d"
+added_by = "WP6"
+
+[[required]]
+path = "worker/aggregate_policy_ls.bin"
+sha256 = "818e5cdb4ac03f4ffa81358aac547bc6559a38493e34509a170be7002781b192"
+added_by = "WP6"
+
+[[required]]
+path = "worker/aggregate_policy_to_local_ls.bin"
+sha256 = "d1c9bf03f4b16eacc3d0a0e69d908368c9dd5161415d87cb21118a8eb6e12d53"
+added_by = "WP6"
+
+[[required]]
+path = "worker/assemble_ls_from_gnn_probs.bin"
+sha256 = "6a8ce8e7b5e5265f1bfdd88e81c3903a9962c51390001935683cb9298f025147"
+added_by = "WP6"
+
+[[required]]
+path = "worker/record_position_graph.bin"
+sha256 = "235bedb351ea2b4ce03cd53ed434f6aeeb6aa495c93c25b8807a2ccd907907d2"
+added_by = "WP6"
+
+[[required]]
+path = "worker/finalize_graph_outcome.bin"
+sha256 = "bb4b3b9805eebff5a8ca971ace12588020bd0575b928a0b78decfc982a7325b0"
+added_by = "WP6"
+
+[[required]]
+path = "worker/graphwire_multigraph_input.bin"
+sha256 = "d9810901e7be4e7b23804a0c75c3c68a87d4f95a2a5f2182c9929da9fd8850c2"
+added_by = "WP6"

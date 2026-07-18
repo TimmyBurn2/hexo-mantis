@@ -557,6 +557,28 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
 }
 
 #[test]
+fn test_wp6_driver_setters_roundtrip() {
+    // WP6 Stage A: the two narrow public setters exposed for the (separate-crate)
+    // selfplay worker-loop driver. In-crate test reads the pub(crate) fields directly.
+    let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.0);
+
+    tree.set_forced_root_child(Some(3));
+    assert_eq!(tree.forced_root_child, Some(3),
+        "set_forced_root_child(Some(3)) must set the field");
+    tree.set_forced_root_child(None);
+    assert_eq!(tree.forced_root_child, None,
+        "set_forced_root_child(None) must clear the field");
+
+    tree.configure_quiescence(false, 0.7);
+    assert!(!tree.quiescence_enabled, "configure_quiescence must set enabled=false");
+    assert_eq!(tree.quiescence_blend_2, 0.7, "configure_quiescence must set blend_2=0.7");
+
+    tree.configure_quiescence(true, 0.3);
+    assert!(tree.quiescence_enabled, "configure_quiescence must set enabled=true");
+    assert_eq!(tree.quiescence_blend_2, 0.3, "configure_quiescence must set blend_2=0.3");
+}
+
+#[test]
 fn test_forced_root_child_selection() {
     let mut tree = setup_expanded_root();
     let root = &tree.pool[0];
