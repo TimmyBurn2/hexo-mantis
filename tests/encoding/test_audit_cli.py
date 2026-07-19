@@ -174,7 +174,9 @@ def test_section_checkpoints_declared_equals_inferred(tmp_path) -> None:
     }
     torch.save({"model_state": state, "metadata": {"encoding_name": "v6"}}, ck / "m.pt")
     report = audit(ck, co, va, repo_root=root)
-    assert report.exit_code() == 0
-    assert any(
-        f.section == "§2" and "declared==inferred" in f.message for f in report.findings
-    )
+    # §2 (checkpoints) is the leg under test: the v6 match is reported and is clean (info).
+    # The global exit code is dominated by §6's unrelated "no corpora to join against" warn,
+    # so this test asserts on the §2 section directly, not on report.exit_code().
+    s2 = [f for f in report.findings if f.section == "§2"]
+    assert any("declared==inferred (v6)" in f.message for f in s2)
+    assert all(f.severity == "info" for f in s2)

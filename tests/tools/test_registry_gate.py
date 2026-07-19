@@ -26,8 +26,10 @@ def test_trigger_arms_when_registry_present(tmp_path):
     assert "registry not yet ported" not in res.stdout
 
 
-def test_stub_path_when_registry_absent(tmp_path):
+def test_hard_fail_when_registry_absent(tmp_path):
+    # WP7 (1cbc89a) armed gate 8: the registry is ported (WP3) at crates/mantis-encoding/
+    # src/registry.toml, so its ABSENCE is a hard failure, not the retired pre-port stub-pass.
     (tmp_path / "crates" / "mantis-encoding").mkdir(parents=True)
     res = _run_in(tmp_path)
-    assert res.returncode == 0, res.stdout + res.stderr
-    assert "registry not yet ported" in res.stdout
+    assert res.returncode != 0, res.stdout + res.stderr
+    assert "expected registry" in (res.stdout + res.stderr)
