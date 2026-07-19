@@ -110,9 +110,11 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   paths are unreachable for the other kind (match exhaustiveness, no `_ =>` on the kind).
 - Python: `mantis.encoding.lookup(name)` returns the `_engine` spec (delegation, single
   parser). Model/buffer/batcher construction dispatches through ONE authority per layer
-  (`model.build_net.model_representation`, buffer facade, batcher ctor). Reading arch
-  attributes off live `nn.Module` instances is banned; arch metadata travels on declared
-  dataclasses.
+  (`model.build.build_net(arch)`, buffer facade, batcher ctor). Reading arch attributes off
+  live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
+  (`model.arch.CnnArch` / `model.arch.GnnArch`), which `build_net` consumes; a live-module
+  representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
+  (a census test proves it stays absent).
 - No dense-by-default anywhere: an absent representation is an error, never `"grid"`.
 - The compiled module exposes `registry_sha()` (sha256 of the embedded TOML).
   `mantis.encoding` hashes the on-disk TOML at import in dev/test and hard-errors on
