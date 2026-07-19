@@ -4,7 +4,8 @@ CLI: artifact_gate.py [--base REF]; base defaults to $ARTIFACT_GATE_BASE, else H
 an all-zeros/invalid base falls back to HEAD~1. Violations over merge-base(BASE, HEAD)
 .. HEAD:
   (1) any changed path under reports/, checkpoints/, logs/, benchmarks/;
-  (2) any ADDED file whose blob size is > 1,000,000 bytes;
+  (2) any ADDED file whose blob size is > 1,000,000 bytes outside tests/fixtures/
+      (CLAUDE.md R7: >1 MB oracle banks live under tests/fixtures/ — same carve-out as (3));
   (3) any ADDED *.jsonl outside tests/fixtures/.
 Prints one `VIOLATION <reason>: <path>` line each; exit 1 if any, 0 clean, 2 on git error.
 """
@@ -70,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             except subprocess.CalledProcessError as exc:
                 print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
                 return 2
-            if size > MAX_ADDED_BYTES:
+            if size > MAX_ADDED_BYTES and not path.startswith("tests/fixtures/"):
                 print(f"VIOLATION large-file: {path}")
                 violations += 1
             if path.endswith(".jsonl") and not path.startswith("tests/fixtures/"):
