@@ -7,6 +7,7 @@ dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "mantis-engine",
+    "torch==2.11.0",
 ]
 
 [dependency-groups]
@@ -21,6 +22,15 @@ members = ["crates/mantis-bridge"]
 
 [tool.uv.sources]
 mantis-engine = { workspace = true }
+# torch pulled from the PyTorch CPU wheel index: the WP9 NN-forward parity regime
+# is CPU-only, and the +cpu manylinux x86_64 wheel is the MKL/AVX512 build that
+# matches the old-side capture backend (torch 2.11.0, BLAS=MKL, ISA=AVX512).
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

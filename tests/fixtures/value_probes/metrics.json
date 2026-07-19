@@ -1,0 +1,27 @@
+{
+  "arm": "scalar",
+  "encoding": "v6_live2_ls",
+  "ckpt": "bootstrap_model_v6_live2.pt",
+  "ckpt_sha": "ba65fceac8dadc83",
+  "n_loss": 234,
+  "n_safe": 651,
+  "M1_mean_v_on_losses": -0.20448957,
+  "M2_ece": 0.06981187,
+  "M3_tail_mass_auc": null,
+  "M3_decoded_auc": 0.87121719,
+  "M4_false_pessimism": 0.02457757,
+  "_metric_defs": {
+    "M1": "mean decoded-v over LOSS positions",
+    "M2": "ECE, 10 equal-width bins on P_win=(v+1)/2 over loss\u222asafe",
+    "M3": "scalar arm: decoded_auc = AUC(-v, loss=1 vs safe=0); dist arm: tail_mass_auc (null here)",
+    "M4": "fraction of SAFE with decoded-v <= -0.5"
+  },
+  "_probe_sha256": {
+    "probe_set_v1.jsonl": "7899fa136ac083f0a428f5f6fa4c89918f1ba82c85618e8c7369a19506a9adb6",
+    "negatives_v1.jsonl": "8faa6af74a7640f869cc3b1c4cb058b62660a052c5381e8ab7ad740a38cafef3"
+  },
+  "_skipped": {
+    "loss": 0,
+    "safe": 0
+  }
+}
