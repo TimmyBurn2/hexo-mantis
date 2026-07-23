@@ -6,7 +6,9 @@ an all-zeros/invalid base falls back to HEAD~1. Violations over merge-base(BASE,
   (1) any changed path under reports/, checkpoints/, logs/, benchmarks/;
   (2) any ADDED file whose blob size is > 1,000,000 bytes outside tests/fixtures/
       (CLAUDE.md R7: >1 MB oracle banks live under tests/fixtures/ — same carve-out as (3));
-  (3) any ADDED *.jsonl outside tests/fixtures/.
+  (3) any ADDED file under tests/fixtures/ whose blob size is > 10,000,000 bytes — the
+      carve-out in (2) is a raised ceiling, NOT an exemption (R8);
+  (4) any ADDED *.jsonl outside tests/fixtures/.
 Prints one `VIOLATION <reason>: <path>` line each; exit 1 if any, 0 clean, 2 on git error.
 """
 import argparse
@@ -15,7 +17,9 @@ import subprocess
 import sys
 
 ARTIFACT_DIRS = ("reports/", "checkpoints/", "logs/", "benchmarks/")
+FIXTURES_PREFIX = "tests/fixtures/"
 MAX_ADDED_BYTES = 1_000_000
+MAX_FIXTURE_BYTES = 10_000_000
 
 
 def _git(*args: str) -> str:
@@ -71,10 +75,15 @@ def main(argv: list[str] | None = None) -> int:
             except subprocess.CalledProcessError as exc:
                 print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
                 return 2
-            if size > MAX_ADDED_BYTES and not path.startswith("tests/fixtures/"):
+            in_fixtures = path.startswith(FIXTURES_PREFIX)
+            if in_fixtures:
+                if size > MAX_FIXTURE_BYTES:
+                    print(f"VIOLATION oversize-fixture: {path}")
+                    violations += 1
+            elif size > MAX_ADDED_BYTES:
                 print(f"VIOLATION large-file: {path}")
                 violations += 1
-            if path.endswith(".jsonl") and not path.startswith("tests/fixtures/"):
+            if path.endswith(".jsonl") and not in_fixtures:
                 print(f"VIOLATION jsonl-outside-fixtures: {path}")
                 violations += 1
     return 1 if violations else 0

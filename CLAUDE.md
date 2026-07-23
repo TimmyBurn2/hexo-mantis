@@ -50,7 +50,8 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
    crates/mantis-bridge; core crates compile without pyo3.
    Reason: keeps every crate but one Python-free and the DAG one-way.
 7. **R7 artifact hygiene.** reports/, checkpoints/, logs/, benchmarks/ are never tracked;
-   files >1 MB and `*.jsonl` only under tests/fixtures/ (CI gate 6 enforces).
+   files >1 MB and `*.jsonl` only under tests/fixtures/, and even there a 10 MB per-file
+   ceiling holds — the carve-out is a raised ceiling, not an exemption (CI gate 6 enforces).
    Reason: run outputs in git history are unremovable and poison clones.
 8. **R8 file size.** 300-line soft cap; exceeding is fine WITH a one-line justification
    at the top of the file.
@@ -103,7 +104,7 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 4. `make check.wasm` green.
 5. Bench smoke (`make bench`, trivial criterion bench).
 6. Artifact rejection (tools/ci_gates/artifact_gate.py): artifact dirs, >1 MB adds,
-   stray `*.jsonl`.
+   >10 MB fixture adds, stray `*.jsonl`.
 7. Every configs/ file schema-validates (tools/ci_gates/validate_configs.py; empty = fail).
 8. Registry sha handshake + audit (tools/ci_gates/registry_gate.sh — auto-arming stub
    until the registry ports; its trigger is self-tested).
