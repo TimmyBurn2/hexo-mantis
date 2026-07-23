@@ -209,3 +209,17 @@ added_by = "WP9"
 path = "value_probes/q13_manifest.tsv"
 sha256 = "8c87492642ce4d7e2df13ef710cfcf2661c41a4a6042e5184e8854130ce89af5"
 added_by = "WP9"
+
+# WP10 (train) — committed legacy-read + resume behavior goldens under tests/fixtures/train/.
+# DERIVED from the dispatcher old-side captures (wp/WP10/oldside/*): key-sets + metadata scalars
+# only (NEVER the multi-MB tensor blobs). Gate the Suite-A legacy-read (T-CK-31/32/33) and the
+# resume/scheduler/F1/E0/lr goldens (T-CK-15..20). Both gate-6-clean (<1 MB).
+[[required]]
+path = "train/legacy_payload_shapes.json"
+sha256 = "10554dc9d6649064916cd977f5c35b4991ee3651c14d6d29e1ad31d311fa3e19"
+added_by = "WP10"
+
+[[required]]
+path = "train/resume_goldens.json"
+sha256 = "4f22d3b92b2e4bbdd0af0e6f135e98358f7dab76b71c44d8f5a09f44bd2b8170"
+added_by = "WP10"

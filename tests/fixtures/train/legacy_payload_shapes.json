@@ -1,0 +1,108 @@
+{
+  "_meta": {
+    "fixture": "WP10 legacy (pre-v2) checkpoint payload SHAPES + metadata scalars",
+    "derived_from": "wp/WP10/oldside/legacy_payload_structure.json (#C1 dispatcher CAPTURE)",
+    "purpose": "Suite A legacy-read conformance T-CK-31 (full-v1 field map), T-CK-32 (bare anchor), T-CK-33 (bare->v2 strip). KEY-SETS + metadata scalars only -- NEVER the multi-MB tensor blobs (WP9 two-tier precedent).",
+    "old_repo_commit": "d769f46ea1b64cb2eaa369033bbea048a3d1201a",
+    "three_shapes": ["BARE_STATE_DICT", "LIGHT_ENVELOPE", "FULL_V1_ENVELOPE"],
+    "ORACLE_WRITE_NOTE": "the real FULL-v1 anchor stamps encoding_name='v6_live2' -- an OLDER single-window lineage that is NOT registered in the new repo (registry: gnn_axis_v1/v6/v6_live2_ls/v6w25). The captured 'v6_live2' string + the field-map scalars (training_date/commit_sha/...) are recorded here verbatim; T-CK-31 constructs its synthetic full-v1 envelope with a REGISTERED grid encoding ('v6_live2_ls') so arch resolution succeeds, while preserving the captured field-map scalars (training_date value asserted verbatim). See ORACLE_NOTES.md judgment call J3."
+  },
+
+  "bare_state_dict": {
+    "file": "checkpoints/bootstrap_model_v6_live2.pt",
+    "encoding": "v6_live2_ls",
+    "top_level_is_envelope": false,
+    "top_level_note": "NO wrapper -- the payload dict IS the model state_dict; no model_state/metadata/step envelope key",
+    "n_state_dict_keys": 147,
+    "killed_branch_keys": [],
+    "has_value_fc2_bins": false,
+    "first5_keys_sorted": [
+      "chain_head.bias",
+      "chain_head.weight",
+      "opp_reply_conv.bias",
+      "opp_reply_conv.weight",
+      "opp_reply_fc.bias"
+    ],
+    "expectation": "loads via load_legacy_weights(path, declared_encoding='v6_live2_ls'); arch resolved from declared/registry encoding -> build_net(arch_from_spec_and_config); kind='weights'; NO synthetic run_id/content-hash/created_utc minted (LAW-12). Encoding is NOT embedded in a bare state dict -- it MUST come from declared_encoding / filename / registry."
+  },
+
+  "light_envelope": {
+    "file": "checkpoints/run3_bootstrap_v6_live2_ls_dist65.pt",
+    "encoding": "v6_live2_ls",
+    "top_level_keys_sorted": ["metadata", "model_state", "step"],
+    "step": 0,
+    "has_optimizer_state": false,
+    "has_scaler_state": false,
+    "has_scheduler_state": false,
+    "has_config": false,
+    "model_state_n_keys": 149,
+    "model_state_has_value_fc2_bins": true,
+    "model_state_note": "149 keys (2 more than the 147-key bare v6_live2 anchor) because value_fc2_bins.* is present (dist65 value head)",
+    "metadata": {
+      "dist65_bins_synthesized": true,
+      "dist65_mint_source_sha256": "8dba7c8195e09f464dc4c7149fe57a0c483e241bff2abe6fa8ba652827afaa8a",
+      "encoding_name": "v6_live2_ls",
+      "minted_from": "run2_bootstrap_v6_live2_ls.pt",
+      "n_value_bins": 65,
+      "source_sha256": "c34cc4981f29ccd232677409e90eb9277a5e627c80017c21c975275b5bf3248b",
+      "synthesized_from": "bootstrap_model_v6_live2_8300.pt",
+      "synthesized_metadata": true,
+      "value_head_type": "dist65"
+    },
+    "expectation": "encoding read from metadata['encoding_name']; step recovered from wrapper (0); no optimizer/scaler -> kind='weights'. This LIGHT dist65-mint metadata schema is DISTINCT from the FULL-v1 training-checkpoint metadata schema -- the old->v2 field map (T-CK-31) applies to the FULL-v1 shape, not this one."
+  },
+
+  "full_v1_envelope": {
+    "file": "checkpoints/checkpoint_00272357.pt",
+    "encoding": "v6_live2",
+    "top_level_keys_sorted": [
+      "config",
+      "metadata",
+      "model_state",
+      "optimizer_state",
+      "scaler_state",
+      "scheduler_state",
+      "step"
+    ],
+    "step": 272357,
+    "has_optimizer_state": true,
+    "has_scaler_state": true,
+    "has_scheduler_state": true,
+    "has_config": true,
+    "config_key_count": 94,
+    "model_state_n_keys": 147,
+    "model_state_has_value_fc2_bins": false,
+    "scheduler_state": {
+      "keys_sorted": ["T_max", "_get_lr_called_within_step", "_is_initial", "_last_lr", "_step_count", "base_lrs", "eta_min", "last_epoch"],
+      "T_max": 1000000,
+      "eta_min": 0.0005,
+      "note": "torch CosineAnnealingLR state_dict shape; T_max is what T-CK-17 restores untouched (no flag) or re-horizons (with flag)"
+    },
+    "metadata": {
+      "commit_sha": "e132e671209e022e1b580a225a61a0cbf6ee7fa0",
+      "corpus_sha256": null,
+      "encoding_name": "v6_live2",
+      "model_architecture": "HexTacToeNet",
+      "model_variant": null,
+      "schema_version": 1,
+      "train_config_path": null,
+      "training_date": "2026-06-25T07:59:02.257715Z"
+    },
+    "old_v1_to_v2_field_map": {
+      "encoding_name": "encoding_name (verbatim)",
+      "commit_sha": "commit_sha (verbatim)",
+      "training_date": "created_utc (RENAME; value verbatim, immutable -- NOT re-stamped)",
+      "model_architecture+model_variant": "arch (resolve to the WP9 CnnArch/GnnArch dataclass via the registry spec + embedded config; NOT re-sniffed from tensor shapes)",
+      "corpus_sha256": "corpus_sha256 (verbatim, optional)",
+      "train_config_path": "DROPPED (v2 embeds the complete config snapshot instead)",
+      "schema_version_1": "recognised as v1 -> dispatch to the legacy read path; NOT copied as v2",
+      "run_id": "SYNTHESIZED-NEVER (absent in v1; a legacy read leaves it unset; a v2 stamp is minted ONLY by an explicit wire-signature-gated weights-only strip + re-stamp, never on read; LAW-12)"
+    },
+    "expectation": "full resume-capable read via the field map above; optimizer/scaler/scheduler present; created_utc == training_date value verbatim; train_config_path dropped; run_id unset (no synthetic provenance)."
+  },
+
+  "cross_shape_notes": {
+    "encoding_name_lineage": "BARE + LIGHT anchors stamp encoding_name='v6_live2_ls'; the FULL-v1 checkpoint_00272357 stamps encoding_name='v6_live2' (an OLDER single-window lineage). Both are REAL captured values.",
+    "all_three_are_O3b_clean": "0 killed-branch-prefix keys across all three shapes -- the O3b reject guard (T-CK-22..26) is tested with SYNTHETIC dirty state dicts, never these clean real anchors."
+  }
+}

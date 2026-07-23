@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "fixture": "WP10 resume/scheduler/F1/E0/lr behavior goldens",
+    "derived_from": "wp/WP10/oldside/resume_goldens.json (#C3 dispatcher CAPTURE)",
+    "purpose": "Suite A T-CK-15..20 (+ O-F1E0) PIN these literal values; the OLD code IS the spec (zero-behavior-change). ORACLE-WRITE does NOT re-derive.",
+    "old_repo_commit": "d769f46ea1b64cb2eaa369033bbea048a3d1201a",
+    "torch": "2.11.0+cu130 (device=cpu for all #C3 captures)",
+    "warning_event_key": "the emitted event mapping carries its name under the 'event' key (mantis emit convention, cf. config.emit.to_event_payload)"
+  },
+
+  "T-CK-15_frozen_key_set": {
+    "source_old_symbol": "training.orchestrator.RESUME_CHECKPOINT_OWNED_KEYS",
+    "count": 18,
+    "sorted_keys": [
+      "board_size", "cluster_threshold", "cluster_window_size", "encoding", "eta_min",
+      "filters", "in_channels", "input_channels", "legal_move_radius", "lr", "lr_schedule",
+      "min_lr", "model", "res_blocks", "scheduler_t_max", "se_reduction_ratio",
+      "total_steps", "weight_decay"
+    ]
+  },
+
+  "T-CK-16_declared_wins_base_defers": {
+    "source_old_symbol": "training.trainer_ckpt_load._apply_config_overrides_f1",
+    "inputs": {
+      "baked_config": {"aux_chain_weight": 0.5, "grad_clip": 1.0, "entropy_reg_weight": 0.01},
+      "config_overrides": {"aux_chain_weight": 0.2, "grad_clip": 2.0, "ply_index_weight": null},
+      "declared_keys": ["aux_chain_weight", "ply_index_weight"]
+    },
+    "expected_output": {
+      "resolved_config": {
+        "aux_chain_weight": 0.2,
+        "grad_clip": 1.0,
+        "entropy_reg_weight": 0.01,
+        "ply_index_weight": null
+      },
+      "deferred_keys": ["grad_clip"],
+      "warning_event": "resume_base_default_deferred_to_baked",
+      "warning_fields": {"knob": "grad_clip", "base_default": 2.0, "checkpoint_baked": 1.0}
+    },
+    "per_key_semantics": {
+      "aux_chain_weight": "DECLARED -> override 0.2 WINS over baked 0.5",
+      "grad_clip": "base-inherited (not declared) + baked -> DEFERS to baked 1.0 (override 2.0 suppressed) + WARNs; added to deferred set",
+      "ply_index_weight": "DECLARED null -> TRAVELS (config set to None); not in baked so no defer",
+      "entropy_reg_weight": "not overridden -> baked 0.01 unchanged"
+    }
+  },
+
+  "T-CK-17_scheduler_horizon_gate": {
+    "source_old_symbol": "orchestrator.build_resume_config_overrides + trainer_ckpt_load.load_checkpoint (re-horizon branch)",
+    "inputs": {
+      "baked_config_A": {"lr_schedule": "cosine", "total_steps": 1000, "scheduler_t_max": 1000, "eta_min": 1e-05, "lr": 1e-03},
+      "baked_scheduler_state_T_max": 1000,
+      "launch_variant_B": {"total_steps": 5000, "scheduler_t_max": 5000}
+    },
+    "expected_output": {
+      "override_scheduler_horizon_FALSE": {
+        "overrides_contains_total_steps": false,
+        "overrides_contains_scheduler_t_max": false,
+        "resumed_scheduler_T_max": 1000
+      },
+      "override_scheduler_horizon_TRUE": {
+        "overrides_contains_total_steps": true,
+        "overrides_contains_scheduler_t_max": true,
+        "overrides_total_steps": 5000,
+        "overrides_scheduler_t_max": 5000,
+        "resumed_scheduler_T_max": 5000
+      }
+    }
+  },
+
+  "T-CK-18_missing_scheduler_state": {
+    "source_old_symbol": "trainer_ckpt_load.load_checkpoint (scheduler_state None branch)",
+    "inputs": {
+      "payload": "full checkpoint (model_state/config/optimizer_state/scaler_state/step present) with scheduler_state = None",
+      "baked_config_lr_schedule": "cosine"
+    },
+    "expected_output": {
+      "no_allow_fresh": {
+        "raises": true,
+        "raise_type": "ValueError",
+        "raise_message_contains": "scheduler_state missing from checkpoint"
+      },
+      "allow_fresh_scheduler_TRUE": {
+        "raises": false,
+        "warning_event": "scheduler_state_missing_fresh_start"
+      }
+    }
+  },
+
+  "T-CK-19_full_vs_weights_restore": {
+    "source_old_symbol": "trainer_ckpt_load.load_checkpoint (is_full_ckpt full-vs-weights branch)",
+    "inputs": {
+      "is_full_ckpt_rule": "all present AND not None for k in (model_state, config, optimizer_state, scaler_state, step)",
+      "full_ckpt_baked_step": 750,
+      "weights_wrapper_step": 500
+    },
+    "expected_output": {
+      "full_resume": {
+        "loaded_from_full_checkpoint": true,
+        "resumed_step": 750,
+        "optimizer_param_groups_restored": 2,
+        "scaler_restored": true
+      },
+      "weights_only_resume": {
+        "loaded_from_full_checkpoint": false,
+        "resumed_step_from_wrapper": 500,
+        "optimizer_fresh": true
+      }
+    },
+    "CAVEAT_for_oracle_write": "the synthetic full checkpoint's optimizer had an EMPTY per-param 'state' blob (tiny net never took a gradient step before save). PIN on loaded_from_full_checkpoint, resumed_step, optimizer.param_groups restored (2, from the weight-decay split), scaler restored -- NOT on a non-empty optimizer state blob. For the weights path pin: loaded_from_full_checkpoint False, step 500, optimizer fresh."
+  },
+
+  "T-CK-20_lr_resume_owned": {
+    "source_old_symbol": "config.resolve.lr.resolve_lr_provenance + trainer_ckpt_load.load_checkpoint (lr provenance warn branch)",
+    "inputs": {
+      "lr_in_frozen_owned_set": true,
+      "baked_lr": 0.001,
+      "declared_lr_variant": 0.002
+    },
+    "expected_output": {
+      "resolve_lr_provenance_override_ignored_case": {
+        "declared": 0.002, "baked": 0.001, "effective": 0.0008, "override_ignored": true
+      },
+      "resolve_lr_provenance_normal_case_declared_eq_baked": {"override_ignored": false},
+      "end_to_end_full_resume_with_declared_lr_ne_baked": {
+        "warning_event": "lr_declared_override_ignored_on_full_resume",
+        "warning_fired": true,
+        "resumed_effective_lr": 0.001
+      }
+    }
+  }
+}
