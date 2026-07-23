@@ -1,0 +1,1507 @@
+{
+ "_source": "WP-SP dispatcher old-side CAPTURE #C1/#C2/#C2b/#C2c \u2014 see wp/WPSP/CAPTURE_LOG.md. error_message strings are deliberately NOT carried: every ADV oracle asserts on the exception CLASS (ADV-1a fires the endpoint arm, so a message substring would pass for the wrong reason). The dtype sweep keeps only the structured field/dtype pair.",
+ "seed": 20260723,
+ "payloads": {
+  "b6": {
+   "scalars": {
+    "contract_version": 1,
+    "builder_impl": 1,
+    "n_graphs": 6
+   },
+   "arrays": {
+    "node_feat": {
+     "shape": [
+      23694
+     ],
+     "dtype": "float32",
+     "sha256_16": "0c8840ad2e0c6cf3"
+    },
+    "node_coords": {
+     "shape": [
+      4308
+     ],
+     "dtype": "int32",
+     "sha256_16": "edb16c9418232892"
+    },
+    "edge_index": {
+     "shape": [
+      98832
+     ],
+     "dtype": "int64",
+     "sha256_16": "28b91724f9f4fd45"
+    },
+    "edge_attr": {
+     "shape": [
+      247080
+     ],
+     "dtype": "float32",
+     "sha256_16": "91f4ef16970b3a4e"
+    },
+    "node_offsets": {
+     "shape": [
+      7
+     ],
+     "dtype": "int64",
+     "sha256_16": "ed4af2fc2ca9852e"
+    },
+    "edge_offsets": {
+     "shape": [
+      7
+     ],
+     "dtype": "int64",
+     "sha256_16": "4e7a481eb04af41f"
+    },
+    "legal_offsets": {
+     "shape": [
+      7
+     ],
+     "dtype": "int64",
+     "sha256_16": "8f0a571c1c5e87ff"
+    },
+    "legal_node_gather": {
+     "shape": [
+      2088
+     ],
+     "dtype": "int64",
+     "sha256_16": "6877e62c445f87c3"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      2088
+     ],
+     "dtype": "int32",
+     "sha256_16": "87484db59a311072"
+    },
+    "n_nodes_checksum": {
+     "shape": [
+      6
+     ],
+     "dtype": "uint32",
+     "sha256_16": "4caed7f6cd26d2c8"
+    },
+    "n_stones": {
+     "shape": [
+      6
+     ],
+     "dtype": "uint16",
+     "sha256_16": "6e04e838b65a3239"
+    },
+    "window_center": {
+     "shape": [
+      12
+     ],
+     "dtype": "int32",
+     "sha256_16": "9e7c7292138b7e3d"
+    },
+    "current_player": {
+     "shape": [
+      6
+     ],
+     "dtype": "int8",
+     "sha256_16": "dfea2964b5deedea"
+    }
+   }
+  },
+  "b1": {
+   "scalars": {
+    "contract_version": 1,
+    "builder_impl": 1,
+    "n_graphs": 1
+   },
+   "arrays": {
+    "node_feat": {
+     "shape": [
+      3949
+     ],
+     "dtype": "float32",
+     "sha256_16": "c422f141fbfcbba1"
+    },
+    "node_coords": {
+     "shape": [
+      718
+     ],
+     "dtype": "int32",
+     "sha256_16": "847f2df3f899fb5a"
+    },
+    "edge_index": {
+     "shape": [
+      16472
+     ],
+     "dtype": "int64",
+     "sha256_16": "39a836425dde2ef3"
+    },
+    "edge_attr": {
+     "shape": [
+      41180
+     ],
+     "dtype": "float32",
+     "sha256_16": "a167700e12af7621"
+    },
+    "node_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "5535ef79df840e1b"
+    },
+    "edge_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "67e32a0402754f7c"
+    },
+    "legal_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "c5ab60a92780c5ff"
+    },
+    "legal_node_gather": {
+     "shape": [
+      348
+     ],
+     "dtype": "int64",
+     "sha256_16": "930720de4017c222"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      348
+     ],
+     "dtype": "int32",
+     "sha256_16": "5ccb5532875aa3cd"
+    },
+    "n_nodes_checksum": {
+     "shape": [
+      1
+     ],
+     "dtype": "uint32",
+     "sha256_16": "9ce54d98590e9d49"
+    },
+    "n_stones": {
+     "shape": [
+      1
+     ],
+     "dtype": "uint16",
+     "sha256_16": "102b51b9765a56a3"
+    },
+    "window_center": {
+     "shape": [
+      2
+     ],
+     "dtype": "int32",
+     "sha256_16": "35e3a6176b50da27"
+    },
+    "current_player": {
+     "shape": [
+      1
+     ],
+     "dtype": "int8",
+     "sha256_16": "4bf5122f344554c5"
+    }
+   }
+  },
+  "b0": {
+   "scalars": {
+    "contract_version": 1,
+    "builder_impl": 1,
+    "n_graphs": 0
+   },
+   "arrays": {
+    "node_feat": {
+     "shape": [
+      0
+     ],
+     "dtype": "float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "node_coords": {
+     "shape": [
+      0
+     ],
+     "dtype": "int32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_index": {
+     "shape": [
+      0
+     ],
+     "dtype": "int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_attr": {
+     "shape": [
+      0
+     ],
+     "dtype": "float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "node_offsets": {
+     "shape": [
+      1
+     ],
+     "dtype": "int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "edge_offsets": {
+     "shape": [
+      1
+     ],
+     "dtype": "int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "legal_offsets": {
+     "shape": [
+      1
+     ],
+     "dtype": "int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "legal_node_gather": {
+     "shape": [
+      0
+     ],
+     "dtype": "int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      0
+     ],
+     "dtype": "int32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "n_nodes_checksum": {
+     "shape": [
+      0
+     ],
+     "dtype": "uint32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "n_stones": {
+     "shape": [
+      0
+     ],
+     "dtype": "uint16",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "window_center": {
+     "shape": [
+      0
+     ],
+     "dtype": "int32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "current_player": {
+     "shape": [
+      0
+     ],
+     "dtype": "int8",
+     "sha256_16": "e3b0c44298fc1c14"
+    }
+   }
+  },
+  "empty_legal": {
+   "scalars": {
+    "contract_version": 1,
+    "builder_impl": 1,
+    "n_graphs": 1
+   },
+   "arrays": {
+    "node_feat": {
+     "shape": [
+      22
+     ],
+     "dtype": "float32",
+     "sha256_16": "10eef285deef7a4b"
+    },
+    "node_coords": {
+     "shape": [
+      4
+     ],
+     "dtype": "int32",
+     "sha256_16": "374708fff7719dd5"
+    },
+    "edge_index": {
+     "shape": [
+      0
+     ],
+     "dtype": "int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_attr": {
+     "shape": [
+      0
+     ],
+     "dtype": "float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "node_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "c571327cb01ac1de"
+    },
+    "edge_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "374708fff7719dd5"
+    },
+    "legal_offsets": {
+     "shape": [
+      2
+     ],
+     "dtype": "int64",
+     "sha256_16": "374708fff7719dd5"
+    },
+    "legal_node_gather": {
+     "shape": [
+      0
+     ],
+     "dtype": "int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      0
+     ],
+     "dtype": "int32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "n_nodes_checksum": {
+     "shape": [
+      1
+     ],
+     "dtype": "uint32",
+     "sha256_16": "26b25d457597a7b0"
+    },
+    "n_stones": {
+     "shape": [
+      1
+     ],
+     "dtype": "uint16",
+     "sha256_16": "47dc540c94ceb704"
+    },
+    "window_center": {
+     "shape": [
+      2
+     ],
+     "dtype": "int32",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "current_player": {
+     "shape": [
+      1
+     ],
+     "dtype": "int8",
+     "sha256_16": "4bf5122f344554c5"
+    }
+   }
+  }
+ },
+ "collated": {
+  "b6": {
+   "n_graphs": 6,
+   "device": "cpu",
+   "extra": {},
+   "tensors": {
+    "x": {
+     "shape": [
+      2154,
+      11
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "0c8840ad2e0c6cf3"
+    },
+    "edge_index": {
+     "shape": [
+      2,
+      49416
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "28b91724f9f4fd45"
+    },
+    "edge_attr": {
+     "shape": [
+      49416,
+      5
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "91f4ef16970b3a4e"
+    },
+    "legal_mask": {
+     "shape": [
+      2154
+     ],
+     "numpy_dtype": "bool",
+     "torch_dtype": "torch.bool",
+     "sha256_16": "4b146d6f20bb5ead"
+    },
+    "legal_offsets": {
+     "shape": [
+      7
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "8f0a571c1c5e87ff"
+    },
+    "legal_node_gather": {
+     "shape": [
+      2088
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "6877e62c445f87c3"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      2088
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "ab87bb3409d88b8e"
+    },
+    "node_offsets": {
+     "shape": [
+      7
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "ed4af2fc2ca9852e"
+    },
+    "node_coords": {
+     "shape": [
+      2154,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "f72dd3fbdd8b761d"
+    },
+    "window_center": {
+     "shape": [
+      6,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "7152d627fa4f40d4"
+    },
+    "current_player": {
+     "shape": [
+      6
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "334658f1779808c7"
+    },
+    "n_stones": {
+     "shape": [
+      6
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "dc1f33e8168ae420"
+    }
+   }
+  },
+  "b1": {
+   "n_graphs": 1,
+   "device": "cpu",
+   "extra": {},
+   "tensors": {
+    "x": {
+     "shape": [
+      359,
+      11
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "c422f141fbfcbba1"
+    },
+    "edge_index": {
+     "shape": [
+      2,
+      8236
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "39a836425dde2ef3"
+    },
+    "edge_attr": {
+     "shape": [
+      8236,
+      5
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "a167700e12af7621"
+    },
+    "legal_mask": {
+     "shape": [
+      359
+     ],
+     "numpy_dtype": "bool",
+     "torch_dtype": "torch.bool",
+     "sha256_16": "5d1cb81b84f9ac64"
+    },
+    "legal_offsets": {
+     "shape": [
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "c5ab60a92780c5ff"
+    },
+    "legal_node_gather": {
+     "shape": [
+      348
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "930720de4017c222"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      348
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "544d1ca37a2e2bd9"
+    },
+    "node_offsets": {
+     "shape": [
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "5535ef79df840e1b"
+    },
+    "node_coords": {
+     "shape": [
+      359,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "619b88aa54eed868"
+    },
+    "window_center": {
+     "shape": [
+      1,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "8b47fb8c37b46edd"
+    },
+    "current_player": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "7c9fa136d4413fa6"
+    },
+    "n_stones": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "a111f275cc2e7588"
+    }
+   }
+  },
+  "b0_full": {
+   "outcome": "ok",
+   "n_graphs": 0,
+   "device": "cpu",
+   "extra": {},
+   "tensors": {
+    "x": {
+     "shape": [
+      0,
+      11
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_index": {
+     "shape": [
+      2,
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_attr": {
+     "shape": [
+      0,
+      5
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "legal_mask": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "bool",
+     "torch_dtype": "torch.bool",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "legal_offsets": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "legal_node_gather": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "node_offsets": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "node_coords": {
+     "shape": [
+      0,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "window_center": {
+     "shape": [
+      0,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "current_player": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "n_stones": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    }
+   }
+  },
+  "b0_off": {
+   "outcome": "ok",
+   "n_graphs": 0,
+   "device": "cpu",
+   "extra": {},
+   "tensors": {
+    "x": {
+     "shape": [
+      0,
+      11
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_index": {
+     "shape": [
+      2,
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "edge_attr": {
+     "shape": [
+      0,
+      5
+     ],
+     "numpy_dtype": "float32",
+     "torch_dtype": "torch.float32",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "legal_mask": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "bool",
+     "torch_dtype": "torch.bool",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "legal_offsets": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "legal_node_gather": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "policy_dst_slot": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "node_offsets": {
+     "shape": [
+      1
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "af5570f5a1810b7a"
+    },
+    "node_coords": {
+     "shape": [
+      0,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "window_center": {
+     "shape": [
+      0,
+      2
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "current_player": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    },
+    "n_stones": {
+     "shape": [
+      0
+     ],
+     "numpy_dtype": "int64",
+     "torch_dtype": "torch.int64",
+     "sha256_16": "e3b0c44298fc1c14"
+    }
+   }
+  }
+ },
+ "b6_scalars": {
+  "off_window_sentinel_count": 1800,
+  "legal_mask_sum": 2088,
+  "Lg": 2088
+ },
+ "hotpath": {
+  "logits_recipe": "torch.randn(2088, generator=torch.Generator().manual_seed(20260723), dtype=float32)",
+  "torch_num_threads": 1,
+  "logits_sha256_16": "cee5278eb22a5532",
+  "segment_softmax": {
+   "shape": [
+    2088
+   ],
+   "dtype": "torch.float32",
+   "sha256_16": "2e83f4f22613f6b1"
+  },
+  "stone_mask": {
+   "shape": [
+    2154
+   ],
+   "dtype": "torch.bool",
+   "sha256_16": "89d8f5d25bc078d2",
+   "true_count": 60
+  }
+ },
+ "adv_batch_level": {
+  "ADV-1a_OffsetsNonMonotonic": {
+   "expected_by_design": "OffsetsNonMonotonic",
+   "recipe": "node_offsets[-1] = N-1 (old test :142-147, drop-last-node)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "ADV-2a_ScatterGatherCrossesGraph": {
+   "expected_by_design": "ScatterGatherCrossesGraph",
+   "recipe": "legal_node_gather[0] = node_offsets[1] (old test :157-162)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "ScatterGatherCrossesGraph"
+  },
+  "ADV-3_EdgeCrossesGraphBoundary": {
+   "expected_by_design": "EdgeCrossesGraphBoundary",
+   "recipe": "edge_index.reshape(2,E)[1,0] = node_offsets[1] (old test :175-182)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "EdgeCrossesGraphBoundary"
+  },
+  "ADV-4_DtypeMismatch": {
+   "expected_by_design": "DtypeMismatch",
+   "recipe": "edge_index = edge_index.astype(np.uint16) (old test :185-189)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  }
+ },
+ "suite_a_remaining": {
+  "A-03_contract_version_mismatch": {
+   "expected_by_design": "GraphContractVersionMismatch",
+   "recipe": "contract_version = 2 (old :123)",
+   "collate_kwargs": {
+    "expected_version": 1,
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "GraphContractVersionMismatch"
+  },
+  "A-04_non_native_builder": {
+   "expected_by_design": "NonNativeSampleBuilder",
+   "recipe": "builder_impl = 2 (old :130)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "NonNativeSampleBuilder"
+  },
+  "A-04b_non_native_builder_allow_flag": {
+   "expected_by_design": "no raise (allow_oracle_builder=True)",
+   "recipe": "builder_impl = 2 + allow_oracle_builder=True, semantic='off' (old :136)",
+   "collate_kwargs": {
+    "device": "cpu",
+    "allow_oracle_builder": true,
+    "semantic": "off"
+   },
+   "outcome": "NO_RAISE",
+   "error_class": null
+  },
+  "A-04c_non_native_builder_env_flag": {
+   "expected_by_design": "no raise (MANTIS_ALLOW_ORACLE_BUILDER=1)",
+   "recipe": "builder_impl = 2 + env MANTIS_ALLOW_ORACLE_BUILDER=1, semantic='off'",
+   "NOTE": "env var name is an OLD-REPO TOKEN; DV-3 renames it MANTIS_ALLOW_ORACLE_BUILDER",
+   "collate_kwargs": {
+    "device": "cpu",
+    "semantic": "off"
+   },
+   "outcome": "NO_RAISE",
+   "error_class": null
+  },
+  "A-06_ADV-1b_interior_off_by_one": {
+   "expected_by_design": "NodeCountChecksum",
+   "recipe": "node_offsets[1] += 1 (old :150)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "NodeCountChecksum"
+  },
+  "A-08_ADV-2b_slot_aliasing": {
+   "expected_by_design": "ScatterSlotAliasing",
+   "recipe": "collide two in-window slots of graph 0 (old :165-172)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "ScatterSlotAliasing"
+  },
+  "A-11_ADV-7_slot_map_unrotated": {
+   "expected_by_design": "ScatterSlotCanonicalMismatch",
+   "recipe": "window_center[0] += 1, semantic='full' (old :192-198)",
+   "collate_kwargs": {
+    "device": "cpu",
+    "semantic": "full"
+   },
+   "outcome": "RAISE",
+   "error_class": "ScatterSlotCanonicalMismatch"
+  },
+  "A-12_ADV-8_edge_attr_permuted": {
+   "expected_by_design": "EdgeAttrGeometryMismatch",
+   "recipe": "edge_attr[3] = -edge_attr[3], semantic='full' (old :201-205)",
+   "collate_kwargs": {
+    "device": "cpu",
+    "semantic": "full"
+   },
+   "outcome": "RAISE",
+   "error_class": "EdgeAttrGeometryMismatch"
+  },
+  "A-13_ADV-9_gather_at_stone_node": {
+   "expected_by_design": "GatherNotLegalNode",
+   "recipe": "legal_node_gather[0] = node_offsets[0], semantic='full' (old :208-213)",
+   "collate_kwargs": {
+    "device": "cpu",
+    "semantic": "full"
+   },
+   "outcome": "RAISE",
+   "error_class": "GatherNotLegalNode"
+  },
+  "A-15_batch_count_mismatch": {
+   "expected_by_design": "BatchCountMismatch",
+   "recipe": "current_player = current_player[:-1] (old :245-249)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "BatchCountMismatch"
+  },
+  "A-17a_scatter_slot_400": {
+   "expected_by_design": "ScatterSlotOutOfBounds",
+   "recipe": "policy_dst_slot[0] = 400 (coverage extension; graph_collate.py:452-454)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "ScatterSlotOutOfBounds"
+  },
+  "A-17b_scatter_slot_minus2": {
+   "expected_by_design": "ScatterSlotOutOfBounds",
+   "recipe": "policy_dst_slot[0] = -2 (coverage extension)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "ScatterSlotOutOfBounds"
+  },
+  "A-18_edge_index_out_of_bounds": {
+   "expected_by_design": "EdgeIndexOutOfBounds",
+   "recipe": "edge_index[0,0] = N+5 (coverage extension; graph_collate.py:430)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "EdgeIndexOutOfBounds"
+  },
+  "A-19a_node_feat_dim_mismatch": {
+   "expected_by_design": "NodeFeatDimMismatch",
+   "recipe": "node_feat = node_feat[:-1] (coverage extension; graph_collate.py:364)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "NodeFeatDimMismatch"
+  },
+  "A-19b_edge_attr_dim_mismatch": {
+   "expected_by_design": "EdgeAttrDimMismatch",
+   "recipe": "edge_attr = edge_attr[:-1] (coverage extension; graph_collate.py:371)",
+   "collate_kwargs": {
+    "device": "cpu"
+   },
+   "outcome": "RAISE",
+   "error_class": "EdgeAttrDimMismatch"
+  },
+  "A-14_empty_legal_set": {
+   "expected_by_design": "EmptyLegalSet",
+   "recipe": "hand-built 1-stone/0-legal single-graph payload (old :219-242); fixture c2c_empty_legal_payload.npz",
+   "outcome": "RAISE",
+   "error_class": "EmptyLegalSet"
+  },
+  "A-16_aug_round_trip_mismatch": {
+   "expected_by_design": "AugRoundTripMismatch",
+   "recipe": "target_argmax_cells[0] = (99999, 99999), semantic='full' (old :252-260)",
+   "outcome": "RAISE",
+   "error_class": "AugRoundTripMismatch"
+  }
+ },
+ "dtype_sweep": {
+  "node_feat": {
+   "wrong_dtype": "float64",
+   "expected_dtype": "float32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "node_coords": {
+   "wrong_dtype": "int64",
+   "expected_dtype": "int32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "edge_index": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int64",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "edge_attr": {
+   "wrong_dtype": "float64",
+   "expected_dtype": "float32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "node_offsets": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int64",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "edge_offsets": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int64",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "legal_offsets": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int64",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "legal_node_gather": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int64",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "policy_dst_slot": {
+   "wrong_dtype": "int64",
+   "expected_dtype": "int32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "n_nodes_checksum": {
+   "wrong_dtype": "int64",
+   "expected_dtype": "uint32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "n_stones": {
+   "wrong_dtype": "int64",
+   "expected_dtype": "uint16",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "window_center": {
+   "wrong_dtype": "int64",
+   "expected_dtype": "int32",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  },
+  "current_player": {
+   "wrong_dtype": "int32",
+   "expected_dtype": "int8",
+   "outcome": "RAISE",
+   "error_class": "DtypeMismatch"
+  }
+ },
+ "canary_cadence": {
+  "semantic_off": [
+   {
+    "call": 0,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 1,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 2,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 3,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 4,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 5,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 6,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 7,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   }
+  ],
+  "semantic_full": [
+   {
+    "call": 0,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 1,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 2,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 3,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 4,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 5,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 6,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 7,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   }
+  ],
+  "semantic_canary_period_3": [
+   {
+    "call": 0,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 1,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 2,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 3,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 4,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 5,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 6,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 7,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   }
+  ],
+  "semantic_canary_period_64": [
+   {
+    "call": 0,
+    "outcome": "RAISE",
+    "error_class": "ScatterSlotCanonicalMismatch"
+   },
+   {
+    "call": 1,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 2,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 3,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 4,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 5,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 6,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   },
+   {
+    "call": 7,
+    "outcome": "NO_RAISE",
+    "error_class": null
+   }
+  ],
+  "note": "corruption = ADV-7 window_center[0] += 1 (semantic layer only); reset_semantic_canary() called before each trace"
+ },
+ "boundary_sweep": {
+  "node_offsets[zero=0]+1": {
+   "array": "node_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "node_offsets[zero=0]-1": {
+   "array": "node_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "node_offsets[first_interior=1]+1": {
+   "array": "node_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "NodeCountChecksum"
+  },
+  "node_offsets[first_interior=1]-1": {
+   "array": "node_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "NodeCountChecksum"
+  },
+  "node_offsets[last_interior=5]+1": {
+   "array": "node_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "NodeCountChecksum"
+  },
+  "node_offsets[last_interior=5]-1": {
+   "array": "node_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "NodeCountChecksum"
+  },
+  "node_offsets[B=6]+1": {
+   "array": "node_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "node_offsets[B=6]-1": {
+   "array": "node_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "edge_offsets[zero=0]+1": {
+   "array": "edge_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "edge_offsets[zero=0]-1": {
+   "array": "edge_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "edge_offsets[first_interior=1]+1": {
+   "array": "edge_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "EdgeCrossesGraphBoundary"
+  },
+  "edge_offsets[first_interior=1]-1": {
+   "array": "edge_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "EdgeCrossesGraphBoundary"
+  },
+  "edge_offsets[last_interior=5]+1": {
+   "array": "edge_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "EdgeCrossesGraphBoundary"
+  },
+  "edge_offsets[last_interior=5]-1": {
+   "array": "edge_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "EdgeCrossesGraphBoundary"
+  },
+  "edge_offsets[B=6]+1": {
+   "array": "edge_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "edge_offsets[B=6]-1": {
+   "array": "edge_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "legal_offsets[zero=0]+1": {
+   "array": "legal_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "legal_offsets[zero=0]-1": {
+   "array": "legal_offsets",
+   "index": 0,
+   "position": "zero",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "legal_offsets[first_interior=1]+1": {
+   "array": "legal_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "ScatterGatherCrossesGraph"
+  },
+  "legal_offsets[first_interior=1]-1": {
+   "array": "legal_offsets",
+   "index": 1,
+   "position": "first_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "ScatterGatherCrossesGraph"
+  },
+  "legal_offsets[last_interior=5]+1": {
+   "array": "legal_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "ScatterGatherCrossesGraph"
+  },
+  "legal_offsets[last_interior=5]-1": {
+   "array": "legal_offsets",
+   "index": 5,
+   "position": "last_interior",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "ScatterGatherCrossesGraph"
+  },
+  "legal_offsets[B=6]+1": {
+   "array": "legal_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": 1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  },
+  "legal_offsets[B=6]-1": {
+   "array": "legal_offsets",
+   "index": 6,
+   "position": "B",
+   "delta": -1,
+   "outcome": "RAISE",
+   "error_class": "OffsetsNonMonotonic"
+  }
+ }
+}

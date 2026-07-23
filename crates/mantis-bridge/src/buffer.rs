@@ -301,6 +301,12 @@ impl PyReplayBuffer {
         self.inner.resize(new_capacity).map_err(PyValueError::new_err)
     }
 
+    /// Count valid outcomes in the half-open interval `[lo, hi)` (live prefix
+    /// only). Feeds `buffer_composition()`'s `draw_target_fraction`.
+    pub fn outcome_in_range_count(&self, lo: f32, hi: f32) -> usize {
+        self.inner.outcome_in_range_count(lo, hi)
+    }
+
     /// Set the game-length weight schedule.
     pub fn set_weight_schedule(
         &mut self,

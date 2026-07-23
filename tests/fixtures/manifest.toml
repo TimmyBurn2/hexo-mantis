@@ -223,3 +223,91 @@ added_by = "WP10"
 path = "train/resume_goldens.json"
 sha256 = "4f22d3b92b2e4bbdd0af0e6f135e98358f7dab76b71c44d8f5a09f44bd2b8170"
 added_by = "WP10"
+
+# WP-SP (selfplay) — ⊕ oracle-first fixture bank under tests/fixtures/selfplay/.
+# PROMOTED from the dispatcher-owned old-side capture (wp/WPSP/CAPTURE_LOG.md, frozen
+# old rev): the #C1 collate payloads + collate outputs (byte-parity targets for Suite B),
+# the #C2/#C2b/#C2c ADV expectation table (exception CLASSES only — no message strings,
+# no old-repo tokens), the #C3b scripted drain/push goldens, the #C3a encoding-resolve
+# table, the #C3d runner-config ctor-kwarg golden (WP6-KILLed fields removed), and the
+# #C3c instrumentation pure-function battery. All gate-6-clean (largest 124 KB).
+
+[[required]]
+path = "selfplay/collate/b6_payload.npz"
+sha256 = "73f586551c9f0726d1da0565c159604c77d798491a6410de259cba8b65f7db6d"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b6_collated.npz"
+sha256 = "333526fb3e9fe56457e33e1ec5a7443ebae9041ff4c48204c1f9134cfce7f0e6"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b6_hotpath.npz"
+sha256 = "e16e146afbfdb7a79767afc0d97656731b8671c0bf1d122143c6d616f373ba95"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b1_payload.npz"
+sha256 = "c4d8a4a217b0f37fda5748a102682dd4d82571411c67d351d02bcd14b96cc41d"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b1_collated.npz"
+sha256 = "538d50c51f4917235e1aaafe81c5c978bd2466f27ad0c5598eb4dbbe2023b975"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b0_payload.npz"
+sha256 = "ebf7da7ff914fffba0d05504aef0181f362cb449ee46c7d2b3a8a755b251034e"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/b0_collated.npz"
+sha256 = "c7893e44284821d7e8f6241b01113b11ffa2640d1411ba006bf8da5183cd60fd"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/empty_legal_payload.npz"
+sha256 = "c49dc3ee9db6d1bd85cb8e2e340594bb7ecf2b9b7426ff9908a12c551d24230d"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/collate/collate_expectations.json"
+sha256 = "47e92ca46336f544d256194f0c029d74ce8621c0b42290a7cdeee51fec49efc9"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/drain/collect_data_input.npz"
+sha256 = "3b8ae72fcf7f47035de7ac0669ac122e88021ff13af3b101d381255d290ccbc2"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/drain/dense_pushed.npz"
+sha256 = "56f37e3f3e92cde24849d43cf11909296f4054d1044897abca753d09e08b22c7"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/drain/graph_pushed.npz"
+sha256 = "659d5a9550373c590787110246eddd443351aa19af7f0492b7d954f27ac27f78"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/drain/drain_goldens.json"
+sha256 = "6c14cbf41716a797778cf7fb85ae9064f41971a676726c0ed51d7dfdcd47ddd9"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/pool/encoding_resolve.json"
+sha256 = "310027040aee1ccb302b27d2428ff6dfcc117c00b9eb22df9f37220ebab6ff34"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/pool/runner_config_goldens.json"
+sha256 = "8f88c88be2660a2f75ff8fbdef4d6a7be6091e5b692416a1983c31679bf0974b"
+added_by = "WP-SP"
+
+[[required]]
+path = "selfplay/instrumentation/pure_function_battery.json"
+sha256 = "75ae22188e4aed0411c46fb6ad750de691732a38cbe0d38d5d7e842ab54f402b"
+added_by = "WP-SP"

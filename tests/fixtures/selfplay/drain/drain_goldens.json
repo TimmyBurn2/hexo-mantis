@@ -1,0 +1,4674 @@
+{
+ "_method": "REAL WorkerPool._run_stats_loop bound to a stub pool; pool module globals emit_event/time/log replaced by recorders; runner, replay_buffer, recent_buffer and recorder are recording stubs; PoolInstrumentation is REAL. One loop iteration.",
+ "_constants": {
+  "trunk_size": 19,
+  "n_kept_planes": 8,
+  "feat_len": 2888,
+  "chain_len": 2166,
+  "policy_len": 362,
+  "effective_sims_per_move": 111,
+  "last_pos_generated_before": 100,
+  "runner_positions_generated": 340,
+  "runner_counters": {
+   "games_completed": 6,
+   "x_wins": 2,
+   "o_wins": 1,
+   "draws": 3
+  },
+  "games_batch": [
+   [
+    11,
+    1,
+    [
+     [
+      0,
+      0
+     ],
+     [
+      50,
+      50
+     ],
+     [
+      51,
+      50
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      0
+     ],
+     [
+      52,
+      50
+     ],
+     [
+      53,
+      50
+     ],
+     [
+      3,
+      0
+     ],
+     [
+      4,
+      0
+     ],
+     [
+      54,
+      50
+     ],
+     [
+      55,
+      50
+     ],
+     [
+      5,
+      0
+     ]
+    ],
+    0,
+    0,
+    5,
+    7,
+    3,
+    0,
+    0
+   ],
+   [
+    24,
+    2,
+    [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      3,
+      1
+     ]
+    ],
+    1,
+    1,
+    7,
+    7,
+    1,
+    1,
+    4
+   ],
+   [
+    250,
+    0,
+    [
+     [
+      -1,
+      -1
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      5,
+      5
+     ]
+    ],
+    2,
+    2,
+    1,
+    9,
+    5,
+    0,
+    2
+   ],
+   [
+    30,
+    0,
+    [],
+    3,
+    3,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   [
+    15,
+    1,
+    [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      3,
+      1
+     ]
+    ],
+    0,
+    7,
+    2,
+    3,
+    2,
+    1,
+    0
+   ],
+   [
+    9,
+    3,
+    [
+     [
+      -1,
+      -1
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      5,
+      5
+     ]
+    ],
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0
+   ]
+  ],
+  "collect_data_input_npz": "c3b_collect_data_input.npz",
+  "graph_rows_recipe": "graph_rows(): 3 opaque tuples (f32[6], i64[4], int, float)"
+ },
+ "_nondeterminism": {
+  "game_id": "uuid4().hex per game_complete event \u2014 EXCLUDED from this golden entirely; only the [0-9a-f]{32} format is contract (PREREG C-03)."
+ },
+ "variants": {
+  "dense_5s_crossed": {
+   "clock_sequence": [
+    1000.0,
+    1002.0,
+    1006.5
+   ],
+   "clock_calls_consumed": 3,
+   "sleeps": [
+    0.1
+   ],
+   "runner_call_order": [
+    "collect_data",
+    "drain_game_results"
+   ],
+   "buffer_calls": [
+    {
+     "method": "push_many",
+     "tag": "push_many_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "c63ad8a0b7747eb2"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "8beb667f90b0eaae"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "d50e844af7d77e77"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "float32",
+       "sha256_16": "5ca205e933a5f08c"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "9efecec0286b022f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "7ec53bccf23fa12f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "10b030222feff0a4"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "252c0b6b080fa045"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "245bbd9d484dcf27"
+      }
+     ],
+     "kwargs": {
+      "value_target_valid": {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "52a5c4a10657220c"
+      }
+     }
+    }
+   ],
+   "recent_buffer_calls": [
+    {
+     "tag": "recent_push_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "1897e65c7da50555"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "6b57830c29b33aa5"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "2eb19a4ebaca2086"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": 1.0
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "9490dee185aa1e1c"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "2a7546aeabb5fc9c"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    },
+    {
+     "tag": "recent_push_1",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "e62ef3b165789289"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "1e4f3c781cce34e3"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "55acb543af36678c"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": -0.5
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "92f455d2c12a5792"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "0ddba771e192b1a4"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": false
+      }
+     }
+    },
+    {
+     "tag": "recent_push_2",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "59bf4f0516c23aa8"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "31ec560a59e07dd9"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "778ebd32bcbe52e3"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": -1.0
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "30b6e878e519c7c6"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "2a7546aeabb5fc9c"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": false
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    },
+    {
+     "tag": "recent_push_3",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "512db9a264ea9b65"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "cb4d4d26ea66f7bf"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "082cb032ece043d2"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": 0.25
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "f687bf2e095359d3"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "0ddba771e192b1a4"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    }
+   ],
+   "recorder_calls": [
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 11
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 2,
+     "game_length": 24
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 0,
+     "game_length": 250
+    },
+    {
+     "moves": [],
+     "winner_code": 0,
+     "game_length": 30
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 15
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 3,
+     "game_length": 9
+    }
+   ],
+   "log_calls": [
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 11
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 6
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 1.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 24
+      },
+      "winner": {
+       "kind": "str",
+       "value": "o"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 12
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 250
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 125
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 30
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 15
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 15
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 8
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 9
+      },
+      "winner": {
+       "kind": "str",
+       "value": "unknown"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 5
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    }
+   ],
+   "events": [
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c86efbed417b76d2bb68e25e916a1b5dba3cfa6c",
+     "winner": 0,
+     "moves": 11,
+     "moves_list": [
+      "(0,0)",
+      "(50,50)",
+      "(51,50)",
+      "(1,0)",
+      "(2,0)",
+      "(52,50)",
+      "(53,50)",
+      "(3,0)",
+      "(4,0)",
+      "(54,50)",
+      "(55,50)",
+      "(5,0)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 12,
+     "colony_extension_stone_total": 12,
+     "colony_extension_fraction": 1.0,
+     "longest_line_fraction": 1.0,
+     "n_components": 1,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 5,
+     "model_version_max": 7,
+     "model_version_distinct": 3,
+     "stride5_run_p90": 2,
+     "row_max_density": 6,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 1,
+     "moves": 24,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "colony",
+     "model_version_min": 7,
+     "model_version_max": 7,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 4
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 250,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 2,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "ply_cap",
+     "model_version_min": 1,
+     "model_version_max": 9,
+     "model_version_distinct": 5,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 2
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+     "winner": -1,
+     "moves": 30,
+     "moves_list": [],
+     "worker_id": 3,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 0,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.0,
+     "n_components": 0,
+     "terminal_reason": "other_draw",
+     "model_version_min": 0,
+     "model_version_max": 0,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 0,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 0,
+     "moves": 15,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "unknown",
+     "model_version_min": 2,
+     "model_version_max": 3,
+     "model_version_distinct": 2,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 9,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 0,
+     "model_version_max": 1,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "system_stats",
+     "buffer_size": 1234,
+     "buffer_capacity": 5678
+    }
+   ],
+   "event_order": [
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "system_stats"
+   ],
+   "game_id_format_ok": true,
+   "counters_after": {
+    "positions_pushed": 4,
+    "self_play_positions_pushed": 4,
+    "games_completed": 6,
+    "x_wins": 2,
+    "o_wins": 1,
+    "draws": 3,
+    "_total_sims": 26640,
+    "_sims_per_sec": 13320.0,
+    "_avg_game_length": 28.5,
+    "_game_lengths": [
+     6,
+     12,
+     125,
+     15,
+     8,
+     5
+    ],
+    "_last_drain_time": 1002.0,
+    "_last_pos_generated": 340
+   },
+   "instrumentation_after": {
+    "terminal_reason_counts": {
+     "six_in_a_row": 2,
+     "colony": 1,
+     "ply_cap": 1,
+     "other_draw": 1
+    },
+    "per_worker_draw_rates": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 1.0,
+     "3": 1.0
+    },
+    "current_stride5_p90": 1,
+    "model_version_summary": {
+     "n": 6,
+     "median_range": 1,
+     "p90_range": 2,
+     "max_range": 8,
+     "median_distinct": 2,
+     "spearman_rho_range_vs_draw": null
+    },
+    "recent_move_histories": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ]
+    ]
+   },
+   "npz": "c3b_dense_5s_crossed_pushed.npz"
+  },
+  "dense_5s_not_crossed": {
+   "clock_sequence": [
+    1000.0,
+    1002.0,
+    1003.25
+   ],
+   "clock_calls_consumed": 3,
+   "sleeps": [
+    0.1
+   ],
+   "runner_call_order": [
+    "collect_data",
+    "drain_game_results"
+   ],
+   "buffer_calls": [
+    {
+     "method": "push_many",
+     "tag": "push_many_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "c63ad8a0b7747eb2"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "8beb667f90b0eaae"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "d50e844af7d77e77"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "float32",
+       "sha256_16": "5ca205e933a5f08c"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "9efecec0286b022f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "7ec53bccf23fa12f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "10b030222feff0a4"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "252c0b6b080fa045"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "245bbd9d484dcf27"
+      }
+     ],
+     "kwargs": {
+      "value_target_valid": {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "52a5c4a10657220c"
+      }
+     }
+    }
+   ],
+   "recent_buffer_calls": [
+    {
+     "tag": "recent_push_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "1897e65c7da50555"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "6b57830c29b33aa5"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "2eb19a4ebaca2086"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": 1.0
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "9490dee185aa1e1c"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "2a7546aeabb5fc9c"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    },
+    {
+     "tag": "recent_push_1",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "e62ef3b165789289"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "1e4f3c781cce34e3"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "55acb543af36678c"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": -0.5
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "92f455d2c12a5792"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "0ddba771e192b1a4"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": false
+      }
+     }
+    },
+    {
+     "tag": "recent_push_2",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "59bf4f0516c23aa8"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "31ec560a59e07dd9"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "778ebd32bcbe52e3"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": -1.0
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "30b6e878e519c7c6"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "2a7546aeabb5fc9c"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": false
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    },
+    {
+     "tag": "recent_push_3",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "512db9a264ea9b65"
+      }
+     ],
+     "kwargs": {
+      "chain_planes": {
+       "kind": "ndarray",
+       "shape": [
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "cb4d4d26ea66f7bf"
+      },
+      "policy": {
+       "kind": "ndarray",
+       "shape": [
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "082cb032ece043d2"
+      },
+      "outcome": {
+       "kind": "float",
+       "value": 0.25
+      },
+      "ownership": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "f687bf2e095359d3"
+      },
+      "winning_line": {
+       "kind": "ndarray",
+       "shape": [
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "0ddba771e192b1a4"
+      },
+      "is_full_search": {
+       "kind": "bool",
+       "value": true
+      },
+      "value_target_valid": {
+       "kind": "bool",
+       "value": true
+      }
+     }
+    }
+   ],
+   "recorder_calls": [
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 11
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 2,
+     "game_length": 24
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 0,
+     "game_length": 250
+    },
+    {
+     "moves": [],
+     "winner_code": 0,
+     "game_length": 30
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 15
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 3,
+     "game_length": 9
+    }
+   ],
+   "log_calls": [
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 11
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 6
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 1.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 24
+      },
+      "winner": {
+       "kind": "str",
+       "value": "o"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 12
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 250
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 125
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 30
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 15
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 15
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 8
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 9
+      },
+      "winner": {
+       "kind": "str",
+       "value": "unknown"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 5
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    }
+   ],
+   "events": [
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c86efbed417b76d2bb68e25e916a1b5dba3cfa6c",
+     "winner": 0,
+     "moves": 11,
+     "moves_list": [
+      "(0,0)",
+      "(50,50)",
+      "(51,50)",
+      "(1,0)",
+      "(2,0)",
+      "(52,50)",
+      "(53,50)",
+      "(3,0)",
+      "(4,0)",
+      "(54,50)",
+      "(55,50)",
+      "(5,0)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 12,
+     "colony_extension_stone_total": 12,
+     "colony_extension_fraction": 1.0,
+     "longest_line_fraction": 1.0,
+     "n_components": 1,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 5,
+     "model_version_max": 7,
+     "model_version_distinct": 3,
+     "stride5_run_p90": 2,
+     "row_max_density": 6,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 1,
+     "moves": 24,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "colony",
+     "model_version_min": 7,
+     "model_version_max": 7,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 4
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 250,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 2,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "ply_cap",
+     "model_version_min": 1,
+     "model_version_max": 9,
+     "model_version_distinct": 5,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 2
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+     "winner": -1,
+     "moves": 30,
+     "moves_list": [],
+     "worker_id": 3,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 0,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.0,
+     "n_components": 0,
+     "terminal_reason": "other_draw",
+     "model_version_min": 0,
+     "model_version_max": 0,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 0,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 0,
+     "moves": 15,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "unknown",
+     "model_version_min": 2,
+     "model_version_max": 3,
+     "model_version_distinct": 2,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 9,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 0,
+     "model_version_max": 1,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 0
+    }
+   ],
+   "event_order": [
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete"
+   ],
+   "game_id_format_ok": true,
+   "counters_after": {
+    "positions_pushed": 4,
+    "self_play_positions_pushed": 4,
+    "games_completed": 6,
+    "x_wins": 2,
+    "o_wins": 1,
+    "draws": 3,
+    "_total_sims": 26640,
+    "_sims_per_sec": 13320.0,
+    "_avg_game_length": 28.5,
+    "_game_lengths": [
+     6,
+     12,
+     125,
+     15,
+     8,
+     5
+    ],
+    "_last_drain_time": 1002.0,
+    "_last_pos_generated": 340
+   },
+   "instrumentation_after": {
+    "terminal_reason_counts": {
+     "six_in_a_row": 2,
+     "colony": 1,
+     "ply_cap": 1,
+     "other_draw": 1
+    },
+    "per_worker_draw_rates": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 1.0,
+     "3": 1.0
+    },
+    "current_stride5_p90": 1,
+    "model_version_summary": {
+     "n": 6,
+     "median_range": 1,
+     "p90_range": 2,
+     "max_range": 8,
+     "median_distinct": 2,
+     "spearman_rho_range_vs_draw": null
+    },
+    "recent_move_histories": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ]
+    ]
+   },
+   "npz": "c3b_dense_5s_not_crossed_pushed.npz"
+  },
+  "graph": {
+   "clock_sequence": [
+    1000.0,
+    1002.0,
+    1006.5
+   ],
+   "clock_calls_consumed": 3,
+   "sleeps": [
+    0.1
+   ],
+   "runner_call_order": [
+    "collect_graph_data",
+    "drain_game_results"
+   ],
+   "buffer_calls": [
+    {
+     "method": "push_graph_position",
+     "tag": "push_graph_position_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        6
+       ],
+       "dtype": "float32",
+       "sha256_16": "e2c0a71510b5394d"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "int64",
+       "sha256_16": "a1e03200f1f82ad2"
+      },
+      {
+       "kind": "int",
+       "value": 3
+      },
+      {
+       "kind": "float",
+       "value": 0.5
+      }
+     ],
+     "kwargs": {
+      "game_id": {
+       "kind": "int",
+       "value": -1
+      }
+     }
+    },
+    {
+     "method": "push_graph_position",
+     "tag": "push_graph_position_1",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        6
+       ],
+       "dtype": "float32",
+       "sha256_16": "c2600e1170a6c887"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "int64",
+       "sha256_16": "73e200e2b048c86d"
+      },
+      {
+       "kind": "int",
+       "value": 4
+      },
+      {
+       "kind": "float",
+       "value": -1.0
+      }
+     ],
+     "kwargs": {
+      "game_id": {
+       "kind": "int",
+       "value": -1
+      }
+     }
+    },
+    {
+     "method": "push_graph_position",
+     "tag": "push_graph_position_2",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        6
+       ],
+       "dtype": "float32",
+       "sha256_16": "93253864fb1cc58f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "int64",
+       "sha256_16": "b0e6f25f2c9bcf8e"
+      },
+      {
+       "kind": "int",
+       "value": 5
+      },
+      {
+       "kind": "float",
+       "value": 0.0
+      }
+     ],
+     "kwargs": {
+      "game_id": {
+       "kind": "int",
+       "value": -1
+      }
+     }
+    }
+   ],
+   "recent_buffer_calls": [],
+   "recorder_calls": [
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 11
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 2,
+     "game_length": 24
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 0,
+     "game_length": 250
+    },
+    {
+     "moves": [],
+     "winner_code": 0,
+     "game_length": 30
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 15
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 3,
+     "game_length": 9
+    }
+   ],
+   "log_calls": [
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 11
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 6
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 1.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 24
+      },
+      "winner": {
+       "kind": "str",
+       "value": "o"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 12
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 250
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 125
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 30
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 15
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 15
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 8
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 9
+      },
+      "winner": {
+       "kind": "str",
+       "value": "unknown"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 5
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    }
+   ],
+   "events": [
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c86efbed417b76d2bb68e25e916a1b5dba3cfa6c",
+     "winner": 0,
+     "moves": 11,
+     "moves_list": [
+      "(0,0)",
+      "(50,50)",
+      "(51,50)",
+      "(1,0)",
+      "(2,0)",
+      "(52,50)",
+      "(53,50)",
+      "(3,0)",
+      "(4,0)",
+      "(54,50)",
+      "(55,50)",
+      "(5,0)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 12,
+     "colony_extension_stone_total": 12,
+     "colony_extension_fraction": 1.0,
+     "longest_line_fraction": 1.0,
+     "n_components": 1,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 5,
+     "model_version_max": 7,
+     "model_version_distinct": 3,
+     "stride5_run_p90": 2,
+     "row_max_density": 6,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 1,
+     "moves": 24,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "colony",
+     "model_version_min": 7,
+     "model_version_max": 7,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 4
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 250,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 2,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "ply_cap",
+     "model_version_min": 1,
+     "model_version_max": 9,
+     "model_version_distinct": 5,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 2
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+     "winner": -1,
+     "moves": 30,
+     "moves_list": [],
+     "worker_id": 3,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 0,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.0,
+     "n_components": 0,
+     "terminal_reason": "other_draw",
+     "model_version_min": 0,
+     "model_version_max": 0,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 0,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 0,
+     "moves": 15,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "unknown",
+     "model_version_min": 2,
+     "model_version_max": 3,
+     "model_version_distinct": 2,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 9,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 0,
+     "model_version_max": 1,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "system_stats",
+     "buffer_size": 1234,
+     "buffer_capacity": 5678
+    }
+   ],
+   "event_order": [
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "system_stats"
+   ],
+   "game_id_format_ok": true,
+   "counters_after": {
+    "positions_pushed": 3,
+    "self_play_positions_pushed": 3,
+    "games_completed": 6,
+    "x_wins": 2,
+    "o_wins": 1,
+    "draws": 3,
+    "_total_sims": 26640,
+    "_sims_per_sec": 13320.0,
+    "_avg_game_length": 28.5,
+    "_game_lengths": [
+     6,
+     12,
+     125,
+     15,
+     8,
+     5
+    ],
+    "_last_drain_time": 1002.0,
+    "_last_pos_generated": 340
+   },
+   "instrumentation_after": {
+    "terminal_reason_counts": {
+     "six_in_a_row": 2,
+     "colony": 1,
+     "ply_cap": 1,
+     "other_draw": 1
+    },
+    "per_worker_draw_rates": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 1.0,
+     "3": 1.0
+    },
+    "current_stride5_p90": 1,
+    "model_version_summary": {
+     "n": 6,
+     "median_range": 1,
+     "p90_range": 2,
+     "max_range": 8,
+     "median_distinct": 2,
+     "spearman_rho_range_vs_draw": null
+    },
+    "recent_move_histories": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ]
+    ]
+   },
+   "npz": "c3b_graph_pushed.npz"
+  },
+  "dense_no_recent_buffer": {
+   "clock_sequence": [
+    1000.0,
+    1002.0,
+    1006.5
+   ],
+   "clock_calls_consumed": 3,
+   "sleeps": [
+    0.1
+   ],
+   "runner_call_order": [
+    "collect_data",
+    "drain_game_results"
+   ],
+   "buffer_calls": [
+    {
+     "method": "push_many",
+     "tag": "push_many_0",
+     "args": [
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        8,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "c63ad8a0b7747eb2"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        6,
+        19,
+        19
+       ],
+       "dtype": "float16",
+       "sha256_16": "8beb667f90b0eaae"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        362
+       ],
+       "dtype": "float32",
+       "sha256_16": "d50e844af7d77e77"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "float32",
+       "sha256_16": "5ca205e933a5f08c"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "9efecec0286b022f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4,
+        361
+       ],
+       "dtype": "uint8",
+       "sha256_16": "7ec53bccf23fa12f"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "10b030222feff0a4"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "252c0b6b080fa045"
+      },
+      {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint16",
+       "sha256_16": "245bbd9d484dcf27"
+      }
+     ],
+     "kwargs": {
+      "value_target_valid": {
+       "kind": "ndarray",
+       "shape": [
+        4
+       ],
+       "dtype": "uint8",
+       "sha256_16": "52a5c4a10657220c"
+      }
+     }
+    }
+   ],
+   "recent_buffer_calls": null,
+   "recorder_calls": [
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 11
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 2,
+     "game_length": 24
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 0,
+     "game_length": 250
+    },
+    {
+     "moves": [],
+     "winner_code": 0,
+     "game_length": 30
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 15
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 3,
+     "game_length": 9
+    }
+   ],
+   "log_calls": [
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 11
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 6
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 1.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 24
+      },
+      "winner": {
+       "kind": "str",
+       "value": "o"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 12
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 250
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 125
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 30
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 15
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 15
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 8
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 9
+      },
+      "winner": {
+       "kind": "str",
+       "value": "unknown"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 5
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    }
+   ],
+   "events": [
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c86efbed417b76d2bb68e25e916a1b5dba3cfa6c",
+     "winner": 0,
+     "moves": 11,
+     "moves_list": [
+      "(0,0)",
+      "(50,50)",
+      "(51,50)",
+      "(1,0)",
+      "(2,0)",
+      "(52,50)",
+      "(53,50)",
+      "(3,0)",
+      "(4,0)",
+      "(54,50)",
+      "(55,50)",
+      "(5,0)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 12,
+     "colony_extension_stone_total": 12,
+     "colony_extension_fraction": 1.0,
+     "longest_line_fraction": 1.0,
+     "n_components": 1,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 5,
+     "model_version_max": 7,
+     "model_version_distinct": 3,
+     "stride5_run_p90": 2,
+     "row_max_density": 6,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 1,
+     "moves": 24,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "colony",
+     "model_version_min": 7,
+     "model_version_max": 7,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 4
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 250,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 2,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "ply_cap",
+     "model_version_min": 1,
+     "model_version_max": 9,
+     "model_version_distinct": 5,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 2
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+     "winner": -1,
+     "moves": 30,
+     "moves_list": [],
+     "worker_id": 3,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 0,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.0,
+     "n_components": 0,
+     "terminal_reason": "other_draw",
+     "model_version_min": 0,
+     "model_version_max": 0,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 0,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 0,
+     "moves": 15,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "unknown",
+     "model_version_min": 2,
+     "model_version_max": 3,
+     "model_version_distinct": 2,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 9,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 0,
+     "model_version_max": 1,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "system_stats",
+     "buffer_size": 1234,
+     "buffer_capacity": 5678
+    }
+   ],
+   "event_order": [
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "system_stats"
+   ],
+   "game_id_format_ok": true,
+   "counters_after": {
+    "positions_pushed": 4,
+    "self_play_positions_pushed": 4,
+    "games_completed": 6,
+    "x_wins": 2,
+    "o_wins": 1,
+    "draws": 3,
+    "_total_sims": 26640,
+    "_sims_per_sec": 13320.0,
+    "_avg_game_length": 28.5,
+    "_game_lengths": [
+     6,
+     12,
+     125,
+     15,
+     8,
+     5
+    ],
+    "_last_drain_time": 1002.0,
+    "_last_pos_generated": 340
+   },
+   "instrumentation_after": {
+    "terminal_reason_counts": {
+     "six_in_a_row": 2,
+     "colony": 1,
+     "ply_cap": 1,
+     "other_draw": 1
+    },
+    "per_worker_draw_rates": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 1.0,
+     "3": 1.0
+    },
+    "current_stride5_p90": 1,
+    "model_version_summary": {
+     "n": 6,
+     "median_range": 1,
+     "p90_range": 2,
+     "max_range": 8,
+     "median_distinct": 2,
+     "spearman_rho_range_vs_draw": null
+    },
+    "recent_move_histories": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ]
+    ]
+   },
+   "npz": "c3b_dense_no_recent_buffer_pushed.npz"
+  },
+  "dense_zero_rows": {
+   "clock_sequence": [
+    1000.0,
+    1002.0,
+    1006.5
+   ],
+   "clock_calls_consumed": 3,
+   "sleeps": [
+    0.1
+   ],
+   "runner_call_order": [
+    "collect_data",
+    "drain_game_results"
+   ],
+   "buffer_calls": [],
+   "recent_buffer_calls": [],
+   "recorder_calls": [
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 11
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 2,
+     "game_length": 24
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 0,
+     "game_length": 250
+    },
+    {
+     "moves": [],
+     "winner_code": 0,
+     "game_length": 30
+    },
+    {
+     "moves": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     "winner_code": 1,
+     "game_length": 15
+    },
+    {
+     "moves": [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     "winner_code": 3,
+     "game_length": 9
+    }
+   ],
+   "log_calls": [
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 11
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 6
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 12
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 1.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 24
+      },
+      "winner": {
+       "kind": "str",
+       "value": "o"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 12
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 250
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 125
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 30
+      },
+      "winner": {
+       "kind": "str",
+       "value": "draw"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 15
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 15
+      },
+      "winner": {
+       "kind": "str",
+       "value": "x"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 8
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 0
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 4
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.0
+      }
+     }
+    },
+    {
+     "level": "info",
+     "event": "game_complete",
+     "kwargs": {
+      "plies": {
+       "kind": "int",
+       "value": 9
+      },
+      "winner": {
+       "kind": "str",
+       "value": "unknown"
+      },
+      "game_length": {
+       "kind": "int",
+       "value": 5
+      },
+      "sims_per_sec": {
+       "kind": "float",
+       "value": 13320.0
+      },
+      "colony_extension_stone_count": {
+       "kind": "int",
+       "value": 1
+      },
+      "colony_extension_stone_total": {
+       "kind": "int",
+       "value": 3
+      },
+      "colony_extension_fraction": {
+       "kind": "float",
+       "value": 0.3333333333333333
+      }
+     }
+    }
+   ],
+   "events": [
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c86efbed417b76d2bb68e25e916a1b5dba3cfa6c",
+     "winner": 0,
+     "moves": 11,
+     "moves_list": [
+      "(0,0)",
+      "(50,50)",
+      "(51,50)",
+      "(1,0)",
+      "(2,0)",
+      "(52,50)",
+      "(53,50)",
+      "(3,0)",
+      "(4,0)",
+      "(54,50)",
+      "(55,50)",
+      "(5,0)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 12,
+     "colony_extension_stone_total": 12,
+     "colony_extension_fraction": 1.0,
+     "longest_line_fraction": 1.0,
+     "n_components": 1,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 5,
+     "model_version_max": 7,
+     "model_version_distinct": 3,
+     "stride5_run_p90": 2,
+     "row_max_density": 6,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 1,
+     "moves": 24,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "colony",
+     "model_version_min": 7,
+     "model_version_max": 7,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 4
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 250,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 2,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "ply_cap",
+     "model_version_min": 1,
+     "model_version_max": 9,
+     "model_version_distinct": 5,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 2
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+     "winner": -1,
+     "moves": 30,
+     "moves_list": [],
+     "worker_id": 3,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 0,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.0,
+     "n_components": 0,
+     "terminal_reason": "other_draw",
+     "model_version_min": 0,
+     "model_version_max": 0,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 0,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "c759ce69fdd183440fb12af62cdf4d1909857fc1",
+     "winner": 0,
+     "moves": 15,
+     "moves_list": [
+      "(0,0)",
+      "(1,0)",
+      "(2,1)",
+      "(3,1)"
+     ],
+     "worker_id": 0,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 0,
+     "colony_extension_stone_total": 4,
+     "colony_extension_fraction": 0.0,
+     "longest_line_fraction": 0.5,
+     "n_components": 1,
+     "terminal_reason": "unknown",
+     "model_version_min": 2,
+     "model_version_max": 3,
+     "model_version_distinct": 2,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 1,
+     "solver_fires": 0
+    },
+    {
+     "event": "game_complete",
+     "game_id_byte_hash": "581685920370106d80aba934a9b4c3ba6348f56c",
+     "winner": -1,
+     "moves": 9,
+     "moves_list": [
+      "(-1,-1)",
+      "(0,-1)",
+      "(5,5)"
+     ],
+     "worker_id": 1,
+     "moves_detail": null,
+     "value_trace": null,
+     "colony_extension_stone_count": 1,
+     "colony_extension_stone_total": 3,
+     "colony_extension_fraction": 0.3333333333333333,
+     "longest_line_fraction": 1.0,
+     "n_components": 2,
+     "terminal_reason": "six_in_a_row",
+     "model_version_min": 0,
+     "model_version_max": 1,
+     "model_version_distinct": 1,
+     "stride5_run_p90": 1,
+     "row_max_density": 2,
+     "seeded": 0,
+     "solver_fires": 0
+    },
+    {
+     "event": "system_stats",
+     "buffer_size": 1234,
+     "buffer_capacity": 5678
+    }
+   ],
+   "event_order": [
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "game_complete",
+    "system_stats"
+   ],
+   "game_id_format_ok": true,
+   "counters_after": {
+    "positions_pushed": 0,
+    "self_play_positions_pushed": 0,
+    "games_completed": 6,
+    "x_wins": 2,
+    "o_wins": 1,
+    "draws": 3,
+    "_total_sims": 26640,
+    "_sims_per_sec": 13320.0,
+    "_avg_game_length": 28.5,
+    "_game_lengths": [
+     6,
+     12,
+     125,
+     15,
+     8,
+     5
+    ],
+    "_last_drain_time": 1002.0,
+    "_last_pos_generated": 340
+   },
+   "instrumentation_after": {
+    "terminal_reason_counts": {
+     "six_in_a_row": 2,
+     "colony": 1,
+     "ply_cap": 1,
+     "other_draw": 1
+    },
+    "per_worker_draw_rates": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 1.0,
+     "3": 1.0
+    },
+    "current_stride5_p90": 1,
+    "model_version_summary": {
+     "n": 6,
+     "median_range": 1,
+     "p90_range": 2,
+     "max_range": 8,
+     "median_distinct": 2,
+     "spearman_rho_range_vs_draw": null
+    },
+    "recent_move_histories": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       51,
+       50
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       52,
+       50
+      ],
+      [
+       53,
+       50
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       54,
+       50
+      ],
+      [
+       55,
+       50
+      ],
+      [
+       5,
+       0
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ],
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       -1
+      ],
+      [
+       0,
+       -1
+      ],
+      [
+       5,
+       5
+      ]
+     ]
+    ]
+   },
+   "npz": null
+  }
+ },
+ "_npz": {
+  "dense_5s_crossed": "dense_pushed.npz",
+  "dense_5s_not_crossed": null,
+  "graph": "graph_pushed.npz",
+  "dense_no_recent_buffer": "dense_pushed.npz (byte-identical push_many args to dense_5s_crossed \u2014 verified sha-equal at promotion time)",
+  "dense_zero_rows": null
+ }
+}

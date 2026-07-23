@@ -1,0 +1,3593 @@
+{
+ "seed": 20260723,
+ "cluster_thresholds": [
+  5,
+  19
+ ],
+ "winner_codes": [
+  0,
+  1,
+  2
+ ],
+ "cases": {
+  "empty": {
+   "move_history": [],
+   "split_players": {
+    "p1": [],
+    "p2": []
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 0,
+    "row_max_density": 0
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 0,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct5_wc1": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct5_wc2": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct19_wc0": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct19_wc1": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct19_wc2": {
+     "longest_line": 0,
+     "fraction": 0.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 0,
+    "ct5_wc1": 0,
+    "ct5_wc2": 0,
+    "ct19_wc0": 0,
+    "ct19_wc1": 0,
+    "ct19_wc2": 0
+   }
+  },
+  "single_stone": {
+   "move_history": [
+    [
+     0,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ]
+    ],
+    "p2": []
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 0,
+    "row_max_density": 1
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 0,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 0,
+     "fraction": 0.0
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 0,
+     "fraction": 0.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 0,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 0
+   }
+  },
+  "two_stones_adjacent": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      1,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 2
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 2,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "two_stones_far": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     50
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      50,
+      50
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 0,
+    "row_max_density": 1
+   },
+   "colony_extension": {
+    "count": 2,
+    "total": 2,
+    "fraction": 1.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "three_adjacent_r0": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 3
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 3,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "stride5_chain_of_4": {
+   "move_history": [
+    [
+     3,
+     0
+    ],
+    [
+     8,
+     0
+    ],
+    [
+     13,
+     0
+    ],
+    [
+     18,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      3,
+      0
+     ],
+     [
+      18,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      8,
+      0
+     ],
+     [
+      13,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 4,
+    "row_max_density": 4
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 4,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 2,
+    "ct5_wc1": 2,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "stride5_chain_of_2": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     5,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      5,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 2
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 2,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "stride5_two_chains": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     5,
+     0
+    ],
+    [
+     10,
+     0
+    ],
+    [
+     0,
+     3
+    ],
+    [
+     5,
+     3
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      3
+     ],
+     [
+      5,
+      3
+     ]
+    ],
+    "p2": [
+     [
+      5,
+      0
+     ],
+     [
+      10,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 3,
+    "row_max_density": 3
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 5,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "six_in_a_row_p1": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     50
+    ],
+    [
+     51,
+     50
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     2,
+     0
+    ],
+    [
+     52,
+     50
+    ],
+    [
+     53,
+     50
+    ],
+    [
+     3,
+     0
+    ],
+    [
+     4,
+     0
+    ],
+    [
+     54,
+     50
+    ],
+    [
+     55,
+     50
+    ],
+    [
+     5,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      0
+     ],
+     [
+      3,
+      0
+     ],
+     [
+      4,
+      0
+     ],
+     [
+      5,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      50,
+      50
+     ],
+     [
+      51,
+      50
+     ],
+     [
+      52,
+      50
+     ],
+     [
+      53,
+      50
+     ],
+     [
+      54,
+      50
+     ],
+     [
+      55,
+      50
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 6
+   },
+   "colony_extension": {
+    "count": 12,
+    "total": 12,
+    "fraction": 1.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 6,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "seven_collinear_p1": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     50
+    ],
+    [
+     51,
+     50
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     2,
+     0
+    ],
+    [
+     52,
+     50
+    ],
+    [
+     53,
+     50
+    ],
+    [
+     3,
+     0
+    ],
+    [
+     4,
+     0
+    ],
+    [
+     54,
+     50
+    ],
+    [
+     55,
+     50
+    ],
+    [
+     5,
+     0
+    ],
+    [
+     6,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      0
+     ],
+     [
+      3,
+      0
+     ],
+     [
+      4,
+      0
+     ],
+     [
+      5,
+      0
+     ],
+     [
+      6,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      50,
+      50
+     ],
+     [
+      51,
+      50
+     ],
+     [
+      52,
+      50
+     ],
+     [
+      53,
+      50
+     ],
+     [
+      54,
+      50
+     ],
+     [
+      55,
+      50
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 7
+   },
+   "colony_extension": {
+    "count": 13,
+    "total": 13,
+    "fraction": 1.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 6,
+     "fraction": 0.8571428571428571
+    },
+    "ct5_wc1": {
+     "longest_line": 6,
+     "fraction": 0.8571428571428571
+    },
+    "ct5_wc2": {
+     "longest_line": 6,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 6,
+     "fraction": 0.8571428571428571
+    },
+    "ct19_wc1": {
+     "longest_line": 6,
+     "fraction": 0.8571428571428571
+    },
+    "ct19_wc2": {
+     "longest_line": 6,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "two_cluster_p1": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     50
+    ],
+    [
+     51,
+     50
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     20,
+     0
+    ],
+    [
+     52,
+     50
+    ],
+    [
+     53,
+     50
+    ],
+    [
+     21,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      20,
+      0
+     ],
+     [
+      21,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      50,
+      50
+     ],
+     [
+      51,
+      50
+     ],
+     [
+      52,
+      50
+     ],
+     [
+      53,
+      50
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 4
+   },
+   "colony_extension": {
+    "count": 8,
+    "total": 8,
+    "fraction": 1.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 4,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 0.5
+    },
+    "ct5_wc2": {
+     "longest_line": 4,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 4,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 0.5
+    },
+    "ct19_wc2": {
+     "longest_line": 4,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 2,
+    "ct5_wc1": 2,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "axis_r_line": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     0,
+     2
+    ],
+    [
+     0,
+     3
+    ],
+    [
+     0,
+     4
+    ],
+    [
+     0,
+     5
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      0,
+      3
+     ],
+     [
+      0,
+      4
+     ]
+    ],
+    "p2": [
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      0,
+      5
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 6
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 6,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "axis_s_line": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     2,
+     -2
+    ],
+    [
+     3,
+     -3
+    ],
+    [
+     4,
+     -4
+    ],
+    [
+     5,
+     -5
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      3,
+      -3
+     ],
+     [
+      4,
+      -4
+     ]
+    ],
+    "p2": [
+     [
+      1,
+      -1
+     ],
+     [
+      2,
+      -2
+     ],
+     [
+      5,
+      -5
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 6
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 6,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 0.6666666666666666
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "duplicate_cells": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 2
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 4,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "negative_coords": {
+   "move_history": [
+    [
+     -3,
+     -3
+    ],
+    [
+     -2,
+     -3
+    ],
+    [
+     -1,
+     -3
+    ],
+    [
+     0,
+     -3
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      -3,
+      -3
+     ],
+     [
+      0,
+      -3
+     ]
+    ],
+    "p2": [
+     [
+      -2,
+      -3
+     ],
+     [
+      -1,
+      -3
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 4
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 4,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "colony_far_apart": {
+   "move_history": [
+    [
+     0,
+     0
+    ],
+    [
+     30,
+     0
+    ],
+    [
+     31,
+     0
+    ],
+    [
+     1,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      0
+     ],
+     [
+      2,
+      0
+     ]
+    ],
+    "p2": [
+     [
+      30,
+      0
+     ],
+     [
+      31,
+      0
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 5
+   },
+   "colony_extension": {
+    "count": 5,
+    "total": 5,
+    "fraction": 1.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 3,
+     "fraction": 1.0
+    },
+    "ct5_wc1": {
+     "longest_line": 3,
+     "fraction": 1.0
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    },
+    "ct19_wc0": {
+     "longest_line": 3,
+     "fraction": 1.0
+    },
+    "ct19_wc1": {
+     "longest_line": 3,
+     "fraction": 1.0
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 1.0
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 1,
+    "ct5_wc1": 1,
+    "ct5_wc2": 1,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_8_span6": {
+   "move_history": [
+    [
+     3,
+     -2
+    ],
+    [
+     -1,
+     5
+    ],
+    [
+     4,
+     -5
+    ],
+    [
+     2,
+     -6
+    ],
+    [
+     0,
+     -5
+    ],
+    [
+     -4,
+     0
+    ],
+    [
+     3,
+     2
+    ],
+    [
+     5,
+     -6
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      3,
+      -2
+     ],
+     [
+      2,
+      -6
+     ],
+     [
+      0,
+      -5
+     ],
+     [
+      5,
+      -6
+     ]
+    ],
+    "p2": [
+     [
+      -1,
+      5
+     ],
+     [
+      4,
+      -5
+     ],
+     [
+      -4,
+      0
+     ],
+     [
+      3,
+      2
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 2
+   },
+   "colony_extension": {
+    "count": 1,
+    "total": 8,
+    "fraction": 0.125
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 0.25
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.25
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.25
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 0.25
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.25
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.25
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 3,
+    "ct5_wc1": 1,
+    "ct5_wc2": 3,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_16_span10": {
+   "move_history": [
+    [
+     -9,
+     3
+    ],
+    [
+     -2,
+     4
+    ],
+    [
+     10,
+     8
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     -5
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     -3,
+     6
+    ],
+    [
+     8,
+     -6
+    ],
+    [
+     6,
+     1
+    ],
+    [
+     -8,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     -1,
+     -9
+    ],
+    [
+     1,
+     -6
+    ],
+    [
+     -2,
+     -4
+    ],
+    [
+     9,
+     -3
+    ],
+    [
+     10,
+     -8
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      -9,
+      3
+     ],
+     [
+      1,
+      10
+     ],
+     [
+      1,
+      -5
+     ],
+     [
+      8,
+      -6
+     ],
+     [
+      6,
+      1
+     ],
+     [
+      -1,
+      -9
+     ],
+     [
+      1,
+      -6
+     ],
+     [
+      10,
+      -8
+     ]
+    ],
+    "p2": [
+     [
+      -2,
+      4
+     ],
+     [
+      10,
+      8
+     ],
+     [
+      -2,
+      -1
+     ],
+     [
+      -3,
+      6
+     ],
+     [
+      -8,
+      0
+     ],
+     [
+      -5,
+      0
+     ],
+     [
+      -2,
+      -4
+     ],
+     [
+      9,
+      -3
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 3
+   },
+   "colony_extension": {
+    "count": 4,
+    "total": 16,
+    "fraction": 0.25
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 0.25
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 0.25
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.125
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 0.25
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 0.25
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.125
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 5,
+    "ct5_wc1": 5,
+    "ct5_wc2": 3,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_32_span12": {
+   "move_history": [
+    [
+     -7,
+     2
+    ],
+    [
+     -3,
+     5
+    ],
+    [
+     2,
+     -10
+    ],
+    [
+     11,
+     -10
+    ],
+    [
+     3,
+     3
+    ],
+    [
+     7,
+     -3
+    ],
+    [
+     10,
+     -11
+    ],
+    [
+     0,
+     -1
+    ],
+    [
+     -5,
+     -9
+    ],
+    [
+     -10,
+     -10
+    ],
+    [
+     -2,
+     -8
+    ],
+    [
+     6,
+     -1
+    ],
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     12
+    ],
+    [
+     9,
+     2
+    ],
+    [
+     10,
+     -3
+    ],
+    [
+     -3,
+     -6
+    ],
+    [
+     -11,
+     9
+    ],
+    [
+     -7,
+     9
+    ],
+    [
+     -9,
+     11
+    ],
+    [
+     7,
+     4
+    ],
+    [
+     3,
+     -1
+    ],
+    [
+     -3,
+     -7
+    ],
+    [
+     10,
+     -3
+    ],
+    [
+     4,
+     -7
+    ],
+    [
+     -11,
+     -10
+    ],
+    [
+     -3,
+     -6
+    ],
+    [
+     2,
+     -8
+    ],
+    [
+     -8,
+     8
+    ],
+    [
+     -11,
+     8
+    ],
+    [
+     4,
+     -11
+    ],
+    [
+     7,
+     7
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      -7,
+      2
+     ],
+     [
+      11,
+      -10
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      0,
+      -1
+     ],
+     [
+      -5,
+      -9
+     ],
+     [
+      6,
+      -1
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      10,
+      -3
+     ],
+     [
+      -3,
+      -6
+     ],
+     [
+      -9,
+      11
+     ],
+     [
+      7,
+      4
+     ],
+     [
+      10,
+      -3
+     ],
+     [
+      4,
+      -7
+     ],
+     [
+      2,
+      -8
+     ],
+     [
+      -8,
+      8
+     ],
+     [
+      7,
+      7
+     ]
+    ],
+    "p2": [
+     [
+      -3,
+      5
+     ],
+     [
+      2,
+      -10
+     ],
+     [
+      7,
+      -3
+     ],
+     [
+      10,
+      -11
+     ],
+     [
+      -10,
+      -10
+     ],
+     [
+      -2,
+      -8
+     ],
+     [
+      2,
+      12
+     ],
+     [
+      9,
+      2
+     ],
+     [
+      -11,
+      9
+     ],
+     [
+      -7,
+      9
+     ],
+     [
+      3,
+      -1
+     ],
+     [
+      -3,
+      -7
+     ],
+     [
+      -11,
+      -10
+     ],
+     [
+      -3,
+      -6
+     ],
+     [
+      -11,
+      8
+     ],
+     [
+      4,
+      -11
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 4
+   },
+   "colony_extension": {
+    "count": 1,
+    "total": 32,
+    "fraction": 0.03125
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 0.125
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.0625
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 0.125
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 0.125
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.0625
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 0.125
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 7,
+    "ct5_wc1": 5,
+    "ct5_wc2": 7,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_64_span20": {
+   "move_history": [
+    [
+     2,
+     5
+    ],
+    [
+     14,
+     17
+    ],
+    [
+     -16,
+     1
+    ],
+    [
+     8,
+     9
+    ],
+    [
+     -16,
+     -16
+    ],
+    [
+     -16,
+     -6
+    ],
+    [
+     -6,
+     4
+    ],
+    [
+     -10,
+     -15
+    ],
+    [
+     16,
+     -15
+    ],
+    [
+     15,
+     8
+    ],
+    [
+     3,
+     -2
+    ],
+    [
+     -9,
+     -13
+    ],
+    [
+     -15,
+     11
+    ],
+    [
+     -3,
+     -19
+    ],
+    [
+     -8,
+     10
+    ],
+    [
+     8,
+     -2
+    ],
+    [
+     -15,
+     15
+    ],
+    [
+     -19,
+     -15
+    ],
+    [
+     15,
+     15
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     6,
+     13
+    ],
+    [
+     -11,
+     -10
+    ],
+    [
+     3,
+     -4
+    ],
+    [
+     13,
+     -4
+    ],
+    [
+     -10,
+     5
+    ],
+    [
+     -12,
+     -17
+    ],
+    [
+     7,
+     7
+    ],
+    [
+     8,
+     -2
+    ],
+    [
+     11,
+     15
+    ],
+    [
+     16,
+     9
+    ],
+    [
+     -5,
+     19
+    ],
+    [
+     0,
+     8
+    ],
+    [
+     -15,
+     7
+    ],
+    [
+     -20,
+     5
+    ],
+    [
+     20,
+     13
+    ],
+    [
+     15,
+     -12
+    ],
+    [
+     16,
+     -6
+    ],
+    [
+     14,
+     4
+    ],
+    [
+     4,
+     -1
+    ],
+    [
+     18,
+     -16
+    ],
+    [
+     -4,
+     19
+    ],
+    [
+     1,
+     -1
+    ],
+    [
+     -9,
+     -4
+    ],
+    [
+     -2,
+     6
+    ],
+    [
+     0,
+     4
+    ],
+    [
+     0,
+     -18
+    ],
+    [
+     -16,
+     9
+    ],
+    [
+     -15,
+     -13
+    ],
+    [
+     -13,
+     -20
+    ],
+    [
+     7,
+     -19
+    ],
+    [
+     17,
+     -6
+    ],
+    [
+     7,
+     -3
+    ],
+    [
+     -16,
+     -16
+    ],
+    [
+     7,
+     18
+    ],
+    [
+     -15,
+     14
+    ],
+    [
+     -1,
+     12
+    ],
+    [
+     -20,
+     5
+    ],
+    [
+     -14,
+     -11
+    ],
+    [
+     -8,
+     -14
+    ],
+    [
+     5,
+     2
+    ],
+    [
+     -8,
+     -2
+    ],
+    [
+     -7,
+     -8
+    ],
+    [
+     -3,
+     4
+    ],
+    [
+     13,
+     -9
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      2,
+      5
+     ],
+     [
+      8,
+      9
+     ],
+     [
+      -16,
+      -16
+     ],
+     [
+      -10,
+      -15
+     ],
+     [
+      16,
+      -15
+     ],
+     [
+      -9,
+      -13
+     ],
+     [
+      -15,
+      11
+     ],
+     [
+      8,
+      -2
+     ],
+     [
+      -15,
+      15
+     ],
+     [
+      -2,
+      -1
+     ],
+     [
+      6,
+      13
+     ],
+     [
+      13,
+      -4
+     ],
+     [
+      -10,
+      5
+     ],
+     [
+      8,
+      -2
+     ],
+     [
+      11,
+      15
+     ],
+     [
+      0,
+      8
+     ],
+     [
+      -15,
+      7
+     ],
+     [
+      15,
+      -12
+     ],
+     [
+      16,
+      -6
+     ],
+     [
+      18,
+      -16
+     ],
+     [
+      -4,
+      19
+     ],
+     [
+      -2,
+      6
+     ],
+     [
+      0,
+      4
+     ],
+     [
+      -15,
+      -13
+     ],
+     [
+      -13,
+      -20
+     ],
+     [
+      7,
+      -3
+     ],
+     [
+      -16,
+      -16
+     ],
+     [
+      -1,
+      12
+     ],
+     [
+      -20,
+      5
+     ],
+     [
+      5,
+      2
+     ],
+     [
+      -8,
+      -2
+     ],
+     [
+      13,
+      -9
+     ]
+    ],
+    "p2": [
+     [
+      14,
+      17
+     ],
+     [
+      -16,
+      1
+     ],
+     [
+      -16,
+      -6
+     ],
+     [
+      -6,
+      4
+     ],
+     [
+      15,
+      8
+     ],
+     [
+      3,
+      -2
+     ],
+     [
+      -3,
+      -19
+     ],
+     [
+      -8,
+      10
+     ],
+     [
+      -19,
+      -15
+     ],
+     [
+      15,
+      15
+     ],
+     [
+      -11,
+      -10
+     ],
+     [
+      3,
+      -4
+     ],
+     [
+      -12,
+      -17
+     ],
+     [
+      7,
+      7
+     ],
+     [
+      16,
+      9
+     ],
+     [
+      -5,
+      19
+     ],
+     [
+      -20,
+      5
+     ],
+     [
+      20,
+      13
+     ],
+     [
+      14,
+      4
+     ],
+     [
+      4,
+      -1
+     ],
+     [
+      1,
+      -1
+     ],
+     [
+      -9,
+      -4
+     ],
+     [
+      0,
+      -18
+     ],
+     [
+      -16,
+      9
+     ],
+     [
+      7,
+      -19
+     ],
+     [
+      17,
+      -6
+     ],
+     [
+      7,
+      18
+     ],
+     [
+      -15,
+      14
+     ],
+     [
+      -14,
+      -11
+     ],
+     [
+      -8,
+      -14
+     ],
+     [
+      -7,
+      -8
+     ],
+     [
+      -3,
+      4
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 5
+   },
+   "colony_extension": {
+    "count": 11,
+    "total": 64,
+    "fraction": 0.171875
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.03125
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 16,
+    "ct5_wc1": 9,
+    "ct5_wc2": 16,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_5_span2_dense": {
+   "move_history": [
+    [
+     2,
+     2
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     -2,
+     -1
+    ],
+    [
+     0,
+     1
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      2,
+      2
+     ],
+     [
+      -2,
+      -1
+     ],
+     [
+      0,
+      1
+     ]
+    ],
+    "p2": [
+     [
+      -2,
+      -1
+     ],
+     [
+      1,
+      2
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 1,
+    "row_max_density": 2
+   },
+   "colony_extension": {
+    "count": 0,
+    "total": 5,
+    "fraction": 0.0
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct5_wc1": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct5_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    },
+    "ct19_wc0": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct19_wc1": {
+     "longest_line": 1,
+     "fraction": 0.3333333333333333
+    },
+    "ct19_wc2": {
+     "longest_line": 1,
+     "fraction": 0.5
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 2,
+    "ct5_wc1": 1,
+    "ct5_wc2": 2,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  },
+  "rand_100_span30": {
+   "move_history": [
+    [
+     13,
+     -28
+    ],
+    [
+     25,
+     -18
+    ],
+    [
+     -25,
+     9
+    ],
+    [
+     6,
+     -6
+    ],
+    [
+     19,
+     0
+    ],
+    [
+     9,
+     -27
+    ],
+    [
+     25,
+     -20
+    ],
+    [
+     23,
+     30
+    ],
+    [
+     -25,
+     -5
+    ],
+    [
+     -28,
+     21
+    ],
+    [
+     -28,
+     8
+    ],
+    [
+     8,
+     1
+    ],
+    [
+     -24,
+     27
+    ],
+    [
+     23,
+     20
+    ],
+    [
+     -13,
+     6
+    ],
+    [
+     12,
+     1
+    ],
+    [
+     15,
+     8
+    ],
+    [
+     26,
+     -28
+    ],
+    [
+     -30,
+     8
+    ],
+    [
+     13,
+     -28
+    ],
+    [
+     18,
+     23
+    ],
+    [
+     6,
+     18
+    ],
+    [
+     -8,
+     19
+    ],
+    [
+     -17,
+     19
+    ],
+    [
+     20,
+     12
+    ],
+    [
+     7,
+     9
+    ],
+    [
+     -16,
+     29
+    ],
+    [
+     12,
+     -27
+    ],
+    [
+     -17,
+     -5
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     -3,
+     2
+    ],
+    [
+     18,
+     -12
+    ],
+    [
+     -19,
+     -18
+    ],
+    [
+     -30,
+     -7
+    ],
+    [
+     -13,
+     -3
+    ],
+    [
+     -9,
+     20
+    ],
+    [
+     -20,
+     -30
+    ],
+    [
+     6,
+     -25
+    ],
+    [
+     -14,
+     2
+    ],
+    [
+     24,
+     11
+    ],
+    [
+     -13,
+     -1
+    ],
+    [
+     -3,
+     30
+    ],
+    [
+     -1,
+     18
+    ],
+    [
+     -2,
+     30
+    ],
+    [
+     25,
+     28
+    ],
+    [
+     7,
+     -7
+    ],
+    [
+     -11,
+     -2
+    ],
+    [
+     3,
+     26
+    ],
+    [
+     -30,
+     5
+    ],
+    [
+     17,
+     -13
+    ],
+    [
+     28,
+     -19
+    ],
+    [
+     -15,
+     -19
+    ],
+    [
+     30,
+     -29
+    ],
+    [
+     -27,
+     -8
+    ],
+    [
+     -18,
+     12
+    ],
+    [
+     21,
+     21
+    ],
+    [
+     -12,
+     -15
+    ],
+    [
+     -12,
+     -2
+    ],
+    [
+     26,
+     6
+    ],
+    [
+     4,
+     17
+    ],
+    [
+     -11,
+     -9
+    ],
+    [
+     27,
+     -9
+    ],
+    [
+     -14,
+     4
+    ],
+    [
+     -3,
+     -10
+    ],
+    [
+     10,
+     5
+    ],
+    [
+     -23,
+     -5
+    ],
+    [
+     -28,
+     22
+    ],
+    [
+     27,
+     -7
+    ],
+    [
+     7,
+     7
+    ],
+    [
+     -16,
+     -5
+    ],
+    [
+     -11,
+     5
+    ],
+    [
+     12,
+     -29
+    ],
+    [
+     12,
+     -25
+    ],
+    [
+     15,
+     3
+    ],
+    [
+     28,
+     19
+    ],
+    [
+     -11,
+     25
+    ],
+    [
+     -8,
+     -2
+    ],
+    [
+     5,
+     -3
+    ],
+    [
+     21,
+     -3
+    ],
+    [
+     -3,
+     -20
+    ],
+    [
+     -2,
+     -6
+    ],
+    [
+     15,
+     -25
+    ],
+    [
+     6,
+     8
+    ],
+    [
+     -18,
+     -26
+    ],
+    [
+     -29,
+     10
+    ],
+    [
+     16,
+     20
+    ],
+    [
+     -16,
+     21
+    ],
+    [
+     -1,
+     -5
+    ],
+    [
+     -11,
+     -12
+    ],
+    [
+     -25,
+     22
+    ],
+    [
+     5,
+     19
+    ],
+    [
+     5,
+     11
+    ],
+    [
+     -6,
+     19
+    ],
+    [
+     21,
+     9
+    ],
+    [
+     -29,
+     27
+    ],
+    [
+     -28,
+     -28
+    ],
+    [
+     13,
+     12
+    ],
+    [
+     17,
+     22
+    ],
+    [
+     16,
+     13
+    ],
+    [
+     14,
+     -16
+    ]
+   ],
+   "split_players": {
+    "p1": [
+     [
+      13,
+      -28
+     ],
+     [
+      6,
+      -6
+     ],
+     [
+      19,
+      0
+     ],
+     [
+      23,
+      30
+     ],
+     [
+      -25,
+      -5
+     ],
+     [
+      8,
+      1
+     ],
+     [
+      -24,
+      27
+     ],
+     [
+      12,
+      1
+     ],
+     [
+      15,
+      8
+     ],
+     [
+      13,
+      -28
+     ],
+     [
+      18,
+      23
+     ],
+     [
+      -17,
+      19
+     ],
+     [
+      20,
+      12
+     ],
+     [
+      12,
+      -27
+     ],
+     [
+      -17,
+      -5
+     ],
+     [
+      18,
+      -12
+     ],
+     [
+      -19,
+      -18
+     ],
+     [
+      -9,
+      20
+     ],
+     [
+      -20,
+      -30
+     ],
+     [
+      24,
+      11
+     ],
+     [
+      -13,
+      -1
+     ],
+     [
+      -2,
+      30
+     ],
+     [
+      25,
+      28
+     ],
+     [
+      3,
+      26
+     ],
+     [
+      -30,
+      5
+     ],
+     [
+      -15,
+      -19
+     ],
+     [
+      30,
+      -29
+     ],
+     [
+      21,
+      21
+     ],
+     [
+      -12,
+      -15
+     ],
+     [
+      4,
+      17
+     ],
+     [
+      -11,
+      -9
+     ],
+     [
+      -3,
+      -10
+     ],
+     [
+      10,
+      5
+     ],
+     [
+      27,
+      -7
+     ],
+     [
+      7,
+      7
+     ],
+     [
+      12,
+      -29
+     ],
+     [
+      12,
+      -25
+     ],
+     [
+      -11,
+      25
+     ],
+     [
+      -8,
+      -2
+     ],
+     [
+      -3,
+      -20
+     ],
+     [
+      -2,
+      -6
+     ],
+     [
+      -18,
+      -26
+     ],
+     [
+      -29,
+      10
+     ],
+     [
+      -1,
+      -5
+     ],
+     [
+      -11,
+      -12
+     ],
+     [
+      5,
+      11
+     ],
+     [
+      -6,
+      19
+     ],
+     [
+      -28,
+      -28
+     ],
+     [
+      13,
+      12
+     ],
+     [
+      14,
+      -16
+     ]
+    ],
+    "p2": [
+     [
+      25,
+      -18
+     ],
+     [
+      -25,
+      9
+     ],
+     [
+      9,
+      -27
+     ],
+     [
+      25,
+      -20
+     ],
+     [
+      -28,
+      21
+     ],
+     [
+      -28,
+      8
+     ],
+     [
+      23,
+      20
+     ],
+     [
+      -13,
+      6
+     ],
+     [
+      26,
+      -28
+     ],
+     [
+      -30,
+      8
+     ],
+     [
+      6,
+      18
+     ],
+     [
+      -8,
+      19
+     ],
+     [
+      7,
+      9
+     ],
+     [
+      -16,
+      29
+     ],
+     [
+      -5,
+      0
+     ],
+     [
+      -3,
+      2
+     ],
+     [
+      -30,
+      -7
+     ],
+     [
+      -13,
+      -3
+     ],
+     [
+      6,
+      -25
+     ],
+     [
+      -14,
+      2
+     ],
+     [
+      -3,
+      30
+     ],
+     [
+      -1,
+      18
+     ],
+     [
+      7,
+      -7
+     ],
+     [
+      -11,
+      -2
+     ],
+     [
+      17,
+      -13
+     ],
+     [
+      28,
+      -19
+     ],
+     [
+      -27,
+      -8
+     ],
+     [
+      -18,
+      12
+     ],
+     [
+      -12,
+      -2
+     ],
+     [
+      26,
+      6
+     ],
+     [
+      27,
+      -9
+     ],
+     [
+      -14,
+      4
+     ],
+     [
+      -23,
+      -5
+     ],
+     [
+      -28,
+      22
+     ],
+     [
+      -16,
+      -5
+     ],
+     [
+      -11,
+      5
+     ],
+     [
+      15,
+      3
+     ],
+     [
+      28,
+      19
+     ],
+     [
+      5,
+      -3
+     ],
+     [
+      21,
+      -3
+     ],
+     [
+      15,
+      -25
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      16,
+      20
+     ],
+     [
+      -16,
+      21
+     ],
+     [
+      -25,
+      22
+     ],
+     [
+      5,
+      19
+     ],
+     [
+      21,
+      9
+     ],
+     [
+      -29,
+      27
+     ],
+     [
+      17,
+      22
+     ],
+     [
+      16,
+      13
+     ]
+    ]
+   },
+   "stride5_metrics": {
+    "stride5_run_max": 2,
+    "row_max_density": 5
+   },
+   "colony_extension": {
+    "count": 23,
+    "total": 100,
+    "fraction": 0.23
+   },
+   "longest_line": {
+    "ct5_wc0": {
+     "longest_line": 2,
+     "fraction": 0.04
+    },
+    "ct5_wc1": {
+     "longest_line": 2,
+     "fraction": 0.04
+    },
+    "ct5_wc2": {
+     "longest_line": 2,
+     "fraction": 0.04
+    },
+    "ct19_wc0": {
+     "longest_line": 2,
+     "fraction": 0.04
+    },
+    "ct19_wc1": {
+     "longest_line": 2,
+     "fraction": 0.04
+    },
+    "ct19_wc2": {
+     "longest_line": 2,
+     "fraction": 0.04
+    }
+   },
+   "n_components": {
+    "ct5_wc0": 29,
+    "ct5_wc1": 29,
+    "ct5_wc2": 26,
+    "ct19_wc0": 1,
+    "ct19_wc1": 1,
+    "ct19_wc2": 1
+   }
+  }
+ },
+ "_source": "WP-SP old-side CAPTURE #C3c (instrumentation pure-function battery)"
+}

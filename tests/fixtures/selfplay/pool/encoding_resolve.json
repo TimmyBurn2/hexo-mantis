@@ -1,0 +1,80 @@
+{
+ "_source": "WP-SP old-side CAPTURE #C3a (`_resolve_encoding_for_pool` per registered name)",
+ "encodings": {
+  "v6": {
+   "outcome": "ok",
+   "encoding_name": "v6",
+   "board_size": 19,
+   "trunk_size": 19,
+   "n_kept_planes": 8,
+   "spec_representation": "grid",
+   "spec_is_graph": false,
+   "spec_policy_logit_count": 362,
+   "spec_node_feat_dim": null,
+   "spec_edge_feat_dim": null,
+   "spec_kept_plane_indices": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11
+   ]
+  },
+  "v6w25": {
+   "outcome": "ok",
+   "encoding_name": "v6w25",
+   "board_size": 25,
+   "trunk_size": 25,
+   "n_kept_planes": 8,
+   "spec_representation": "grid",
+   "spec_is_graph": false,
+   "spec_policy_logit_count": 626,
+   "spec_node_feat_dim": null,
+   "spec_edge_feat_dim": null,
+   "spec_kept_plane_indices": [
+    0,
+    1,
+    2,
+    3,
+    8,
+    9,
+    10,
+    11
+   ]
+  },
+  "v6_live2_ls": {
+   "outcome": "ok",
+   "encoding_name": "v6_live2_ls",
+   "board_size": 19,
+   "trunk_size": 19,
+   "n_kept_planes": 4,
+   "spec_representation": "grid",
+   "spec_is_graph": false,
+   "spec_policy_logit_count": 362,
+   "spec_node_feat_dim": null,
+   "spec_edge_feat_dim": null,
+   "spec_kept_plane_indices": [
+    0,
+    8,
+    16,
+    17
+   ]
+  },
+  "gnn_axis_v1": {
+   "outcome": "ok",
+   "encoding_name": "gnn_axis_v1",
+   "board_size": 19,
+   "trunk_size": 19,
+   "n_kept_planes": 0,
+   "spec_representation": "graph",
+   "spec_is_graph": true,
+   "spec_policy_logit_count": 362,
+   "spec_node_feat_dim": 11,
+   "spec_edge_feat_dim": 5,
+   "spec_kept_plane_indices": []
+  }
+ }
+}
