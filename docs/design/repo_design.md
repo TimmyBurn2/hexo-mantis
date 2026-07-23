@@ -90,7 +90,7 @@ config                       → encoding, util
 data                         → encoding, env, util
 model                        → encoding, config          # dist65 codec lives HERE
 bots                         → encoding, env, model
-selfplay                     → encoding, env, model, config, monitor(events only)
+selfplay                     → encoding, env, model, config, util, monitor(events only)
 monitor                      → encoding, util            # headless; imports NO torch
 train                        → all above except eval     # eval reached via injected callable
 eval, arena                  → all above except train's internals; checkpoint IO via the
