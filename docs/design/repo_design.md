@@ -265,9 +265,34 @@ copies are single-read by contract.
   errors increment `persist_errors_total`, and the watchdog aborts on it. `except
   Exception: pass` is lint-banned; optional effects go through a `best_effort()` wrapper
   that requires a counter.
-- Log identity: rotation on resume; a JSONL file never spans two run segments.
+- Log identity: rotation on resume; a JSONL file never spans two run segments. The segment
+  is claimed ATOMICALLY (`O_CREAT|O_EXCL` + bounded re-scan), so concurrent starts cannot
+  share one file, and `run_id` is validated where the filename is built.
 - Lifecycle is one subsystem: SIGINT/SIGTERM → save-then-exit (second signal force-
   exits), self-play stall watchdog (always armed), disk guard. Contract-tested.
+- Livelock-proof watchdog (WP13-A): the pipeline stages emit heartbeats — train step,
+  inference dispatch, selfplay drain — into a monotonic in-process registry; an
+  INDEPENDENT watchdog thread (never driven from the step path) fires on per-source
+  heartbeat staleness or on `persist_errors_total > 0`: loud event → time-bounded
+  snapshot to the distinct `.watchdog` path (never the canonical resume buffer) →
+  `os._exit` with a distinct code (42 stall/livelock, 43 persist-fatal). Every optional
+  effect in the fire path carries a hard time budget: a hung snapshot may delay the exit,
+  never suppress it. The in-loop games-progress tick watchdog is KEPT as a complement — it
+  catches live-but-unproductive loops the heartbeat signal cannot see. A clean shutdown
+  SWAPS the per-source deadlines for one bounded close-out deadline — teardown legitimately
+  stops the heartbeats and legitimately runs long, but it is never unbounded, because an
+  unbounded teardown is invisible to BOTH levels (the file `seq` keeps advancing, so the
+  supervisor reads a wedged child as healthy). The persist-fatal fire is never disarmed.
+  A source the composition root did not declare as wired, and which has never beaten, is a
+  WIRING gap, not a wedge: it is reported loudly and never fires — an omitted heartbeat
+  kwarg must not kill a healthy run.
+- Supervisor liveness: the watchdog thread mirrors heartbeats to an atomically-replaced
+  heartbeat file carrying a monotonic `seq`; the host-neutral out-of-process supervisor
+  (`python -m mantis.monitor.supervise`) relaunches the child on exit 42 or on frozen
+  `seq` (the watchdog-thread-starvation backstop: SIGTERM, grace, SIGKILL), stops loud
+  on 0/43/other codes and on relaunch-budget exhaustion. Staleness is measured by seq
+  progression on the supervisor's own monotonic clock — never file mtime, never wall
+  clock.
 
 ## 12. Strength-claim + eval discipline
 
