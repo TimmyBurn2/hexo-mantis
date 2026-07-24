@@ -95,6 +95,14 @@ monitor                      → encoding, util            # headless; imports N
 train                        → all above except eval     # eval reached via injected callable
 eval, arena                  → all above except train's internals; checkpoint IO via the
                                ONE loader exposed from train.checkpoints
+run                          → train, eval, monitor, config, selfplay   # the composition
+                               root (WP11-A §a.4/§c.6); a top-level module ABOVE both
+                               train and eval; NOTHING imports `mantis.run` — it is a
+                               source-only DAG node. ADDITIVE: this row registers the new
+                               node; it does not weaken the train↛eval ban above, which
+                               stays verbatim (census-tested,
+                               tests/test_run_composition.py::
+                               test_no_train_module_imports_eval_even_lazily).
 ```
 The historical training↔eval / model↔training / bots↔bootstrap cycles are dissolved by
 relocation (protocol→bots, dist65→model, eval hooks injected). CI runs an import-cycle
