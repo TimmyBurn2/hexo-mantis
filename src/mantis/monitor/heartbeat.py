@@ -26,9 +26,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, cast
 
-# The three pipeline stages whose liveness the watchdog keys on (name pins — the manifest
-# rows, the coordinator beat, the pool/server beats and the arm-log all use these tokens).
-HEARTBEAT_SOURCES: tuple[str, ...] = ("train_step", "inference_dispatch", "selfplay_drain")
+# The pipeline stages whose liveness the watchdog keys on (name pins — the manifest rows,
+# the coordinator beat, the pool/server beats and the arm-log all use these tokens).
+# WP11-A adds "eval_round" as the 4th source: the eval pipeline's persistent poller thread
+# beats it every tick, with or without an in-flight round.
+HEARTBEAT_SOURCES: tuple[str, ...] = (
+    "train_step", "inference_dispatch", "selfplay_drain", "eval_round",
+)
 
 # The restart-wrapper key. 42 MUST equal `mantis.train.lifecycle.watchdog.
 # SELFPLAY_STALL_EXIT_CODE` (one authority for the transient stall/livelock class);

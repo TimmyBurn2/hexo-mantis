@@ -211,9 +211,14 @@ class StepCoordinator:
         if health is not None:
             health()
 
+        # WP11-A: non-blocking eval-result poll at the TOP of every iteration — main-thread
+        # routing through drain._route_eval_result, on every branch (warmup/waiting-for-
+        # games included), never a blocking call (never `drain_pending()`; §c.4b).
+        eval_drained = self._poll_eval_results()
+
         base = dict(
             steps_run=0, buffer_resized=None, checkpoint_saved=False, axis_emitted=False,
-            eval_kicked_off=False, eval_skipped_busy=False, eval_drained=False,
+            eval_kicked_off=False, eval_skipped_busy=False, eval_drained=eval_drained,
             promoted_step=None, soft_abort_fired=False, hard_abort_fired=False,
             instrumentation_emitted=[], pool_overflow_delta=0,
         )
@@ -320,11 +325,13 @@ class StepCoordinator:
 
         # The eval KICK return is NEVER consumed for WR and `step()` adds NO blocking call:
         # completed rounds reach `on_eval_round_complete` via the async drain (§c.4b).
-        eval_kicked_off = self._maybe_kick_eval(cfg)
+        # `_maybe_kick_eval` consumes the ACK only for `eval_skipped_busy` (WP13-A P-06 pin).
+        eval_kicked_off, eval_skipped_busy = self._maybe_kick_eval(cfg)
         return self._build_outcome(
             in_warmup=False, waiting_for_games=False,
             **{**base, "steps_run": steps_budget, "buffer_resized": buffer_resized,
                "checkpoint_saved": checkpoint_saved, "eval_kicked_off": eval_kicked_off,
+               "eval_skipped_busy": eval_skipped_busy,
                "hard_abort_fired": hard_abort_fired, "axis_emitted": axis_emitted},
         )
 
@@ -454,7 +461,7 @@ class StepCoordinator:
             "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
             "draw_rate_threshold": cfg.draw_rate_threshold,
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
-            "sealbot_wr_result_producer_pending": "WP11A",
+            "sealbot_wr_result_producer_pending": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             "wr_history_len": len(self._wr_history),
             # The watchdog's best-effort counters get a LIVE in-run consumer here (LAW-08 /
             # LAW-18): a degraded fire-path effect (a failed mirror, a timed-out snapshot)
@@ -501,7 +508,7 @@ class StepCoordinator:
                 "step": step,
                 "reason": "wr_sealbot_absent",
                 "skipped_total": stats["skips"],
-                "pending_producer": "WP11A",
+                "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })
             return
         self._wr_history.append((step, float(wr)))
@@ -520,7 +527,7 @@ class StepCoordinator:
                 "step": step,
                 "message": alert,
                 "warn_total": stats["warns"],
-                "pending_producer": "WP11A",
+                "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })
 
     # ── training-step dispatch (mixed vs straight self-play) ──────────────────────────────
@@ -556,21 +563,36 @@ class StepCoordinator:
                                        recent_buffer=self.recent_buffer)
 
     # ── eval kickoff at the boundary (via the INJECTED EvalPipelineLike; no train→eval) ───
-    def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> bool:
+    def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> "tuple[bool, bool]":
+        """Returns `(eval_kicked_off, eval_skipped_busy)`. The kick ACK is consumed ONLY
+        for `eval_skipped_busy` (`ack.get("kicked") is False`) — NEVER for WR (P-06)."""
         if self.eval_pipeline is None or cfg.eval_interval <= 0:
-            return False
+            return False, False
         round_idx = self._train_step // cfg.eval_interval
         if round_idx <= 0 or round_idx == self._eval_round_last_step:
-            return False
+            return False, False
         if self._train_step % cfg.eval_interval != 0:
-            return False
+            return False, False
         self._eval_round_last_step = round_idx
         best = getattr(self.anchor_state, "best_model", None)
         best_step = getattr(self.anchor_state, "best_model_step", None)
-        self.eval_pipeline.run_evaluation(
+        ack = self.eval_pipeline.run_evaluation(
             self.eval_model, self._train_step, best,
             full_config=self.full_config, best_model_step=best_step,
         )
+        eval_skipped_busy = bool(ack.get("kicked") is False)
+        eval_kicked_off = bool(ack.get("kicked") is True)
+        return eval_kicked_off, eval_skipped_busy
+
+    # ── the async eval-result POLL at the top of step() (main-thread, never blocking) ─────
+    def _poll_eval_results(self) -> bool:
+        if self.eval_pipeline is None:
+            return False
+        result = self.eval_pipeline.poll_completed()
+        if result is None:
+            return False
+        from mantis.train.coordinator import drain
+        drain._route_eval_result(self, result, sync_inference=True)
         return True
 
     # ── close-out / terminal-eval flush (delegates to drain.py; §a.4 `drain` slice) ───────

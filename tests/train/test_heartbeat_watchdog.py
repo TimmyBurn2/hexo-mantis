@@ -106,7 +106,8 @@ def test_per_source_deadlines_are_independent(tmp_path, spy_sink):
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
-    deadlines = {"train_step": 100.0, "inference_dispatch": 0.5, "selfplay_drain": 100.0}
+    deadlines = {"train_step": 100.0, "inference_dispatch": 0.5, "selfplay_drain": 100.0,
+                "eval_round": 100.0}
     wd = _make_wd(registry=reg, deadlines=deadlines, sink=spy_sink, clock=clock,
                  exit_fn=exits.append, save_snapshot=lambda: None, hb_file=tmp_path / "hb.json")
     wd.arm()
@@ -133,7 +134,8 @@ def test_arm_log_emitted_even_when_a_deadline_disables_a_source(tmp_path, spy_si
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
-    deadlines = {"train_step": 0.0, "inference_dispatch": 100.0, "selfplay_drain": 100.0}
+    deadlines = {"train_step": 0.0, "inference_dispatch": 100.0, "selfplay_drain": 100.0,
+                "eval_round": 100.0}
     wd = _make_wd(registry=reg, deadlines=deadlines, sink=spy_sink, clock=clock,
                  exit_fn=exits.append, save_snapshot=lambda: None, hb_file=tmp_path / "hb.json")
     wd.arm()
@@ -440,7 +442,10 @@ def test_undeclared_never_beaten_source_warns_instead_of_firing(tmp_path, spy_si
     )
     wd.arm()
     armed = spy_sink.named("heartbeat_watchdog_armed")[-1]
-    assert armed["unwired_sources"] == ["inference_dispatch"]
+    assert armed["unwired_sources"] == ["inference_dispatch", "eval_round"], (
+        "eval_round joins inference_dispatch as unwired: WP11-A extends HEARTBEAT_SOURCES "
+        "and this fixture declares neither wired"
+    )
     assert armed["enabled"]["inference_dispatch"] is False, (
         "an unwired source must not read enabled:True in the arm log"
     )
@@ -453,13 +458,13 @@ def test_undeclared_never_beaten_source_warns_instead_of_firing(tmp_path, spy_si
     wd.poll_once()
     assert not exits, "an unwired source must never fire a stall abort"
     unwired = spy_sink.named("heartbeat_source_unwired")
-    assert [e["source"] for e in unwired] == ["inference_dispatch"]
+    assert [e["source"] for e in unwired] == ["inference_dispatch", "eval_round"]
 
-    clock.t = 20.0                                   # emitted ONCE, not once per poll
+    clock.t = 20.0                                   # emitted ONCE per source, not once per poll
     reg.beat("train_step")
     reg.beat("selfplay_drain")
     wd.poll_once()
-    assert len(spy_sink.named("heartbeat_source_unwired")) == 1
+    assert len(spy_sink.named("heartbeat_source_unwired")) == 2
     assert not exits
 
 

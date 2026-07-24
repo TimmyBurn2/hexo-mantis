@@ -298,6 +298,8 @@ def test_every_declared_heartbeat_source_has_a_live_emitter() -> None:
         "train_step": _SRC / "train" / "coordinator" / "step.py",
         "inference_dispatch": _SRC / "selfplay" / "inference_server.py",
         "selfplay_drain": _SRC / "selfplay" / "pool_drain.py",
+        # WP11-A: the eval pipeline's persistent poller thread beats this every tick.
+        "eval_round": _SRC / "eval" / "pipeline.py",
     }
     assert set(emitters) == set(HEARTBEAT_SOURCES), "the emitter map must cover every source"
     for source, path in emitters.items():

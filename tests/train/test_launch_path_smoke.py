@@ -38,11 +38,35 @@ def _synthetic_batch(spec):
     return states, policies, outcomes
 
 
+def _eval_block():
+    # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
+    return {
+        "random_model_sims": 1, "sealbot_model_sims": 1, "kraken_model_sims": 1,
+        "strix_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
+        "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
+        "gate": {
+            "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
+            "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
+            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1,
+        },
+        "ladder": {
+            "rungs": [{"name": "r0", "bot": "random", "variant": "raw", "depth": None,
+                      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
+                      "deploy_matched": True, "games_max": 1}],
+            "round_games": 1, "min_games_per_active_rung": 1, "graduation_wr_lower_ci": 0.9,
+            "graduation_consec_rounds": 1, "activation_wr_lower_ci": 0.5,
+            "calibration_every_k_rounds": 1, "calibration_games": 1,
+            "bootstrap_resamples": 1, "bootstrap_ci_level": 0.95,
+            "bt_prior_games": 1.0, "bootstrap_seed": 1,
+        },
+    }
+
+
 def _config():
     return {
         "schema_version": 1, "run_id": "smoke", "seed": 20260722,
         "identity": {"encoding": ENCODING, "representation": "grid"},
-        "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
+        "eval": _eval_block(),
         "selfplay": {"legal_move_radius_schedule": None},
     }
 

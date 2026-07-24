@@ -20,9 +20,10 @@ from mantis.train.emit import emit_via
 _LOG = logging.getLogger(__name__)
 
 
-def _route_eval_result(coord: Any, result: Any) -> Any:
+def _route_eval_result(coord: Any, result: Any, *, sync_inference: bool = True) -> Any:
     """Route completed eval-round result(s) through the coordinator's async eval-RESULT seam
-    (`on_eval_round_complete` — THE sealbot-WR consumer, §c.4b).
+    (`on_eval_round_complete` — THE sealbot-WR consumer, §c.4b), then apply any promotion
+    decision (WP11-A `_apply_promotion`).
 
     Shapes handled EXPLICITLY (RED-TEAM F7 — the sealbot gate's only feed path must never go
     quiet the way F-10 did):
@@ -44,17 +45,38 @@ def _route_eval_result(coord: Any, result: Any) -> Any:
         return result
     if isinstance(result, Mapping):
         handler(cast("Mapping[str, Any]", result))
+        _apply_promotion(coord, result, sync_inference=sync_inference)
         return result
     if isinstance(result, (list, tuple)):
         rounds = cast("Sequence[Any]", result)
         for item in rounds:
             if isinstance(item, Mapping):
                 handler(cast("Mapping[str, Any]", item))
+                _apply_promotion(coord, item, sync_inference=sync_inference)
             else:
                 _unroutable(coord, item, "batch element is not a result mapping")
         return result
     _unroutable(coord, result, "unsupported eval-result shape")
     return result
+
+
+def _apply_promotion(coord: Any, result: Any, *, sync_inference: bool) -> None:
+    """WP11-A: apply a promoted round's gate decision through the injected pipeline's
+    `apply_gate_decision` (mantis/eval/promote.py's ONE call site). A promoted result with
+    NO promotion surface (no pipeline, or one missing the method) is recorded LOUD — the
+    same posture as `_unroutable` — never silently dropped."""
+    if not isinstance(result, Mapping) or not result.get("promoted"):
+        return
+    pipeline = getattr(coord, "eval_pipeline", None)
+    apply_fn = getattr(pipeline, "apply_gate_decision", None)
+    if apply_fn is None:
+        step = result.get("step")
+        _LOG.error("eval_promotion_unapplied step=%s reason=no_promotion_surface", step)
+        emit_via(getattr(coord, "_sink", None), {
+            "event": "eval_promotion_unapplied", "step": step, "reason": "no_promotion_surface",
+        })
+        return
+    apply_fn(result, sync_inference=sync_inference)
 
 
 def _unroutable(coord: Any, result: Any, reason: str) -> None:
@@ -81,7 +103,8 @@ def flush_pending_eval(coord: Any) -> Any:
     _LOG.info("flush_pending_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "flush_pending_eval", "step": getattr(coord, "_train_step", None)})
-    return _route_eval_result(coord, drain())
+    # "pool still UP" contract (drain.py:73-74,105-134): a drained promotion may sync.
+    return _route_eval_result(coord, drain(), sync_inference=True)
 
 
 def run_terminal_eval(coord: Any) -> Any:
@@ -96,10 +119,12 @@ def run_terminal_eval(coord: Any) -> Any:
     _LOG.info("terminal_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "terminal_eval", "step": getattr(coord, "_train_step", None)})
+    # Terminal promotion: pool already stopped (step_coordinator.py:1705-1710 parity) —
+    # never sync inference weights into a torn-down pool.
     return _route_eval_result(coord, pipeline.run_evaluation(
         coord.eval_model, coord._train_step, best,
         full_config=coord.full_config, best_model_step=best_step, ignore_stride=True,
-    ))
+    ), sync_inference=False)
 
 
 def close_out(coord: Any, on_drained: "Callable[[], None] | None" = None) -> None:

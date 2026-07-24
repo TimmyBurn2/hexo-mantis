@@ -14,6 +14,18 @@ from mantis.encoding import EncodingRegistryError, lookup
 
 SCHEMA_VERSION = 1
 
+#: RED-TEAM-2 F-RT2-1 (BLOCKER fix): an obviously-generous finite ceiling for a
+#: timeout/grace-period float field whose value feeds `proc.join(timeout)` arithmetic
+#: (pipeline.py isolation law 2) — `multiprocessing.Process.join` cannot accept
+#: `float("inf")` (raises `OverflowError` deep inside `selectors.select()`), so a
+#: floor-only bound (`gt=0`/`ge=0`) that admits `+inf` is not actually a bound for this
+#: arithmetic. One day (86400.0s) is deliberately more generous than the
+#: `StepCoordinatorConfig` drain-cap family (coordinator/config.py
+#: DEFAULT_*_HARD_CAP_SEC = 14400.0, 4h) since these two fields bound a single eval round
+#: / kill-grace, never a whole drain budget — named module constant, never an inline
+#: magic literal (R1).
+_EVAL_TIMEOUT_CEILING_SEC = 86400.0
+
 
 class StrictModel(BaseModel):
     """Base for every config model: unknown key = hard error, no coercion, immutable."""
@@ -56,11 +68,161 @@ class RadiusStage(StrictModel):
     radius: int
 
 
-class EvalConfig(StrictModel):
-    """Eval opponent simulation counts (resolve_eval_model_sims reads these — no code default)."""
+class LadderRung(StrictModel):
+    """One opponent-ladder rung (design §c.1). `bot` is the resolver kind (closed set,
+    WP11-A); `depth` is sealbot's fixed-depth bar (LAW-15), `opponent_sims` the
+    kraken/strix opponent-side sims — exactly one of the two is meaningful per `bot`, both
+    travel as `None` where inapplicable rather than a sentinel int (R1: no code default).
 
-    random_model_sims: int
-    sealbot_model_sims: int
+    RED-TEAM F2 (MAJOR): a fixed-depth bar of 0 or negative, an opponent-sims count of 0 or
+    negative, or a rung that can never play a single game (`games_max < 1`) are each
+    domain-nonsense — bounded here as named `Field` constraints (pydantic includes the
+    field path in the raised error), never a silent clamp.
+    """
+
+    name: str = Field(min_length=1)
+    bot: Literal["sealbot", "kraken", "strix", "random"]
+    variant: str = Field(min_length=1)
+    depth: int | None = Field(ge=1)
+    opponent_sims: int | None = Field(ge=1)
+    opening_book: str = Field(min_length=1)
+    deploy_matched: bool
+    games_max: int = Field(ge=1)
+
+
+class GateConfig(StrictModel):
+    """The run3 deploy-strength gate, knob-for-knob (LIVE knobs only).
+
+    `screen_confirm_hi` is DELIBERATELY NOT PORTED (MUST-FIX 1): stored-but-never-read in
+    run3 (the escalation decision is the single lower-bound test `wr_screen >=
+    screen_confirm_lo`) — a dead schema key would violate LAW-08/R1; `extra="forbid"`
+    rejects a minted `screen_confirm_hi`.
+
+    RED-TEAM F2 (MAJOR) bounds: `promotion_winrate` is a win-rate fraction, domain `[0,1]`
+    — an out-of-range value (e.g. `2.0`) previously loaded silently and then permanently
+    and silently disabled promotion (`wr_confirm >= 2.0` can never be true), the exact
+    silently-disabled-lever class R1/LAW-08 exist to kill. `screen_confirm_lo` is the same
+    kind of win-rate-fraction threshold. The remaining fields are game/resample COUNTS
+    (`screen_games`, `confirm_games`, `deploy_sims`, `bootstrap_resamples`,
+    `min_distinct_per_pair`) or a round CADENCE (`stride`) — all must be >=1: a count of 0
+    cannot produce a game/resample/distinct-pair to measure, and `stride=0` would divide by
+    zero at `round_idx % cfg.gate.stride` (pipeline.py `_build_round_spec`). `seed_base` is
+    an RNG seed with no domain restriction (any int is a valid seed).
+    """
+
+    stride: int = Field(ge=1)
+    screen_games: int = Field(ge=1)
+    confirm_games: int = Field(ge=1)
+    promotion_winrate: float = Field(ge=0, le=1)
+    screen_confirm_lo: float = Field(ge=0, le=1)
+    deploy_sims: int = Field(ge=1)
+    opening_book: str = Field(min_length=1)
+    bootstrap_resamples: int = Field(ge=1)
+    min_distinct_per_pair: int = Field(ge=1)
+    seed_base: int
+
+
+class LadderConfig(StrictModel):
+    """The opponent-ladder schema (STATE §5): ordered rungs + every scheduling/hysteresis
+    threshold as a named field — never a code literal (rule 4).
+
+    RED-TEAM F2 (MAJOR) bounds: `bootstrap_ci_level` is a confidence LEVEL, mathematical
+    domain strictly `(0,1)` — `pair_bootstrap_wr_ci` computes `alpha = (1 - level) / 2` and
+    calls `np.quantile(..., alpha)`/`np.quantile(..., 1 - alpha)`; a level outside `(0,1)`
+    either raises deep inside a worker subprocess (`level > 1` -> negative `alpha` ->
+    `np.quantile` raises at runtime, not at config load) or silently returns a
+    statistically-inverted-but-plausible-looking CI (`level < 0`), previously undetected at
+    the config boundary R1 promises. `round_games`/`bootstrap_resamples` are per-round
+    COUNTS (>=1: zero games or zero resamples measures nothing); `min_games_per_active_rung`
+    is a per-rung FLOOR that is legitimately allowed to be 0 (no floor); `calibration_games`
+    is the saturated-rung calibration COUNT — STATE §5 requires calibration "never fully
+    retired", so it must be >=1 (0 would silently retire a graduated rung's Elo-scale
+    anchor forever); `bt_prior_games` is the BT fit's regularizer pseudo-count, domain
+    `>=0` (a negative prior is not a pseudo-count at all).
+
+    RED-TEAM-2 F-RT2-1 (BLOCKER) sweep: `bt_prior_games`'s floor-only bound (`ge=0`) also
+    silently admitted `float("inf")` — traced downstream (bt.py `fit_bt`): an `inf` prior
+    added to the win matrix produces `inf`/`inf` MM-iteration ratios (NaN), a degenerate
+    but non-crashing corruption of every downstream BT rating and `p_hat`/scheduling
+    value. `allow_inf_nan=False` closes it the same way as the two timeout fields above
+    (no finite ceiling needed here — this field is not `proc.join()` timeout arithmetic,
+    so any finite value is domain-legal). `graduation_wr_lower_ci` /
+    `activation_wr_lower_ci` / `graduation_consec_rounds` / `calibration_every_k_rounds`
+    already carry their own bounds via `_validate_ladder` below (unchanged here).
+    `bootstrap_seed` is an RNG seed with no domain restriction.
+    """
+
+    rungs: list[LadderRung]
+    round_games: int = Field(ge=1)
+    min_games_per_active_rung: int = Field(ge=0)
+    graduation_wr_lower_ci: float
+    graduation_consec_rounds: int
+    activation_wr_lower_ci: float
+    calibration_every_k_rounds: int
+    calibration_games: int = Field(ge=1)
+    bootstrap_resamples: int = Field(ge=1)
+    bootstrap_ci_level: float = Field(gt=0, lt=1)
+    bt_prior_games: float = Field(ge=0, allow_inf_nan=False)
+    bootstrap_seed: int
+
+    @model_validator(mode="after")
+    def _validate_ladder(self) -> "LadderConfig":
+        if not self.rungs:
+            raise ValueError("eval.ladder.rungs must be non-empty")
+        names = [r.name for r in self.rungs]
+        if len(names) != len(set(names)):
+            dupes = sorted({n for n in names if names.count(n) > 1})
+            raise ValueError(
+                f"eval.ladder.rungs: rung 'name' must be unique; duplicate name(s): {dupes}"
+            )
+        if not (0 < self.activation_wr_lower_ci <= self.graduation_wr_lower_ci < 1):
+            raise ValueError(
+                "eval.ladder: thresholds must satisfy "
+                "0 < activation_wr_lower_ci <= graduation_wr_lower_ci < 1 "
+                f"(got activation_wr_lower_ci={self.activation_wr_lower_ci}, "
+                f"graduation_wr_lower_ci={self.graduation_wr_lower_ci})"
+            )
+        if self.graduation_consec_rounds < 1:
+            raise ValueError("eval.ladder.graduation_consec_rounds must be >= 1")
+        if self.calibration_every_k_rounds < 1:
+            raise ValueError("eval.ladder.calibration_every_k_rounds must be >= 1")
+        return self
+
+
+class EvalConfig(StrictModel):
+    """Eval opponent simulation counts (resolve_eval_model_sims reads these — no code default).
+
+    RED-TEAM F2 (MAJOR) bounds: a `*_model_sims` count of 0 or negative cannot run a single
+    MCTS simulation, so all four are `>=1` (the RED_TEAM-reproduced silent-load of
+    `random_model_sims=-5` is now a named `ValidationError` at config load, not a downstream
+    surprise). `random_floor_games` is legitimately mintable at `0` (A-2: parity mints the
+    floor DISABLED) so its bound is `>=0`, not `>=1`. `round_timeout_sec` bounds the
+    isolation-law join/escalation arithmetic (pipeline.py's poller compares elapsed wall
+    time against it) and must be strictly positive; `worker_kill_grace_sec` is a grace
+    period, domain `>=0`.
+
+    RED-TEAM-2 F-RT2-1 (BLOCKER): a floor-only bound (`gt=0`/`ge=0`) admits `float("inf")`
+    (mathematically `inf > 0` and `inf >= 0`), which previously loaded SILENTLY via a
+    genuine YAML `.inf` literal and reproduced F1's exact silent-poller-death failure mode
+    — `_escalate_and_finalize` (pipeline.py) calls a real `multiprocessing.Process.join`
+    with this value, which raises an uncaught `OverflowError` for a non-finite timeout.
+    Both fields now carry `allow_inf_nan=False` (rejects `inf`/`-inf`/`nan` with a named
+    pydantic `finite_number` error) PLUS a finite ceiling
+    (`_EVAL_TIMEOUT_CEILING_SEC`, see above) — the isolation-law arithmetic this WP's own
+    docstring names as the reason these fields exist can no longer be handed a value it
+    cannot execute.
+    """
+
+    random_model_sims: int = Field(ge=1)
+    sealbot_model_sims: int = Field(ge=1)
+    kraken_model_sims: int = Field(ge=1)
+    strix_model_sims: int = Field(ge=1)
+    random_floor_games: int = Field(ge=0)
+    worker_device: Literal["cuda", "cpu"]
+    round_timeout_sec: float = Field(gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
+    worker_kill_grace_sec: float = Field(ge=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
+    gate: GateConfig
+    ladder: LadderConfig
 
 
 class SelfplayConfig(StrictModel):

@@ -2,7 +2,9 @@
 
 - version: v1
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
-- status: v1 — filled by the run-safety subsystem port (WP13-A)
+- status: v1 — filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
+  (`sealbot_wr_warn` producer, `eval_round` heartbeat, `eval_round_wall`/`eval_broken`/
+  `eval_rung_skipped`) landed at WP11-A
 
 ## Summary
 
@@ -75,26 +77,48 @@ producers is a phantom-armed abort chain waiting to happen).
 | id | kind | producer | producer test |
 |---|---|---|---|
 | `draw_rate_collapse` | symbol | `train.coordinator.config.recent_pool_draw_rate` ← `selfplay.pool.WorkerPool.per_worker_draw_rates` | `tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer` |
-| `sealbot_wr_warn` | seam (`pending: WP11A`) | `train.coordinator.step.StepCoordinator.on_eval_round_complete` (field `wr_sealbot`) | `tests/train/test_coordinator_gates.py::test_sealbot_default_is_warn_only_and_does_not_shut_down` |
+| `sealbot_wr_warn` | symbol (+`also`) | `eval.rounds.build_round_result` (field `wr_sealbot`) + `train.coordinator.step.StepCoordinator.on_eval_round_complete` | `tests/eval/test_wr_sealbot_handshake.py::test_round_result_always_carries_wr_sealbot` |
 | `grad_norm_hard_abort` | symbol | `train.coordinator.step.StepCoordinator._run_training_step` | `tests/train/test_coordinator_gates.py::test_grad_norm_gate_fires_with_the_uniform_contract` |
 | `heartbeat.train_step` | event_literal | `train.coordinator.step` / `train_step` | `tests/train/test_coordinator_gates.py::test_step_loop_beats` |
 | `heartbeat.inference_dispatch` | event_literal | `selfplay.inference_server` / `inference_dispatch` | `tests/selfplay/test_inference_server.py::test_graph_loop_emits_one_heartbeat_per_batch` |
 | `heartbeat.selfplay_drain` | event_literal | `selfplay.pool_drain` / `selfplay_drain` | `tests/selfplay/test_pool_drain_parity.py::test_heartbeat_emission_at_drain` |
+| `heartbeat.eval_round` | event_literal | `eval.pipeline` / `eval_round` (the persistent poller thread; beats every tick, idle or active) | `tests/train/test_eval_heartbeat.py::test_poller_thread_beats_eval_round` |
 | `persist_fatal` | symbol (+`also`) | `train.checkpoints.persist_errors_total` + `monitor.sink.JsonlEventSink.persist_errors_total` | `tests/monitor/test_persist_fatal.py::test_sink_failure_counts_and_aborts` |
 | `selfplay_stall` | symbol | `selfplay.pool.WorkerPool.games_completed` | `tests/train/test_lifecycle_contract.py::test_watchdog_fires_after_timeout` |
 | `disk_guard` | symbol | `train.lifecycle.disk_guard.DiskGuard.check_once` | `tests/train/test_lifecycle_contract.py::test_disk_guard_emits_free_event` |
 | `warn.training_step_alerts` | event_literal | `train.events` / `training_step` (4 rules: `entropy_collapse`, `selfplay_entropy_collapse`, `grad_norm_spike`, `loss_increase_window`) | `tests/train/test_coordinator_gates.py::test_log_interval_emits_training_step` |
+| `eval_round_wall` | event_literal (+`also`) | `eval.pipeline` / `eval_round_started` + `eval_round_complete` | `tests/eval/test_round_events.py::test_round_emits_start_and_complete_wall_events` |
+| `eval_broken` | event_literal | `eval.pipeline` / `eval_broken` | `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain` (+ reason `round_completion_error` — RED-TEAM-FIX WP11-A F1 layer 2, ANY uncaught exception in round completion/scheduling converts to a delivered `eval_broken` rather than killing the poller thread silently — `tests/eval/test_round_completion_error.py::test_poller_thread_survives_an_uncaught_exception_in_round_completion`) |
+| `eval_rung_skipped` | event_literal | `eval.pipeline` / `eval_rung_skipped` | `tests/eval/test_rung_loud_skip.py::test_unresolvable_rung_emits_skip_event_and_log` |
 
-Coverage state at WP13-A landing (recorded, not silent — the intended operator posture,
-post close-out amendments A+B): WP13-A ships **ZERO new default-active hard-aborts**.
+Coverage state at WP11-A landing (recorded, not silent — the intended operator posture):
+WP13-A shipped **ZERO new default-active hard-aborts**; WP11-A lands the mid-run eval-
+RESULT producer that row `sealbot_wr_warn` was pending on.
 - `sealbot_wr_warn` ships **WARN-ONLY** (operator G-3): a sustained collapse emits a visible
   `sealbot_wr_warn` and does NOT stop the run; the one-field flip `wr_hard_abort_enabled=True`
-  restores the A/B/C hard-abort as a capability. It is also INERT until WP11-A lands the
-  mid-run eval-RESULT producer (every undelivered round is skip-counted).
+  restores the A/B/C hard-abort as a capability. The producer LANDED at WP11-A
+  (`eval.rounds.build_round_result` unconditionally sets `wr_sealbot`); an eval round that
+  never resolves a sealbot rung (0/6 census verdict at HEAD — no adapters installed) still
+  routes `wr_sealbot: None`, which the coordinator skip-counts loudly
+  (`sealbot_wr_gate_skipped`), never silently.
 - `draw_rate_collapse` ships `draw_rate_threshold = 0.0` (OFF) until the run5 mint makes it
   configurable.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
+- `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's
+  persistent poller thread beats it every tick, in or out of an active round.
+- `eval_round_complete`'s routed `gate.elo_ci_lower_boot` field (fed from
+  `eval.aggregate.aggregate_gate`, consumed by `gate_promotion_decision`'s `ci_lo_boot`
+  parameter) is NOT an Elo-scale bootstrap bound (deviation #5, FIX-PASS document-the-unit
+  ruling): it is the pooled distinct-game draw-aware WR bootstrap's LOWER bound,
+  RE-CENTERED to the Elo zero-point — `wr_lower_boot - 0.5`, so its range is `[-0.5, 0.5]`,
+  not Elo points. It is DECISION-EQUIVALENT to a literal per-resample BT/Elo bootstrap for
+  the promotion test: for the 2-entity candidate-vs-best comparison, any monotone
+  transform commutes with quantiles, so `wr_lower_boot - 0.5 > 0 ⟺ Elo_lower > 0` — the
+  `ci_lo_boot > 0.0` truth-table cell `gate_promotion_decision` reads is bit-identical
+  either way. The field KEEPS its historical name (`elo_ci_lower_boot`) for run3-parity
+  continuity; a future consumer must read the VALUE as a re-centered win-rate bound, never
+  as Elo points.
 
 The one gate LIVE the moment a coordinator runs is `grad_norm_hard_abort`. The heartbeat
 watchdog, persist-fatal and the heartbeat file are code-complete and oracle-tested but are

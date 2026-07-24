@@ -28,6 +28,32 @@ from mantis.model import CnnArch, GnnArch, RepresentationMismatch  # noqa: F401 
 
 # ── Slice 1 surface under conformance (RED until IMPL writes train/checkpoints.py) ─────────
 import mantis.train.checkpoints as checkpoints
+
+
+# WP11-A schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
+def _make_eval_block() -> dict:
+    return {
+        "random_model_sims": 96, "sealbot_model_sims": 128, "kraken_model_sims": 128,
+        "strix_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
+        "gate": {
+            "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
+            "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
+            "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625,
+        },
+        "ladder": {
+            "rungs": [{"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
+                      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
+                      "deploy_matched": True, "games_max": 32}],
+            "round_games": 64, "min_games_per_active_rung": 4, "graduation_wr_lower_ci": 0.75,
+            "graduation_consec_rounds": 3, "activation_wr_lower_ci": 0.65,
+            "calibration_every_k_rounds": 4, "calibration_games": 8,
+            "bootstrap_resamples": 1000, "bootstrap_ci_level": 0.95,
+            "bt_prior_games": 1.0, "bootstrap_seed": 1234,
+        },
+    }
+
+
 from mantis.train.checkpoints import (
     CHECKPOINT_SCHEMA_VERSION,
     Checkpoint,  # noqa: F401 — the in-memory loaded-envelope view (public dataclass)
@@ -618,7 +644,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
     valid_config = {
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
-        "eval": {"random_model_sims": 96, "sealbot_model_sims": 128},
+        "eval": _make_eval_block(),
         "selfplay": {"legal_move_radius_schedule": None},
     }
     payload = {  # the real FULL-v1 top-level shape (7 keys) + captured metadata scalars

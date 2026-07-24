@@ -64,6 +64,9 @@ class MonitorConfig:
     heartbeat_deadline_train_step_sec: float = 1800.0
     heartbeat_deadline_inference_dispatch_sec: float = 1800.0
     heartbeat_deadline_selfplay_drain_sec: float = 1800.0
+    # WP11-A: the eval pipeline's poller-thread source (R-MONITORCONFIG-SCHEMA debt
+    # pattern — a code-side default until the run5 mint, documented alongside its siblings).
+    heartbeat_deadline_eval_round_sec: float = 1800.0
     heartbeat_poll_interval_sec: float = 5.0
     heartbeat_file_interval_sec: float = 15.0
     # Teardown budget swapped in by `disarm_staleness()` (RED-TEAM F2): close-out waits are

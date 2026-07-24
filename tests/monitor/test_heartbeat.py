@@ -38,8 +38,11 @@ def test_exit_code_constants_are_pinned() -> None:
 
 
 def test_heartbeat_sources_name_pins() -> None:
-    """The three pipeline stages are name-pinned (the watchdog + manifest key on these)."""
-    assert HEARTBEAT_SOURCES == ("train_step", "inference_dispatch", "selfplay_drain")
+    """The pipeline stages are name-pinned (the watchdog + manifest key on these).
+    WP11-A adds "eval_round" as the 4th source (the eval pipeline's poller thread)."""
+    assert HEARTBEAT_SOURCES == (
+        "train_step", "inference_dispatch", "selfplay_drain", "eval_round",
+    )
 
 
 # ── registry ──────────────────────────────────────────────────────────────────────────

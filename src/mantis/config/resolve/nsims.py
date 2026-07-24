@@ -8,7 +8,9 @@ the config field is required, there is no code default to fall to).
 from __future__ import annotations
 
 # The known eval opponents (name authority; NOT a value default — the values live in the config).
-_KNOWN_OPPONENTS = ("random", "sealbot")
+# WP11-A extends this from ("random", "sealbot") to add the ladder's kraken/strix kinds
+# (design §a.4) — semantics unchanged: the config value always wins, None still raises.
+_KNOWN_OPPONENTS = ("random", "sealbot", "kraken", "strix")
 
 
 def resolve_eval_model_sims(opponent: str, cfg_value: int | None) -> int:

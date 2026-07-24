@@ -34,22 +34,21 @@ gates:
   - id: sealbot_wr_warn
     input: wr_sealbot                # on the ASYNC eval-RESULT dict, never the kick return
     producer:
-      kind: seam
+      kind: symbol
+      module: mantis.eval.rounds
+      symbol: build_round_result
+    also:
+      kind: symbol
       module: mantis.train.coordinator.step
       symbol: StepCoordinator.on_eval_round_complete
-      field: wr_sealbot
-      resolves_via: >-
-        WP11-A's non-blocking drain runtime routes every completed round's result dict
-        through this handler; teardown-side flush_pending_eval/run_terminal_eval returns
-        route TODAY.
-    pending: WP11A                   # the mid-run RESULT producer lands there (Appendix B)
     note: >-
       ships WARN-ONLY (operator G-3: warn chosen over hard-abort). A sustained-collapse
       trajectory emits a visible `sealbot_wr_warn` and does NOT stop the run; the one-field
       flip `wr_hard_abort_enabled=True` restores the A/B/C hard-abort exactly (capability
-      pinned by test_sealbot_hard_abort_capability_when_enabled). Still `pending: WP11A`
-      because warn ALSO needs the WP11-A `wr_sealbot` feed to ever evaluate.
-    producer_test: tests/train/test_coordinator_gates.py::test_sealbot_default_is_warn_only_and_does_not_shut_down
+      pinned by test_sealbot_hard_abort_capability_when_enabled). The producer landed at
+      WP11-A: `build_round_result` unconditionally sets `wr_sealbot` (float|None) on every
+      routed round result; `on_eval_round_complete` is the consumer.
+    producer_test: tests/eval/test_wr_sealbot_handshake.py::test_round_result_always_carries_wr_sealbot
 
   - id: grad_norm_hard_abort         # KEPT WP10 gate (decision byte-identical), manifest-cited
     input: grad_norm

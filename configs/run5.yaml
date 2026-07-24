@@ -2,6 +2,7 @@
 # template: dev
 # delta: run_id: template_dev -> run5
 # delta: seed: 20260716 -> 20260718
+# delta: eval.random_floor_games: 4 -> 0
 schema_version: 1
 run_id: run5
 seed: 20260718
@@ -11,5 +12,83 @@ identity:
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128
+  kraken_model_sims: 128
+  strix_model_sims: 128
+  random_floor_games: 0
+  worker_device: cuda
+  round_timeout_sec: 3600.0
+  worker_kill_grace_sec: 10.0
+  gate:
+    stride: 1
+    screen_games: 80
+    confirm_games: 128
+    promotion_winrate: 0.55
+    screen_confirm_lo: 0.44
+    deploy_sims: 150
+    opening_book: book_v1_s20260625_p4
+    bootstrap_resamples: 1000
+    min_distinct_per_pair: 10
+    seed_base: 20260625
+  ladder:
+    rungs:
+    - name: sealbot_d5
+      bot: sealbot
+      variant: d5
+      depth: 5
+      opponent_sims: null
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    - name: kraken_raw
+      bot: kraken
+      variant: raw
+      depth: null
+      opponent_sims: null
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    - name: sealbot_d6
+      bot: sealbot
+      variant: d6
+      depth: 6
+      opponent_sims: null
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    - name: kraken_mcts200
+      bot: kraken
+      variant: mcts200
+      depth: null
+      opponent_sims: 200
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    - name: strix_128
+      bot: strix
+      variant: s128
+      depth: null
+      opponent_sims: 128
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    - name: strix_256
+      bot: strix
+      variant: s256
+      depth: null
+      opponent_sims: 256
+      opening_book: book_v1_s20260625_p4
+      deploy_matched: true
+      games_max: 32
+    round_games: 64
+    min_games_per_active_rung: 4
+    graduation_wr_lower_ci: 0.75
+    graduation_consec_rounds: 3
+    activation_wr_lower_ci: 0.65
+    calibration_every_k_rounds: 4
+    calibration_games: 8
+    bootstrap_resamples: 1000
+    bootstrap_ci_level: 0.95
+    bt_prior_games: 1.0
+    bootstrap_seed: 1234
 selfplay:
   legal_move_radius_schedule: null

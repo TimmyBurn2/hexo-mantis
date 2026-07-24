@@ -240,6 +240,7 @@ def build_run_safety(
             "train_step": cfg.heartbeat_deadline_train_step_sec,
             "inference_dispatch": cfg.heartbeat_deadline_inference_dispatch_sec,
             "selfplay_drain": cfg.heartbeat_deadline_selfplay_drain_sec,
+            "eval_round": cfg.heartbeat_deadline_eval_round_sec,
         },
         sink=sink,
         counters_fn=_persist_errors_total,

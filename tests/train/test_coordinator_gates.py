@@ -119,6 +119,7 @@ class FakeEvalPipeline:
         self.kick_result = kick_result
         self.run_calls = 0
         self.drain_calls = 0
+        self.poll_calls = 0
 
     def run_evaluation(self, model, step, best, *, full_config, best_model_step,
                        ignore_stride=False) -> dict:
@@ -127,6 +128,13 @@ class FakeEvalPipeline:
 
     def drain_pending(self):
         self.drain_calls += 1
+        return None
+
+    def poll_completed(self):
+        # WP11-A: step()'s non-blocking poll at the top of every iteration. This fixture
+        # never has a completed round ready — the kick-return-is-never-consumed-for-WR
+        # invariant this test pins is entirely about the KICK ack, not this seam.
+        self.poll_calls += 1
         return None
 
 

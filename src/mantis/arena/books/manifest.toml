@@ -1,0 +1,10 @@
+# Opening-book authority manifest (LAW-15 sha-pin; design §a.2).
+#
+# book_v1: 512 four-ply openings, minted with seed 20260625 = run3's ACTUAL deploy-strength
+# gate seed_base (deploy_strength_eval.py:272; adjudication A-3) via
+# tools/mint_opening_book.py --seed 20260625 --plies 4 --n 512.
+# FROZEN + sha-pinned: `mantis.arena.books.paired_openings` verifies this hash at load.
+
+[books."book_v1_s20260625_p4"]
+file = "book_v1_s20260625_p4.json"
+sha256 = "52943eabdfd911c36dcd9374da7d91f0a712b0d1eff47a99ab09a760b5088d06"
