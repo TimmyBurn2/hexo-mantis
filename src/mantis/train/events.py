@@ -19,8 +19,11 @@ from mantis.train.emit import EventSink, emit_via
 
 _LOG = logging.getLogger(__name__)
 
-# The old monitoring.early_game_probe threshold, inlined (the probe is WP13; only the numeric
-# gate is needed here to preserve the warn-log behaviour).
+# The old monitoring.early_game_probe threshold, inlined. The PROBE itself is DEFER/ARCH
+# (file_map row 64; the F-27/F-30 class — a probe is never a run-gate: the value-spread
+# canary stayed green through a 33%→5% WR collapse). Re-entry requires a LAW-02
+# re-validation, not a wiring commit. Only the numeric gate is needed here to preserve the
+# warn-log behaviour for a duck-typed probe a caller may still inject.
 EARLY_GAME_ENTROPY_WARN_THRESHOLD: float = 4.5
 
 # CONFRES S2: PUCT-descent-specific cluster stats — always-keyed (value under PUCT, None under
@@ -86,12 +89,19 @@ def replay_pretrain_events(log_dir: str | Path, sink: EventSink) -> None:
 def emit_axis_distribution(
     train_step: int,
     pool: Any,
-    config: dict[str, Any],
+    monitor_cfg: Any,
     baseline: dict[str, float],
     tb_writer: Any,
     sink: EventSink,
 ) -> Optional[float]:
-    """Compute + emit selfplay axis-distribution metrics through the injected sink."""
+    """Compute + emit selfplay axis-distribution metrics through the injected sink.
+
+    `monitor_cfg` is a `MonitorConfig`-like (duck-typed — `train/events.py` is NOT one of
+    the three declared `train → monitor` import sites): the warn/alert thresholds have ONE
+    authority, the dataclass field. The old inline
+    `config.get("monitors", {}).get("axis_warn", 0.45)` code-side defaults are DEAD — a
+    duplicated default authority is exactly what §5/R1 forbids.
+    """
     recent_games = pool.recent_move_histories
     if not recent_games:
         return None
@@ -100,9 +110,8 @@ def emit_axis_distribution(
     axis_q, axis_r, axis_s = metrics["axis_q"], metrics["axis_r"], metrics["axis_s"]
     axis_max = metrics["axis_max"]
 
-    mon_cfg = config.get("monitors", {})
-    axis_warn = float(mon_cfg.get("axis_warn", 0.45))
-    axis_alert = float(mon_cfg.get("axis_alert", 0.50))
+    axis_warn = float(monitor_cfg.axis_warn)
+    axis_alert = float(monitor_cfg.axis_alert)
     max_frac = max(axis_q, axis_r, axis_s)
 
     if max_frac >= axis_alert:
@@ -156,13 +165,19 @@ def emit_training_events(
     mcts_config: dict[str, Any],
     capacity: int,
     games_per_hour_fn: Any,
-    qfire_delta: int,
+    qfire_delta: Optional[int],
     sink: EventSink,
     early_game_probe: Optional[Any] = None,
     trainer_model: Optional[Any] = None,
     solver_deltas: Optional[dict[str, Any]] = None,
-) -> None:
-    """Emit `training_step` + `iteration_complete` events through the injected sink."""
+) -> dict[str, Any]:
+    """Emit `training_step` + `iteration_complete` events through the injected sink and
+    RETURN the `training_step` payload.
+
+    The return is what the 4 WARN rules read (`monitor.rules.emit_training_step_alerts`):
+    the rules run on the payload that was actually emitted, so a rule can never fire on a
+    shape the event stream does not carry (LAW-07 — the alert and its producer are the
+    same object)."""
     policy_entropy = float(loss_info.get("policy_entropy", 0.0))
     value_accuracy = float(loss_info.get("value_accuracy", 0.0))
     grad_norm = float(loss_info.get("grad_norm", float("nan")))
@@ -203,6 +218,9 @@ def emit_training_events(
         "value_accuracy": value_accuracy,
         "lr": lr,
         "grad_norm": grad_norm,
+        # None = NOT MEASURED (no quiescence-counter producer exists new-side; the
+        # solver-delta half is DEFER/ARCH). The key stays for schema stability, but it
+        # must never carry a fabricated 0 — see docs/contracts/event_manifest.md.
         "quiescence_fires_per_step": qfire_delta,
     }
     if probe_metrics:
@@ -236,3 +254,4 @@ def emit_training_events(
     }
     iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
     emit_via(sink, iteration_complete_event)
+    return training_step_event

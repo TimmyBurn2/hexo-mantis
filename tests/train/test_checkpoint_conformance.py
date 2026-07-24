@@ -275,9 +275,16 @@ def test_unstamped_save_fails_loud_and_writes_nothing(tmp_path, tiny_net, optim_
 
 
 def test_quarantine_path_when_run_must_survive(tmp_path, tiny_net, optim_scaler_sched, valid_config,
-                                               tiny_arch):
+                                               tiny_arch, monkeypatch):
     """T-CK-12 — PASS iff, with the survive-run flag, an unstampable save writes <path>.quarantine
-    + increments the counter, NEVER a canonical name. Bites: a canonical unstamped artifact."""
+    + increments the counter, NEVER a canonical name. Bites: a canonical unstamped artifact.
+
+    `persist_errors_total` is a process-wide module GLOBAL and this test increments it via
+    `global … += 1`, which no assertion can undo. The monkeypatch pins it to 0 for the test AND
+    RESTORES the pre-test value at teardown, so the leak cannot reach another suite (WP13-A
+    REVIEW-impl F-2: the watchdog's persist-fatal rule is the literal `> 0`, so a leaked count
+    would make a later, healthy watchdog abort on inherited state)."""
+    monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
     opt, scaler, sched = optim_scaler_sched
     unstampable = {"run_id": "runa", "arch": tiny_arch}
     before = checkpoints.persist_errors_total

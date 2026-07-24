@@ -241,8 +241,15 @@ def test_buffer_persist_error_increments_counter_and_aborts(tmp_path, tiny_net, 
                                                             metadata_kwargs, monkeypatch):
     """T-LC-14 — PASS iff a buffer/checkpoint save failure increments persist_errors_total and
     aborts (run-fatal), NOT a silent except: pass. Bites: a swallowed persist failure.
-    Realized via the checkpoint save path (torch.save forced to fail) — ORACLE_NOTES J9."""
+    Realized via the checkpoint save path (torch.save forced to fail) — ORACLE_NOTES J9.
+
+    `persist_errors_total` is a process-wide module GLOBAL and the `global … += 1` under test
+    cannot be undone by an assertion. The monkeypatch pins it to 0 here AND RESTORES the
+    pre-test value at teardown, so the increment cannot leak into another suite (WP13-A
+    REVIEW-impl F-2: the heartbeat watchdog's persist-fatal rule is the literal `> 0`, so a
+    leaked count would abort a later, healthy watchdog on inherited state)."""
     from mantis.train import checkpoints  # Slice 1
+    monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
     before = checkpoints.persist_errors_total
 
     def _boom(*_a, **_k):

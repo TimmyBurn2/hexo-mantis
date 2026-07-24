@@ -13,11 +13,59 @@ no-op. When WP11 injects a concrete pipeline, `flush_pending_eval` joins the in-
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Sequence, cast
 
 from mantis.train.emit import emit_via
 
 _LOG = logging.getLogger(__name__)
+
+
+def _route_eval_result(coord: Any, result: Any) -> Any:
+    """Route completed eval-round result(s) through the coordinator's async eval-RESULT seam
+    (`on_eval_round_complete` — THE sealbot-WR consumer, §c.4b).
+
+    Shapes handled EXPLICITLY (RED-TEAM F7 — the sealbot gate's only feed path must never go
+    quiet the way F-10 did):
+      * ``None``            — no pending round; the normal no-op.
+      * a ``Mapping``       — ONE completed round (the pre-WP11-A teardown shape).
+      * a list/tuple        — a BATCH of completed rounds (the N-2 handshake shape WP11-A's
+                              drain may plausibly return): every Mapping element is routed,
+                              one handler call per round.
+      * anything else       — LOUD: an `eval_result_unroutable` event + an ERROR log. It is
+                              deliberately not a raise: a raise here escapes into `close_out`
+                              and skips `on_drained` (`pool.stop`) and the terminal eval
+                              (RED-TEAM F10), which is a worse failure than a recorded drop.
+    """
+    handler = getattr(coord, "on_eval_round_complete", None)
+    if result is None:
+        return result
+    if handler is None:
+        _unroutable(coord, result, "coordinator has no on_eval_round_complete handler")
+        return result
+    if isinstance(result, Mapping):
+        handler(cast("Mapping[str, Any]", result))
+        return result
+    if isinstance(result, (list, tuple)):
+        rounds = cast("Sequence[Any]", result)
+        for item in rounds:
+            if isinstance(item, Mapping):
+                handler(cast("Mapping[str, Any]", item))
+            else:
+                _unroutable(coord, item, "batch element is not a result mapping")
+        return result
+    _unroutable(coord, result, "unsupported eval-result shape")
+    return result
+
+
+def _unroutable(coord: Any, result: Any, reason: str) -> None:
+    """A result the sealbot seam cannot consume is RECORDED, never dropped in silence."""
+    _LOG.error("eval_result_unroutable reason=%s type=%s", reason, type(result).__name__)
+    emit_via(getattr(coord, "_sink", None), {
+        "event": "eval_result_unroutable",
+        "reason": reason,
+        "result_type": type(result).__name__,
+        "step": getattr(coord, "_train_step", None),
+    })
 
 
 def flush_pending_eval(coord: Any) -> Any:
@@ -33,7 +81,7 @@ def flush_pending_eval(coord: Any) -> Any:
     _LOG.info("flush_pending_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "flush_pending_eval", "step": getattr(coord, "_train_step", None)})
-    return drain()
+    return _route_eval_result(coord, drain())
 
 
 def run_terminal_eval(coord: Any) -> Any:
@@ -48,16 +96,38 @@ def run_terminal_eval(coord: Any) -> Any:
     _LOG.info("terminal_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "terminal_eval", "step": getattr(coord, "_train_step", None)})
-    return pipeline.run_evaluation(
+    return _route_eval_result(coord, pipeline.run_evaluation(
         coord.eval_model, coord._train_step, best,
         full_config=coord.full_config, best_model_step=best_step, ignore_stride=True,
-    )
+    ))
 
 
 def close_out(coord: Any, on_drained: "Callable[[], None] | None" = None) -> None:
-    """The run epilogue (§D-LOOPFIX W1): (1) DRAIN the in-flight eval (pool still UP so a
-    drained promotion can sync), (2) ``on_drained()`` (the caller passes ``pool.stop`` so the
-    terminal eval runs on an UNLOADED GPU), (3) TERMINAL full-battery eval on the final ckpt."""
+    """The run epilogue (§D-LOOPFIX W1): (0) DISARM the heartbeat watchdog's staleness fire,
+    (1) DRAIN the in-flight eval (pool still UP so a drained promotion can sync),
+    (2) ``on_drained()`` (the caller passes ``pool.stop`` so the terminal eval runs on an
+    UNLOADED GPU), (3) TERMINAL full-battery eval on the final ckpt.
+
+    Step (0) is the FIRST action and it is load-bearing (O-27): the close-out waits below
+    are legally up to 14400 s, an order of magnitude past the 1800 s staleness deadline, so
+    a disarm that lands after `flush_pending_eval` turns every clean finish with a long
+    terminal eval into a false-42 supervisor RELAUNCH STORM. Only staleness is disarmed —
+    the persist-fatal fire and the heartbeat-file `seq` stay live through the whole epilogue.
+    """
+    watchdog = getattr(coord, "heartbeat_watchdog", None)
+    if watchdog is not None:
+        disarm = getattr(watchdog, "disarm_staleness", None)
+        if disarm is None:
+            # FAIL LOUD (RED-TEAM F8): silently skipping the disarm because a duck-typed
+            # object lacks the method is the exact false-42 relaunch storm MUST-2 exists to
+            # prevent. A wrong object here is a wiring bug, and a wiring bug must not
+            # degrade into "no watchdog" without anybody noticing.
+            raise TypeError(
+                f"close_out: coord.heartbeat_watchdog ({type(watchdog).__name__}) has no "
+                "disarm_staleness(); a close-out that cannot disarm staleness would "
+                "false-fire 42 on every clean finish with a long terminal eval"
+            )
+        disarm()
     flush_pending_eval(coord)
     if on_drained is not None:
         on_drained()

@@ -9,22 +9,34 @@ Two ratified changes from the port:
     `build_inference_model` / `build_eval_model` construct via `build_net(arch)` — NOT a
     `model_representation(module)` sniff (WP9-deleted, §c.4/§c.6). No shape-inference.
   * The DISPLAY-boot half (WebDashboard, `register_renderer`/`register_jsonl_sink`, TB
-    `MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) DEFERS→WP13 — `build_subsystems` returns
-    only the run-safety subsystems (disk guard + the optional GPU monitor + the injected
-    `EventSink`); the trainer's `EventSink` is the seam WP13 wires the real sink onto.
+    `MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH — `build_subsystems`
+    returns only the run-safety subsystems (disk guard + the optional GPU monitor + the
+    injected `EventSink`).
+
+WP13-A adds `build_run_safety` — the composition root for the run-safety triple (the REAL
+JSONL sink, the heartbeat registry, the INDEPENDENT watchdog thread). This is one of the
+THREE declared `train → mantis.monitor` import sites (census-pinned, O-19); everywhere else
+the sink stays INJECTED, never imported.
 """
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, NamedTuple, Sequence
 
 import torch
 
+import mantis.train.checkpoints as _checkpoints
 from mantis.model import ModelArch, amp_dtype_for, build_net
+from mantis.monitor.config import MonitorConfig
+from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
+from mantis.monitor.sink import JsonlEventSink
 from mantis.train.lifecycle.disk_guard import DiskGuard
+from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
+from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
 _LOG = logging.getLogger(__name__)
 
@@ -148,3 +160,98 @@ def build_subsystems(
     if gpu_monitor is not None and hasattr(gpu_monitor, "start"):
         gpu_monitor.start()
     return LoopSubsystems(disk_guard=disk_guard, sink=sink, gpu_monitor=gpu_monitor)
+
+
+# ── WP13-A run-safety composition root ───────────────────────────────────────────────
+class RunSafety(NamedTuple):
+    """The run-safety triple. Tuple-shaped (§a.2 `-> (sink, registry, watchdog)`) with
+    names, so a caller can unpack it or read `run_safety.heartbeat`."""
+
+    sink: JsonlEventSink
+    registry: HeartbeatRegistry
+    watchdog: HeartbeatWatchdog
+
+    @property
+    def heartbeat(self) -> Callable[[str], None]:
+        """THE `HeartbeatFn` — pass it to `WorkerPool(heartbeat=…)`,
+        `InferenceServer(heartbeat=…)` and `StepCoordinator(heartbeat=…)`."""
+        return self.registry.beat
+
+
+def build_run_safety(
+    *,
+    log_dir: str | Path,
+    run_id: str,
+    buffer: Any,
+    buffer_persist_path: str | Path,
+    wired_sources: Sequence[str],
+    monitor_cfg: MonitorConfig | None = None,
+    heartbeat_file: str | Path | None = None,
+    exit_fn: Callable[[int], None] = os._exit,
+) -> RunSafety:
+    """Build the REAL event sink + heartbeat registry + independent watchdog (unstarted).
+
+    Wiring contract:
+      * the sink replaces `NullEventSink` everywhere the run injects one (trainer,
+        coordinator, disk guard, pool) — ONE JSONL segment per process start (§11 log
+        identity: a file never spans two run segments);
+      * `run_safety.heartbeat` is handed to the pool / inference server / coordinator so
+        all three pipeline stages beat into ONE registry;
+      * `counters_fn` reads the persist counters as LIVE module/instance ATTRIBUTES —
+        `_checkpoints.persist_errors_total`, never `from … import persist_errors_total`,
+        which binds the int at import and reads a frozen 0 forever after `global … += 1`
+        (O-28). BOTH sources are fatal via the watchdog (LAW-14);
+      * the fire-time snapshot targets `watchdog_snapshot_path(canonical)` — the DISTINCT
+        `.watchdog` path, so an abnormal-exit save can never truncate the resume buffer;
+      * `wired_sources` is REQUIRED and has NO default: the caller must DECLARE which
+        pipeline stages it actually handed `run_safety.heartbeat` to. A declared stage is
+        watched from arm time; an undeclared one gets a loud `heartbeat_source_unwired`
+        event instead of a stall abort. Without the declaration, one forgotten `heartbeat=`
+        kwarg makes a healthy run fire 42 and the supervisor relaunch into the same missing
+        wiring until the budget is gone (RED-TEAM F3) — so this may never be inferred.
+
+    The watchdog is returned UNSTARTED: the caller starts it only after the pool is up
+    (an unstarted pool must never be torn down by a fire), and passes it to the
+    coordinator so `close_out` can disarm staleness first (O-27).
+    """
+    cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+    sink = JsonlEventSink(log_dir=Path(log_dir), run_id=run_id)
+    registry = HeartbeatRegistry(sources=HEARTBEAT_SOURCES)
+    snapshot_target = watchdog_snapshot_path(Path(buffer_persist_path))
+
+    def _save_snapshot() -> None:
+        saver = getattr(buffer, "save_to_path", None)
+        if saver is not None:
+            saver(str(snapshot_target))
+
+    def _persist_errors_total() -> int:
+        # LIVE module-attribute read (O-28): the counter is re-read on EVERY poll. The
+        # ignore is only for the type checker, which cannot infer a `global`-mutated
+        # module counter — never a licence to bind the value (a `from … import` here
+        # would read a frozen 0 forever and silently exempt checkpoint persist failures).
+        checkpoint_errors = int(
+            _checkpoints.persist_errors_total  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+        )
+        return checkpoint_errors + int(sink.persist_errors_total)
+
+    watchdog = HeartbeatWatchdog(
+        registry=registry,
+        deadlines={
+            "train_step": cfg.heartbeat_deadline_train_step_sec,
+            "inference_dispatch": cfg.heartbeat_deadline_inference_dispatch_sec,
+            "selfplay_drain": cfg.heartbeat_deadline_selfplay_drain_sec,
+        },
+        sink=sink,
+        counters_fn=_persist_errors_total,
+        heartbeat_file=(Path(heartbeat_file) if heartbeat_file is not None
+                        else Path(log_dir) / f"heartbeat_{run_id}.json"),
+        file_interval_sec=cfg.heartbeat_file_interval_sec,
+        poll_interval_sec=cfg.heartbeat_poll_interval_sec,
+        close_out_deadline_sec=cfg.heartbeat_close_out_deadline_sec,
+        snapshot_timeout_sec=cfg.heartbeat_fire_effect_timeout_sec,
+        wired_sources=list(wired_sources),
+        save_snapshot=_save_snapshot,
+        exit_fn=exit_fn,
+    )
+    _LOG.info("run_safety_built sink=%s heartbeat_file=%s", sink.path, watchdog.heartbeat_file)
+    return RunSafety(sink=sink, registry=registry, watchdog=watchdog)

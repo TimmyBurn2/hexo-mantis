@@ -5,35 +5,69 @@
 cohesive control-flow unit, kept together. Behaviour-exact on the reachable seams, routed
 through the injected collaborators (`config.py` Protocols); the stall watchdog is driven via
 the Slice-1 `lifecycle.watchdog.StallWatchdog.tick(...)` (the slice-2 wiring the DESIGN calls
-for). The terminal-eval flush + close_out live in `drain.py`.
+for). The terminal-eval flush + close_out live in `drain.py`. WP13-A adds the run-safety
+instrumentation half to the SAME control-flow unit (it is one loop, not two): the
+`train_step` heartbeat beats, the log_interval event emission + the 4 WARN rules, the
+draw-rate hard-abort gate, the LAW-18 `monitor_gates` summary, and the async eval-RESULT
+consumer `on_eval_round_complete` (warn-only sealbot by default, operator G-3) — all in this
+file so the loop's decision trail stays readable end to end. (The stride5-spam gate was
+REMOVED at close-out, operator directive B.)
 
 Severances (must not re-enter): the `bot_refresh` subprocess family (`_tick_bot_refresh`,
 force-refresh sentinel) is a DEFINITE KILL — NOT ported. The `track_b_*` snapshot/attribution
-call-sites (F-22..F-33 KILL) are severed. The display/instrumentation/tracemalloc half (perf
-probes, dashboard renderers, value-probe cadence) DEFERS→WP13; events route through the
-injected `EventSink`. The stride5-spam / draw-rate sustained-collapse hard-abort gates DEFER→WP13
-(they consume monitoring-aggregated pool signals + the `monitors.*` config block that WP13 owns);
-the cheap loss-info hard-GN abort is kept (run-safety, reads the trainer's own grad_norm).
+call-sites (F-22..F-33 KILL) are severed. The DISPLAY half (dashboard renderers, TB writer),
+the perf/tracemalloc probes and the value-probe cadence stay DEFER/ARCH; events route through
+the injected `EventSink`. The probe-as-gate class (early-game probe, value-spread canary) is
+FALSIFIED (F-27/F-30) and never becomes a run gate here.
+
+L-B/L-A discipline: `step()` NEVER blocks on eval and NEVER reads the eval KICK return for
+WR — a blocking drain in the step path is the run3 wedge class the independent heartbeat
+watchdog exists to kill. Completed eval ROUNDS reach the sealbot-WR gate only through
+`on_eval_round_complete` (WP11-A routes them mid-run; `drain.py` routes them at teardown).
 """
 from __future__ import annotations
 
 import logging
 import math
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
+from mantis.monitor.config import MonitorConfig
+from mantis.monitor.rules import (
+    check_draw_rate_collapse,
+    check_sealbot_wr_hard_abort,
+    emit_training_step_alerts,
+    sealbot_wr_trajectory_alert,
+)
 from mantis.train.buffer_persist import try_save_buffer as _try_save_buffer
 from mantis.train.coordinator.config import (
     ClockLike,
     RealClock,
     StepCoordinatorConfig,
     StepOutcome,
+    recent_pool_draw_rate,
 )
-from mantis.train.emit import emit_via
+from mantis.train.emit import NullEventSink, emit_via
+from mantis.train.events import emit_axis_distribution, emit_training_events
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
 
 _LOG = logging.getLogger(__name__)
+
+#: The gate keys carried by the LAW-18 `monitor_gates` summary (checks/fires/skips/warns).
+#: The KEPT WP10 grad-norm abort is in the list so the one hard-abort that is unconditionally
+#: ACTIVE at landing is visible in the ONE channel like the WP13-A gates. `sealbot_wr_abort`
+#: ships WARN-ONLY (operator G-3) and `draw_rate_collapse` ships OFF (threshold 0.0) — both
+#: named here so their inert/warn posture is readable, never silent. (`stride5_spam` was
+#: REMOVED at close-out, operator directive B.)
+GATE_NAMES: tuple[str, ...] = (
+    "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
+)
+
+#: Depth of the sealbot-WR ring (old `step_coordinator.py` parity: `pop(0)` past 5).
+WR_HISTORY_DEPTH = 5
+#: Depth of the pool-signal rings the two live-producer gates slide over.
+_GATE_HISTORY_DEPTH = 32
 
 
 class StepCoordinator:
@@ -69,6 +103,9 @@ class StepCoordinator:
         sink: Any = None,
         bot_buffer: Any | None = None,
         exit_fn: Callable[[int], None] = os._exit,
+        heartbeat: Callable[[str], None] | None = None,
+        monitor_cfg: Any = None,
+        heartbeat_watchdog: Any = None,
     ) -> None:
         self.trainer = trainer
         self.buffer = buffer
@@ -92,6 +129,11 @@ class StepCoordinator:
         self._clock = clock or RealClock()
         self._sink = sink
         self._exit_fn = exit_fn
+        # WP13-A run-safety seams: the heartbeat fn (the watchdog's `train_step` source),
+        # the monitor thresholds and the independent watchdog `close_out` disarms.
+        self._heartbeat = heartbeat
+        self.monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+        self.heartbeat_watchdog = heartbeat_watchdog
 
         # Per-step mutable bookkeeping.
         self._train_step = int(getattr(trainer, "step", 0))
@@ -103,6 +145,18 @@ class StepCoordinator:
         self._initial_policy_loss: float | None = None
         self._consec_high_gn = 0
         self._eval_round_last_step = -1
+
+        # WP13-A gate state — every ring is caller-owned (the rules are stateless).
+        self._wr_history: list[tuple[int, float]] = []
+        self._draw_rate_history: list[float] = []
+        self._loss_window: list[float] = []
+        self._last_iter_games = 0
+        self._run_started = self._clock.now()
+        # `warns` is carried alongside checks/fires/skips so the warn-only sealbot posture
+        # (operator G-3) is visible per-gate in every `monitor_gates` event, not silent.
+        self._gate_stats: dict[str, dict[str, int]] = {
+            name: {"checks": 0, "fires": 0, "skips": 0, "warns": 0} for name in GATE_NAMES
+        }
 
         # Self-play stall watchdog — always armed (context law, LAW-16). Driven via
         # `.tick(...)` from step(); fires → best-effort snapshot to a DISTINCT path + exit.
@@ -147,6 +201,10 @@ class StepCoordinator:
     def step(self) -> StepOutcome:
         """Run exactly one outer iteration; return a :class:`StepOutcome`."""
         cfg = self.config
+
+        # L-B: the outer loop is alive. Beaten at ENTRY (so every early-return branch —
+        # warmup, waiting-for-games — still proves liveness) and once per burst iteration.
+        self._beat("train_step")
 
         # F02 fail-fast: the self-play feeder is the sole producer — abort loudly if it died.
         health = getattr(self.pool, "check_producer_health", None)
@@ -200,8 +258,10 @@ class StepCoordinator:
         buffer_resized: int | None = None
         checkpoint_saved = False
         hard_abort_fired = False
+        axis_emitted = False
 
         for _ in range(steps_budget):
+            self._beat("train_step")
             if cfg.stop_step is not None and self._train_step >= cfg.stop_step:
                 break
             # D1: buffer growth schedule.
@@ -222,14 +282,23 @@ class StepCoordinator:
             self._last_loss_info = loss_info
 
             # D3: hard-abort on sustained gradient norm (run-safety; reads the trainer's own gn).
+            # WP13-A routes the FIRE through the shared `_fire_hard_abort` contract so this
+            # gate is visible in the ONE channel (a `hard_abort` event + `monitor_gates`)
+            # like every other gate; the DECISION (threshold, consecutive count, reset) is
+            # byte-identical to WP10.
+            self._gate_stats["grad_norm_hard_abort"]["checks"] += 1
             step_gn = float(loss_info.get("grad_norm", 0.0))
             if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
                 self._consec_high_gn += 1
                 if self._consec_high_gn >= cfg.hard_gn_min_steps:
                     _LOG.error("hard_abort_grad_norm step=%s consec=%s gn=%.4f",
                                self._train_step, self._consec_high_gn, step_gn)
-                    self.shutdown.running = False
-                    hard_abort_fired = True
+                    hard_abort_fired = self._fire_hard_abort(
+                        "grad_norm_hard_abort",
+                        f"HARD-ABORT (grad-norm): grad_norm {step_gn:.4f} > "
+                        f"{cfg.hard_gn_threshold:.4f} for {self._consec_high_gn} consecutive "
+                        f"training steps — optimizer instability",
+                    ) or hard_abort_fired
             else:
                 self._consec_high_gn = 0
 
@@ -240,13 +309,219 @@ class StepCoordinator:
                                  self.recent_buffer)
                 checkpoint_saved = True
 
+            # WP13-A: the log_interval boundary is tested PER TRAINING STEP (old-side parity,
+            # `step_coordinator.py:1370/1383`). Testing it once per burst would skip every
+            # boundary the post-burst step does not land exactly on, thinning BOTH the LAW-18
+            # emission stream and the sampling cadence of the draw-rate gate by ~the mean
+            # burst — the gate's `consec` window would silently stretch by that factor.
+            axis_step, gate_fired = self._run_log_interval(cfg, loss_info)
+            axis_emitted = axis_emitted or axis_step
+            hard_abort_fired = hard_abort_fired or gate_fired
+
+        # The eval KICK return is NEVER consumed for WR and `step()` adds NO blocking call:
+        # completed rounds reach `on_eval_round_complete` via the async drain (§c.4b).
         eval_kicked_off = self._maybe_kick_eval(cfg)
         return self._build_outcome(
             in_warmup=False, waiting_for_games=False,
             **{**base, "steps_run": steps_budget, "buffer_resized": buffer_resized,
                "checkpoint_saved": checkpoint_saved, "eval_kicked_off": eval_kicked_off,
-               "hard_abort_fired": hard_abort_fired},
+               "hard_abort_fired": hard_abort_fired, "axis_emitted": axis_emitted},
         )
+
+    # ── L-B heartbeat ─────────────────────────────────────────────────────────────────
+    def _beat(self, source: str) -> None:
+        """Beat one heartbeat source. An unknown source raises inside the registry — a
+        wiring bug must be loud, never a silently-dropped beat the watchdog can't see."""
+        if self._heartbeat is not None:
+            self._heartbeat(source)
+
+    # ── WP13-A: log_interval instrumentation + the hard-abort gates ───────────────────
+    def _run_log_interval(
+        self, cfg: StepCoordinatorConfig, loss_info: dict[str, float]
+    ) -> tuple[bool, bool]:
+        """At the `log_interval` boundary: emit the run's payload events, run the 4 WARN
+        rules on them, run the two LIVE-producer hard-abort gates, and publish the LAW-18
+        `monitor_gates` summary. Returns ``(axis_emitted, hard_abort_fired)``."""
+        if not loss_info or cfg.log_interval <= 0 or self._train_step % cfg.log_interval != 0:
+            return False, False
+        sink = self._sink if self._sink is not None else NullEventSink()
+
+        payload = self._emit_training_events(cfg, loss_info, sink)
+        emit_training_step_alerts(payload, self.monitor_cfg, self._loss_window, sink=sink)
+        keep = max(2 * int(self.monitor_cfg.alert_loss_increase_window) + 2, 8)
+        del self._loss_window[:-keep]
+
+        axis = emit_axis_distribution(
+            self._train_step, self.pool, self.monitor_cfg,
+            getattr(self.subsystems, "axis_baseline", None) or {},
+            getattr(self.subsystems, "tb_writer", None), sink,
+        )
+        fired = self._run_hard_abort_gates(cfg)
+        self._emit_monitor_gates(cfg, sink)
+        return axis is not None, fired
+
+    def _emit_training_events(
+        self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
+    ) -> dict[str, Any]:
+        """Build + emit `training_step` and `iteration_complete` through the injected sink
+        (the WP10 builders; payload shapes unchanged) and return the `training_step`
+        payload the WARN rules read."""
+        w_pre = 0.0
+        if self.pretrained_buffer is not None:
+            w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
+                                               cfg.mixing_min_w, cfg.mixing_decay_steps)
+        payload = emit_training_events(
+            self._train_step, loss_info, w_pre, self._games_played, self._last_iter_games,
+            self.pool, self.buffer, getattr(self.subsystems, "gpu_monitor", None),
+            self.full_config, self.full_config.get("mcts", {}), cfg.capacity,
+            # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
+            # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
+            # as a real measurement ("quiescence never fires") — a miniature F-10.
+            self._games_per_hour, None, sink,
+        )
+        self._last_iter_games = self._games_played
+        return payload
+
+    def _games_per_hour(self) -> float:
+        elapsed = self._clock.now() - self._run_started
+        return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else 0.0
+
+    def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
+        """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.
+
+        draw-rate reads `recent_pool_draw_rate(pool.per_worker_draw_rates())` — never the NaN
+        draw-target phantom at `pool_push.py:135`, whose very TOKEN is grep-banned here
+        (O-15). A missing producer is SKIP-counted (LAW-18), never silently read as a healthy
+        signal. (The stride5-spam gate was REMOVED at close-out, operator directive B.)
+        """
+        fired = False
+        rates_fn = getattr(self.pool, "per_worker_draw_rates", None)
+        draw = self._sample(
+            "draw_rate_collapse", self._draw_rate_history,
+            (lambda: recent_pool_draw_rate(rates_fn())) if rates_fn is not None else None,
+        )
+        if draw and cfg.draw_rate_threshold > 0:
+            message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
+                                               threshold=cfg.draw_rate_threshold,
+                                               consec=cfg.draw_rate_consec,
+                                               min_step=cfg.draw_rate_min_step)
+            fired = self._fire_hard_abort("draw_rate_collapse", message) or fired
+        elif draw:
+            self._gate_stats["draw_rate_collapse"]["skips"] += 1
+        return fired
+
+    def _sample(self, gate: str, history: list[float], producer: Any) -> bool:
+        """Append one LIVE producer sample to ``history``; False (+skip) when it is absent."""
+        self._gate_stats[gate]["checks"] += 1
+        if producer is None:
+            self._gate_stats[gate]["skips"] += 1
+            return False
+        history.append(float(producer()))
+        del history[:-_GATE_HISTORY_DEPTH]
+        return True
+
+    def _fire_hard_abort(self, rule: str, message: str | None, step: int | None = None) -> bool:
+        """The ONE fire contract every WP13-A gate shares: stop the run + one `hard_abort`
+        event naming the rule and carrying the rule's own message.
+
+        A gate that resolves AFTER the run already stopped (the teardown-routed eval result)
+        records a DISTINCT `hard_abort_after_stop` event: the trail stays complete, but a
+        stopped run is never reported as a second abort decision.
+        """
+        if message is None:
+            return False
+        at_step = self._train_step if step is None else int(step)
+        sink = self._sink
+        if not bool(getattr(self.shutdown, "running", True)):
+            emit_via(sink, {"event": "hard_abort_after_stop", "rule": rule,
+                            "message": message, "step": at_step})
+            _LOG.warning("hard_abort_after_stop rule=%s step=%s message=%s", rule, at_step, message)
+            return False
+        _LOG.error("hard_abort rule=%s step=%s message=%s", rule, at_step, message)
+        emit_via(sink, {"event": "hard_abort", "rule": rule, "message": message, "step": at_step})
+        self.shutdown.running = False
+        if rule in self._gate_stats:
+            self._gate_stats[rule]["fires"] += 1
+        return True
+
+    def _emit_monitor_gates(self, cfg: StepCoordinatorConfig, sink: Any) -> None:
+        """LAW-18 in-run visibility: every gate publishes its own checks/fires/skips AND
+        its live threshold, so an inert gate (threshold 0.0 = OFF, or a producer that has
+        not landed yet) is READABLE in the event stream instead of silently dead."""
+        emit_via(sink, {
+            "event": "monitor_gates",
+            "step": self._train_step,
+            "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
+            "draw_rate_threshold": cfg.draw_rate_threshold,
+            "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
+            "sealbot_wr_result_producer_pending": "WP11A",
+            "wr_history_len": len(self._wr_history),
+            # The watchdog's best-effort counters get a LIVE in-run consumer here (LAW-08 /
+            # LAW-18): a degraded fire-path effect (a failed mirror, a timed-out snapshot)
+            # is readable in the ONE channel while the run is alive, not only in the
+            # `heartbeat_watchdog_fire_complete` event emitted moments before `os._exit`.
+            "watchdog_best_effort": self._watchdog_counters(),
+        })
+
+    def _watchdog_counters(self) -> dict[str, int]:
+        counters = getattr(self.heartbeat_watchdog, "counters", None)
+        snapshot = getattr(counters, "snapshot", None)
+        return dict(snapshot()) if callable(snapshot) else {}
+
+    # ── the async eval-RESULT seam — THE sealbot-WR consumer (§c.4b, MUST-1) ──────────
+    def on_eval_round_complete(self, result: Mapping[str, Any]) -> None:
+        """Consume ONE completed (drained) eval-round result dict.
+
+        The new-side twin of old `step_coordinator.py` L1168-1200, which read the async
+        `_pending_eval_result` — NEVER the eval kick return. Callers today: `drain.py`'s
+        `flush_pending_eval` / `run_terminal_eval`; mid-run, WP11-A's non-blocking drain
+        runtime MUST route every completed round here (Appendix B handshake).
+
+        `wr_sealbot` absent/None ⇒ ONE `sealbot_wr_gate_skipped` event + skip counter
+        (LAW-18: an inert gate is loud, never silently dead).
+
+        Disposition (operator G-3): a sustained-collapse trajectory HARD-ABORTS only when
+        `monitor_cfg.wr_hard_abort_enabled` is True; the shipped default is False = WARN-ONLY,
+        which emits a VISIBLE `sealbot_wr_warn` carrying the same de-diagnosed trajectory fact
+        and does NOT set `shutdown.running=False`. Warn-only is never silent — a warn-only
+        gate that emitted nothing would be the silently-disabled class (R1/LAW-18).
+        """
+        payload: Mapping[str, Any] = result or {}
+        stats = self._gate_stats["sealbot_wr_abort"]
+        stats["checks"] += 1
+        # `or self._train_step` would rewrite a legitimate step 0 (falsy) to the current
+        # train step and mis-stamp the WR ring (RED-TEAM F12): test for absence, not truth.
+        raw_step = payload.get("step")
+        step = self._train_step if raw_step is None else int(raw_step)
+        wr = payload.get("wr_sealbot")
+        if wr is None:
+            stats["skips"] += 1
+            emit_via(self._sink, {
+                "event": "sealbot_wr_gate_skipped",
+                "step": step,
+                "reason": "wr_sealbot_absent",
+                "skipped_total": stats["skips"],
+                "pending_producer": "WP11A",
+            })
+            return
+        self._wr_history.append((step, float(wr)))
+        del self._wr_history[:-WR_HISTORY_DEPTH]
+        alert = sealbot_wr_trajectory_alert(self._wr_history, step, self.monitor_cfg)
+        if alert is None:
+            return
+        hard = check_sealbot_wr_hard_abort(self._wr_history, step, self.monitor_cfg)
+        if hard is not None:                         # wr_hard_abort_enabled=True → hard-abort
+            self._fire_hard_abort("sealbot_wr_abort", hard, step=step)
+        else:                                        # default warn-only (operator G-3)
+            stats["warns"] += 1
+            _LOG.warning("sealbot_wr_warn step=%s message=%s", step, alert)
+            emit_via(self._sink, {
+                "event": "sealbot_wr_warn",
+                "step": step,
+                "message": alert,
+                "warn_total": stats["warns"],
+                "pending_producer": "WP11A",
+            })
 
     # ── training-step dispatch (mixed vs straight self-play) ──────────────────────────────
     def _run_training_step(self, cfg: StepCoordinatorConfig) -> dict[str, float]:

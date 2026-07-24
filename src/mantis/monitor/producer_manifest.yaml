@@ -1,0 +1,126 @@
+# Seam-7 producer manifest (contract: docs/contracts/event_manifest.md, v1).
+#
+# ONE row per HEADLESS gate/monitor input. Display panels do NOT exist here — the old
+# `monitoring/dashboard_manifest.yaml` panel half died with the dashboards; what survives
+# is its law: every consumer binding cites a LIVE producer plus a NAMED producer test
+# (R4/LAW-07). `mantis.monitor.manifest.verify_manifest` resolves BOTH halves of every row
+# and is itself mutation-self-tested (tests/monitor/test_manifest_contract.py, O-01/O-02).
+#
+# A row is un-shippable if its producer symbol/event-literal is gone or its producer_test
+# node id is stale — which is exactly how F-10 (a gate quietly fed by nothing for 16,880
+# steps) is made structurally impossible.
+version: 1
+channel: jsonl_event_sink            # the ONE channel: the JSONL event sink (structlog is dead)
+gates:
+  # ── hard-abort gates ──────────────────────────────────────────────────────────────
+  - id: draw_rate_collapse
+    input: recent_pool_draw_rate
+    producer:
+      kind: symbol
+      module: mantis.train.coordinator.config
+      symbol: recent_pool_draw_rate
+      feeds_from: mantis.selfplay.pool.WorkerPool.per_worker_draw_rates
+    note: >-
+      keyed on the LIVE per-worker draw rates, NEVER the NaN draw-target phantom at
+      pool_push.py:135 (whose token is grep-banned in this file too — O-15). Ships
+      threshold 0.0 = OFF until the run5 mint (R-MONITORCONFIG-SCHEMA); the inert state
+      is named in every `monitor_gates` event.
+    producer_test: tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer
+
+  # (stride5_spam gate REMOVED at close-out per operator directive B — stride5-spam is a
+  #  dead artifact of bad hyperparams that never occurs under current recipes. The
+  #  selfplay-owned WorkerPool.current_stride5_p90() producer stays; only the gate is gone.)
+
+  - id: sealbot_wr_warn
+    input: wr_sealbot                # on the ASYNC eval-RESULT dict, never the kick return
+    producer:
+      kind: seam
+      module: mantis.train.coordinator.step
+      symbol: StepCoordinator.on_eval_round_complete
+      field: wr_sealbot
+      resolves_via: >-
+        WP11-A's non-blocking drain runtime routes every completed round's result dict
+        through this handler; teardown-side flush_pending_eval/run_terminal_eval returns
+        route TODAY.
+    pending: WP11A                   # the mid-run RESULT producer lands there (Appendix B)
+    note: >-
+      ships WARN-ONLY (operator G-3: warn chosen over hard-abort). A sustained-collapse
+      trajectory emits a visible `sealbot_wr_warn` and does NOT stop the run; the one-field
+      flip `wr_hard_abort_enabled=True` restores the A/B/C hard-abort exactly (capability
+      pinned by test_sealbot_hard_abort_capability_when_enabled). Still `pending: WP11A`
+      because warn ALSO needs the WP11-A `wr_sealbot` feed to ever evaluate.
+    producer_test: tests/train/test_coordinator_gates.py::test_sealbot_default_is_warn_only_and_does_not_shut_down
+
+  - id: grad_norm_hard_abort         # KEPT WP10 gate (decision byte-identical), manifest-cited
+    input: grad_norm
+    producer:
+      kind: symbol
+      module: mantis.train.coordinator.step
+      symbol: StepCoordinator._run_training_step
+    note: >-
+      the cited test asserts the gate's DECISION (sustained grad norm above threshold for
+      `hard_gn_min_steps` consecutive training steps ⇒ run stops + ONE `hard_abort` event
+      naming the rule + a `monitor_gates` entry) — the uniform WP13-A fire contract.
+    producer_test: tests/train/test_coordinator_gates.py::test_grad_norm_gate_fires_with_the_uniform_contract
+
+  # ── liveness heartbeats (the L-B watchdog's three sources) ────────────────────────
+  - id: heartbeat.train_step
+    producer:
+      kind: event_literal
+      module: mantis.train.coordinator.step
+      literal: train_step
+    producer_test: tests/train/test_coordinator_gates.py::test_step_loop_beats
+
+  - id: heartbeat.inference_dispatch
+    producer:
+      kind: event_literal
+      module: mantis.selfplay.inference_server
+      literal: inference_dispatch
+    producer_test: tests/selfplay/test_inference_server.py::test_graph_loop_emits_one_heartbeat_per_batch
+
+  - id: heartbeat.selfplay_drain
+    producer:
+      kind: event_literal
+      module: mantis.selfplay.pool_drain
+      literal: selfplay_drain
+    producer_test: tests/selfplay/test_pool_drain_parity.py::test_heartbeat_emission_at_drain
+
+  # ── run-fatal persistence + the kept lifecycle gates ──────────────────────────────
+  - id: persist_fatal
+    input: persist_errors_total
+    producer:
+      kind: symbol
+      module: mantis.train.checkpoints
+      symbol: persist_errors_total
+    also:
+      kind: symbol
+      module: mantis.monitor.sink
+      symbol: JsonlEventSink.persist_errors_total
+    producer_test: tests/monitor/test_persist_fatal.py::test_sink_failure_counts_and_aborts
+
+  - id: selfplay_stall               # WP10 games-progress tick watchdog, manifest-cited
+    input: games_completed
+    producer:
+      kind: symbol
+      module: mantis.selfplay.pool
+      symbol: WorkerPool.games_completed
+    producer_test: tests/train/test_lifecycle_contract.py::test_watchdog_fires_after_timeout
+
+  - id: disk_guard
+    producer:
+      kind: symbol
+      module: mantis.train.lifecycle.disk_guard
+      symbol: DiskGuard.check_once
+    producer_test: tests/train/test_lifecycle_contract.py::test_disk_guard_emits_free_event
+
+  # ── the 4 training-step WARN rules (inputs = training_step payload fields) ─────────
+  - id: warn.training_step_alerts
+    input: training_step
+    producer:
+      kind: event_literal
+      module: mantis.train.events
+      literal: training_step
+    note: >-
+      rule names: entropy_collapse, selfplay_entropy_collapse, grad_norm_spike,
+      loss_increase_window (mantis.monitor.rules.WARN_RULE_NAMES).
+    producer_test: tests/train/test_coordinator_gates.py::test_log_interval_emits_training_step
