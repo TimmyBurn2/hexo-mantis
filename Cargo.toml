@@ -12,6 +12,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [workspace.dependencies]
 pyo3 = { version = "0.28", features = ["abi3-py311"] }

@@ -2,6 +2,8 @@
 name = "mantis"
 version = "0.1.0"
 description = "AlphaZero-style self-play bot for Hex Tac Toe (Rust engine + Python training)"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7",
