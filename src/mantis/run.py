@@ -187,8 +187,13 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         print("usage: python -m mantis.run <config.yaml>", file=sys.stderr)
         return 2
     from mantis.config.loader import load_config
+    from mantis.train.determinism import seed_everything
 
     cfg = load_config(argv[0])
+    # R30a — the ONE determinism boot site: seed before any RNG-consuming object exists.
+    # This entry point does not yet build one (smoke-grade, see module docstring); a future
+    # WP that wires main() to launch a real run inherits the already-seeded state for free.
+    seed_everything(cfg.seed)
     print(f"config OK: run_id={cfg.run_id} encoding={cfg.identity.encoding}")
     return 0
 
