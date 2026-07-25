@@ -13,8 +13,9 @@ D1 debt R-MONITORCONFIG-SCHEMA: these are code-side defaults, NOT minted `config
 owed with R-TRAINCONFIG-SCHEMA before the run5 mint (one schema extension retires both).
 The draw-rate threshold deliberately stays in `StepCoordinatorConfig` (WP10): one authority
 per knob, no duplication. (The stride5-spam gate was REMOVED at close-out per operator
-directive B; its WP10 `stride5_p90_*` knobs are now consumer-less again — debt
-R-STRIDE5-ORPHAN-KNOBS.)
+directive B; its WP10 `stride5_p90_*` knobs went consumer-less — debt
+R-STRIDE5-ORPHAN-KNOBS — and were DELETED from `StepCoordinatorConfig` outright per
+DESIGN_P2.md §4.3, WPSC Phase 2 REVIEW MUST-FIX #2; R-STRIDE5-ORPHAN-KNOBS is discharged.)
 
 R1b honesty: the `wr_*` values are old-lineage (dense) calibrations carried verbatim and
 are flagged for re-anchor at the run5 mint; the criterion STRUCTURE is the law.

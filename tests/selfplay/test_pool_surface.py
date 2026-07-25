@@ -45,7 +45,7 @@ FILL_ROWS = 40
 FILL_SELF_PLAY_PUSHED = 30
 # The captured terminal-reason script: 5 six-in-a-row, 3 colony, 2 ply-cap, 1 other-draw.
 TERMINAL_SCRIPT = [0] * 5 + [1] * 3 + [2] * 2 + [3] * 1
-# `buffer_composition()` on that fill under `training.draw_value=-0.5, ply_cap_value=-0.7`.
+# `buffer_composition()` on that fill under `train.draw_reward=-0.5, ply_cap_value=-0.7`.
 EXPECTED_COMPOSITION = {
     "buffer_size": 40,
     "buffer_capacity": 64,
@@ -351,7 +351,7 @@ def test_dense_pool_buffer_composition_matches_the_capture(device) -> None:
     draw/ply-cap values (−0.5 / −0.7 ⇒ `[-0.75, -0.45)` ⇒ 18 of 40 rows), never a
     hardcoded window."""
     pool = _grid_pool(device)
-    pool.config["training"] = {"draw_value": -0.5, "ply_cap_value": -0.7}
+    pool.config["train"] = {"draw_reward": -0.5, "ply_cap_value": -0.7}
     _apply_capture_fill(pool)
 
     composition = pool.buffer_composition()
@@ -362,32 +362,40 @@ def test_dense_pool_buffer_composition_matches_the_capture(device) -> None:
 
 
 @pytest.mark.parametrize(
-    "training,expected_fraction",
+    "train,expected_fraction",
     [
-        ({"draw_value": -0.5, "ply_cap_value": -0.7}, 0.45),
-        ({"draw_value": -0.5}, 0.25),
-        (None, 0.25),
-        ({"draw_value": -0.3, "ply_cap_value": -0.9}, 0.45),
+        ({"draw_reward": -0.5, "ply_cap_value": -0.7}, 0.45),
+        ({"draw_reward": -0.3, "ply_cap_value": -0.9}, 0.45),
     ],
-    ids=["draw_and_ply", "draw_only", "no_training_section", "wide_band"],
+    ids=["draw_and_ply", "wide_band"],
 )
-def test_draw_target_fraction_follows_the_live_band(device, training, expected_fraction):
-    """E-05 (band arm) — PASS iff all four captured config cases produce the captured
-    fraction on the same fill: the band tracks the configured draw and ply-cap targets, so
-    narrowing it to `draw_value` alone drops the eight ply-cap rows (0.45 → 0.25).
+def test_draw_target_fraction_follows_the_live_band(device, train, expected_fraction):
+    """E-05 (band arm) — PASS iff both captured config cases produce the captured fraction
+    on the same fill: the band tracks the configured `train.draw_reward`/`ply_cap_value`.
 
     The band is re-resolved from the LIVE config on every read — deliberately independent
     of the values wired into the runner at construction — which is why mutating
     `pool.config` after the fill is the correct instrument here."""
     pool = _grid_pool(device)
     _apply_capture_fill(pool)
-    if training is None:
-        pool.config.pop("training", None)
-    else:
-        pool.config["training"] = training
+    pool.config["train"] = train
 
     assert pool.buffer_composition()["draw_target_fraction"] == pytest.approx(
         expected_fraction)
+
+
+def test_draw_target_fraction_raises_on_missing_train_section(device) -> None:
+    """E-05 (no-fallback arm) — `train.draw_reward`/`train.ply_cap_value` are schema-required
+    (R1), so `buffer_composition()` has NO `.get(k, default)` fallback for either: a config
+    dict missing the `train` section is a caller bug, not a NaN-degrade case, and must raise
+    loudly (`KeyError`) instead of silently reporting a stale hardcoded band. Regression pin
+    for the WPSC Phase 2 REVIEW MUST-FIX #1 dead legacy-dict-read fix."""
+    pool = _grid_pool(device)
+    _apply_capture_fill(pool)
+    pool.config.pop("train", None)
+
+    with pytest.raises(KeyError):
+        pool.buffer_composition()
 
 
 def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None:
@@ -399,7 +407,7 @@ def test_graph_pool_buffer_composition_is_nan_and_that_is_parity(device) -> None
     encoding, this is the value a monitor will actually see, which is exactly why it must
     not be quietly invented."""
     pool = _graph_pool(device)
-    pool.config["training"] = {"draw_value": -0.5, "ply_cap_value": -0.7}
+    pool.config["train"] = {"draw_reward": -0.5, "ply_cap_value": -0.7}
 
     composition = pool.buffer_composition()
     assert math.isnan(composition["draw_target_fraction"])

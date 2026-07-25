@@ -178,9 +178,6 @@ class StepCoordinatorConfig:
     eval_final_drain_hard_cap_sec: float = DEFAULT_FINAL_EVAL_DRAIN_HARD_CAP_SEC
     terminal_eval_enabled: bool = True
     terminal_eval_hard_cap_sec: float = DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC
-    # §CANARY-VAL stride-5 spam hard-abort (threshold <= 0 disables).
-    stride5_p90_threshold: float = 30.0
-    stride5_p90_consec: int = 3
     # §D-GOLONG sustained draw-rate hard-abort (threshold <= 0 disables; default OFF).
     draw_rate_threshold: float = 0.0
     draw_rate_consec: int = 3

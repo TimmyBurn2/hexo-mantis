@@ -164,7 +164,7 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     pool.x_wins = 0
     pool.o_wins = 0
     pool.draws = 0
-    pool.config = {"training": {"draw_value": -0.5, "ply_cap_value": -0.7}}
+    pool.config = {"train": {"draw_reward": -0.5, "ply_cap_value": -0.7}}
     return pool
 
 

@@ -1,5 +1,13 @@
 """Shared fixtures for the WP10 ⊕⊕ conformance suites (tests/train/).
 
+>300 justify: one shared fixture module for one directory's suites — the spies, the tiny-net
++ optim/scaler/sched builders, the full `v6_live2_ls` net, and the `RunConfig`/`TrainHParams`
+block factories (`train`/`selfplay`/`inference`/`monitor`) all have to stay co-located so
+every `tests/train/` suite draws its config shape from ONE place; splitting them would let
+two copies of a block factory drift apart. WPSC Phase 2 SC-A1/SC-A2's `train:`/`selfplay:`
+reshape of `make_run_config` plus the new `full_train_hparams` fixture factory
+(DESIGN_P2.md §2.1) is what pushed this file from 226 to 336 lines.
+
 This conftest imports ONLY already-present layers (torch + mantis.model / mantis.encoding
 / mantis.config) and NEVER `mantis.train.*` — so it collects cleanly while the two suites
 are RED (the suites import `mantis.train.*`, which does not exist until IMPL; that is the

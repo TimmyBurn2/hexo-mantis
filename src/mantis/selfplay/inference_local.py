@@ -1,5 +1,12 @@
 """Local inference engine — the synchronous face over the batched seam.
 
+>300 justify: one class, three decode contracts that must be read together — the dense
+`infer_batch` scatter-max/min-pool decode, the graph leg riding the ONE `InferenceServer`,
+and the RAW per-cluster decode (`infer_batch_per_cluster`) — splitting them would separate
+each decode from the docstring stating what it drops. WPSC Phase 2 SC-A2's explicit
+8-field `InferenceHParams`-default dict literal (replacing the old `{"selfplay": {}}`
+fallback) is what pushed this file from 292 to 303 lines.
+
 One class, three decode contracts that must be read together: the dense `infer_batch`
 scatter-max/min-pool decode, the graph leg that rides the ONE server, and the RAW
 per-cluster decode (`infer_batch_per_cluster` — deliberately NO scatter-max, NO

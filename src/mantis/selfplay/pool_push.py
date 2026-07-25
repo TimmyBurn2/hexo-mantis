@@ -116,7 +116,11 @@ def buffer_composition(pool: Any) -> dict[str, float]:
 
     The draw/ply-cap values are re-resolved from the LIVE config here rather than read off
     the frozen ctor-time hparams: this monitoring read is deliberately independent of the
-    wire site that hands the same two values to the Rust runner.
+    wire site that hands the same two values to the Rust runner. Both are read off
+    `config["train"]` with NO fallback default — the schema (`train.draw_reward` /
+    `train.ply_cap_value`, both required, R1) is the sole authority on their value; a
+    `.get(k, default)` here would be a second, independently-editable authority for the
+    same knob (the exact hazard R1 exists to close).
 
     `draw_target_fraction` degrades to NaN when the bound buffer has no
     `outcome_in_range_count`. That is not a nicety — the graph buffer genuinely does not
@@ -127,9 +131,9 @@ def buffer_composition(pool: Any) -> dict[str, float]:
     sp_pushed = int(pool.self_play_positions_pushed)
     corpus_fraction = max(0.0, 1.0 - (sp_pushed / size))
     try:
-        _tcfg = pool.config.get("training", pool.config)
-        _draw = float(_tcfg.get("draw_value", -0.5))
-        _ply = float(_tcfg.get("ply_cap_value", _tcfg.get("draw_value", -0.5)))
+        _train = pool.config["train"]
+        _draw = float(_train["draw_reward"])
+        _ply = float(_train["ply_cap_value"])
         _lo, _hi = _draw_outcome_band(_draw, _ply)
         draws_in_buf = int(pool.replay_buffer.outcome_in_range_count(_lo, _hi))
         draw_target_fraction = draws_in_buf / size
