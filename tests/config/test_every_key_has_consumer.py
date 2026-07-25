@@ -21,7 +21,10 @@ from mantis.config.schema import RunConfig
 CONSUMER_REGISTRY = {
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
-    "seed": "emit source-tag (acting RNG consumer lands WP-train)",
+    "seed": (
+        "seed_everything (mantis.train.determinism, R30a) -> mantis.run.main() boot + "
+        "emit source-tag"
+    ),
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
@@ -222,6 +225,22 @@ def test_registry_has_exactly_eight_entries():
     # invariant this file exists to hold.
     assert len(CONSUMER_REGISTRY) == 143
     assert len(_leaf_paths(RunConfig)) == 143
+
+
+def test_no_forward_reference_strings_in_registry():
+    # V-NOOP strengthening (R40, WPSC Phase 3 SC-B4, DESIGN_P3.md §0/§5.1 item 3): the
+    # bijection above is a pure key-SET diff — it never checks that a registry string names
+    # a function that actually reads the field, so an honest-but-unconsumed entry (like
+    # `train.amp_dtype` sat through all of Phase 2, DESIGN_P2 STOP CANDIDATE 4) can pass it
+    # forever. This bans forward-reference-shaped language in CONSUMER_REGISTRY values.
+    banned = ("SC-B3 wires", "TODO", "will be")
+    hits = [
+        (key, value)
+        for key, value in CONSUMER_REGISTRY.items()
+        for token in banned
+        if token in value
+    ]
+    assert hits == [], f"forward-reference-shaped registry strings: {hits}"
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

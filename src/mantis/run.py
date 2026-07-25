@@ -57,6 +57,20 @@ def _stop_pool_if_started(pool: Any, *, pool_started: bool) -> Callable[[], None
     return _stop
 
 
+def _resolve_monitor_cfg(config: Any) -> MonitorConfig:
+    """The monitor-section twin of the `eval_cfg=getattr(config, "eval", None)` idiom two
+    lines below this function's call site in `compose_run` (STOP CANDIDATE 5, DESIGN_P3.md
+    §5.0). `config` may be a real `RunConfig` (`.monitor: MonitorSchemaConfig`, production)
+    or a fakes-test `SimpleNamespace()` with no `.monitor` attribute at all (every existing
+    `compose_run` test) — `getattr(..., None)` tolerates both, unlike a direct
+    `config.monitor` read."""
+    section = getattr(config, "monitor", None)
+    if section is None:
+        return MonitorConfig()
+    from mantis.config.resolve.monitor import resolve_monitor_config
+    return resolve_monitor_config(section)
+
+
 def _default_step_coordinator_config() -> StepCoordinatorConfig:
     """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) — no config-key
     reads here; the run5 mint threads real values through this seam once the schema
@@ -88,7 +102,7 @@ def compose_run(
     a kwarg, never built here (R-10)."""
     log_dir = Path(log_dir)
     checkpoint_dir = Path(checkpoint_dir)
-    monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+    monitor_cfg = monitor_cfg if monitor_cfg is not None else _resolve_monitor_cfg(config)
 
     wired_sources: list[str] = list(_BASE_WIRED_SOURCES)
     if eval_enabled:

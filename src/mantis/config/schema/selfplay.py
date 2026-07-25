@@ -68,6 +68,22 @@ class PlayoutCapConfig(StrictModel):
                 "playout_cap: n_sims_quick must be <= n_sims_full (quick>full is a "
                 "nonsensical playout-cap-randomization preset)"
             )
+        # V-PCR (R40, WPSC Phase 3 SC-B4): the two genuinely-missing PlayoutCapConfig
+        # checks. Gated on "both presets are set" (n_sims_quick>0 and n_sims_full>0), NOT
+        # on full_search_prob>0 — gating there would false-fire on every minted config's
+        # all-zero disabled shape (0, 0, 0.0).
+        if self.n_sims_quick > 0 and self.n_sims_full > 0:
+            if self.n_sims_quick == self.n_sims_full:
+                raise ValueError(
+                    "playout_cap: n_sims_quick == n_sims_full is a no-op randomization "
+                    "(quick and full presets must differ)"
+                )
+            if self.full_search_prob <= 0.0 or self.full_search_prob >= 1.0:
+                raise ValueError(
+                    "playout_cap: full_search_prob must be in (0, 1) when both n_sims_quick "
+                    "and n_sims_full are configured (0 or 1 makes one preset permanently "
+                    "unreachable — degenerate randomization)"
+                )
         return self
 
 

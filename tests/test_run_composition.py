@@ -15,8 +15,10 @@ watchdog start order (subsystems.py contract), the `wired_sources` declaration, 
 HEAD, closed here by `_stop_pool_if_started`), the train->eval lazy-import ban (repo_design
 §2, un-weakened by the new `run` node), and the WP-UNFREEZE actor-lag absence property.
 
->300 justify: N/A at write time (kept under 300); if IMPL additions push it over, IMPL adds
-the R8 one-liner — not this oracle's job to pre-justify a length it does not yet have.
+>300 justify (R8, WPSC Phase 3 SC-B4): STOP CANDIDATE 5's MonitorConfig production-wiring
+producer test (DESIGN_P3.md §5.0) is folded in here rather than a new file — same subject
+(compose_run's monitor_cfg fallback) as this file's existing coverage; pushed the file past
+the 300-line soft cap.
 """
 from __future__ import annotations
 
@@ -27,6 +29,35 @@ from typing import Any
 import pytest
 
 import mantis.run  # noqa: F401 — RED-at-import anchor: this module does not exist yet
+from mantis.config.schema import DrainCapsConfig, MonitorSchemaConfig
+from mantis.monitor.config import MonitorConfig
+
+# Inlined (not cross-imported from tests/config/test_monitor_schema.py) — MEASURED to fail
+# under the house test invocation (`uv run pytest`; `tests/` carries no `__init__.py`
+# anywhere, so `from tests.config.test_monitor_schema import ...` raises
+# ModuleNotFoundError). Mirrors that file's VALID_MONITOR_SCALARS/VALID_DRAIN dicts; the
+# exact figures don't matter, only that the value threaded through below is non-default.
+_VALID_MONITOR_SCALARS: dict = {
+    "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
+    "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
+    "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
+    "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
+    "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
+    "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
+    "axis_warn": 0.45, "axis_alert": 0.50,
+    "heartbeat_deadline_train_step_sec": 1800.0,
+    "heartbeat_deadline_inference_dispatch_sec": 1800.0,
+    "heartbeat_deadline_selfplay_drain_sec": 1800.0,
+    "heartbeat_deadline_eval_round_sec": 1800.0,
+    "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
+    "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
+    "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
+    "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
+}
+_VALID_DRAIN: dict = {
+    "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
+    "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
+}
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
@@ -250,3 +281,64 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(tmp_path, m
     assert captured.get("eval_heartbeat") is heartbeat_fn, (
         "the eval pipeline must receive the SAME heartbeat fn build_run_safety produced"
     )
+
+
+# ── STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0) ─────────
+def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
+    tmp_path, monkeypatch
+) -> None:
+    """A real `config.monitor` (MonitorSchemaConfig) flows through compose_run's own
+    resolve_monitor_config call into the MonitorConfig handed to build_run_safety /
+    StepCoordinator. Proven via a NON-DEFAULT threshold value threaded end to end (LAW-07
+    mutation-shaped proof, not a did-not-crash check)."""
+    mantis_run = mantis.run
+    captured: dict[str, Any] = {}
+
+    def _fake_build_run_safety(**kwargs):
+        captured["monitor_cfg"] = kwargs.get("monitor_cfg")
+        return SimpleNamespace(
+            sink=SimpleNamespace(emit=lambda e: None),
+            registry=SimpleNamespace(beat=lambda s: None),
+            watchdog=FakeWatchdog(_OrderSpy()), heartbeat=lambda s: None,
+        )
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
+    monitor_section = MonitorSchemaConfig(
+        **{**_VALID_MONITOR_SCALARS, "alert_entropy_min": 2.75},
+        drain=DrainCapsConfig(**_VALID_DRAIN),
+    )
+    mantis_run.compose_run(
+        config=SimpleNamespace(monitor=monitor_section),
+        trainer=SimpleNamespace(step=0, model=object()), pool=FakePoolNeverStarted(),
+        buffer=SimpleNamespace(save_to_path=lambda p: None),
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+    )
+    assert captured["monitor_cfg"] is not None
+    assert captured["monitor_cfg"].alert_entropy_min == 2.75
+    assert captured["monitor_cfg"] != MonitorConfig()  # not the bare-default fallback
+
+
+def test_compose_run_falls_back_to_bare_monitor_config_when_config_has_no_monitor_section(
+    tmp_path, monkeypatch
+) -> None:
+    """Negative control — a fakes-style config with no `.monitor` attribute (every OTHER
+    compose_run test in this file) is unaffected: same bare `MonitorConfig()` as HEAD
+    today, made explicit rather than left implicit."""
+    mantis_run = mantis.run
+    captured: dict[str, Any] = {}
+
+    def _fake_build_run_safety(**kwargs):
+        captured["monitor_cfg"] = kwargs.get("monitor_cfg")
+        return SimpleNamespace(
+            sink=SimpleNamespace(emit=lambda e: None),
+            registry=SimpleNamespace(beat=lambda s: None),
+            watchdog=FakeWatchdog(_OrderSpy()), heartbeat=lambda s: None,
+        )
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
+    mantis_run.compose_run(
+        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object()),
+        pool=FakePoolNeverStarted(), buffer=SimpleNamespace(save_to_path=lambda p: None),
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+    )
+    assert captured["monitor_cfg"] == MonitorConfig()
