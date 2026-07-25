@@ -863,10 +863,44 @@ def resume_trainer(
     # would spuriously reject it. `strict=False` reproduces the old resume load mode exactly.
     model.load_state_dict(ck.model_state, strict=False)
 
-    config = dict(ck.config) if ck.config else dict(fallback_config or {})
+    # CONFRES F1(A)/E0 (S-2, DESIGN_P2.md §6): actually APPLY config_overrides onto the
+    # checkpoint-baked config instead of dropping it on the floor. `baked_config` is the
+    # already-schema-validated `train.*`-nested snapshot; a DECLARED top-level key (e.g.
+    # the whole `"train"` section) wins outright, a base-inherited (non-declared) key that
+    # differs from baked DEFERS to baked + emits `resume_base_default_deferred_to_baked`.
+    baked_config = ck.config if ck.config else None
+    if config_overrides:
+        resolved_config, deferred = apply_config_overrides_f1(
+            baked_config, config_overrides, declared_keys, sink=sink,
+        )
+    else:
+        resolved_config, deferred = (
+            dict(baked_config) if baked_config else dict(fallback_config or {}),
+            frozenset(),
+        )
+    config = resolved_config
     # Pass the DECLARED arch (metadata.arch) so the Trainer stamps the same arch on re-save
     # (never re-derives it); the sink threads through for resume-time events (T-CK-18).
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)
+    trainer.f1_deferred_keys = deferred
+
+    # CONFRES S1 (S-2): lr is resume-state-owned — a declared `lr` is never allowed to win
+    # on a full checkpoint resume, but an operator who declared one anyway must be warned
+    # loudly rather than silently ignored. `baked_lr` reads the NESTED `train.lr` (the flat
+    # top-level `lr` key no longer exists post-SC-A1); `declared_lr` still comes from a bare
+    # flat `"lr"` key in `config_overrides` when `"lr"` is a declared key (E0's own shape).
+    declared_lr = (
+        (config_overrides or {}).get("lr")
+        if declared_keys and "lr" in declared_keys else None
+    )
+    baked_train = baked_config.get("train") if isinstance(baked_config, dict) else None
+    baked_lr = baked_train.get("lr") if isinstance(baked_train, dict) else None
+    lr_prov = resolve_lr_provenance(declared=declared_lr, baked=baked_lr, effective=trainer.hp.lr)
+    if lr_prov.override_ignored:
+        emit_via(sink, {
+            "event": "resume_lr_override_ignored",
+            "declared": lr_prov.declared, "baked": lr_prov.baked, "effective": lr_prov.effective,
+        })
 
     is_full = ck.kind == "full"
     trainer.loaded_from_full_checkpoint = is_full
