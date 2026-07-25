@@ -74,7 +74,12 @@ def normalize_encoding_name(enc: Any) -> str:
     if isinstance(enc, str):
         return enc
     if isinstance(enc, Mapping):
-        name = enc.get("name", enc.get("version", "v6"))
+        name = enc.get("name", enc.get("version"))
+        if name is None:
+            raise MissingEncodingError(
+                "encoding mapping carries neither 'name' nor 'version'; an explicit "
+                "encoding is required (LAW-11, R28) — the v6 default arm is retired"
+            )
         if not isinstance(name, str):
             raise EncodingRegistryError(
                 f"encoding mapping name/version must be a string; "
