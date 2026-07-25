@@ -111,6 +111,30 @@ def _inference_block() -> dict:
     }
 
 
+def _monitor_block() -> dict:
+    return {
+        "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
+        "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
+        "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
+        "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
+        "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
+        "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
+        "axis_warn": 0.45, "axis_alert": 0.50,
+        "heartbeat_deadline_train_step_sec": 1800.0,
+        "heartbeat_deadline_inference_dispatch_sec": 1800.0,
+        "heartbeat_deadline_selfplay_drain_sec": 1800.0,
+        "heartbeat_deadline_eval_round_sec": 1800.0,
+        "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
+        "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
+        "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
+        "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
+        "drain": {
+            "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
+            "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
+        },
+    }
+
+
 def _payload(**eval_overrides: Any) -> dict:
     eval_block = dict(
         random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
@@ -127,6 +151,7 @@ def _payload(**eval_overrides: Any) -> dict:
         "train": _train_block(),
         "selfplay": _selfplay_block(),
         "inference": _inference_block(),
+        "monitor": _monitor_block(),
     }
 
 

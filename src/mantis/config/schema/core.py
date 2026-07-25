@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from mantis.config.schema._base import StrictModel
+from mantis.config.schema.monitor import MonitorSchemaConfig
 from mantis.config.schema.selfplay import InferenceConfig, SelfplayConfig
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
@@ -225,7 +226,8 @@ class EvalConfig(StrictModel):
 class RunConfig(StrictModel):
     """Top-level run config: explicit, complete, schema_version-pinned.
 
-    ``SelfplayConfig``/``InferenceConfig`` live in ``schema/selfplay.py`` (§10 file-size
+    ``SelfplayConfig``/``InferenceConfig`` live in ``schema/selfplay.py`` and
+    ``MonitorSchemaConfig``/``DrainCapsConfig`` in ``schema/monitor.py`` (§10 file-size
     split) — ``legal_move_radius_schedule``/``RadiusStage`` are deliberately NOT part of
     ``SelfplayConfig`` (DESIGN_P2.md §5, shape (ii): the encoding registry alone is the
     radius authority). ``RadiusStage`` stays defined here (unused) until a later chunk
@@ -240,6 +242,7 @@ class RunConfig(StrictModel):
     train: TrainConfig
     selfplay: SelfplayConfig
     inference: InferenceConfig
+    monitor: MonitorSchemaConfig
 
     @field_validator("schema_version")
     @classmethod

@@ -17,6 +17,7 @@ from mantis.config.schema.core import (
     StrictModel,
     _EVAL_TIMEOUT_CEILING_SEC,
 )
+from mantis.config.schema.monitor import DrainCapsConfig, MonitorSchemaConfig
 from mantis.config.schema.selfplay import (
     InferenceConfig,
     MctsConfig,
@@ -27,6 +28,7 @@ from mantis.config.schema.train import TrainConfig
 
 __all__ = [
     "SCHEMA_VERSION",
+    "DrainCapsConfig",
     "EvalConfig",
     "GateConfig",
     "IdentityConfig",
@@ -34,6 +36,7 @@ __all__ = [
     "LadderConfig",
     "LadderRung",
     "MctsConfig",
+    "MonitorSchemaConfig",
     "PlayoutCapConfig",
     "RadiusStage",
     "RunConfig",

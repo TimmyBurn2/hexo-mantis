@@ -19,6 +19,7 @@ from mantis.config.resolve.encoding import (
     normalize_stamp,
     reconcile_encoding,
 )
+from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.config.resolve.radius import (
     OfflineRadiusUnresolvableError,
@@ -41,5 +42,6 @@ __all__ = [
     "resolve_amp_dtype",
     "resolve_bootstrap",
     "resolve_eval_model_sims",
+    "resolve_monitor_config",
     "resolve_radius_from_schedule",
 ]

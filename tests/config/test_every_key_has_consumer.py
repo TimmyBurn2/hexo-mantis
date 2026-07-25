@@ -146,6 +146,41 @@ CONSUMER_REGISTRY = {
     "inference.compile_inference_dynamic": "InferenceHParams.from_config -> inference_server compile dynamic",
     "inference.perf_timing": "InferenceHParams.from_config -> perf timing diagnostics",
     "inference.perf_sync_cuda": "InferenceHParams.from_config -> perf CUDA-sync diagnostics",
+    # WPSC Phase 2 SC-A3 (R-MONITORCONFIG-SCHEMA closure): every MonitorSchemaConfig leaf's
+    # live consumer is resolve_monitor_config (mantis.config.resolve.monitor), the pure 1:1
+    # field-copy onto mantis.monitor.config.MonitorConfig; the 4 monitor.drain.* leaves feed
+    # DrainCaps (run.py) / drain_budget_sec + _run_terminal_sync (eval/pipeline.py).
+    "monitor.alert_entropy_min": "resolve_monitor_config -> monitor/rules.py entropy WARN",
+    "monitor.collapse_threshold_nats": "resolve_monitor_config -> monitor/rules.py collapse threshold",
+    "monitor.alert_grad_norm_max": "resolve_monitor_config -> monitor/rules.py grad-norm WARN",
+    "monitor.alert_loss_increase_window": "resolve_monitor_config -> monitor/rules.py loss-increase window",
+    "monitor.wr_hard_abort_enabled": "resolve_monitor_config -> sealbot-WR hard-abort disposition wrapper",
+    "monitor.wr_rolling_consecutive_evals": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_rolling_threshold": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_rolling_min_step": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_collapse_from_peak_ratio": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_collapse_min_step": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_collapse_consecutive_evals": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_early_death_threshold": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.wr_early_death_min_step": "resolve_monitor_config -> sealbot_wr_trajectory_alert",
+    "monitor.axis_warn": "resolve_monitor_config -> train/events.py emit_axis_distribution",
+    "monitor.axis_alert": "resolve_monitor_config -> train/events.py emit_axis_distribution",
+    "monitor.heartbeat_deadline_train_step_sec": "resolve_monitor_config -> heartbeat_watchdog.py per-source deadline",
+    "monitor.heartbeat_deadline_inference_dispatch_sec": "resolve_monitor_config -> heartbeat_watchdog.py deadline",
+    "monitor.heartbeat_deadline_selfplay_drain_sec": "resolve_monitor_config -> heartbeat_watchdog.py deadline",
+    "monitor.heartbeat_deadline_eval_round_sec": "resolve_monitor_config -> heartbeat_watchdog.py eval-poller deadline",
+    "monitor.heartbeat_poll_interval_sec": "resolve_monitor_config -> heartbeat_watchdog.py poll cadence",
+    "monitor.heartbeat_file_interval_sec": "resolve_monitor_config -> heartbeat_watchdog.py file-write cadence",
+    "monitor.heartbeat_close_out_deadline_sec": "resolve_monitor_config -> disarm_staleness() teardown budget",
+    "monitor.heartbeat_fire_effect_timeout_sec": "resolve_monitor_config -> heartbeat fire-path effect timeout",
+    "monitor.supervisor_stale_after_sec": "resolve_monitor_config -> monitor/supervise.py staleness flag",
+    "monitor.supervisor_poll_interval_sec": "resolve_monitor_config -> monitor/supervise.py poll cadence",
+    "monitor.supervisor_kill_grace_sec": "resolve_monitor_config -> monitor/supervise.py kill grace",
+    "monitor.supervisor_max_relaunches": "resolve_monitor_config -> monitor/supervise.py relaunch cap",
+    "monitor.drain.final_eval_drain_timeout_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_safety_factor": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_hard_cap_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.terminal_eval_hard_cap_sec": "DrainCapsConfig -> _run_terminal_sync (eval/pipeline.py:596-608)",
 }
 
 
@@ -178,11 +213,12 @@ def test_registry_has_exactly_eight_entries():
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
     # (`selfplay.legal_move_radius_schedule`, forced fallout of DESIGN_P2.md §5) and adds 52
     # (25 `selfplay.*` + 8 `selfplay.mcts.*` + 11 `selfplay.playout_cap.*` + 8 `inference.*`,
-    # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. The name is historical (O15's
-    # original 8-entry WP8 count); the bijection test above is the live invariant this file
-    # exists to hold.
-    assert len(CONSUMER_REGISTRY) == 112
-    assert len(_leaf_paths(RunConfig)) == 112
+    # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. SC-A3 adds 31 (27 `monitor.*` + 4
+    # `monitor.drain.*`, R-MONITORCONFIG-SCHEMA closure): 112 + 31 = 143. The name is
+    # historical (O15's original 8-entry WP8 count); the bijection test above is the live
+    # invariant this file exists to hold.
+    assert len(CONSUMER_REGISTRY) == 143
+    assert len(_leaf_paths(RunConfig)) == 143
 
 
 def test_bijection_bites_on_a_real_schema_mutation():
