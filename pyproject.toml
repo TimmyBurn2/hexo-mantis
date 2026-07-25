@@ -12,6 +12,13 @@ dependencies = [
     "torch==2.11.0",
 ]
 
+[project.optional-dependencies]
+# R41 (WPSC SC-B7): the three lazily-imported analysis/instrumentation deps and ONLY
+# those — corpus_metrics/corpus_reporter/corpus_analysis (matplotlib, rich) and
+# selfplay instrumentation's spearmanr (scipy). structlog is deliberately absent:
+# nothing imports it (WP10 swapped it for stdlib logging).
+analysis = ["matplotlib", "rich", "scipy"]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
