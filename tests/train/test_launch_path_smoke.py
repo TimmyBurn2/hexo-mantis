@@ -21,7 +21,7 @@ from mantis.model import CnnArch, arch_from_spec_and_config, build_net
 from mantis.train.checkpoints import CHECKPOINT_SCHEMA_VERSION, resume_trainer
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 from mantis.train.loop import run_training_loop
-from mantis.train.trainer.core import Trainer, TrainHParams
+from mantis.train.trainer.core import Trainer
 
 pytestmark = pytest.mark.integration
 
@@ -62,16 +62,31 @@ def _eval_block():
     }
 
 
+def _train_block():
+    # WPSC Phase 2 SC-A1: `train:` is now a required RunConfig section (DESIGN_P2.md §2).
+    return {
+        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": False, "amp_dtype": "fp16",
+        "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
+        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+        "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+        "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
+        "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
+        "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
+        "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+    }
+
+
 def _config():
     return {
         "schema_version": 1, "run_id": "smoke", "seed": 20260722,
         "identity": {"encoding": ENCODING, "representation": "grid"},
         "eval": _eval_block(),
+        "train": _train_block(),
         "selfplay": {"legal_move_radius_schedule": None},
     }
 
 
-def test_launch_path_smoke(tmp_path):
+def test_launch_path_smoke(tmp_path, full_train_hparams):
     """Build → run ≈2 steps → write envelope-v2 ckpt → resume → clean shutdown on a signal."""
     spec = lookup(ENCODING)
     # a tiny CNN (filters=16, res_blocks=1) — CPU-cheap, real build_net(arch) net.
@@ -79,9 +94,9 @@ def test_launch_path_smoke(tmp_path):
                    filters=16, res_blocks=1)
     net = build_net(arch)
     config = _config()
-    # Default cosine scheduler (TrainHParams field default) so the saved envelope carries a
+    # Default cosine schedule (TrainConfig-minted "cosine") so the saved envelope carries a
     # scheduler_state and the resumed Trainer (which re-defaults to cosine) restores it.
-    hp = TrainHParams(fp16=False, checkpoint_interval=0)
+    hp = full_train_hparams(fp16=False, checkpoint_interval=0)
     tr = Trainer(net, config, arch=arch, checkpoint_dir=tmp_path, train_hparams=hp)
 
     states, policies, outcomes = _synthetic_batch(spec)

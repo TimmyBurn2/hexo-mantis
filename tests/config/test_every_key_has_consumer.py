@@ -58,6 +58,34 @@ CONSUMER_REGISTRY = {
         "pipeline.py RoundSpec.ladder_bootstrap_seed -> worker.py aggregate_rung (M-2)"
     ),
     "selfplay.legal_move_radius_schedule": "resolve_radius_from_schedule + radius parity (O12) + emit",
+    # WPSC Phase 2 SC-A1 (R-TRAINCONFIG-SCHEMA closure): every TrainConfig leaf's live
+    # consumer is TrainHParams.from_config (trainer/core.py), which reads config["train"]
+    # directly (no flat-key fallback).
+    "train.lr": "TrainHParams.from_config -> optimizer ctor (trainer/core.py)",
+    "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
+    "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
+    "train.fp16": "TrainHParams.from_config -> Trainer fp16/scaler gate",
+    "train.amp_dtype": "TrainConfig schema surface for R30b (SC-B3 wires the runtime consumer)",
+    "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
+    "train.total_steps": "TrainHParams.from_config -> Trainer._build_scheduler T_max fallback",
+    "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",
+    "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
+    "train.min_lr": "TrainHParams.from_config -> Trainer._build_scheduler eta_min fallback",
+    "train.checkpoint_interval": "TrainHParams.from_config -> Trainer periodic-save gate",
+    "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
+    "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
+    "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
+    "train.draw_reward": "SelfPlayHParams.from_config cross-section read (SC-A2)",
+    "train.ply_cap_value": "SelfPlayHParams.from_config cross-section read (SC-A2)",
+    "train.policy_prune_frac": "TrainHParams.from_config -> _prune_policy_targets",
+    "train.entropy_reg_weight": "TrainHParams.from_config -> entropy bonus weight (R37)",
+    "train.aux_opp_reply_weight": "TrainHParams.from_config -> aux opp-reply loss weight",
+    "train.uncertainty_weight": "TrainHParams.from_config -> uncertainty loss weight",
+    "train.ownership_weight": "TrainHParams.from_config -> ownership loss weight",
+    "train.threat_weight": "TrainHParams.from_config -> threat loss weight",
+    "train.aux_chain_weight": "TrainHParams.from_config -> chain loss weight",
+    "train.ply_index_weight": "TrainHParams.from_config -> ply-index loss weight",
+    "train.threat_pos_weight": "TrainHParams.from_config -> threat pos_weight tensor",
 }
 
 
@@ -86,10 +114,12 @@ def test_schema_leaves_equal_consumer_registry_bijection():
 
 def test_registry_has_exactly_eight_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
-    # ladder.* + 6 new eval.* scalars). The name is historical (O15's original 8-entry
-    # WP8 count); the bijection test above is the live invariant this file exists to hold.
-    assert len(CONSUMER_REGISTRY) == 36
-    assert len(_leaf_paths(RunConfig)) == 36
+    # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
+    # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). The name is
+    # historical (O15's original 8-entry WP8 count); the bijection test above is the live
+    # invariant this file exists to hold.
+    assert len(CONSUMER_REGISTRY) == 61
+    assert len(_leaf_paths(RunConfig)) == 61
 
 
 def test_enumeration_stops_at_radius_stage():

@@ -8,8 +8,10 @@ keys carry no terminal defaults at all; representation is the closed set {grid, 
 """
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
+from mantis.config.schema._base import StrictModel
+from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
 
 SCHEMA_VERSION = 1
@@ -25,12 +27,6 @@ SCHEMA_VERSION = 1
 #: / kill-grace, never a whole drain budget — named module constant, never an inline
 #: magic literal (R1).
 _EVAL_TIMEOUT_CEILING_SEC = 86400.0
-
-
-class StrictModel(BaseModel):
-    """Base for every config model: unknown key = hard error, no coercion, immutable."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class IdentityConfig(StrictModel):
@@ -244,6 +240,7 @@ class RunConfig(StrictModel):
     seed: int
     identity: IdentityConfig
     eval: EvalConfig
+    train: TrainConfig
     selfplay: SelfplayConfig
 
     @field_validator("schema_version")

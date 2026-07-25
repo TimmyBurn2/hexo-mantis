@@ -645,6 +645,17 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": _make_eval_block(),
+        "train": {
+            "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
+            "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
+            "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
+            "checkpoint_interval": 0, "completed_q_values": False,
+            "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+            "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
+            "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
+            "uncertainty_weight": 0.0, "ownership_weight": 0.0, "threat_weight": 0.0,
+            "aux_chain_weight": 0.0, "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+        },
         "selfplay": {"legal_move_radius_schedule": None},
     }
     payload = {  # the real FULL-v1 top-level shape (7 keys) + captured metadata scalars

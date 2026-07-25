@@ -20,10 +20,11 @@ routed through the new-repo seams, with the ratified WP10 amendments + KILL seve
     `EventSink`; the reachable NUMERIC path (forward/loss/backward/optim/scheduler/EMA/step) is
     behaviour-exact.
 
-Training hyperparameters are NOT WP8 config keys (R-TRAINCONFIG-SCHEMA / §c.2): they ride a
-`TrainHParams` dataclass whose FIELD DEFAULTS are the sole default authority (R1 — a default
-lives in a dataclass field, WP9 arch precedent), overridden by flat legacy-config keys when a
-legacy resume supplies them.
+Training hyperparameters ARE first-class `TrainConfig` schema fields (R-TRAINCONFIG-SCHEMA
+closure, WPSC Phase 2 SC-A1): the minted `configs/*.yaml` `train:` section is the sole default
+authority (R1). `TrainHParams` is now the RUNTIME dataclass a resolver (`from_config`) builds
+from the validated `RunConfig.train` section — it is no longer an independent default
+authority; every field is a REQUIRED constructor argument (no `=` default on the dataclass).
 """
 from __future__ import annotations
 
@@ -93,47 +94,86 @@ def build_param_groups(model: nn.Module, weight_decay: float) -> list[dict[str, 
 
 @dataclass(frozen=True)
 class TrainHParams:
-    """Training hyperparameters — the R-TRAINCONFIG-SCHEMA explicit-construction-param surface.
-
-    Field DEFAULTS are the sole default authority (R1: a default lives in a dataclass field,
-    not a scattered code-side `.get(k, default)`). A legacy flat resume config overrides them
-    via `from_config`; a WP8 nested config (which carries NO training knobs) uses the defaults.
-    `lr_schedule` defaults to "cosine" so a resumed Trainer always builds a scheduler (the
-    T-CK-18 missing-scheduler_state gate needs `trainer.scheduler is not None`).
+    """Training hyperparameters — the RUNTIME object a `Trainer` (and every test bypassing
+    `.from_config`) constructs and passes around. R-TRAINCONFIG-SCHEMA closure (WPSC Phase 2
+    SC-A1): every field is a REQUIRED constructor argument — NO Python dataclass default.
+    `TrainConfig` (the schema, `mantis.config.schema.train`) is the sole default authority
+    (R1); a dataclass default here would be a second, independently-editable authority for
+    the same knob, exactly what R1 forbids. `.from_config` builds this from a validated
+    `RunConfig.train` section (`config["train"]`), never from flat legacy keys.
     """
 
-    lr: float = 1e-3
-    weight_decay: float = 1e-4
-    batch_size: int = 256
-    grad_clip: float = 1.0
-    fp16: bool = True
-    amp_dtype: str = "fp16"
-    lr_schedule: str = "cosine"
-    total_steps: int = 1_000_000
-    scheduler_t_max: Optional[int] = None
-    eta_min: float = 5e-4
-    min_lr: Optional[float] = None
-    recency_weight: float = 0.0
-    checkpoint_interval: int = 0
-    completed_q_values: bool = False
-    policy_prune_frac: float = 0.0
-    entropy_reg_weight: float = 0.0
-    aux_opp_reply_weight: float = 0.0
-    uncertainty_weight: float = 0.0
-    ownership_weight: float = 0.0
-    threat_weight: float = 0.0
-    aux_chain_weight: float = 0.0
-    ply_index_weight: float = 0.0
-    threat_pos_weight: float = 1.0
+    lr: float
+    weight_decay: float
+    grad_clip: float
+    fp16: bool
+    lr_schedule: str
+    total_steps: int
+    scheduler_t_max: Optional[int]
+    eta_min: float
+    min_lr: Optional[float]
+    checkpoint_interval: int
+    completed_q_values: bool
+    policy_prune_frac: float
+    entropy_reg_weight: float
+    aux_opp_reply_weight: float
+    uncertainty_weight: float
+    ownership_weight: float
+    threat_weight: float
+    aux_chain_weight: float
+    ply_index_weight: float
+    threat_pos_weight: float
+    value_target: str
+    policy_target: str
+    draw_reward: float
+    ply_cap_value: float
 
     @classmethod
     def from_config(cls, config: Any) -> "TrainHParams":
-        """Read flat legacy training keys (if present) over the dataclass defaults; a nested
-        WP8 config carries none → all defaults. `config` is a plain mapping."""
+        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No
+        flat-key fallback: `config['train']` (a `TrainConfig.model_dump()`-shaped, no-terminal-
+        default dict — every field present) is REQUIRED. `value_target`/`policy_target`'s
+        single-variant Literals are asserted here (V-NOOP-eligible reads, T-D/T-B/R34) and
+        `policy_target` is cross-validated against `completed_q_values` on both sides."""
         cfg = config if isinstance(config, dict) else {}
+        train = cfg.get("train")
+        if not isinstance(train, dict):
+            raise ValueError(
+                "TrainHParams.from_config: config['train'] is required (R-TRAINCONFIG-SCHEMA "
+                "closure) — no flat legacy training keys are read anymore."
+            )
+        if train["value_target"] != "pure_outcome_z":
+            raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
+        _assert_policy_target_consistency(train, cfg.get("selfplay") or {})
         fields = {f for f in cls.__dataclass_fields__}
-        overrides = {k: cfg[k] for k in fields if k in cfg and cfg[k] is not None}
-        return cls(**overrides)
+        kwargs = {k: train[k] for k in fields}
+        return cls(**kwargs)
+
+
+def _assert_policy_target_consistency(train: Dict[str, Any], selfplay: Dict[str, Any]) -> None:
+    """T-B/R34 cross-check: `train.policy_target` must agree with `train.completed_q_values`
+    and (once `selfplay` carries the field — SC-A2) `selfplay.completed_q_values`. One
+    decision, not two independently-editable knobs (ADJUDICATION_QUEUE closing note). The
+    `RunConfig`-level `model_validator` (schema/core.py) enforces this at schema-validate
+    time; this is the defensive runtime assertion at the actual `.from_config` consumer for
+    a caller that hands `TrainHParams.from_config` a dict never routed through
+    `RunConfig.model_validate`."""
+    raw = train["policy_target"] == "raw_visit_distribution"
+    train_off = not train["completed_q_values"]
+    if raw != train_off:
+        raise ValueError(
+            "train.policy_target disagrees with train.completed_q_values — "
+            f"policy_target={train['policy_target']!r}, "
+            f"completed_q_values={train['completed_q_values']!r}."
+        )
+    if "completed_q_values" in selfplay:
+        selfplay_off = not selfplay["completed_q_values"]
+        if raw != selfplay_off:
+            raise ValueError(
+                "train.policy_target disagrees with selfplay.completed_q_values — "
+                f"policy_target={train['policy_target']!r}, "
+                f"selfplay.completed_q_values={selfplay['completed_q_values']!r}."
+            )
 
 
 class Trainer:

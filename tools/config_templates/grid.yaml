@@ -90,5 +90,31 @@ eval:
     bootstrap_ci_level: 0.95
     bt_prior_games: 1.0
     bootstrap_seed: 1234
+train:
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  fp16: true
+  amp_dtype: fp16
+  lr_schedule: cosine
+  total_steps: 1000000
+  scheduler_t_max: null
+  eta_min: 0.0005
+  min_lr: null
+  checkpoint_interval: 0
+  completed_q_values: false
+  value_target: pure_outcome_z
+  policy_target: raw_visit_distribution
+  draw_reward: -0.5
+  ply_cap_value: -0.5
+  policy_prune_frac: 0.0
+  entropy_reg_weight: 0.0
+  aux_opp_reply_weight: 0.0
+  uncertainty_weight: 0.0
+  ownership_weight: 0.0
+  threat_weight: 0.0
+  aux_chain_weight: 0.0
+  ply_index_weight: 0.0
+  threat_pos_weight: 1.0
 selfplay:
   legal_move_radius_schedule: null

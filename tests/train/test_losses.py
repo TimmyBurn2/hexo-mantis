@@ -82,22 +82,26 @@ def test_chain_loss_math_is_smooth_l1():
 
 
 # ── in-run through the Trainer (the report is genuinely emitted DURING a training step) ───
-def test_chain_fire_rate_emitted_during_trainer_step(spy_sink):
+def test_chain_fire_rate_emitted_during_trainer_step(spy_sink, full_train_hparams):
     """O-CHAIN(e) — the report is IN-RUN: a dense training step with aux_chain_weight>0 emits
     the `aux_chain_loss` event through the trainer's injected sink."""
     from mantis.model import arch_from_spec_and_config
-    from mantis.train.trainer.core import Trainer, TrainHParams
+    from mantis.train.trainer.core import Trainer
 
     spec = lookup("v6_live2_ls")
     arch = arch_from_spec_and_config(spec, {})
     net = build_net(arch)
+    # NOTE: this `eval` block is deliberately incomplete relative to the full EvalConfig — it
+    # is safe because `checkpoint_interval=0` below means `RunConfig.model_validate` is never
+    # reached from this test (train_step_from_tensors only validates on a periodic save).
     config = {
         "schema_version": 1, "run_id": "run5", "seed": 7,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
         "selfplay": {"legal_move_radius_schedule": None},
     }
-    hp = TrainHParams(fp16=False, lr_schedule="none", aux_chain_weight=0.3, checkpoint_interval=0)
+    hp = full_train_hparams(fp16=False, lr_schedule="none", aux_chain_weight=0.3,
+                            checkpoint_interval=0)
     tr = Trainer(net, config, arch=arch, train_hparams=hp, sink=spy_sink)
 
     b, planes, hw = 3, int(spec.n_planes), int(spec.board_size)

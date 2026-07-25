@@ -674,6 +674,22 @@ def strip_and_restamp(
                 "bt_prior_games": 1.0, "bootstrap_seed": 1,
             },
         },
+        # WPSC Phase 2 SC-A1/A2: `train:`/expanded `selfplay:` are now required RunConfig
+        # sections — this synthetic config exists only to satisfy the schema-validate-on-write
+        # gate for a strip/restamp utility payload; placeholder values, same posture as the
+        # pre-existing seed=0/run_id=<caller> placeholders above (zero-behavior-change mint
+        # values, DESIGN_P2.md §1.1/§1.2).
+        "train": {
+            "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
+            "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
+            "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
+            "checkpoint_interval": 0, "completed_q_values": False,
+            "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+            "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
+            "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
+            "uncertainty_weight": 0.0, "ownership_weight": 0.0, "threat_weight": 0.0,
+            "aux_chain_weight": 0.0, "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+        },
         "selfplay": {"legal_move_radius_schedule": None},
     }
     return _write_v2_payload(

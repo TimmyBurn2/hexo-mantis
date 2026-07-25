@@ -149,6 +149,23 @@ def _make_eval_block() -> dict[str, Any]:
     }
 
 
+# WPSC Phase 2 SC-A1: `train:` is now a required RunConfig section — every value below is
+# the zero-behavior-change TrainHParams-dataclass-default carried over (DESIGN_P2.md §1.1/§2).
+def _make_train_block(**over: Any) -> dict[str, Any]:
+    base = {
+        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
+        "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
+        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+        "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+        "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
+        "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
+        "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
+        "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+    }
+    base.update(over)
+    return base
+
+
 # ── schema-valid / invalid config snapshots (validated against config-schema v1 on write) ─
 def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
                     run_id: str = "run5") -> dict[str, Any]:
@@ -159,8 +176,34 @@ def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},
         "eval": _make_eval_block(),
+        "train": _make_train_block(),
         "selfplay": {"legal_move_radius_schedule": None},
     }
+
+
+# ── shared TrainHParams factory (DESIGN_P2.md §2.1 recommendation) — every TrainHParams
+# field is now required (no dataclass default, R-TRAINCONFIG-SCHEMA closure); this factory
+# returns the zero-behavior-change values with **overrides layered on, so a test passes only
+# the fields it cares about instead of enumerating all ~24 at every call site.
+def make_full_train_hparams(**over: Any):
+    from mantis.train.trainer.core import TrainHParams
+
+    base = dict(
+        lr=1e-3, weight_decay=1e-4, grad_clip=1.0, fp16=True, lr_schedule="cosine",
+        total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4, min_lr=None,
+        checkpoint_interval=0, completed_q_values=False, policy_prune_frac=0.0,
+        entropy_reg_weight=0.0, aux_opp_reply_weight=0.0, uncertainty_weight=0.0,
+        ownership_weight=0.0, threat_weight=0.0, aux_chain_weight=0.0, ply_index_weight=0.0,
+        threat_pos_weight=1.0, value_target="pure_outcome_z",
+        policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
+    )
+    base.update(over)
+    return TrainHParams(**base)
+
+
+@pytest.fixture
+def full_train_hparams():
+    return make_full_train_hparams
 
 
 @pytest.fixture

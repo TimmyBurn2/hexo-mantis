@@ -25,6 +25,7 @@ from mantis.config.schema import (
     RunConfig,
     SelfplayConfig,
     StrictModel,
+    TrainConfig,
 )
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "RunConfig",
     "SelfplayConfig",
     "StrictModel",
+    "TrainConfig",
     "load_config",
     "reconcile_encoding",
     "require_offline_radius",

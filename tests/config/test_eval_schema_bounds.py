@@ -69,6 +69,19 @@ def _ladder(**overrides: Any) -> dict:
     return base
 
 
+def _train_block() -> dict:
+    return {
+        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
+        "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
+        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+        "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+        "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
+        "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
+        "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
+        "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+    }
+
+
 def _payload(**eval_overrides: Any) -> dict:
     eval_block = dict(
         random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
@@ -82,6 +95,7 @@ def _payload(**eval_overrides: Any) -> dict:
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": eval_block,
+        "train": _train_block(),
         "selfplay": {"legal_move_radius_schedule": None},
     }
 
