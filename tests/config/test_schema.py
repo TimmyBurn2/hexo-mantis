@@ -13,7 +13,6 @@ from mantis.config.schema import (
     EvalConfig,
     IdentityConfig,
     MonitorSchemaConfig,
-    RadiusStage,
     RunConfig,
     SelfplayConfig,
     TrainConfig,
@@ -242,7 +241,7 @@ def test_o16_schema_round_trip():
 
 
 def test_o16_all_fields_required_no_code_side_defaults():
-    for model in (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, RadiusStage, TrainConfig,
+    for model in (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, TrainConfig,
                   MonitorSchemaConfig, DrainCapsConfig):
         for name, field in model.model_fields.items():
             assert field.is_required(), f"{model.__name__}.{name} has a code-side default"

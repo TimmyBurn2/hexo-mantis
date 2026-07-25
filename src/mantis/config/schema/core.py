@@ -59,13 +59,6 @@ class IdentityConfig(StrictModel):
         return self
 
 
-class RadiusStage(StrictModel):
-    """One (step, radius) point of a legal-move radius curriculum schedule."""
-
-    step: int
-    radius: int
-
-
 class LadderRung(StrictModel):
     """One opponent-ladder rung (design §c.1). `bot` is the resolver kind (closed set,
     WP11-A); `depth` is sealbot's fixed-depth bar (LAW-15), `opponent_sims` the
@@ -228,10 +221,10 @@ class RunConfig(StrictModel):
 
     ``SelfplayConfig``/``InferenceConfig`` live in ``schema/selfplay.py`` and
     ``MonitorSchemaConfig``/``DrainCapsConfig`` in ``schema/monitor.py`` (§10 file-size
-    split) — ``legal_move_radius_schedule``/``RadiusStage`` are deliberately NOT part of
-    ``SelfplayConfig`` (DESIGN_P2.md §5, shape (ii): the encoding registry alone is the
-    radius authority). ``RadiusStage`` stays defined here (unused) until a later chunk
-    formally retires it and its resolver module.
+    split) — there is deliberately NO ``legal_move_radius``/``legal_move_radius_schedule``
+    field anywhere on this tree (DESIGN_P2.md §5, shape (ii), SC-A4: the encoding registry
+    alone is the radius authority; ``RadiusStage`` and its resolver module
+    (``mantis.config.resolve.radius``) are retired, not merely unused).
     """
 
     schema_version: int
