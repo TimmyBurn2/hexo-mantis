@@ -6,6 +6,10 @@ pub mod records;
 pub mod replay;
 pub mod runner;
 
+// CARD-MINPIN: re-exported solely so the bit-for-bit parity pin
+// (tests/min_value_aggregation_pin.rs) can reach the one named min-aggregation home.
+pub use runner::search_drive::aggregate_cluster_values_min;
+
 pub const CRATE_NAME: &str = "mantis-selfplay";
 
 #[cfg(test)]

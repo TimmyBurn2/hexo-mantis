@@ -38,6 +38,29 @@ use mantis_search::{
 use crate::queues::{build_leaf_graph, DenseQueue, GraphQueue};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
+
+/// K-cluster value aggregation: the value head takes the WORST cluster view (min).
+///
+/// CARD-MINPIN (WPSC Phase 4): lifted verbatim from the frozen inline loop so the
+/// min/max asymmetry — value pools min while policy pools best-scoring
+/// (`records::aggregate_policy*`) — has ONE named, pinned home. This asymmetry is a
+/// flagged defect preserved pending the matched-FLOP dense arm (falsified.md F-04
+/// scope note; registry.toml `value_pool = "min"` comments). Bit-for-bit parity with
+/// the old loop is pinned by `tests/min_value_aggregation_pin.rs`. `pub` solely so
+/// the pin can reach it.
+///
+/// # Panics
+/// Panics on an empty slice — a cluster with zero leaf values is unrepresentable
+/// upstream (every expanded leaf contributes exactly one value per cluster view).
+pub fn aggregate_cluster_values_min(leaf_values: &[f32]) -> f32 {
+    let mut min_v = leaf_values[0];
+    for &v in leaf_values {
+        if v < min_v {
+            min_v = v;
+        }
+    }
+    min_v
+}
 use crate::replay::sym::SymTables;
 
 use super::record::{record_position, record_position_graph_dispatch, RecordTuple};
@@ -296,13 +319,7 @@ fn infer_and_expand(
             variance.variance_samples.fetch_add(1, Ordering::Relaxed);
         }
 
-        let mut min_v = leaf_values[0];
-        for &v in leaf_values {
-            if v < min_v {
-                min_v = v;
-            }
-        }
-        aggregated_values.push(min_v);
+        aggregated_values.push(aggregate_cluster_values_min(leaf_values));
         if legal_set {
             aggregated_policies_ls.push(records::aggregate_policy_ls(
                 policy_stride, has_pass_slot, agg_trunk_sz, &leaves[i], centers, leaf_policies,

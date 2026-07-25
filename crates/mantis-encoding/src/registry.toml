@@ -97,7 +97,10 @@ plane_layout            = [
 policy_logit_count      = 626            # 25*25 + 1
 has_pass_slot           = true
 is_multi_window         = true
-value_pool              = "min"          # K-invariant value head
+value_pool              = "min"          # K-invariant value head — known-defective asymmetry
+                                         # (value=worst view, policy=best view); do not change
+                                         # without a matched-FLOP dense-arm re-run; see
+                                         # falsified.md F-04 note + CARD-MINPIN pinning test.
 policy_pool             = "scatter_max"  # per-move cluster dispatch
 sym_table_id            = "size_25"
 # kept_plane_indices: canonical X+history, O+history (see header comment).
@@ -132,7 +135,9 @@ plane_layout            = [
 policy_logit_count      = 362            # 19*19 + 1 (last = pass); head shape preserved
 has_pass_slot           = true
 is_multi_window         = true
-value_pool              = "min"
+value_pool              = "min"        # known-defective asymmetry — do not change without a
+                                       # matched-FLOP dense-arm re-run; see falsified.md F-04
+                                       # note + CARD-MINPIN pinning test.
 policy_pool             = "legal_set_scatter_max"
 sym_table_id            = "size_19"
 kept_plane_indices      = [0, 8, 16, 17]
