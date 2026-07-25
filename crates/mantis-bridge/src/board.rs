@@ -264,13 +264,19 @@ impl PyBoard {
     /// over the Vec the encode kernel just allocated. Python callers spell:
     ///   `board.to_tensor().reshape(18, board.size, board.size)`.
     ///
-    /// An encoding-less board (`Board.new()`) uses the v6 default wire geometry
-    /// (byte-identical to the old `board_size`-defaulting-to-19 None path).
+    /// Panics for an encoding-less board (`Board.new()`) — no v6 default
+    /// (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
+    /// With `panic = "unwind"` that panic crosses the FFI as a catchable
+    /// `PanicException`, matching this function's own multi-window panic
+    /// arm above.
     pub fn to_tensor<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
         let spec = match self.encoding {
             Some(s) => s,
-            None => mantis_encoding::lookup("v6")
-                .expect("v6 default encoding must be registered"),
+            None => panic!(
+                "Board::to_tensor called on an encoding-less Board (Board.new()); \
+                 construct via Board.with_encoding_name(...) first — no v6 default \
+                 (R28, LAW-11)"
+            ),
         };
         mantis_encoding::to_planes(&self.inner, spec).into_pyarray(py)
     }

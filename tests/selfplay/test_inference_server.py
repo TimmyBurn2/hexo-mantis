@@ -89,13 +89,16 @@ def _random_state() -> np.ndarray:
 def _cfg(**over: Any) -> dict[str, Any]:
     # WPSC Phase 2 SC-A2 reshape: `InferenceHParams.from_config` now reads `config
     # ["inference"]` (a nested schema-shaped section), not `config["selfplay"]`/a flat dict.
+    # WPSC Phase 3 SC-B2: `resolve_from_config` no longer defaults an absent 'encoding'
+    # key to v6 (R28) — this fixture's model is v6-grid-derived (BOARD_CHANNELS/BOARD_SIZE
+    # above), so the encoding is now explicit rather than relying on the retired fallback.
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
     }
     base.update(over)
-    return {"inference": base}
+    return {"inference": base, "encoding": "v6"}
 
 
 def _make_server(

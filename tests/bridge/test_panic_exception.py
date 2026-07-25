@@ -27,6 +27,30 @@ def test_multi_window_to_tensor_panics_catchably(panic_exception):
         raise AssertionError("expected a PanicException, none raised")
 
 
+def test_encoding_less_board_to_tensor_panics_catchably(panic_exception):
+    """Board().to_tensor() (no encoding bound) -> catchable PanicException
+    (R28; DESIGN_P3.md §3.2/§3.4). Mirrors test_multi_window_to_tensor_
+    panics_catchably's exact idiom."""
+    board = _engine.Board()
+    try:
+        board.to_tensor()
+    except panic_exception as exc:
+        assert "encoding-less" in str(exc)
+    else:
+        raise AssertionError("expected a PanicException, none raised")
+
+    # Follow-on liveness check, same test (design's preferred shape, §3.4): the
+    # interpreter must still be usable after the catch above (unwind, not abort).
+    for _ in range(2):
+        try:
+            _engine.Board().to_tensor()
+        except panic_exception:
+            pass
+    b = _engine.Board.with_encoding_name("v6")
+    b.apply_move(0, 0)
+    assert b.ply == 1
+
+
 def test_process_survives_a_caught_panic(panic_exception):
     """After catching a panic the interpreter is still live and usable —
     proves unwind, not abort."""

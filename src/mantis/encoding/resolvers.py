@@ -36,6 +36,18 @@ class ShapeMismatchError(Exception):
     """Raised when state-dict shapes contradict an EncodingSpec."""
 
 
+class MissingEncodingError(EncodingRegistryError):
+    """Raised when an encoding value is absent (R28, LAW-11).
+
+    A subclass of `EncodingRegistryError` — a caller catching the parent for
+    "encoding trouble in general" keeps working, while a caller wanting to
+    distinguish "never specified" from "specified but unknown to the
+    registry" can catch this subclass specifically. The retired behaviour
+    silently resolved an absent encoding to the "v6" default; that default
+    arm is killed — an absent encoding is now always an error.
+    """
+
+
 # Sentinel used by expand_auto_paths to detect unresolved artifact paths.
 _AUTO = "<auto>"
 
@@ -43,15 +55,22 @@ _AUTO = "<auto>"
 def normalize_encoding_name(enc: Any) -> str:
     """Coerce a config encoding value to its registry name string.
 
-    Accepts the four forms that show up at consumer sites:
+    Accepts the three forms that show up at consumer sites:
       - str ``"v6"``                           → returned as-is
       - dict ``{"version": "v6", ...}`` or
              ``{"name": "v6", ...}``           → version/name extracted
       - object with ``.name`` (EncodingSpec)   → ``.name`` returned
-      - ``None``                               → default ``"v6"``
+
+    Raises:
+        MissingEncodingError: if ``enc`` is ``None`` — an explicit encoding
+            name/dict/EncodingSpec is required (LAW-11, R28); the v6 default
+            arm is retired.
     """
     if enc is None:
-        return "v6"
+        raise MissingEncodingError(
+            "encoding value is None; an explicit encoding name/dict/EncodingSpec "
+            "is required (LAW-11, R28) — the v6 default arm is retired"
+        )
     if isinstance(enc, str):
         return enc
     if isinstance(enc, Mapping):
@@ -377,22 +396,35 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
       - `cfg['encoding'] = "v6w25"`            (string form)
       - `cfg['encoding'] = {'version': 'v6'}`  (mapping form)
 
-    Default: `"v6"` if no encoding section present. If `cfg` has an explicit
-    `encoding` key, all legacy scattered scalars must equal the registry spec
-    where the spec is non-None (disagreement raises). Legacy configs with NO
-    `encoding` key downgrade the rejection to a `DeprecationWarning`.
+    Raises:
+        MissingEncodingError: if `cfg` is `None`, has no `encoding` key, or
+            has a mapping-form `encoding` with no `version` key — an explicit
+            encoding is required (LAW-11, R28); the v6 default arm is
+            retired.
     """
     if cfg is None:
-        return lookup("v6")
+        raise MissingEncodingError(
+            "resolve_from_config(None): a config mapping is required (LAW-11, "
+            "R28) — the v6 default arm is retired"
+        )
     section = cfg.get("encoding")
-    explicit_encoding = section is not None
-    spec: EncodingSpec
     if section is None:
-        spec = lookup("v6")
-    elif isinstance(section, str):
+        raise MissingEncodingError(
+            "config has no 'encoding' key; an explicit `encoding: <name>` "
+            "declaration is required (LAW-11, R28) — the v6 default arm is "
+            "retired"
+        )
+    spec: EncodingSpec
+    if isinstance(section, str):
         spec = lookup(section)
     elif isinstance(section, Mapping):
-        version = section.get("version", "v6")
+        version = section.get("version")
+        if version is None:
+            raise MissingEncodingError(
+                "config's 'encoding' mapping has no 'version' key; an "
+                "explicit version is required (LAW-11, R28) — the v6 "
+                "default arm is retired"
+            )
         if not isinstance(version, str):
             raise EncodingRegistryError(
                 f"encoding.version must be a string; got {type(version).__name__}"
@@ -403,19 +435,7 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
             f"encoding section must be str or mapping; got {type(section).__name__}"
         )
 
-    if explicit_encoding:
-        _check_scattered_keys(cfg, spec)
-    else:
-        try:
-            _check_scattered_keys(cfg, spec)
-        except EncodingRegistryError as e:
-            warnings.warn(
-                f"legacy config without 'encoding' key has scattered keys "
-                f"that disagree with v6 default; resolving as v6 anyway. "
-                f"Add an explicit `encoding: <name>` declaration. Detail:\n{e}",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+    _check_scattered_keys(cfg, spec)
     return spec
 
 
