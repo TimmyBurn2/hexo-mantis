@@ -5,8 +5,12 @@ layers to reconstruct). What survives is per-knob ``(value, source)`` tagging + 
 for the resolved_config event (docs/contracts/event_manifest.md). No inputs_seen, no
 precedence_family, no layer chain; "checkpoint" source is not producible in WP8 (no loader).
 
-The payload carries the 8 schema leaf keys (source="file") plus the derived ``amp_dtype``
-(source="derived") = 9 knobs. The 8-key schema portion is identical to O15's CONSUMER_REGISTRY.
+The payload carries the 7 schema leaf keys (source="file") plus the derived ``amp_dtype``
+(source="derived") = 8 knobs. The 7-key schema portion is identical to O15's CONSUMER_REGISTRY's
+original (pre-WP11-A/pre-WPSC) 8-key set, minus ``selfplay.legal_move_radius_schedule``
+(WPSC Phase 2 SC-A2: the field no longer exists — the encoding registry alone is the radius
+authority, DESIGN_P2.md §5/§9 — no replacement leaf is added, per the same precedent WP11-A
+set of not threading every new schema leaf into this payload).
 """
 from __future__ import annotations
 
@@ -63,10 +67,6 @@ def resolve_config(cfg: RunConfig) -> ResolvedConfig:
     reconcile_encoding (declared, no stamp → source "variant") and remaps variant→"file" (NIT-2).
     """
     enc = reconcile_encoding(cfg.identity.encoding, None)
-    schedule = cfg.selfplay.legal_move_radius_schedule
-    schedule_value = (
-        [stage.model_dump() for stage in schedule] if schedule is not None else None
-    )
     knobs: dict[str, ResolvedKnob] = {
         "schema_version": ResolvedKnob(cfg.schema_version, "file"),
         "run_id": ResolvedKnob(cfg.run_id, "file"),
@@ -75,7 +75,6 @@ def resolve_config(cfg: RunConfig) -> ResolvedConfig:
         "identity.representation": ResolvedKnob(cfg.identity.representation, "file"),
         "eval.random_model_sims": ResolvedKnob(cfg.eval.random_model_sims, "file"),
         "eval.sealbot_model_sims": ResolvedKnob(cfg.eval.sealbot_model_sims, "file"),
-        "selfplay.legal_move_radius_schedule": ResolvedKnob(schedule_value, "file"),
         "amp_dtype": ResolvedKnob(resolve_amp_dtype(cfg.identity.representation), "derived"),
     }
     return ResolvedConfig(knobs)

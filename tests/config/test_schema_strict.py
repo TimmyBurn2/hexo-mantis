@@ -46,6 +46,35 @@ def _valid_train_block() -> dict:
     }
 
 
+def _valid_selfplay_block() -> dict:
+    return {
+        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
+        "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10,
+        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
+        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
+        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
+        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
+        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
+        "instrumentation_enabled": False,
+        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
+                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
+                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
+        "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
+                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
+                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
+                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
+    }
+
+
+def _valid_inference_block() -> dict:
+    return {
+        "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
+        "compile_inference": False, "compile_inference_mode": "default",
+        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+    }
+
+
 def _valid_payload() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -54,7 +83,8 @@ def _valid_payload() -> dict:
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _valid_eval_block(),
         "train": _valid_train_block(),
-        "selfplay": {"legal_move_radius_schedule": None},
+        "selfplay": _valid_selfplay_block(),
+        "inference": _valid_inference_block(),
     }
 
 
@@ -79,9 +109,13 @@ def test_bool_to_int_rejected():
         RunConfig.model_validate(payload)
 
 
-def test_radius_stage_float_step_rejected():
+def test_selfplay_nested_float_to_int_rejected():
+    # O14 strict-coercion pin ported off the retired RadiusStage float-step case: a nested
+    # sub-model field (`selfplay.mcts.n_simulations`) still rejects a silent float->int
+    # coercion (WPSC Phase 2 SC-A2: `selfplay.legal_move_radius_schedule`/`RadiusStage` are
+    # gone from the schema, DESIGN_P2.md §5).
     payload = _valid_payload()
-    payload["selfplay"]["legal_move_radius_schedule"] = [{"step": 0.0, "radius": 5}]
+    payload["selfplay"]["mcts"]["n_simulations"] = 50.0
     with pytest.raises(ValidationError):
         RunConfig.model_validate(payload)
 

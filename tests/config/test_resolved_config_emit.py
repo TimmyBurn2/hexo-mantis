@@ -1,10 +1,12 @@
-"""O6 — resolved-config emit (emit.ResolvedConfig.to_event_payload; B1 9-knob payload)
+"""O6 — resolved-config emit (emit.ResolvedConfig.to_event_payload; B1 8-knob payload)
 and O7 — death-of-merge census (grep-gate + mutation self-test).
 
 The merge/layer-reconstruct machinery is deleted; emit is thin per-knob (value, source)
-tagging. The payload carries EXACTLY the 8 schema leaves (source="file") plus the derived
-amp_dtype (source="derived") = 9 knobs. The 8 schema-key portion is identical to O15's
-CONSUMER_REGISTRY (B1 — no phantom emit consumer).
+tagging. The payload carries EXACTLY the 7 schema leaves (source="file") plus the derived
+amp_dtype (source="derived") = 8 knobs (WPSC Phase 2 SC-A2: `selfplay.
+legal_move_radius_schedule` dropped out of the schema entirely, DESIGN_P2.md §5/§9 — no
+replacement leaf). The 7-key schema portion is identical to O15's CONSUMER_REGISTRY's
+original WP8 set (B1 — no phantom emit consumer).
 """
 from pathlib import Path
 
@@ -23,7 +25,6 @@ _EIGHT_SCHEMA_LEAVES = {
     "identity.representation",
     "eval.random_model_sims",
     "eval.sealbot_model_sims",
-    "selfplay.legal_move_radius_schedule",
 }
 
 
@@ -32,7 +33,7 @@ def _run5() -> ResolvedConfig:
 
 
 # ── O6 emit ────────────────────────────────────────────────────────────────
-def test_payload_event_and_nine_knob_key_set():
+def test_payload_event_and_eight_knob_key_set():
     payload = _run5().to_event_payload()
     assert payload["event"] == "resolved_config"
     assert set(payload["knobs"]) == _EIGHT_SCHEMA_LEAVES | {"amp_dtype"}
@@ -45,7 +46,6 @@ def test_payload_pins_production_values():
     assert knobs["identity.representation"]["value"] == "graph"
     assert knobs["eval.random_model_sims"]["value"] == 96
     assert knobs["eval.sealbot_model_sims"]["value"] == 128
-    assert knobs["selfplay.legal_move_radius_schedule"]["value"] is None
     assert knobs["amp_dtype"]["value"] == "bf16"
 
 

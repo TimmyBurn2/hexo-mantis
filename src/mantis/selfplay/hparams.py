@@ -1,23 +1,27 @@
-"""Self-play knob resolution: config dict → typed hparams → `SelfPlayRunnerConfig`.
+"""Self-play knob resolution: validated `SelfplayConfig`/`InferenceConfig` → typed hparams →
+`SelfPlayRunnerConfig`.
 
 >300 justify: ONE concern — everything the pool/server constructors used to read out of the
-raw config dict inline. Keeping the two hparam dataclasses, the encoding resolve, the
+config used to be read inline. Keeping the two hparam dataclasses, the encoding resolve, the
 seed-corpus parse and the runner-config assembly in one file means the config→runner wire
 (write-only from Python: the Rust config exposes no ctor getters) is greppable in one place;
-splitting it would scatter the very reads R-SELFPLAYCONFIG-SCHEMA exists to inventory.
+splitting it would scatter the very reads R-SELFPLAYCONFIG-SCHEMA inventoried.
 
-**Tracked R1-exception — R-SELFPLAYCONFIG-SCHEMA.** `SelfPlayHParams` / `InferenceHParams`
-carry code-side field defaults that reproduce the frozen inline `.get()` defaults verbatim.
-CLAUDE.md R1 ("no code-side defaults; a default lives only in the schema field") is
-therefore **NOT intact for these knobs** — this is the operator-pinned Option A exception,
-owed before the run5 config mint and retiring in the WP8 schema-extension commit alongside
-R-TRAINCONFIG-SCHEMA. `legal_move_radius_schedule` is NOT here: it stays a real config key
-read through the committed radius resolver.
+**R-SELFPLAYCONFIG-SCHEMA closure (WPSC Phase 2 SC-A2).** `SelfPlayHParams.from_config` /
+`InferenceHParams.from_config` now read a validated `RunConfig`-shaped mapping's `selfplay`/
+`mcts`/`playout_cap`/`inference` sections (a `SelfplayConfig`/`InferenceConfig`
+`.model_dump()`-shaped dict, or an equivalent explicit mapping) directly — no raw flat/legacy
+dict, no top-level namespace fallback, no code-side `.get(k, default)`. The schema (`mantis.
+config.schema.selfplay`) is the sole default authority (R1); the two hard-error checks that
+used to live here (`fast_sims` required, `fast_prob`/`full_search_prob` mutual exclusion)
+are now `PlayoutCapConfig` schema bounds/validators — not duplicated here (LAW-07: single
+authority). `legal_move_radius_schedule` is gone from the schema entirely (DESIGN_P2.md §5);
+nothing in this module ever read it.
 
-`_resolve_playout_cap_temperature` is a byte-exact LOCAL copy of the frozen self-play
-temperature resolver (`src/mantis/config/` is out of this work package's write scope);
-relocation to `config/resolve/temperature.py` rides the same schema-extension commit. No
-EVAL-temperature surface is created here — self-play schedule only.
+`_resolve_playout_cap_temperature`'s key/field-spelling shim is RETIRED: the schema field IS
+`temperature_threshold_compound_moves` (matching the config key one-to-one), so there is
+nothing left to resolve — `from_config` reads `pc["temperature_threshold_compound_moves"]`/
+`pc["temp_min"]` directly.
 """
 from __future__ import annotations
 
@@ -28,31 +32,6 @@ from typing import Any
 from mantis._engine import SelfPlayRunnerConfig
 from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
-
-
-# ---------------------------------------------------------------------------
-# Temperature resolver — byte-exact local copy (relocation debt tracked).
-# ---------------------------------------------------------------------------
-def _resolve_playout_cap_temperature(pc: dict[str, Any]) -> tuple[int, float]:
-    """Resolve ``(temp_threshold_compound_moves, temp_min)`` from a ``playout_cap`` dict.
-
-    Fallback = cosine-OFF ``(0, 0.5)`` — mirrors the Rust ``SelfPlayRunnerConfig`` default
-    and the documented production posture: a variant that omits these keys inherits a
-    constant tau=0.5, and must NOT silently re-arm the draw-collapse cosine (the legacy
-    fallback was the toxic 15 / 0.05). Schedule-ON values pass through unchanged.
-
-    NOTE the key/field asymmetry this resolver exists to absorb: the CONFIG KEY is
-    ``temperature_threshold_compound_moves``; the runner ctor kwarg (and the
-    `SelfPlayHParams` field) is ``temp_threshold_compound_moves``. Reading the shorter
-    spelling off the config returns None on every config → this fallback fires → an
-    operator's temperature schedule is silently disabled with no error.
-    """
-    thr = pc.get("temperature_threshold_compound_moves")
-    tmin = pc.get("temp_min")
-    return (
-        int(thr) if thr is not None else 0,       # absent OR explicit null -> OFF
-        float(tmin) if tmin is not None else 0.5,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +197,7 @@ class SelfPlayHParams:
     quiescence_enabled: bool = True
     quiescence_blend_2: float = 0.3
     dirichlet_alpha: float = 0.3
-    dirichlet_epsilon: float = 0.25       # CONFIG KEY: `mcts.epsilon` (not the field name)
+    dirichlet_epsilon: float = 0.25       # field name == schema key (mcts.dirichlet_epsilon)
     dirichlet_enabled: bool = True
     # playout_cap ns — fast_sims REQUIRED (no default; missing key = ValueError)
     fast_sims: int
@@ -230,9 +209,9 @@ class SelfPlayHParams:
     zoi_enabled: bool = False
     zoi_lookback: int = 16
     zoi_margin: int = 5
-    # CONFIG KEY: `playout_cap.temperature_threshold_compound_moves` — NOT this field's
-    # name. Resolved through `_resolve_playout_cap_temperature`; reading the field spelling
-    # off the config returns None on every config and silently disables the schedule.
+    # Runner ctor kwarg spelling differs from the schema field name
+    # (`PlayoutCapConfig.temperature_threshold_compound_moves`); `from_config` reads the
+    # schema field directly (no resolver shim — retired, R-SELFPLAYCONFIG-SCHEMA closure).
     temp_threshold_compound_moves: int = 0
     temp_min: float = 0.5                 # field name == config key
     # training ns
@@ -260,115 +239,76 @@ class SelfPlayHParams:
     def from_config(
         cls, config: dict[str, Any], n_workers: int | None = None
     ) -> SelfPlayHParams:
-        """Resolve every ctor-time knob, with the frozen namespace fallbacks and the four
-        frozen hard errors, in the frozen order."""
-        sp = config.get("selfplay", config)
-        mcts_cfg = config.get("mcts", config)
-        training_cfg = config.get("training", config)
-        mon_cfg = config.get("monitoring", config)
-        instr_cfg = config.get("instrumentation", {}) or {}
-
-        pc = sp.get("playout_cap", config.get("playout_cap", {}))
-        if "fast_sims" not in pc:
-            raise ValueError(
-                "playout_cap.fast_sims must be set in the self-play config — "
-                "no silent defaults"
-            )
-
-        # Move-level and game-level playout caps are mutually exclusive: move-level
-        # (full_search_prob) overrides the game-level (fast_prob/fast_sims) sim selection
-        # inside the worker loop, so running both at once silently ignores the latter.
-        fast_prob_cfg = float(pc.get("fast_prob", 0.0))
-        full_search_prob_cfg = float(pc.get("full_search_prob", 0.0))
-        n_sims_quick_cfg = int(pc.get("n_sims_quick", 0))
-        n_sims_full_cfg = int(pc.get("n_sims_full", 0))
-        if full_search_prob_cfg > 0.0 and fast_prob_cfg > 0.0:
-            raise ValueError(
-                "playout_cap: fast_prob and full_search_prob are mutually exclusive — "
-                "move-level cap (full_search_prob) overrides game-level cap (fast_prob). "
-                f"Got fast_prob={fast_prob_cfg}, full_search_prob={full_search_prob_cfg}. "
-                "Set one of them to 0 in the self-play config."
-            )
-        if full_search_prob_cfg > 0.0 and (n_sims_quick_cfg <= 0 or n_sims_full_cfg <= 0):
-            raise ValueError(
-                "playout_cap: full_search_prob > 0 requires n_sims_quick > 0 AND "
-                "n_sims_full > 0. "
-                f"Got full_search_prob={full_search_prob_cfg}, "
-                f"n_sims_quick={n_sims_quick_cfg}, n_sims_full={n_sims_full_cfg}."
-            )
-
-        # Within-game temperature defaults to cosine-OFF (0, 0.5) when a variant omits the
-        # playout_cap keys — never the legacy 15 / 0.05.
-        temp_threshold, temp_min = _resolve_playout_cap_temperature(pc)
-
-        inference_pool_size = sp.get("inference_pool_size", None)
-        if inference_pool_size is not None:
-            inference_pool_size = int(inference_pool_size)
+        """Resolve every ctor-time knob off a validated `RunConfig`-shaped mapping's
+        `selfplay`/`train` sections (R-SELFPLAYCONFIG-SCHEMA closure) — direct nested reads,
+        no top-level namespace fallback, no code-side default. `fast_sims`-required and the
+        `fast_prob`/`full_search_prob` mutual-exclusion checks are now `PlayoutCapConfig`
+        schema bounds/validators (not duplicated here, LAW-07); `effective_sims_per_move==0`
+        has no schema equivalent (it spans `mcts.n_simulations` AND `playout_cap.*`), so it
+        stays the one runtime hard error this resolver still raises.
+        """
+        sp = config["selfplay"]
+        mcts_cfg = sp["mcts"]
+        pc = sp["playout_cap"]
+        train = config["train"]
 
         hp = cls(
-            n_workers=int(n_workers if n_workers is not None else sp.get("n_workers", 1)),
-            leaf_batch_size=int(sp.get("leaf_batch_size", 8)),
-            max_moves_per_game=int(
-                sp.get("max_game_moves", sp.get("max_moves_per_game", 128))
+            n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
+            leaf_batch_size=int(sp["leaf_batch_size"]),
+            max_moves_per_game=int(sp["max_game_moves"]),
+            inference_pool_size=(
+                int(sp["inference_pool_size"]) if sp["inference_pool_size"] is not None else None
             ),
-            inference_pool_size=inference_pool_size,
-            completed_q_values=bool(sp.get("completed_q_values", False)),
-            c_visit=float(sp.get("c_visit", 50.0)),
-            c_scale=float(sp.get("c_scale", 1.0)),
-            gumbel_mcts=bool(sp.get("gumbel_mcts", False)),
-            gumbel_m=int(sp.get("gumbel_m", 16)),
-            gumbel_explore_moves=int(sp.get("gumbel_explore_moves", 10)),
-            results_queue_cap=int(sp.get("results_queue_cap", 10_000)),
-            random_opening_plies=int(sp.get("random_opening_plies", 0)),
-            rotation_enabled=bool(sp.get("rotation_enabled", True)),
-            forced_win_policy_enabled=bool(sp.get("forced_win_policy_enabled", False)),
-            forced_win_policy_depth=int(sp.get("forced_win_policy_depth", 2)),
-            forced_win_policy_weight=float(sp.get("forced_win_policy_weight", 1.0)),
-            solver_enabled=bool(sp.get("solver_enabled", False)),
-            solver_depth=int(sp.get("solver_depth", 16)),
-            solver_node_budget=int(sp.get("solver_node_budget", 50_000)),
-            solver_neighbor_dist=int(sp.get("solver_neighbor_dist", 2)),
-            solver_visit_weight=float(sp.get("solver_visit_weight", 0.3)),
-            seed_fraction=float(sp.get("seed_fraction", 0.0)),
-            seed_corpus_path=sp.get("seed_corpus_path", None),
-            n_simulations=int(
-                mcts_cfg.get("n_simulations", config.get("n_simulations", 50))
-            ),
-            c_puct=float(mcts_cfg.get("c_puct", 1.5)),
-            fpu_reduction=float(mcts_cfg.get("fpu_reduction", 0.25)),
-            quiescence_enabled=bool(mcts_cfg.get("quiescence_enabled", True)),
-            quiescence_blend_2=float(mcts_cfg.get("quiescence_blend_2", 0.3)),
-            dirichlet_alpha=float(mcts_cfg.get("dirichlet_alpha", 0.3)),
-            dirichlet_epsilon=float(mcts_cfg.get("epsilon", 0.25)),
-            dirichlet_enabled=bool(mcts_cfg.get("dirichlet_enabled", True)),
+            completed_q_values=bool(sp["completed_q_values"]),
+            c_visit=float(sp["c_visit"]),
+            c_scale=float(sp["c_scale"]),
+            gumbel_mcts=bool(sp["gumbel_mcts"]),
+            gumbel_m=int(sp["gumbel_m"]),
+            gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
+            results_queue_cap=int(sp["results_queue_cap"]),
+            random_opening_plies=int(sp["random_opening_plies"]),
+            rotation_enabled=bool(sp["rotation_enabled"]),
+            forced_win_policy_enabled=bool(sp["forced_win_policy_enabled"]),
+            forced_win_policy_depth=int(sp["forced_win_policy_depth"]),
+            forced_win_policy_weight=float(sp["forced_win_policy_weight"]),
+            solver_enabled=bool(sp["solver_enabled"]),
+            solver_depth=int(sp["solver_depth"]),
+            solver_node_budget=int(sp["solver_node_budget"]),
+            solver_neighbor_dist=int(sp["solver_neighbor_dist"]),
+            solver_visit_weight=float(sp["solver_visit_weight"]),
+            seed_fraction=float(sp["seed_fraction"]),
+            seed_corpus_path=sp["seed_corpus_path"],
+            n_simulations=int(mcts_cfg["n_simulations"]),
+            c_puct=float(mcts_cfg["c_puct"]),
+            fpu_reduction=float(mcts_cfg["fpu_reduction"]),
+            quiescence_enabled=bool(mcts_cfg["quiescence_enabled"]),
+            quiescence_blend_2=float(mcts_cfg["quiescence_blend_2"]),
+            dirichlet_alpha=float(mcts_cfg["dirichlet_alpha"]),
+            dirichlet_epsilon=float(mcts_cfg["dirichlet_epsilon"]),
+            dirichlet_enabled=bool(mcts_cfg["dirichlet_enabled"]),
             fast_sims=int(pc["fast_sims"]),
-            fast_prob=fast_prob_cfg,
-            standard_sims=int(pc.get("standard_sims", 0)),
-            full_search_prob=full_search_prob_cfg,
-            n_sims_quick=n_sims_quick_cfg,
-            n_sims_full=n_sims_full_cfg,
-            zoi_enabled=bool(pc.get("zoi_enabled", False)),
-            zoi_lookback=int(pc.get("zoi_lookback", 16)),
-            zoi_margin=int(pc.get("zoi_margin", 5)),
-            temp_threshold_compound_moves=temp_threshold,
-            temp_min=temp_min,
-            draw_value=float(training_cfg.get("draw_value", -0.5)),
-            # ply_cap_value is split from draw_reward so the value head sees distinct
-            # targets for organic draws vs ply-cap truncations; falls back to draw_value.
-            ply_cap_value=float(
-                training_cfg.get("ply_cap_value", training_cfg.get("draw_value", -0.5))
-            ),
-            log_investigation_metrics=bool(mon_cfg.get(
-                "log_investigation_metrics",
-                config.get("log_investigation_metrics", True),
-            )),
-            instrumentation_enabled=bool(instr_cfg.get("enabled", False)),
+            fast_prob=float(pc["fast_prob"]),
+            standard_sims=int(pc["standard_sims"]),
+            full_search_prob=float(pc["full_search_prob"]),
+            n_sims_quick=int(pc["n_sims_quick"]),
+            n_sims_full=int(pc["n_sims_full"]),
+            zoi_enabled=bool(pc["zoi_enabled"]),
+            zoi_lookback=int(pc["zoi_lookback"]),
+            zoi_margin=int(pc["zoi_margin"]),
+            temp_threshold_compound_moves=int(pc["temperature_threshold_compound_moves"]),
+            temp_min=float(pc["temp_min"]),
+            # Cross-section read (DESIGN_P2.md §2 note): draw_reward/ply_cap_value are part
+            # of `pure_outcome_z`'s definition and live on TrainConfig, not SelfplayConfig.
+            draw_value=float(train["draw_reward"]),
+            ply_cap_value=float(train["ply_cap_value"]),
+            log_investigation_metrics=bool(sp["log_investigation_metrics"]),
+            instrumentation_enabled=bool(sp["instrumentation_enabled"]),
         )
         if hp.effective_sims_per_move <= 0:
             raise ValueError(
                 "sims/sec: could not resolve effective per-move sim count — "
-                f"full_search_prob={full_search_prob_cfg}, "
-                f"n_sims_full={n_sims_full_cfg}, n_simulations={hp.n_simulations}. "
+                f"full_search_prob={hp.full_search_prob}, "
+                f"n_sims_full={hp.n_sims_full}, n_simulations={hp.n_simulations}. "
                 "Set mcts.n_simulations > 0 (flat regime) or "
                 "playout_cap.n_sims_full > 0 (move-level cap regime)."
             )
@@ -391,18 +331,19 @@ class InferenceHParams:
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> InferenceHParams:
-        sp = config.get("selfplay", config)
-        raw_diag = config.get("diagnostics")
-        diag = raw_diag if isinstance(raw_diag, dict) else {}
+        """Resolve every ctor-time knob off a validated `RunConfig`-shaped mapping's
+        `inference` section (R-SELFPLAYCONFIG-SCHEMA closure) — direct nested reads, no
+        top-level namespace fallback."""
+        inf = config["inference"]
         return cls(
-            inference_batch_size=int(sp.get("inference_batch_size", 64)),
-            inference_max_wait_ms=int(float(sp.get("inference_max_wait_ms", 10.0))),
-            trace_inference=bool(sp.get("trace_inference", True)),
-            compile_inference=bool(sp.get("compile_inference", False)),
-            compile_inference_mode=str(sp.get("compile_inference_mode", "default")),
-            compile_inference_dynamic=bool(sp.get("compile_inference_dynamic", True)),
-            perf_timing=bool(diag.get("perf_timing", False)),
-            perf_sync_cuda=bool(diag.get("perf_sync_cuda", False)),
+            inference_batch_size=int(inf["inference_batch_size"]),
+            inference_max_wait_ms=int(inf["inference_max_wait_ms"]),
+            trace_inference=bool(inf["trace_inference"]),
+            compile_inference=bool(inf["compile_inference"]),
+            compile_inference_mode=str(inf["compile_inference_mode"]),
+            compile_inference_dynamic=bool(inf["compile_inference_dynamic"]),
+            perf_timing=bool(inf["perf_timing"]),
+            perf_sync_cuda=bool(inf["perf_sync_cuda"]),
         )
 
 

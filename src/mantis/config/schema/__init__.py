@@ -14,9 +14,14 @@ from mantis.config.schema.core import (
     LadderRung,
     RadiusStage,
     RunConfig,
-    SelfplayConfig,
     StrictModel,
     _EVAL_TIMEOUT_CEILING_SEC,
+)
+from mantis.config.schema.selfplay import (
+    InferenceConfig,
+    MctsConfig,
+    PlayoutCapConfig,
+    SelfplayConfig,
 )
 from mantis.config.schema.train import TrainConfig
 
@@ -25,8 +30,11 @@ __all__ = [
     "EvalConfig",
     "GateConfig",
     "IdentityConfig",
+    "InferenceConfig",
     "LadderConfig",
     "LadderRung",
+    "MctsConfig",
+    "PlayoutCapConfig",
     "RadiusStage",
     "RunConfig",
     "SelfplayConfig",

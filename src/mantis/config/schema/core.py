@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from mantis.config.schema._base import StrictModel
+from mantis.config.schema.selfplay import InferenceConfig, SelfplayConfig
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
 
@@ -221,19 +222,15 @@ class EvalConfig(StrictModel):
     ladder: LadderConfig
 
 
-class SelfplayConfig(StrictModel):
-    """Self-play knobs in the WP8 field set.
-
-    ``legal_move_radius_schedule`` is REQUIRED with no ``= None`` default: every config MUST
-    write it explicitly (``null`` = "no curriculum → use the encoding's registry radius", an
-    explicit-complete declaration, not a code-side default). resolve_radius_from_schedule reads it.
-    """
-
-    legal_move_radius_schedule: list[RadiusStage] | None
-
-
 class RunConfig(StrictModel):
-    """Top-level run config: explicit, complete, schema_version-pinned."""
+    """Top-level run config: explicit, complete, schema_version-pinned.
+
+    ``SelfplayConfig``/``InferenceConfig`` live in ``schema/selfplay.py`` (§10 file-size
+    split) — ``legal_move_radius_schedule``/``RadiusStage`` are deliberately NOT part of
+    ``SelfplayConfig`` (DESIGN_P2.md §5, shape (ii): the encoding registry alone is the
+    radius authority). ``RadiusStage`` stays defined here (unused) until a later chunk
+    formally retires it and its resolver module.
+    """
 
     schema_version: int
     run_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_\-]*$")
@@ -242,6 +239,7 @@ class RunConfig(StrictModel):
     eval: EvalConfig
     train: TrainConfig
     selfplay: SelfplayConfig
+    inference: InferenceConfig
 
     @field_validator("schema_version")
     @classmethod
@@ -249,3 +247,26 @@ class RunConfig(StrictModel):
         if v != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}, got {v}")
         return v
+
+    @model_validator(mode="after")
+    def _policy_target_completed_q_consistency(self) -> "RunConfig":
+        # ADJUDICATION_QUEUE closing note / DESIGN_P2.md §2: `train.policy_target` is
+        # produced in self-play (gated by `selfplay.completed_q_values`) and the SAME
+        # decision also selects the train-side loss (`train.completed_q_values`). One
+        # decision, two consumers across two seams — this cross-section validator keeps
+        # them from becoming two independently-editable knobs kept in sync only by
+        # convention. Inert at mint time (all three sides pin to the single live combo);
+        # fires the day one flag flips without the others.
+        raw = self.train.policy_target == "raw_visit_distribution"
+        train_off = not self.train.completed_q_values
+        selfplay_off = not self.selfplay.completed_q_values
+        if not (raw == train_off == selfplay_off):
+            raise ValueError(
+                "policy_target/completed_q_values disagree across sections: "
+                f"train.policy_target={self.train.policy_target!r}, "
+                f"train.completed_q_values={self.train.completed_q_values!r}, "
+                f"selfplay.completed_q_values={self.selfplay.completed_q_values!r} — "
+                "all three must agree (one decision, not three independently-editable "
+                "knobs)."
+            )
+        return self

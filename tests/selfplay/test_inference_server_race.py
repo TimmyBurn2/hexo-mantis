@@ -54,7 +54,13 @@ def test_load_state_dict_during_forward_is_safe(device: torch.device) -> None:
 
     server = InferenceServer(
         model_a, device,
-        {"selfplay": {"inference_batch_size": 4, "inference_max_wait_ms": 50.0}},
+        # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"] now.
+        {"inference": {
+            "inference_batch_size": 4, "inference_max_wait_ms": 50.0,
+            "trace_inference": True, "compile_inference": False,
+            "compile_inference_mode": "default", "compile_inference_dynamic": True,
+            "perf_timing": False, "perf_sync_cuda": False,
+        }},
     )
     server.start()
 

@@ -1,16 +1,19 @@
-"""O9–O12 — regime-parity per LAW knob (repo_design §8).
+"""O9–O11 — regime-parity per LAW knob (repo_design §8).
 
 Each asserts *suite default == production default* over production_config() (configs/run5.yaml):
 the suite expectation is DERIVED from the shipped config, never a hardcoded regime knob
-(CONTEXT bug-class #5). The four §8 knobs: sims (O9), amp=bf16 (O10), encoding (O11),
-radius schedule (O12).
+(CONTEXT bug-class #5). Three §8 knobs remain here: sims (O9), amp=bf16 (O10), encoding
+(O11). O12 (radius schedule) is RETIRED (WPSC Phase 2 SC-A2 forced-fallout: DESIGN_P2.md §5
+removes `selfplay.legal_move_radius_schedule`/`RadiusStage` from the schema entirely — the
+encoding registry alone is the radius authority, so there is no regime-parity knob left to
+compare here). `tests/config/test_regime_parity_p2.py` (a later chunk's oracle) owns the
+O12-replacement assertion.
 """
 from pathlib import Path
 
 from mantis.config.loader import load_config
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.nsims import resolve_eval_model_sims
-from mantis.config.resolve.radius import resolve_radius_from_schedule
 from mantis.encoding import lookup
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,16 +48,3 @@ def test_o11_encoding_regime_parity(production_config):
     assert production_config.identity.representation == "graph"
 
 
-def test_o12_radius_schedule_regime_parity(production_config):
-    # run5 (graph) declares no curriculum -> None -> caller keeps the encoding's registry radius.
-    assert production_config.selfplay.legal_move_radius_schedule is None
-    assert resolve_radius_from_schedule(None, 500_000) is None
-
-
-def test_o12_curriculum_smoke_exercises_non_null_scan():
-    smoke = load_config(REPO_ROOT / "configs" / "smoke_radius_curriculum.yaml")
-    schedule = smoke.selfplay.legal_move_radius_schedule
-    assert schedule is not None
-    sched = [stage.model_dump() for stage in schedule]
-    assert resolve_radius_from_schedule(sched, 0) == sched[0]["radius"]
-    assert resolve_radius_from_schedule(sched, 10**9) == sched[-1]["radius"]

@@ -76,13 +76,45 @@ def _train_block():
     }
 
 
+def _selfplay_block():
+    # WPSC Phase 2 SC-A2: `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
+    # `legal_move_radius_schedule` is gone (DESIGN_P2.md §5).
+    return {
+        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
+        "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10,
+        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
+        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
+        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
+        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
+        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
+        "instrumentation_enabled": False,
+        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
+                 "quiescence_enabled": True, "quiescence_blend_2": 0.3,
+                 "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
+        "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
+                        "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
+                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
+                        "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
+    }
+
+
+def _inference_block():
+    return {
+        "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
+        "compile_inference": False, "compile_inference_mode": "default",
+        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+    }
+
+
 def _config():
     return {
         "schema_version": 1, "run_id": "smoke", "seed": 20260722,
         "identity": {"encoding": ENCODING, "representation": "grid"},
         "eval": _eval_block(),
         "train": _train_block(),
-        "selfplay": {"legal_move_radius_schedule": None},
+        "selfplay": _selfplay_block(),
+        "inference": _inference_block(),
     }
 
 

@@ -73,8 +73,19 @@ class LocalInferenceEngine:
             from mantis.selfplay.inference_server import InferenceServer
 
             self._graph_batcher = InferenceBatcher(encoding_spec=self.encoding_spec)
+            # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"]
+            # directly (no top-level-namespace fallback) — this standalone caller has no
+            # RunConfig to draw from, so it hands the `InferenceHParams` dataclass defaults
+            # explicitly (zero-behavior-change: these are the same values `{"selfplay": {}}`
+            # used to resolve to via the old `.get(k, default)` fallback chain).
             self._graph_server = InferenceServer(
-                model, device, {"selfplay": {}},
+                model, device,
+                {"inference": {
+                    "inference_batch_size": 64, "inference_max_wait_ms": 10,
+                    "trace_inference": True, "compile_inference": False,
+                    "compile_inference_mode": "default", "compile_inference_dynamic": True,
+                    "perf_timing": False, "perf_sync_cuda": False,
+                }},
                 batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
             )
             self._graph_server.start()

@@ -1,9 +1,12 @@
 """O15 — every-key-has-consumer bijection (LAW-08).
 
 SCHEMA KEYS ONLY (not registered encodings — that is gate-8's disjoint concern). Enumerate
-leaf key-paths of RunConfig.model_fields and assert the set equals an explicit 8-entry
-CONSUMER_REGISTRY. Enumeration STOPS at a list[SubModel] field (NIT-3): RadiusStage.step /
-.radius are covered transitively by resolve_radius_from_schedule, not separate registry rows.
+leaf key-paths of RunConfig.model_fields and assert the set equals an explicit CONSUMER_REGISTRY.
+`selfplay.legal_move_radius_schedule`/`RadiusStage` are GONE (WPSC Phase 2 SC-A2 forced-fallout,
+DESIGN_P2.md §5) — the NIT-3 "enumeration stops at a list[SubModel] field" note that used to
+apply to `RadiusStage.step`/`.radius` no longer has a subject; `selfplay.mcts.*`/`selfplay.
+playout_cap.*` are ordinary nested `StrictModel` leaves, fully enumerated like every other
+section.
 """
 from pydantic import BaseModel
 
@@ -57,7 +60,6 @@ CONSUMER_REGISTRY = {
     "eval.ladder.bootstrap_seed": (
         "pipeline.py RoundSpec.ladder_bootstrap_seed -> worker.py aggregate_rung (M-2)"
     ),
-    "selfplay.legal_move_radius_schedule": "resolve_radius_from_schedule + radius parity (O12) + emit",
     # WPSC Phase 2 SC-A1 (R-TRAINCONFIG-SCHEMA closure): every TrainConfig leaf's live
     # consumer is TrainHParams.from_config (trainer/core.py), which reads config["train"]
     # directly (no flat-key fallback).
@@ -86,6 +88,64 @@ CONSUMER_REGISTRY = {
     "train.aux_chain_weight": "TrainHParams.from_config -> chain loss weight",
     "train.ply_index_weight": "TrainHParams.from_config -> ply-index loss weight",
     "train.threat_pos_weight": "TrainHParams.from_config -> threat pos_weight tensor",
+    # WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure): every SelfplayConfig/MctsConfig/
+    # PlayoutCapConfig/InferenceConfig leaf's live consumer is SelfPlayHParams.from_config /
+    # InferenceHParams.from_config (mantis.selfplay.hparams), which read the nested
+    # `selfplay`/`selfplay.mcts`/`selfplay.playout_cap`/`inference` sections directly.
+    "selfplay.n_workers": "SelfPlayHParams.from_config -> WorkerPool worker count",
+    "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
+    "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
+    "selfplay.inference_pool_size": "SelfPlayHParams.from_config -> runner inference_pool_size",
+    "selfplay.completed_q_values": "SelfPlayHParams.from_config -> runner completed_q_values",
+    "selfplay.c_visit": "SelfPlayHParams.from_config -> runner c_visit",
+    "selfplay.c_scale": "SelfPlayHParams.from_config -> runner c_scale",
+    "selfplay.gumbel_mcts": "SelfPlayHParams.from_config -> runner gumbel_mcts + WorkerPool.gumbel_mcts",
+    "selfplay.gumbel_m": "SelfPlayHParams.from_config -> runner gumbel_m",
+    "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
+    "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
+    "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
+    "selfplay.rotation_enabled": "SelfPlayHParams.from_config -> runner selfplay_rotation_enabled",
+    "selfplay.forced_win_policy_enabled": "SelfPlayHParams.from_config -> runner.forced_win_policy_enabled",
+    "selfplay.forced_win_policy_depth": "SelfPlayHParams.from_config -> runner.forced_win_policy_depth",
+    "selfplay.forced_win_policy_weight": "SelfPlayHParams.from_config -> runner.forced_win_policy_weight",
+    "selfplay.solver_enabled": "SelfPlayHParams.from_config -> runner.solver_enabled",
+    "selfplay.solver_depth": "SelfPlayHParams.from_config -> runner.solver_depth",
+    "selfplay.solver_node_budget": "SelfPlayHParams.from_config -> runner.solver_node_budget",
+    "selfplay.solver_neighbor_dist": "SelfPlayHParams.from_config -> runner.solver_neighbor_dist",
+    "selfplay.solver_visit_weight": "SelfPlayHParams.from_config -> runner.solver_visit_weight",
+    "selfplay.seed_fraction": "SelfPlayHParams.from_config -> runner.seed_fraction",
+    "selfplay.seed_corpus_path": "SelfPlayHParams.from_config -> _load_seed_corpus",
+    "selfplay.log_investigation_metrics": "SelfPlayHParams.from_config -> pool investigation logging",
+    "selfplay.instrumentation_enabled": "SelfPlayHParams.from_config -> pool instrumentation gate",
+    "selfplay.mcts.n_simulations": "SelfPlayHParams.from_config -> runner n_simulations",
+    "selfplay.mcts.c_puct": "SelfPlayHParams.from_config -> runner c_puct",
+    "selfplay.mcts.fpu_reduction": "SelfPlayHParams.from_config -> runner fpu_reduction",
+    "selfplay.mcts.quiescence_enabled": "SelfPlayHParams.from_config -> runner quiescence_enabled",
+    "selfplay.mcts.quiescence_blend_2": "SelfPlayHParams.from_config -> runner quiescence_blend_2",
+    "selfplay.mcts.dirichlet_alpha": "SelfPlayHParams.from_config -> runner dirichlet_alpha",
+    "selfplay.mcts.dirichlet_epsilon": "SelfPlayHParams.from_config -> runner dirichlet_epsilon",
+    "selfplay.mcts.dirichlet_enabled": "SelfPlayHParams.from_config -> runner dirichlet_enabled",
+    "selfplay.playout_cap.fast_sims": "SelfPlayHParams.from_config -> runner fast_sims",
+    "selfplay.playout_cap.fast_prob": "SelfPlayHParams.from_config -> runner fast_prob",
+    "selfplay.playout_cap.standard_sims": "SelfPlayHParams.from_config -> runner standard_sims",
+    "selfplay.playout_cap.full_search_prob": "SelfPlayHParams.from_config -> runner full_search_prob",
+    "selfplay.playout_cap.n_sims_quick": "SelfPlayHParams.from_config -> runner n_sims_quick",
+    "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.from_config -> runner n_sims_full",
+    "selfplay.playout_cap.zoi_enabled": "SelfPlayHParams.from_config -> runner zoi_enabled",
+    "selfplay.playout_cap.zoi_lookback": "SelfPlayHParams.from_config -> runner zoi_lookback",
+    "selfplay.playout_cap.zoi_margin": "SelfPlayHParams.from_config -> runner zoi_margin",
+    "selfplay.playout_cap.temperature_threshold_compound_moves": (
+        "SelfPlayHParams.from_config -> runner temp_threshold_compound_moves"
+    ),
+    "selfplay.playout_cap.temp_min": "SelfPlayHParams.from_config -> runner temp_min",
+    "inference.inference_batch_size": "InferenceHParams.from_config -> inference_server batch size",
+    "inference.inference_max_wait_ms": "InferenceHParams.from_config -> inference_server max wait",
+    "inference.trace_inference": "InferenceHParams.from_config -> inference_server tracing gate",
+    "inference.compile_inference": "InferenceHParams.from_config -> inference_server compile gate",
+    "inference.compile_inference_mode": "InferenceHParams.from_config -> inference_server compile mode",
+    "inference.compile_inference_dynamic": "InferenceHParams.from_config -> inference_server compile dynamic",
+    "inference.perf_timing": "InferenceHParams.from_config -> perf timing diagnostics",
+    "inference.perf_sync_cuda": "InferenceHParams.from_config -> perf CUDA-sync diagnostics",
 }
 
 
@@ -115,18 +175,14 @@ def test_schema_leaves_equal_consumer_registry_bijection():
 def test_registry_has_exactly_eight_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
-    # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). The name is
-    # historical (O15's original 8-entry WP8 count); the bijection test above is the live
-    # invariant this file exists to hold.
-    assert len(CONSUMER_REGISTRY) == 61
-    assert len(_leaf_paths(RunConfig)) == 61
-
-
-def test_enumeration_stops_at_radius_stage():
-    # NIT-3: the schedule is ONE leaf; RadiusStage.step/.radius are not enumerated.
-    leaves = _leaf_paths(RunConfig)
-    assert "selfplay.legal_move_radius_schedule" in leaves
-    assert not any(p.startswith("selfplay.legal_move_radius_schedule.") for p in leaves)
+    # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
+    # (`selfplay.legal_move_radius_schedule`, forced fallout of DESIGN_P2.md §5) and adds 52
+    # (25 `selfplay.*` + 8 `selfplay.mcts.*` + 11 `selfplay.playout_cap.*` + 8 `inference.*`,
+    # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. The name is historical (O15's
+    # original 8-entry WP8 count); the bijection test above is the live invariant this file
+    # exists to hold.
+    assert len(CONSUMER_REGISTRY) == 112
+    assert len(_leaf_paths(RunConfig)) == 112
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

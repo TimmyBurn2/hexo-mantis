@@ -143,15 +143,11 @@ def test_killed_and_relocated_fields_never_reach_the_runner(
 
 
 def test_temperature_schedule_reaches_the_runner(runner_config_goldens, record_runner_config):
-    """D-15 (silently-disabled-knob arm; CAPTURE finding F-3 / DISPATCHER CORRECTION 3) —
-    PASS iff the FULL config's temperature schedule arrives at the runner as
-    `temp_threshold_compound_moves=12`, `temp_min=0.35`.
-
-    This is the one field in the dataclass whose CONFIG KEY differs from its ctor-kwarg name:
-    the key is `temperature_threshold_compound_moves`. A port that reads the ctor-kwarg
-    spelling gets None on every config, falls into the resolver's cosine-OFF fallback, and
-    ships `(0, 0.5)` — an operator's temperature schedule silently disabled, with no error.
-    Capture proved it empirically. FAIL here = exactly that bug."""
+    """D-15 (behavior-named per R38/ADJ-02 — WPSC Phase 2 SC-A2 retires the historical
+    spelling-mismatch framing) — PASS iff the FULL config's `playout_cap.
+    temperature_threshold_compound_moves`/`temp_min` arrive at the runner as
+    `temp_threshold_compound_moves=12`, `temp_min=0.35`, and the minimal config's absence of
+    a schedule resolves to the cosine-OFF `(0, 0.5)` fallback."""
     recorded = record_runner_config(runner_config_goldens["cases"]["full_config"]["config"])
     assert recorded.recorded_kwargs["temp_threshold_compound_moves"] == 12, (
         "temperature schedule was NOT read — the config key is "

@@ -6,18 +6,19 @@ config (which has no ctor getters, so the recorded kwarg dict is the only observ
 the base config dicts the old-side capture used. Splitting the hard-error arms from the
 wire arms would duplicate both.
 
-IMPL-written (non-⊕) per DESIGN §b; D-15 is the ⊕ assembly golden in `test_pool_hparams.py`
-and this file carries the arms ORACLE_NOTES §6 left to IMPL. Every expected value is the
-dispatcher's old-side capture (`wp/WPSP/oldside/data/c3a_c3d_report.json`, sections
-`C3d_hard_error_and_wire_arms`, `C3d_seed_corpus_cases`, `C3d_temperature_resolver`) or the
-PREREG §3 D-18 literals; the config dicts are the capture script's own inputs.
-
-The sharpest row in this file is `test_mcts_epsilon_key_wins`. `mcts.epsilon` is read into
-a field spelled `dirichlet_epsilon` — the config KEY and the field name differ. Reading the
-field spelling returns None on every config, the 0.25 code-side default fires, and an
-operator's Dirichlet exploration setting is discarded with no error. Both directions are
-asserted here, because only the pair distinguishes "reads the right key" from "happens to
-agree with the default".
+WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure) reshape: `SelfPlayHParams.from_config`
+no longer reads a flat legacy dict with top-level-namespace fallback — every config literal
+below is nested (`selfplay: {..., mcts: {...}, playout_cap: {...}}`, `train: {...}`) matching
+the schema shape. The four old hard-error arms (D-06/D-07/D-08 + the temperature-resolver
+key/spelling cases) are now `PlayoutCapConfig`/`MctsConfig` schema bounds/validators — their
+coverage moved to `tests/config/test_mcts_playout_cap_schema.py` and
+`tests/config/test_selfplay_playout_cap_mutual_exclusion.py` (DESIGN_P2.md §12); this file
+keeps only the arms that exercise the ACTUAL `from_config`/wire behavior. The
+`mcts.epsilon`-vs-`dirichlet_epsilon` spelling trap (`test_mcts_epsilon_key_wins`) and the
+`max_game_moves`/`max_moves_per_game` dual-alias chain (`test_max_moves_alias_chain`) are
+DELETED outright: the schema field IS the config key now, so there is no wrong spelling or
+alias fallback left to test (replaces `test_selfplay_schema.py::
+test_dirichlet_epsilon_field_name_equals_config_key`).
 """
 from __future__ import annotations
 
@@ -33,21 +34,60 @@ from mantis.selfplay.hparams import (
     PoolDims,
     SelfPlayHParams,
     _load_seed_corpus,
-    _resolve_playout_cap_temperature,
     build_runner_config,
     resolve_pool_encoding,
 )
 
-# The capture's base config: `mcts.interior_selector` is present in the captured dicts but
-# is a WP6-KILLed knob on this side and is neither read nor set (DV-6).
-BASE: dict[str, Any] = {"encoding": "v6", "mcts": {"interior_selector": "puct"}}
+BASE_SELFPLAY: dict[str, Any] = {
+    "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
+    "inference_pool_size": 1536, "completed_q_values": True, "c_visit": 40.0, "c_scale": 2.0,
+    "gumbel_mcts": True, "gumbel_m": 24, "gumbel_explore_moves": 14,
+    "results_queue_cap": 5000, "random_opening_plies": 3, "rotation_enabled": False,
+    "forced_win_policy_enabled": True, "forced_win_policy_depth": 4,
+    "forced_win_policy_weight": 0.75, "solver_enabled": True, "solver_depth": 20,
+    "solver_node_budget": 77000, "solver_neighbor_dist": 3, "solver_visit_weight": 0.45,
+    "seed_fraction": 0.0, "seed_corpus_path": None,
+    "log_investigation_metrics": False, "instrumentation_enabled": True,
+}
+BASE_MCTS: dict[str, Any] = {
+    "n_simulations": 111, "c_puct": 1.75, "fpu_reduction": 0.4, "quiescence_enabled": False,
+    "quiescence_blend_2": 0.55, "dirichlet_alpha": 0.25, "dirichlet_epsilon": 0.3,
+    "dirichlet_enabled": False,
+}
+BASE_PLAYOUT_CAP: dict[str, Any] = {
+    "fast_sims": 40, "fast_prob": 0.0, "standard_sims": 160, "full_search_prob": 0.0,
+    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": True, "zoi_lookback": 20,
+    "zoi_margin": 7, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+}
+BASE_TRAIN: dict[str, Any] = {
+    "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
+    "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
+    "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+    "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
+    "draw_reward": -0.4, "ply_cap_value": -0.7, "policy_prune_frac": 0.0,
+    "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
+    "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
+    "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+}
 
 
-def cfg(**over: Any) -> dict[str, Any]:
-    """A capture-shaped config: BASE plus the overrides a single arm varies."""
-    out = dict(BASE)
-    out.update(over)
-    return out
+def cfg(
+    *, encoding: str = "v6", selfplay: dict | None = None, mcts: dict | None = None,
+    playout_cap: dict | None = None, train: dict | None = None,
+) -> dict[str, Any]:
+    """A nested, schema-shaped config: BASE_* plus per-section overrides. `encoding` stays a
+    top-level flat key — `resolve_pool_encoding`/`resolve_from_config` read it independently
+    of `identity.encoding` (a separate, pre-existing pool.py/hparams.py convention untouched
+    by SC-A2)."""
+    sp = dict(BASE_SELFPLAY)
+    sp.update(selfplay or {})
+    sp["mcts"] = dict(BASE_MCTS, **(mcts or {}))
+    sp["playout_cap"] = dict(BASE_PLAYOUT_CAP, **(playout_cap or {}))
+    return {
+        "encoding": encoding,
+        "selfplay": sp,
+        "train": dict(BASE_TRAIN, **(train or {})),
+    }
 
 
 class _RecordingRunnerConfig:
@@ -94,55 +134,13 @@ def assemble(monkeypatch):
     return build
 
 
-# ═══ D-06 … D-09 — the four hard errors, on the captured inputs ═══════════════════
-def test_fast_sims_missing_is_a_hard_error() -> None:
-    """D-06 — PASS iff an empty `playout_cap` raises `ValueError` naming the missing key
-    and refusing a default. FAIL = a silent `fast_sims` default, which sets the game-level
-    playout cap for a whole run to a number nobody chose."""
-    with pytest.raises(ValueError) as exc:
-        SelfPlayHParams.from_config(cfg(playout_cap={}))
-    assert "playout_cap.fast_sims must be set" in str(exc.value)
-    assert "no silent defaults" in str(exc.value)
-
-
-def test_fast_prob_and_full_search_prob_are_mutually_exclusive() -> None:
-    """D-07 — PASS iff setting BOTH caps raises, quoting both values. The move-level cap
-    overrides the game-level one inside the worker loop, so running both silently ignores
-    the latter. FAIL = an operator's game-level cap is discarded with no error."""
-    with pytest.raises(ValueError) as exc:
-        SelfPlayHParams.from_config(cfg(playout_cap={
-            "fast_sims": 40, "fast_prob": 0.5, "full_search_prob": 0.5,
-            "n_sims_quick": 40, "n_sims_full": 200}))
-    message = str(exc.value)
-    assert "mutually exclusive" in message
-    assert "fast_prob=0.5" in message and "full_search_prob=0.5" in message
-
-
-@pytest.mark.parametrize(
-    "quick,full", [(0, 200), (40, 0)],
-    ids=["missing_quick", "missing_full"],
-)
-def test_full_search_prob_requires_both_sim_counts(quick: int, full: int) -> None:
-    """D-08 — PASS iff `full_search_prob > 0` without BOTH sim counts raises, quoting all
-    three numbers. FAIL = a move-level cap regime configured with a zero sim count, which
-    the runner would interpret as "search nothing" for that arm."""
-    with pytest.raises(ValueError) as exc:
-        SelfPlayHParams.from_config(cfg(playout_cap={
-            "fast_sims": 40, "full_search_prob": 0.5,
-            "n_sims_quick": quick, "n_sims_full": full}))
-    message = str(exc.value)
-    assert "requires n_sims_quick > 0 AND n_sims_full > 0" in message
-    assert f"n_sims_quick={quick}" in message and f"n_sims_full={full}" in message
-
-
+# ═══ D-09 — effective-sims resolution + the one hard error with no schema equivalent ═════
 def test_effective_sims_zero_is_a_hard_error() -> None:
     """D-09 — PASS iff a config resolving to zero effective per-move sims raises, naming
-    both escape routes. FAIL = a sims/sec bill of zero for a whole run, i.e. a throughput
-    metric that reads 0 while self-play is healthy."""
+    both escape routes. This check spans `mcts.n_simulations` AND `playout_cap.*`, so it has
+    no single-model schema equivalent and stays a `from_config` runtime check."""
     with pytest.raises(ValueError) as exc:
-        SelfPlayHParams.from_config(cfg(
-            mcts={"interior_selector": "puct", "n_simulations": 0},
-            playout_cap={"fast_sims": 40}))
+        SelfPlayHParams.from_config(cfg(mcts={"n_simulations": 0}))
     message = str(exc.value)
     assert "could not resolve effective per-move sim count" in message
     assert "mcts.n_simulations > 0" in message and "playout_cap.n_sims_full > 0" in message
@@ -151,55 +149,26 @@ def test_effective_sims_zero_is_a_hard_error() -> None:
 @pytest.mark.parametrize(
     "playout_cap,expected",
     [
-        ({"fast_sims": 40}, 50),
-        ({"fast_sims": 40, "full_search_prob": 0.3,
-          "n_sims_quick": 40, "n_sims_full": 250}, 250),
+        ({}, 111),
+        ({"full_search_prob": 0.3, "n_sims_quick": 40, "n_sims_full": 250}, 250),
     ],
     ids=["flat_regime", "move_level_cap_regime"],
 )
 def test_effective_sims_per_move_resolution(playout_cap: dict, expected: int) -> None:
-    """D-09 (resolution arm) — PASS iff the effective per-move sim count equals the
-    capture: the flat `mcts.n_simulations` with no cap, the full-search ceiling
-    `n_sims_full` under a move-level cap. FAIL = the sims/sec bill regresses toward the
-    falsified per-GAME undercount."""
+    """D-09 (resolution arm) — PASS iff the effective per-move sim count equals the flat
+    `mcts.n_simulations` with no cap, the full-search ceiling `n_sims_full` under a
+    move-level cap."""
     hp = SelfPlayHParams.from_config(cfg(playout_cap=playout_cap))
     assert hp.effective_sims_per_move == expected
 
 
-# ═══ D-10 — the temperature resolver + the key it actually reads ══════════════════
-@pytest.mark.parametrize(
-    "playout_cap,expected",
-    [
-        ({}, (0, 0.5)),
-        ({"temperature_threshold_compound_moves": 15, "temp_min": 0.05}, (15, 0.05)),
-        ({"temperature_threshold_compound_moves": 0, "temp_min": 0.5}, (0, 0.5)),
-        ({"temperature_threshold_compound_moves": 9}, (9, 0.5)),
-        ({"temp_min": 0.25}, (0, 0.25)),
-        ({"temperature_threshold_compound_moves": None}, (0, 0.5)),
-        ({"temp_threshold_compound_moves": 15}, (0, 0.5)),
-    ],
-    ids=["absent", "explicit_15_005", "explicit_0_05", "threshold_only",
-         "temp_min_only", "explicit_null_threshold", "WRONG_SPELLING_ignored"],
-)
-def test_temperature_resolver_cases(playout_cap: dict, expected: tuple) -> None:
-    """D-10 — PASS iff all seven captured resolver cases reproduce exactly, including the
-    cosine-OFF fallback `(0, 0.5)` for absent or explicitly-null keys.
-
-    The last case is the trap made visible: `temp_threshold_compound_moves` is the RUNNER
-    KWARG spelling, not the config key, and a config carrying it is silently ignored. That
-    is old behaviour and it is pinned, not fixed — the fix belongs to the schema extension
-    that will retire the code-side default. FAIL on the second case = the schedule is
-    silently disabled; FAIL on the first = the toxic legacy 15/0.05 fallback is back."""
-    assert _resolve_playout_cap_temperature(playout_cap) == expected
-
-
-def test_temperature_schedule_reaches_the_hparams_and_the_wire(assemble) -> None:
-    """D-10 (wire arm) — PASS iff a schedule-ON `playout_cap` arrives at BOTH the hparams
-    field and the runner ctor kwarg. FAIL = the schedule is resolved and then dropped
-    between the two, which no resolver-level test can see."""
-    config = cfg(playout_cap={"fast_sims": 40,
-                              "temperature_threshold_compound_moves": 12,
-                              "temp_min": 0.35})
+# ═══ D-10 — the temperature schedule reaches the hparams AND the wire ═════════════════════
+def test_playout_cap_temperature_threshold_reaches_hparams_and_wire(assemble) -> None:
+    """D-10 (wire arm; RENAMED per R38 — ADJ-02/R38 disposition) — PASS iff a schedule-ON
+    `playout_cap` arrives at BOTH the hparams field and the runner ctor kwarg. The schema
+    field IS the config key now (`temperature_threshold_compound_moves`), so there is no
+    silently-disabled-schedule trap left to test — this asserts the wire, not a spelling."""
+    config = cfg(playout_cap={"temperature_threshold_compound_moves": 12, "temp_min": 0.35})
     hp = SelfPlayHParams.from_config(config)
     assert (hp.temp_threshold_compound_moves, hp.temp_min) == (12, 0.35)
 
@@ -208,69 +177,39 @@ def test_temperature_schedule_reaches_the_hparams_and_the_wire(assemble) -> None
     assert recorded.recorded_kwargs["temp_min"] == 0.35
 
 
-# ═══ the OWED pin — `mcts.epsilon` is the key; `dirichlet_epsilon` is the field ═══
-def test_mcts_epsilon_key_wins(assemble) -> None:
-    """CORRECTION-3b pin — PASS iff `mcts.epsilon` reaches `dirichlet_epsilon` on both the
-    hparams and the runner kwarg, AND the field spelling in the config is IGNORED.
-
-    Both directions are required. Asserting only that `mcts.epsilon = 0.3` arrives would
-    also pass if the port read some third key that happened to be absent — no, it would
-    not, but asserting only that the FIELD spelling is ignored would pass on a port that
-    reads nothing at all and always ships 0.25. The pair distinguishes "reads the right
-    key" from "agrees with the default by accident".
-
-    FAIL = Dirichlet root exploration silently runs at the code-side 0.25 for an entire
-    run while the operator's config says otherwise. That knob controls how much noise is
-    injected at the search root; substituting it changes what the run explores."""
-    with_key = cfg(playout_cap={"fast_sims": 40}, mcts={"epsilon": 0.3})
-    hp = SelfPlayHParams.from_config(with_key)
-    assert hp.dirichlet_epsilon == 0.3, (
-        "the CONFIG KEY is `mcts.epsilon`; reading the field spelling "
-        "`dirichlet_epsilon` off the config returns None on every config"
-    )
-    assert assemble(with_key).recorded_kwargs["dirichlet_epsilon"] == 0.3
-
-    wrong_spelling = cfg(playout_cap={"fast_sims": 40},
-                         mcts={"dirichlet_epsilon": 0.9})
-    hp_wrong = SelfPlayHParams.from_config(wrong_spelling)
-    assert hp_wrong.dirichlet_epsilon == 0.25, (
-        "a config carrying the FIELD spelling must be ignored (old truth): the key is "
-        "`epsilon`, so this config gets the default"
-    )
-    assert assemble(wrong_spelling).recorded_kwargs["dirichlet_epsilon"] == 0.25
-
-
 def test_dirichlet_alpha_field_name_equals_its_key(assemble) -> None:
-    """CORRECTION-3b pin (adjacent-line control) — PASS iff `mcts.dirichlet_alpha` DOES
-    reach `dirichlet_alpha`. The two knobs are read on adjacent frozen lines, one by its
-    own name and one not; without this control the epsilon pin could be "fixed" by
-    reading `dirichlet_*` for both and breaking alpha instead."""
-    config = cfg(playout_cap={"fast_sims": 40}, mcts={"dirichlet_alpha": 0.25})
-    assert SelfPlayHParams.from_config(config).dirichlet_alpha == 0.25
-    assert assemble(config).recorded_kwargs["dirichlet_alpha"] == 0.25
+    """PASS iff `mcts.dirichlet_alpha` reaches `dirichlet_alpha` on both the hparams and the
+    runner kwarg — a basic wiring-through check (the spelling-mismatch control this used to
+    pair with, `test_mcts_epsilon_key_wins`, is deleted: the schema retires the mismatch)."""
+    config = cfg(mcts={"dirichlet_alpha": 0.6})
+    assert SelfPlayHParams.from_config(config).dirichlet_alpha == 0.6
+    assert assemble(config).recorded_kwargs["dirichlet_alpha"] == 0.6
 
 
-# ═══ D-11 — the ply-cap value chain and its wire site ════════════════════════════
+def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:
+    """PASS iff `mcts.dirichlet_epsilon` reaches `dirichlet_epsilon` on both the hparams and
+    the runner kwarg (replaces the retired `mcts.epsilon`-spelling pin — the schema field IS
+    the config key now, `test_selfplay_schema.py::
+    test_dirichlet_epsilon_field_name_equals_config_key` pins the schema side)."""
+    config = cfg(mcts={"dirichlet_epsilon": 0.9})
+    assert SelfPlayHParams.from_config(config).dirichlet_epsilon == 0.9
+    assert assemble(config).recorded_kwargs["dirichlet_epsilon"] == 0.9
+
+
+# ═══ D-11 — the ply-cap value chain and its wire site ════════════════════════════════════
 @pytest.mark.parametrize(
-    "training,expected_draw,expected_ply",
+    "train_over,expected_draw,expected_ply",
     [
-        ({"draw_value": -0.5, "ply_cap_value": -0.9}, -0.5, -0.9),
-        ({"draw_value": -0.3}, -0.3, -0.3),
-        (None, -0.5, -0.5),
+        ({"draw_reward": -0.5, "ply_cap_value": -0.9}, -0.5, -0.9),
+        ({"draw_reward": -0.3, "ply_cap_value": -0.3}, -0.3, -0.3),
     ],
-    ids=["explicit", "falls_back_to_draw_value", "both_absent"],
+    ids=["explicit_split", "explicit_equal"],
 )
-def test_ply_cap_value_wire(assemble, training, expected_draw, expected_ply) -> None:
-    """D-11 — PASS iff the three captured ply-cap cases resolve as captured AND land on
-    the runner's `ply_cap_value` / `draw_reward` kwargs.
-
-    Note the kwarg names differ from the config keys on BOTH sides of this pair:
-    `training.draw_value` → `draw_reward`, `training.ply_cap_value` → `ply_cap_value`.
-    FAIL = ply-capped truncations and organic draws collapse onto one value target, which
-    is the split this key exists to make."""
-    config = cfg(playout_cap={"fast_sims": 40})
-    if training is not None:
-        config["training"] = training
+def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -> None:
+    """D-11 — PASS iff `train.draw_reward`/`train.ply_cap_value` land on the runner's
+    `draw_reward`/`ply_cap_value` kwargs (cross-section read, DESIGN_P2.md §2 note — no
+    fallback-to-sibling once both are required schema fields)."""
+    config = cfg(train=train_over)
 
     hp = SelfPlayHParams.from_config(config)
     assert hp.draw_value == expected_draw
@@ -337,7 +276,7 @@ def test_seed_prefixes_land_on_the_runner_config(assemble, tmp_path) -> None:
     good.write_text('{"seed_moves": [[0, 0], [1, -1]]}\n{"seed_moves": [[2, 3]]}\n')
     prefixes = _load_seed_corpus(str(good), 0.5)
 
-    recorded = assemble(cfg(playout_cap={"fast_sims": 40}), seed_prefixes=prefixes)
+    recorded = assemble(cfg(), seed_prefixes=prefixes)
     assert recorded.recorded_attrs["seed_corpus"] == prefixes
     assert recorded.real.seed_corpus == [[(0, 0), (1, -1)], [(2, 3)]]
 
@@ -346,7 +285,7 @@ def test_absent_seed_prefixes_leave_the_attribute_unset(assemble) -> None:
     """D-12 (negative arm) — PASS iff `seed_prefixes=None` never touches `seed_corpus`, so
     the Rust default (no seeding) stands. FAIL = an explicit empty corpus is written,
     which is a different thing from "no corpus"."""
-    recorded = assemble(cfg(playout_cap={"fast_sims": 40}), seed_prefixes=None)
+    recorded = assemble(cfg(), seed_prefixes=None)
     assert "seed_corpus" not in recorded.recorded_attrs
     assert recorded.real.seed_corpus is None
 
@@ -354,18 +293,14 @@ def test_absent_seed_prefixes_leave_the_attribute_unset(assemble) -> None:
 # ═══ D-13 — inference_pool_size threading ════════════════════════════════════════
 @pytest.mark.parametrize(
     "selfplay_over,expected",
-    [({}, None), ({"inference_pool_size": 999}, 999),
-     ({"inference_pool_size": "777"}, 777)],
-    ids=["absent", "int", "string_coerced"],
+    [({"inference_pool_size": None}, None), ({"inference_pool_size": 999}, 999)],
+    ids=["absent", "int"],
 )
 def test_inference_pool_size_threading(assemble, selfplay_over, expected) -> None:
-    """D-13 — PASS iff the opt-in pool size threads through as captured: absent stays
-    `None` (the engine's own prefill sizing), an int passes, a string coerces. FAIL = a
-    YAML-quoted number silently becomes a `TypeError` at the FFI boundary, or `None`
-    turns into a hard-coded size that pins the working set for every encoding."""
-    selfplay = {"playout_cap": {"fast_sims": 40}}
-    selfplay.update(selfplay_over)
-    config = cfg(selfplay=selfplay)
+    """D-13 — PASS iff the opt-in pool size threads through as declared: `None` stays
+    `None` (the engine's own prefill sizing), an int passes. FAIL = `None` turns into a
+    hard-coded size that pins the working set for every encoding."""
+    config = cfg(selfplay=selfplay_over)
 
     hp = SelfPlayHParams.from_config(config)
     assert hp.inference_pool_size == expected
@@ -380,8 +315,10 @@ def test_gumbel_mcts_property_reads_live_config() -> None:
     Deliberate asymmetry: nearly every knob is resolved once at construction, but this one
     re-reads because the event emitter uses it to decide whether the PUCT-only diagnostics
     are meaningful, and that decision must follow the live config. Exercised through a
-    bare object carrying only `config` so no runner is needed. FAIL = the regime guard
-    freezes at construction and the emitter reports PUCT diagnostics for a Gumbel run."""
+    bare object carrying only `config` so no runner is needed. `WorkerPool.gumbel_mcts`
+    itself is untouched by SC-A2 (its own flat-fallback read is a separate, pre-existing
+    mechanism DESIGN_P2.md does not scope in). FAIL = the regime guard freezes at
+    construction and the emitter reports PUCT diagnostics for a Gumbel run."""
     from mantis.selfplay.pool import WorkerPool
 
     holder = object.__new__(WorkerPool)
@@ -394,9 +331,7 @@ def test_gumbel_mcts_property_reads_live_config() -> None:
     holder.config = {}
     assert holder.gumbel_mcts is False, "absent key ⇒ False, with the namespace fallback"
 
-    hp = SelfPlayHParams.from_config(cfg(playout_cap={"fast_sims": 40},
-                                         selfplay={"gumbel_mcts": True,
-                                                   "playout_cap": {"fast_sims": 40}}))
+    hp = SelfPlayHParams.from_config(cfg(selfplay={"gumbel_mcts": True}))
     assert hp.gumbel_mcts is True, "the frozen ctor-time snapshot still records the knob"
 
 
@@ -435,7 +370,7 @@ def test_pool_dims_agree_with_the_rust_derivation(encoding: str) -> None:
     would be vacuous."""
     from mantis._engine import InferenceBatcher
 
-    config = cfg(encoding=encoding, playout_cap={"fast_sims": 40})
+    config = cfg(encoding=encoding)
     hp = SelfPlayHParams.from_config(config)
     enc = resolve_pool_encoding(config, arch=None)
     _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name,
@@ -446,39 +381,13 @@ def test_pool_dims_agree_with_the_rust_derivation(encoding: str) -> None:
     assert dims.pol_len == int(batcher.policy_len_py)
 
 
-def test_max_moves_alias_chain(assemble) -> None:
-    """D-06 (alias arm; captured as MAXMOVES_*) — PASS iff BOTH spellings reach
-    `max_moves_per_game`, with the primary key winning.
-
-    The FIELD is named after the SECONDARY key: `max_moves_per_game` is the fallback and
-    `max_game_moves` is what the config actually sets first. A port that read only the
-    field's own name would silently ignore every config using the primary spelling and cap
-    games at the code-side 128."""
-    primary = cfg(selfplay={"max_game_moves": 77, "playout_cap": {"fast_sims": 40}})
-    secondary = cfg(selfplay={"max_moves_per_game": 88, "playout_cap": {"fast_sims": 40}})
-    both = cfg(selfplay={"max_game_moves": 77, "max_moves_per_game": 88,
-                         "playout_cap": {"fast_sims": 40}})
-
-    assert SelfPlayHParams.from_config(primary).max_moves_per_game == 77
-    assert SelfPlayHParams.from_config(secondary).max_moves_per_game == 88
-    assert SelfPlayHParams.from_config(both).max_moves_per_game == 77, (
-        "`max_game_moves` is the primary key and must win the alias chain"
-    )
-    assert assemble(primary).recorded_kwargs["max_moves_per_game"] == 77
-
-
 def test_killed_knobs_are_never_read(assemble) -> None:
-    """DV-6 pin — PASS iff a config carrying the two WP-KILLed self-play knobs assembles
-    cleanly and neither name reaches the Rust config.
-
-    `legal_move_radius_jitter` was a ctor kwarg and `interior_selector` a post-ctor attr
-    that the frozen code HARD-read (a missing key was a `KeyError`). Removing that read
-    removes an error path: a config omitting `interior_selector` now constructs instead of
-    raising. Declared, and asserted here so it is not rediscovered as a surprise."""
-    config = cfg(
-        selfplay={"legal_move_radius_jitter": True, "playout_cap": {"fast_sims": 40}},
-        mcts={},                       # no interior_selector at all — used to be fatal
-    )
+    """DV-6 pin — PASS iff a config carrying WP-KILLed self-play knobs assembles cleanly
+    and neither name reaches the Rust config. `from_config` only reads its own known keys
+    off the nested schema sections, so an extra key alongside them is simply never
+    consulted (schema-level rejection of unknown keys is a DIFFERENT, already-covered
+    concern — `test_selfplay_schema.py::test_selfplay_extra_key_rejected`)."""
+    config = cfg(selfplay={"legal_move_radius_jitter": True})
     recorded = assemble(config)
     assert "legal_move_radius_jitter" not in recorded.recorded_kwargs
     assert "interior_selector" not in recorded.recorded_attrs
@@ -488,7 +397,7 @@ def test_hparams_round_trip_is_json_stable() -> None:
     """Guard arm — PASS iff every resolved hparam is a plain Python scalar (or None), so
     the whole knob set can be recorded into a run manifest. FAIL = a numpy scalar or a
     config sub-dict leaked into the frozen snapshot and the manifest write dies mid-run."""
-    hp = SelfPlayHParams.from_config(cfg(playout_cap={"fast_sims": 40}))
+    hp = SelfPlayHParams.from_config(cfg())
     payload = {f: getattr(hp, f) for f in hp.__dataclass_fields__}
     json.dumps(payload)  # raises TypeError on any non-JSON scalar
     for name, value in payload.items():

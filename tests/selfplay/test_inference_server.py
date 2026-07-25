@@ -86,10 +86,16 @@ def _random_state() -> np.ndarray:
     return np.random.randn(BOARD_CHANNELS, BOARD_SIZE, BOARD_SIZE).astype(np.float16)
 
 
-def _cfg(**selfplay: Any) -> dict[str, Any]:
-    base = {"inference_batch_size": 8, "inference_max_wait_ms": 20.0}
-    base.update(selfplay)
-    return {"selfplay": base}
+def _cfg(**over: Any) -> dict[str, Any]:
+    # WPSC Phase 2 SC-A2 reshape: `InferenceHParams.from_config` now reads `config
+    # ["inference"]` (a nested schema-shaped section), not `config["selfplay"]`/a flat dict.
+    base = {
+        "inference_batch_size": 8, "inference_max_wait_ms": 20.0, "trace_inference": True,
+        "compile_inference": False, "compile_inference_mode": "default",
+        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+    }
+    base.update(over)
+    return {"inference": base}
 
 
 def _make_server(

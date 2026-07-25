@@ -304,7 +304,7 @@ added_by = "WP-SP"
 
 [[required]]
 path = "selfplay/pool/runner_config_goldens.json"
-sha256 = "8f88c88be2660a2f75ff8fbdef4d6a7be6091e5b692416a1983c31679bf0974b"
+sha256 = "da140cfea28b50405f2a02603427ecc29cc6d4078897422a0ce9d12c6e28fb0d"
 added_by = "WP-SP"
 
 [[required]]
