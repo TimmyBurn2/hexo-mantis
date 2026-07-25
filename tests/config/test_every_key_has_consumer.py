@@ -67,7 +67,10 @@ CONSUMER_REGISTRY = {
     "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
     "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
     "train.fp16": "TrainHParams.from_config -> Trainer fp16/scaler gate",
-    "train.amp_dtype": "TrainConfig schema surface for R30b (SC-B3 wires the runtime consumer)",
+    "train.amp_dtype": (
+        "resolve_amp_dtype (R30b single authority) -> amp_dtype_for -> "
+        "Trainer/InferenceServer/cuda_warmup autocast dtype"
+    ),
     "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
     "train.total_steps": "TrainHParams.from_config -> Trainer._build_scheduler T_max fallback",
     "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",

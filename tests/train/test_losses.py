@@ -99,6 +99,9 @@ def test_chain_fire_rate_emitted_during_trainer_step(spy_sink, full_train_hparam
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
         "selfplay": {"legal_move_radius_schedule": None},
+        # WPSC Phase 3 SC-B3: Trainer now hard-reads config["train"]["amp_dtype"]
+        # unconditionally (R30b, no fallback), even when train_hparams= is injected below.
+        "train": {"amp_dtype": "fp16"},
     }
     hp = full_train_hparams(fp16=False, lr_schedule="none", aux_chain_weight=0.3,
                             checkpoint_interval=0)

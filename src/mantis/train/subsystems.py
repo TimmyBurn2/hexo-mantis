@@ -46,12 +46,15 @@ class InfModelArch:
     """The declared inference/eval arch — the SOLE construction source at sync/eval (§c.6).
 
     `arch` is the WP9 `CnnArch|GnnArch` dataclass; `representation` is the DECLARED
-    discriminant read off it (never sniffed off a live module). `spec` carries the resolved
+    discriminant read off it (never sniffed off a live module). `amp_dtype` is the DECLARED
+    `train.amp_dtype` string (R30b) — carried, no default (R1), so `cuda_warmup` matches the
+    production loop's autocast dtype instead of guessing. `spec` carries the resolved
     registry spec for a graph warmup. `build_eval_model` reconstructs the IDENTICAL net from
     just this object."""
 
     arch: ModelArch
     representation: str
+    amp_dtype: str
     spec: Any = None
 
 
@@ -64,13 +67,16 @@ def build_inference_model(trainer: Any, device: torch.device) -> tuple[torch.nn.
     inf_model.load_state_dict(trainer.inference_state_dict())
     inf_model.eval()
     representation = getattr(arch, "representation", "grid")
+    amp_dtype = trainer.config["train"]["amp_dtype"]
     spec = None
     try:
         from mantis.encoding import resolve_from_config
         spec = resolve_from_config(dict(trainer.config))
     except Exception:  # noqa: BLE001 — spec is only consulted for a CUDA graph warmup
         spec = None
-    return inf_model, InfModelArch(arch=arch, representation=representation, spec=spec)
+    return inf_model, InfModelArch(
+        arch=arch, representation=representation, amp_dtype=amp_dtype, spec=spec
+    )
 
 
 def build_eval_model(arch: InfModelArch, device: torch.device) -> torch.nn.Module:
@@ -92,7 +98,7 @@ def cuda_warmup(inf_model: torch.nn.Module, device: torch.device, arch: InfModel
     representation = arch.representation
     _t = time.time()
     with torch.no_grad(), torch.autocast(device_type="cuda",
-                                         dtype=amp_dtype_for(representation, None)):
+                                         dtype=amp_dtype_for(representation, arch.amp_dtype)):
         if representation == "graph":
             x, ei, ea, legal_mask, stone_mask, node_offsets = _synthetic_graph_warmup(arch, device)
             inf_model.forward_batch(x, ei, ea, legal_mask, stone_mask, node_offsets=node_offsets)

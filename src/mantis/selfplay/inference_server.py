@@ -159,10 +159,11 @@ class InferenceServer(threading.Thread):
 
         # Autocast dtype — representation-aware. The graph loop is pinned to bf16
         # UNCONDITIONALLY (LAW-06): fp16 GINE sum-aggregation overflows on
-        # production-scale graphs. The dense path reads the `amp_dtype` knob and must
-        # match the trainer's choice for weight-sync consistency.
+        # production-scale graphs. The dense path reads the `train.amp_dtype` knob and must
+        # match the trainer's choice for weight-sync consistency. R30b: hard key access, no
+        # fallback — config["train"]["amp_dtype"] is a required schema field.
         _representation = "graph" if self._is_graph else "grid"
-        self._amp_dtype = amp_dtype_for(_representation, config)
+        self._amp_dtype = amp_dtype_for(_representation, config["train"]["amp_dtype"])
 
     def _setup_inference_path(self, hp: InferenceHParams, board_size: int) -> None:
         """Configure the trace OR compile path for the inference model.

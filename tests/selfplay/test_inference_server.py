@@ -92,13 +92,16 @@ def _cfg(**over: Any) -> dict[str, Any]:
     # WPSC Phase 3 SC-B2: `resolve_from_config` no longer defaults an absent 'encoding'
     # key to v6 (R28) — this fixture's model is v6-grid-derived (BOARD_CHANNELS/BOARD_SIZE
     # above), so the encoding is now explicit rather than relying on the retired fallback.
+    # WPSC Phase 3 SC-B3: `InferenceServer.__init__` now hard-reads `config["train"]
+    # ["amp_dtype"]` unconditionally (R30b, no fallback) — every config needs a `train`
+    # section; amp-focused tests below override it explicitly.
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
     }
     base.update(over)
-    return {"inference": base, "encoding": "v6"}
+    return {"inference": base, "encoding": "v6", "train": {"amp_dtype": "fp16"}}
 
 
 def _make_server(
@@ -676,19 +679,22 @@ def test_grid_batcher_rejects_graph_methods() -> None:
 
 # ══ F-09 — LAW-06 autocast-dtype wiring ══════════════════════════════════════════
 def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
-    """LAW-06: bf16 on the graph path is pinned in CODE, so no config value can flip it
-    back to fp16 (fp16 GINE sum-aggregation overflows on production-scale graphs)."""
-    for amp_knob in ("fp16", "bf16", None):
+    """LAW-06: bf16 on the graph path is pinned in CODE, so no DECLARED config value can
+    flip it back to fp16 (fp16 GINE sum-aggregation overflows on production-scale graphs).
+    WPSC Phase 3 SC-B3: `train.amp_dtype` is now a REQUIRED schema field (R1, no code
+    default) — a config can no longer omit it, even for a graph run that ignores its
+    value; the two remaining cases (fp16/bf16 declared) still prove the graph branch
+    ignores whatever is declared."""
+    for amp_knob in ("fp16", "bf16"):
         cfg = _cfg()
-        if amp_knob is not None:
-            cfg["amp_dtype"] = amp_knob
+        cfg["train"] = {"amp_dtype": amp_knob}
         batcher = _FakeGraphBatcher(object(), n_batches=0)
         server = InferenceServer(
             _FiniteGraphNet(), device, cfg,
             batcher=batcher, encoding_spec=_GRAPH_SPEC,
         )
         assert server._amp_dtype is torch.bfloat16, f"amp_dtype={amp_knob!r} flipped graph"
-        assert server._amp_dtype is amp_dtype_for("graph", cfg)
+        assert server._amp_dtype is amp_dtype_for("graph", amp_knob)
         server.stop()
 
 
@@ -697,14 +703,27 @@ def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
 )
 def test_dense_amp_dtype_follows_the_knob(device, model, knob, expected) -> None:
     cfg = _cfg()
-    cfg["amp_dtype"] = knob
+    cfg["train"] = {"amp_dtype": knob}
     server = InferenceServer(model, device, cfg, encoding_spec=_GRID_SPEC)
     assert server._amp_dtype is expected
-    assert server._amp_dtype is amp_dtype_for("grid", cfg)
+    assert server._amp_dtype is amp_dtype_for("grid", knob)
     server.stop()
 
 
-def test_dense_amp_dtype_defaults_to_fp16(device, model) -> None:
+def test_dense_amp_dtype_requires_explicit_knob(device, model) -> None:
+    """WPSC Phase 3 SC-B3 (R30b/R1): the grid branch's old implicit 'fp16' default is
+    retired — omitting `train.amp_dtype` is now a hard KeyError, not a silent fallback."""
+    cfg = _cfg()
+    cfg["train"] = {}
+    with pytest.raises(KeyError):
+        InferenceServer(model, device, cfg, encoding_spec=_GRID_SPEC)
+
+
+def test_dense_amp_dtype_matches_fixture_declared_value(device, model) -> None:
+    # WPSC Phase 3 SC-B3: NOT a code-level default (R1 retires that) — `_cfg()`'s own
+    # baseline `train.amp_dtype` happens to be "fp16"; this is a fixture-shape pin, not a
+    # production fallback claim (see `test_dense_amp_dtype_requires_explicit_knob` above
+    # for the actual no-fallback proof).
     server = InferenceServer(model, device, _cfg(), encoding_spec=_GRID_SPEC)
     assert server._amp_dtype is torch.float16
     server.stop()

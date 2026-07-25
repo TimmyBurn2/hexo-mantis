@@ -127,7 +127,9 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
         "compile_inference_mode": "default", "compile_inference_dynamic": True,
         "perf_timing": False, "perf_sync_cuda": False,
     }
-    train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
+    # WPSC Phase 3 SC-B3: InferenceServer (via WorkerPool) now hard-reads
+    # config["train"]["amp_dtype"] unconditionally (R30b, no fallback).
+    train = {"draw_reward": -0.5, "ply_cap_value": -0.5, "amp_dtype": "fp16"}
     return {"encoding": encoding, "selfplay": selfplay, "inference": inference, "train": train}
 
 

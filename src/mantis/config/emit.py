@@ -75,6 +75,8 @@ def resolve_config(cfg: RunConfig) -> ResolvedConfig:
         "identity.representation": ResolvedKnob(cfg.identity.representation, "file"),
         "eval.random_model_sims": ResolvedKnob(cfg.eval.random_model_sims, "file"),
         "eval.sealbot_model_sims": ResolvedKnob(cfg.eval.sealbot_model_sims, "file"),
-        "amp_dtype": ResolvedKnob(resolve_amp_dtype(cfg.identity.representation), "derived"),
+        "amp_dtype": ResolvedKnob(
+            resolve_amp_dtype(cfg.identity.representation, cfg.train.amp_dtype), "derived"
+        ),
     }
     return ResolvedConfig(knobs)

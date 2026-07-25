@@ -92,7 +92,10 @@ class LocalInferenceEngine:
                     "trace_inference": True, "compile_inference": False,
                     "compile_inference_mode": "default", "compile_inference_dynamic": True,
                     "perf_timing": False, "perf_sync_cuda": False,
-                }},
+                # WPSC Phase 3 SC-B3: InferenceServer hard-reads config["train"]
+                # ["amp_dtype"] unconditionally (R30b, no fallback) — inert here (this
+                # branch is always graph, LAW-06 bf16-pinned regardless of the value).
+                }, "train": {"amp_dtype": "bf16"}},
                 batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
             )
             self._graph_server.start()

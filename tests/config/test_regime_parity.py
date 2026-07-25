@@ -40,7 +40,9 @@ def test_o9_sims_regime_parity(production_config):
 
 def test_o10_amp_is_bf16_on_graph(production_config):
     assert production_config.identity.representation == "graph"
-    assert resolve_amp_dtype(production_config.identity.representation) == "bf16"
+    assert resolve_amp_dtype(
+        production_config.identity.representation, production_config.train.amp_dtype
+    ) == "bf16"
 
 
 def test_o11_encoding_regime_parity(production_config):

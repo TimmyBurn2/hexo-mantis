@@ -10,16 +10,16 @@ from mantis.config.resolve.amp import resolve_amp_dtype
 
 
 def test_graph_is_bf16_pinned_law06():
-    assert resolve_amp_dtype("graph") == "bf16"
+    assert resolve_amp_dtype("graph", "bf16") == "bf16"
 
 
 def test_grid_is_fp16_historical():
-    assert resolve_amp_dtype("grid") == "fp16"
+    assert resolve_amp_dtype("grid", "fp16") == "fp16"
 
 
 def test_returns_string_token_never_torch_dtype():
-    assert isinstance(resolve_amp_dtype("graph"), str)
-    assert isinstance(resolve_amp_dtype("grid"), str)
+    assert isinstance(resolve_amp_dtype("graph", "bf16"), str)
+    assert isinstance(resolve_amp_dtype("grid", "fp16"), str)
 
 
 def test_o4b_importing_config_package_never_pulls_torch():

@@ -65,12 +65,14 @@ def test_gnn_inference_seam_end_to_end_smoke() -> None:
     server = InferenceServer(
         net, device,
         # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"] now.
+        # WPSC Phase 3 SC-B3: InferenceServer now hard-reads config["train"]["amp_dtype"]
+        # unconditionally (R30b, no fallback) — inert on this graph path, still required.
         {"inference": {
             "inference_batch_size": 8, "inference_max_wait_ms": 10,
             "trace_inference": True, "compile_inference": False,
             "compile_inference_mode": "default", "compile_inference_dynamic": True,
             "perf_timing": False, "perf_sync_cuda": False,
-        }},
+        }, "train": {"amp_dtype": "bf16"}},
         batcher=batcher, encoding_spec=_SPEC,
     )
     assert server._is_graph is True

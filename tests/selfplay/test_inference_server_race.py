@@ -57,12 +57,14 @@ def test_load_state_dict_during_forward_is_safe(device: torch.device) -> None:
         # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"] now.
         # WPSC Phase 3 SC-B2: resolve_from_config requires an explicit 'encoding' key
         # (R28) — this fixture's model is v6-grid-derived, so it is spelled out here.
+        # WPSC Phase 3 SC-B3: InferenceServer now hard-reads config["train"]["amp_dtype"]
+        # unconditionally (R30b, no fallback).
         {"inference": {
             "inference_batch_size": 4, "inference_max_wait_ms": 50.0,
             "trace_inference": True, "compile_inference": False,
             "compile_inference_mode": "default", "compile_inference_dynamic": True,
             "perf_timing": False, "perf_sync_cuda": False,
-        }, "encoding": "v6"},
+        }, "encoding": "v6", "train": {"amp_dtype": "fp16"}},
     )
     server.start()
 

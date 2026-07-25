@@ -209,8 +209,10 @@ class Trainer:
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
 
         # autocast dtype off the DECLARED arch representation (§c.4; no module sniff).
+        # R30b: hard key access, no fallback — config["train"] is already required by
+        # TrainHParams.from_config's own no-fallback read (Phase 2 precedent).
         representation = getattr(self.arch, "representation", "grid")
-        self.amp_dtype = amp_dtype_for(representation, config if isinstance(config, dict) else {})
+        self.amp_dtype = amp_dtype_for(representation, config["train"]["amp_dtype"])
 
         # fp16 is CUDA-only (matches old: disabled on CPU); bf16 needs no scaler.
         fp16_requested = bool(self.hp.fp16)
