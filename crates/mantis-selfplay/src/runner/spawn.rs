@@ -102,7 +102,6 @@ impl SelfPlayRunner {
         };
         let atomics_proto = WorkerAtomics {
             running: self.running.clone(),
-            radius_override: self.radius_override.clone(),
             model_version: self.model_version.clone(),
         };
         let channels_proto = WorkerChannels {

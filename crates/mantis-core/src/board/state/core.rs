@@ -154,8 +154,8 @@ pub struct Board {
     ///   and is dropped before the shared return borrow is created.
     /// - **INV-2.** `cache_dirty` transitions false→true only inside methods
     ///   taking `&mut self` (`apply_move`, `undo_move`,
-    ///   `set_legal_move_radius`, `override_legal_move_radius`,
-    ///   `mark_cache_dirty`) or on boards not yet shared (`with_geometry`'s
+    ///   `set_legal_move_radius`, `mark_cache_dirty`) or on boards not yet
+    ///   shared (`with_geometry`'s
     ///   local, Clone's freshly built value). Enforced by privacy, not
     ///   comments: the field is private to `state::core`; the sole
     ///   crate-visible true-setter is `mark_cache_dirty(&mut self)`.
@@ -323,15 +323,6 @@ impl Board {
     /// game; this setter has no Rust-level guard (any boundary-layer guard
     /// lives at the boundary).
     pub fn set_legal_move_radius(&mut self, radius: i32) {
-        self.legal_move_radius = radius;
-        self.cache_dirty.set(true);
-    }
-
-    /// Explicit curriculum radius override (training-time radius scheduling).
-    ///
-    /// Identical mechanics to `set_legal_move_radius`; kept as a distinct
-    /// named entry point so curriculum call sites stay greppable.
-    pub fn override_legal_move_radius(&mut self, radius: i32) {
         self.legal_move_radius = radius;
         self.cache_dirty.set(true);
     }

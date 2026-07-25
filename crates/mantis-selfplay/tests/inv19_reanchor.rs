@@ -10,7 +10,7 @@
 //!      fails to COMPILE, and distinct per-field sentinels catch any cross-wire;
 //!   2. **NO per-game radius-jitter field** (D7 KILL) and **NO
 //!      `feature_len`/`policy_len` override fields** (C-1) — the exhaustive
-//!      binding set names exactly the 46 live fields, so a resurrected jitter knob
+//!      binding set names exactly the 45 live fields, so a resurrected jitter knob
 //!      (or a caller-supplied shape) would break this test loudly;
 //!   3. the `Default` impl is TEST-SCAFFOLDING, NOT the config authority (R1 — the
 //!      authoritative defaults live in the WP8 Python schema). This file does NOT
@@ -63,7 +63,6 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         random_opening_plies: 3,
         selfplay_rotation_enabled: true,
         encoding_name: Some("v6w25".to_string()),
-        radius_override: Some(6),
         inference_pool_size: Some(4096),
         forced_win_policy_enabled: true,
         forced_win_policy_depth: 5,
@@ -78,7 +77,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
     }
 }
 
-/// Test 1 — every field → exactly one slot; the field surface is EXACTLY the 46
+/// Test 1 — every field → exactly one slot; the field surface is EXACTLY the 45
 /// live fields (no jitter, no feature_len/policy_len). The exhaustive destructure
 /// (no `..`) is the compile-time completeness guard; the sentinel asserts are the
 /// no-cross-wire guard.
@@ -123,7 +122,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         random_opening_plies,
         selfplay_rotation_enabled,
         encoding_name,
-        radius_override,
         inference_pool_size,
         forced_win_policy_enabled,
         forced_win_policy_depth,
@@ -171,7 +169,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(random_opening_plies, 3);
     assert!(selfplay_rotation_enabled);
     assert_eq!(encoding_name, Some("v6w25".to_string()));
-    assert_eq!(radius_override, Some(6));
     assert_eq!(inference_pool_size, Some(4096));
     assert!(forced_win_policy_enabled);
     assert_eq!(forced_win_policy_depth, 5);

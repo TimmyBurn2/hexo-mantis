@@ -77,7 +77,7 @@ fn build_tree(board: Board, mr: u8, children: &[(i32, i32, u32, f32, f32)]) -> M
 /// off-window child is UNCOVERED (→dropped).
 fn two_cluster_board() -> Board {
     let mut b = Board::new();
-    b.override_legal_move_radius(40);
+    b.set_legal_move_radius(40);
     for &(q, r) in &[(0, 0), (1, 0), (20, 0), (21, 0)] {
         b.apply_move(q, r).expect("planted stone must be legal");
     }

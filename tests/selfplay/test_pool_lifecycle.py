@@ -97,7 +97,6 @@ class _StubRunner:
         self.started = 0
         self.stopped = 0
         self.running = False
-        self.radius_calls: list[int | None] = []
         self.calls: list[str] = []
         self._graph_rows = graph_rows if graph_rows is not None else []
         self.games_completed = 0
@@ -129,10 +128,6 @@ class _StubRunner:
     def drain_game_results(self):
         self.calls.append("drain_game_results")
         return []
-
-    def set_radius_override(self, radius: int | None) -> None:
-        self.radius_calls.append(radius)
-
 
 class _StubServer:
     def __init__(self, *, forward_count: int = 0, total_requests: int = 0,
@@ -309,18 +304,7 @@ def test_stopped_feeder_thread_actually_exits() -> None:
     assert not thread.is_alive()
 
 
-# ═══ H-05 … H-08 — the forwarders ════════════════════════════════════════════════
-@pytest.mark.parametrize("radius", [4, 6, None])
-def test_set_radius_override_forwards(radius) -> None:
-    """H-05 — PASS iff apply and clear both reach the runner unchanged, `None` included.
-    `None` is the CLEAR signal, so a forwarder that filters falsy values would silently
-    make the override permanent once set."""
-    pool = _grid_pool()
-    runner, _ = _stub_collaborators(pool)
-    pool.set_radius_override(radius)
-    assert runner.radius_calls == [radius]
-
-
+# ═══ H-06 … H-08 — the forwarders ════════════════════════════════════════════════
 def test_sync_inference_weights_forwards_to_the_server() -> None:
     """H-06 — PASS iff a promoted state_dict reaches the server's safe swap, by identity.
 

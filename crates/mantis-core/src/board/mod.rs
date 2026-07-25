@@ -274,10 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn set_legal_move_radius_overrides_default() {
-        // Per-Board radius override should change the legal_moves_set and
+    fn set_legal_move_radius_replaces_default() {
+        // Per-Board radius change should change the legal_moves_set and
         // remain reproducible across calls.  Defaults unchanged (5);
-        // overrides honoured at 4 and 6.
+        // changes honoured at 4 and 6.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
 

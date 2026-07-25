@@ -51,7 +51,6 @@ from mantis.selfplay.pool_hooks import batch_fill_pct as _batch_fill_pct
 from mantis.selfplay.pool_hooks import inference_stats as _inference_stats
 from mantis.selfplay.pool_hooks import latest_replay_path as _latest_replay_path
 from mantis.selfplay.pool_hooks import runner_stats as _runner_stats
-from mantis.selfplay.pool_hooks import set_radius_override as _set_radius_override
 from mantis.selfplay.pool_hooks import (
     sync_inference_weights as _sync_inference_weights,
 )
@@ -270,10 +269,6 @@ class WorkerPool:
     def latest_replay_path(self) -> Path | None:
         """Most recent recorded self-play replay file, or `None` under the default."""
         return _latest_replay_path(self)
-
-    def set_radius_override(self, radius: int | None) -> None:
-        """Update the per-game legal-move radius override live; `None` clears it."""
-        _set_radius_override(self, radius)
 
     # ── lifecycle ───────────────────────────────────────────────────────────────
     def check_producer_health(self) -> None:

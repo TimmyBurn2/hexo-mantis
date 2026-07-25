@@ -133,16 +133,16 @@ fn miri_clone_while_set_borrowed() {
     assert_eq!(a, c, "clone must rebuild the identical legal set");
 }
 
-/// set_legal_move_radius / override_legal_move_radius invalidation + rebuild.
+/// set_legal_move_radius invalidation + rebuild.
 /// Hex-ball area is 3r² + 3r + 1; minus the occupied stone.
 #[test]
-fn miri_radius_override_rebuild() {
+fn miri_radius_change_rebuild() {
     let mut b = Board::new();
     b.apply_move(0, 0).unwrap();
     assert_eq!(b.legal_move_count(), 90, "radius 5 default: 91 - 1");
     b.set_legal_move_radius(4);
     assert_eq!(b.legal_move_count(), 60, "radius 4: 61 - 1");
-    b.override_legal_move_radius(6);
+    b.set_legal_move_radius(6);
     assert_eq!(b.legal_move_count(), 126, "radius 6: 127 - 1");
     b.set_legal_move_radius(5);
     assert_eq!(b.legal_move_count(), 90, "back to radius 5");

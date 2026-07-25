@@ -76,9 +76,6 @@ pub struct SelfPlayRunnerConfig {
     /// key is never a grid/dense default; the frozen `None → v6` fallback is
     /// killed, D2).
     pub encoding_name: Option<String>,
-    /// §174 — per-game legal-move radius override for curriculum training.
-    /// `None` = "use encoding default / no override". Non-jitter, live.
-    pub radius_override: Option<i32>,
     /// Inference-pool sizing hint — consumed by the WP7 producer face (the NN
     /// pool); the pure-Rust queues do not size a pool.
     pub inference_pool_size: Option<usize>,
@@ -143,7 +140,6 @@ impl Default for SelfPlayRunnerConfig {
             random_opening_plies: 0,
             selfplay_rotation_enabled: false,
             encoding_name: None,
-            radius_override: None,
             inference_pool_size: None,
             // O1 forced-win one-hot POLICY target — OFF by default.
             forced_win_policy_enabled: false,

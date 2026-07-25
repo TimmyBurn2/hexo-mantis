@@ -138,7 +138,6 @@ impl PySelfPlayRunnerConfig {
         random_opening_plies = 0,
         selfplay_rotation_enabled = false,
         encoding_name = None,
-        radius_override = None,
         inference_pool_size = None
     ))]
     pub fn new(
@@ -176,7 +175,6 @@ impl PySelfPlayRunnerConfig {
         random_opening_plies: u32,
         selfplay_rotation_enabled: bool,
         encoding_name: Option<String>,
-        radius_override: Option<i32>,
         inference_pool_size: Option<usize>,
     ) -> Self {
         // The 10 O1/solver/seed knobs come from Default (frozen `..Default::default()`);
@@ -217,7 +215,6 @@ impl PySelfPlayRunnerConfig {
                 random_opening_plies,
                 selfplay_rotation_enabled,
                 encoding_name,
-                radius_override,
                 inference_pool_size,
                 ..Default::default()
             },
@@ -567,11 +564,6 @@ impl PySelfPlayRunner {
         self.inner.set_model_version(version);
     }
 
-    /// §174 — update the per-game legal-move radius override live. `None` clears
-    /// it (frozen `-1` sentinel).
-    pub fn set_radius_override(&self, radius: Option<i32>) {
-        self.inner.set_radius_override(radius.unwrap_or(-1));
-    }
 }
 
 impl PySelfPlayRunner {
@@ -619,7 +611,7 @@ mod tests {
         let cfg = PySelfPlayRunnerConfig::new(
             2, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5,
             false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false,
-            Some("v6".to_string()), None, None,
+            Some("v6".to_string()), None,
         );
         let rust = cfg.to_rust();
         assert_eq!(rust.n_workers, 2);
@@ -667,7 +659,7 @@ mod tests {
         let cfg = PySelfPlayRunnerConfig::new(
             1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5,
             false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false,
-            None, None, None,
+            None, None,
         );
         assert!(PySelfPlayRunner::new(&cfg).is_err(), "absent encoding_name is an error (LAW-11)");
     }

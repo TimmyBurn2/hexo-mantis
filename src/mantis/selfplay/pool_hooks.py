@@ -239,15 +239,6 @@ def latest_replay_path(pool: Any) -> Path | None:
     return pool._recorder.latest_replay_path()
 
 
-def set_radius_override(pool: Any, radius: int | None) -> None:
-    """Update the per-game legal-move radius override live.
-
-    `None` clears the override (use the encoding default). Propagated to the Rust
-    runner's atomic; workers read it at the start of each game.
-    """
-    pool._runner.set_radius_override(radius)
-
-
 __all__ = [
     "EventSink",
     "HeartbeatFn",
@@ -260,7 +251,6 @@ __all__ = [
     "inference_stats",
     "latest_replay_path",
     "runner_stats",
-    "set_radius_override",
     "sync_inference_weights",
     "update_checkpoint_step",
 ]

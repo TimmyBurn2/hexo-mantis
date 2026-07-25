@@ -6,8 +6,8 @@
 //!
 //! Self-play runner core (WP6 D1) — the pyo3-STRIPPED half of the frozen
 //! `game_runner/mod.rs`. Owns the shared `Arc` accumulators, the dense + graph
-//! inference queues (`crate::queues`), the result queues, the live curriculum
-//! `radius_override`, and the LAW-18 in-run fire counters. `start`/`stop`/
+//! inference queues (`crate::queues`), the result queues, and the LAW-18
+//! in-run fire counters. `start`/`stop`/
 //! `is_running`/`drain_game_results` are the pure-Rust lifecycle; a producer
 //! handle exposes the queues so a MOCK producer (tests) / the WP7 NN producer
 //! face can `pop_batch` + `submit_results`.
@@ -31,7 +31,7 @@ pub mod stats;
 pub use config::SelfPlayRunnerConfig;
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -114,9 +114,6 @@ pub struct SelfPlayRunner {
     // ── control ──
     running: Arc<AtomicBool>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-
-    /// §174 live curriculum radius override (`-1` = no override). Non-jitter.
-    radius_override: Arc<AtomicI32>,
 
     /// WP7 NN model-version snapshot source. Each worker reads this once per move and
     /// dedup-pushes it into `version_seen` (drain tuple `mv_min/mv_max/mv_distinct`).
@@ -231,8 +228,6 @@ impl SelfPlayRunner {
         let dense_queue = DenseQueue::new(spec.state_stride());
         let graph_queue = GraphQueue::with_contract_version(spec.contract_version.unwrap_or(1));
 
-        let radius_override = Arc::new(AtomicI32::new(config.radius_override.unwrap_or(-1)));
-
         Ok(Self {
             spec,
             config,
@@ -243,7 +238,6 @@ impl SelfPlayRunner {
             recent_game_results: Arc::new(Mutex::new(VecDeque::new())),
             running: Arc::new(AtomicBool::new(false)),
             handles: Arc::new(Mutex::new(Vec::new())),
-            radius_override,
             model_version: Arc::new(AtomicU64::new(0)),
             seed_corpus: Arc::new(seed_corpus_vec),
             games_completed: Arc::new(AtomicUsize::new(0)),
@@ -303,12 +297,6 @@ impl SelfPlayRunner {
         rg.drain(..).collect()
     }
 
-    /// §174 — update the per-game legal-move radius override live. `-1` clears the
-    /// override (workers read this atomic at the start of each game). Non-jitter.
-    pub fn set_radius_override(&self, radius: i32) {
-        self.radius_override.store(radius, Ordering::SeqCst);
-    }
-
     // ── WP7 SEAM (pure-additive, zero-behaviour) ────────────────────────────────
     // Narrow pub read/drain faces the WP7 `mantis-bridge` producer pyclasses build
     // over; the frozen `collect_data` / `collect_graph_data` / `#[getter]` /
@@ -335,7 +323,6 @@ impl SelfPlayRunner {
     /// WP7 NN seam — set the shared model-version snapshot workers read once per
     /// move (dedup-pushed into the drain tuple `mv_min/mv_max/mv_distinct`). The
     /// frozen `InferenceBatcher.bump_model_version` writes through here. `0` = no-NN.
-    /// Mirrors [`Self::set_radius_override`].
     pub fn set_model_version(&self, version: u64) {
         self.model_version.store(version, Ordering::SeqCst);
     }

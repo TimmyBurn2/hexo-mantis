@@ -18,10 +18,11 @@
 //! legal radius); the `None → v6` board arm is KILLED (D2, absent spec = error at
 //! `new()`), and `legal_move_radius_jitter` is NEVER authored (D7 — the one
 //! behavioural block is dead for every registry spec). The curriculum
-//! `override_legal_move_radius` STAYS (non-jitter).
+//! per-game radius-override chain (A9, R25 commit B) is DELETED — dead weight,
+//! no live caller once the Python-side curriculum plumbing is gone.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use rand::prelude::IndexedRandom;
@@ -166,7 +167,7 @@ pub(crate) fn run_worker_thread(
         solver_injected_seeded,
         seeded_games_started,
     } = stats;
-    let WorkerAtomics { running, radius_override, model_version } = atomics;
+    let WorkerAtomics { running, model_version } = atomics;
     let WorkerChannels {
         dense_queue,
         graph_queue,
@@ -316,7 +317,6 @@ pub(crate) fn run_worker_thread(
             &mut rng,
             &mut version_seen,
             &running,
-            &radius_override,
             &model_version,
             &dense_queue,
             &graph_queue,
@@ -352,7 +352,6 @@ fn run_one_game(
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
     running: &AtomicBool,
-    radius_override: &AtomicI32,
     model_version: &AtomicU64,
     dense_queue: &crate::queues::DenseQueue,
     graph_queue: &crate::queues::GraphQueue,
@@ -416,7 +415,7 @@ fn run_one_game(
         game_sims,
         seeded,
         prefix_len,
-    } = init_per_game_board(board_geometry, init_ctx, radius_override, rng, version_seen, seed);
+    } = init_per_game_board(board_geometry, init_ctx, rng, version_seen, seed);
 
     // D-WS3V3: count a seeded game once at start.
     if seeded {
@@ -582,14 +581,12 @@ fn run_one_game(
 
 /// Per-game board + state initializer (frozen `inner.rs:618`). Builds the board
 /// from the spec-derived `BoardGeometry` (the `None → v6` arm is KILLED, D2),
-/// pre-sizes the record vectors, applies the §174 curriculum radius override
-/// (non-jitter), dry-replays an optional seed prefix, samples per-game rotation,
-/// and resolves the playout cap. The `legal_move_radius_jitter` block is NEVER
-/// authored (D7 — dead for every registry spec).
+/// pre-sizes the record vectors, dry-replays an optional seed prefix, samples
+/// per-game rotation, and resolves the playout cap. The `legal_move_radius_jitter`
+/// block is NEVER authored (D7 — dead for every registry spec).
 fn init_per_game_board(
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
-    radius_override: &AtomicI32,
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
     seed: &SeedCorpus,
@@ -600,13 +597,6 @@ fn init_per_game_board(
     let records_vec = Vec::with_capacity(init_ctx.max_moves);
     let mut move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
     version_seen.clear();
-
-    // §174: curriculum radius override takes precedence (applied after geometry so
-    // it intentionally overrides the spec's canonical radius). Non-jitter.
-    let ro = radius_override.load(Ordering::SeqCst);
-    if ro >= 0 {
-        board.override_legal_move_radius(ro);
-    }
 
     // D7: `legal_move_radius_jitter` is KILLED — the one behavioural block
     // (`inner.rs:652-656`) is NEVER authored (dead for every registry spec).
