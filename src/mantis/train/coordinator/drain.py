@@ -5,10 +5,12 @@ The run-lifecycle epilogue: training has STOPPED. Eval is reached ONLY through t
 coordinator instance so `drain.py` never imports `step.py` (acyclic); `StepCoordinator` exposes
 thin `flush_pending_eval` / `run_terminal_eval` / `close_out` methods that delegate here.
 
-The async eval-THREAD drain + promotion-stamping runtime (old `eval_drain.drain_pending_eval` /
-`promote_anchor`) DEFERS→WP11 — in a WP10-only launch `eval_pipeline is None`, so both functions
-no-op. When WP11 injects a concrete pipeline, `flush_pending_eval` joins the in-flight round and
-`run_terminal_eval` runs the terminal full-battery eval on the final checkpoint.
+The promotion runtime is LIVE (WP11-A wired it): completed rounds route through
+`_apply_promotion` into the pipeline's `apply_gate_decision`. Since WP-UNFREEZE (R49) a gate
+decision moves ONLY the deploy tag (anchor + best_model.pt) — actor weights sync continuously
+in `mantis.train.actor_sync` — so every route calls the SAME single-signature applier and the
+pool's lifecycle state is irrelevant to a gate decision. With no pipeline injected
+(`eval_pipeline is None`) both flush functions no-op.
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ from mantis.train.emit import emit_via
 _LOG = logging.getLogger(__name__)
 
 
-def _route_eval_result(coord: Any, result: Any, *, sync_inference: bool = True) -> Any:
+def _route_eval_result(coord: Any, result: Any) -> Any:
     """Route completed eval-round result(s) through the coordinator's async eval-RESULT seam
     (`on_eval_round_complete` — THE sealbot-WR consumer, §c.4b), then apply any promotion
     decision (WP11-A `_apply_promotion`).
@@ -45,14 +47,14 @@ def _route_eval_result(coord: Any, result: Any, *, sync_inference: bool = True) 
         return result
     if isinstance(result, Mapping):
         handler(cast("Mapping[str, Any]", result))
-        _apply_promotion(coord, result, sync_inference=sync_inference)
+        _apply_promotion(coord, result)
         return result
     if isinstance(result, (list, tuple)):
         rounds = cast("Sequence[Any]", result)
         for item in rounds:
             if isinstance(item, Mapping):
                 handler(cast("Mapping[str, Any]", item))
-                _apply_promotion(coord, item, sync_inference=sync_inference)
+                _apply_promotion(coord, item)
             else:
                 _unroutable(coord, item, "batch element is not a result mapping")
         return result
@@ -60,7 +62,7 @@ def _route_eval_result(coord: Any, result: Any, *, sync_inference: bool = True) 
     return result
 
 
-def _apply_promotion(coord: Any, result: Any, *, sync_inference: bool) -> None:
+def _apply_promotion(coord: Any, result: Any) -> None:
     """WP11-A: apply a promoted round's gate decision through the injected pipeline's
     `apply_gate_decision` (mantis/eval/promote.py's ONE call site). A promoted result with
     NO promotion surface (no pipeline, or one missing the method) is recorded LOUD — the
@@ -76,7 +78,7 @@ def _apply_promotion(coord: Any, result: Any, *, sync_inference: bool) -> None:
             "event": "eval_promotion_unapplied", "step": step, "reason": "no_promotion_surface",
         })
         return
-    apply_fn(result, sync_inference=sync_inference)
+    apply_fn(result)
 
 
 def _unroutable(coord: Any, result: Any, reason: str) -> None:
@@ -92,8 +94,8 @@ def _unroutable(coord: Any, result: Any, reason: str) -> None:
 
 def flush_pending_eval(coord: Any) -> Any:
     """Drain a possibly-promoted final eval before teardown (D-012). No-op when no eval
-    pipeline is injected. The pool is still UP here so a drained promotion can sync into
-    self-play inference (WP11 wires the promotion sync)."""
+    pipeline is injected. A drained promotion moves only the deploy tag (WP-UNFREEZE,
+    R49), so this route and the terminal route call the SAME single-signature applier."""
     pipeline = getattr(coord, "eval_pipeline", None)
     if pipeline is None:
         return None
@@ -103,8 +105,7 @@ def flush_pending_eval(coord: Any) -> Any:
     _LOG.info("flush_pending_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "flush_pending_eval", "step": getattr(coord, "_train_step", None)})
-    # "pool still UP" contract (drain.py:73-74,105-134): a drained promotion may sync.
-    return _route_eval_result(coord, drain(), sync_inference=True)
+    return _route_eval_result(coord, drain())
 
 
 def run_terminal_eval(coord: Any) -> Any:
@@ -119,19 +120,22 @@ def run_terminal_eval(coord: Any) -> Any:
     _LOG.info("terminal_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "terminal_eval", "step": getattr(coord, "_train_step", None)})
-    # Terminal promotion: pool already stopped (step_coordinator.py:1705-1710 parity) —
-    # never sync inference weights into a torn-down pool.
+    # Terminal promotion: the pool is already stopped here, and that is FINE — a gate
+    # decision is pool-independent on every route (WP-UNFREEZE, R49): it writes the
+    # deploy tag only, so the mid-run/terminal asymmetry the old sync flag encoded is gone.
     return _route_eval_result(coord, pipeline.run_evaluation(
         coord.eval_model, coord._train_step, best,
         full_config=coord.full_config, best_model_step=best_step, ignore_stride=True,
-    ), sync_inference=False)
+    ))
 
 
 def close_out(coord: Any, on_drained: "Callable[[], None] | None" = None) -> None:
     """The run epilogue (§D-LOOPFIX W1): (0) DISARM the heartbeat watchdog's staleness fire,
-    (1) DRAIN the in-flight eval (pool still UP so a drained promotion can sync),
-    (2) ``on_drained()`` (the caller passes ``pool.stop`` so the terminal eval runs on an
-    UNLOADED GPU), (3) TERMINAL full-battery eval on the final ckpt.
+    (1) DRAIN the in-flight eval, (2) ``on_drained()`` (the caller passes ``pool.stop`` so
+    the terminal eval runs on an UNLOADED GPU), (3) TERMINAL full-battery eval on the final
+    ckpt. The drain-before-stop order survives for drain-BOUNDING reasons alone (the flush
+    joins the in-flight round under its budget); gate decisions themselves are
+    pool-independent on every route (WP-UNFREEZE, R49).
 
     Step (0) is the FIRST action and it is load-bearing (O-27): the close-out waits below
     are legally up to 14400 s, an order of magnitude past the 1800 s staleness deadline, so

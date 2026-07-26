@@ -1,7 +1,7 @@
 """mantis.eval — pipeline, promotion gate, opponent ladder, Bradley-Terry, aggregation.
 
 Public API surface: `build_eval_pipeline`/`EvalPipeline`/`DrainCaps` (pipeline.py),
-`apply_gate_decision`/`PromotionHooks` (promote.py), `LadderState` (ladder.py),
+`apply_gate_decision`/`DeployTagHooks` (promote.py), `LadderState` (ladder.py),
 `fit_bt`/`predict_p` (bt.py), `aggregate_gate`/`aggregate_rung`/`gate_promotion_decision`/
 `should_escalate` (aggregate.py), `build_round_result`/`resolve_ladder_rungs` (rounds.py),
 the error taxonomy (errors.py), and the snapshot write/load pair (snapshot.py).
@@ -28,7 +28,7 @@ from mantis.eval.errors import (
 )
 from mantis.eval.ladder import LadderState
 from mantis.eval.pipeline import DrainCaps, EvalPipeline, build_eval_pipeline
-from mantis.eval.promote import PromotionHooks, apply_gate_decision
+from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import RoundSpec, build_round_result, resolve_ladder_rungs
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 
@@ -41,7 +41,7 @@ __all__ = [
     "LadderState",
     "LadderStateError",
     "MixedRegimeError",
-    "PromotionHooks",
+    "DeployTagHooks",
     "ResultContractError",
     "RoundSpec",
     "RungAggregate",

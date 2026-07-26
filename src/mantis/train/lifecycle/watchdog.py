@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
+from mantis.train.emit import emit_via
+
 _LOG = logging.getLogger(__name__)
 
 # Wall-clock seconds with NO new self-play game after which the run fails fast.
@@ -73,7 +75,10 @@ class StallWatchdog:
         """
         self._last_games = games_completed
         self._last_progress_time = self._clock()
-        self._sink.emit(
+        # None-sink tolerant (house emit convention): a harness coordinator built with
+        # sink=None must still construct/arm; a real run always injects the JSONL sink.
+        emit_via(
+            self._sink,
             {
                 "event": "selfplay_stall_watchdog_armed",
                 "timeout_sec": self._timeout,
@@ -99,7 +104,8 @@ class StallWatchdog:
     def _fire(self, stalled_for: float) -> None:
         """LOUD log → best-effort snapshot → exit with a distinct code. A clean shutdown
         is avoided on purpose (it would hang on the wedged GPU)."""
-        self._sink.emit(
+        emit_via(
+            self._sink,
             {
                 "event": "selfplay_stall_watchdog",
                 "stalled_for_sec": round(stalled_for, 1),

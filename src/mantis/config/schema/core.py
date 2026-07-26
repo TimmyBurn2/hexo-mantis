@@ -266,3 +266,16 @@ class RunConfig(StrictModel):
                 "knobs)."
             )
         return self
+
+    @model_validator(mode="after")
+    def _actor_lag_threshold_exceeds_sync_cadence(self) -> "RunConfig":
+        # WP-UNFREEZE §5: the lag threshold (monitor section) and the sync cadence
+        # (train section) share one invariant, so the check lives here, the ONE model
+        # that sees both. Unconditional: healthy configs satisfy it trivially, and a
+        # disarmed-but-nonsensical pair would spam exceed-events.
+        if self.monitor.actor_lag_threshold_steps <= self.train.actor_sync_cadence_steps:
+            raise ValueError(
+                "actor_lag_threshold_steps (N) must exceed train.actor_sync_cadence_steps: "
+                "a threshold at or below the sync cadence fires under healthy operation"
+            )
+        return self

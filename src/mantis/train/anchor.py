@@ -409,7 +409,6 @@ def resolve_anchor(
     eval_pipeline: Any,
     anchor_state: Any = None,
     sink: Any = None,
-    inf_model: torch.nn.Module | None = None,
     config: dict[str, Any] | None = None,
     device: torch.device | None = None,
     best_model_path: "str | Path | None" = None,
@@ -418,15 +417,17 @@ def resolve_anchor(
     expected_anchor_sha256: str | None = None,
     bootstrap_candidates: "tuple[str, ...] | None" = None,
 ) -> AnchorState:
-    """Resolve the best-model anchor and (when ``inf_model`` is supplied) sync it to the anchor.
+    """Resolve the best-model anchor (the DEPLOY tag — WP-UNFREEZE, R49: deploy state
+    NEVER writes actor weights, at launch or any other time; the old ``inf_model``
+    launch-time sync arm is deleted, not merely unused).
 
     INJECTED-collaborator contract (§c.6/§c.8): ``eval_pipeline`` is injected (no `train → eval`
     import); when None the anchor stays unresolved (the pre-refactor invariant). Everything else
     derives from ``trainer`` (``trainer.arch``/``.config``/``.device``/``.step``/
-    ``.inference_state_dict()``) when not passed explicitly. The inf/anchor cross-representation
-    check compares DECLARED representations (``trainer.arch.representation`` vs the anchor's
-    ``metadata.arch.representation``) — NEVER an arch-off-a-live-module sniff (§c.6).
-    The full eval-pipeline gating wiring (best_model_path from eval.yaml, promotion) is WP11-owed.
+    ``.inference_state_dict()``) when not passed explicitly. The trainer/anchor
+    cross-representation check compares DECLARED representations
+    (``trainer.arch.representation`` vs the anchor's ``metadata.arch.representation``) —
+    NEVER an arch-off-a-live-module sniff (§c.6).
     """
     config = config if config is not None else dict(getattr(trainer, "config", {}) or {})
     device = device if device is not None else getattr(trainer, "device", torch.device("cpu"))
@@ -464,17 +465,14 @@ def resolve_anchor(
             save_best_model_atomic(best_model, bmp)
             _LOG.info("anchor_persisted_from_fallback path=%s", str(bmp))
 
-        # Cross-representation sync check — DECLARED representations, never a module sniff (§c.6).
+        # Cross-representation lineage check — DECLARED representations, never a module sniff (§c.6).
         if inf_representation != anc_representation:
             raise RepresentationMismatch(
-                f"resolve_anchor: inf_model is representation={inf_representation!r} but the "
-                f"resolved anchor at {bmp} is representation={anc_representation!r}. Cannot sync "
-                "weights across representations — namespace the per-lineage best_model_path."
+                f"resolve_anchor: the trainer arch is representation={inf_representation!r} but "
+                f"the resolved anchor at {bmp} is representation={anc_representation!r}. A "
+                "cross-representation anchor is a wrong-lineage incumbent — namespace the "
+                "per-lineage best_model_path."
             )
-        if inf_model is not None:
-            inf_base = getattr(inf_model, "_orig_mod", inf_model)
-            _guarded_load_state_dict(inf_base, best_model.state_dict())
-
         trainer_step = getattr(trainer, "step", None)
         if best_model_step is not None and trainer_step is not None and trainer_step != best_model_step:
             _LOG.warning(

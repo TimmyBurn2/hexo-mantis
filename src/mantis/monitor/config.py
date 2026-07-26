@@ -78,6 +78,13 @@ class MonitorConfig:
     # catches exceptions, not hangs, so a wedged FS could suspend the exit forever.
     heartbeat_fire_effect_timeout_sec: float = 30.0
 
+    # ── actor-lag invariant (WP-UNFREEZE §4; train/lifecycle/heartbeat_watchdog.py) ───
+    # `learner_step − actor_ckpt_step > N` → exit 45 when armed, else ONE loud event per
+    # exceedance episode. Smoke posture: threshold 100 (inert at sync cadence 1),
+    # abort False — the MECHANISM ships wired, the CONFIG arms it (run5 mint).
+    actor_lag_threshold_steps: int = 100
+    actor_lag_abort_enabled: bool = False
+
     # ── out-of-process supervisor flag defaults (monitor/supervise.py) ───────────────
     supervisor_stale_after_sec: float = 900.0
     supervisor_poll_interval_sec: float = 30.0

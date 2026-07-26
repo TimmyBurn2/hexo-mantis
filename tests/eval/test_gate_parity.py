@@ -241,8 +241,12 @@ def test_screen_escalates_iff_wr_screen_at_least_screen_confirm_lo(wr_screen, ex
     assert should_escalate(wr_screen, screen_confirm_lo=0.44) is expected_escalate
 
 
-# ══ promotion sequence order + terminal no-sync + F-12 snapshot pin ═══════════════════════
+# ══ promotion sequence order (deploy-only since WP-UNFREEZE) + F-12 snapshot pin ══════════
 class _SpyOrder:
+    """R-37: the sync-method arms are GONE with the split — the deploy path has no actor
+    surface to call, so any sync-shaped call on this spy is an AttributeError, which is
+    exactly the failure the anchor-only sequence pin wants."""
+
     def __init__(self) -> None:
         self.order: list[str] = []
 
@@ -253,25 +257,19 @@ class _SpyOrder:
     def save_anchor(self, model, path, *, step, run_id, encoding) -> None:
         self.order.append("save_anchor")
 
-    def sync_inference_weights(self, state_dict) -> None:
-        self.order.append("sync_inference_weights")
-
-    def update_checkpoint_step(self, step) -> None:
-        self.order.append("update_checkpoint_step")
-
 
 def _hooks(spy: "_SpyOrder", tmp_path):
     from types import SimpleNamespace
 
-    from mantis.eval.promote import PromotionHooks
+    from mantis.eval.promote import DeployTagHooks
 
     # `best_model` must be a proper attribute-bearing fixture (not a bare `object()`, which
     # has no `__dict__` and cannot take the sabotage attribute-set below) — a plain
     # SimpleNamespace is the minimal such fixture (test_promoted_weights_are_the_evaluated_
     # snapshot_bytes assigns a throwaway `.state_dict` onto it to prove it is never read).
     anchor_state = SimpleNamespace(best_model=SimpleNamespace(), best_model_step=None)
-    return PromotionHooks(
-        promotion_target=spy, anchor_state=anchor_state,
+    return DeployTagHooks(
+        anchor_state=anchor_state,
         best_model_path=tmp_path / "best_model.pt", run_id="run5", encoding="gnn_axis_v1",
         save_anchor=spy.save_anchor, guarded_load=spy.guarded_load,
     )
@@ -283,7 +281,15 @@ def _fake_snapshot(monkeypatch, state_dict: dict) -> None:
     monkeypatch.setattr(snap_mod, "load_model_snapshot", lambda path, device="cpu": state_dict)
 
 
-def test_gate_pass_sequence_order_anchor_save_sync_step(tmp_path, monkeypatch) -> None:
+def test_gate_pass_sequence_is_anchor_only(tmp_path, monkeypatch) -> None:
+    """E1 rewrite (WP-UNFREEZE, R49): a gate pass moves ONLY the deploy tag — the full
+    call sequence is `guarded_load -> save_anchor`, nothing else. Full-list equality:
+    any sync-shaped call in the spy log fails here (and would AttributeError besides —
+    the spy no longer carries an actor surface). E2 (`test_terminal_promotion_does_not_
+    sync_pool`) is DELETED with grounds: its `sync_inference` parameter is the thing R49
+    deletes, and its conclusion (the gate never syncs) is now universal — pinned stronger
+    by this test + the S4 field-set census + the signature pin in
+    tests/train/test_actor_deploy_independence.py."""
     from mantis.eval.promote import apply_gate_decision
 
     spy = _SpyOrder()
@@ -291,23 +297,8 @@ def test_gate_pass_sequence_order_anchor_save_sync_step(tmp_path, monkeypatch) -
     _fake_snapshot(monkeypatch, {"w": 1})
     result = {"promoted": True, "eval_broken": False, "step": 4200,
               "candidate_snapshot_path": str(tmp_path / "cand.pt")}
-    apply_gate_decision(hooks, result, sync_inference=True)
-    assert spy.order == ["guarded_load", "save_anchor", "sync_inference_weights",
-                         "update_checkpoint_step"], spy.order
-
-
-def test_terminal_promotion_does_not_sync_pool(tmp_path, monkeypatch) -> None:
-    from mantis.eval.promote import apply_gate_decision
-
-    spy = _SpyOrder()
-    hooks = _hooks(spy, tmp_path)
-    _fake_snapshot(monkeypatch, {"w": 1})
-    result = {"promoted": True, "eval_broken": False, "step": 4200,
-              "candidate_snapshot_path": str(tmp_path / "cand.pt")}
-    apply_gate_decision(hooks, result, sync_inference=False)
-    assert "sync_inference_weights" not in spy.order
-    assert "update_checkpoint_step" not in spy.order
-    assert spy.order == ["guarded_load", "save_anchor"]
+    apply_gate_decision(hooks, result)
+    assert spy.order == ["guarded_load", "save_anchor"], spy.order
 
 
 def test_promoted_weights_are_the_evaluated_snapshot_bytes(tmp_path, monkeypatch) -> None:
@@ -325,7 +316,7 @@ def test_promoted_weights_are_the_evaluated_snapshot_bytes(tmp_path, monkeypatch
 
     result = {"promoted": True, "eval_broken": False, "step": 4200,
               "candidate_snapshot_path": str(tmp_path / "cand.pt")}
-    apply_gate_decision(hooks, result, sync_inference=True)
+    apply_gate_decision(hooks, result)
 
     assert spy._loaded_state_dict == evaluated_state_dict, (
         "F-12/LAW-12: promotion must load the EVALUATED snapshot the worker actually played, "

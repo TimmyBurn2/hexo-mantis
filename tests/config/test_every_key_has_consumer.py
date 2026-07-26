@@ -80,6 +80,7 @@ CONSUMER_REGISTRY = {
     "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
     "train.min_lr": "TrainHParams.from_config -> Trainer._build_scheduler eta_min fallback",
     "train.checkpoint_interval": "TrainHParams.from_config -> Trainer periodic-save gate",
+    "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
@@ -179,6 +180,8 @@ CONSUMER_REGISTRY = {
     "monitor.heartbeat_file_interval_sec": "resolve_monitor_config -> heartbeat_watchdog.py file-write cadence",
     "monitor.heartbeat_close_out_deadline_sec": "resolve_monitor_config -> disarm_staleness() teardown budget",
     "monitor.heartbeat_fire_effect_timeout_sec": "resolve_monitor_config -> heartbeat fire-path effect timeout",
+    "monitor.actor_lag_threshold_steps": "resolve_monitor_config -> build_run_safety -> ActorLagSpec.threshold_steps (WP-UNFREEZE K2)",
+    "monitor.actor_lag_abort_enabled": "resolve_monitor_config -> build_run_safety -> ActorLagSpec.abort_enabled (WP-UNFREEZE K3)",
     "monitor.supervisor_stale_after_sec": "resolve_monitor_config -> monitor/supervise.py staleness flag",
     "monitor.supervisor_poll_interval_sec": "resolve_monitor_config -> monitor/supervise.py poll cadence",
     "monitor.supervisor_kill_grace_sec": "resolve_monitor_config -> monitor/supervise.py kill grace",
@@ -222,9 +225,10 @@ def test_registry_has_exactly_eight_entries():
     # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. SC-A3 adds 31 (27 `monitor.*` + 4
     # `monitor.drain.*`, R-MONITORCONFIG-SCHEMA closure): 112 + 31 = 143. The name is
     # historical (O15's original 8-entry WP8 count); the bijection test above is the live
-    # invariant this file exists to hold.
-    assert len(CONSUMER_REGISTRY) == 143
-    assert len(_leaf_paths(RunConfig)) == 143
+    # invariant this file exists to hold. WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
+    # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146.
+    assert len(CONSUMER_REGISTRY) == 146
+    assert len(_leaf_paths(RunConfig)) == 146
 
 
 def test_no_forward_reference_strings_in_registry():

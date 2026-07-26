@@ -47,7 +47,7 @@ import torch
 
 from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import PromotionHooks
+from mantis.eval.promote import DeployTagHooks
 from mantis.model import CnnArch, build_net
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
@@ -91,23 +91,10 @@ def _eval_cfg() -> EvalConfig:
     )
 
 
-class _FakePromotionTarget:
-    def __init__(self) -> None:
-        self.synced: list[Any] = []
-        self.checkpoint_steps: list[int] = []
-
-    def sync_inference_weights(self, state_dict: dict) -> None:
-        self.synced.append(state_dict)
-
-    def update_checkpoint_step(self, step: int) -> None:
-        self.checkpoint_steps.append(step)
-
-
-def _promotion_hooks(tmp_path: Path) -> PromotionHooks:
+def _promotion_hooks(tmp_path: Path) -> DeployTagHooks:
     from types import SimpleNamespace
 
-    return PromotionHooks(
-        promotion_target=_FakePromotionTarget(),
+    return DeployTagHooks(
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         best_model_path=tmp_path / "best_model.pt",
         run_id="oracle_test_run",

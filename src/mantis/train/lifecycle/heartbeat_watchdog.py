@@ -44,11 +44,13 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence, cast
 
 from mantis.monitor.best_effort import BestEffortCounters, best_effort
 from mantis.monitor.heartbeat import (
+    ACTOR_LAG_EXIT_CODE,
     PERSIST_FATAL_EXIT_CODE,
     WATCHDOG_STALL_EXIT_CODE,
     write_heartbeat_file,
@@ -71,6 +73,20 @@ DEFAULT_CLOSE_OUT_DEADLINE_SEC: float = 14400.0
 #: `best_effort` catches exceptions, NOT hangs — without a bound, a wedged filesystem
 #: suspends the fire before `exit_fn` and the process never dies.
 DEFAULT_FIRE_EFFECT_TIMEOUT_SEC: float = 30.0
+
+
+@dataclass(frozen=True)
+class ActorLagSpec:
+    """The actor-lag invariant's inputs (WP-UNFREEZE §4): `learner_step_fn() −
+    actor_ckpt_step_fn() > threshold_steps` → escalation when `abort_enabled`, else ONE
+    loud event per exceedance episode. The QUANTITIES are step-clock; the SAMPLING rides
+    the watchdog's existing seconds poll — deliberately NOT a fifth `HEARTBEAT_SOURCES`
+    entry (a step-delta threshold in a seconds-deadline dict is a type lie)."""
+
+    learner_step_fn: Callable[[], int]     # lambda: int(trainer.step)
+    actor_ckpt_step_fn: Callable[[], int]  # actor_sync.actor_ckpt_step
+    threshold_steps: int                   # N; from monitor.actor_lag_threshold_steps
+    abort_enabled: bool                    # from monitor.actor_lag_abort_enabled
 
 
 class HeartbeatWatchdog:
@@ -97,6 +113,7 @@ class HeartbeatWatchdog:
         close_out_deadline_sec: float = DEFAULT_CLOSE_OUT_DEADLINE_SEC,
         snapshot_timeout_sec: float = DEFAULT_FIRE_EFFECT_TIMEOUT_SEC,
         wired_sources: Sequence[str] | None = None,
+        actor_lag: "ActorLagSpec | None" = None,
     ) -> None:
         self._registry = registry
         self._deadlines = dict(deadlines)
@@ -140,6 +157,11 @@ class HeartbeatWatchdog:
                 f"HeartbeatWatchdog: wired_sources names unknown heartbeat source(s) "
                 f"{unknown}; known sources: {list(self._sources)}"
             )
+        # None = no lag surveillance (direct-ctor tests / non-run contexts) — LOUD as
+        # "absent" in the arm event, never silent.
+        self._actor_lag = actor_lag
+        self._lag_exceeded_latched = False
+        self._lag_negative_reported = False
         self._counters = BestEffortCounters()
         self._staleness_armed = True
         self._close_out_started: float | None = None
@@ -190,6 +212,13 @@ class HeartbeatWatchdog:
             "wired_sources": sorted(self._wired),
             "unwired_sources": [s for s in self._sources if s not in watched],
             "awaiting_first_beat": [s for s in self._sources if s in watched and s not in beaten],
+            # WP-UNFREEZE §4.3 visibility: a disabled or unwired lag check is loud at
+            # arm time, never silent.
+            "actor_lag": (
+                {"armed": bool(self._actor_lag.abort_enabled),
+                 "threshold_steps": int(self._actor_lag.threshold_steps)}
+                if self._actor_lag is not None else "absent"
+            ),
             "poll_interval_sec": self._poll_interval,
             "file_interval_sec": self._file_interval,
             "close_out_deadline_sec": self._close_out_deadline,
@@ -229,10 +258,13 @@ class HeartbeatWatchdog:
                     "close_out_deadline_sec": self._close_out_deadline})
 
     def poll_once(self) -> None:
-        """ONE poll cycle: persist-fatal → staleness → heartbeat-file mirror (that order).
+        """ONE poll cycle: persist-fatal → actor-lag → staleness → file mirror (that order).
 
         Persist first: a storage fault is already fatal and its diagnosis is unambiguous,
-        so it must not be masked by a staleness fire it probably caused.
+        so it must not be masked by a staleness fire it probably caused. The actor-lag
+        check runs iff staleness is armed (WP-UNFREEZE §4.2): during close-out training
+        has stopped, both step counters freeze, and a teardown must never die to a stale
+        lag reading.
         """
         if self._fired:
             return
@@ -242,11 +274,49 @@ class HeartbeatWatchdog:
                        detail={"persist_errors_total": count})
             return
         if self._staleness_armed:
+            if self._check_actor_lag():
+                return
             if self._check_source_staleness():
                 return
         elif self._check_close_out_overrun():
             return
         self._mirror_file()
+
+    def _check_actor_lag(self) -> bool:
+        """The WP-UNFREEZE lag invariant. Returns True when a fire was issued.
+
+        Both callables are read LIVE on every poll (the O-28 discipline — a value
+        captured at ctor/arm would read a frozen delta forever). Disarmed exceedance is
+        ONE loud event per episode (latched; the latch resets once lag re-enters the
+        threshold). A negative lag is a wiring bug being reported honestly, never a fire.
+        """
+        spec = self._actor_lag
+        if spec is None:
+            return False
+        learner_step = int(spec.learner_step_fn())
+        actor_step = int(spec.actor_ckpt_step_fn())
+        lag = learner_step - actor_step
+        detail = {"learner_step": learner_step, "actor_ckpt_step": actor_step,
+                  "lag_steps": lag, "threshold_steps": int(spec.threshold_steps)}
+        if lag < 0:
+            if not self._lag_negative_reported:
+                self._lag_negative_reported = True
+                _LOG.error("actor_lag_negative learner_step=%s actor_ckpt_step=%s",
+                           learner_step, actor_step)
+                self._emit({"event": "actor_lag_negative", **detail})
+            return False
+        if lag > spec.threshold_steps:
+            if spec.abort_enabled:
+                self._fire(ACTOR_LAG_EXIT_CODE, reason="actor_lag_exceeded", detail=detail)
+                return True
+            if not self._lag_exceeded_latched:
+                self._lag_exceeded_latched = True
+                _LOG.error("actor_lag_exceeded (disarmed) lag_steps=%s threshold_steps=%s",
+                           lag, spec.threshold_steps)
+                self._emit({"event": "actor_lag_exceeded", "armed": False, **detail})
+            return False
+        self._lag_exceeded_latched = False
+        return False
 
     def _check_source_staleness(self) -> bool:
         """Per-source staleness. Returns True when a fire was issued."""

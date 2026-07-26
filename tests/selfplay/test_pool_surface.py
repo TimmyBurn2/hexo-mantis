@@ -32,7 +32,7 @@ from mantis.encoding import lookup
 from mantis.model import CnnArch, GnnArch, build_net
 from mantis.selfplay.buffers import BufferKind, BufferKindMismatch, ReplayFacade
 from mantis.selfplay.pool import WorkerPool
-from mantis.selfplay.pool_hooks import InferenceStats, PromotionTarget, RunnerStats
+from mantis.selfplay.pool_hooks import ActorSyncTarget, InferenceStats, RunnerStats
 from mantis.train.coordinator.config import WorkerPoolLike
 
 SELFPLAY_SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "selfplay"
@@ -229,15 +229,15 @@ def test_pool_presents_every_frozen_member(device) -> None:
 
 def test_pool_satisfies_both_runtime_protocols(device) -> None:
     """H-01 (Protocol arm) — PASS iff the pool satisfies the trainer's committed
-    `WorkerPoolLike` AND this package's `PromotionTarget`.
+    `WorkerPoolLike` AND this package's `ActorSyncTarget` (WP-UNFREEZE, R49).
 
-    The second assertion is `PromotionTarget`'s only live consumer: a Protocol nothing
+    The second assertion is `ActorSyncTarget`'s LAW-08 live consumer: a Protocol nothing
     checks is a dead declaration. It is also the mechanical statement of the DAG rule —
-    promotion is something callers do TO the pool, so the pool must satisfy the shape
-    without importing anything from the eval side."""
+    actor sync is something the train-side engine does TO the pool, so the pool must
+    satisfy the shape without importing anything from the train or eval side."""
     pool = _grid_pool(device)
     assert isinstance(pool, WorkerPoolLike)
-    assert isinstance(pool, PromotionTarget)
+    assert isinstance(pool, ActorSyncTarget)
 
 
 def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:

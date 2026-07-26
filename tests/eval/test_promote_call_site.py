@@ -1,27 +1,25 @@
-"""⊕ WP11-A DESIGN §a.4/§c.5 — the interface caution: WP-UNFREEZE will split `PromotionTarget`
-(pool_hooks.py:64-76) into ActorSyncTarget/DeployTag. WP11-A may call the existing promotion
-seam on gate-pass (zero-behavior parity with run3's flow) but must not deepen the coupling:
-EXACTLY ONE gate-decision call site, marked with a seam comment referencing WP-UNFREEZE, and
-no new code reading best_model/deploy state as a proxy for actor weights.
+"""⊕ WP-UNFREEZE (R50 rows E4/E5/E6) — the surviving half of the WP11-A call-site suite.
 
-RED-at-import: `mantis.eval.promote` does not exist yet.
+The split happened: `PromotionTarget` became `ActorSyncTarget` (actor seam) +
+`DeployTagHooks` (deploy seam). The E4 call-site census relocated to
+`tests/train/test_actor_sync_isolation.py` as S1/S2 (call sites == exactly
+`{train/actor_sync.py}`; zero under eval/arena) and the promote-file pins live there as
+S4 — the frozen copies are the ONLY copies (LAW-03: one census, one authority). The E5
+seam-comment marker announced this split; executing the split discharged it.
+
+What remains HERE is E6, KEPT VERBATIM: the anchor/best-model proxy-read ban across
+`mantis/eval` + `mantis/arena`, with `promote.py` the sole exemption — one direction of
+the no-cross-read law that predates the split and survives it unchanged.
 """
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
-import mantis.eval.promote  # noqa: F401 — RED-at-import anchor: this module does not exist yet
+import mantis.eval.promote  # noqa: F401 — the one file allowed to touch these fields
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
-
-# pool.py / pool_hooks.py DEFINE the seam + forward their OWN self-calls to it; those are the
-# pre-existing seam, excluded by path (dispatch: "pre-existing seam definitions excluded").
-_EXCLUDED_PATHS = (_SRC / "selfplay" / "pool.py", _SRC / "selfplay" / "pool_hooks.py")
-
-_TARGET_METHODS = ("sync_inference_weights", "update_checkpoint_step")
 
 # O-G (FIX-PASS supplemental, DISPATCH_LOG-authorized): the census must ban ATTRIBUTE
 # READS of best-model/anchor state as an actor-weight sync proxy, NOT the bare substring
@@ -33,50 +31,6 @@ _TARGET_METHODS = ("sync_inference_weights", "update_checkpoint_step")
 # (`anchor_state.best_model_step`, `resolved_anchor.best_model`) — a bare parameter name,
 # keyword argument, or local variable never does.
 _PROXY_READ_RE = re.compile(r"anchor_state\.\w+|\.best_model(?:_step)?\b")
-
-
-def _promotion_target_call_sites() -> list[tuple[Path, int, str]]:
-    """Every `<expr>.sync_inference_weights(...)` / `<expr>.update_checkpoint_step(...)` CALL
-    (attribute-method call, not a bare-name forwarder call, not a `def` definition) across
-    src/mantis, excluding the pre-existing pool seam."""
-    sites: list[tuple[Path, int, str]] = []
-    for py_file in _SRC.rglob("*.py"):
-        if py_file in _EXCLUDED_PATHS:
-            continue
-        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr in _TARGET_METHODS
-            ):
-                sites.append((py_file, node.lineno, node.func.attr))
-    return sites
-
-
-def test_exactly_one_gate_decision_call_site() -> None:
-    import mantis.eval.promote  # noqa: F401 — RED-at-import anchor; forces the module to exist
-
-    sites = _promotion_target_call_sites()
-    files = {p for p, _, _ in sites}
-    assert files == {_SRC / "eval" / "promote.py"}, (
-        f"sync_inference_weights/update_checkpoint_step must be called on a promotion target "
-        f"from EXACTLY mantis/eval/promote.py; found call sites in: {sorted(str(f) for f in files)}"
-    )
-    methods_called = {m for _, _, m in sites}
-    assert methods_called == set(_TARGET_METHODS), (
-        f"promote.py must call BOTH {_TARGET_METHODS}, found only {methods_called}"
-    )
-
-
-def test_seam_comment_references_wp_unfreeze() -> None:
-    promote_path = _SRC / "eval" / "promote.py"
-    assert promote_path.is_file(), "mantis/eval/promote.py must exist"
-    text = promote_path.read_text(encoding="utf-8")
-    assert "WP-UNFREEZE" in text, (
-        "the ONE gate-decision call site must carry the seam comment referencing WP-UNFREEZE "
-        "(the PromotionTarget split coming next) — dispatch Interface caution"
-    )
 
 
 def test_no_new_actor_weight_proxy_reads() -> None:

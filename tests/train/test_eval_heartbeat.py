@@ -110,6 +110,8 @@ def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
         log_dir=tmp_path, run_id="test-run", buffer=FakeBuffer(),
         buffer_persist_path=tmp_path / "replay.bin",
         wired_sources=["train_step", "inference_dispatch", "selfplay_drain", "eval_round"],
+        # WP-UNFREEZE E36 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
+        actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     run_safety.watchdog._sink = sink  # route the arm-log through our spy without a real JSONL
     run_safety.watchdog.arm()

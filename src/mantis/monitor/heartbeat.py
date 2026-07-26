@@ -39,6 +39,11 @@ HEARTBEAT_SOURCES: tuple[str, ...] = (
 # 43 is the persistence fault — NOT transient, so the supervisor never relaunches on it.
 WATCHDOG_STALL_EXIT_CODE: int = 42
 PERSIST_FATAL_EXIT_CODE: int = 43
+# 44 is taken supervisor-side (`supervise.RELAUNCH_BUDGET_EXIT_CODE`). 45 is the
+# actor-lag invariant breach (WP-UNFREEZE §4: `learner_step − actor_ckpt_step > N`):
+# the supervisor's existing "any other code propagated with NO relaunch" arm handles it
+# with zero supervisor change — relaunching into a broken sync mechanism is a crash loop.
+ACTOR_LAG_EXIT_CODE: int = 45
 
 
 @dataclass(frozen=True)

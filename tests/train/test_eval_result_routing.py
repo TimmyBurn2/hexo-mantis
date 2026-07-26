@@ -50,6 +50,10 @@ class FakePool:
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
         self.recent_move_histories: list = []
+        # E17 (WP-UNFREEZE): sync-call spy surface — the routing suites assert a gate
+        # decision reaches the pool with ZERO sync-shaped calls.
+        self.sync_calls: list = []
+        self.checkpoint_step_calls: list[int] = []
 
     def check_producer_health(self) -> None:
         return None
@@ -63,8 +67,11 @@ class FakePool:
     def runner_stats(self) -> Any:
         return _RunnerStats()
 
+    def sync_inference_weights(self, state_dict) -> None:
+        self.sync_calls.append(state_dict)
+
     def update_checkpoint_step(self, step: int) -> None:
-        return None
+        self.checkpoint_step_calls.append(int(step))
 
 
 class FakeTrainer:
@@ -132,8 +139,10 @@ class ThreadIdentSpyEvalPipeline:
         self.drain_calls += 1
         return None
 
-    def apply_gate_decision(self, result, *, sync_inference: bool) -> int | None:
-        self.apply_gate_calls.append({"result": dict(result), "sync_inference": sync_inference})
+    def apply_gate_decision(self, result) -> int | None:
+        # Single-signature applier (WP-UNFREEZE, R49): a drain that still threads a
+        # sync flag fails here with a TypeError, loudly.
+        self.apply_gate_calls.append({"result": dict(result)})
         return result.get("promoted_step") if result.get("promoted") else None
 
 
@@ -222,60 +231,61 @@ def test_kick_ack_busy_sets_eval_skipped_busy_outcome() -> None:
     )
 
 
-def test_promoted_result_applies_gate_decision_midrun_with_sync() -> None:
-    """A completed round with `promoted=True` routed mid-run (via `poll_completed()`) must
-    apply the gate decision WITH `sync_inference=True` — the pool is still up mid-run."""
+def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> None:
+    """E7 rewrite (WP-UNFREEZE, R49): a completed round with `promoted=True` routed
+    mid-run (via `poll_completed()`) reaches the ONE single-signature applier — there is
+    no sync flag left to thread (the spy applier rejects one with a TypeError) — and the
+    pool records ZERO sync-shaped calls in the window. The deploy-tag (anchor) write on
+    the REAL applier is pinned in tests/train/test_actor_deploy_independence.py."""
     result = {"step": 7, "promoted": True, "promoted_step": 7, "wr_sealbot": 0.9,
               "eval_broken": False}
     pipe = ThreadIdentSpyEvalPipeline(poll_result=result)
     h = _make_coordinator(eval_pipeline=pipe)
-
-    def _on_complete(r):
-        drain._apply_promotion(h.coord, r, sync_inference=True)
-
-    h.coord.on_eval_round_complete = _on_complete
+    h.coord.on_eval_round_complete = lambda r: None  # the WR consumer is not under test
     h.pool.games_completed = 5
 
     h.coord.step()
 
     assert pipe.apply_gate_calls, "a promoted result must invoke apply_gate_decision"
-    assert pipe.apply_gate_calls[0]["sync_inference"] is True, (
-        "mid-run promotion must sync inference weights (pool still up)"
+    assert pipe.apply_gate_calls[0]["result"]["step"] == 7, (
+        "the applier must receive the promoted round's step (the deploy-tag step)"
+    )
+    assert h.pool.sync_calls == [] and h.pool.checkpoint_step_calls == [], (
+        "a mid-run gate decision must never reach the pool's sync surface (R49)"
     )
 
 
-def test_terminal_route_applies_without_sync() -> None:
-    """The terminal route (`drain.run_terminal_eval` -> `_route_eval_result`) must apply a
-    promoted gate decision with `sync_inference=False` (pool already stopped; run3 parity,
-    step_coordinator.py:1705-1710)."""
+def test_terminal_route_applies_identically_to_midrun() -> None:
+    """E8 rewrite (WP-UNFREEZE, R49): the terminal route (`drain.run_terminal_eval` ->
+    `_route_eval_result`) calls the SAME single-signature applier as the mid-run route —
+    the mid-run/terminal asymmetry is gone because a gate decision is pool-independent on
+    every route: it applies with the pool stopped and untouched."""
     result = {"step": 9, "promoted": True, "promoted_step": 9, "wr_sealbot": 0.9,
               "eval_broken": False}
     pipe = ThreadIdentSpyEvalPipeline()
     pipe.run_evaluation = lambda *a, **k: dict(result)  # terminal eval RETURNS the result
     h = _make_coordinator(eval_pipeline=pipe)
+    h.coord.on_eval_round_complete = lambda r: None  # the WR consumer is not under test
 
-    def _on_complete(r):
-        drain._apply_promotion(h.coord, r, sync_inference=False)
-
-    h.coord.on_eval_round_complete = _on_complete
-    drain.run_terminal_eval(h.coord)
+    drain.run_terminal_eval(h.coord)  # pool never started, never touched
 
     assert pipe.apply_gate_calls, "the terminal route must invoke apply_gate_decision"
-    assert pipe.apply_gate_calls[0]["sync_inference"] is False, (
-        "terminal promotion must NOT sync inference weights (pool already stopped)"
+    assert pipe.apply_gate_calls[0]["result"]["step"] == 9, (
+        "the terminal route must hand the applier the same single-signature call shape"
+    )
+    assert h.pool.sync_calls == [] and h.pool.checkpoint_step_calls == [], (
+        "a terminal gate decision must never reach the pool's sync surface (R49)"
     )
 
 
 def test_flush_before_pool_stop_before_terminal_order() -> None:
-    """close_out ordering (drain.py:105-134 contract; disarm-first, O-27 untouched): disarm
-    -> flush_pending_eval -> on_drained -> run_terminal_eval. Exercises ONLY today's
-    already-shipped `drain.close_out` (WP13-A) — a regression pin on ordering the new eval
-    pipeline must not disturb, NOT an oracle for unbuilt IMPL behavior. It would PASS today
-    in isolation (drain.py already implements this order), but this whole FILE's top-level
-    `import mantis.eval.pipeline` fails first (RED-at-import, correct per the design's
-    per-suite law), so this test's own correctness-today is not separately observable until
-    that import exists — noted here so a reviewer doesn't mistake the file-level RED for
-    this specific assertion being wrong."""
+    """close_out ordering (disarm-first, O-27 untouched): disarm -> flush_pending_eval ->
+    on_drained -> run_terminal_eval. E34 (WP-UNFREEZE) re-justification: the order
+    survives for drain-BOUNDING reasons alone — the flush joins the in-flight round under
+    its budget before the pool goes down and the terminal eval runs on an unloaded GPU.
+    Gate decisions themselves are now pool-independent on EVERY route (R49): both the
+    flush and the terminal route call the one single-signature applier, so the ordering
+    is no longer what makes a promotion's sync safe — nothing about a promotion syncs."""
     order: list[str] = []
     watchdog = SimpleNamespace(disarm_staleness=lambda: order.append("disarm"))
     pipe = SimpleNamespace(

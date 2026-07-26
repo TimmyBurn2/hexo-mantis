@@ -65,7 +65,7 @@ from mantis.selfplay.pool_hooks import (
     HeartbeatFn,
     InferenceStats,
     NullRecorder,
-    PromotionTarget,
+    ActorSyncTarget,
     RecorderLike,
     RunnerStats,
 )
@@ -102,7 +102,7 @@ __all__ = [
     "OffsetsNonMonotonic",
     "PoolDims",
     "PoolInstrumentation",
-    "PromotionTarget",
+    "ActorSyncTarget",
     "RecorderLike",
     "ReplayFacade",
     "ResolvedPoolEncoding",

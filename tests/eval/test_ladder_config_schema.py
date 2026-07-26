@@ -91,7 +91,8 @@ def _train_block() -> dict:
     return {
         "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
         "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
+        "actor_sync_cadence_steps": 1, "completed_q_values": False,
         "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
         "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
         "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
@@ -146,6 +147,7 @@ def _monitor_block() -> dict:
         "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
         "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
         "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
+        "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
         "drain": {
             "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
             "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,

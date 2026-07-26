@@ -4,6 +4,7 @@ Each rule is the single authority both the self-play and eval callers import whe
 train/eval cannot re-derive a knob divergently (CONTEXT bug-class #3). None of these modules pull
 torch (config → encoding, util only — DAG).
 """
+from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.bootstrap import (
     BootstrapNotFoundError,
@@ -32,6 +33,7 @@ __all__ = [
     "normalize_declared",
     "normalize_stamp",
     "reconcile_encoding",
+    "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
     "resolve_bootstrap",
     "resolve_eval_model_sims",

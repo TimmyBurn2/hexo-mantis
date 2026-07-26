@@ -4,10 +4,11 @@ This is the "promotion-hooks" quarter of the pool split. Two kinds of thing live
 they share one reason to exist — they are the pool's EDGES:
 
   * the injected collaborators (`EventSink`, `RecorderLike`, `HeartbeatFn`) the pool writes
-    OUT to, each with an explicit no-op default, and `PromotionTarget`, the surface an
-    evaluator calls IN to. Promotion is a CALLEE surface: `WorkerPool` satisfies
-    `PromotionTarget`, and nothing in this package imports `mantis.eval` — the evaluator
-    reaches the pool by injection on its own side, so the import DAG stays one-way.
+    OUT to, each with an explicit no-op default, and `ActorSyncTarget`, the surface the
+    train-side sync engine calls IN to. Actor sync is a CALLEE surface: `WorkerPool`
+    satisfies `ActorSyncTarget`, and nothing in this package imports `mantis.train` or
+    `mantis.eval` — the caller reaches the pool by injection on its own side, so the
+    import DAG stays one-way.
   * the typed read-only snapshots (`RunnerStats`, `InferenceStats`) that replaced ad-hoc
     reaches into the private runner / inference-server attributes, plus the small
     forwarders that sit on the same seam (weight sync, recorder step, radius override,
@@ -62,11 +63,14 @@ class RecorderLike(Protocol):
 
 
 @runtime_checkable
-class PromotionTarget(Protocol):
-    """What a promotion pipeline calls INTO the pool after a gate decision.
+class ActorSyncTarget(Protocol):
+    """What the TRAIN-side sync engine (`mantis.train.actor_sync.ActorSync`) calls INTO
+    the pool, on a fixed step cadence, unconditionally (WP-UNFREEZE, R49). Nothing else
+    participates in the decision to sync: no gate, promotion, or eval code may ever
+    hold a reference shaped like this.
 
     `runtime_checkable` so the surface conformance test can assert
-    `isinstance(pool, PromotionTarget)` — that assertion is this Protocol's live
+    `isinstance(pool, ActorSyncTarget)` — that assertion is this Protocol's live
     consumer, and a Protocol nothing checks is the dead surface LAW-08 exists to
     prevent.
     """
@@ -244,7 +248,7 @@ __all__ = [
     "HeartbeatFn",
     "InferenceStats",
     "NullRecorder",
-    "PromotionTarget",
+    "ActorSyncTarget",
     "RecorderLike",
     "RunnerStats",
     "batch_fill_pct",

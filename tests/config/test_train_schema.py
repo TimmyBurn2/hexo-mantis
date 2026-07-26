@@ -30,6 +30,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "eta_min": 5e-4,
     "min_lr": None,
     "checkpoint_interval": 0,
+    "actor_sync_cadence_steps": 1,
     "completed_q_values": False,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",

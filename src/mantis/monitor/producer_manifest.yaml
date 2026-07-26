@@ -105,6 +105,14 @@ gates:
       symbol: WorkerPool.games_completed
     producer_test: tests/train/test_lifecycle_contract.py::test_watchdog_fires_after_timeout
 
+  - id: actor_lag                    # WPUF-2 Phase U actor-lag invariant, exit code 45
+    input: actor_ckpt_step
+    producer:
+      kind: symbol
+      module: mantis.train.actor_sync
+      symbol: ActorSync.actor_ckpt_step
+    producer_test: tests/train/test_actor_lag_watchdog.py::test_rigged_lag_over_threshold_fires_named_escalation_when_armed
+
   - id: disk_guard
     producer:
       kind: symbol

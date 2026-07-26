@@ -42,6 +42,11 @@ class TrainConfig(StrictModel):
     eta_min: float = Field(ge=0)
     min_lr: float | None = Field(default=..., ge=0)
     checkpoint_interval: int = Field(ge=0)
+    # WP-UNFREEZE K1: continuous actor-sync cadence in coordinator training steps.
+    # `ge=1` means NO disabled value exists — the schema cannot express "don't sync"
+    # (R49 enforced at the type level). Resolved ONLY by
+    # `mantis.config.resolve.actor_sync.resolve_actor_sync_cadence`.
+    actor_sync_cadence_steps: int = Field(ge=1)
 
     # loss selection + targets
     completed_q_values: bool

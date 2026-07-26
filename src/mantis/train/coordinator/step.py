@@ -106,6 +106,7 @@ class StepCoordinator:
         heartbeat: Callable[[str], None] | None = None,
         monitor_cfg: Any = None,
         heartbeat_watchdog: Any = None,
+        actor_sync: Any = None,
     ) -> None:
         self.trainer = trainer
         self.buffer = buffer
@@ -134,6 +135,11 @@ class StepCoordinator:
         self._heartbeat = heartbeat
         self.monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
         self.heartbeat_watchdog = heartbeat_watchdog
+        # WP-UNFREEZE: the continuous actor-sync engine (mantis.train.actor_sync).
+        # None is a unit-test affordance ONLY (like `eval_pipeline=None`); production
+        # wiring is unconditional at the ONE composition root, pinned by
+        # tests/train/test_actor_sync_isolation.py.
+        self.actor_sync = actor_sync
 
         # Per-step mutable bookkeeping.
         self._train_step = int(getattr(trainer, "step", 0))
@@ -282,6 +288,11 @@ class StepCoordinator:
             # else a straight self-play step. Both route through the injected trainer.
             loss_info = self._run_training_step(cfg)
             self._train_step = self.trainer.step
+            # D2b (WP-UNFREEZE): continuous actor weight sync — per inner step, the
+            # house cadence pattern (D4, log_interval); `_train_step` advances by
+            # exactly 1 per burst iteration so a modulo boundary can never be skipped.
+            if self.actor_sync is not None:
+                self.actor_sync.maybe_sync(self._train_step)
             if self._initial_policy_loss is None and "policy_loss" in loss_info:
                 self._initial_policy_loss = float(loss_info["policy_loss"])
             self._last_loss_info = loss_info
@@ -592,7 +603,7 @@ class StepCoordinator:
         if result is None:
             return False
         from mantis.train.coordinator import drain
-        drain._route_eval_result(self, result, sync_inference=True)
+        drain._route_eval_result(self, result)
         return True
 
     # ── close-out / terminal-eval flush (delegates to drain.py; §a.4 `drain` slice) ───────

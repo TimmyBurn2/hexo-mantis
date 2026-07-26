@@ -31,7 +31,7 @@ import numpy as np
 from mantis.eval.bt import fit_bt, predict_p
 from mantis.eval.errors import LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
-from mantis.eval.promote import PromotionHooks, apply_gate_decision
+from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import (
     GateSpec,
     RoundSpec,
@@ -177,7 +177,7 @@ class EvalPipeline:
         run_id: str,
         spool_dir: "str | Path",
         ladder_state_path: "str | Path",
-        promotion: PromotionHooks,
+        promotion: DeployTagHooks,
         sink: Any = None,
         heartbeat: "Callable[[str], None] | None" = None,
         clock: Callable[[], float] = time.monotonic,
@@ -612,8 +612,8 @@ class EvalPipeline:
         return self._finalize_round(inflight)
 
     # ── gate-decision delegation (the ONE call site lives in promote.py) ────────────────
-    def apply_gate_decision(self, result: Mapping[str, Any], *, sync_inference: bool) -> "int | None":
-        return apply_gate_decision(self._promotion, result, sync_inference=sync_inference)
+    def apply_gate_decision(self, result: Mapping[str, Any]) -> "int | None":
+        return apply_gate_decision(self._promotion, result)
 
     # ── teardown ─────────────────────────────────────────────────────────────────────
     def stop(self) -> None:
@@ -637,7 +637,7 @@ def build_eval_pipeline(
     run_id: str,
     spool_dir: "str | Path",
     ladder_state_path: "str | Path",
-    promotion: PromotionHooks,
+    promotion: DeployTagHooks,
     sink: Any = None,
     heartbeat: "Callable[[str], None] | None" = None,
     clock: Callable[[], float] = time.monotonic,

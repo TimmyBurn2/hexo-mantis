@@ -1,12 +1,17 @@
-"""apply_gate_decision — the EXACTLY-ONE gate-decision call site (design §a.3/§c.5).
+"""apply_gate_decision — the EXACTLY-ONE gate-decision call site (deploy seam).
 
-Sequence (run3 parity, eval_drain.py:78-114): load the EVALUATED candidate snapshot (the
-exact bytes the worker played — F-12/LAW-12; never the live trainer module) into the
-resolved anchor's best-model slot via the injected guarded loader -> `save_anchor(...)` ->
-iff `sync_inference`: `promotion_target.sync_inference_weights(sd)` +
-`.update_checkpoint_step(step)` -> update the resolved anchor's recorded step -> return the
-promoted step. NO read of the resolved anchor's recorded state anywhere in this module
-except to WRITE the post-decision update (no actor-weight proxy reads).
+DEPLOY-TAG SEAM (WP-UNFREEZE, R49): gate decisions move ONLY the deploy tag (the
+resolved anchor + best_model.pt). Actor weights sync continuously in
+mantis.train.actor_sync — this module must never name, hold, or call an actor-side
+surface, and `DeployTagHooks` carries no attribute through which one could be reached
+(field set pinned by tests/train/test_actor_sync_isolation.py).
+
+Sequence (F-12/LAW-12): load the EVALUATED candidate snapshot (the exact bytes the
+worker played — never the live trainer module) into the resolved anchor's best-model
+slot via the injected guarded loader -> `save_anchor(...)` -> update the resolved
+anchor's recorded step -> return the promoted step. NO read of the resolved anchor's
+recorded state anywhere in this module except to WRITE the post-decision update (no
+actor-weight proxy reads).
 """
 from __future__ import annotations
 
@@ -16,10 +21,10 @@ from typing import Any, Callable, Mapping
 
 
 @dataclass(frozen=True)
-class PromotionHooks:
-    """Constructed by the composition root (train side)."""
+class DeployTagHooks:
+    """Constructed by the composition root (train side): the deploy-side collaborators,
+    and nothing else — there is deliberately no actor-shaped field here (R49)."""
 
-    promotion_target: Any            # the pool — PromotionTarget (pool_hooks.py:64-76)
     anchor_state: Any                # train.anchor.AnchorState (anchor.py:75-85)
     best_model_path: Path
     run_id: str
@@ -28,14 +33,11 @@ class PromotionHooks:
     guarded_load: Callable[[Any, dict], None]  # injected train.anchor._guarded_load_state_dict
 
 
-def apply_gate_decision(
-    hooks: PromotionHooks, result: Mapping[str, Any], *, sync_inference: bool
-) -> "int | None":
+def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> "int | None":
     """No-op (`None`) unless `result["promoted"] is True` and the round was not broken.
 
-    # WP-UNFREEZE seam: PromotionTarget (pool_hooks.py:64-76) will split into
-    # ActorSyncTarget/DeployTag; this is the single gate-decision call site — do not add
-    # another.
+    A gate pass advances the deploy tag and ONLY the deploy tag; the actor's weights
+    are none of this function's business (WP-UNFREEZE, R49).
     """
     if not result.get("promoted") or result.get("eval_broken"):
         return None
@@ -56,11 +58,8 @@ def apply_gate_decision(
         resolved_anchor.best_model, hooks.best_model_path,
         step=step, run_id=hooks.run_id, encoding=hooks.encoding,
     )
-    if sync_inference:
-        hooks.promotion_target.sync_inference_weights(state_dict)
-        hooks.promotion_target.update_checkpoint_step(step)
     resolved_anchor.best_model_step = step
     return step
 
 
-__all__ = ["PromotionHooks", "apply_gate_decision"]
+__all__ = ["DeployTagHooks", "apply_gate_decision"]

@@ -257,7 +257,7 @@ class WorkerPool:
         """Composition snapshot of the live replay buffer."""
         return _buffer_composition(self)
 
-    # ── promotion / recorder seam ───────────────────────────────────────────────
+    # ── actor-sync / recorder seam ───────────────────────────────────────────────
     def sync_inference_weights(self, state_dict: dict[str, Any]) -> None:
         """Forward a promoted state_dict to the bound inference server."""
         _sync_inference_weights(self, state_dict)

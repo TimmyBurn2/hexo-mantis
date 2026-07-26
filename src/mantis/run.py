@@ -10,8 +10,9 @@ test_no_train_module_imports_eval_even_lazily).
 law). Smoke-grade until WP-SCHEMA-CLOSE (R-SELFPLAYCONFIG-SCHEMA: the pool still builds
 only via the legacy hparams dict path elsewhere) — `compose_run` is therefore
 injection-first: every collaborator (trainer/pool/buffer) is handed in, never built here,
-so it stays fakes-testable. NO actor-lag mechanism of any kind (WP-UNFREEZE property;
-census-tested).
+so it stays fakes-testable. WP-UNFREEZE lives here: this root builds the continuous
+actor-sync engine (`mantis.train.actor_sync.ActorSync`) UNCONDITIONALLY and wires the
+actor-lag watchdog callables (`actor_ckpt_step` / learner step) into `build_run_safety`.
 """
 from __future__ import annotations
 
@@ -22,8 +23,9 @@ from types import SimpleNamespace
 from typing import Any, Callable, NamedTuple, Sequence
 
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import PromotionHooks
+from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
+from mantis.train.actor_sync import ActorSync
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
@@ -35,6 +37,13 @@ _LOG = logging.getLogger(__name__)
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
 _BASE_WIRED_SOURCES: tuple[str, ...] = ("train_step", "inference_dispatch", "selfplay_drain")
+
+#: The fakes-path actor-sync cadence (R-10 justification, same as
+#: `_default_step_coordinator_config`): a config object with no `.train` attribute (every
+#: existing fakes test) gets cadence 1 — the zero-staleness, MOST-synced posture, never a
+#: quietly frozen one. A real `RunConfig` missing the key never reaches this branch:
+#: pydantic rejects it at load, naming the key.
+_SMOKE_ACTOR_SYNC_CADENCE_STEPS: int = 1
 
 
 class RunHandles(NamedTuple):
@@ -69,6 +78,17 @@ def _resolve_monitor_cfg(config: Any) -> MonitorConfig:
         return MonitorConfig()
     from mantis.config.resolve.monitor import resolve_monitor_config
     return resolve_monitor_config(section)
+
+
+def _resolve_actor_sync_cadence_steps(config: Any) -> int:
+    """The train-section twin of `_resolve_monitor_cfg`: a real `RunConfig` resolves
+    `train.actor_sync_cadence_steps` through its ONE resolver (K1); a fakes-test config
+    with no `.train` attribute gets `_SMOKE_ACTOR_SYNC_CADENCE_STEPS`."""
+    section = getattr(config, "train", None)
+    if section is None:
+        return _SMOKE_ACTOR_SYNC_CADENCE_STEPS
+    from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
+    return resolve_actor_sync_cadence(section)
 
 
 def _default_step_coordinator_config() -> StepCoordinatorConfig:
@@ -108,10 +128,30 @@ def compose_run(
     if eval_enabled:
         wired_sources.append("eval_round")
 
+    # WP-UNFREEZE §4.3: the lag-watchdog callables are read LIVE at poll time, never at
+    # build time — `actor_sync` is assigned immediately below, before anything can start
+    # (this root owns both the assignment and `watchdog.start()`). DESIGN §4.3's
+    # "ActorSync first" ordering is inverted here because the engine's LAW-18 sink IS
+    # `run_safety.sink`, which only exists after this call.
     run_safety = build_run_safety(
         log_dir=log_dir, run_id=run_id, buffer=buffer,
         buffer_persist_path=checkpoint_dir / "replay_buffer.bin",
         wired_sources=wired_sources, monitor_cfg=monitor_cfg,
+        actor_ckpt_step_fn=lambda: actor_sync.actor_ckpt_step(),
+        learner_step_fn=lambda: int(trainer.step),
+    )
+
+    # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
+    # or eval state may make actor sync conditional (pinned by
+    # tests/train/test_actor_sync_isolation.py). The actor's weights come from the
+    # learner on a cadence and NEVER from a gate decision.
+    actor_sync = ActorSync(
+        target=pool,
+        state_dict_fn=trainer.inference_state_dict,
+        step_fn=lambda: int(trainer.step),
+        cadence_steps=_resolve_actor_sync_cadence_steps(config),
+        sink=run_safety.sink,
+        run_id=run_id,
     )
 
     # M-4: the StepCoordinatorConfig instance is built FIRST — DrainCaps is LIFTED from
@@ -135,8 +175,8 @@ def compose_run(
             encoding=getattr(getattr(config, "identity", None), "encoding", "unknown"),
             run_id=run_id, spool_dir=log_dir / "eval_spool",
             ladder_state_path=log_dir / "eval_ladder_state.json",
-            promotion=PromotionHooks(
-                promotion_target=pool, anchor_state=resolved_anchor,
+            promotion=DeployTagHooks(
+                anchor_state=resolved_anchor,
                 best_model_path=checkpoint_dir / "best_model.pt", run_id=run_id,
                 encoding=getattr(getattr(config, "identity", None), "encoding", "unknown"),
                 save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
@@ -158,7 +198,7 @@ def compose_run(
         config=step_coordinator_cfg, full_config=(config if isinstance(config, dict) else {}),
         train_cfg={}, mixing_cfg={}, run_id=run_id,
         sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,
-        heartbeat_watchdog=run_safety.watchdog,
+        heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync,
     )
 
     # Drive the loop + epilogue. Defensive: a placeholder/fake collaborator (no real

@@ -35,7 +35,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.lifecycle.disk_guard import DiskGuard
-from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
+from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
 from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
 _LOG = logging.getLogger(__name__)
@@ -191,6 +191,8 @@ def build_run_safety(
     buffer: Any,
     buffer_persist_path: str | Path,
     wired_sources: Sequence[str],
+    actor_ckpt_step_fn: Callable[[], int],
+    learner_step_fn: Callable[[], int],
     monitor_cfg: MonitorConfig | None = None,
     heartbeat_file: str | Path | None = None,
     exit_fn: Callable[[int], None] = os._exit,
@@ -214,7 +216,12 @@ def build_run_safety(
         watched from arm time; an undeclared one gets a loud `heartbeat_source_unwired`
         event instead of a stall abort. Without the declaration, one forgotten `heartbeat=`
         kwarg makes a healthy run fire 42 and the supervisor relaunch into the same missing
-        wiring until the budget is gone (RED-TEAM F3) — so this may never be inferred.
+        wiring until the budget is gone (RED-TEAM F3) — so this may never be inferred;
+      * `actor_ckpt_step_fn` / `learner_step_fn` are REQUIRED with NO defaults (the E32
+        posture, WP-UNFREEZE §4.3): a default here would silently unwire the actor-lag
+        check. They feed `ActorLagSpec` together with the monitor config's
+        `actor_lag_threshold_steps` / `actor_lag_abort_enabled`, and are read LIVE at
+        poll time.
 
     The watchdog is returned UNSTARTED: the caller starts it only after the pool is up
     (an unstarted pool must never be torn down by a fire), and passes it to the
@@ -257,6 +264,12 @@ def build_run_safety(
         close_out_deadline_sec=cfg.heartbeat_close_out_deadline_sec,
         snapshot_timeout_sec=cfg.heartbeat_fire_effect_timeout_sec,
         wired_sources=list(wired_sources),
+        actor_lag=ActorLagSpec(
+            learner_step_fn=learner_step_fn,
+            actor_ckpt_step_fn=actor_ckpt_step_fn,
+            threshold_steps=cfg.actor_lag_threshold_steps,
+            abort_enabled=cfg.actor_lag_abort_enabled,
+        ),
         save_snapshot=_save_snapshot,
         exit_fn=exit_fn,
     )

@@ -68,6 +68,12 @@ class MonitorSchemaConfig(StrictModel):
     heartbeat_close_out_deadline_sec: float = Field(ge=0)
     heartbeat_fire_effect_timeout_sec: float = Field(ge=0)
 
+    # ── actor-lag invariant (WP-UNFREEZE K2/K3; watchdog family) ──────────────────────
+    # `ge=1`, no zero-disable sentinel — disablement is the arming flag's job, one
+    # authority. Cross-checked > train.actor_sync_cadence_steps at the RunConfig level.
+    actor_lag_threshold_steps: int = Field(ge=1)
+    actor_lag_abort_enabled: bool
+
     # ── out-of-process supervisor flag defaults (monitor/supervise.py) ────────────────
     supervisor_stale_after_sec: float = Field(ge=0)
     supervisor_poll_interval_sec: float = Field(ge=0)

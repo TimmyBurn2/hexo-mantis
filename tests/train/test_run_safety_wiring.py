@@ -274,6 +274,8 @@ def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_pat
         log_dir=tmp_path, run_id="wiring", buffer=None,
         buffer_persist_path=tmp_path / "replay_buffer.bin",
         wired_sources=HEARTBEAT_SOURCES,
+        # WP-UNFREEZE E31 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
+        actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     try:
         assert run_safety.heartbeat.__self__ is run_safety.registry, (

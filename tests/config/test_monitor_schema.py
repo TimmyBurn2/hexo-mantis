@@ -1,4 +1,4 @@
-"""SC-A3 oracle — `MonitorSchemaConfig` (27 fields) + `DrainCapsConfig` (4 fields) +
+"""SC-A3 oracle — `MonitorSchemaConfig` (29 fields; +2 WP-UNFREEZE actor-lag knobs) + `DrainCapsConfig` (4 fields) +
 `resolve_monitor_config` round-trip (DESIGN_P2.md §4 / PREREG_P2.md suite #6).
 
 RED-at-import until IMPL lands `mantis.config.schema.monitor.MonitorSchemaConfig` /
@@ -19,7 +19,8 @@ from mantis.monitor.config import MonitorConfig
 
 # Every value = the CURRENT `monitor.config.MonitorConfig` dataclass default, minted
 # verbatim (DESIGN_P2.md §4.2 — zero behavior change; enumerated by direct read of
-# monitor/config.py:32-84, the corrected 27-field count, not the debt row's paraphrased 22).
+# monitor/config.py, the corrected field count — 27 at SC-A3, 29 since WP-UNFREEZE
+# added actor_lag_threshold_steps / actor_lag_abort_enabled (R-30)).
 VALID_MONITOR_SCALARS: dict = {
     "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
     "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -36,6 +37,7 @@ VALID_MONITOR_SCALARS: dict = {
     "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
     "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
     "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
+    "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
 }
 VALID_DRAIN: dict = {
     "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
