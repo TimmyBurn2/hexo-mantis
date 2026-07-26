@@ -59,8 +59,23 @@ def run_training_loop(
     if eval_pipeline is not None:
         if resolve_anchor is None:
             from mantis.train.anchor import resolve_anchor as resolve_anchor  # lazy (Slice 3)
-        anchor_state = resolve_anchor(
+        resolved = resolve_anchor(
             trainer=trainer, eval_pipeline=eval_pipeline, anchor_state=anchor_state, sink=sink)
+        if anchor_state is None:
+            anchor_state = resolved
+        else:
+            # PUBLISH onto the caller's object, do not rebind a local.
+            #
+            # The composition root hands ONE anchor object to `PromotionHooks` and to
+            # `StepCoordinator` before this loop starts. Rebinding `anchor_state` here
+            # updated nothing either of them could see, so `best_model` stayed None
+            # forever, `eval/pipeline.py`'s `run_gate = (best is not None) and …` was
+            # permanently False, and no round could ever promote. That is the WP-SP /
+            # WP11-A port parity gap (WPUF-2 chunk U-w): the actor never synced and
+            # nothing was ever blessed.
+            for field in ("best_model", "best_model_step", "best_model_path", "representation"):
+                if hasattr(resolved, field):
+                    setattr(anchor_state, field, getattr(resolved, field))
 
     saved = False
 

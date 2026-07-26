@@ -168,7 +168,8 @@ def compose_run(
     # the drive succeeded end to end.
     try:
         run_training_loop(trainer=trainer, shutdown_state=shutdown, eval_pipeline=eval_pipeline,
-                          coordinator=coordinator, sink=run_safety.sink)
+                          coordinator=coordinator, anchor_state=resolved_anchor,
+                          sink=run_safety.sink)
     except Exception:  # noqa: BLE001 — see docstring note above
         _LOG.exception("run_training_loop_raised run_id=%s", run_id)
     try:
