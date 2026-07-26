@@ -45,6 +45,8 @@ jobs:
         run: bash tools/ci_gates/registry_gate.sh
       - name: "gate 9: import-DAG check"
         run: uv run python tools/check_import_dag.py src/mantis
+      - name: "gate 11: no silent encoding-fallback arms"
+        run: uv run python tools/ci_gates/silent_encoding_gate.py
       - name: "supplementary: ruff"
         run: uv run ruff check .
       - name: "supplementary: pyright"

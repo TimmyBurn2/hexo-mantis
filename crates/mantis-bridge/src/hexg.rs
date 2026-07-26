@@ -24,10 +24,12 @@ pub struct PyHexgBuffer {
 #[pymethods]
 impl PyHexgBuffer {
     /// Create a graph-position ring with `capacity` records. `encoding` MUST be a
-    /// graph spec (default `"gnn_axis_v1"`); a grid encoding is a LOUD `ValueError`
-    /// (an unknown name panics through `lookup_or_panic` → `PanicException`).
+    /// graph spec and is REQUIRED — the `"gnn_axis_v1"` default was a silent-fallback arm
+    /// (R45, LAW-11), and becomes actively wrong the moment a second graph schema exists
+    /// (WP-AXIS2 adds `gnn_axis_v2`). A grid encoding is a LOUD `ValueError`; an unknown
+    /// name panics through `lookup_or_panic` → `PanicException`.
     #[new]
-    #[pyo3(signature = (capacity, encoding = "gnn_axis_v1"))]
+    #[pyo3(signature = (capacity, encoding))]
     pub fn new(capacity: usize, encoding: &str) -> PyResult<Self> {
         Ok(PyHexgBuffer {
             inner: HexgBuffer::new(capacity, encoding).map_err(PyValueError::new_err)?,

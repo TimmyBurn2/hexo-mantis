@@ -70,11 +70,12 @@ pub struct PyReplayBuffer {
 
 #[pymethods]
 impl PyReplayBuffer {
-    /// Create a buffer with `capacity` positions. `encoding` is a registry name
-    /// (default `"v6"`, frozen back-compat); an unknown name panics through
-    /// `lookup_or_panic` (→ catchable `PanicException`, LOCKED #4).
+    /// Create a buffer with `capacity` positions. `encoding` is a registry name and is
+    /// REQUIRED — the `"v6"` default was a silent-fallback arm (R45, LAW-11): a buffer
+    /// built without stating its encoding decoded as v6 and reported success. An unknown
+    /// name panics through `lookup_or_panic` (→ catchable `PanicException`, LOCKED #4).
     #[new]
-    #[pyo3(signature = (capacity, encoding = "v6"))]
+    #[pyo3(signature = (capacity, encoding))]
     pub fn new(capacity: usize, encoding: &str) -> Self {
         PyReplayBuffer {
             inner: ReplayBuffer::new(capacity, encoding),

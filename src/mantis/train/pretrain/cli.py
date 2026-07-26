@@ -35,6 +35,7 @@ from mantis.encoding import lookup as _lookup_encoding
 from mantis.encoding import resolve_corpus_path as _resolve_corpus_path
 from mantis.encoding import resolve_from_checkpoint as _resolve_encoding_from_ckpt
 from mantis.encoding.registry import EncodingRegistryError as _EncodingRegistryError
+from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import arch_from_spec_and_config, build_net, compile_model
 from mantis.train.emit import NullEventSink
 from mantis.train.pretrain.dataset import (
@@ -88,7 +89,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _resolve_encoding_name(args: argparse.Namespace) -> str:
-    """Resolve the encoding: --encoding, else auto-detect from the --resume checkpoint, else v6."""
+    """Resolve the encoding: --encoding, else auto-detect from the --resume checkpoint.
+
+    There is no third branch. Pretraining with an unstated encoding silently produced a
+    v6 model until R45 (LAW-11, LAW-05); an absent encoding now raises.
+
+    Raises:
+        MissingEncodingError: if neither `--encoding` nor `--resume` was given. R45 names
+            the convention by ERROR CLASS, and this is that class — so it raises the class
+            error rather than `SystemExit`, even though the surrounding function uses
+            `SystemExit` for its argument-shaped failures. `pretrain()` converts it to a
+            clean CLI message at the boundary, so the operator still sees a message rather
+            than a traceback.
+    """
     if args.encoding is not None:
         return args.encoding
     if args.resume is not None:
@@ -101,14 +114,23 @@ def _resolve_encoding_name(args: argparse.Namespace) -> str:
             ) from e
         _LOG.info("auto_detected_encoding_from_resume_ckpt name=%s resume=%s", spec.name, args.resume)
         return spec.name
-    return "v6"
+    raise MissingEncodingError(
+        "no encoding specified: pass --encoding <name>, or --resume <ckpt> to inherit it "
+        "from the checkpoint's metadata. There is no default (LAW-11, R45) — pretraining "
+        "silently defaulted to v6 before this was closed."
+    )
 
 
 def pretrain(argv: Optional[list[str]] = None) -> None:
     logging.basicConfig(level=logging.INFO)
     args = _build_arg_parser().parse_args(argv)
 
-    encoding = _resolve_encoding_name(args)
+    # The class error is the authority (R45); the CLI boundary is the only place it is
+    # turned into a message, so an operator who forgot a flag gets one line, not a stack.
+    try:
+        encoding = _resolve_encoding_name(args)
+    except MissingEncodingError as e:
+        raise SystemExit(str(e)) from e
     spec = _lookup_encoding(encoding)  # loud raise on an unregistered name
 
     # Plain config dict (training knobs are explicit params — R-TRAINCONFIG-SCHEMA; no yaml files).

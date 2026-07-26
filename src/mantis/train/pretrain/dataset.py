@@ -76,7 +76,7 @@ class AugmentedBootstrapDataset(torch.utils.data.Dataset):
         )
 
 
-def make_augmented_collate(augment: bool, encoding: str = "v6"):
+def make_augmented_collate(augment: bool, encoding: str):
     """Return a collate_fn that batches triples and applies hex augmentation.
 
     19×19 grid (v6 family): Rust ``apply_symmetries_batch`` state scatter (one PyO3 hop) + numpy

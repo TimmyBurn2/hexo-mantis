@@ -222,10 +222,18 @@ _CORPUS_FILENAME_HEURISTIC: tuple[tuple[str, str], ...] = (
 
 
 def _infer_corpus_from_filename(name: str) -> str:
-    """Best-effort filename→encoding heuristic; default v6."""
+    """Best-effort filename→encoding heuristic; default v6.
+
+    NOT a resolver. Its only consumer compares the guess against the sidecar's DECLARED
+    encoding purely to emit a `warn` finding when the two disagree; it never selects an
+    encoding for encoding, training or inference, so the default cannot mis-encode
+    anything — the worst it can do is make an audit report's warning noisier or quieter.
+    """
     for needle, encoding in _CORPUS_FILENAME_HEURISTIC:
         if needle in name:
             return encoding
+    # silent-encoding-gate: ok -- diagnostic-only guess, compared against the declared
+    # sidecar value to raise a warning; never resolves an encoding for real work.
     return "v6"
 
 

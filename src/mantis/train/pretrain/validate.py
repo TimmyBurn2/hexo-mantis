@@ -19,6 +19,7 @@ from pathlib import Path
 import torch
 
 from mantis.encoding import lookup as _lookup_encoding
+from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import arch_from_spec_and_config, build_net
 
 _LOG = logging.getLogger(__name__)
@@ -26,7 +27,14 @@ _LOG = logging.getLogger(__name__)
 
 def _config_encoding(cfg: dict) -> str:
     """Resolve the encoding name from a saved checkpoint config — the WP8 nested
-    `identity.encoding`, a legacy `{version: …}` dict, or a flat string; default v6."""
+    `identity.encoding`, a legacy `{version: …}` dict, or a flat string.
+
+    Raises:
+        MissingEncodingError: if none of those forms carries an explicit encoding
+            name. A checkpoint that does not say what it was encoded with cannot be
+            validated against a guess (LAW-11, R28, R45) — the v6 default arms this
+            function used to carry are retired.
+    """
     ident = cfg.get("identity")
     if isinstance(ident, dict) and isinstance(ident.get("encoding"), str):
         return ident["encoding"]
@@ -34,8 +42,19 @@ def _config_encoding(cfg: dict) -> str:
     if isinstance(enc, str):
         return enc
     if isinstance(enc, dict):
-        return str(enc.get("version", "v6"))
-    return "v6"
+        version = enc.get("version")
+        if not isinstance(version, str):
+            raise MissingEncodingError(
+                "pretrain checkpoint config's 'encoding' mapping has no string "
+                "'version' key; an explicit encoding is required (LAW-11, R45) — "
+                "the v6 default arm is retired"
+            )
+        return version
+    raise MissingEncodingError(
+        "pretrain checkpoint config carries no encoding: expected "
+        "'identity.encoding', a string 'encoding', or an 'encoding' mapping with a "
+        "'version' key (LAW-11, R45) — the v6 default arm is retired"
+    )
 
 
 def validate(ckpt_path: Path, device: torch.device) -> None:
