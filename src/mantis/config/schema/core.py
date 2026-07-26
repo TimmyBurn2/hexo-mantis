@@ -279,3 +279,34 @@ class RunConfig(StrictModel):
                 "a threshold at or below the sync cadence fires under healthy operation"
             )
         return self
+
+    @model_validator(mode="after")
+    def _actor_sync_knobs_fit_inside_the_run(self) -> "RunConfig":
+        """Both step-clock knobs must be reachable within the run (RED-TEAM F-2).
+
+        `ge=1` alone does not make "never sync" inexpressible. A cadence at or beyond
+        `total_steps` lets the actor take its single unconditional first sync and then
+        freeze for the entire run — run3's failure, expressed in a config that validated
+        clean. And because the threshold must exceed the cadence, such a config also
+        pushes the lag threshold out of reach, so the exit-45 invariant that exists to
+        catch a frozen actor could never fire on one. The two knobs failed open together.
+
+        Requiring both to be strictly inside `total_steps` is what actually makes
+        "don't sync" unrepresentable, which is what R49 asks of the config surface.
+        """
+        total = self.train.total_steps
+        if self.train.actor_sync_cadence_steps >= total:
+            raise ValueError(
+                f"train.actor_sync_cadence_steps "
+                f"({self.train.actor_sync_cadence_steps}) must be < train.total_steps "
+                f"({total}): a cadence the run never reaches means the actor syncs once "
+                f"and then never again, which is the frozen actor this WP removed"
+            )
+        if self.monitor.actor_lag_threshold_steps >= total:
+            raise ValueError(
+                f"monitor.actor_lag_threshold_steps "
+                f"({self.monitor.actor_lag_threshold_steps}) must be < train.total_steps "
+                f"({total}): a threshold the run never reaches is an invariant that can "
+                f"never fire — armed in the config, absent in effect"
+            )
+        return self
