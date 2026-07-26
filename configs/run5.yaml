@@ -3,6 +3,7 @@
 # delta: run_id: template_dev -> run5
 # delta: seed: 20260716 -> 20260718
 # delta: eval.random_floor_games: 4 -> 0
+# delta: monitor.actor_lag_abort_enabled: False -> True
 schema_version: 1
 run_id: run5
 seed: 20260718
@@ -198,7 +199,7 @@ monitor:
   heartbeat_close_out_deadline_sec: 14400.0
   heartbeat_fire_effect_timeout_sec: 30.0
   actor_lag_threshold_steps: 100
-  actor_lag_abort_enabled: false
+  actor_lag_abort_enabled: true
   supervisor_stale_after_sec: 900.0
   supervisor_poll_interval_sec: 30.0
   supervisor_kill_grace_sec: 30.0
