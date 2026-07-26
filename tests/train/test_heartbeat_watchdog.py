@@ -585,7 +585,8 @@ def test_gil_starvation_freezes_seq_and_the_supervisor_declares_it_stale(tmp_pat
         t0 = time.monotonic()
         math.factorial(700_000)              # one non-yielding C call: the GIL is held
         elapsed = time.monotonic() - t0
-        frozen = read_heartbeat_file(hb).seq
+        frozen_state = read_heartbeat_file(hb)
+        frozen = frozen_state.seq
         # A free-running watchdog mirrors once per 0.01 s poll, so this window should have
         # produced ~elapsed/0.01 increments. At most ONE boundary tick may land on either
         # side of the read; anything more means the thread was NOT starved.
@@ -600,8 +601,16 @@ def test_gil_starvation_freezes_seq_and_the_supervisor_declares_it_stale(tmp_pat
         # stale no matter how healthy the child looks.
         tracker = LivenessTracker(stale_after_sec=1.0)
         tracker.reset(now=0.0)
-        tracker.observe(read_heartbeat_file(hb), now=0.0)
-        tracker.observe(read_heartbeat_file(hb), now=2.0)      # same seq, 2 s later
+        # The SAME captured state, twice. Re-READING the live file here raced the watchdog
+        # thread: the GIL window has ended by this line, so the thread is free-running again
+        # at one mirror per 0.01 s poll, and a tick landing between the two reads made
+        # `observe` see PROGRESS — `_last_progress` rebased to 2.0 and `is_stale(2.0)` went
+        # False at a measured ~10 % (WPUF-2 R3). The property under test is "an UNCHANGED seq
+        # observed 2 s apart is stale", so the input must be unchanged by construction, not
+        # by luck — and `frozen_state` is literally the seq that froze during the GIL window,
+        # which is what the docstring claims this leg feeds level 2.
+        tracker.observe(frozen_state, now=0.0)
+        tracker.observe(frozen_state, now=2.0)      # the SAME frozen state, 2 s later
         assert tracker.is_stale(2.0), "the supervisor must declare a frozen seq stale"
         assert _wait_until(lambda: read_heartbeat_file(hb).seq > frozen, 5.0), (
             "the watchdog thread must resume mirroring once the GIL is released"
