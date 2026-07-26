@@ -91,6 +91,19 @@ producers is a phantom-armed abort chain waiting to happen).
 | `eval_broken` | event_literal | `eval.pipeline` / `eval_broken` | `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain` (+ reason `round_completion_error` — RED-TEAM-FIX WP11-A F1 layer 2, ANY uncaught exception in round completion/scheduling converts to a delivered `eval_broken` rather than killing the poller thread silently — `tests/eval/test_round_completion_error.py::test_poller_thread_survives_an_uncaught_exception_in_round_completion`) |
 | `eval_rung_skipped` | event_literal | `eval.pipeline` / `eval_rung_skipped` | `tests/eval/test_rung_loud_skip.py::test_unresolvable_rung_emits_skip_event_and_log` |
 
+## WP-UNFREEZE rows (actor-sync ⊥ deploy-gate split; LAW-18)
+
+| event | producer | producer test |
+|---|---|---|
+| `actor_sync` | `train.actor_sync.ActorSync.maybe_sync` — one event per successful sync; payload `{event, step, actor_ckpt_step, lag_steps_pre_sync, cadence_steps, sync_count, duration_ms}` (the cadence is a lever under test — it logs its own fire rate in-run) | `tests/train/test_actor_sync.py::test_actor_sync_event_carries_lever_fire_rate_fields` |
+| `actor_lag_exceeded` | `train.lifecycle.heartbeat_watchdog.HeartbeatWatchdog._check_actor_lag` — armed: the `heartbeat_watchdog_fired` payload with `reason=actor_lag_exceeded`, exit code 45; disarmed: ONE `actor_lag_exceeded {armed: false}` event per exceedance episode (latched) | `tests/train/test_actor_lag_watchdog.py::test_rigged_lag_over_threshold_disarmed_emits_event_and_never_aborts` |
+| `actor_lag_negative` | same check — a negative lag is a wiring bug reported loudly once, never a fire | `tests/train/test_actor_lag_watchdog.py::test_negative_lag_reports_wiring_bug_event_once` |
+
+The `heartbeat_watchdog_armed` payload additionally gains one key, `actor_lag`: either
+`{armed: bool, threshold_steps: int}` or the string `"absent"` when no spec was injected —
+a disabled or unwired lag check is loud at arm time, never silent
+(`tests/train/test_actor_lag_watchdog.py::test_arm_event_names_actor_lag_posture`).
+
 Coverage state at WP11-A landing (recorded, not silent — the intended operator posture):
 WP13-A shipped **ZERO new default-active hard-aborts**; WP11-A lands the mid-run eval-
 RESULT producer that row `sealbot_wr_warn` was pending on.
