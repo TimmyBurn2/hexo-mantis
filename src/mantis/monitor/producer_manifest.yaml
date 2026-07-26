@@ -111,7 +111,7 @@ gates:
       kind: symbol
       module: mantis.train.actor_sync
       symbol: ActorSync.actor_ckpt_step
-    producer_test: tests/train/test_actor_lag_watchdog.py::test_rigged_lag_over_threshold_fires_named_escalation_when_armed
+    producer_test: tests/train/test_actor_lag_wiring_live.py::test_actor_ckpt_step_fn_reads_the_live_sync_engine
 
   - id: disk_guard
     producer:
