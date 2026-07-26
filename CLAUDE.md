@@ -110,6 +110,8 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
    until the registry ports; its trigger is self-tested).
 9. Import-DAG check (tools/check_import_dag.py — no top-level cycles).
 10. No Makefile/doc reference to untracked paths (tools/ci_gates/check_tracked_refs.py).
+11. No silent encoding-fallback arms (tools/ci_gates/silent_encoding_gate.py) — an absent
+    encoding raises, never defaults (LAW-11/LAW-05).
 
 Every gate's check logic is a repo-local script or make target under tools/ — nothing
 lives only in workflow YAML.

@@ -240,6 +240,11 @@ copies are single-read by contract.
 8. Registry sha handshake + `python -m mantis.encoding audit` exit 0.
 9. Import-DAG check (no new top-level cycles).
 10. No Makefile/doc reference to a path absent from `git ls-files`.
+11. No silent encoding-fallback arms — an absent encoding RAISES, it is never defaulted
+    into existence (LAW-11, LAW-05). Grep gate over `src/` and `crates/`
+    (`tools/ci_gates/silent_encoding_gate.py`). A site that is not a fallback is justified
+    in place; a real arm that cannot be closed yet is registered with a named owner, never
+    hidden in the justification hatch.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 
