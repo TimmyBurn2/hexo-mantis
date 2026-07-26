@@ -29,10 +29,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
         with: { python-version: "3.11" }
+      - name: "setup: build the job workspace from the lockfile"
+        run: uv sync --locked
       - name: "gate 1: fresh-clone uv sync builds the extension"
-        run: |
-          uv sync --locked
-          uv run python -c "from mantis import _engine; assert _engine.__doc__; print(_engine.__doc__)"
+        run: bash tools/ci_gates/gate_01_fresh_sync.sh
       - name: "gate 3a: pytest default tier"
         run: uv run pytest -m "not integration and not slow"
       - name: "gate 3b: pytest integration tier"
