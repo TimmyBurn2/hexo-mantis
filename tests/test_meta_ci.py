@@ -108,6 +108,29 @@ def test_every_ci_gate_script_is_invoked_by_ci_yaml():
     )
 
 
+def test_lint_and_type_steps_are_advisory_not_blocking():
+    """R57 / CARD-LINT-TYPE: ruff and pyright report, they do not gate.
+
+    Both were nominally required and permanently red (612 and 1238 findings) for the whole
+    migration, unnoticed because this repo has no remote and Actions never ran. A
+    permanently-red required step makes every other gate's result unreadable.
+
+    This pin cuts both ways deliberately. Re-blocking them is CARD-LINT-TYPE's job and is
+    welcome — but it must happen by burning the findings down, not by flipping the flag and
+    leaving the job red. If you are here because this test failed after you removed the
+    `|| true`, check that `ruff check .` and `pyright` are actually clean first.
+    """
+    commands = _ci_run_commands()
+    for tool in ("ruff check", "pyright"):
+        steps = [c for c in commands if tool in c]
+        assert steps, f"{tool} step vanished from ci.yml — it should report, not disappear"
+        for step in steps:
+            assert "|| true" in step, (
+                f"{tool} is blocking again. R57 demoted it to advisory under "
+                f"CARD-LINT-TYPE; re-block it only once it is green."
+            )
+
+
 def test_gate_01_script_actually_fresh_clones_and_syncs():
     """repo_design §9.1: 'clone-and-run is the product', so gate 1 must CLONE.
 

@@ -47,10 +47,17 @@ jobs:
         run: uv run python tools/check_import_dag.py src/mantis
       - name: "gate 11: no silent encoding-fallback arms"
         run: uv run python tools/ci_gates/silent_encoding_gate.py
-      - name: "supplementary: ruff"
-        run: uv run ruff check .
-      - name: "supplementary: pyright"
-        run: uv run pyright
+      # ADVISORY, NOT BLOCKING (R57 / CARD-LINT-TYPE). Both have been red for the entire
+      # migration — 612 ruff findings and 1238 pyright findings at the time of demotion —
+      # and neither has ever been observed failing, because this repo has no git remote so
+      # Actions has never run. Leaving them nominally required while permanently red makes
+      # every other gate's result unreadable: a red job says nothing about the change.
+      # They report, loudly, and do not gate. CARD-LINT-TYPE (WP-R family) owns burning
+      # them down; the BINDING pre-cutover gate is the local serialized sweep (R57).
+      - name: "advisory: ruff (CARD-LINT-TYPE — non-blocking)"
+        run: uv run ruff check . || true
+      - name: "advisory: pyright (CARD-LINT-TYPE — non-blocking)"
+        run: uv run pyright || true
 
   hygiene:
     runs-on: ubuntu-latest
