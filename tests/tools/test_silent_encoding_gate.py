@@ -39,9 +39,8 @@ def _fires(line: str, prev: str = "", suffix: str = ".py") -> bool:
     """
     lines = [prev, line] if prev else [line]
     for idx, logical in GATE._logical_lines(lines, suffix):
-        for rx, _why in GATE._COMPILED:
-            if rx.search(logical):
-                return not GATE._is_justified(lines, idx, suffix)
+        if GATE.line_hit(logical) is not None:
+            return not GATE._is_justified(lines, idx, suffix)
     return False
 
 
@@ -185,6 +184,63 @@ def test_escape_hatch_reads_the_whole_comment_block_not_just_one_line():
         '    return "v6"',
     ]
     assert GATE._is_justified(lines, 2)
+
+
+def _load_corpus() -> list[dict]:
+    import tomllib
+
+    path = REPO_ROOT / "tests" / "fixtures" / "silent_encoding_evasions.toml"
+    return tomllib.loads(path.read_text())["case"]
+
+
+CORPUS = _load_corpus()
+
+
+def test_the_evasion_corpus_is_the_one_review_impl_built():
+    """Guards the fixture itself against quiet shrinkage.
+
+    The corpus is only worth committing if it cannot be trimmed when a case becomes
+    inconvenient — the failure mode that let the first draft claim coverage it never had.
+    """
+    import tomllib
+
+    path = REPO_ROOT / "tests" / "fixtures" / "silent_encoding_evasions.toml"
+    meta = tomllib.loads(path.read_text())["meta"]
+    assert meta["candidates_tried"] == 31
+    assert len(CORPUS) >= 31, f"corpus shrank to {len(CORPUS)} cases"
+    assert {c["expect"] for c in CORPUS} <= {"fires", "quiet", "gap"}
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CORPUS if c["expect"] == "fires"], ids=lambda c: c["id"]
+)
+def test_corpus_shapes_the_gate_must_flag(case):
+    assert _fires(case["code"], suffix=f".{case['lang']}"), (
+        f"{case['id']} evaded gate 11: {case['code']!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CORPUS if c["expect"] == "quiet"], ids=lambda c: c["id"]
+)
+def test_corpus_shapes_the_gate_must_ignore(case):
+    assert not _fires(case["code"], suffix=f".{case['lang']}"), (
+        f"{case['id']} false-positived: {case['code']!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CORPUS if c["expect"] == "gap"], ids=lambda c: c["id"]
+)
+def test_corpus_accepted_gaps_are_still_gaps(case):
+    """Pins the ADMITTED limits, so the gate's real power stays honestly stated.
+
+    If one of these starts firing, that is good news — but the fixture is then lying about
+    this gate's coverage, and the claim must be re-derived rather than left stale.
+    """
+    assert not _fires(case["code"], suffix=f".{case['lang']}"), (
+        f"{case['id']} now fires — the accepted-residue claim in the fixture is stale"
+    )
 
 
 def test_v6_alternation_does_not_shadow_longer_names():

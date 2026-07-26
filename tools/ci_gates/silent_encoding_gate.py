@@ -74,7 +74,22 @@ MIN_SCANNED_FILES = 80  # a floor, so "scanned nothing, found nothing" can never
 # Longest-first so the alternation cannot match "v6" inside "v6w25".
 ENCODINGS = ("v6_live2_ls", "gnn_axis_v1", "v6w25", "v6")
 _ENC = "|".join(ENCODINGS)
-_Q = f"['\"](?:{_ENC})['\"]"
+# An optional `f`/`r`/`b` prefix: `return f"v6"` is the same arm with a redundant prefix,
+# and an earlier draft let it through because `_Q` demanded the quote immediately.
+_Q = f"(?:[frb]{{0,2}})['\"](?:{_ENC})['\"]"
+# In a FALLBACK position (`or`, `else`, a match arm) the literal may be wrapped in any
+# call — `else lookup("v6")` is arm 8's actual shape — because the position itself is what
+# makes it a fallback.
+_CALL = r"(?:[\w.]+\(\s*)?"
+# In an ASSIGNMENT position the wrapper must be an explicit default-DECLARATION helper.
+# A general `[\w.]+\(` here would flag `spec = lookup("v6")`, which is the single most
+# common legitimate form in this repo — affirmative dispatch, the opposite of a default.
+# Firing on it would train reviewers to ignore the gate, so recall is traded for precision
+# deliberately and the residue is recorded in the corpus fixture.
+_DECL_CALL = r"(?:(?:Field|field|Argument|Query|Body|Option|Some)\(\s*)?"
+# Terminators that can follow a default value. `;` was missing, so every Rust
+# `const DEFAULT: &str = "v6";` walked through.
+_END = r"(?:[,;)\]}]|$)"
 
 # Every shape below puts an encoding literal in a DEFAULT position -- the value used when
 # nobody said. Derived from arms 1-8 plus the evasion set REVIEW-impl constructed against
@@ -89,15 +104,19 @@ PATTERNS: tuple[tuple[str, str], ...] = (
     # `return lookup(...)` is NOT given the same treatment: inside an affirmative guard it
     # is correct dispatch (resolvers.py:487), and a gate that fires on correct code trains
     # reviewers to ignore it.
-    (rf"\bor\s+(?:[\w.]+\(\s*)?{_Q}", "`or <encoding>` fallback"),
-    (rf"\belse\s+(?:[\w.]+\(\s*)?{_Q}", "ternary/else fallback to an encoding"),
-    (rf"\breturn\s+{_Q}\s*(?:[;)]|$)", "terminal `return <encoding>` fallback"),
-    # `(?<![=!<>])=` so comparisons (`== "v6"`, `!= "v6"`) are not mistaken for defaults.
-    (rf"(?<![=!<>])=\s*{_Q}\s*(?:[,)\]]|$)", "assignment / signature default / keyword default"),
+    (rf"\bor\s+{_CALL}{_Q}", "`or <encoding>` fallback"),
+    (rf"\belse\s+{_CALL}{_Q}", "ternary/else fallback to an encoding"),
+    (rf"\breturn\s+\(?\s*{_Q}\s*\)?\s*{_END}", "terminal `return <encoding>` fallback"),
+    (rf"\breturn\s+{_Q}\s+if\b", "conditional `return <encoding> if ...` fallback"),
+    (rf"\bdefault(?:_factory)?\s*=\s*{_DECL_CALL}{_Q}",
+     "explicit `default=<encoding>` (argparse / dataclass / pydantic)"),
+    (rf"[{{,]\s*['\"][^'\"]*['\"]\s*:\s*{_Q}\s*{_END}",
+     "dict-literal value defaulting to an encoding"),
     (rf"\bunwrap_or\(\s*{_Q}", "Rust unwrap_or() with an encoding-name default"),
-    (rf"\bunwrap_or_else\(\s*\|\|\s*{_Q}", "Rust unwrap_or_else() with an encoding default"),
-    (rf"\bmap_or\(\s*{_Q}", "Rust map_or() with an encoding-name default"),
-    (rf"=>\s*{_Q}", "Rust match arm defaulting to an encoding"),
+    (rf"\bunwrap_or_else\(\s*\|\|\s*\{{?\s*{_Q}", "Rust unwrap_or_else() with an encoding default"),
+    (rf"\bmap_or(?:_else)?\(\s*{_CALL}{_Q}",
+     "Rust map_or()/map_or_else() with an encoding default"),
+    (rf"=>\s*{_CALL}{_Q}", "Rust match arm defaulting to an encoding"),
 )
 
 # ── known, owned, still-open arms ────────────────────────────────────────────────────
@@ -108,11 +127,16 @@ KNOWN_DEBT: tuple[tuple[str, str, str], ...] = (
     (
         "src/mantis/selfplay/inference_local.py",
         'encoding_spec if encoding_spec is not None else lookup("v6")',
-        "ADJ-05 / owner WP12-R (eval-worker encoding_spec threading; WP11-A handoff, "
-        "run5-mint blocker). src/mantis/eval/worker.py:78,193 construct "
-        "LocalInferenceEngine positionally with no spec and depend on this default. "
-        "Closing it inside R45 would change eval-worker behaviour that WP11-A already "
-        "reports failing loud (eval_broken), which is WP12-R's decision, not R45's.",
+        "ADJ-05 / R56. OWNER: WP12-R. Handoff row, verbatim from "
+        "plan/STATE_2026-07-24_ADDENDUM_A.md §3: 'eval worker does not thread "
+        "encoding_spec -> graph eval rounds fail loud (eval_broken) every round | "
+        "WP12-R TOP ROW (threading) | decision required at run5 mint (§5)'. "
+        "src/mantis/eval/worker.py:78,193 construct LocalInferenceEngine positionally "
+        "with no spec and depend on this default; closing it here would change "
+        "eval-worker behaviour that is WP12-R's decision. Bounded meanwhile by "
+        "tests/selfplay/test_arm8_reachable_paths.py, which pins that every reachable "
+        "path either threads the spec or fails loud (R56; if that test cannot hold, "
+        "arm 8 escalates to a hard run5-mint blocker).",
     ),
 )
 
@@ -153,31 +177,99 @@ def _is_justified(lines: list[str], idx: int, suffix: str = ".py") -> bool:
     return False
 
 
+_TRIPLE = re.compile(r'"""|\'\'\'')
+_STR_SPAN = re.compile(r"""(['"])(?:\\.|(?!\1).)*\1""")
+_MAX_JOIN = 600  # safety valve: no real construct is this long
+
+
+def _bracket_delta(code: str) -> int:
+    """Net bracket depth of *code*, ignoring brackets inside string literals.
+
+    Counting brackets in raw text made a `(` inside a docstring unbalance the joiner,
+    which then swallowed an entire module into one logical line and matched patterns
+    across unrelated statements. Strings are blanked before counting.
+    """
+    bare = _STR_SPAN.sub("''", code)
+    return (bare.count("(") - bare.count(")")) + (bare.count("[") - bare.count("]"))
+
+
 def _logical_lines(lines: list[str], suffix: str = ".py") -> list[tuple[int, str]]:
-    """Join bracket-continued physical lines, and strip trailing comments.
+    """Join bracket-continued physical lines, and strip comments and docstrings.
 
     Two evasions REVIEW-impl found in the first draft die here: `return "v6"  # comment`
     (the pattern anchored on end-of-line, so a comment walked straight through) and a
     `.get(` call split across lines (never matched at all). Reported line number is the
     line the construct STARTS on.
+
+    Triple-quoted blocks are skipped entirely — they are prose, and treating them as code
+    is what let a docstring bracket corrupt the whole scan.
     """
     comment_only, strip = _comment_res(suffix)
     out: list[tuple[int, str]] = []
     buf, start, depth = "", 0, 0
+    in_doc = False
+
     for i, raw in enumerate(lines):
+        if suffix != ".rs":
+            marks = len(_TRIPLE.findall(raw))
+            if in_doc:
+                if marks % 2:
+                    in_doc = False
+                continue
+            if marks % 2:
+                in_doc = True
+                continue
+
         code = "" if comment_only.match(raw) else strip.sub("", raw)
         if not buf:
             start = i
         buf = f"{buf} {code.strip()}" if buf else code.strip()
-        depth += code.count("(") - code.count(")")
-        depth += code.count("[") - code.count("]")
-        if depth <= 0:
+        depth += _bracket_delta(code)
+        if depth <= 0 or len(buf) > _MAX_JOIN:
             if buf:
                 out.append((start, buf))
             buf, depth = "", 0
     if buf:
         out.append((start, buf))
     return out
+
+
+_DEF_CTX = re.compile(r"^\s*(?:async\s+)?(?:def\b|class\b)|#\[pyo3\(signature|\bfn\s+\w+\s*\(")
+_ASSIGN = re.compile(rf"(?<![=!<>])=\s*{_DECL_CALL}{_Q}")
+
+
+def _assignment_default_hit(logical: str) -> bool:
+    """True if *logical* binds an encoding literal as a DEFAULT rather than passing one.
+
+    `def f(encoding="v6")` declares a default; `f(encoding="v6")` is a caller stating the
+    encoding explicitly — the opposite — and the two are nearly identical as text. The
+    discriminator is context: a signature (`def`, Rust `fn`, `#[pyo3(signature ...)]`), or
+    a binding at bracket depth 0 (`enc = "v6"`, `encoding: str = "v6"`). A keyword
+    argument inside an ordinary call is left alone; `default=` is caught by its own
+    pattern, so argparse and pydantic do not slip through this exemption.
+    """
+    m = _ASSIGN.search(logical)
+    if m is None:
+        return False
+    if _DEF_CTX.search(logical):
+        return True
+    return _bracket_delta(logical[: m.start()]) <= 0
+
+
+def line_hit(logical: str) -> str | None:
+    """THE decision: why this logical line is a silent fallback, or None.
+
+    Both `scan()` and the corpus tests go through this one function. An earlier oracle
+    replayed `_COMPILED` itself and so could not see the context-aware assignment check —
+    a test helper diverging from the production path is its own small instance of the
+    defect class this gate exists to catch.
+    """
+    for rx, why in _COMPILED:
+        if rx.search(logical):
+            return why
+    if _assignment_default_hit(logical):
+        return "assignment / signature default binding an encoding"
+    return None
 
 
 def _iter_files():
@@ -205,11 +297,10 @@ def scan() -> tuple[list[str], list[str], int, set[int]]:
         rel = str(path.relative_to(REPO_ROOT))
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         for idx, logical in _logical_lines(lines, path.suffix):
-            for rx, why in _COMPILED:
-                if not rx.search(logical):
-                    continue
+            why = line_hit(logical)
+            if why is not None:
                 if _is_justified(lines, idx, path.suffix):
-                    break
+                    continue
                 debt_i = next(
                     (
                         k

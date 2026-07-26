@@ -84,6 +84,10 @@ impl ReplayBuffer {
             r.read_exact(&mut buf8).map_err(|e| format!("{e}"))?;
             saved_size = u64::from_le_bytes(buf8) as usize;
 
+            // silent-encoding-gate: ok -- not a fallback. This arm is reached only when the
+            // file's own header declares HEXB wire version 6, and the `else` below returns
+            // an error; v6 is what that version IS, derived from the file rather than
+            // substituted for an absent value. (WPUF-2 R58 / REVIEW_IMPL_R2 A3.)
             file_encoding_name = "v6".to_string();
         } else {
             return Err(format!(

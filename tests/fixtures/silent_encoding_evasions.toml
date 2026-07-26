@@ -1,0 +1,286 @@
+# The gate-11 evasion corpus (WPUF-2, R58).
+#
+# Provenance: constructed by REVIEW-impl against the FIRST draft of
+# tools/ci_gates/silent_encoding_gate.py. 31 candidates were tried and 27 evaded — the
+# finding that got the gate rebuilt rather than patched. Committed as a fixture, per R58,
+# so the gate's coverage is a measured property of the repo rather than a claim in a
+# review document nobody re-runs.
+#
+# `expect` is the CONTRACT, and it is deliberately not all "fires":
+#   fires  — the gate must flag this line. A regression here is a real hole reopening.
+#   quiet  — legitimate code the gate must NOT flag. A regression here means the gate
+#            started firing on correct code, which trains reviewers to ignore it.
+#   gap    — a KNOWN, ACCEPTED limit of a literal-matching grep gate. See [residue].
+#
+# Adding a shape here is cheaper than rediscovering it in production. When a new arm is
+# found in the wild, add its shape before fixing the site.
+
+[meta]
+source = "wp/WPUF/REVIEW_IMPL_R2.md § Gate evasion report"
+candidates_tried = 31
+evaded_first_draft = 27
+
+# ── Class A — shapes that were LIVE arms in the tree when the corpus was built ────────
+[[case]]
+id = "A1"
+lang = "py"
+code = 'self.encoding_spec = encoding_spec if encoding_spec is not None else lookup("v6")'
+expect = "fires"
+note = "arm 8, inference path. Ternary + call-wrapped literal. Still REGISTERED-OPEN under WP12-R."
+
+[[case]]
+id = "A2"
+lang = "py"
+code = 'def make_augmented_collate(augment: bool, encoding: str = "v6"):'
+expect = "fires"
+note = "arm 7, signature default. Closed in 44aa09c."
+
+[[case]]
+id = "A3"
+lang = "rs"
+code = 'file_encoding_name = "v6".to_string();'
+expect = "fires"
+note = """The SHAPE is a genuine bare-assignment fallback and must keep firing — an
+identical line elsewhere would be a real arm. The SITE at
+crates/mantis-selfplay/src/replay/persist/load.rs is adjudicated affirmative (reached only
+when the file header declares HEXB wire version 6, whose `else` returns an error, so v6 is
+derived from the file rather than substituted for an absent value) and carries an in-place
+`silent-encoding-gate: ok --` justification. Shape fires; site is justified. Recorded this
+way round deliberately: exempting the shape would blind the gate everywhere."""
+
+# ── Class B — accidental evasions of the closed arms' own shapes ──────────────────────
+[[case]]
+id = "B1a"
+lang = "py"
+code = 'return "v6"  # legacy path'
+expect = "fires"
+note = "a trailing comment used to disarm the gate — the good instinct (explaining) defeated it."
+
+[[case]]
+id = "B1b"
+lang = "py"
+code = 'return ("v6")'
+expect = "fires"
+
+[[case]]
+id = "B2a"
+lang = "py"
+code = 'enc = "v6"'
+expect = "fires"
+note = "the most obvious shape of all; the first draft had no assignment pattern."
+
+[[case]]
+id = "B3a"
+lang = "py"
+code = 'DEFAULT_ENCODING = "v6"'
+expect = "fires"
+note = """variable indirection is caught at the DEFINITION. The use site (`enc = declared or
+DEFAULT_ENCODING`) carries no literal and is structurally invisible — see [residue]."""
+
+# ── Class C — constructed evasions ────────────────────────────────────────────────────
+[[case]]
+id = "C1"
+lang = "py"
+code = 'parser.add_argument("--encoding", default="v6")'
+expect = "fires"
+note = "the exact way arm 6 regresses, on a CLI, with the gate green."
+
+[[case]]
+id = "C2"
+lang = "py"
+code = 'def build(encoding: str = "v6") -> Net:'
+expect = "fires"
+
+[[case]]
+id = "C3a"
+lang = "py"
+code = 'encoding: str = "v6"'
+expect = "fires"
+note = "dataclass field default — collides head-on with LAW-11 'identity keys have no terminal defaults'."
+
+[[case]]
+id = "C3b"
+lang = "py"
+code = 'encoding: str = Field("v6")'
+expect = "fires"
+note = "pydantic default behind a call wrapper."
+
+[[case]]
+id = "C4"
+lang = "py"
+code = 'enc = cfg.get(key, "v6")'
+expect = "fires"
+note = "variable key; the first draft required a quoted literal key."
+
+[[case]]
+id = "C6"
+lang = "py"
+code = 'cfg.setdefault("encoding", "v6")'
+expect = "fires"
+
+[[case]]
+id = "C7"
+lang = "py"
+code = 'enc = cfg.pop("encoding", "v6")'
+expect = "fires"
+
+[[case]]
+id = "C8a"
+lang = "py"
+code = 'return "v6" if enc is None else enc'
+expect = "fires"
+
+[[case]]
+id = "C8b"
+lang = "py"
+code = 'enc = enc if enc else "v6"'
+expect = "fires"
+
+[[case]]
+id = "C9"
+lang = "py"
+code = 'return f"v6"'
+expect = "fires"
+note = "f-prefix used to break the quote match."
+
+[[case]]
+id = "C12"
+lang = "rs"
+code = 'let name = d.unwrap_or_else(|| { "v6" });'
+expect = "fires"
+note = "braced closure body; the first draft required the literal immediately after `||`."
+
+[[case]]
+id = "C13"
+lang = "rs"
+code = 'let name = match declared { Some(n) => n, None => "v6" };'
+expect = "fires"
+
+[[case]]
+id = "C14"
+lang = "rs"
+code = 'let n = d.map_or("v6", |x| x);'
+expect = "fires"
+
+[[case]]
+id = "C15"
+lang = "rs"
+code = 'const DEFAULT: &str = "v6";'
+expect = "fires"
+note = "semicolon terminator was missing from the pattern set."
+
+[[case]]
+id = "C16"
+lang = "py"
+code = '_DEFAULTS = {"encoding": "v6"}'
+expect = "fires"
+note = "dict-literal default table."
+
+# ── Shapes the first draft DID catch — pinned so the rebuild did not lose coverage ────
+[[case]]
+id = "K1"
+lang = "py"
+code = 'return str(enc.get("version", "v6"))'
+expect = "fires"
+
+[[case]]
+id = "K2"
+lang = "py"
+code = "return 'v6'"
+expect = "fires"
+
+[[case]]
+id = "K3"
+lang = "py"
+code = 'enc = os.environ.get("MANTIS_ENCODING", "v6")'
+expect = "fires"
+
+[[case]]
+id = "K4"
+lang = "py"
+code = 'name = getattr(spec, "name", "v6")'
+expect = "fires"
+
+[[case]]
+id = "K5"
+lang = "rs"
+code = 'let name = declared.unwrap_or("v6");'
+expect = "fires"
+
+# ── Legitimate code the gate must stay quiet on ───────────────────────────────────────
+[[case]]
+id = "Q1"
+lang = "py"
+code = 'spec = lookup("v6")'
+expect = "quiet"
+note = "explicit dispatch."
+
+[[case]]
+id = "Q2"
+lang = "py"
+code = 'return lookup("gnn_axis_v1")'
+expect = "quiet"
+note = "affirmative marker dispatch (resolvers.py:487), fires only inside a positive guard."
+
+[[case]]
+id = "Q3"
+lang = "py"
+code = 'assert spec.name == "v6w25"'
+expect = "quiet"
+note = "comparison, not a default — an earlier draft read `== \"v6\"` as an assignment."
+
+[[case]]
+id = "Q4"
+lang = "rs"
+code = 'let v6 = rows.iter().find(|r| r[0] == "v6").unwrap();'
+expect = "quiet"
+note = "the real audit.rs false positive that the `(?<![=!<>])` guard fixed."
+
+[[case]]
+id = "Q5"
+lang = "py"
+code = 'ENCODINGS = ("v6", "v6w25")'
+expect = "quiet"
+note = "census tuple."
+
+[[case]]
+id = "Q6"
+lang = "py"
+code = 'ReplayBuffer(capacity=8, encoding="v6")'
+expect = "quiet"
+note = "a named ARGUMENT at a call site is a caller stating the encoding — the opposite of a default."
+
+# ── Accepted structural limits ────────────────────────────────────────────────────────
+# These carry NO encoding literal, so a literal-matching grep gate cannot see them by
+# construction. Recorded rather than hidden: the mitigation is that the variable's or
+# const's DEFINITION is caught (B3a, C15), so the pair is only invisible if the definition
+# lives outside src/ and crates/.
+[[case]]
+id = "C10"
+lang = "rs"
+code = "let name = declared.unwrap_or_default();"
+expect = "gap"
+note = "no literal anywhere; only a type-aware check could see this."
+
+[[case]]
+id = "C11"
+lang = "rs"
+code = "let name = declared.unwrap_or(DEFAULT_ENC);"
+expect = "gap"
+note = "variable indirection; caught at DEFAULT_ENC's definition instead."
+
+[[case]]
+id = "C17"
+lang = "py"
+code = 'return "v7"'
+expect = "gap"
+note = """v7 is ARCHIVED, not registered (WP3 pruned the set to four). A non-registered name
+raises at `lookup()`, so this is loud by construction rather than silent — it is the wrong
+KIND of defect for this gate. Recorded so the reasoning is not rediscovered."""
+
+[residue]
+accepted = ["C10", "C11", "C17"]
+rationale = """A grep gate keyed on encoding literals cannot see a default that contains no
+literal. The mitigation is coverage of the DEFINITION site rather than the use site. The
+honest statement of this gate's power: it makes the literal-bearing shapes of this class
+mechanically impossible to add unnoticed, and it does not, and cannot, prove their absence."""
