@@ -137,7 +137,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; 18 assertions, 15+ named errors; single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
-| 5 | run config schema | v1 | pydantic models, extra=forbid; schema_version key in every file |
+| 5 | run config schema | v2 | pydantic models, extra=forbid; schema_version key in every file |
 | 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
@@ -146,6 +146,43 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
 copies are single-read by contract.
+
+### AMENDMENT — contract #5 v1 → v2, with the doc half of the same-commit clause DEFERRED
+
+**WPAX Phase S (card CARD-SMOKE-SEAM), ADJ-09 Option B.** Recorded here rather than left as
+silent drift (R9).
+
+1. **The bump.** `train.max_train_steps` is a NEW **required** field on `RunConfig` — the
+   run-length authority, resolved to `StepCoordinatorConfig.stop_step`, which is the real
+   stop condition. This is an *incompatible* change: a config file lacking the key fails to
+   load. That is strictly more than the precedent the contract doc's own status line records
+   for WP8 (*"additive founding growth … no key changed incompatibly; the config's own
+   `schema_version` stays 1"*), so contract #5's row above moves **v1 → v2**. The config
+   files' own `schema_version:` key is a *file-format* pin and is unchanged at `1`; it is
+   not this contract's version.
+2. **The doc half is OWED and BLOCKED, and the owner is WP14.**
+   `docs/contracts/run_config_schema.md` must gain the key and the bump. Phase S is barred
+   from touching that file (rule R11: it carries another work package's uncommitted work —
+   an unrecoverable loss if disturbed), so the same-commit clause above is **half-kept**: the
+   version bumped here, the contract doc deferred to **WP14**. Stated outright rather than
+   left to be discovered.
+3. **run5-mint checklist item.** Before the next `configs/run5.yaml` mint, check that
+   `docs/contracts/run_config_schema.md` carries `train.max_train_steps`. A stale contract doc
+   *for the very config being minted* is what misleads at mint time, so the owed update is
+   recorded where the minter will read it.
+4. **Nothing enforces contract #5's doc.** MEASURED at this commit: `grep -rn
+   "run_config_schema" .` over the whole repo returns **no hits at all outside this
+   amendment** — no test, no tool, no Makefile target, no CI gate names the contract file
+   (not even the file itself). Two consequences: the drift
+   recorded above **cannot make any gate lie** (nothing reads the doc, so nothing can report
+   green over it), and this clause was **already weaker than it reads** — kept by manual
+   discipline alone. That missing handshake is its own defect, recorded for WP14 / WP-R
+   rather than fixed here.
+
+**Precedence, recorded so it is not re-derived.** R11 protects another WP's uncommitted work
+(unrecoverable); this clause's doc half protects a document with no consumer (recoverable
+staleness). The reading applied here is that **R11 yields nothing and the doc clause defers**.
+That is a dispatcher reading pending operator ratification, not a settled rule.
 
 ## 5. Config system
 
