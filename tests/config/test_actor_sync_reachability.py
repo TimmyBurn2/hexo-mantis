@@ -44,8 +44,10 @@ def _load_frozen_schema_oracle():
 _payload = _load_frozen_schema_oracle()._payload
 
 
-def _total_steps() -> int:
-    return int(_payload()["train"]["total_steps"])
+def _max_train_steps() -> int:
+    """WPAX S-4: the bound is anchored to the RUN-LENGTH knob, not to the LR-scheduler
+    horizon `train.total_steps` that it used to read (F-C re-anchor)."""
+    return int(_payload()["train"]["max_train_steps"])
 
 
 def test_the_baseline_payload_is_still_valid():
@@ -53,9 +55,9 @@ def test_the_baseline_payload_is_still_valid():
     RunConfig(**_payload())
 
 
-def test_cadence_at_or_beyond_total_steps_is_a_named_error():
-    total = _total_steps()
-    with pytest.raises(ValidationError, match="must be < train.total_steps"):
+def test_cadence_at_or_beyond_max_train_steps_is_a_named_error():
+    total = _max_train_steps()
+    with pytest.raises(ValidationError, match="must be < train.max_train_steps"):
         RunConfig(**_payload(
             train_over={"actor_sync_cadence_steps": total},
             monitor_over={"actor_lag_threshold_steps": total + 1},
@@ -64,23 +66,23 @@ def test_cadence_at_or_beyond_total_steps_is_a_named_error():
 
 def test_red_teams_exact_billion_step_cadence_is_rejected():
     """The literal reproduction from the RED-TEAM report."""
-    with pytest.raises(ValidationError, match="must be < train.total_steps"):
+    with pytest.raises(ValidationError, match="must be < train.max_train_steps"):
         RunConfig(**_payload(
             train_over={"actor_sync_cadence_steps": 10**9},
             monitor_over={"actor_lag_threshold_steps": 10**9 + 1},
         ))
 
 
-def test_threshold_at_or_beyond_total_steps_is_a_named_error():
+def test_threshold_at_or_beyond_max_train_steps_is_a_named_error():
     """An armed invariant the run can never reach is absent in effect, not armed."""
-    total = _total_steps()
+    total = _max_train_steps()
     with pytest.raises(ValidationError, match="never fire"):
         RunConfig(**_payload(monitor_over={"actor_lag_threshold_steps": total}))
 
 
 def test_a_cadence_just_inside_the_run_is_accepted():
     """The bound is `>=`, not a blanket ban on large cadences — pin the boundary."""
-    total = _total_steps()
+    total = _max_train_steps()
     RunConfig(**_payload(
         train_over={"actor_sync_cadence_steps": total - 2},
         monitor_over={"actor_lag_threshold_steps": total - 1},

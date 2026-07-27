@@ -193,7 +193,7 @@ def build_run_safety(
     wired_sources: Sequence[str],
     actor_ckpt_step_fn: Callable[[], int],
     learner_step_fn: Callable[[], int],
-    monitor_cfg: MonitorConfig | None = None,
+    monitor_cfg: MonitorConfig,
     heartbeat_file: str | Path | None = None,
     exit_fn: Callable[[int], None] = os._exit,
 ) -> RunSafety:
@@ -221,13 +221,21 @@ def build_run_safety(
         posture, WP-UNFREEZE §4.3): a default here would silently unwire the actor-lag
         check. They feed `ActorLagSpec` together with the monitor config's
         `actor_lag_threshold_steps` / `actor_lag_abort_enabled`, and are read LIVE at
-        poll time.
+        poll time;
+      * `monitor_cfg` is REQUIRED with NO default, for the SAME reason and by the same
+        posture (WPAX RED-TEAM F-2). It used to default to `None` and fall back to a bare
+        `MonitorConfig()`, whose `actor_lag_abort_enabled` is `False` — so a caller that
+        merely FORGOT the kwarg got a silently DISARMED hard abort while its config said
+        armed. That is the ADJ-07 shape one function downstream of the `compose_run`
+        `monitor_cfg=` parameter WPAX S-2 deleted, and it is the arm that actually
+        constructs `ActorLagSpec`. Three of `ActorLagSpec`'s four inputs are now
+        required-with-no-default; the fourth is derived from this one.
 
     The watchdog is returned UNSTARTED: the caller starts it only after the pool is up
     (an unstarted pool must never be torn down by a fire), and passes it to the
     coordinator so `close_out` can disarm staleness first (O-27).
     """
-    cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+    cfg = monitor_cfg
     sink = JsonlEventSink(log_dir=Path(log_dir), run_id=run_id)
     registry = HeartbeatRegistry(sources=HEARTBEAT_SOURCES)
     snapshot_target = watchdog_snapshot_path(Path(buffer_persist_path))

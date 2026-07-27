@@ -73,6 +73,7 @@ def _train_block(**over: object) -> dict:
         "threat_weight": 0.0, "aux_chain_weight": 0.0, "ply_index_weight": 0.0,
         "threat_pos_weight": 1.0,
         "actor_sync_cadence_steps": 1,  # K1 — the WP's minted inert value (DESIGN §5)
+        "max_train_steps": 1_000_000,  # WPAX S-4 run-length authority (required key)
     }
     base.update(over)
     return base

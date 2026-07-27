@@ -155,7 +155,9 @@ def _install_harness(monkeypatch):
     )
 
 
-def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(tmp_path, monkeypatch):
+def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
+    tmp_path, monkeypatch, smoke_run_config
+):
     """THE F-1 pin. Production posture, observed by consequence rather than syntax.
 
     `eval_enabled=True` is what run5 launches with. Before this test, every behavioral
@@ -166,7 +168,10 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(tmp_path, mon
     _install_harness(monkeypatch)
 
     handles = mantis.run.compose_run(
-        config=SimpleNamespace(), trainer=trainer, pool=pool, buffer=_Buffer(),
+        config=smoke_run_config(
+            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+            monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
+        trainer=trainer, pool=pool, buffer=_Buffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=True,
     )
@@ -186,14 +191,19 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(tmp_path, mon
     )
 
 
-def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(tmp_path, monkeypatch):
+def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
+    tmp_path, monkeypatch, smoke_run_config
+):
     """Both postures must sync. A difference between them IS the coupling R49 forbids."""
     results = {}
     for label, eval_enabled in (("no_eval", False), ("with_eval", True)):
         pool, trainer = _SyncRecordingPool(), _Trainer()
         _install_harness(monkeypatch)
         mantis.run.compose_run(
-            config=SimpleNamespace(), trainer=trainer, pool=pool, buffer=_Buffer(),
+            config=smoke_run_config(
+                train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+                monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
+            trainer=trainer, pool=pool, buffer=_Buffer(),
             log_dir=str(tmp_path / label), checkpoint_dir=str(tmp_path / label / "ckpt"),
             eval_enabled=eval_enabled,
         )

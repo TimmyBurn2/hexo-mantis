@@ -19,8 +19,12 @@ tests/train/test_actor_sync_isolation.py::test_no_actor_lag_mechanism_in_eval.
 
 >300 justify (R8, WPSC Phase 3 SC-B4): STOP CANDIDATE 5's MonitorConfig production-wiring
 producer test (DESIGN_P3.md §5.0) is folded in here rather than a new file — same subject
-(compose_run's monitor_cfg fallback) as this file's existing coverage; pushed the file past
-the 300-line soft cap.
+(how compose_run reaches the monitor section) as this file's existing coverage; pushed the
+file past the 300-line soft cap. WPAX Phase S added the drivable fakes below for the same
+reason (R5 bars cross-test imports, so a second file would fork a third copy of them), and
+the WPAX RED-TEAM fix pass added the F-3 re-validation pins at the end for the third time
+over: their subject is what `compose_run` may be composed from, they drive the same fakes,
+and the alternative is a fourth copy of them.
 """
 from __future__ import annotations
 
@@ -31,39 +35,76 @@ from typing import Any
 import pytest
 
 import mantis.run  # noqa: F401 — RED-at-import anchor: this module does not exist yet
-from mantis.config.schema import DrainCapsConfig, MonitorSchemaConfig
+from mantis.config.resolve.composition import (
+    UnvalidatedConfigError,
+    require_run_config,
+    revalidate_run_config,
+)
+from mantis.config.schema import RunConfig
 from mantis.monitor.config import MonitorConfig
-
-# Inlined (not cross-imported from tests/config/test_monitor_schema.py) — MEASURED to fail
-# under the house test invocation (`uv run pytest`; `tests/` carries no `__init__.py`
-# anywhere, so `from tests.config.test_monitor_schema import ...` raises
-# ModuleNotFoundError). Mirrors that file's VALID_MONITOR_SCALARS/VALID_DRAIN dicts; the
-# exact figures don't matter, only that the value threaded through below is non-default.
-_VALID_MONITOR_SCALARS: dict = {
-    "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-    "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-    "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-    "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-    "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-    "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
-    "axis_warn": 0.45, "axis_alert": 0.50,
-    "heartbeat_deadline_train_step_sec": 1800.0,
-    "heartbeat_deadline_inference_dispatch_sec": 1800.0,
-    "heartbeat_deadline_selfplay_drain_sec": 1800.0,
-    "heartbeat_deadline_eval_round_sec": 1800.0,
-    "heartbeat_poll_interval_sec": 5.0, "heartbeat_file_interval_sec": 15.0,
-    "heartbeat_close_out_deadline_sec": 14400.0, "heartbeat_fire_effect_timeout_sec": 30.0,
-    "supervisor_stale_after_sec": 900.0, "supervisor_poll_interval_sec": 30.0,
-    "supervisor_kill_grace_sec": 30.0, "supervisor_max_relaunches": 5,
-    "actor_lag_threshold_steps": 100, "actor_lag_abort_enabled": False,
-}
-_VALID_DRAIN: dict = {
-    "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
-    "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
-}
+from mantis.train.coordinator.config import StepCoordinatorConfig
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
+
+#: WPAX S-4: `stop_step` is config-authored now, so every `compose_run` call below drives a
+#: REAL bounded burst instead of terminating at the builder's `stop_step=0`. The reachability
+#: validator spans all three step-clock knobs (`cadence < threshold < max_train_steps`), so
+#: they are co-overridden together; 3 is the smallest legal run at cadence 1.
+_DRIVE_STEPS = 3
+
+
+def _bounded(smoke_run_config, **monitor_over):
+    """A REAL minted `RunConfig`, bounded so a drive terminates (WPAX S-1: the strict gate
+    means no `SimpleNamespace()` reaches this root any more — smoke runs get smoke CONFIGS)."""
+    return smoke_run_config(
+        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS},
+        monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **monitor_over},
+    )
+
+
+def _no_terminal_eval_config() -> StepCoordinatorConfig:
+    """The ONE builder patch the `eval_enabled=True` drives below still need. The production
+    builder defaults `terminal_eval_enabled=True`, so `close_out` runs a terminal eval round
+    that reaches `eval/snapshot.py`'s `.arch` read on a fake model. That knob has NO config
+    key — it is one of the 24 hardcoded `_default_step_coordinator_config` knobs owned by
+    R-TRAINCONFIG-SCHEMA / ADJ-08. `stop_step` is left at 0 here deliberately: WPAX S-4 makes
+    `compose_run` override it from the config, so a patched builder that still dictated run
+    length would hide the knob."""
+    return StepCoordinatorConfig(
+        terminal_eval_enabled=False,
+        eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
+        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
+        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
+        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
+        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
+        instrumentation_enabled=False, stop_step=0, final_eval_drain_timeout_sec=900.0,
+    )
+
+
+def _patch_eval_side(monkeypatch, capture: dict | None = None):
+    """Fake the eval pipeline AND the anchor seed for an `eval_enabled=True` drive. Both are
+    harness, not subject: `run_training_loop` seeds the anchor from `trainer.model`, which
+    reads `.arch` off it (`train/anchor.py`) and blows up on any fake model — the same patch,
+    for the same reason, as `tests/train/test_actor_sync_real_config.py::_drive`."""
+    import mantis.train.anchor as _anchor
+
+    def _fake_build_eval_pipeline(**kwargs):
+        if capture is not None:
+            capture.update(kwargs)
+        return SimpleNamespace(
+            run_evaluation=lambda *a, **k: {"kicked": False, "reason": None},
+            poll_completed=lambda: None, drain_pending=lambda: None,
+            apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
+        )
+
+    monkeypatch.setattr(mantis.run, "build_eval_pipeline", _fake_build_eval_pipeline)
+    monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _no_terminal_eval_config)
+    monkeypatch.setattr(
+        _anchor, "resolve_anchor",
+        lambda **_kw: SimpleNamespace(best_model=None, best_model_step=None,
+                                      best_model_path=None, representation="grid"),
+    )
 
 
 # ── census helpers (operate on today's tree; no import of not-yet-existing modules) ──────
@@ -108,16 +149,46 @@ class FakeWatchdog:
         self._order.calls.append("watchdog.start")
 
 
+class _RunnerStats:
+    mcts_mean_depth = 5.0
+    mcts_mean_root_concentration = 0.1
+    cluster_value_std_mean = 0.0
+    cluster_policy_disagreement_mean = 0.0
+    cluster_variance_sample_count = 0
+
+
 class FakePoolNeverStarted:
     """Models the real hazard: `WorkerPool.stop()` -> `InferenceServer.join(timeout=5.0)`
     raises RuntimeError when the underlying thread was never started (pool.py:335;
     `threading.Thread.join` on a never-started thread raises `RuntimeError: cannot join
     thread before it is started`). Only a caller that GUARDS on "was start() ever called"
-    (compose_run's `_stop_pool_if_started`) may call `.stop()` safely."""
+    (compose_run's `_stop_pool_if_started`) may call `.stop()` safely.
+
+    WPAX Phase S: also DRIVABLE. `stop_step` is config-authored now, so every compose_run
+    call in this file runs a real burst and the pool must carry the coordinator's read
+    surface. `games_completed` yields one fresh game per read so each `step()` runs exactly
+    one burst. The never-started guard above is unchanged — it is what
+    `test_close_out_with_never_started_pool_does_not_raise` pins."""
 
     def __init__(self, order: _OrderSpy | None = None) -> None:
         self._order = order
         self._started = False
+        self._games = 0
+        self.gumbel_mcts = True
+        self.avg_game_length = 20.0
+        self.x_winrate = 0.5
+        self.o_winrate = 0.45
+        self.draws = 1
+        self.sims_per_sec = 100.0
+        self.batch_fill_pct = 0.9
+        self.recent_move_histories: list = []
+        self.sync_payloads: list = []
+        self.step_calls: list[int] = []
+
+    @property
+    def games_completed(self) -> int:
+        self._games += 1
+        return self._games
 
     def start(self) -> None:
         self._started = True
@@ -130,9 +201,57 @@ class FakePoolNeverStarted:
         if self._order is not None:
             self._order.calls.append("pool.stop")
 
+    def check_producer_health(self) -> None:
+        return None
+
+    def per_worker_draw_rates(self) -> dict[int, float]:
+        return {}
+
+    def current_stride5_p90(self) -> int:
+        return 1
+
+    def runner_stats(self) -> Any:
+        return _RunnerStats()
+
+    def sync_inference_weights(self, state_dict) -> None:
+        self.sync_payloads.append(state_dict)
+
+    def update_checkpoint_step(self, step: int) -> None:
+        self.step_calls.append(int(step))
+
+
+class _DrivableTrainer:
+    def __init__(self) -> None:
+        self.step = 0
+        self.model = object()
+        self.inference_sd: dict = {}
+
+    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+        self.step += 1
+        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
+                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
+                "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def inference_state_dict(self) -> dict:
+        return self.inference_sd
+
+    def save_checkpoint(self, loss_info) -> None:
+        return None
+
+
+class _DrivableBuffer:
+    size = 1000
+    capacity = 100_000
+
+    def resize(self, n: int) -> None:
+        return None
+
+    def save_to_path(self, p) -> None:
+        return None
+
 
 def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, smoke_run_config
 ) -> None:
     """Spy order: pool.start() -> watchdog.start() (subsystems.py contract; the composition
     root is the ONE place this order is enforced). `build_run_safety` must be called exactly
@@ -154,9 +273,8 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     handles = mantis_run.compose_run(
-        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}),
-        pool=pool, buffer=SimpleNamespace(save_to_path=lambda p: None),
+        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        pool=pool, buffer=_DrivableBuffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False,
     )
@@ -170,7 +288,9 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
     assert handles is not None
 
 
-def test_wired_sources_include_eval_round_iff_pipeline_built(tmp_path, monkeypatch) -> None:
+def test_wired_sources_include_eval_round_iff_pipeline_built(
+    tmp_path, monkeypatch, smoke_run_config
+) -> None:
     """`wired_sources` passed to `build_run_safety` includes "eval_round" iff an eval
     pipeline is actually built (`eval_enabled=True`); absent when `eval_enabled=False`."""
     mantis_run = mantis.run
@@ -188,10 +308,10 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(tmp_path, monkeypat
         return _fake
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("with_eval"))
+    _patch_eval_side(monkeypatch)
     mantis_run.compose_run(
-        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}),
-        pool=FakePoolNeverStarted(), buffer=SimpleNamespace(save_to_path=lambda p: None),
+        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
     assert "eval_round" in seen["with_eval"], (
@@ -200,9 +320,8 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(tmp_path, monkeypat
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("no_eval"))
     mantis_run.compose_run(
-        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}),
-        pool=FakePoolNeverStarted(), buffer=SimpleNamespace(save_to_path=lambda p: None),
+        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
     assert "eval_round" not in seen["no_eval"], (
@@ -230,7 +349,9 @@ def test_close_out_with_never_started_pool_does_not_raise() -> None:
         pool.stop()  # the mutation arm: calling stop() unconditionally DOES raise
 
 
-def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(tmp_path, monkeypatch) -> None:
+def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
+    tmp_path, monkeypatch, smoke_run_config
+) -> None:
     """The `run_safety.sink` / `run_safety.heartbeat` built by `build_run_safety` must reach
     BOTH the eval pipeline (if built) and the `StepCoordinator` — asserted via identity spies
     threaded through `compose_run`'s injection points."""
@@ -246,38 +367,37 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(tmp_path, m
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     captured: dict[str, Any] = {}
+    _patch_eval_side(monkeypatch, captured)
 
-    def _fake_build_eval_pipeline(**kwargs):
-        captured["eval_sink"] = kwargs.get("sink")
-        captured["eval_heartbeat"] = kwargs.get("heartbeat")
-        return SimpleNamespace(
-            run_evaluation=lambda *a, **k: {"kicked": False, "reason": None},
-            poll_completed=lambda: None, drain_pending=lambda: None,
-            apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
-        )
-
-    monkeypatch.setattr(mantis_run, "build_eval_pipeline", _fake_build_eval_pipeline,
-                        raising=False)
     mantis_run.compose_run(
-        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}),
-        pool=FakePoolNeverStarted(), buffer=SimpleNamespace(save_to_path=lambda p: None),
+        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
-    assert captured.get("eval_sink") is sink, "the eval pipeline must receive the SAME sink"
-    assert captured.get("eval_heartbeat") is heartbeat_fn, (
+    assert captured.get("sink") is sink, "the eval pipeline must receive the SAME sink"
+    assert captured.get("heartbeat") is heartbeat_fn, (
         "the eval pipeline must receive the SAME heartbeat fn build_run_safety produced"
     )
 
 
 # ── STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0) ─────────
 def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, smoke_run_config
 ) -> None:
     """A real `config.monitor` (MonitorSchemaConfig) flows through compose_run's own
     resolve_monitor_config call into the MonitorConfig handed to build_run_safety /
     StepCoordinator. Proven via a NON-DEFAULT threshold value threaded end to end (LAW-07
-    mutation-shaped proof, not a did-not-crash check)."""
+    mutation-shaped proof, not a did-not-crash check).
+
+    WPAX Phase S DELETED this test's negative control,
+    `test_compose_run_falls_back_to_bare_monitor_config_when_config_has_no_monitor_section`.
+    Its subject — the absent-monitor-section fallback to a bare `MonitorConfig()` — ceased to
+    exist when S-1's gate landed, and a bare `MonitorConfig()` carries
+    `actor_lag_abort_enabled=False`, so that fallback silently DISARMED the hard abort
+    `configs/run5.yaml` ships armed (ADJ-07). It was deleted rather than inverted: the
+    inversion lives in `tests/test_run_strict_composition.py` as an eight-shape corpus, and
+    an inverted copy here would be a second authority for one fact (LAW-03).
+    """
     mantis_run = mantis.run
     captured: dict[str, Any] = {}
 
@@ -290,15 +410,10 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
         )
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
-    monitor_section = MonitorSchemaConfig(
-        **{**_VALID_MONITOR_SCALARS, "alert_entropy_min": 2.75},
-        drain=DrainCapsConfig(**_VALID_DRAIN),
-    )
+    cfg = _bounded(smoke_run_config, alert_entropy_min=2.75)
     mantis_run.compose_run(
-        config=SimpleNamespace(monitor=monitor_section),
-        trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}), pool=FakePoolNeverStarted(),
-        buffer=SimpleNamespace(save_to_path=lambda p: None),
+        config=cfg, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(),
+        buffer=_DrivableBuffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
     assert captured["monitor_cfg"] is not None
@@ -306,28 +421,90 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     assert captured["monitor_cfg"] != MonitorConfig()  # not the bare-default fallback
 
 
-def test_compose_run_falls_back_to_bare_monitor_config_when_config_has_no_monitor_section(
-    tmp_path, monkeypatch
+# ── RED-TEAM F-3 — the composition root RE-VALIDATES, it does not merely type-check ───────
+def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
+    tmp_path, monkeypatch, smoke_run_config
 ) -> None:
-    """Negative control — a fakes-style config with no `.monitor` attribute (every OTHER
-    compose_run test in this file) is unaffected: same bare `MonitorConfig()` as HEAD
-    today, made explicit rather than left implicit."""
-    mantis_run = mantis.run
-    captured: dict[str, Any] = {}
+    """The twelfth route: a genuine `RunConfig` that never re-ran its cross-field validators.
 
-    def _fake_build_run_safety(**kwargs):
-        captured["monitor_cfg"] = kwargs.get("monitor_cfg")
-        return SimpleNamespace(
-            sink=SimpleNamespace(emit=lambda e: None),
-            registry=SimpleNamespace(beat=lambda s: None),
-            watchdog=FakeWatchdog(_OrderSpy()), heartbeat=lambda s: None,
+    `RunConfig.model_copy(update=…)` is the idiomatic pydantic-v2 way to rig a config on a
+    copy. The result is the real class, every typed read succeeds, and the strict gate
+    accepts it — but the model validators never re-ran, so it can carry a sync cadence the
+    run never reaches. Measured before this pin: 20 real training steps, ONE actor sync, and
+    a lag threshold of 5000 that a 20-step run can never trip either. That is run3's frozen
+    actor plus the "two knobs fail open together" defect the schema-level F-2 bound closed —
+    reopened at the COMPOSITION level, with the loader refusing the identical payload.
+
+    So the closure cannot be a type check, and this test asserts that in three parts:
+
+      1. the type gate still ACCEPTS the rigged config — pinning that the type rule is not
+         the instrument here, so a future "simplification" that folds the two rules together
+         cannot be mistaken for this one;
+      2. `compose_run` RAISES, naming the field the loader names;
+      3. nothing was built and nothing was driven — the spy `build_run_safety` raises if
+         called at all, and the trainer's step is still 0. A re-validation that fired AFTER
+         the subsystems were constructed would leave a started pool behind.
+    """
+    base = smoke_run_config()
+    rigged = base.model_copy(update={
+        "train": base.train.model_copy(update={"max_train_steps": 20,
+                                               "actor_sync_cadence_steps": 1000}),
+        "monitor": base.monitor.model_copy(update={"actor_lag_threshold_steps": 5000}),
+    })
+
+    assert require_run_config(rigged, caller="compose_run") is rigged, (
+        "harness precondition: the TYPE gate accepts this object — it is a real RunConfig. "
+        "If this ever fails, the type gate grew a validation check and the test below is no "
+        "longer measuring re-validation"
+    )
+
+    def _must_not_be_called(**_kwargs):
+        raise AssertionError(
+            "build_run_safety was constructed for a config the loader would reject — "
+            "re-validation must happen before any subsystem exists"
         )
 
-    monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
-    mantis_run.compose_run(
-        config=SimpleNamespace(), trainer=SimpleNamespace(step=0, model=object(),
-                                inference_state_dict=lambda: {}),
-        pool=FakePoolNeverStarted(), buffer=SimpleNamespace(save_to_path=lambda p: None),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+    monkeypatch.setattr(mantis.run, "build_run_safety", _must_not_be_called)
+    trainer, pool = _DrivableTrainer(), FakePoolNeverStarted()
+
+    with pytest.raises(UnvalidatedConfigError, match="must be < train.max_train_steps"):
+        mantis.run.compose_run(
+            config=rigged, trainer=trainer, pool=pool, buffer=_DrivableBuffer(),
+            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        )
+
+    assert trainer.step == 0, (
+        f"the rigged config drove {trainer.step} training steps before being refused; the "
+        "frozen actor this closes is a RUN, so refusing it after the run is no refusal"
     )
-    assert captured["monitor_cfg"] == MonitorConfig()
+    assert pool.sync_payloads == [], "no run may have started, so no sync may have happened"
+
+
+def test_revalidation_does_not_over_reject_a_good_config_or_a_validated_subclass(
+    smoke_run_config,
+) -> None:
+    """The other direction, and it is not optional (LAW-07): a re-validation that rejected
+    everything would satisfy the test above while breaking every real run.
+
+    Two arms. A loaded minted config must round-trip to an EQUAL config — not merely a
+    non-raising one, because a re-validation that silently dropped or re-defaulted a section
+    would pass a truthiness check and quietly change what the run composes from. And a
+    validated SUBCLASS must survive as itself: `require_run_config` admits it on LSP grounds,
+    so a re-validation that downgraded it to the base class would make the two rules
+    disagree about the same object.
+    """
+    good = _bounded(smoke_run_config)
+    assert revalidate_run_config(good, caller="probe") == good, (
+        "re-validating a config the loader produced must return an EQUAL config; a "
+        "difference here means composition drives from something other than the config"
+    )
+
+    class _Sub(RunConfig):
+        pass
+
+    subclass = _Sub.model_validate(good.model_dump())
+    out = revalidate_run_config(subclass, caller="probe")
+    assert type(out) is _Sub, (
+        f"re-validation downgraded a validated subclass to {type(out).__name__}; the type "
+        "gate admits subclasses (LSP) and this hop must not undo that"
+    )

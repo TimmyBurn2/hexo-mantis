@@ -66,7 +66,7 @@ def run_training_loop(
         else:
             # PUBLISH onto the caller's object, do not rebind a local.
             #
-            # The composition root hands ONE anchor object to `PromotionHooks` and to
+            # The composition root hands ONE anchor object to `DeployTagHooks` and to
             # `StepCoordinator` before this loop starts. Rebinding `anchor_state` here
             # updated nothing either of them could see, so `best_model` stayed None
             # forever, `eval/pipeline.py`'s `run_gate = (best is not None) and …` was

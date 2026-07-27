@@ -650,6 +650,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
             "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
             "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
+            "max_train_steps": 1_000_000,
             "completed_q_values": False,
             "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
             "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,

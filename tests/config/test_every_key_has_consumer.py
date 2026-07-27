@@ -81,6 +81,9 @@ CONSUMER_REGISTRY = {
     "train.min_lr": "TrainHParams.from_config -> Trainer._build_scheduler eta_min fallback",
     "train.checkpoint_interval": "TrainHParams.from_config -> Trainer periodic-save gate",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
+    "train.max_train_steps":
+        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step"
+        " -> step.py O2 (WPAX S-4)",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
@@ -216,19 +219,21 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_eight_entries():
+def test_registry_has_exactly_147_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
     # (`selfplay.legal_move_radius_schedule`, forced fallout of DESIGN_P2.md §5) and adds 52
     # (25 `selfplay.*` + 8 `selfplay.mcts.*` + 11 `selfplay.playout_cap.*` + 8 `inference.*`,
     # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. SC-A3 adds 31 (27 `monitor.*` + 4
-    # `monitor.drain.*`, R-MONITORCONFIG-SCHEMA closure): 112 + 31 = 143. The name is
-    # historical (O15's original 8-entry WP8 count); the bijection test above is the live
-    # invariant this file exists to hold. WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
-    # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146.
-    assert len(CONSUMER_REGISTRY) == 146
-    assert len(_leaf_paths(RunConfig)) == 146
+    # `monitor.drain.*`, R-MONITORCONFIG-SCHEMA closure): 112 + 31 = 143. The historical
+    # test name is retired here (it said `eight` while asserting 146); the bijection test
+    # above is the live invariant this file exists to hold, not this count.
+    # WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
+    # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146. WPAX S-4 adds 1
+    # (train.max_train_steps, the run-length authority): 146 + 1 = 147.
+    assert len(CONSUMER_REGISTRY) == 147
+    assert len(_leaf_paths(RunConfig)) == 147
 
 
 def test_no_forward_reference_strings_in_registry():

@@ -16,12 +16,17 @@ actor-lag watchdog callables (`actor_ckpt_step` / learner step) into `build_run_
 """
 from __future__ import annotations
 
-import logging
 import sys
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, NamedTuple, Sequence
 
+from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
+from mantis.config.resolve.composition import require_run_config, revalidate_run_config
+from mantis.config.resolve.monitor import resolve_monitor_config
+from mantis.config.resolve.run_length import resolve_max_train_steps
+from mantis.config.schema import RunConfig
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
@@ -32,18 +37,9 @@ from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
 from mantis.train.subsystems import build_run_safety
 
-_LOG = logging.getLogger(__name__)
-
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
 _BASE_WIRED_SOURCES: tuple[str, ...] = ("train_step", "inference_dispatch", "selfplay_drain")
-
-#: The fakes-path actor-sync cadence (R-10 justification, same as
-#: `_default_step_coordinator_config`): a config object with no `.train` attribute (every
-#: existing fakes test) gets cadence 1 — the zero-staleness, MOST-synced posture, never a
-#: quietly frozen one. A real `RunConfig` missing the key never reaches this branch:
-#: pydantic rejects it at load, naming the key.
-_SMOKE_ACTOR_SYNC_CADENCE_STEPS: int = 1
 
 
 class RunHandles(NamedTuple):
@@ -66,36 +62,30 @@ def _stop_pool_if_started(pool: Any, *, pool_started: bool) -> Callable[[], None
     return _stop
 
 
-def _resolve_monitor_cfg(config: Any) -> MonitorConfig:
-    """The monitor-section twin of the `eval_cfg=getattr(config, "eval", None)` idiom two
-    lines below this function's call site in `compose_run` (STOP CANDIDATE 5, DESIGN_P3.md
-    §5.0). `config` may be a real `RunConfig` (`.monitor: MonitorSchemaConfig`, production)
-    or a fakes-test `SimpleNamespace()` with no `.monitor` attribute at all (every existing
-    `compose_run` test) — `getattr(..., None)` tolerates both, unlike a direct
-    `config.monitor` read."""
-    section = getattr(config, "monitor", None)
-    if section is None:
-        return MonitorConfig()
-    from mantis.config.resolve.monitor import resolve_monitor_config
-    return resolve_monitor_config(section)
+def _resolve_monitor_cfg(config: RunConfig) -> MonitorConfig:
+    """WPAX S-1/S-2: a plain typed section read through the monitor section's ONE resolver.
+
+    This used to be a member of the duck-typed config-section family, whose absent-section
+    arm returned a bare `MonitorConfig()` — and a bare one carries
+    `actor_lag_abort_enabled=False`, so it silently DISARMED the hard abort `configs/run5.yaml`
+    ships armed (ADJ-07). `compose_run`'s gate makes the section typed and present, so there
+    is no absent arm left to take."""
+    return resolve_monitor_config(config.monitor)
 
 
-def _resolve_actor_sync_cadence_steps(config: Any) -> int:
-    """The train-section twin of `_resolve_monitor_cfg`: a real `RunConfig` resolves
-    `train.actor_sync_cadence_steps` through its ONE resolver (K1); a fakes-test config
-    with no `.train` attribute gets `_SMOKE_ACTOR_SYNC_CADENCE_STEPS`."""
-    section = getattr(config, "train", None)
-    if section is None:
-        return _SMOKE_ACTOR_SYNC_CADENCE_STEPS
-    from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
-    return resolve_actor_sync_cadence(section)
+def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
+    """The train-section twin of `_resolve_monitor_cfg`: `train.actor_sync_cadence_steps`
+    through its ONE resolver (K1). Its retired smoke arm substituted cadence 1 for any
+    config object without a train section — a test-only value on a production axis."""
+    return resolve_actor_sync_cadence(config.train)
 
 
 def _default_step_coordinator_config() -> StepCoordinatorConfig:
     """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) — no config-key
-    reads here; the run5 mint threads real values through this seam once the schema
-    extension lands. `stop_step=0` makes a single `step()` call terminal by construction,
-    matching the composition root's own smoke-grade posture."""
+    reads here; the remaining ~24 knobs are unauthored code-side defaults owned by
+    R-TRAINCONFIG-SCHEMA / ADJ-08. `stop_step` is the ONE exception and is no longer set
+    from here: `compose_run` overrides it from `train.max_train_steps` (WPAX S-4), so the
+    `stop_step=0` literal below is a placeholder the config always replaces."""
     return StepCoordinatorConfig(
         eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
         value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
@@ -108,21 +98,32 @@ def _default_step_coordinator_config() -> StepCoordinatorConfig:
 
 def compose_run(
     *,
-    config: Any,
+    config: RunConfig | Any,
     trainer: Any,
     pool: Any,
     buffer: Any,
     log_dir: "str | Path",
     checkpoint_dir: "str | Path",
-    monitor_cfg: "MonitorConfig | None" = None,
     eval_enabled: bool = True,
     run_id: str = "run",
 ) -> RunHandles:
-    """The run composition root (§c.6). Injection-first: every collaborator arrives via
-    a kwarg, never built here (R-10)."""
+    """The run composition root (§c.6). Injection-first: every COLLABORATOR arrives via a
+    kwarg, never built here (R-10) — but no parameter may carry a CONFIG FACT: the gate on
+    the first line below is the ONE authority for what this root may be composed from, and
+    the parameter list is pinned by a signature census so a re-add cannot be silent (WPAX
+    S-1/S-2, MF-1)."""
+    config = require_run_config(config, caller="compose_run")
+    # RED-TEAM F-3: the gate above answers "is this the class?"; this answers "is this a
+    # config the loader would accept?". `model_copy(update=…)` builds a genuine RunConfig
+    # whose CROSS-FIELD validators never re-ran, and one such copy drove a 20-step run with
+    # a single actor sync — run3's frozen actor — past the gate. Re-validating the dump
+    # closes that route, `model_construct`, and post-gate mutation together. It stays a
+    # SECOND statement because the gate must remain compose_run's first (pinned) and because
+    # the two rules have different contracts: the gate is identity-preserving, this is not.
+    config = revalidate_run_config(config, caller="compose_run")
     log_dir = Path(log_dir)
     checkpoint_dir = Path(checkpoint_dir)
-    monitor_cfg = monitor_cfg if monitor_cfg is not None else _resolve_monitor_cfg(config)
+    monitor_cfg = _resolve_monitor_cfg(config)
 
     wired_sources: list[str] = list(_BASE_WIRED_SOURCES)
     if eval_enabled:
@@ -159,26 +160,33 @@ def compose_run(
     # literals. The two used to duplicate config.py's own defaults (900.0/3.0/14400.0/
     # 14400.0) by coincidence; a future default change there would have silently
     # diverged the two (R1: duplicated default authority).
-    step_coordinator_cfg = _default_step_coordinator_config()
+    # WPAX S-4: stop_step is the ONE run-length authority and now comes from the config
+    # (train.max_train_steps), never from this builder. The remaining ~24 knobs in
+    # _default_step_coordinator_config are still unauthored code-side defaults, owned by
+    # R-TRAINCONFIG-SCHEMA / ADJ-08 — this seam is where they will land.
+    step_coordinator_cfg = dataclass_replace(
+        _default_step_coordinator_config(),
+        stop_step=resolve_max_train_steps(config.train),
+    )
 
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
     eval_pipeline = None
     if eval_enabled:
         eval_pipeline = build_eval_pipeline(
-            eval_cfg=getattr(config, "eval", None),
+            eval_cfg=config.eval,
             coordinator_cfg_caps=DrainCaps(
                 final_eval_drain_timeout_sec=step_coordinator_cfg.final_eval_drain_timeout_sec,
                 eval_final_drain_safety_factor=step_coordinator_cfg.eval_final_drain_safety_factor,
                 eval_final_drain_hard_cap_sec=step_coordinator_cfg.eval_final_drain_hard_cap_sec,
                 terminal_eval_hard_cap_sec=step_coordinator_cfg.terminal_eval_hard_cap_sec,
             ),
-            encoding=getattr(getattr(config, "identity", None), "encoding", "unknown"),
+            encoding=config.identity.encoding,
             run_id=run_id, spool_dir=log_dir / "eval_spool",
             ladder_state_path=log_dir / "eval_ladder_state.json",
             promotion=DeployTagHooks(
                 anchor_state=resolved_anchor,
                 best_model_path=checkpoint_dir / "best_model.pt", run_id=run_id,
-                encoding=getattr(getattr(config, "identity", None), "encoding", "unknown"),
+                encoding=config.identity.encoding,
                 save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
             ),
             sink=run_safety.sink, heartbeat=run_safety.heartbeat,
@@ -195,27 +203,26 @@ def compose_run(
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=resolved_anchor, shutdown=shutdown,
         eval_model=getattr(trainer, "model", None), bufs=None,
-        config=step_coordinator_cfg, full_config=(config if isinstance(config, dict) else {}),
+        config=step_coordinator_cfg, full_config=config.model_dump(),
         train_cfg={}, mixing_cfg={}, run_id=run_id,
         sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,
         heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync,
     )
 
-    # Drive the loop + epilogue. Defensive: a placeholder/fake collaborator (no real
-    # `.arch`, no real checkpoint machinery) must never crash the COMPOSITION root itself
-    # — a real production run's collaborators satisfy every downstream contract; a
-    # fakes-testable smoke harness's do not, and this root's job is to WIRE, not to assert
-    # the drive succeeded end to end.
+    # WPAX S-5: NOTHING is swallowed. The old blanket `except Exception -> log -> return`
+    # existed so a fakes harness could not crash this root; that is the same defect as the
+    # smoke resolver arm (accommodating test doubles in production code), and it also
+    # swallowed actor-SYNC failures into an exit-0 return — a run that looks launched and
+    # never syncs, which is run3's silent freeze with the backstop routed around it.
+    # Fail-loud law wins: the loop's failure propagates, and `close_out` still runs in a
+    # `finally` so the buffer save and the guarded pool stop are not lost. If `close_out`
+    # also raises, Python chains the loop failure as its `__context__`.
     try:
         run_training_loop(trainer=trainer, shutdown_state=shutdown, eval_pipeline=eval_pipeline,
                           coordinator=coordinator, anchor_state=resolved_anchor,
                           sink=run_safety.sink)
-    except Exception:  # noqa: BLE001 — see docstring note above
-        _LOG.exception("run_training_loop_raised run_id=%s", run_id)
-    try:
+    finally:
         coordinator.close_out(on_drained=_stop_pool_if_started(pool, pool_started=pool_started))
-    except Exception:  # noqa: BLE001 — see docstring note above
-        _LOG.exception("close_out_raised run_id=%s", run_id)
 
     return RunHandles(coordinator=coordinator, run_safety=run_safety, eval_pipeline=eval_pipeline,
                       shutdown=shutdown)

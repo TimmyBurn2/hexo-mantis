@@ -23,7 +23,6 @@ from typing import Any
 
 import mantis.run
 import mantis.train.actor_sync  # noqa: F401 — RED-at-import anchor (module does not exist yet)
-from mantis.train.coordinator.config import StepCoordinatorConfig
 
 _STOP_STEP = 5
 
@@ -115,23 +114,13 @@ class _Buffer:
         return None
 
 
-def _bounded_config() -> StepCoordinatorConfig:
-    return StepCoordinatorConfig(
-        eval_interval=0, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=_STOP_STEP,
-        final_eval_drain_timeout_sec=900.0,
-    )
-
-
-def test_compose_run_syncs_actor_on_cadence_without_eval(tmp_path, monkeypatch) -> None:
+def test_compose_run_syncs_actor_on_cadence_without_eval(
+    tmp_path, monkeypatch, smoke_run_config
+) -> None:
     """The dependency-absence proof: `eval_enabled=False` means no gate, no promotion
     hooks, no eval pipeline exist ANYWHERE in the process, yet the pool records
-    cadence-consistent weight pushes (fakes path = cadence 1, `_SMOKE_ACTOR_SYNC_
-    CADENCE_STEPS`, the zero-staleness posture — DESIGN §5) and the actor's recorded
+    cadence-consistent weight pushes (a real minted config at cadence 1, the
+    zero-staleness posture — DESIGN §5) and the actor's recorded
     step ends inside the cadence bound of the learner's."""
     pool = _SyncRecordingPool()
     trainer = _Trainer()
@@ -145,12 +134,21 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(tmp_path, monkeypatch) 
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_build_run_safety)
-    # Bound the drive: the shipped smoke config's stop_step=0 never enters the burst loop;
-    # a small positive stop_step exercises real training steps (harness move, not a pin).
-    monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _bounded_config)
+    # WPAX S-4 retired C-6: stop_step is now config-authored (train.max_train_steps), so this
+    # oracle drives the PRODUCTION _default_step_coordinator_config() with no monkeypatch.
+    # Retirement is for eval_enabled=False ONLY. The eval_enabled=True posture still needs the
+    # patch: terminal_eval_enabled defaults True in that builder, has NO config key, and is
+    # owned by R-TRAINCONFIG-SCHEMA / ADJ-08 (see DESIGN_S §6.7).
+    # NEW COUPLING: the step counts below now depend on the builder's other 24 knobs
+    # (eval_interval=1000, max_train_burst=1, log_interval=1000). That is deliberate — the
+    # oracle exercises the production seam — but a change to max_train_burst moves them.
 
     handles = mantis.run.compose_run(
-        config=SimpleNamespace(),  # no .train attribute → the smoke cadence (=1) path
+        # reachability bound: cadence < threshold < max_train_steps, so this hunk depends
+        # on _STOP_STEP >= 3
+        config=smoke_run_config(
+            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+            monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
         trainer=trainer, pool=pool, buffer=_Buffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False,
@@ -170,7 +168,7 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(tmp_path, monkeypatch) 
     assert pool.step_calls == sorted(set(pool.step_calls)), (
         f"recorded sync steps must be strictly increasing: {pool.step_calls}"
     )
-    cadence = 1  # the fakes-path smoke cadence (DESIGN §5): the MOST-synced world
+    cadence = 1  # the composed config's cadence (DESIGN §5): the MOST-synced world
     assert trainer.step - pool.step_calls[-1] < cadence + 1, (
         f"actor_ckpt_step {pool.step_calls[-1]} must track learner_step {trainer.step} "
         f"within the cadence bound"

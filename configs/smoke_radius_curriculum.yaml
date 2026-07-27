@@ -3,6 +3,7 @@
 # delta: run_id: template_grid -> smoke_radius_curriculum
 # delta: seed: 20260716 -> 20260721
 # delta: identity.encoding: v6_live2_ls -> v6w25
+# delta: train.max_train_steps: 1000000 -> 2000
 schema_version: 1
 run_id: smoke_radius_curriculum
 seed: 20260721
@@ -103,6 +104,7 @@ train:
   min_lr: null
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
+  max_train_steps: 2000
   completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution

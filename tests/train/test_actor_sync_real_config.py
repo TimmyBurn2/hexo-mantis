@@ -136,8 +136,11 @@ def _bounded_config() -> StepCoordinatorConfig:
 
 def _real_run_config() -> RunConfig:
     payload = _frozen_payload()(
-        train_over={"actor_sync_cadence_steps": _CADENCE},
-        monitor_over={"actor_lag_threshold_steps": _CADENCE + 8},
+        # WPAX S-4: the reachability bound now binds on the RUN LENGTH (6), not on the
+        # LR horizon (1 000 000), so the threshold must fit inside `cadence < threshold
+        # < max_train_steps` — 2 < 4 < 6.
+        train_over={"actor_sync_cadence_steps": _CADENCE, "max_train_steps": _STOP_STEP},
+        monitor_over={"actor_lag_threshold_steps": _CADENCE + 2},
     )
     return RunConfig(**payload)
 
@@ -159,6 +162,11 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _capture)
+    # WPAX S-4 narrowed this patch's reason: `stop_step` is config-authored now (compose_run
+    # overrides it from train.max_train_steps regardless), so what `_bounded_config` still
+    # buys is `terminal_eval_enabled=False` — this drive is eval_enabled=True and the
+    # production builder's terminal eval round reaches eval/snapshot.py's `.arch` read on a
+    # fake model. That knob has no config key (R-TRAINCONFIG-SCHEMA / ADJ-08).
     monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _bounded_config)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",

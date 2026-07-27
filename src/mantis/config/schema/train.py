@@ -47,6 +47,20 @@ class TrainConfig(StrictModel):
     # (R49 enforced at the type level). Resolved ONLY by
     # `mantis.config.resolve.actor_sync.resolve_actor_sync_cadence`.
     actor_sync_cadence_steps: int = Field(ge=1)
+    # WPAX S-4 (F-C re-anchor): the RUN-LENGTH authority, in coordinator training steps.
+    # Consumed by mantis.config.resolve.run_length.resolve_max_train_steps ->
+    # StepCoordinatorConfig.stop_step, the real stop condition (coordinator/step.py O2).
+    # Distinct from total_steps, which is only the LR-scheduler horizon.
+    #
+    # ABSOLUTE, not per-process: StepCoordinator seeds `self._train_step` from
+    # `trainer.step` and re-reads it each burst, so a run resumed past this ceiling
+    # terminates immediately having performed ZERO syncs. That is correct — a run past its
+    # cap is done — but it looks exactly like a frozen actor, so it is stated here, in
+    # resolve_max_train_steps' docstring, and pinned by the resume oracle.
+    #
+    # `ge=1` is a floor, not THE floor: the reachability validator dominates it. With any
+    # legal cadence the smallest expressible run is 3 (cadence 1 < threshold 2 < 3).
+    max_train_steps: int = Field(ge=1)
 
     # loss selection + targets
     completed_q_values: bool

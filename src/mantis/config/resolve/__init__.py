@@ -11,6 +11,10 @@ from mantis.config.resolve.bootstrap import (
     ResolvedBootstrap,
     resolve_bootstrap,
 )
+from mantis.config.resolve.composition import (
+    UnvalidatedConfigError,
+    require_run_config,
+)
 from mantis.config.resolve.encoding import (
     UNSPECIFIED,
     AbsentEncodingError,
@@ -22,6 +26,7 @@ from mantis.config.resolve.encoding import (
 )
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
+from mantis.config.resolve.run_length import resolve_max_train_steps
 
 __all__ = [
     "UNSPECIFIED",
@@ -30,12 +35,15 @@ __all__ = [
     "EncodingConflictError",
     "EncodingResolution",
     "ResolvedBootstrap",
+    "UnvalidatedConfigError",
     "normalize_declared",
     "normalize_stamp",
     "reconcile_encoding",
+    "require_run_config",
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
     "resolve_bootstrap",
     "resolve_eval_model_sims",
+    "resolve_max_train_steps",
     "resolve_monitor_config",
 ]

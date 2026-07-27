@@ -31,6 +31,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "min_lr": None,
     "checkpoint_interval": 0,
     "actor_sync_cadence_steps": 1,
+    "max_train_steps": 1_000_000,
     "completed_q_values": False,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",

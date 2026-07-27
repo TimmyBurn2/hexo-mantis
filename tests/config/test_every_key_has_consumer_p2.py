@@ -12,7 +12,8 @@ Leaf-count arithmetic (computed mechanically from DESIGN_P2.md's field lists, no
 guessed): 36 (current) - 1 (selfplay.legal_move_radius_schedule, removed) + 25 (train.*) +
 25 (selfplay.* scalars) + 8 (selfplay.mcts.*) + 11 (selfplay.playout_cap.*) +
 8 (inference.*) + 27 (monitor.* scalars) + 4 (monitor.drain.*) = 143;
-WP-UNFREEZE adds 3 (K1/K2/K3 actor-sync knobs) = 146.
+WP-UNFREEZE adds 3 (K1/K2/K3 actor-sync knobs) = 146; WPAX S-4 adds 1
+(train.max_train_steps) = 147.
 
 Every consumer string below cites the real read site named in DESIGN_P2.md §1.1 (train)/
 §1.2 (selfplay/inference)/§4.2-4.3 (monitor/drain) — not placeholder text.
@@ -71,6 +72,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.min_lr": "TrainHParams.min_lr -> core.py:230 _build_scheduler eta_min fallback",
     "train.checkpoint_interval": "TrainHParams.checkpoint_interval -> core.py:432 periodic save trigger",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
+    "train.max_train_steps":
+        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step"
+        " -> step.py O2 (WPAX S-4)",
     "train.completed_q_values": "TrainHParams.completed_q_values -> core.py:347 CE-vs-KL loss switch; cross-validated",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "RunConfig cross-section validator (policy_target/completed_q_values consistency, §2)",
@@ -200,10 +204,11 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_146_entries():
-    # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3).
-    assert len(CONSUMER_REGISTRY) == 146
-    assert len(_leaf_paths(RunConfig)) == 146
+def test_registry_has_exactly_147_entries():
+    # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
+    # (train.max_train_steps, the run-length authority) = 147.
+    assert len(CONSUMER_REGISTRY) == 147
+    assert len(_leaf_paths(RunConfig)) == 147
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

@@ -111,6 +111,11 @@ def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
         buffer_persist_path=tmp_path / "replay.bin",
         wired_sources=["train_step", "inference_dispatch", "selfplay_drain", "eval_round"],
         # WP-UNFREEZE E36 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
+        # WPAX RED-TEAM F-2: `monitor_cfg` is REQUIRED too. This test asserts the
+        # `eval_round` deadline arms at the MonitorConfig DEFAULT 1800.0, so the default
+        # instance is now passed explicitly rather than reached through an absent-kwarg
+        # fallback that also silently disarmed the actor-lag abort.
+        monitor_cfg=MonitorConfig(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     run_safety.watchdog._sink = sink  # route the arm-log through our spy without a real JSONL

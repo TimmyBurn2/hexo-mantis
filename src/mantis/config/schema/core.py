@@ -1,5 +1,9 @@
 """Run-config schema (contract run-config-schema v1).
 
+>300 justify (R8): this file carries the `RunConfig` root model and the five
+`model_validator`s of this schema's cross-field rules — the three on `RunConfig` span
+SECTIONS (train x selfplay, train x monitor), so they cannot live in any section module.
+
 Every model is strict: unknown key = hard error, missing key = hard error, silent scalar
 coercions (str->int, float->int, bool->int) rejected, values immutable. NO code-side
 defaults — a default lives in exactly one place: the schema field (repo_design §5). Identity
@@ -285,27 +289,32 @@ class RunConfig(StrictModel):
         """Both step-clock knobs must be reachable within the run (RED-TEAM F-2).
 
         `ge=1` alone does not make "never sync" inexpressible. A cadence at or beyond
-        `total_steps` lets the actor take its single unconditional first sync and then
+        `max_train_steps` lets the actor take its single unconditional first sync and then
         freeze for the entire run — run3's failure, expressed in a config that validated
         clean. And because the threshold must exceed the cadence, such a config also
         pushes the lag threshold out of reach, so the exit-45 invariant that exists to
         catch a frozen actor could never fire on one. The two knobs failed open together.
 
-        Requiring both to be strictly inside `total_steps` is what actually makes
+        Requiring both to be strictly inside `max_train_steps` is what actually makes
         "don't sync" unrepresentable, which is what R49 asks of the config surface.
+
+        WPAX S-4 (F-C): the bound is anchored to `train.max_train_steps`, the RUN-LENGTH
+        authority, not to `train.total_steps`, which is only the LR-scheduler horizon. On
+        the proxy the bound could be satisfied and still be wrong — a 2000-step run with
+        `total_steps: 1000000` blessed a cadence of 999 999.
         """
-        total = self.train.total_steps
+        total = self.train.max_train_steps
         if self.train.actor_sync_cadence_steps >= total:
             raise ValueError(
                 f"train.actor_sync_cadence_steps "
-                f"({self.train.actor_sync_cadence_steps}) must be < train.total_steps "
+                f"({self.train.actor_sync_cadence_steps}) must be < train.max_train_steps "
                 f"({total}): a cadence the run never reaches means the actor syncs once "
                 f"and then never again, which is the frozen actor this WP removed"
             )
         if self.monitor.actor_lag_threshold_steps >= total:
             raise ValueError(
                 f"monitor.actor_lag_threshold_steps "
-                f"({self.monitor.actor_lag_threshold_steps}) must be < train.total_steps "
+                f"({self.monitor.actor_lag_threshold_steps}) must be < train.max_train_steps "
                 f"({total}): a threshold the run never reaches is an invariant that can "
                 f"never fire — armed in the config, absent in effect"
             )

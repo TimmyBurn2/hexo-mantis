@@ -275,6 +275,11 @@ def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_pat
         buffer_persist_path=tmp_path / "replay_buffer.bin",
         wired_sources=HEARTBEAT_SOURCES,
         # WP-UNFREEZE E31 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
+        # WPAX RED-TEAM F-2: `monitor_cfg` is now REQUIRED too — this call site used to
+        # omit it and silently take the bare-`MonitorConfig()` (disarmed) arm. This test
+        # is about heartbeat wiring, so an explicit default-valued MonitorConfig is the
+        # honest subject; the arming transport is pinned in test_actor_lag_wiring_live.py.
+        monitor_cfg=MonitorConfig(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     try:
