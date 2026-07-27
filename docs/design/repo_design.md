@@ -122,7 +122,12 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
   (`model.arch.CnnArch` / `model.arch.GnnArch`), which `build_net` consumes; a live-module
   representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
-  (a census test proves it stays absent).
+  (a census test proves it stays absent). The discriminator, stated so the prose stops being
+  broader than the gate: what is banned is *deriving* arch metadata from a live module's
+  structure (a representation sniff, or reading arch hyperparameters off an `nn.Module`);
+  *carrying* the declared dataclass instance itself as a handle is the convention, not a
+  breach of it — `build_net` attaches `net.arch = arch` and `eval/snapshot.py` reads it back,
+  which is the arch travelling with the model exactly as this section prescribes.
 - No dense-by-default anywhere: an absent representation is an error, never `"grid"`.
 - The compiled module exposes `registry_sha()` (sha256 of the embedded TOML).
   `mantis.encoding` hashes the on-disk TOML at import in dev/test and hard-errors on
@@ -282,6 +287,13 @@ That is a dispatcher reading pending operator ratification, not a settled rule.
     (`tools/ci_gates/silent_encoding_gate.py`). A site that is not a fallback is justified
     in place; a real arm that cannot be closed yet is registered with a named owner, never
     hidden in the justification hatch.
+12. Armed-abort manifest audit — every `required` row of the manifest
+    (`src/mantis/config/armed_aborts.py`) must be ARMED in every config the manifest binds
+    (`PRODUCTION_CONFIGS`). Read through the real loader; no boot, no burst, no GPU
+    (`tools/ci_gates/preflight_mint.py --audit-only`). A `deferred` row is printed loudly on
+    every run, is tamper-evident through a pinned source literal, and does not gate. The
+    same tool's full mint preflight — a real `compose_run` boot plus a bounded burst,
+    asserting sync cadence and lag transport — is MANUAL and is invoked by no CI step.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 
