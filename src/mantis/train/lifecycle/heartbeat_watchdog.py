@@ -169,6 +169,10 @@ class HeartbeatWatchdog:
         self._fired = False
         self._seq = 0
         self._last_file_write: float | None = None
+        # LAW-18 (WPAX P / TD-6): the lag SAMPLE's own gate. Derived from `_file_interval`
+        # above — no new ctor parameter, so one config fact never enters this constructor
+        # twice under two names (LAW-08) and no construction site changes.
+        self._last_lag_sample: float | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -298,6 +302,22 @@ class HeartbeatWatchdog:
         lag = learner_step - actor_step
         detail = {"learner_step": learner_step, "actor_ckpt_step": actor_step,
                   "lag_steps": lag, "threshold_steps": int(spec.threshold_steps)}
+        # LAW-18: the lag invariant is a lever under test, so it logs its own reading
+        # in-run, not only when it fires. Before this, a healthy run emitted NOTHING from
+        # this check (`actor_lag_negative` / `actor_lag_exceeded` are the only two arms), so
+        # no observer could tell a live reading from a frozen 0 — the exact discrimination
+        # the mint preflight (R61 assertion (b)) has to make. It is the SAME `detail` dict
+        # the fire path uses, so a sample can never disagree with the reading that fires.
+        # Emitted BEFORE the `lag < 0` arm on purpose: b5a reads `lag_steps < 0` off the
+        # SAMPLE, and a sample placed after that arm is silenced on exactly the wiring
+        # defect it exists to expose. Bounded by the interval ALREADY in this object — the
+        # same one `_mirror_file` uses (one rule, two consumers) — so a 5 s poll cannot
+        # flood the segment.
+        now = float(self._clock())
+        if (self._last_lag_sample is None
+                or (now - self._last_lag_sample) >= self._file_interval):
+            self._last_lag_sample = now
+            self._emit({"event": "actor_lag_sample", "seq": self._seq, **detail})
         if lag < 0:
             if not self._lag_negative_reported:
                 self._lag_negative_reported = True

@@ -112,6 +112,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 10. No Makefile/doc reference to untracked paths (tools/ci_gates/check_tracked_refs.py).
 11. No silent encoding-fallback arms (tools/ci_gates/silent_encoding_gate.py) — an absent
     encoding raises, never defaults (LAW-11/LAW-05).
+12. Armed-abort manifest audit (tools/ci_gates/preflight_mint.py --audit-only) — every
+    `required` row of src/mantis/config/armed_aborts.py is armed in every production
+    config; deferred rows print loud and do not gate. The same tool's full mint preflight
+    (a real boot + burst) is MANUAL, invoked by no CI step.
 
 Every gate's check logic is a repo-local script or make target under tools/ — nothing
 lives only in workflow YAML.

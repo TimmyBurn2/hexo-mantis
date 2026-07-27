@@ -47,6 +47,12 @@ jobs:
         run: uv run python tools/check_import_dag.py src/mantis
       - name: "gate 11: no silent encoding-fallback arms"
         run: uv run python tools/ci_gates/silent_encoding_gate.py
+      # Mode AUDIT only: no boot, no burst, no GPU — it reads the committed production
+      # configs through the real loader and audits the armed-abort manifest. The mode that
+      # needs a burst (the full mint preflight) is invoked by NO CI step and is the manual
+      # mint gate. rc 0 here covers assertion (c) alone, and the tool says so on stdout.
+      - name: "gate 12: armed-abort manifest audit (production configs)"
+        run: uv run python tools/ci_gates/preflight_mint.py --audit-only
       # ADVISORY, NOT BLOCKING (R57 / CARD-LINT-TYPE). Both have been red for the entire
       # migration — 612 ruff findings and 1238 pyright findings at the time of demotion —
       # and neither has ever been observed failing, because this repo has no git remote so
