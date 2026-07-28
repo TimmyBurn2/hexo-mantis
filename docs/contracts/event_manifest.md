@@ -129,6 +129,22 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `monitor_gates` counters, never appended to the abort history as a healthy `0.0`. An
   observer therefore reads insufficient evidence as a rising `skips` count, not as a healthy
   reading.
+  **WPMINT Phase X (CARD-ABORT-EXIT / R84) makes a fired abort supervisor-distinguishable.**
+  Until it landed, `shutdown.running = False` was written by four sites in
+  `train/coordinator/step.py` — `stop()`, the O2 iteration limit, the O3 shutdown-save and
+  `_fire_hard_abort` — and nothing recorded which one fired: a collapsed run and a completed
+  run were the same observable, in state and in exit status. `_fire_hard_abort` now records the
+  RULE NAME on `ShutdownState.abort_rule` beside the stop (`None` on both clean stops), and
+  `mantis.config.armed_aborts.exit_code_for_abort` resolves that name to the manifest row's
+  `exit_code` at a process boundary. The `draw_rate_collapse` row's `exit_code` is **46**
+  (`monitor.heartbeat.DRAW_RATE_COLLAPSE_EXIT_CODE`, the fail-fast family's cooperative
+  member — see repo_design §11). The `hard_abort` event is unchanged and still carries
+  `rule` / `message` / `step`: the event stream was never the gap, the PROCESS was, and a
+  supervisor that reads only exit statuses now sees 46 instead of 0. Delivery stays
+  cooperative — the run still unwinds through `close_out`, the terminal-eval drain and the
+  shutdown checkpoint — so the abort's own evidence survives the abort.
+  A rule with no manifest row (`grad_norm_hard_abort`, `sealbot_wr_abort`) resolves to `None`:
+  truthful, and no code is invented for an abort nobody pre-registered.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

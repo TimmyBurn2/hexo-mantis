@@ -44,6 +44,19 @@ PERSIST_FATAL_EXIT_CODE: int = 43
 # the supervisor's existing "any other code propagated with NO relaunch" arm handles it
 # with zero supervisor change — relaunching into a broken sync mechanism is a crash loop.
 ACTOR_LAG_EXIT_CODE: int = 45
+# 46 is the COOPERATIVE member of the family (WPMINT Phase X, CARD-ABORT-EXIT / R84), and
+# the deviation is deliberate rather than an oversight. 42/43/45 are delivered by `os._exit`
+# from the watchdog thread; the draw-rate collapse abort is delivered by
+# `StepCoordinator._fire_hard_abort` setting `shutdown.running = False` and RETURNING, so the
+# loop unwinds through `close_out`, the terminal-eval drain and the shutdown checkpoint.
+# Delivering 46 by `os._exit` would discard all three and contradict LAW-16 (save-then-exit),
+# making the fix strictly worse than the defect it closes. Parity with the family is therefore
+# taken in the REGISTRY (this constant + the `draw_rate_collapse` manifest row's `exit_code`)
+# and in the supervisor's READING of the process rc; DELIVERY stays cooperative. The rc is
+# resolved at a process boundary from the rule name the coordinator records
+# (`ShutdownState.abort_rule` -> `mantis.config.armed_aborts.exit_code_for_abort`), never from
+# a second literal here or in the coordinator.
+DRAW_RATE_COLLAPSE_EXIT_CODE: int = 46
 
 
 @dataclass(frozen=True)

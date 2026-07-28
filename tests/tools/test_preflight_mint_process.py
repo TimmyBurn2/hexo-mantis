@@ -213,6 +213,67 @@ def test_the_classifier_evaluates_arms_1_to_3_before_anything_else() -> None:
     )
 
 
+def test_a_child_rc_46_is_the_runs_own_ARMED_ABORT_and_is_never_collapsed_to_33() -> None:
+    """X-6 — CARD-ABORT-EXIT (R84) in the rc taxonomy, driven rather than declared.
+
+    Before WPMINT Phase X, 46 sat in a hole: outside `PASS_THROUGH` ([10, 41]) and outside the
+    reserved set, so `_classify_child` fell through every arm to the final
+    `PreflightBootFailedError` and a child that exited with the AUTHORED abort code reported
+    **rc 33** — the tool meant to surface the signal would have destroyed it. That is the
+    failure this test measures, and it measures it at the number, not at the concept.
+
+    The rc PROPAGATES rather than being rewritten to a parent code, which is the difference
+    between this and the rc-34 watchdog arm above: a watchdog fire is `os._exit` mid-run and
+    the parent's own diagnosis (34) is the useful thing; an armed abort is COOPERATIVE — the
+    run decided, unwound, saved, and returned the manifest's number — so a supervisor must
+    read the same number on both sides of this tool.
+    """
+    for code in TOOL.ARMED_ABORT_CODES:
+        with pytest.raises(TOOL.PreflightArmedAbortFiredError) as caught:
+            TOOL._classify_child(_child(code))
+        assert caught.value.rc == code, (
+            f"an armed abort's authored rc must propagate UNCHANGED; got {caught.value.rc} "
+            f"for child rc {code}"
+        )
+        assert caught.value.rc != TOOL.PreflightBootFailedError.rc, (
+            "and it must NOT be the rc 33 it collapsed to before the taxonomy was extended"
+        )
+        assert code not in TOOL.PASS_THROUGH, (
+            "the premise: 46 cannot ride arm 4, which is why it needed an arm of its own"
+        )
+    assert TOOL.ARMED_ABORT_CODES == (46,), (
+        f"the authored code is 46 and it comes from the ONE authority; got "
+        f"{TOOL.ARMED_ABORT_CODES!r}"
+    )
+    assert TOOL.DRAW_RATE_COLLAPSE_EXIT_CODE == 46 and 46 not in TOOL.WATCHDOG_CODES, (
+        "46 is a reserved code but NOT a watchdog code — it is not delivered by `os._exit` "
+        "and must not be diagnosed as a stall"
+    )
+
+
+def test_the_boot_childs_rc_is_decided_by_whether_an_abort_fired() -> None:
+    """X-6's other half — `_abort_rc`, the card's one real process boundary.
+
+    `_boot_main` hands `RunHandles.shutdown.abort_rule` to this function and returns what it
+    says. Three outcomes, driven directly because the function IS the boundary:
+
+    * no rule fired -> 0 (a clean run is still a clean run);
+    * a rule fired with an authored code -> that code, taken from the manifest;
+    * a rule fired with NO authored code -> a NAMED failure. Never 0 — an aborted run
+      reported as a clean boot is the defect R84 opened the card on — and never an invented
+      number, which is the thing R84 refused for `grad_norm_hard_abort`.
+    """
+    assert TOOL._abort_rc(None) == 0, "no rule fired is the ONLY thing that means rc 0"
+    assert TOOL._abort_rc("draw_rate_collapse") == TOOL.DRAW_RATE_COLLAPSE_EXIT_CODE
+
+    with pytest.raises(TOOL.PreflightBootFailedError) as caught:
+        TOOL._abort_rc("grad_norm_hard_abort")
+    assert "grad_norm_hard_abort" in str(caught.value) and caught.value.rc == 33, (
+        "an abort with no authored code is a named failure that NAMES THE RULE, not a silent "
+        f"rc 0 and not a fabricated code; got rc {caught.value.rc}"
+    )
+
+
 def test_the_pass_through_range_is_the_designs_range_and_is_not_empty() -> None:
     """RR-33: `PASS_THROUGH = range(0, 0)` kills arm 4 silently — every named child outcome
     collapses to 33 — and the parametrized test above would then fail one code at a time.
@@ -824,8 +885,16 @@ def test_the_failure_code_table_is_the_designs_table() -> None:
     assert 24 not in TOOL.FAILURE_CODES.values(), (
         "§6.3 keeps 24 free so 23 and 25 stay visually distinct in a CI log"
     )
-    assert set(TOOL.FAILURE_CODES.values()).isdisjoint({42, 43, 44, 45}), (
-        "the four codes the run's OWN machinery reserves must never be an assertion outcome"
+    # WPMINT Phase X: the reserved band grew to 42–46 (46 = the authored draw-rate abort code)
+    # and this assertion moved with it. Pinned against `RESERVED_CODES` rather than a re-typed
+    # `{42, 43, 44, 45, 46}`: a hand-written set here would go stale exactly as the four-element
+    # one just did, silently, because a set literal cannot notice a sixth reserved code.
+    assert set(TOOL.FAILURE_CODES.values()).isdisjoint(set(TOOL.RESERVED_CODES)), (
+        "the codes the run's OWN machinery reserves must never be an assertion outcome"
+    )
+    assert TOOL.RESERVED_CODES == (42, 43, 44, 45, 46), (
+        "and the band the docstring declares is 42–46; a code that joins the family without "
+        f"joining this tuple is one the parent will collapse. Got {TOOL.RESERVED_CODES!r}"
     )
 
 

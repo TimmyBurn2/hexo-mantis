@@ -485,6 +485,16 @@ class StepCoordinator:
         A gate that resolves AFTER the run already stopped (the teardown-routed eval result)
         records a DISTINCT `hard_abort_after_stop` event: the trail stays complete, but a
         stopped run is never reported as a second abort decision.
+
+        WPMINT Phase X (CARD-ABORT-EXIT / R84): the fire also records the RULE NAME on
+        `ShutdownState.abort_rule`, beside the `running = False` it was already writing. That
+        is the whole of R84's "supervisor-distinguishable from a clean run" on this side — the
+        two clean stops (O2 iteration-limit, O3 shutdown-save) leave the field `None`. The
+        NAME, not a code: this method must not import `mantis.config.armed_aborts`, and it is
+        shared by rules that have no authored exit code, so the rule -> code resolution
+        (`armed_aborts.exit_code_for_abort`) belongs at the process boundary, not here. The
+        assignment is deliberately paired with `running = False` — it must be impossible to
+        stop the run on a fired rule without recording which rule it was.
         """
         if message is None:
             return False
@@ -498,6 +508,7 @@ class StepCoordinator:
         _LOG.error("hard_abort rule=%s step=%s message=%s", rule, at_step, message)
         emit_via(sink, {"event": "hard_abort", "rule": rule, "message": message, "step": at_step})
         self.shutdown.running = False
+        self.shutdown.abort_rule = rule
         if rule in self._gate_stats:
             self._gate_stats[rule]["fires"] += 1
         return True

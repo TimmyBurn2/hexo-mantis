@@ -392,6 +392,36 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
   on 0/43/other codes and on relaunch-budget exhaustion. Staleness is measured by seq
   progression on the supervisor's own monotonic clock — never file mtime, never wall
   clock.
+- Process exit-code family (the supervisor-readable contract). One number per outcome, and
+  the whole band is reserved by the run's own machinery — no tool of this repo may emit one
+  as its own diagnosis:
+
+  | rc | constant | authority | delivery |
+  |---|---|---|---|
+  | 42 | `WATCHDOG_STALL_EXIT_CODE` (= `lifecycle.watchdog.SELFPLAY_STALL_EXIT_CODE`) | `monitor/heartbeat.py` | `os._exit` from the watchdog thread |
+  | 43 | `PERSIST_FATAL_EXIT_CODE` | `monitor/heartbeat.py` | `os._exit` from the watchdog thread |
+  | 44 | `RELAUNCH_BUDGET_EXIT_CODE` | `monitor/supervise.py` | supervisor return — never a child's |
+  | 45 | `ACTOR_LAG_EXIT_CODE` | `monitor/heartbeat.py` | `os._exit` from the watchdog thread |
+  | 46 | `DRAW_RATE_COLLAPSE_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
+
+  46 (WPMINT Phase X, CARD-ABORT-EXIT / R84) deviates from the family on DELIVERY, and the
+  deviation is the point. The draw-rate collapse abort stops the run by
+  `StepCoordinator._fire_hard_abort` setting `shutdown.running = False` and RETURNING, so the
+  loop unwinds through `close_out`, the terminal-eval drain and the shutdown checkpoint; an
+  `os._exit(46)` would discard all three and contradict LAW-16 (save-then-exit), making the
+  registration strictly worse than the gap it closes. **Parity is taken in the registry and in
+  the supervisor's reading of the rc; delivery stays cooperative.** What carries the signal
+  out of the loop is `ShutdownState.abort_rule` — the rule NAME the fire records, `None` on
+  every clean stop — and a process boundary maps it to a number through
+  `mantis.config.armed_aborts.exit_code_for_abort`, which reads the manifest row and never
+  branches on the rule's identity. A rule with no manifest row resolves to `None` and NO code
+  is invented for it. The number is written in exactly one place per authority: the constant,
+  and the manifest row that imports it.
+
+  OWED: `run_until_stopped` has no caller in `src/` and `mantis.run.main()` is smoke-grade, so
+  the only production-posture process boundary that reads the resolver today is the mint
+  preflight's boot child (`tools/ci_gates/preflight_mint.py`). When a production launcher
+  lands it must read the SAME resolver rather than re-deriving the mapping.
 
 ## 12. Strength-claim + eval discipline
 

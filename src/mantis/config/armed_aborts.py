@@ -1,4 +1,5 @@
-# R8 >300 justify (343, re-measured at WPMINT DS-VERIFY; was 324 at WPAX Phase D, and the
+# R8 >300 justify (399, re-measured at WPMINT Phase X; was 343 at DS-VERIFY and 324 at WPAX
+# Phase D, and the
 # figure is restated at the file's MEASURED size rather than the size it was written for —
 # `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
 # which is not true is worse than none): the manifest ROWS are data and their reason text IS the row —
@@ -6,7 +7,10 @@
 # can be trimmed. The two walkers below (`_dotted`, `audit_arming`) are ~35 lines of code
 # carrying the F-4 named-arm and disarmed-short-circuit rationale; splitting them from the
 # rows they walk would put "which aborts must arm" and the predicate that reads it on
-# opposite sides of an import, which is the drift this module exists to prevent.
+# opposite sides of an import, which is the drift this module exists to prevent. Phase X adds
+# `exit_code_for_abort` (+52 lines, 8 of them code) for the same reason: "which code does a
+# fired abort exit with" is answered BY the rows, and a resolver living anywhere else becomes
+# a second authority for that answer the first time a row's `exit_code` moves.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -34,6 +38,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+# The exit-code AUTHORITY (WPMINT Phase X, CARD-ABORT-EXIT / R84). 42/43/45 already live in
+# `mantis.monitor.heartbeat` and `monitor/supervise.py` imports two of them across the
+# supervisor seam, so 46 joins them there rather than opening a fourth site for one family.
+# Imported rather than re-typed: the row below is the manifest's copy of the number, and a
+# literal here would be the second place "which code does the draw-rate abort use" is
+# written. `mantis.monitor.heartbeat` imports nothing from `mantis` (stdlib only), so this is
+# a leaf edge in the same direction `config/resolve/monitor.py` already takes (gate 9).
+from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 
 
 class Status(str, Enum):
@@ -140,7 +153,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="train.draw_rate_abort.threshold",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
         status=Status.REQUIRED,
-        exit_code=None,
+        exit_code=DRAW_RATE_COLLAPSE_EXIT_CODE,
         owner=None,
         source_pin=(
             "src/mantis/run.py",
@@ -161,11 +174,19 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "25 samples by step 25000, and min_step gates only the FIRE. DR-8's contrary claim "
             "(earliest fire 27000) was MEASURED FALSE and withdrawn. The pin binds to the THREADING at the "
             "construction site, so deleting it, renaming the resolver or reordering the "
-            "call past it all break the R56 scan. exit_code is None because the gate stops "
-            "the run cooperatively (shutdown.running = False) and NO distinct process exit "
-            "code exists — a fired abort is indistinguishable by exit status from a clean "
-            "run. That is TRUTHFUL, not an omission: R84 ratified it and opened "
-            "CARD-ABORT-EXIT (pre-run5-mint, BLOCKING) as the one authorized flip."
+            "call past it all break the R56 scan. exit_code is 46 "
+            "(monitor.heartbeat.DRAW_RATE_COLLAPSE_EXIT_CODE) since WPMINT Phase X discharged "
+            "CARD-ABORT-EXIT (R84). This row's exit_code was None until then — truthfully, "
+            "because the gate stops the run COOPERATIVELY and no distinct process exit code "
+            "existed. Delivery is STILL cooperative and that is deliberate: the gate sets "
+            "shutdown.running = False and returns, so the loop unwinds through close_out, the "
+            "terminal-eval drain and the shutdown checkpoint, which an os._exit(46) would "
+            "discard (LAW-16 save-then-exit). Family parity is taken in this registry and in "
+            "the supervisor's READING of the rc, not in the delivery mechanism. What makes a "
+            "fired abort distinguishable from a clean run is ShutdownState.abort_rule, which "
+            "_fire_hard_abort sets to the rule NAME beside the stop; a process boundary maps "
+            "it here through exit_code_for_abort. The two clean stops (O2 iteration limit, O3 "
+            "shutdown-save) leave the field None."
         ),
     ),
 )
@@ -330,6 +351,40 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
 
 
+def exit_code_for_abort(
+    rule: str, *, manifest: tuple[ArmedAbort, ...] = MANIFEST
+) -> int | None:
+    """The process exit code a FIRED abort rule maps to, or `None` if none is authored.
+
+    The other half of CARD-ABORT-EXIT (R84). `StepCoordinator._fire_hard_abort` records the
+    rule NAME on `ShutdownState.abort_rule`; this resolves that name to the number a
+    supervisor reads off the process, at the boundary where the manifest already lives.
+
+    It NEVER branches on a rule's identity — it looks the row up and returns whatever
+    `exit_code` that row carries, exactly as `Mechanism.is_armed` selects a predicate from
+    data rather than from a name. So the manifest stays the ONE authority: flipping a row's
+    `exit_code` moves this function's answer with no code change here, and no second literal
+    exists to disagree with the row.
+
+    `None` has two distinct and equally truthful sources, and neither is an error:
+
+    * a rule with NO manifest row at all — `grad_norm_hard_abort` and `sealbot_wr_abort`
+      share `_fire_hard_abort` and neither is pre-registered. R84 refused to invent a code
+      for an abort nobody registered, and inventing one HERE would be that same class one
+      layer down;
+    * a row that is registered but carries `exit_code=None` — the posture the draw-rate row
+      itself held until Phase X.
+
+    A caller must therefore treat `None` as "this abort has no authored exit code", never as
+    "no abort fired" — `ShutdownState.abort_rule is None` is the only thing that means the
+    latter.
+    """
+    for row in manifest:
+        if row.name == rule:
+            return row.exit_code
+    return None
+
+
 __all__ = [
     "EXEMPT_CONFIGS",
     "MANIFEST",
@@ -340,4 +395,5 @@ __all__ = [
     "Mechanism",
     "Status",
     "audit_arming",
+    "exit_code_for_abort",
 ]

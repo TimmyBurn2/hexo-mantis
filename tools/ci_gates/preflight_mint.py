@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1284 lines total, 126 in the child closure, 809 in
-# parent-only function bodies. Re-measured at ADJ-13's R72 CLOSING PASS (was 1234/126/764 at
-# the corrective pass, 1156/126/691 before it, 1090/126/643 before that): this pass added 50
-# lines — `_watchdog_reason` (F-3's species a second time: the rc-34 parenthetical derived
-# from the segments the run actually READ instead of a constant that named a search which in
-# one reachable posture never happened) and the post-child scan's `segments_scanned` record —
-# every one of them on the PARENT side, and the child closure is STILL 126 lines and STILL
-# exactly the same six functions, which is the justification's load-bearing claim. Two
-# reasons, because the first covers only 126 of the 1284
-# and saying so is the point (SF-7's own ruling: a justification that is not true is worse
-# than none):
+# this file's own top-level functions — 1452 lines total, 195 in the child closure, 846 in
+# parent-only function bodies. RE-MEASURED at WPMINT Phase X, and the previous figures
+# (1284/126/809, six child functions) were MEASURED STALE at this pass: the committed file at
+# `5548516` was already 1353/159/835 across seven child functions, so DS/DR grew both sides
+# without restating the header, and `_burst_floors` had entered the closure via
+# `_minimum_legal_burst` unrecorded. Corrected rather than extended, because SF-7's own ruling
+# is that a justification which is not true is worse than none — and the sentence that had
+# gone false ("the child closure is STILL 126 lines and STILL exactly the same six functions")
+# was the justification's load-bearing claim, which makes it the one sentence a stale figure
+# may not be left on. Phase X's own delta is +94 lines: the rc-taxonomy extension for the
+# authored abort code 46 and `PreflightArmedAbortFiredError` on the PARENT side, and
+# `_abort_rc` — the card's one real process boundary — as the child closure's EIGHTH function.
+# Two reasons, because the first covers only 195 of the 1452 and saying so is the point:
 #
-#  (1) CHILD SIDE (126 lines: _boot_main, _build_buffer, _load, _apply_burst_override,
-#      _minimum_legal_burst, _resolve_config_path). The parent re-execs ITSELF as the boot
+#  (1) CHILD SIDE (195 lines: _boot_main, _abort_rc, _build_buffer, _load,
+#      _apply_burst_override, _minimum_legal_burst, _burst_floors, _resolve_config_path).
+#      `_abort_rc` belongs on this side by the same rule as the rest: it runs IN the child,
+#      after `compose_run` returns, and it is what turns the run's own `abort_rule` into the
+#      process rc a supervisor reads. The parent re-execs ITSELF as the boot
 #      child by os.path.abspath(__file__) (DESIGN_P §6.2) — one file IS the containment
 #      mechanism, not a packaging preference. Splitting parent from child replaces that
 #      self-exec with a sibling-path exec, which is a second thing that can be wrong (a
 #      moved, renamed or unshipped sibling) in the one code path whose whole job is to
 #      survive a child that dies without unwinding.
 #
-#  (2) PARENT SIDE (809 lines: the two predicate evaluators, the classifier, the exit
+#  (2) PARENT SIDE (846 lines: the two predicate evaluators, the classifier, the exit
 #      taxonomy, the audit path, the report writer). Reason (1) does NOT reach these — they
 #      could move to a sibling module with zero effect on the self-exec, and REVIEW-impl
 #      measured exactly that (SF-I1: 462 parent-only lines before this pass added to them).
@@ -83,8 +88,25 @@ measured that an armed-abort row whose `config_path` does not resolve fell into 
 rc 31 (`ArmingSurfaceMissingError` -> `PreflightManifestError`, WPAX Phase D); rc 1
 remains what it always was — the outcome nobody diagnosed — and a NEW rc-1 is a finding,
 not a routine failure mode. A child rc in [10, 41] PROPAGATES
-UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. 42 / 43 /
-44 / 45 are RESERVED by the run's own machinery and are never emitted by this tool.
+UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–46 are
+RESERVED by the run's own machinery**: 42 stall/livelock, 43 persist-fatal, 44 the supervisor's
+relaunch budget, 45 actor-lag, 46 the cooperative armed-abort code
+(`monitor/heartbeat.py::DRAW_RATE_COLLAPSE_EXIT_CODE`). None of the five is ever an assertion
+outcome of this tool.
+
+46 joined that band at WPMINT Phase X (CARD-ABORT-EXIT / R84) and the taxonomy had to move with
+it, in the same change: 46 is outside the [10, 41] pass-through and was outside the reserved
+set, so a child exiting 46 would have fallen through to `PreflightBootFailedError` and
+**collapsed to rc 33** — the tool meant to surface the authored abort signal would have
+destroyed it. 46 also differs from 42/43/45 in one respect this tool must not paper over: the
+child EMITS it deliberately. `_boot_main` reads `RunHandles.shutdown.abort_rule` — the rule
+name the coordinator's own `_fire_hard_abort` recorded — and resolves it through
+`mantis.config.armed_aborts.exit_code_for_abort`, so the number the parent propagates comes
+from the manifest row and from nowhere else. A rule that fired with NO authored code (the
+resolver returns `None` — `grad_norm_hard_abort` and `sealbot_wr_abort` are not
+pre-registered) is rc 33 `PreflightBootFailedError` naming the rule: an abort that stopped the
+run is never reported as a clean boot, and no exit code is invented for a rule nobody
+registered.
 """
 from __future__ import annotations
 
@@ -107,9 +129,11 @@ from mantis.config.armed_aborts import (
     ArmingSurfaceMissingError,
     Status,
     audit_arming,
+    exit_code_for_abort,
 )
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
+from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 
 #: SF-4: every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
@@ -152,9 +176,18 @@ RC_CONVENTION = (
 )
 #: The child's own named outcomes propagate unchanged (§6.3a arm 4).
 PASS_THROUGH = range(10, 42)
-#: Reserved by the run's own machinery — `monitor/heartbeat.py:39-46`, `monitor/supervise.py:39`.
+#: Reserved by the run's own machinery — `monitor/heartbeat.py`, `monitor/supervise.py:39`.
 WATCHDOG_CODES = (42, 43, 45)
 RELAUNCH_BUDGET_CODE = 44
+#: The cooperative half of the reserved band (WPMINT Phase X / R84). NOT a watchdog code: it is
+#: not delivered by `os._exit` from the fire path, it is RETURNED by the child after the run
+#: unwound through its own close-out. Read from the ONE authority rather than re-typed as 46 —
+#: a literal here would be a third place the number is written (the constant, the manifest row,
+#: and this), and the whole point of the rule-name carrier is that there is no such third place.
+ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE,)
+#: The full 42–46 band the docstring declares. Derived, so the docstring's claim and the three
+#: tuples above cannot drift apart.
+RESERVED_CODES = tuple(sorted({*WATCHDOG_CODES, RELAUNCH_BUDGET_CODE, *ARMED_ABORT_CODES}))
 
 
 # ── named outcomes (§6.3) ─────────────────────────────────────────────────────────────
@@ -232,6 +265,23 @@ class PreflightAssertionsFailedError(PreflightError):
 
 class PreflightChildOutcomeError(PreflightError):
     """§6.3a arm 4 — the child's own named outcome, propagated UNCHANGED."""
+
+    def __init__(self, rc: int, message: str) -> None:
+        super().__init__(message)
+        self.rc = int(rc)
+
+
+class PreflightArmedAbortFiredError(PreflightError):
+    """A manifest-registered armed abort FIRED, and its authored rc propagates UNCHANGED.
+
+    Distinct from `PreflightWatchdogFiredError` (rc 34) on purpose, and the distinction is
+    the card's: a watchdog fire is `os._exit` from a thread mid-run, so the parent reports
+    its OWN rc 34 and the child's number is evidence inside the report. An armed abort is
+    COOPERATIVE — the run decided to stop, unwound, saved, and returned the number the
+    manifest authored for it. Rewriting that number to 34 (or to 33) would discard exactly
+    the signal R84 opened this card to create, so the parent exits with the child's rc and a
+    supervisor reads the same number either side of this tool.
+    """
 
     def __init__(self, rc: int, message: str) -> None:
         super().__init__(message)
@@ -1057,14 +1107,52 @@ def _boot_main(args) -> int:
     pool = WorkerPool(model=trainer.model, config=booted.model_dump(),
                       device=torch.device(args.device), replay_buffer=buffer,
                       arch=trainer.arch, sink=None, heartbeat=None)
-    compose_run(config=booted, trainer=trainer, pool=pool, buffer=buffer,
-                log_dir=log_dir, checkpoint_dir=checkpoint_dir,
-                # ADJ-11: there is no `eval_enabled` config key — it is a `compose_run`
-                # parameter with a code-side default True (`run.py:107`), filed as
-                # CARD-EVAL-ENABLED-KEY. R64 BANS False as an escape, so the literal is
-                # unconditional: not a flag, not a config read, not an expression.
-                eval_enabled=True, run_id=booted.run_id)
-    return 0
+    handles = compose_run(config=booted, trainer=trainer, pool=pool, buffer=buffer,
+                          log_dir=log_dir, checkpoint_dir=checkpoint_dir,
+                          # ADJ-11: there is no `eval_enabled` config key — it is a
+                          # `compose_run` parameter with a code-side default True
+                          # (`run.py:107`), filed as CARD-EVAL-ENABLED-KEY. R64 BANS False as
+                          # an escape, so the literal is unconditional: not a flag, not a
+                          # config read, not an expression.
+                          eval_enabled=True, run_id=booted.run_id)
+    return _abort_rc(handles.shutdown.abort_rule)
+
+
+def _abort_rc(rule: "str | None") -> int:
+    """The child's rc, decided by WHETHER AN ABORT FIRED and by nothing else (R84).
+
+    This is the card's process boundary, and it is the only one in the repo: `run_until_stopped`
+    has zero callers in `src/`, `mantis.run.main()` is smoke-grade, and `compose_run` is a
+    library function returning `RunHandles`. Authoring a production launcher so the card had
+    somewhere else to exit from is scope widening (R90 hard stop), so the card is satisfied
+    where a boundary EXISTS — here, and in-process on `RunHandles.shutdown.abort_rule`, which
+    any caller can read the moment this lands.
+
+    Three outcomes, and the middle one is the one that must not be quietly rounded off:
+
+    * no rule fired -> 0. `abort_rule is None` is the ONLY thing that means a clean run;
+    * a rule fired WITH an authored code -> that code, resolved from the manifest row. The
+      number is never written here;
+    * a rule fired with NO authored code -> a NAMED failure, never 0 and never an invented
+      number. `grad_norm_hard_abort` and `sealbot_wr_abort` share `_fire_hard_abort` and are
+      not pre-registered; R84 refused to invent codes for them and this refuses again rather
+      than reporting an aborted run as a clean boot.
+
+    OWED, and recorded rather than absorbed: when a production launcher lands it must read
+    this same resolver. The card cannot make it, because it does not exist yet.
+    """
+    if rule is None:
+        return 0
+    code = exit_code_for_abort(rule)
+    if code is None:
+        raise PreflightBootFailedError(
+            f"the run's hard-abort rule {rule!r} FIRED and stopped the run, but "
+            "`mantis.config.armed_aborts.MANIFEST` authors no exit code for it. Reported as "
+            "a failed boot rather than as rc 0: an aborted run is not a clean one. No code is "
+            "invented here — R84 declined to author one for a rule nobody pre-registered, and "
+            "doing it in this tool would be that same class one layer down"
+        )
+    return int(code)
 
 
 def _child_argv(args) -> "list[str]":
@@ -1138,6 +1226,17 @@ def _classify_child(child: dict) -> None:
         raise PreflightBootFailedError(
             f"child rc {rc} is the supervisor's RELAUNCH_BUDGET_EXIT_CODE and cannot "
             "legitimately be raised by a preflight child"
+        )
+    if rc in ARMED_ABORT_CODES:
+        # BEFORE the rc-0 arm and before the generic tail sniff, for the same anti-evasion
+        # reason arm 4 sits before arm 5: this rc is the child's own authored outcome and a
+        # later arm would rewrite it. It cannot reach the [10, 41] pass-through — 46 is
+        # outside that range — so without this arm it fell to `PreflightBootFailedError`.
+        raise PreflightArmedAbortFiredError(
+            rc, f"the run's own ARMED ABORT fired and stopped the run cooperatively: child "
+                f"rc {rc}, the exit code `mantis.config.armed_aborts.MANIFEST` authors for "
+                f"the rule that fired. The run unwound through its own close-out, so this is "
+                f"a COMPLETED abort, not a crashed boot"
         )
     if rc == 0:
         return

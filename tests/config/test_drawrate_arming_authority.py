@@ -69,12 +69,14 @@ from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissi
     ArmingSurfaceMissingError,  # noqa: F401 — anchor: the delta is half-landed without it
     Status,
     audit_arming,
+    exit_code_for_abort,
 )
 from mantis.config.loader import load_config
 from mantis.config.resolve.draw_rate import (  # RED anchor #1 — the ONE read path (R80)
     DrawRateAbortSpec,
     resolve_draw_rate_abort,  # noqa: F401 — anchor; its oracles live in the sibling files
 )
+from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import _step_coordinator_config  # RED anchor #2 — MF-2 Attack B's surface
 from mantis.train.coordinator.config import StepCoordinatorConfig
 
@@ -303,12 +305,21 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "`train.step_coordinator.*` was RULED AGAINST (§2): it is named after a dataclass "
         "and invites the ~24 coordinator knobs R78 forecloses"
     )
-    assert row.exit_code is None, (
-        "N-3/R84: the draw-rate gate stops the run cooperatively (`shutdown.running = False`, "
-        "step.py:441-463) and NO distinct process exit code exists, so a fired abort is "
-        "indistinguishable by exit status from a clean run. `None` is the truthful value "
-        "TODAY. CARD-ABORT-EXIT (pre-run5-mint, BLOCKING) is the one authorized flip — when "
-        "it lands this assertion is what makes the manifest row's update unforgettable"
+    # WPMINT Phase X (CARD-ABORT-EXIT / R84) — THE authorized flip this assertion existed to
+    # make unforgettable. It used to read `row.exit_code is None` with the grounds "the gate
+    # stops the run cooperatively and NO distinct process exit code exists". The first half is
+    # still true (delivery is still cooperative, deliberately — LAW-16); the second is not, so
+    # the assertion is re-pointed rather than deleted. It is now pinned to the CONSTANT, not to
+    # the literal 46: a row carrying its own number would be the second authority the
+    # rule-name carrier exists to prevent, and an equality against `46` here would pass just as
+    # happily against a hand-typed one.
+    assert row.exit_code == DRAW_RATE_COLLAPSE_EXIT_CODE, (
+        f"the row must carry the family's own authored constant, not a literal; got "
+        f"{row.exit_code!r} against {DRAW_RATE_COLLAPSE_EXIT_CODE!r}"
+    )
+    assert exit_code_for_abort(row.name) == row.exit_code, (
+        "and the resolver must ANSWER FROM THE ROW — it is what a process boundary calls, so "
+        "if it can disagree with the manifest the manifest has stopped being the authority"
     )
 
     cfg = load_config(CONFIGS_DIR / "run5.yaml")
