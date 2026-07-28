@@ -91,7 +91,9 @@ class DrawRateAbortConfig(StrictModel):
                 f"threshold {self.threshold}: the pooled rate's smallest non-zero value at "
                 f"the bar is 1/{self.N_pool_min} = {1.0 / self.N_pool_min}, so ONE drawn "
                 f"game would meet the threshold and fire the hard abort. Raise N_pool_min "
-                f"above {int(1.0 / self.threshold)} or lower the threshold"
+                f"above {int(1.0 / self.threshold)}, or RAISE the threshold above "
+                f"{1.0 / self.N_pool_min}. Lowering the threshold NEVER resolves this — it "
+                f"makes 1/N_pool_min >= threshold more true, not less"
             )
         return self
 

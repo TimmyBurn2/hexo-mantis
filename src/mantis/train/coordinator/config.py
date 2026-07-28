@@ -245,9 +245,13 @@ class StepCoordinatorConfig:
     # Safe rather than merely bounded: with `N_pool_min` closing the one-drawn-game route
     # (schema/train.py `_one_drawn_game_cannot_fire_the_abort`) and `min_step` closing the
     # early-run route, `consec` is not load-bearing for the ADJ-14 hazard.
-    # DISCLOSED (WPMINT DR-8): `consec` counts consecutive CHECKS at a stride of
-    # `log_interval` train steps, so at the shipped log_interval=1000 a `consec` of 3 is
-    # 3000 sustained steps and run5's earliest possible fire is step 27000, not 25000.
+    # DISCLOSED (WPMINT DS-VERIFY, correcting the WITHDRAWN DR-8): `consec` counts
+    # consecutive CHECKS at a stride of `log_interval` train steps, so at the shipped
+    # log_interval=1000 three samples SPAN 2000 steps — `consec` is a sustained-ness bar in
+    # steps, not in checks. It does NOT delay the first fire: sampling is not gated by
+    # `min_step`, so the history accumulates from step 1000 and already holds 25 samples at
+    # step 25000. run5's earliest possible fire is step 25000. DR-8 claimed 27000; that was
+    # measured false and withdrawn before it reached any ruling.
     draw_rate_consec: int = 3
     # §178 bot-corpus batch slot (mixing knobs — NOT the killed refresh hook).
     bot_batch_share: float = 0.0

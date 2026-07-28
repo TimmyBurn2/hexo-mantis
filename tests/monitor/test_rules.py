@@ -240,8 +240,20 @@ def test_draw_rate_collapse_threshold_nonpositive_disables() -> None:
                                     threshold=0.0, consec=3, min_step=0) is None
 
 
-def test_draw_rate_collapse_empty_signal_never_fires() -> None:
-    """O-03 — a history of 0.0 (no worker has a game yet) never fires even when configured."""
+def test_draw_rate_collapse_measured_healthy_zero_never_fires() -> None:
+    """O-03 — a history of MEASURED 0.0 never fires even when configured.
+
+    R73 name-truth (WPMINT DS-VERIFY, DSV-3). This test used to be called
+    `..._empty_signal_never_fires` and its docstring said "no worker has a game yet". Both
+    became FALSE at Phase DS: the drive is `pooled_draw_rate((0, 50), N_pool_min=50)` —
+    fifty COMPLETED games of which zero were drawn, which is a healthy pool reporting
+    honestly, the exact OPPOSITE of an empty signal.
+
+    Under R92 an empty signal is not `0.0` at all: below `N_pool_min` the producer returns
+    `None`, nothing is appended to the history, and a skip is counted. That case has its own
+    producer test; this one's live subject is the healthy-zero reading, and it is named for
+    it now.
+    """
     history = [pooled_draw_rate((0, 50), N_pool_min=50) for _ in range(5)]
     assert all(x == 0.0 for x in history)
     assert check_draw_rate_collapse(history, 50000, threshold=0.4, consec=3, min_step=0) is None

@@ -1,4 +1,7 @@
-# R8 >300 justify (324): the manifest ROWS are data and their reason text IS the row —
+# R8 >300 justify (343, re-measured at WPMINT DS-VERIFY; was 324 at WPAX Phase D, and the
+# figure is restated at the file's MEASURED size rather than the size it was written for —
+# `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
+# which is not true is worse than none): the manifest ROWS are data and their reason text IS the row —
 # `note` is a live consumer's field, printed by gate 12 on every run, not a comment that
 # can be trimmed. The two walkers below (`_dotted`, `audit_arming`) are ~35 lines of code
 # carrying the F-4 named-arm and disarmed-short-circuit rationale; splitting them from the
@@ -150,10 +153,13 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "guarded), all three pre-registered at mint prereg. The gated statistic is the "
             "pooled count-weighted rate Sum(draws)/Sum(completed) over the union of worker "
             "windows; below N_pool_min completed games the gate makes NO OBSERVATION "
-            "(skip-counted), never a healthy 0.0. NOTE for the mint record (WPMINT DR-8): "
-            "consec=3 counts consecutive CHECKS at a stride of log_interval train steps, so "
-            "at the shipped log_interval 1000 the earliest possible fire is step 27000, not "
-            "25000. The pin binds to the THREADING at the "
+            "(skip-counted), never a healthy 0.0. NOTE for the mint record (WPMINT DS-VERIFY, "
+            "correcting the WITHDRAWN DR-8): consec=3 counts consecutive CHECKS at a stride of "
+            "log_interval train steps, so at the shipped log_interval 1000 the three samples "
+            "span 2000 steps. The earliest possible fire is nonetheless step 25000, because "
+            "SAMPLING IS NOT GATED BY min_step — the history accumulates from step 1000, holds "
+            "25 samples by step 25000, and min_step gates only the FIRE. DR-8's contrary claim "
+            "(earliest fire 27000) was MEASURED FALSE and withdrawn. The pin binds to the THREADING at the "
             "construction site, so deleting it, renaming the resolver or reordering the "
             "call past it all break the R56 scan. exit_code is None because the gate stops "
             "the run cooperatively (shutdown.running = False) and NO distinct process exit "
