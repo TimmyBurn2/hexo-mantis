@@ -261,8 +261,15 @@ def verify_source_pins(
 
     Returns the BROKEN rows. The asymmetry is the load-bearing part
     (`silent_encoding_gate.py:338-344`): a pin that matches NOTHING — including a pinned
-    file that no longer exists — is a HARD failure, never a quiet pass. That is what makes
-    Phase D's deletion of `draw_rate_threshold: float = 0.0` impossible to forget.
+    file that no longer exists — is a HARD failure, never a quiet pass.
+
+    R73 name-truth, WPMINT DR-10: this used to say the asymmetry "makes Phase D's deletion
+    of `draw_rate_threshold: float = 0.0` impossible to forget". Phase D landed and that
+    literal is gone. The manifest's one pin now binds `run.py`'s `resolve_draw_rate_abort`
+    threading, so what the scan makes impossible to forget today is deleting, renaming or
+    reordering THAT call. What it does NOT prove is that the right VALUE flows — it is a
+    whole-file substring scan (SF-2's correction); `tests/train/test_drawrate_abort_
+    threading.py`'s O-D2 is the sole witness for "pinned text present, wrong value flowing".
     """
     root = Path(repo_root)
     broken: list[ArmedAbort] = []

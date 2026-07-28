@@ -36,8 +36,15 @@ class DrawRateAbortConfig(StrictModel):
       in effect" (`schema/core.py`'s own words for the sibling defect). Reachable by the
       natural percent slip (an operator meaning 35% writes `35`), so `le=1` closes it.
       DISCLOSED RESIDUAL: `1e-300` still loads. That is a hair-trigger, not a disarm, and
-      the type does not close it; `min_samples` does (at 50 the smallest non-zero rate the
-      estimator can report is 1/50 = 0.02) together with R82's mint prereg.
+      the type does not close it. NEITHER DOES `min_samples` (WPMINT DR-2 correction; the
+      earlier claim here — "at 50 the smallest non-zero rate the estimator can report is
+      1/50 = 0.02" — was arithmetically FALSE for the value actually compared against this
+      threshold). `1/min_samples` bounds ONE WORKER's rate; the compared value is
+      `recent_pool_draw_rate`, an unweighted MEAN over the N included workers, so its
+      smallest non-zero value is `1/(min_samples * N)` — measured 0.02 at N=1, 0.000625 at
+      N=32 and 0.0003125 at N=64, i.e. understated by a factor of N. What holds the value
+      today is R82's mint prereg alone. This bound does not close the residual; the
+      statistic itself is under replacement (R92), and no revised bound is asserted here.
     * `min_step` — R80's second guard. No "disabled" value exists (`ge=1`), and the twin
       cross-validator in `schema/core.py` closes the top end against
       `train.max_train_steps`.

@@ -1,4 +1,9 @@
-"""O15 — every-key-has-consumer bijection (LAW-08).
+""">300 justify (R8): this file is ~85% DATA — the 150-entry `CONSUMER_REGISTRY` is the
+LAW-08 authority itself, one line per schema leaf, and splitting it would create a second
+registry copy to keep in sync (there is already exactly one deliberate duplicate,
+`test_every_key_has_consumer_p2.py`). The four tests below are ~60 lines together.
+
+O15 — every-key-has-consumer bijection (LAW-08).
 
 SCHEMA KEYS ONLY (not registered encodings — that is gate-8's disjoint concern). Enumerate
 leaf key-paths of RunConfig.model_fields and assert the set equals an explicit CONSUMER_REGISTRY.
@@ -7,7 +12,14 @@ DESIGN_P2.md §5) — the NIT-3 "enumeration stops at a list[SubModel] field" no
 apply to `RadiusStage.step`/`.radius` no longer has a subject; `selfplay.mcts.*`/`selfplay.
 playout_cap.*` are ordinary nested `StrictModel` leaves, fully enumerated like every other
 section.
+
+WPMINT DR-6 (R93): the walker now descends through OPTIONAL nested blocks too. The old stop
+condition was blind to `Block | None` — the R79 arming idiom — and the reason recorded here
+for that blindness was itself wrong; see `_nested_block` below.
 """
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
+
 from pydantic import BaseModel
 
 from mantis.config.schema import RunConfig
@@ -83,16 +95,23 @@ CONSUMER_REGISTRY = {
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
-    # WPAX Phase D (R65/R80): ONE registry leaf, not three. `_leaf_paths` recurses only into
-    # `isinstance(ann, type) and issubclass(ann, BaseModel)`, and `Optional[
-    # DrawRateAbortConfig]` is not a `type`, so `threshold`/`min_step`/`min_samples` are
-    # INVISIBLE to this bijection. That blindness is why
-    # tests/train/test_drawrate_abort_threading.py::
-    # test_all_THREE_block_keys_reach_their_runtime_destination exists: it observes each of
-    # the three at its own call site, which is the LAW-08 coverage this gate cannot give.
-    "train.draw_rate_abort":
-        "resolve_draw_rate_abort -> compose_run -> StepCoordinatorConfig.draw_rate_abort"
-        " -> step.py O2 (WPAX S-4)",
+    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf, because `_leaf_paths` used to
+    # recurse only into `isinstance(ann, type) and issubclass(ann, BaseModel)`. WPMINT DR-6
+    # (R93) closes that: the cause was OPTIONALITY, not nesting — `DrawRateAbortConfig |
+    # None` is a `UnionType`, while a NON-optional nested block (`monitor.drain.*`) was
+    # descended into all along. `Block | None` is the house arming idiom (R79), so the hole
+    # was generic to every future arming block: a fourth, wholly unconsumed key inside
+    # `DrawRateAbortConfig` passed the full tier plus gates 7 and 12 green. The three inner
+    # keys are registered individually now, each at the call site that reads it.
+    "train.draw_rate_abort.threshold":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(threshold=)",
+    "train.draw_rate_abort.min_step":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(min_step=)",
+    "train.draw_rate_abort.min_samples":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> pool.per_worker_draw_rates(min_samples=)",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
@@ -205,15 +224,43 @@ CONSUMER_REGISTRY = {
 }
 
 
+def _nested_block(ann: Any) -> type[BaseModel] | None:
+    """The nested config BLOCK an annotation names, seen THROUGH `Optional` / `Block | None`.
+
+    WPMINT DR-6 (R93). The predecessor tested `isinstance(ann, type) and issubclass(ann,
+    BaseModel)` and stopped there, so an OPTIONAL block was one opaque leaf. The stated
+    reason ("the BLOCK is one leaf") was wrong: non-optional nested blocks — `monitor.drain`
+    — were descended into all along, and the real cause was that `DrawRateAbortConfig |
+    None` is a `types.UnionType`, not a `type`. Since `Block | None` is the house arming
+    idiom (R79), that blindness was generic to every future arming block, and it was
+    measured: a fourth, entirely unconsumed key inside `DrawRateAbortConfig` passed the full
+    tier and gates 7 and 12 green.
+
+    NIT-3 is UNCHANGED and is a different rule: `list[SubModel]` (`eval.ladder.rungs`) has a
+    `list` origin, not a union one, so it stays ONE leaf. Only an `Optional`/union whose
+    non-`None` arms name exactly ONE BaseModel is descended — a genuine sum of two different
+    blocks has no single key-path to hand out and is left as a leaf rather than guessed at.
+    """
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return ann
+    if get_origin(ann) in (Union, UnionType):
+        blocks = [arm for arm in get_args(ann)
+                  if isinstance(arm, type) and issubclass(arm, BaseModel)]
+        if len(blocks) == 1:
+            return blocks[0]
+    return None
+
+
 def _leaf_paths(model: type[BaseModel], prefix: str = "") -> list[str]:
-    """Leaf key-paths of a StrictModel; recurse into nested models but STOP at any field
-    whose annotation is not itself a BaseModel subclass (NIT-3 — list[SubModel] is one leaf)."""
+    """Leaf key-paths of a StrictModel; recurse into nested models (including OPTIONAL ones,
+    DR-6) but STOP at any field that does not name exactly one nested block (NIT-3 —
+    list[SubModel] is one leaf)."""
     out: list[str] = []
     for name, field in model.model_fields.items():
         path = f"{prefix}.{name}" if prefix else name
-        ann = field.annotation
-        if isinstance(ann, type) and issubclass(ann, BaseModel):
-            out.extend(_leaf_paths(ann, path))
+        nested = _nested_block(field.annotation)
+        if nested is not None:
+            out.extend(_leaf_paths(nested, path))
         else:
             out.append(path)
     return out
@@ -228,7 +275,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_148_entries():
+def test_registry_has_exactly_150_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
@@ -241,11 +288,14 @@ def test_registry_has_exactly_148_entries():
     # WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
     # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146. WPAX S-4 adds 1
     # (train.max_train_steps, the run-length authority): 146 + 1 = 147.
-    # WPAX Phase D adds 1 (train.draw_rate_abort — the BLOCK is one leaf; its
-    # three inner keys are invisible to `_leaf_paths`, see the registry note):
-    # 147 + 1 = 148.
-    assert len(CONSUMER_REGISTRY) == 148
-    assert len(_leaf_paths(RunConfig)) == 148
+    # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
+    # 147 + 1 = 148. WPMINT DR-6 (R93) then makes `_leaf_paths` descend through OPTIONAL
+    # blocks, which retires that one block leaf and surfaces its three inner keys:
+    # 148 - 1 + 3 = 150. Measured, not derived: `train.draw_rate_abort` is the ONLY
+    # `Block | None` field anywhere in `RunConfig`, so those three are the whole blast
+    # radius; `eval.ladder.rungs` is a `list[LadderRung]` and stays one leaf under NIT-3.
+    assert len(CONSUMER_REGISTRY) == 150
+    assert len(_leaf_paths(RunConfig)) == 150
 
 
 def test_no_forward_reference_strings_in_registry():
@@ -262,6 +312,52 @@ def test_no_forward_reference_strings_in_registry():
         if token in value
     ]
     assert hits == [], f"forward-reference-shaped registry strings: {hits}"
+
+
+def test_the_walker_descends_into_an_OPTIONAL_block_not_only_a_required_one():
+    """WPMINT DR-6 (R93) — the walker's own predicate, driven on all three shapes at once.
+
+    The defect this is the sole witness for: `Block | None` is the house arming idiom (R79),
+    and the pre-DR-6 walker treated such a block as ONE opaque leaf, so a key added inside it
+    had no LAW-08 obligation at all. Measured at Phase DR: a fourth, wholly unconsumed key
+    inside `DrawRateAbortConfig` passed the full tier plus gates 7 and 12, all green. The
+    bijection test above cannot witness this on its own — with the block opaque, the walker
+    and the registry agreed with each other about a key neither could see.
+
+    NIT-3 is asserted in the same breath, because the fix must not swallow it: a
+    `list[SubModel]` field has no single key-path to hand out and stays ONE leaf. Without
+    this arm a "descend into anything that mentions a BaseModel" implementation would pass.
+    """
+    class _Inner(BaseModel):
+        a: int
+        b: int
+
+    class _Outer(BaseModel):
+        required_block: _Inner
+        optional_block: _Inner | None
+        block_list: list[_Inner]
+        scalar: int
+
+    assert _leaf_paths(_Outer) == [
+        "required_block.a", "required_block.b",
+        "optional_block.a", "optional_block.b",
+        "block_list", "scalar",
+    ], (
+        "an OPTIONAL nested block must be descended into exactly like a required one — "
+        "optionality, not nesting, was the cause of the LAW-08 hole (DR-6) — while a "
+        f"list[SubModel] stays one leaf (NIT-3); got {_leaf_paths(_Outer)}"
+    )
+
+    leaves = set(_leaf_paths(RunConfig))
+    assert {"train.draw_rate_abort.threshold", "train.draw_rate_abort.min_step",
+            "train.draw_rate_abort.min_samples"} <= leaves, (
+        "the real arming block's three inner keys must each carry their own LAW-08 "
+        "obligation now, not hide behind the block key"
+    )
+    assert "train.draw_rate_abort" not in leaves, (
+        "the block itself is no longer a leaf — leaving it registered as well would put two "
+        "registry entries on one fact and re-open the bijection to an unconsumed inner key"
+    )
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

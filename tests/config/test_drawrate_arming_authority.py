@@ -23,7 +23,9 @@ The oracles, and the defect each is the ONLY witness to:
   change list creates at `preflight_mint.py:990`), or a `__post_init__` /
   `object.__setattr__` resurrection on a frozen dataclass (Attack A). Not caught by O-D2
   (a threading line can exist beside any of the three) or by O-D3 (a config that sets the
-  key flows correctly anyway).
+  key flows correctly anyway). WPMINT DR-5 extends the same two shapes to the family's
+  OTHER frozen dataclass, `DrawRateAbortSpec` — R83 named them, but the RED pinned them on
+  `StepCoordinatorConfig` only, and BOTH survived the full tier on the sibling.
 - O-D3 `test_the_required_row_is_audited_against_a_REAL_RunConfig` — F-4's class: a
   `config_path` that does not resolve on a real `RunConfig`. The ancestor O-7 built its stub
   FROM `config_path` and so could not disagree with it.
@@ -237,6 +239,39 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "the builder must hand ON both config-authored values. A builder that takes them as "
         "required parameters and then ignores them satisfies every signature and field "
         "assertion above while the config reaches nothing — this is the transport arm"
+    )
+
+    # ── the family's OTHER frozen dataclass (WPMINT DR-5) ─────────────────────────────
+    # R83 named the two resurrection shapes for the draw-rate family; the arms above pinned
+    # them on `StepCoordinatorConfig` alone. `DrawRateAbortSpec` is where the three VALUES
+    # actually live, so a default authority resurrected there defeats every assertion above:
+    # the coordinator would faithfully carry a spec whose terms the config never wrote.
+    # Measured at WPMINT Phase DR: field defaults on all three keys, and a `__post_init__` +
+    # `object.__setattr__` normalisation, BOTH left the full tier green.
+    spec_fields = {field.name: field for field in dataclasses.fields(DrawRateAbortSpec)}
+    assert set(spec_fields) == {"threshold", "min_step", "min_samples"}, (
+        "the resolved spec must carry R80's three keys and nothing else — a fourth field "
+        f"here is a term the schema block never authored; got {sorted(spec_fields)}"
+    )
+    for name, field in spec_fields.items():
+        assert (field.default is dataclasses.MISSING
+                and field.default_factory is dataclasses.MISSING), (
+            f"DrawRateAbortSpec.{name} carries a code-side default ({field.default!r} / "
+            f"{field.default_factory!r}). The resolver would then build a spec the config "
+            "did not fully author, and every arm above stays green while it happens (R1/R83)"
+        )
+    assert not hasattr(DrawRateAbortSpec, "__post_init__"), (
+        "`DrawRateAbortSpec` is `frozen=True`, and `object.__setattr__` inside a "
+        "`__post_init__` is legal on a frozen dataclass — a code-side default can be "
+        "restored AFTER construction with `dataclasses.fields()` still reporting MISSING. "
+        "This is R83's Attack A on the sibling class (MF-2's lesson one seam over)"
+    )
+    probe = DrawRateAbortSpec(threshold=0.5, min_step=3, min_samples=7)
+    assert dataclasses.asdict(probe) == {"threshold": 0.5, "min_step": 3, "min_samples": 7}, (
+        "the resolved terms must survive construction VERBATIM. The probe values are "
+        "deliberately off-prereg (min_samples 7 is under R85's 50, min_step 3 is under "
+        "R82's 25000) so a normaliser that clamps toward the pre-registered numbers is "
+        f"visible here rather than silently agreeing with run5; got {dataclasses.asdict(probe)}"
     )
 
 

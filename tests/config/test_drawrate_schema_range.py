@@ -78,11 +78,17 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
     never passes.
 
     THE RESIDUAL, ASSERTED RATHER THAN GLOSSED: `1e-300` still loads. That is a
-    maximum-sensitivity hair-trigger, not a disarm, and `le=1` does not address it. What
-    addresses it is R80's `min_samples`: at 50 the smallest non-zero rate the estimator can
-    report is `1/50 = 0.02`, so no threshold below `0.02` behaves differently from `0.02`
-    (measured, O-D9). The arm is here so the residual is VISIBLE; if a later phase closes it
-    at the type, this red is the correct signal to re-adjudicate the disclosure, not a bug.
+    maximum-sensitivity hair-trigger, not a disarm, and `le=1` does not address it.
+    WPMINT DR-2 correction: `min_samples` does not address it either, and this docstring
+    used to claim it did. `1/min_samples = 0.02` bounds ONE WORKER's rate; the value
+    compared against `threshold` is `recent_pool_draw_rate`, an unweighted MEAN over the N
+    included workers, whose smallest non-zero value is `1/(min_samples * N)` — measured
+    0.000625 at N=32 and 0.0003125 at N=64 (`coordinator/config.py`'s own estimator). So
+    thresholds below 0.02 are NOT indistinguishable from 0.02; the old claim understated
+    the residual by a factor of N. R82's mint prereg is what holds the value today, and the
+    statistic is under replacement (R92). The arm is here so the residual is VISIBLE; if a
+    later phase closes it at the type, this red is the correct signal to re-adjudicate the
+    disclosure, not a bug.
     """
     armed = dict(RUN5_PREREG)
     assert _with_block(armed).train.draw_rate_abort.threshold == 0.25
@@ -94,8 +100,9 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "it by accident"
     )
     assert _with_block({**armed, "threshold": 1e-300}).train.draw_rate_abort.threshold == 1e-300, (
-        "DISCLOSED RESIDUAL (MF-1 ancillary): the type does NOT close the hair-trigger end. "
-        "`min_samples`'s 0.02 quantization and R82's mint prereg are what do"
+        "DISCLOSED RESIDUAL (MF-1 ancillary): the type does NOT close the hair-trigger end, "
+        "and neither does `min_samples` — the compared mean's floor is 1/(min_samples*N), "
+        "not 1/min_samples (WPMINT DR-2). R82's mint prereg is what holds the value"
     )
 
     rejected = {

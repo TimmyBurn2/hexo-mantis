@@ -414,27 +414,35 @@ class StepCoordinator:
         (O-15). A missing producer is SKIP-counted (LAW-18), never silently read as a healthy
         signal. (The stride5-spam gate was REMOVED at close-out, operator directive B.)
         """
-        fired = False
         rates_fn = getattr(self.pool, "per_worker_draw_rates", None)
         spec = cfg.draw_rate_abort
-        draw = self._sample(
+        # WPAX Phase D: `is not None`, NOT `> 0`. Under the type change `draw_rate_abort` is
+        # `None` on every disarmed run, and `None > 0` would raise TypeError here once per
+        # step() — so testing for absence is required BY the type change, not a tidy-up.
+        # Both absences (EXPLICIT-off `train.draw_rate_abort: null`, and a producer that has
+        # not landed) route through `_sample` with a `None` producer, which is what SKIP-
+        # counts them (LAW-18) — `_sample` owns that counter and always has. WPMINT DR-1 /
+        # R72: the earlier shape guarded the live path with `if draw and spec is not None`
+        # plus an `elif draw:` skip arm. `_sample` returns False whenever its producer is
+        # None and the producer is None exactly when `spec is None`, so `draw` implied
+        # `spec is not None`: the conjunct had NO flip-set and the `elif` arm was provably
+        # unreachable (its LAW-18 comment was measured false). The early return keeps `spec`
+        # narrowed for the type checker without a conjunct that no input can flip.
+        if spec is None or rates_fn is None:
+            self._sample("draw_rate_collapse", self._draw_rate_history, None)
+            return False
+        # Past the early return the producer is non-None, so `_sample` appends and returns
+        # True unconditionally; its return is deliberately not branched on (a `if not
+        # self._sample(...)` here would be a second no-flip-set conjunct, R72).
+        self._sample(
             "draw_rate_collapse", self._draw_rate_history,
-            (lambda: recent_pool_draw_rate(rates_fn(min_samples=spec.min_samples)))
-            if rates_fn is not None and spec is not None else None,
+            lambda: recent_pool_draw_rate(rates_fn(min_samples=spec.min_samples)),
         )
-        # WPAX Phase D: `is not None`, NOT `> 0`. Under the type change `draw_rate_abort`
-        # is `None` on every disarmed run, and `None > 0` raises TypeError here once per
-        # step() — so this is required BY the type change, not a tidy-up. The `elif draw:`
-        # skip arm (LAW-18) now counts the EXPLICIT-off case, which is what it should say.
-        if draw and spec is not None:
-            message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
-                                               threshold=spec.threshold,
-                                               consec=cfg.draw_rate_consec,
-                                               min_step=spec.min_step)
-            fired = self._fire_hard_abort("draw_rate_collapse", message) or fired
-        elif draw:
-            self._gate_stats["draw_rate_collapse"]["skips"] += 1
-        return fired
+        message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
+                                           threshold=spec.threshold,
+                                           consec=cfg.draw_rate_consec,
+                                           min_step=spec.min_step)
+        return self._fire_hard_abort("draw_rate_collapse", message)
 
     def _sample(self, gate: str, history: list[float], producer: Any) -> bool:
         """Append one LIVE producer sample to ``history``; False (+skip) when it is absent."""

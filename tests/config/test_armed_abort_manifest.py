@@ -18,9 +18,13 @@ The oracles, and the defect each one is the ONLY witness to:
       implementation of M1 is `disarmed iff path endswith dev_example.yaml`. Only this
       oracle kills it: run5 with the value flipped to False must be disarmed, and
       dev_example with it flipped to True must not.
-- M10 `test_the_deferred_row_source_pin_is_tamper_evident` — R56's asymmetry: a pin that
-      matches NOTHING is itself a hard failure. Sole witness to the forcing function that
-      makes Phase D's DEFERRED→required flip unforgettable (§8.4).
+- M10 `test_the_pinned_row_source_pin_is_tamper_evident` — R56's asymmetry: a pin that
+      matches NOTHING is itself a hard failure, and so is a pin whose FILE is gone. Sole
+      witness to the missing-pinned-file arm (`verify_source_pins`' vacuity direction).
+      RENAMED at WPMINT DR-10 (R73): it was `test_the_deferred_row_source_pin_is_tamper_
+      evident`, which R87's four hunks missed. The manifest carries ZERO deferred rows
+      since Phase D's flip, so the old name named nothing; the subject was and still is
+      "the manifest's pinned row", which is now the REQUIRED draw-rate row.
 - O-6  `test_the_manifest_is_not_vacuous` — gate 11's `MIN_SCANNED_FILES` floor
       (`silent_encoding_gate.py:70,331-336`) transplanted. An empty manifest audits every
       config green; sole witness to that.
@@ -182,12 +186,26 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
 
 
 # ── M10 — R56 tamper-evidence ─────────────────────────────────────────────────────────
-def test_the_deferred_row_source_pin_is_tamper_evident(tmp_path) -> None:
+def test_the_pinned_row_source_pin_is_tamper_evident(tmp_path) -> None:
     """`source_pin` is `(repo-relative path, exact source text)` and the scan asserts the
     string is still THERE. R56's asymmetry (`silent_encoding_gate.py:338-344`): a pin that
-    matches nothing is a HARD failure, not a quiet pass — so when Phase D deletes
-    `draw_rate_threshold: float = 0.0` (R65), this goes red and the row's flip cannot be
-    forgotten.
+    matches nothing is a HARD failure, not a quiet pass.
+
+    R73 NAME-TRUTH, WPMINT DR-10. This test was `test_the_deferred_row_source_pin_is_tamper_
+    evident` and its prose said it would go red "when Phase D deletes `draw_rate_threshold:
+    float = 0.0` (R65)". Phase D landed: that literal is gone, the manifest holds ZERO
+    `Status.DEFERRED` rows (asserted by
+    `test_the_required_row_is_audited_against_a_REAL_RunConfig`), and R87's four re-prose
+    hunks missed this one. The SUBJECT never moved — it is whatever row the manifest pins,
+    which is now the REQUIRED draw-rate row whose pin binds `run.py`'s resolver threading —
+    so the test is renamed and re-prosed rather than deleted or re-pointed.
+
+    SCOPE, and why it is not O-D5's duplicate. This is the generic
+    `verify_source_pins`-asymmetry oracle: it is the sole witness to the MISSING-FILE arm
+    (`REVIEW_IMPL_P.md` RR-35, `FIX_ADJ13.md` V1). `test_the_required_row_keeps_a_source_
+    pin_bound_to_the_construction_site` (O-D5) asserts WHICH row is pinned and WHAT the
+    pinned text must contain; this one asserts only that the scan is asymmetric in all
+    three directions. Neither subsumes the other.
 
     Three arms, because only the three together pin the asymmetry: the real tree is clean,
     a tree with the text REMOVED is dirty, and a tree with the FILE removed is dirty too
@@ -211,8 +229,8 @@ def test_the_deferred_row_source_pin_is_tamper_evident(tmp_path) -> None:
     (tampered_root / rel).write_text(original.replace(text, "# pinned literal deleted\n"))
     assert [broken.name for broken in TOOL.verify_source_pins(
         MANIFEST, repo_root=tampered_root)] == [row.name], (
-        f"deleting the pinned literal from {rel} must report exactly the {row.name!r} row "
-        "as broken — this is the Phase D forcing function (§8.4)"
+        f"deleting the pinned text from {rel} must report exactly the {row.name!r} row as "
+        "broken — the pin is what makes an edit at the pinned site visible to gate 12"
     )
 
     absent_root = tmp_path / "absent"

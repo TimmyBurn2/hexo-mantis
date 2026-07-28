@@ -13,12 +13,21 @@ guessed): 36 (current) - 1 (selfplay.legal_move_radius_schedule, removed) + 25 (
 25 (selfplay.* scalars) + 8 (selfplay.mcts.*) + 11 (selfplay.playout_cap.*) +
 8 (inference.*) + 27 (monitor.* scalars) + 4 (monitor.drain.*) = 143;
 WP-UNFREEZE adds 3 (K1/K2/K3 actor-sync knobs) = 146; WPAX S-4 adds 1
-(train.max_train_steps) = 147; WPAX Phase D adds 1 (train.draw_rate_abort — the block is
-ONE leaf, its three inner keys being invisible to `_leaf_paths`) = 148.
+(train.max_train_steps) = 147; WPAX Phase D adds 1 (train.draw_rate_abort, registered as
+ONE opaque block leaf) = 148; WPMINT DR-6 (R93) makes `_leaf_paths` descend through
+OPTIONAL blocks, retiring that block leaf and surfacing its three inner keys = 150.
+
+This file is the SECOND copy of the registry and the walker; both copies must agree, so
+every DR-6 edit landed here byte-for-byte in meaning (`tests/config/
+test_every_key_has_consumer.py` carries the long-form rationale and the walker's own
+oracle).
 
 Every consumer string below cites the real read site named in DESIGN_P2.md §1.1 (train)/
 §1.2 (selfplay/inference)/§4.2-4.3 (monitor/drain) — not placeholder text.
 """
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
+
 from pydantic import BaseModel
 
 from mantis.config.schema import RunConfig
@@ -75,16 +84,19 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
-    # WPAX Phase D (R65/R80): ONE registry leaf, not three. `_leaf_paths` recurses only into
-    # `isinstance(ann, type) and issubclass(ann, BaseModel)`, and `Optional[
-    # DrawRateAbortConfig]` is not a `type`, so `threshold`/`min_step`/`min_samples` are
-    # INVISIBLE to this bijection. That blindness is why
-    # tests/train/test_drawrate_abort_threading.py::
-    # test_all_THREE_block_keys_reach_their_runtime_destination exists: it observes each of
-    # the three at its own call site, which is the LAW-08 coverage this gate cannot give.
-    "train.draw_rate_abort":
-        "resolve_draw_rate_abort -> compose_run -> StepCoordinatorConfig.draw_rate_abort"
-        " -> step.py O2 (WPAX S-4)",
+    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf; WPMINT DR-6 (R93) makes the
+    # walker descend through OPTIONAL blocks — the cause of the old blindness was
+    # optionality, not nesting — so the three inner keys are registered individually now,
+    # each at the call site that reads it.
+    "train.draw_rate_abort.threshold":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(threshold=)",
+    "train.draw_rate_abort.min_step":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(min_step=)",
+    "train.draw_rate_abort.min_samples":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> pool.per_worker_draw_rates(min_samples=)",
     "train.completed_q_values": "TrainHParams.completed_q_values -> core.py:347 CE-vs-KL loss switch; cross-validated",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "RunConfig cross-section validator (policy_target/completed_q_values consistency, §2)",
@@ -193,13 +205,27 @@ CONSUMER_REGISTRY: dict[str, str] = {
 }
 
 
+def _nested_block(ann: Any) -> type[BaseModel] | None:
+    """The nested block an annotation names, seen THROUGH `Optional` / `Block | None`
+    (WPMINT DR-6, R93). NIT-3 is unchanged: `list[SubModel]` has a `list` origin, not a
+    union one, and stays ONE leaf."""
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return ann
+    if get_origin(ann) in (Union, UnionType):
+        blocks = [arm for arm in get_args(ann)
+                  if isinstance(arm, type) and issubclass(arm, BaseModel)]
+        if len(blocks) == 1:
+            return blocks[0]
+    return None
+
+
 def _leaf_paths(model: type[BaseModel], prefix: str = "") -> list[str]:
     out: list[str] = []
     for name, field in model.model_fields.items():
         path = f"{prefix}.{name}" if prefix else name
-        ann = field.annotation
-        if isinstance(ann, type) and issubclass(ann, BaseModel):
-            out.extend(_leaf_paths(ann, path))
+        nested = _nested_block(field.annotation)
+        if nested is not None:
+            out.extend(_leaf_paths(nested, path))
         else:
             out.append(path)
     return out
@@ -214,14 +240,16 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_148_entries():
+def test_registry_has_exactly_150_entries():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
-    # WPAX Phase D adds 1 (train.draw_rate_abort — the BLOCK is one leaf; its
-    # three inner keys are invisible to `_leaf_paths`, see the registry note):
-    # 147 + 1 = 148.
-    assert len(CONSUMER_REGISTRY) == 148
-    assert len(_leaf_paths(RunConfig)) == 148
+    # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
+    # 147 + 1 = 148. WPMINT DR-6 (R93) retires that block leaf and surfaces its three inner
+    # keys: 148 - 1 + 3 = 150. `train.draw_rate_abort` is the ONLY `Block | None` field in
+    # `RunConfig`, so those three are the whole blast radius. This count and the sibling
+    # copy's must stay equal.
+    assert len(CONSUMER_REGISTRY) == 150
+    assert len(_leaf_paths(RunConfig)) == 150
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

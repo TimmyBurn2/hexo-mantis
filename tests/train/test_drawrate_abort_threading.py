@@ -19,12 +19,14 @@ The oracles, and the defect each is the ONLY witness to:
   `TypeError` inside `_run_hard_abort_gates` ONCE PER `step()`, on every disarmed run, so
   `is not None` is REQUIRED BY THE TYPE CHANGE rather than a tidy-up. Every other oracle here
   uses an armed config or never reaches `_run_hard_abort_gates`.
-- O-D10 `test_all_THREE_block_keys_reach_their_runtime_destination` — the block's inner keys
-  are INVISIBLE to the consumer-registry bijection: `_leaf_paths`
-  (`test_every_key_has_consumer.py:206`) tests `isinstance(ann, type)` and
-  `Optional[BlockModel]` is not a `type`, so `train.draw_rate_abort` is ONE leaf and a
-  `min_samples` that reached nothing would still pass gate-level LAW-08. Not caught by O-D2,
-  which asserts the spec object rather than the three call sites.
+- O-D10 `test_all_THREE_block_keys_reach_their_runtime_destination` — each key observed AT
+  ITS OWN CALL SITE. WPMINT DR-6 (R93) fixed `_leaf_paths` to descend through
+  `Block | None`, so the three inner keys DO carry a consumer-registry obligation now (they
+  did not when this oracle was written). That obligation is a key-set bijection against a
+  registry STRING, though: it proves someone wrote down a consumer, never that the value
+  arrives. This oracle is still the only thing that watches `threshold` / `min_step` land on
+  `check_draw_rate_collapse(...)` and `min_samples` land on `per_worker_draw_rates(...)`.
+  Not caught by O-D2, which asserts the spec object rather than the three call sites.
 
 R7 / gate 6: nothing here writes a `*.jsonl`; every drive writes under `tmp_path`.
 
@@ -300,9 +302,13 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
     So `is not None` is REQUIRED BY THE TYPE CHANGE, not a tidy-up, and this is its only
     witness.
 
-    The `elif draw:` skip arm (LAW-18) is asserted too, and it is asserted with a NON-EMPTY
+    The skip accounting (LAW-18) is asserted too, and it is asserted with a NON-EMPTY
     producer: a coordinator that never reached the gate would satisfy "no TypeError" while
-    witnessing nothing, so `checks` must have advanced as well as `skips`.
+    witnessing nothing, so `checks` must have advanced as well as `skips`. WPMINT DR-1: the
+    skip is `_sample`'s and always was — the `elif draw:` arm this prose used to credit was
+    provably unreachable and has been deleted (R72). The EXACT per-run counts live in
+    `tests/train/test_drawrate_gate_branch_flipset.py`; the `>=` here is deliberate, because
+    this oracle drives a whole `step()` rather than one gate run.
     """
     pool = _Pool(draw_rates={0: 0.99})
     h = _coordinator(config=_coordinator_config(None), pool=pool)
@@ -352,11 +358,14 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
 
 # ── O-D10 — all THREE keys reach their own call site ──────────────────────────────────
 def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> None:
-    """LAW-08 does not reach inside this block, and that is measured, not feared:
-    `_leaf_paths` (`test_every_key_has_consumer.py:206`) recurses only when
-    `isinstance(ann, type) and issubclass(ann, BaseModel)`, and `Optional[DrawRateAbortConfig]`
-    is not a `type`. So `train.draw_rate_abort` is ONE registry leaf and a `min_samples` that
-    reached nothing would pass the bijection gate.
+    """WHAT LAW-08's bijection gate can and cannot say about this block. When this oracle
+    was written the gate said NOTHING: `_leaf_paths` recursed only when `isinstance(ann,
+    type) and issubclass(ann, BaseModel)`, and `DrawRateAbortConfig | None` is a
+    `types.UnionType`, so the whole block was ONE registry leaf. WPMINT DR-6 (R93) closed
+    that — the three inner keys are separate registry leaves now. What the gate still cannot
+    say is whether the value ARRIVES: it is a key-set bijection against a hand-written
+    consumer STRING, so a `min_samples` that reached nothing would pass it with the string
+    intact.
 
     Each key is therefore observed AT ITS OWN CALL SITE: `threshold` and `min_step` at
     `check_draw_rate_collapse(...)`, `min_samples` at `pool.per_worker_draw_rates(...)`. The
