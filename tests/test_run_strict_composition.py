@@ -334,13 +334,27 @@ def test_the_gate_admits_a_validated_subclass_and_documents_the_model_construct_
     RunConfig`.
 
     `model_construct`: a genuine, genuinely-typed `RunConfig` that skipped every validator.
-    It PASSES, and that is recorded rather than papered over: no type-based gate can see it,
-    because it is not a spoof — it is the class. It does not reopen the family, because the
-    first typed read (`config.monitor`) raises `AttributeError` LOUDLY; the defect class this
-    card closes is SILENT wrong behaviour. The only instrument that would see it is a source
-    census banning `model_construct` in `tests/`, which is outside S-1..S-6 and is filed as
-    WP-R §9.10. Driving it through `compose_run` would blow up on that AttributeError, which
-    is why this row is asserted at `require_run_config`.
+    It PASSES **this gate**, and that is recorded rather than papered over: no type-based gate
+    can see it, because it is not a spoof — it is the class. This row is asserted at
+    `require_run_config` rather than through a drive because the gate is what it is about.
+
+    CORRECTED BY WPAX R67 (RED-TEAM-2 N-3/N-4). Three sentences here were false and are struck:
+
+    1. struck — "the first typed read (`config.monitor`) raises `AttributeError` LOUDLY". It is
+       unreachable: `revalidate_run_config`, `compose_run`'s SECOND statement, rejects the
+       object before any typed read happens.
+    2. struck — "the only instrument that would see it is a source census banning
+       `model_construct` in `tests/` … filed as WP-R §9.10". False: `revalidate_run_config`
+       sees it, in-repo, and landed inside Phase S. **WP-R §9.10 is therefore CLOSED IN FACT
+       and wants re-adjudication rather than continued carriage** (N-4).
+    3. struck — "driving it through `compose_run` would blow up on that AttributeError".
+       Measured false: `compose_run(RunConfig.model_construct(run_id="x"))` raises
+       `UnvalidatedConfigError`.
+
+    None of the three carried an assertion — this test's only two assertions are identity
+    checks on the unchanged `require_run_config`, which is why the staleness was safe to carry
+    until an R43 event could correct it. The live rule is now: this gate admits the object,
+    and the re-validation one line later is what rejects it.
     """
     cfg = smoke_run_config()
 

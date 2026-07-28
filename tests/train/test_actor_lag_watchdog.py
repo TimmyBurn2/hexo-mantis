@@ -21,6 +21,8 @@ import inspect
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from mantis.train.lifecycle.heartbeat_watchdog import (  # RED-at-import anchor
     ActorLagSpec,
     HeartbeatWatchdog,
@@ -214,15 +216,44 @@ def test_build_run_safety_wires_actor_lag_from_monitor_config(tmp_path, monkeypa
     assert fired[0]["threshold_steps"] == 77, "monitor_cfg's threshold must reach the spec"
 
 
-# ── (g) the two new kwargs carry NO defaults (E32 extension; R1 posture) ──────────────
-def test_build_run_safety_lag_fns_have_no_defaults() -> None:
+# ── (g) ALL THREE ActorLagSpec inputs carry NO defaults (E32 extension; R1 posture) ───
+# WPAX R67 (bounded R43 event). Three changes, and the reason for each:
+#   1. `monitor_cfg` JOINS the census. It was found by RED-TEAM F-2 and parked in
+#      `tests/train/test_actor_lag_wiring_live.py` with an authority note, because this file
+#      was byte-frozen and that fix pass held no R43 event. R67 is that event, so the second
+#      site is deleted and the rule lives HERE, once (LAW-08). RED-TEAM-2's MUT-10 measured
+#      what the two-site arrangement cost: deleting the parked test AND restoring the F-2
+#      defect together produced **0 failures**, caught only by the collected-count floor,
+#      which any co-added test masks.
+#   2. PARAMETRIZED, one item per name, so each name DIES ALONE — the discipline R-P2/R72
+#      make standing law, applied to the census that is itself a census.
+#   3. RENAMED from `test_build_run_safety_lag_fns_have_no_defaults`: `monitor_cfg` is not a
+#      fn, so the old name would have become false. A test name asserting something untrue is
+#      the same class R67's other half is fixing in `tests/test_run_strict_composition.py`.
+#      Old name recorded here because REDTEAM_S/REDTEAM_S2 cite it.
+@pytest.mark.parametrize(
+    ("name", "silently_unwires"),
+    [
+        ("actor_ckpt_step_fn", "the lag READING (the E32/RED-TEAM F3 class)"),
+        ("learner_step_fn", "the lag READING (the E32/RED-TEAM F3 class)"),
+        # F-2's own evidence, moved rather than discarded: measured against an ARMED run5,
+        # `build_run_safety(monitor_cfg=None)` fell back to a bare `MonitorConfig()` whose
+        # `actor_lag_abort_enabled` is False, so a lag of 10 000 over a threshold of 100
+        # produced `exit codes []`. Note the failure mode is NOT the siblings': they unwire
+        # the reading, this unwires the ABORT while the reading stays perfectly live.
+        ("monitor_cfg",
+         "the actor-lag ABORT — a bare MonitorConfig() carries actor_lag_abort_enabled=False "
+         "(the ADJ-07 / RED-TEAM F-2 class)"),
+    ],
+)
+def test_build_run_safety_actor_lag_inputs_have_no_defaults(
+    name: str, silently_unwires: str
+) -> None:
     params = inspect.signature(build_run_safety).parameters
-    for name in ("actor_ckpt_step_fn", "learner_step_fn"):
-        assert name in params, f"build_run_safety must take {name} explicitly"
-        assert params[name].default is inspect.Parameter.empty, (
-            f"{name} must be REQUIRED — a default here silently unwires the lag check "
-            "(the E32/RED-TEAM F3 class)"
-        )
+    assert name in params, f"build_run_safety must take {name} explicitly"
+    assert params[name].default is inspect.Parameter.empty, (
+        f"{name} must be REQUIRED — a default here silently unwires {silently_unwires}"
+    )
 
 
 # ── (h) negative lag is a reported wiring bug, never a fire ───────────────────────────

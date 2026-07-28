@@ -12,7 +12,12 @@ that producer test.
 
 Deliberately NOT frozen: written after ORACLE-WRITE, in response to a review finding.
 
->300 justify (R8): the RED-TEAM F-1/F-2 pins at the end are the SAME subject as this file's
+WPAX R67: the RED-TEAM F-2 signature census that used to close this file has been FOLDED into
+`tests/train/test_actor_lag_watchdog.py`'s parametrized no-defaults census, which is the one
+authority for that rule (LAW-08). It lived here only because that file was byte-frozen and the
+fix pass that found F-2 held no R43 event; R67 was that event. Nothing replaces it here.
+
+>300 justify (R8): the RED-TEAM F-1 pins at the end are the SAME subject as this file's
 existing ones — what the composition root hands `build_run_safety`, and what that builder
 does with it — and R5 bars cross-test imports, so a second file would fork a fourth copy of
 the drivable pool/trainer/buffer fakes above.
@@ -322,33 +327,4 @@ def test_the_REAL_build_run_safety_carries_the_declared_arming_into_ActorLagSpec
         f"the sibling field on the same dataclass is also transport, not a constant: "
         f"monitor_cfg says {monitor_cfg.actor_lag_threshold_steps}, spec says "
         f"{spec.threshold_steps}"
-    )
-
-
-def test_build_run_safety_monitor_cfg_has_no_default() -> None:
-    """The third `ActorLagSpec` input carries no default either (RED-TEAM F-2).
-
-    `build_run_safety(monitor_cfg=None)` fell back to a bare `MonitorConfig()`, whose
-    `actor_lag_abort_enabled` is `False`. Measured against an ARMED run5: a lag of 10 000
-    over a threshold of 100 produced `exit codes []` — the hard abort silently absent
-    because a caller omitted ONE keyword argument. That is the same silent-disarm-by-shape
-    the WPAX S-2 gate removed from `compose_run`, alive one function downstream in the
-    function that actually constructs the spec.
-
-    AUTHORITY NOTE (LAW-03), read this before adding a third site: the canonical statement
-    of this rule is `tests/train/test_actor_lag_watchdog.py`'s
-    `test_build_run_safety_lag_fns_have_no_defaults`, which makes it for
-    `actor_ckpt_step_fn` and `learner_step_fn`. Extending that loop by one name is the
-    right shape and is NOT done here only because that file is byte-frozen under WPAX R43
-    and this fix pass holds no R43 event. This test is therefore a deliberate SECOND site,
-    booked to be folded into the frozen loop at the next R43 event on that file; until then
-    the two together are the census, and neither may be deleted without the other gaining
-    the name.
-    """
-    params = inspect.signature(build_run_safety).parameters
-    assert "monitor_cfg" in params, "build_run_safety must take monitor_cfg explicitly"
-    assert params["monitor_cfg"].default is inspect.Parameter.empty, (
-        "monitor_cfg must be REQUIRED — a default here silently unwires the actor-lag "
-        "ABORT (bare MonitorConfig() carries actor_lag_abort_enabled=False), which is the "
-        "ADJ-07 / RED-TEAM F-2 class and the same rule the two lag-fn kwargs already carry"
     )
