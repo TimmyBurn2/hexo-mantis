@@ -59,6 +59,13 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
     "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": True, "zoi_lookback": 20,
     "zoi_margin": 7, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
+# WPMINT Phase K-A stage 0 left this block hand-written on purpose. It is NOT a `train:`
+# schema payload — `cfg()` below builds the LEGACY flat hparams dict the pool still reads, so
+# this block is deliberately INCOMPLETE (no `max_train_steps` / `actor_sync_cadence_steps` /
+# `draw_rate_abort`) and never reaches `RunConfig.model_validate`. A new `train.*` schema key
+# therefore costs this file nothing. Its values are also its subject: `draw_reward: -0.4` and
+# `ply_cap_value: -0.7` are DISTINGUISHABLE from the minted defaults precisely so the oracles
+# below can prove they arrived at the Rust runner rather than a coincidence.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,

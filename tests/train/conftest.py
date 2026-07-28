@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import CnnArch, arch_from_spec_and_config, build_net
 
@@ -157,26 +158,18 @@ def _make_eval_block() -> dict[str, Any]:
     }
 
 
-# WPSC Phase 2 SC-A1: `train:` is now a required RunConfig section — every value below is
-# the zero-behavior-change TrainHParams-dataclass-default carried over (DESIGN_P2.md §1.1/§2).
+# WPSC Phase 2 SC-A1: `train:` is a required RunConfig section.
+# WPMINT Phase K-A stage 0: the block is DERIVED from a MINTED config rather than restated —
+# eleven files carried a hand-written copy, so a new `train.*` key cost eleven edits and gave
+# eleven chances to disagree with the schema. `dev_example.yaml`'s resolved block was measured
+# byte-identical to the census it replaces (which was itself the zero-behavior-change
+# TrainHParams-dataclass-default carry-over, DESIGN_P2.md §1.1/§2), so the swap changes nothing.
+_MINTED_TRAIN: dict[str, Any] = load_config(
+    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
+
+
 def _make_train_block(**over: Any) -> dict[str, Any]:
-    base = {
-        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
-        "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
-        "actor_sync_cadence_steps": 1, "max_train_steps": 1_000_000,
-        # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
-        # EXPLICIT disarmed posture (R79(1)).
-        "draw_rate_abort": None,
-        "completed_q_values": False,
-        "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-        "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
-        "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
-        "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
-        "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
-    }
-    base.update(over)
-    return base
+    return dict(_MINTED_TRAIN, **over)
 
 
 # WPSC Phase 2 SC-A2: `selfplay:` gains `mcts:`/`playout_cap:` sub-blocks + many new required

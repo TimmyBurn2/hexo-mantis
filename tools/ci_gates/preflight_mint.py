@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1672 lines total, 194 in the child closure, 970 in
-# parent-only function bodies. RE-MEASURED at WPMINT Phase B; Phase X's figures (1452/195/846,
+# this file's own top-level functions — 1677 lines total, 196 in the child closure, 970 in
+# parent-only function bodies. RE-MEASURED at WPMINT Phase K-A, whose whole delta here is +2
+# lines INSIDE `_boot_main` (the `resolve_drain_caps` import and the argument it feeds the
+# coordinator builder, R93) — so the child closure grew by exactly 2 and the parent side did
+# not move. Phase B's figures were 1672/194/970; Phase X's (1452/195/846,
 # the same eight child functions) were true when written and are restated here rather than
 # left to go stale, per SF-7: a justification which is not true is worse than none. Phase X in
 # turn corrected a header that HAD gone false — it claimed "the same six functions" against a
@@ -1281,6 +1284,7 @@ def _boot_main(args) -> int:
     """
     import torch
 
+    from mantis.config.resolve.drain import resolve_drain_caps
     from mantis.config.resolve.draw_rate import resolve_draw_rate_abort
     from mantis.config.resolve.run_length import resolve_max_train_steps
     from mantis.run import _step_coordinator_config, compose_run
@@ -1320,6 +1324,7 @@ def _boot_main(args) -> int:
     buffer = _build_buffer(booted, int(_step_coordinator_config(
         stop_step=resolve_max_train_steps(booted.train),
         draw_rate_abort=resolve_draw_rate_abort(booted.train),
+        drain_caps=resolve_drain_caps(booted.monitor),
     ).capacity))
     pool = WorkerPool(model=trainer.model, config=booted.model_dump(),
                       device=torch.device(args.device), replay_buffer=buffer,

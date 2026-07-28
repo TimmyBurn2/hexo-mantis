@@ -37,7 +37,9 @@ and deliberately minimal: everything the card asserts on is real. The `StepCoord
 objects; only the trainer/buffer/pool collaborators are fakes, and none of them touches the
 abort decision.
 
->300 justify (R8), at the file's MEASURED size of 420 lines. Two components, and neither is
+>300 justify (R8), at the file's MEASURED size of 428 lines (Phase X wrote 420; WPMINT Phase
+K-A's coordinator-census consolidation is the delta, and the number is restated rather than
+left stale per SF-7). Two components, and neither is
 splittable without losing what it is for. (1) ~110 lines are the local `StepCoordinator`
 harness, which exists ONLY because R5 bars cross-test imports — the alternative is a shared
 fixture module, which is the collection-shadowing shape R5 forbids. (2) The rest is one card's
@@ -50,19 +52,28 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from mantis.config.armed_aborts import MANIFEST, ArmedAbort, Mechanism, Status, exit_code_for_abort
+from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
+from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 RULE = "draw_rate_collapse"
+
+#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11) — read
+#: from a MINTED config, never restated here.
+_DRAIN_CAPS = resolve_drain_caps(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 
 
 # ── the minimum real-coordinator harness ──────────────────────────────────────────────
@@ -140,17 +151,14 @@ class _Sink:
 
 
 def _config(**overrides) -> StepCoordinatorConfig:
-    base = dict(
-        eval_interval=0, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=10, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
-        draw_rate_abort=None,
+    """DERIVED from the production builder (WPMINT Phase K-A stage 0) — this file's deltas
+    only. `None` is the EXPLICIT disarmed draw-rate posture; the builder gives it no
+    default and neither does this factory."""
+    return dataclasses.replace(
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+                                 drain_caps=_DRAIN_CAPS),
+        **{"eval_interval": 0, "log_interval": 1, "min_buf_size": 10, **overrides},
     )
-    base.update(overrides)
-    return StepCoordinatorConfig(**base)
 
 
 def _coordinator(*, pool=None, config=None, shutdown=None):

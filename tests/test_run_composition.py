@@ -28,6 +28,7 @@ and the alternative is a fourth copy of them.
 """
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -63,28 +64,27 @@ def _bounded(smoke_run_config, **monitor_over):
     )
 
 
-def _no_terminal_eval_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
+#: The UNPATCHED production builder, captured at import so the patch below can delegate to
+#: it without re-entering itself (WPMINT Phase K-A stage 0).
+_PRODUCTION_BUILDER = mantis.run._step_coordinator_config
+
+
+def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     """The ONE builder patch the `eval_enabled=True` drives below still need. The production
     builder defaults `terminal_eval_enabled=True`, so `close_out` runs a terminal eval round
     that reaches `eval/snapshot.py`'s `.arch` read on a fake model. That knob has NO config
-    key — it is one of the 24 hardcoded `_default_step_coordinator_config` knobs owned by
-    R-TRAINCONFIG-SCHEMA / ADJ-08. `stop_step` is left at 0 here deliberately: WPAX S-4 makes
-    `compose_run` override it from the config, so a patched builder that still dictated run
-    length would hide the knob."""
-    return StepCoordinatorConfig(
-        terminal_eval_enabled=False,
-        eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        # WPAX Phase D: the two CONFIG-AUTHORED values arrive as required keyword
-        # parameters and are passed THROUGH — a harness builder that swallowed them
-        # would be a stand-in dictating a config fact, which is what this delta ends.
-        instrumentation_enabled=False, stop_step=stop_step,
-        draw_rate_abort=draw_rate_abort,
-        final_eval_drain_timeout_sec=900.0,
-    )
+    key — it is one of the hardcoded `_step_coordinator_config` knobs owned by
+    R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78).
+
+    WPMINT Phase K-A stage 0: this is now a ONE-KNOB DELTA over the real builder, not a
+    24-kwarg restatement of it. The old shape had to be edited by every change to the
+    dataclass and, worse, silently pinned 23 knobs to values a reader would take for the
+    production posture. `**kwargs` forwards every CONFIG-AUTHORED value untouched — a
+    harness builder that swallowed one would be a stand-in dictating a config fact, and
+    `stop_step` in particular must keep arriving from `compose_run`'s resolver (WPAX S-4),
+    or a patched builder dictating run length would hide the knob.
+    """
+    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
 def _patch_eval_side(monkeypatch, capture: dict | None = None):

@@ -53,6 +53,7 @@ outcome than one long file.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import importlib.util
 import inspect
 from pathlib import Path
@@ -218,28 +219,25 @@ def _fake_run_safety(**_kwargs):
     )
 
 
-def _no_terminal_eval_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
+#: The UNPATCHED production builder, captured at import so the patch below can delegate to
+#: it without re-entering itself (WPMINT Phase K-A stage 0).
+_PRODUCTION_BUILDER = mantis.run._step_coordinator_config
+
+
+def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     """The ONE monkeypatch this file still applies, and only on `eval_enabled=True` drives:
     the production builder defaults `terminal_eval_enabled=True`, `close_out` therefore runs
     a terminal eval round, and `eval/snapshot.py` raises on any fake model that carries no
-    declared `.arch`. That knob has NO config key — it is one of the 24 hardcoded
-    `_default_step_coordinator_config` knobs owned by R-TRAINCONFIG-SCHEMA / ADJ-08
-    (DESIGN_S §6.7). `stop_step` is deliberately left at 0 here: S-4 makes the config
-    override it, so a patched builder that still dictated run length would hide the knob."""
-    return StepCoordinatorConfig(
-        terminal_eval_enabled=False,
-        eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        # WPAX Phase D: the two CONFIG-AUTHORED values arrive as required keyword
-        # parameters and are passed THROUGH — a harness builder that swallowed them
-        # would be a stand-in dictating a config fact, which is what this delta ends.
-        instrumentation_enabled=False, stop_step=stop_step,
-        draw_rate_abort=draw_rate_abort,
-        final_eval_drain_timeout_sec=900.0,
-    )
+    declared `.arch`. That knob has NO config key — it is one of the hardcoded
+    `_step_coordinator_config` knobs owned by R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78,
+    DESIGN_S §6.7).
+
+    WPMINT Phase K-A stage 0: a ONE-KNOB DELTA over the real builder, not a 24-kwarg
+    restatement of it. `**kwargs` forwards every CONFIG-AUTHORED value untouched, which is
+    what keeps `stop_step` arriving from S-4's resolver — a patched builder that still
+    dictated run length would hide the knob.
+    """
+    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
 def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STEPS):

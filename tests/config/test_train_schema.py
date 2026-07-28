@@ -18,6 +18,16 @@ from mantis.config.schema import TrainConfig
 
 # Zero-behavior-change mint values (DESIGN_P2.md §1.1/§2): every value is the CURRENT
 # `TrainHParams` dataclass default, carried over verbatim.
+#
+# WPMINT Phase K-A stage 0 consolidated eleven other copies of this block onto a MINTED
+# config and DELIBERATELY LEFT THIS ONE HAND-WRITTEN. This census is not payload scaffolding
+# here, it is the SUBJECT: `FIELD_NAMES` is derived from it and drives
+# `test_missing_field_rejected`, so the file's claim is "the schema requires exactly these
+# fields, independently written down". Deriving it from a config the schema itself validated
+# makes that claim circular — the enumeration and the thing enumerated would come from the
+# same source, and a field the schema stopped requiring would silently leave both. The
+# maintenance cost (one line per new `train.*` key) is the price of the independence, and it
+# is the only place in the suite that pays it.
 VALID_TRAIN_PAYLOAD: dict = {
     "lr": 1e-3,
     "weight_decay": 1e-4,

@@ -198,10 +198,14 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "monitor.supervisor_kill_grace_sec": "resolve_monitor_config -> monitor/supervise.py kill grace",
     "monitor.supervisor_max_relaunches": "resolve_monitor_config -> monitor/supervise.py relaunch cap",
     # ── monitor.drain.* (4; DrainCapsConfig, DESIGN_P2.md §4.3) ──────────────────────────
-    "monitor.drain.final_eval_drain_timeout_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.eval_final_drain_safety_factor": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.eval_final_drain_hard_cap_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.terminal_eval_hard_cap_sec": "DrainCapsConfig -> _run_terminal_sync (eval/pipeline.py:596-608)",
+    # WPMINT Phase K-A (R93): these four citations were FALSE until this phase — the block
+    # was popped by resolve_monitor_config and never reached the functions named below, which
+    # a grep could not tell from a read (DR-11). The path is now named end to end and is
+    # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    "monitor.drain.final_eval_drain_timeout_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_safety_factor": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.terminal_eval_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> _run_terminal_sync budget_sec (eval/pipeline.py)",
 }
 
 

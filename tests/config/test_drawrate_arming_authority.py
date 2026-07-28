@@ -72,6 +72,7 @@ from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissi
     exit_code_for_abort,
 )
 from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import (  # RED anchor #1 — the ONE read path (R80)
     DrawRateAbortSpec,
     resolve_draw_rate_abort,  # noqa: F401 — anchor; its oracles live in the sibling files
@@ -84,6 +85,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 ROW_NAME = "draw_rate_collapse"
+
+#: WPMINT Phase K-A (R93): the builder's third config-authored parameter, from a MINTED
+#: block. This file is about THRESHOLD authority, so the drain caps arrive derived rather
+#: than as four more literals to keep in step.
+_MINTED_DRAIN_CAPS = resolve_drain_caps(load_config(CONFIGS_DIR / "dev_example.yaml").monitor)
 
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place
 #: they may change, so they are written here as the pin that makes an in-place edit visible.
@@ -124,8 +130,14 @@ def _complete_kwargs(spec) -> dict:
     Derived, never hand-written: a literal census here would have to be edited by the same
     change that adds or drops a field, so it would agree with the dataclass by maintenance
     rather than by construction and O-D1's `TypeError` arm could go vacuous silently.
+
+    WPMINT Phase K-A (R93): `drain_caps` joined `stop_step`/`draw_rate_abort` as a
+    config-authored builder parameter with no default, so it arrives from a MINTED
+    `monitor.drain` block — a literal here would be a second authority over the very keys
+    that phase wired.
     """
-    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec)
+    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
+                                     drain_caps=_MINTED_DRAIN_CAPS)
     return {field.name: getattr(built, field.name)
             for field in dataclasses.fields(StepCoordinatorConfig)}
 
@@ -236,7 +248,8 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "or normalises it is a second authority over the operator's own terms"
     )
 
-    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec)
+    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
+                                     drain_caps=_MINTED_DRAIN_CAPS)
     assert built.draw_rate_abort is spec and built.stop_step == 11, (
         "the builder must hand ON both config-authored values. A builder that takes them as "
         "required parameters and then ignores them satisfies every signature and field "

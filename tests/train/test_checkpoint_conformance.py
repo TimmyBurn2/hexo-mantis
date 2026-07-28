@@ -23,6 +23,7 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.config.loader import load_config
 from mantis.encoding import EncodingRegistryError
 from mantis.model import CnnArch, GnnArch, RepresentationMismatch  # noqa: F401 (arch types)
 
@@ -645,22 +646,11 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": _make_eval_block(),
-        "train": {
-            "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
-            "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
-            "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
-            "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
-            "max_train_steps": 1_000_000,
-            # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
-            # EXPLICIT disarmed posture (R79(1)).
-            "draw_rate_abort": None,
-            "completed_q_values": False,
-            "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-            "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
-            "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
-            "uncertainty_weight": 0.0, "ownership_weight": 0.0, "threat_weight": 0.0,
-            "aux_chain_weight": 0.0, "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
-        },
+        # WPMINT Phase K-A stage 0: DERIVED from a MINTED config, not a twelfth restatement
+        # of the complete `train:` block (measured byte-identical to the census it replaces).
+        "train": load_config(
+            Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
+        ).train.model_dump(),
         "selfplay": {
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,

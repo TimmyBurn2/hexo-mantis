@@ -55,6 +55,7 @@ import mantis.train.coordinator.step as step_module
 # `mantis.*` siblings, which is where it belongs the moment IMPL lands it.
 from mantis.config.armed_aborts import audit_arming
 from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE read path
     DrawRateAbortSpec,
     resolve_draw_rate_abort,
@@ -234,8 +235,15 @@ def _coordinator(*, config, pool, trainer=None):
 def _coordinator_config(spec, **overrides) -> StepCoordinatorConfig:
     """The production builder's own output with `draw_rate_abort` set — never a hand-written
     census of the ~22 knobs CARD-COORD-KNOBS still owns (R78). `dataclasses.replace` supplies
-    the harness-only cadence knobs so the builder stays the single source of the rest."""
-    base = _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec)
+    the harness-only cadence knobs so the builder stays the single source of the rest.
+
+    WPMINT Phase K-A (R93): `drain_caps` is a third config-authored builder parameter with
+    no default, so it arrives here from a MINTED `monitor.drain` block for the same reason
+    `stop_step`/`draw_rate_abort` do — a literal would be a second authority.
+    """
+    base = _step_coordinator_config(
+        stop_step=10**9, draw_rate_abort=spec,
+        drain_caps=resolve_drain_caps(load_config(_CONFIGS / "dev_example.yaml").monitor))
     return dataclasses.replace(base, log_interval=1, eval_interval=1, min_buf_size=1,
                                terminal_eval_enabled=False, **overrides)
 

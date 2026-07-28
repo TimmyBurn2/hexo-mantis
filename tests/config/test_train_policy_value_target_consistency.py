@@ -17,9 +17,12 @@ kept in sync only by convention" defect this validator exists to kill).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
+from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION
 
 _LADDER_RUNGS = [
@@ -50,24 +53,16 @@ def _eval_block() -> dict:
     }
 
 
+#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
+#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
+#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to the
+#: census it replaces, so the swap is zero-behavior-change.
+_MINTED_TRAIN: dict = load_config(
+    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
+
+
 def _train_block(**over: object) -> dict:
-    base = {
-        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
-        "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-        "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
-        "actor_sync_cadence_steps": 1, "max_train_steps": 1_000_000,
-        # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
-        # EXPLICIT disarmed posture (R79(1)).
-        "draw_rate_abort": None,
-        "completed_q_values": False,
-        "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-        "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
-        "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
-        "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
-        "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
-    }
-    base.update(over)
-    return base
+    return dict(_MINTED_TRAIN, **over)
 
 
 def _selfplay_block(*, completed_q_values: bool = False) -> dict:

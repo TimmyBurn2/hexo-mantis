@@ -51,8 +51,11 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from pathlib import Path
 from types import CodeType, SimpleNamespace
 
+from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
 from mantis.run import _step_coordinator_config
@@ -110,9 +113,17 @@ class _SpySink:
         self.events.append(event)
 
 
+#: WPMINT Phase K-A (R93): `drain_caps` is a third config-authored builder parameter with no
+#: default, so it arrives from a MINTED `monitor.drain` block — a literal would be a second
+#: authority over `monitor.drain.*`, which is the DR-11 defect in miniature.
+_DRAIN_CAPS = resolve_drain_caps(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
+
+
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec),
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec,
+                                 drain_caps=_DRAIN_CAPS),
         log_interval=1, eval_interval=1, min_buf_size=1, terminal_eval_enabled=False,
     )
     shutdown = ShutdownState()

@@ -21,6 +21,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from mantis.config.loader import load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence  # RED-at-import anchor
 from mantis.config.resolve import resolve_monitor_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, MonitorSchemaConfig
@@ -61,25 +62,17 @@ def _eval_block() -> dict:
     }
 
 
+#: WPMINT Phase K-A stage 0 — the complete `train:` payload, DERIVED from a MINTED config
+#: instead of restated. Eleven test files carried a hand-written copy of this block, so every
+#: new `train.*` key cost eleven edits and gave eleven chances to disagree with the schema;
+#: derived, they cost none. `dev_example.yaml` is the base because its RESOLVED train block
+#: was measured BYTE-IDENTICAL to the census this replaces, which is what makes the swap
+#: zero-behavior-change rather than a re-baselining.
+_MINTED_TRAIN: dict = load_config(_REPO / "configs" / "dev_example.yaml").train.model_dump()
+
+
 def _train_block(**over: object) -> dict:
-    base = {
-        "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
-        "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
-        "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
-        "completed_q_values": False, "value_target": "pure_outcome_z",
-        "policy_target": "raw_visit_distribution", "draw_reward": -0.5,
-        "ply_cap_value": -0.5, "policy_prune_frac": 0.0, "entropy_reg_weight": 0.0,
-        "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0, "ownership_weight": 0.0,
-        "threat_weight": 0.0, "aux_chain_weight": 0.0, "ply_index_weight": 0.0,
-        "threat_pos_weight": 1.0,
-        "actor_sync_cadence_steps": 1,  # K1 — the WP's minted inert value (DESIGN §5)
-        "max_train_steps": 1_000_000,  # WPAX S-4 run-length authority (required key)
-        # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
-        # EXPLICIT disarmed posture (R79(1)).
-        "draw_rate_abort": None,
-    }
-    base.update(over)
-    return base
+    return dict(_MINTED_TRAIN, **over)
 
 
 def _selfplay_block() -> dict:

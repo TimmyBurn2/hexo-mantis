@@ -187,7 +187,8 @@ CONSUMER_REGISTRY = {
     # WPSC Phase 2 SC-A3 (R-MONITORCONFIG-SCHEMA closure): every MonitorSchemaConfig leaf's
     # live consumer is resolve_monitor_config (mantis.config.resolve.monitor), the pure 1:1
     # field-copy onto mantis.monitor.config.MonitorConfig; the 4 monitor.drain.* leaves feed
-    # DrainCaps (run.py) / drain_budget_sec + _run_terminal_sync (eval/pipeline.py).
+    # DrainCaps (run.py) / drain_budget_sec + _run_terminal_sync (eval/pipeline.py) through
+    # their own resolver, mantis.config.resolve.drain.resolve_drain_caps (WPMINT K-A).
     "monitor.alert_entropy_min": "resolve_monitor_config -> monitor/rules.py entropy WARN",
     "monitor.collapse_threshold_nats": "resolve_monitor_config -> monitor/rules.py collapse threshold",
     "monitor.alert_grad_norm_max": "resolve_monitor_config -> monitor/rules.py grad-norm WARN",
@@ -217,10 +218,14 @@ CONSUMER_REGISTRY = {
     "monitor.supervisor_poll_interval_sec": "resolve_monitor_config -> monitor/supervise.py poll cadence",
     "monitor.supervisor_kill_grace_sec": "resolve_monitor_config -> monitor/supervise.py kill grace",
     "monitor.supervisor_max_relaunches": "resolve_monitor_config -> monitor/supervise.py relaunch cap",
-    "monitor.drain.final_eval_drain_timeout_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.eval_final_drain_safety_factor": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.eval_final_drain_hard_cap_sec": "DrainCapsConfig -> drain_budget_sec (eval/pipeline.py)",
-    "monitor.drain.terminal_eval_hard_cap_sec": "DrainCapsConfig -> _run_terminal_sync (eval/pipeline.py:596-608)",
+    # WPMINT Phase K-A (R93): these four citations were FALSE until this phase — the block
+    # was popped by resolve_monitor_config and never reached the functions named below, which
+    # a grep could not tell from a read (DR-11). The path is now named end to end and is
+    # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    "monitor.drain.final_eval_drain_timeout_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_safety_factor": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.eval_final_drain_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
+    "monitor.drain.terminal_eval_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> _run_terminal_sync budget_sec (eval/pipeline.py)",
 }
 
 

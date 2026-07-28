@@ -23,6 +23,7 @@ from typing import Any, Callable, NamedTuple, Sequence
 
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
+from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
@@ -84,6 +85,7 @@ def _step_coordinator_config(
     *,
     stop_step: int,
     draw_rate_abort: "DrawRateAbortSpec | None",
+    drain_caps: DrainCapsSpec,
 ) -> StepCoordinatorConfig:
     """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) for the ~22 knobs
     R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78) still owns — no config-key reads here.
@@ -93,9 +95,17 @@ def _step_coordinator_config(
     is a parameter default — the authority would merely MIGRATE from the dataclass field to
     this signature, leaving every `dataclasses.fields()` assertion green while a caller that
     omits the argument silently inherits a posture (MF-2 Attack B). `tests/config/
-    test_drawrate_arming_authority.py` pins both parameters' `Parameter.empty` for exactly
-    that reason (R83), and the renamed function is the name-truth half (R73): it no longer
-    DEFAULTS the two facts the config authors.
+    test_drawrate_arming_authority.py` pins `stop_step`/`draw_rate_abort`'s
+    `Parameter.empty` for exactly that reason (R83) and
+    `tests/config/test_drain_caps_wiring.py` pins `drain_caps`'; the renamed function is the
+    name-truth half (R73): it no longer DEFAULTS the facts the config authors.
+
+    WPMINT Phase K-A (R93): `drain_caps` is the third such fact. The `900.0` that used to
+    sit in the literal below, and the three `StepCoordinatorConfig` terminal defaults beside
+    it, were the run's REAL drain caps while the minted, schema-validated,
+    registry-claimed `monitor.drain.*` block was popped and discarded by
+    `resolve_monitor_config` (the DR-11 finding). The four values now arrive whole, through
+    `resolve_drain_caps`, or this call raises.
     """
     return StepCoordinatorConfig(
         eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
@@ -104,7 +114,11 @@ def _step_coordinator_config(
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
         instrumentation_enabled=False, stop_step=stop_step,
-        draw_rate_abort=draw_rate_abort, final_eval_drain_timeout_sec=900.0,
+        draw_rate_abort=draw_rate_abort,
+        final_eval_drain_timeout_sec=drain_caps.final_eval_drain_timeout_sec,
+        eval_final_drain_safety_factor=drain_caps.eval_final_drain_safety_factor,
+        eval_final_drain_hard_cap_sec=drain_caps.eval_final_drain_hard_cap_sec,
+        terminal_eval_hard_cap_sec=drain_caps.terminal_eval_hard_cap_sec,
     )
 
 
@@ -168,20 +182,22 @@ def compose_run(
     )
 
     # M-4: the StepCoordinatorConfig instance is built FIRST — DrainCaps is LIFTED from
-    # its own 4 fields (config.py:176-180), never a second, independently-hardcoded set of
-    # literals. The two used to duplicate config.py's own defaults (900.0/3.0/14400.0/
-    # 14400.0) by coincidence; a future default change there would have silently
-    # diverged the two (R1: duplicated default authority).
-    # WPAX S-4 + Phase D: `stop_step` (train.max_train_steps) and `draw_rate_abort`
-    # (train.draw_rate_abort) are the two facts the CONFIG authors, and they are PASSED IN
-    # through their own resolvers rather than replaced afterwards — a `dataclass_replace`
-    # over a defaulted object requires a complete object first, i.e. a literal, and a
-    # literal that is always overwritten is still a second default authority (R1). The
-    # remaining ~22 knobs in `_step_coordinator_config` are still unauthored code-side
-    # defaults, owned by R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78).
+    # its own 4 fields, never a second, independently-hardcoded set of literals. The two
+    # used to duplicate config.py's own defaults (900.0/3.0/14400.0/14400.0) by
+    # coincidence; a future default change there would have silently diverged the two
+    # (R1: duplicated default authority).
+    # WPAX S-4 + Phase D + WPMINT Phase K-A: `stop_step` (train.max_train_steps),
+    # `draw_rate_abort` (train.draw_rate_abort) and `drain_caps` (monitor.drain) are the
+    # facts the CONFIG authors, and they are PASSED IN through their own resolvers rather
+    # than replaced afterwards — a `dataclass_replace` over a defaulted object requires a
+    # complete object first, i.e. a literal, and a literal that is always overwritten is
+    # still a second default authority (R1). The remaining ~22 knobs in
+    # `_step_coordinator_config` are still unauthored code-side defaults, owned by
+    # R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78).
     step_coordinator_cfg = _step_coordinator_config(
         stop_step=resolve_max_train_steps(config.train),
         draw_rate_abort=resolve_draw_rate_abort(config.train),
+        drain_caps=resolve_drain_caps(config.monitor),
     )
 
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)

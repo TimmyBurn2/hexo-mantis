@@ -18,16 +18,28 @@ one family; splitting the harness from its seven call sites would duplicate it f
 """
 from __future__ import annotations
 
+import dataclasses
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
+from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.monitor.config import MonitorConfig
+from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import drain
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+
+#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11) — read
+#: from a MINTED config, never restated here.
+_DRAIN_CAPS = resolve_drain_caps(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 
 
 # ── fakes (mirrors tests/train/test_coordinator_gates.py's harness shape) ────────────────
@@ -147,19 +159,14 @@ class ThreadIdentSpyEvalPipeline:
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
-    base = dict(
-        eval_interval=1, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=10, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
-        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
-        # is not about the draw-rate abort, and the field carries no default (R1).
-        draw_rate_abort=None,
+    """DERIVED from the production builder (WPMINT Phase K-A stage 0) — this file's deltas
+    only. `None` is the EXPLICIT disarmed draw-rate posture; the builder gives it no
+    default and neither does this factory."""
+    return dataclasses.replace(
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+                                 drain_caps=_DRAIN_CAPS),
+        **{"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides},
     )
-    base.update(overrides)
-    return StepCoordinatorConfig(**base)
 
 
 def _make_coordinator(*, eval_pipeline=None, config=None):
@@ -307,3 +314,22 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
     assert order == ["disarm", "flush_pending_eval", "on_drained", "run_terminal_eval"], (
         f"close_out ordering must be disarm -> flush -> on_drained -> terminal: {order}"
     )
+
+
+def test_an_absent_terminal_eval_enabled_raises_instead_of_inheriting_true() -> None:
+    """WPMINT Phase K-A: `run_terminal_eval` reads `cfg.terminal_eval_enabled` as a plain
+    attribute. It used to read `getattr(cfg, "terminal_eval_enabled", True)` — a SECOND
+    default authority beside the dataclass field's own `= True`, and the one that would
+    survive making the field required: a call site that omitted the field would silently
+    inherit "run the terminal eval" from the read site, with every `dataclasses.fields()`
+    assertion still green. The fallback is gone, so an absent field is an AttributeError
+    NAMING the field. This is the producer test for that removal (R4/LAW-07): with the
+    `getattr` restored, this node is the only thing in the suite that reds."""
+    coord = SimpleNamespace(
+        eval_pipeline=SimpleNamespace(run_evaluation=lambda *a, **k: None),
+        config=SimpleNamespace(),  # no terminal_eval_enabled — the shape a required field makes
+        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
+        _train_step=1000, _sink=None, eval_model=object(), full_config={},
+    )
+    with pytest.raises(AttributeError, match="terminal_eval_enabled"):
+        drain.run_terminal_eval(coord)

@@ -21,6 +21,7 @@ NOT frozen: written after ORACLE-WRITE in response to a RED-TEAM finding.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
@@ -104,27 +105,27 @@ class _Buffer:
     def save_to_path(self, p) -> None: ...
 
 
-def _bounded_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
-    # The deploy side must be CONSTRUCTED — that is the posture under test — but must not
-    # RUN a round: `eval_interval` beyond `stop_step` suppresses the periodic kick and
-    # `terminal_eval_enabled=False` suppresses the close-out one. Executing a round would
-    # demand a snapshot-able model with a real `.arch`, which is a different test's
-    # subject. What is asserted here is that sync happens while the deploy machinery
-    # exists, not anything about round execution.
-    return StepCoordinatorConfig(
-        terminal_eval_enabled=False,
-        eval_interval=1000, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        # WPAX Phase D: `draw_rate_abort` is a required parameter with no default
-        # and is passed THROUGH; `stop_step` stays the harness's own bound, which
-        # is this patch's stated reason for existing.
-        instrumentation_enabled=False, stop_step=_STOP_STEP,
-        draw_rate_abort=draw_rate_abort,
-        final_eval_drain_timeout_sec=900.0,
-    )
+#: The UNPATCHED production builder, captured at import so the patch below can delegate to
+#: it without re-entering itself (WPMINT Phase K-A stage 0).
+_PRODUCTION_BUILDER = mantis.run._step_coordinator_config
+
+
+def _bounded_config(**kwargs) -> StepCoordinatorConfig:
+    """The deploy side must be CONSTRUCTED — that is the posture under test — but must not
+    RUN a round: `eval_interval` beyond `stop_step` suppresses the periodic kick and
+    `terminal_eval_enabled=False` suppresses the close-out one. Executing a round would
+    demand a snapshot-able model with a real `.arch`, which is a different test's subject.
+    What is asserted here is that sync happens while the deploy machinery exists, not
+    anything about round execution.
+
+    WPMINT Phase K-A stage 0: expressed as the harness's own deltas over the REAL builder
+    rather than a 24-kwarg restatement of it. `draw_rate_abort` (and every other
+    config-authored value) is passed THROUGH; `stop_step` stays the harness's own bound,
+    which is this patch's stated reason for existing.
+    """
+    return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
+                               terminal_eval_enabled=False, eval_interval=1000,
+                               log_interval=1, stop_step=_STOP_STEP)
 
 
 def _fake_run_safety(**_kwargs):

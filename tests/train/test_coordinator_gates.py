@@ -34,15 +34,26 @@ catch. Added post-review (F-3/F-4): the non-degenerate cadence rows (`log_interv
 """
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import check_sealbot_wr_hard_abort  # noqa: F401 — RED-at-import anchor
+from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+
+#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11), so a
+#: harness reads them from a MINTED config rather than restating them — the same rule the
+#: rest of this file's coordinator config now follows (see `_make_config`).
+_DRAIN_CAPS = resolve_drain_caps(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 
 
 # ── fakes ─────────────────────────────────────────────────────────────────────────────
@@ -165,19 +176,23 @@ class SpySink:
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
-    base = dict(
-        eval_interval=1, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=10, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
-        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
-        # is not about the draw-rate abort, and the field carries no default (R1).
-        draw_rate_abort=None,
+    """DERIVED from the production builder, never a hand-written 24-kwarg census.
+
+    WPMINT Phase K-A stage 0. This used to restate every field; ten test files restated the
+    same ones, so they agreed with `StepCoordinatorConfig` by maintenance rather than by
+    construction and every new coordinator knob cost ten edits. The shape here is the one
+    `tests/train/test_drawrate_abort_threading.py` and
+    `tests/config/test_drawrate_arming_authority.py` already used and the census named as
+    the in-repo precedent: build with the shipped builder, state only this file's deltas.
+    `stop_step`/`draw_rate_abort` are passed EXPLICITLY (`None` is the disarmed posture,
+    and this harness is not about the draw-rate abort) because the builder gives them no
+    default and neither does this factory.
+    """
+    return dataclasses.replace(
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+                                 drain_caps=_DRAIN_CAPS),
+        **{"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides},
     )
-    base.update(overrides)
-    return StepCoordinatorConfig(**base)
 
 
 def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=None,

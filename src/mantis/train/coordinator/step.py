@@ -600,6 +600,17 @@ class StepCoordinator:
 
     # ── training-step dispatch (mixed vs straight self-play) ──────────────────────────────
     def _run_training_step(self, cfg: StepCoordinatorConfig) -> dict[str, float]:
+        # DISCLOSED LIVE R1 VIOLATION — WPMINT Phase K-A measured it and DEFERRED the fix to
+        # CARD-COORD-KNOBS' authoring half, with grounds. Measured at HEAD on run5:
+        # `compose_run` passes `train_cfg={}` and `full_config=config.model_dump()`, whose
+        # top-level keys are exactly the RunConfig SECTIONS (identity/train/selfplay/eval/
+        # monitor/inference/run_id/seed/schema_version) — no `batch_size` among them. Both
+        # lookups therefore miss and the production batch size is unconditionally the literal
+        # `256`, while `StepCoordinatorConfig.batch_size` (the builder's `8`) sits beside it
+        # unread. Removing the literal is not a local edit: there is NO `train.batch_size`
+        # schema key to read instead, so the fix is to AUTHOR one and route it here — which is
+        # the next agent's scope, not this one's. Recorded here rather than in a note so the
+        # site itself says what it is.
         batch_size = int(self.train_cfg.get("batch_size", self.full_config.get("batch_size", 256)))
         if (self.pretrained_buffer is not None and self.pretrained_buffer.size > 0
                 and self.buffer.size > 0):

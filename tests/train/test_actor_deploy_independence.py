@@ -16,18 +16,27 @@ one spy/hooks/coordinator harness; splitting harness from assertions would dupli
 """
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from mantis.config.loader import load_config
+from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision  # RED-at-import anchor
 from mantis.monitor.config import MonitorConfig
+from mantis.run import _step_coordinator_config
 from mantis.train.actor_sync import ActorSync
 from mantis.train.coordinator import drain
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+
+#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11) — read
+#: from a MINTED config, never restated here.
+_DRAIN_CAPS = resolve_drain_caps(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 
 
 # ── shared spies ──────────────────────────────────────────────────────────────────────
@@ -181,16 +190,13 @@ class _AttrReadRecorder:
 
 
 def _kick_config() -> StepCoordinatorConfig:
-    return StepCoordinatorConfig(
-        eval_interval=4, log_interval=0, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
-        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
-        # is not about the draw-rate abort, and the field carries no default (R1).
-        draw_rate_abort=None,
+    """DERIVED from the production builder (WPMINT Phase K-A stage 0) — this file's deltas
+    only. `None` is the EXPLICIT disarmed draw-rate posture; the four drain caps come from
+    a MINTED `monitor.drain` block (R93/DR-11)."""
+    return dataclasses.replace(
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+                                 drain_caps=_DRAIN_CAPS),
+        eval_interval=4, log_interval=0,
     )
 
 

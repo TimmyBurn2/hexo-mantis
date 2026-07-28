@@ -15,6 +15,10 @@ from mantis.config.resolve.composition import (
     UnvalidatedConfigError,
     require_run_config,
 )
+from mantis.config.resolve.drain import (
+    DrainCapsSpec,
+    resolve_drain_caps,
+)
 from mantis.config.resolve.draw_rate import (
     DrawRateAbortSpec,
     resolve_draw_rate_abort,
@@ -36,6 +40,7 @@ __all__ = [
     "UNSPECIFIED",
     "AbsentEncodingError",
     "BootstrapNotFoundError",
+    "DrainCapsSpec",
     "DrawRateAbortSpec",
     "EncodingConflictError",
     "EncodingResolution",
@@ -48,6 +53,7 @@ __all__ = [
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
     "resolve_bootstrap",
+    "resolve_drain_caps",
     "resolve_draw_rate_abort",
     "resolve_eval_model_sims",
     "resolve_max_train_steps",

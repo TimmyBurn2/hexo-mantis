@@ -106,8 +106,12 @@ def test_absent_sealbot_rounds_route_none_and_coordinator_skip_counts() -> None:
     """The OTHER half of the handshake — the REAL, already-existing coordinator consumer
     (step.py:472-524). Hand-constructed result dict (no mantis.eval import needed for this
     one test)."""
+    import dataclasses
+
+    from mantis.config.loader import load_config
+    from mantis.config.resolve.drain import resolve_drain_caps
     from mantis.monitor.config import MonitorConfig
-    from mantis.train.coordinator.config import StepCoordinatorConfig
+    from mantis.run import _step_coordinator_config
     from mantis.train.coordinator.step import StepCoordinator
     from mantis.train.lifecycle.signals import ShutdownState
 
@@ -148,16 +152,16 @@ def test_absent_sealbot_rounds_route_none_and_coordinator_skip_counts() -> None:
         def save_to_path(self, p) -> None: ...
 
     sink = _Sink()
-    config = StepCoordinatorConfig(
-        eval_interval=1, log_interval=1, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=10, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
-        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
-        # is not about the draw-rate abort, and the field carries no default (R1).
-        draw_rate_abort=None,
+    # WPMINT Phase K-A stage 0: DERIVED from the production builder, never a hand-written
+    # 24-kwarg census (which is why a new coordinator knob costs this file no edit). `None`
+    # is the EXPLICIT disarmed draw-rate posture — this harness is not about that abort —
+    # and the four drain caps come from a MINTED `monitor.drain` block (R93/DR-11).
+    config = dataclasses.replace(
+        _step_coordinator_config(
+            stop_step=10**9, draw_rate_abort=None,
+            drain_caps=resolve_drain_caps(load_config(_REPO / "configs" / "dev_example.yaml").monitor),
+        ),
+        eval_interval=1, log_interval=1, min_buf_size=10,
     )
     coord = StepCoordinator(
         trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,

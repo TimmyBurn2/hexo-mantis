@@ -135,11 +135,13 @@ class RealTracemalloc:
         tracemalloc.reset_peak()
 
 
-# ── close-out / abort-gate defaults (named, no literals — §D-LOOPFIX W1) ────────────────
-DEFAULT_FINAL_EVAL_DRAIN_TIMEOUT_SEC: float = 900.0
-DEFAULT_FINAL_EVAL_DRAIN_SAFETY_FACTOR: float = 3.0
-DEFAULT_FINAL_EVAL_DRAIN_HARD_CAP_SEC: float = 14400.0
-DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC: float = 14400.0
+# ── close-out drain caps: DELETED, not moved (WPMINT Phase K-A, R93) ────────────────────
+# The four `DEFAULT_FINAL_EVAL_DRAIN_*` / `DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC` constants
+# that stood here are GONE. `monitor.drain.*` is the authority (`DrainCapsConfig` ->
+# `mantis.config.resolve.drain.resolve_drain_caps`), and a named constant beside an
+# authored key is the duplicated-default class R1 exists to kill — one of the four
+# (`DEFAULT_FINAL_EVAL_DRAIN_TIMEOUT_SEC`) had already rotted into a dead twin of a bare
+# `900.0` literal in `run.py` with no reader at all. Re-adding one is a regression.
 
 
 def promotion_capable_rounds(stop_step: int | None, eval_interval: int, best_stride: int) -> list[int]:
@@ -230,11 +232,19 @@ class StepCoordinatorConfig:
     # the caller always replaces is still a second default authority (R1), which is what
     # `draw_rate_threshold: float = 0.0` was.
     draw_rate_abort: "DrawRateAbortLike | None"
+    # WPMINT Phase K-A (R93, the DR-11 finding): the four drain/terminal-eval caps join
+    # `stop_step`/`draw_rate_abort` as CONFIG-AUTHORED facts, and so lose their code-side
+    # defaults for the same reason those two have none. `monitor.drain.*` had been minted,
+    # schema-validated and registry-claimed since SC-A3 while `resolve_monitor_config`
+    # popped the block and threw it away — the three defaults below (and a fourth, dead,
+    # `DEFAULT_FINAL_EVAL_DRAIN_TIMEOUT_SEC`) were what the run actually used. A default
+    # here is a second authority over the same number, so there is none: the value arrives
+    # through `mantis.config.resolve.drain.resolve_drain_caps` or construction fails.
     final_eval_drain_timeout_sec: float
-    eval_final_drain_safety_factor: float = DEFAULT_FINAL_EVAL_DRAIN_SAFETY_FACTOR
-    eval_final_drain_hard_cap_sec: float = DEFAULT_FINAL_EVAL_DRAIN_HARD_CAP_SEC
+    eval_final_drain_safety_factor: float
+    eval_final_drain_hard_cap_sec: float
+    terminal_eval_hard_cap_sec: float
     terminal_eval_enabled: bool = True
-    terminal_eval_hard_cap_sec: float = DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC
     # §D-GOLONG sustained draw-rate hard-abort. `threshold` and `min_step` moved to the
     # config (`train.draw_rate_abort`, above) at WPAX Phase D — R80 names exactly three
     # keys and `consec` is not one of them, so it stays a code-side default owned by

@@ -21,27 +21,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from mantis.config.loader import load_config
 from mantis.config.schema import TrainConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Duplicated verbatim from test_train_schema.py::VALID_TRAIN_PAYLOAD (zero-behavior-change
-# mint values, DESIGN_P2.md §1.1/§2).
-VALID_TRAIN_PAYLOAD: dict = {
-    "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
-    "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-    "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
-    "actor_sync_cadence_steps": 1, "max_train_steps": 1_000_000,
-    # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
-    # EXPLICIT disarmed posture (R79(1)).
-    "draw_rate_abort": None,
-    "completed_q_values": False,
-    "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-    "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
-    "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
-    "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
-    "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
-}
+# WPMINT Phase K-A stage 0: DERIVED from a MINTED config, not duplicated verbatim from
+# `test_train_schema.py::VALID_TRAIN_PAYLOAD` (which is what this used to say, and which is
+# how a copy silently drifts). This file's SUBJECT is `entropy_reg_weight`'s named sign
+# error, not the field census, so the payload around it should cost nothing to keep valid.
+# `test_train_schema.py` keeps its hand-written census on purpose — see its own note.
+VALID_TRAIN_PAYLOAD: dict = load_config(
+    REPO_ROOT / "configs" / "dev_example.yaml").train.model_dump()
 
 
 def _payload(**over: object) -> dict:

@@ -113,7 +113,14 @@ def run_terminal_eval(coord: Any) -> Any:
     pipeline is injected or `terminal_eval_enabled` is False."""
     pipeline = getattr(coord, "eval_pipeline", None)
     cfg = coord.config
-    if pipeline is None or not getattr(cfg, "terminal_eval_enabled", True):
+    # WPMINT Phase K-A: read as a plain attribute, never `getattr(cfg, …, True)`. That
+    # fallback was a SECOND default authority beside the dataclass field's own `= True`
+    # (census §1 Surface 3): if the field is ever made required — which is what authoring
+    # `terminal_eval_enabled` as a config key does — a call site that omitted it would have
+    # silently inherited "run the terminal eval" from HERE, with every
+    # `dataclasses.fields()` assertion still green. An absent attribute must be an
+    # AttributeError naming the field, not an inherited posture (R1/LAW-08).
+    if pipeline is None or not cfg.terminal_eval_enabled:
         return None
     best = getattr(coord.anchor_state, "best_model", None)
     best_step = getattr(coord.anchor_state, "best_model_step", None)
