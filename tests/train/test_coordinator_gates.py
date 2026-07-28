@@ -37,6 +37,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import check_sealbot_wr_hard_abort  # noqa: F401 — RED-at-import anchor
 from mantis.train.coordinator.config import StepCoordinatorConfig
@@ -66,11 +67,17 @@ class FakePool:
         self.recent_move_histories: list = []   # empty → emit_axis_distribution returns early
         self._stride5 = stride5
         self._draw_rates = dict(draw_rates or {})
+        self.min_samples_seen: list[int] = []
 
     def check_producer_health(self) -> None:
         return None
 
-    def per_worker_draw_rates(self) -> dict[int, float]:
+    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]:
+        # WPAX Phase D (R80): the widened `WorkerPoolLike` surface. The bar is asserted, not
+        # applied — this fake serves rates directly, and the rule the bar drives lives one
+        # layer down in `PoolInstrumentation` (its own oracle is
+        # tests/selfplay/test_drawrate_min_samples_inclusion.py).
+        self.min_samples_seen.append(int(min_samples))
         return dict(self._draw_rates)
 
     def current_stride5_p90(self) -> int:
@@ -165,6 +172,9 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
         instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
+        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
+        # is not about the draw-rate abort, and the field carries no default (R1).
+        draw_rate_abort=None,
     )
     base.update(overrides)
     return StepCoordinatorConfig(**base)
@@ -286,10 +296,13 @@ def test_sealbot_absent_key_skips_and_counts() -> None:
 # (O-04 stride5-spam gate REMOVED at close-out per operator directive B.)
 def test_draw_rate_gate_fires_on_live_producer() -> None:
     """O-03 — the manifest `draw_rate_collapse` producer test. Keyed on the LIVE
-    `recent_pool_draw_rate(per_worker_draw_rates())` (never the NaN `draw_target_fraction`): a
+    `recent_pool_draw_rate(per_worker_draw_rates(min_samples=…))` (never the NaN
+    `draw_target_fraction`): a
     sustained 0.9 draw rate past min_step fires. Grad-norm is quiet, so the fire is draw-rate."""
     pool = FakePool(draw_rates={0: 0.9, 1: 0.9})
-    cfg = _make_config(draw_rate_threshold=0.4, draw_rate_consec=3, draw_rate_min_step=0)
+    cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
+                                                        min_samples=1),
+                       draw_rate_consec=3)
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h)
     assert h.shutdown.running is False, "a sustained pool draw-rate collapse must hard-abort"
@@ -300,14 +313,16 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
 
 
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
-    """O-03 — at the shipped default (draw_rate_threshold 0.0 = OFF, §f R9), a high draw rate
-    NEVER fires; the gate is inert-by-config until the run5 mint. Bites a gate that ships hot
-    against the recorded scope-honesty statement."""
+    """O-03 — on the EXPLICITLY disarmed posture (`train.draw_rate_abort: null`, WPAX Phase
+    D — it used to be the code-side `threshold 0.0`), a high draw rate NEVER fires. Bites a
+    gate that ships hot against the config the operator actually wrote."""
     pool = FakePool(draw_rates={0: 0.99, 1: 0.99})
-    cfg = _make_config()  # draw_rate_threshold defaults 0.0
+    cfg = _make_config()  # draw_rate_abort is None — EXPLICITLY off
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=6)
-    assert h.shutdown.running is True, "the draw-rate gate ships OFF (threshold 0.0)"
+    assert h.shutdown.running is True, (
+        "a `null` draw_rate_abort means the gate cannot fire, however bad the draw rate"
+    )
 
 
 # ══ O-22 — emission wiring + heartbeat beats + monitor_gates ══════════════════════════
@@ -336,7 +351,7 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
     emission instead of 4, thinning the LAW-18 stream and both gates' sampling by ~the burst.
     """
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
-                       draw_rate_threshold=0.0)
+                       draw_rate_abort=None)
     h = _make_coordinator(config=cfg)
     for _ in range(5):
         h.pool.games_completed += 5
@@ -356,8 +371,9 @@ def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:
     not have fired yet — the `consec` window silently stretched by the burst factor."""
     pool = FakePool(draw_rates={0: 0.9, 1: 0.9})
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
-                       draw_rate_threshold=0.4, draw_rate_consec=3, draw_rate_min_step=0,
-                       hard_gn_threshold=1e9)
+                       draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
+                                                        min_samples=1),
+                       draw_rate_consec=3, hard_gn_threshold=1e9)
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=8)
 

@@ -65,7 +65,10 @@ def test_g01_draws_counter_increments_on_draw_terminal() -> None:
     lk = _lock()
     _game_complete(instr, lk, winner_code=0, worker_id=0)  # draw
     _game_complete(instr, lk, winner_code=1, worker_id=0)  # win
-    rates = instr.per_worker_draw_rates(lk)
+    # WPAX Phase D (R80): the inclusion bar is a REQUIRED keyword with no default at any
+    # layer — `min_samples=1` reproduces the pre-delta `len(dq) > 0` rule this unit
+    # arm was written against, so the arm keeps its original subject.
+    rates = instr.per_worker_draw_rates(lk, min_samples=1)
     assert 0 in rates
     assert abs(rates[0] - 0.5) < 1e-9
 

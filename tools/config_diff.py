@@ -39,6 +39,25 @@ def _diff_keys(flat_a: dict[str, object], flat_b: dict[str, object]) -> set[str]
     return {k for k in set(flat_a) | set(flat_b) if flat_a.get(k) != flat_b.get(k)}
 
 
+def _covers(claimed: str, actual: str) -> bool:
+    """True iff a delta claimed on `claimed` accounts for the real diff at `actual`.
+
+    Exact match, or `actual` sits INSIDE the block `claimed` names. A mint delta may set a
+    whole BLOCK — `--set 'train.draw_rate_abort={threshold: …, min_step: …, min_samples: …}'`
+    — and in some cases it MUST: `mint_config._resolve_parent` requires every path segment to
+    exist in the template, so a leaf inside a template block that ships `null` cannot be
+    addressed at all. The header then truthfully claims one key while the flattened diff
+    reports its leaves, and comparing the two sets literally reads that as a lying header.
+
+    The widening is bounded and it is one-way: a claimed block with NO real diff under it is
+    still reported (`HEADER CLAIMS … but it is unchanged`), so a header cannot claim a delta
+    it did not make; and a real diff OUTSIDE every claimed block is still reported, so a
+    header cannot hide one. What it stops asserting is that a delta names a LEAF, which was
+    never the rule — it was an artefact of every previous delta happening to be one.
+    """
+    return actual == claimed or actual.startswith(f"{claimed}.")
+
+
 def _parse_header(text: str) -> tuple[str | None, set[str]]:
     """Return (template_name, claimed_delta_keys) from a stamped mint header.
 
@@ -81,12 +100,14 @@ def _run_from_header(config_path: str) -> int:
         print(f"load/validation error: {exc}", file=sys.stderr)
         return 2
     actual = _diff_keys(flat_cfg, flat_tmpl)
-    if actual == claimed:
+    unclaimed = {k for k in actual if not any(_covers(c, k) for c in claimed)}
+    empty_claims = {c for c in claimed if not any(_covers(c, k) for k in actual)}
+    if not unclaimed and not empty_claims:
         print("MATCH:", ", ".join(sorted(actual)))
         return 0
-    for k in sorted(actual - claimed):
+    for k in sorted(unclaimed):
         print(f"HEADER OMITS a real diff on {k}: {flat_tmpl.get(k)!r} -> {flat_cfg.get(k)!r}")
-    for k in sorted(claimed - actual):
+    for k in sorted(empty_claims):
         print(f"HEADER CLAIMS {k} but it is unchanged vs template")
     return 1
 

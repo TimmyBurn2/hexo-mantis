@@ -32,6 +32,9 @@ VALID_TRAIN_PAYLOAD: dict = {
     "checkpoint_interval": 0,
     "actor_sync_cadence_steps": 1,
     "max_train_steps": 1_000_000,
+    # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
+    # EXPLICIT disarmed posture (R79(1)).
+    "draw_rate_abort": None,
     "completed_q_values": False,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",

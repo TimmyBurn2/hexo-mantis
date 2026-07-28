@@ -74,6 +74,9 @@ def _train_block(**over: object) -> dict:
         "threat_pos_weight": 1.0,
         "actor_sync_cadence_steps": 1,  # K1 — the WP's minted inert value (DESIGN §5)
         "max_train_steps": 1_000_000,  # WPAX S-4 run-length authority (required key)
+        # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
+        # EXPLICIT disarmed posture (R79(1)).
+        "draw_rate_abort": None,
     }
     base.update(over)
     return base

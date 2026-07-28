@@ -22,3 +22,19 @@ therefore have no place in the registry.
 # OPP_STONE_PLANE). A future history-depth change here MUST move the
 # opponent-block offset in lockstep; test_b4_history_len_sot pins the equality.
 HISTORY_LEN: int = 8
+
+# Depth of the per-worker rolling draw-outcome window the self-play pool keeps
+# (`selfplay.instrumentation.PoolInstrumentation._per_worker_draws`, one append per
+# completed game). Self-play telemetry geometry, not an encoding parameter — kept here for
+# the same reason HISTORY_LEN is: it is a SINGLE SoT read by two layers that must not drift.
+#
+# LOAD-BEARING COUPLING (WPAX Phase D, R80/R83): the config-authored inclusion bar
+# `train.draw_rate_abort.min_samples` is bounded by this window
+# (`config/schema/train.py`'s `le=DRAW_RATE_WINDOW`), because `len(dq)` can never exceed
+# the deque's own `maxlen` — a `min_samples` above it is a condition no history can
+# satisfy, so the abort audits ARMED and can never fire ("armed in the config, absent in
+# effect", measured at 51 under total collapse). A second independent literal on either
+# side would re-open that dead zone silently, which is why both sides import THIS name.
+# `tests/selfplay/test_drawrate_min_samples_inclusion.py` asserts the equality against the
+# real deque rather than against the number.
+DRAW_RATE_WINDOW: int = 50

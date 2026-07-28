@@ -764,11 +764,43 @@ def test_audit_only_is_green_on_the_real_tree() -> None:
             f"the mandatory AUDIT stdout line (§6.3b) must carry {needle!r}; got "
             f"stdout={result.stdout!r}"
         )
-    for needle in ("DEFERRED", "draw_rate_collapse"):
-        assert needle in result.stdout, (
-            "R56's loud print on EVERY run including a green one — registered debt that "
-            f"stops being visible stops being debt; missing {needle!r}"
+    # R81 (ADJ-15) — the ONE granted R43 re-point, and the whole of it. Phase D flips the
+    # draw-rate row to REQUIRED, so the shipped manifest holds ZERO deferred rows and
+    # gate-12 stdout can no longer carry one. What must still hold is that R56's loud-debt
+    # MECHANISM works: `_print_deferred_rows` survives (CARD-COORD-KNOBS will feed it rows)
+    # and is driven here on a SYNTHETIC deferred row through the `manifest=` keyword — the
+    # same seam `audit_arming` already exposes. Keeping a row deferred so this assertion
+    # stayed true was REJECTED: it would shape the shipped manifest to suit a test.
+    import contextlib
+    import io
+
+    from mantis.config.armed_aborts import ArmedAbort, Mechanism, Status
+
+    spec = importlib.util.spec_from_file_location("_pfm_deferred_probe", TOOL_PATH)
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    probe = ArmedAbort(
+        name="_synthetic_deferred_probe", config_path="train.does_not_exist",
+        mechanism=Mechanism.CONFIG_BOOL, status=Status.DEFERRED, exit_code=None,
+        owner="CARD-COORD-KNOBS (R78)", source_pin=("src/mantis/run.py", "def compose_run"),
+        note="synthetic subject for R56's loud-debt mechanism; not a shipped row.",
+    )
+    loud = io.StringIO()
+    with contextlib.redirect_stdout(loud):
+        tool._print_deferred_rows(manifest=(probe,))
+    for needle in ("DEFERRED", probe.name, probe.owner, probe.config_path, probe.note):
+        assert needle in loud.getvalue(), (
+            "R56's loud print on EVERY run that carries debt — registered debt that stops "
+            f"being visible stops being debt; missing {needle!r} from {loud.getvalue()!r}"
         )
+    quiet = io.StringIO()
+    with contextlib.redirect_stdout(quiet):
+        tool._print_deferred_rows(manifest=())
+    assert quiet.getvalue() == "", (
+        "the empty arm (R72 — `if not deferred: return`): with no deferred row the loud "
+        "print says NOTHING, which is exactly why the shipped-manifest assertion this "
+        f"replaces had to move; got {quiet.getvalue()!r}"
+    )
 
 
 def test_an_audit_report_can_never_read_as_a_green_for_the_dynamic_assertions(

@@ -188,6 +188,9 @@ def _kick_config() -> StepCoordinatorConfig:
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
         instrumentation_enabled=False, stop_step=10**9, final_eval_drain_timeout_sec=900.0,
+        # WPAX Phase D: `None` is the EXPLICIT disarmed posture — this harness config
+        # is not about the draw-rate abort, and the field carries no default (R1).
+        draw_rate_abort=None,
     )
 
 

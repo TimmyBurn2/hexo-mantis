@@ -57,8 +57,9 @@ _LOG = logging.getLogger(__name__)
 #: The gate keys carried by the LAW-18 `monitor_gates` summary (checks/fires/skips/warns).
 #: The KEPT WP10 grad-norm abort is in the list so the one hard-abort that is unconditionally
 #: ACTIVE at landing is visible in the ONE channel like the WP13-A gates. `sealbot_wr_abort`
-#: ships WARN-ONLY (operator G-3) and `draw_rate_collapse` ships OFF (threshold 0.0) — both
-#: named here so their inert/warn posture is readable, never silent. (`stride5_spam` was
+#: ships WARN-ONLY (operator G-3) and `draw_rate_collapse` is armed BY THE CONFIG
+#: (`train.draw_rate_abort`; `null` is the explicit off posture — WPAX Phase D, R65/R80) —
+#: both named here so their inert/warn posture is readable, never silent. (`stride5_spam` was
 #: REMOVED at close-out, operator directive B.)
 GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
@@ -407,22 +408,29 @@ class StepCoordinator:
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.
 
-        draw-rate reads `recent_pool_draw_rate(pool.per_worker_draw_rates())` — never the NaN
+        draw-rate reads `recent_pool_draw_rate(pool.per_worker_draw_rates(min_samples=…))`
+        — the inclusion bar is config-authored (R80) — never the NaN
         draw-target phantom at `pool_push.py:135`, whose very TOKEN is grep-banned here
         (O-15). A missing producer is SKIP-counted (LAW-18), never silently read as a healthy
         signal. (The stride5-spam gate was REMOVED at close-out, operator directive B.)
         """
         fired = False
         rates_fn = getattr(self.pool, "per_worker_draw_rates", None)
+        spec = cfg.draw_rate_abort
         draw = self._sample(
             "draw_rate_collapse", self._draw_rate_history,
-            (lambda: recent_pool_draw_rate(rates_fn())) if rates_fn is not None else None,
+            (lambda: recent_pool_draw_rate(rates_fn(min_samples=spec.min_samples)))
+            if rates_fn is not None and spec is not None else None,
         )
-        if draw and cfg.draw_rate_threshold > 0:
+        # WPAX Phase D: `is not None`, NOT `> 0`. Under the type change `draw_rate_abort`
+        # is `None` on every disarmed run, and `None > 0` raises TypeError here once per
+        # step() — so this is required BY the type change, not a tidy-up. The `elif draw:`
+        # skip arm (LAW-18) now counts the EXPLICIT-off case, which is what it should say.
+        if draw and spec is not None:
             message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
-                                               threshold=cfg.draw_rate_threshold,
+                                               threshold=spec.threshold,
                                                consec=cfg.draw_rate_consec,
-                                               min_step=cfg.draw_rate_min_step)
+                                               min_step=spec.min_step)
             fired = self._fire_hard_abort("draw_rate_collapse", message) or fired
         elif draw:
             self._gate_stats["draw_rate_collapse"]["skips"] += 1
@@ -464,13 +472,19 @@ class StepCoordinator:
 
     def _emit_monitor_gates(self, cfg: StepCoordinatorConfig, sink: Any) -> None:
         """LAW-18 in-run visibility: every gate publishes its own checks/fires/skips AND
-        its live threshold, so an inert gate (threshold 0.0 = OFF, or a producer that has
-        not landed yet) is READABLE in the event stream instead of silently dead."""
+        its live threshold, so an inert gate (explicitly disarmed, or a producer that has
+        not landed yet) is READABLE in the event stream instead of silently dead.
+
+        WPAX Phase D: `draw_rate_threshold` keeps its event-contract NAME and is now read
+        off the resolved block. `null` is the EXPLICIT off posture (`train.draw_rate_abort:
+        null`) — it used to be `0.0`, a number in the middle of the range an operator picks
+        from, which is precisely the spelling R79 removed."""
+        spec = cfg.draw_rate_abort
         emit_via(sink, {
             "event": "monitor_gates",
             "step": self._train_step,
             "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
-            "draw_rate_threshold": cfg.draw_rate_threshold,
+            "draw_rate_threshold": None if spec is None else spec.threshold,
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
             "sealbot_wr_result_producer_pending": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             "wr_history_len": len(self._wr_history),

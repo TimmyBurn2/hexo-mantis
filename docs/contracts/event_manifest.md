@@ -115,8 +115,13 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   never resolves a sealbot rung (0/6 census verdict at HEAD — no adapters installed) still
   routes `wr_sealbot: None`, which the coordinator skip-counts loudly
   (`sealbot_wr_gate_skipped`), never silently.
-- `draw_rate_collapse` ships `draw_rate_threshold = 0.0` (OFF) until the run5 mint makes it
-  configurable.
+- `draw_rate_collapse` is armed **by the config** (WPAX Phase D, R65/R80): the
+  `train.draw_rate_abort` block — `threshold` / `min_step` / `min_samples`, one block and one
+  resolver — is the sole authority, and `null` is the EXPLICIT off posture (R79: arming is a
+  property of the resolved value; there is no boolean beside it). `configs/run5.yaml` arms it
+  at `0.25 / 25000 / 50` (R82/R85, pre-registered at mint prereg); the four non-production
+  configs carry `null` (R59). The `monitor_gates` event's `draw_rate_threshold` field keeps
+  its name and now carries `null` on a disarmed run rather than the retired `0.0` spelling.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

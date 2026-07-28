@@ -142,7 +142,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; 18 assertions, 15+ named errors; single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
-| 5 | run config schema | v2 | pydantic models, extra=forbid; schema_version key in every file |
+| 5 | run config schema | v3 | pydantic models, extra=forbid; schema_version key in every file |
 | 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
@@ -188,6 +188,31 @@ silent drift (R9).
 (unrecoverable); this clause's doc half protects a document with no consumer (recoverable
 staleness). The reading applied here is that **R11 yields nothing and the doc clause defers**.
 That is a dispatcher reading pending operator ratification, not a settled rule.
+
+### AMENDMENT — contract #5 v2 → v3, same shape, same deferred doc half
+
+**WPAX Phase D (card CARD-DRAWRATE-KEY), R65 as re-scoped by R80.** Recorded here rather than
+left as silent drift (R9); the S-4 amendment above is the precedent this follows verbatim.
+
+1. **The bump.** `train.draw_rate_abort` is a NEW **required** field on `RunConfig` — a nested
+   block (`threshold` `gt=0, le=1`, `min_step` `ge=1`, `min_samples` `ge=1, le=DRAW_RATE_
+   WINDOW`) or `null`, which is the EXPLICIT disarmed posture. Incompatible for the same
+   reason S-4's was: a config lacking the key fails to load. Contract #5's row moves
+   **v2 → v3**; the config files' own `schema_version:` file-format pin is unchanged at `1`.
+   A second cross-field rule joins `RunConfig`'s validators: `train.draw_rate_abort.min_step`
+   must be `< train.max_train_steps`, the twin of the actor-lag rule and the same defect class
+   ("armed in the config, absent in effect").
+2. **The doc half is OWED and BLOCKED, and the owner is still WP14.** R11 bars this phase from
+   `docs/contracts/run_config_schema.md` exactly as it barred Phase S, so the same-commit
+   clause is half-kept again: version bumped here, contract doc deferred. The run5-mint
+   checklist item above now covers **two** owed keys — `train.max_train_steps` and
+   `train.draw_rate_abort`.
+3. **Measured consequence, recorded because it moves an operator-facing number.** With run5
+   armed at `min_step: 25000`, the mint preflight's minimum legal `--burst-steps` for
+   `configs/run5.yaml` moves from **101 to 25001**: the burst override shortens
+   `train.max_train_steps`, and every fire-floor in the config must stay inside the run. The
+   tool now enumerates each binding rule with its own floor rather than reporting only the
+   maximum. See IMPL_NOTES_D's STOP-2.
 
 ## 5. Config system
 

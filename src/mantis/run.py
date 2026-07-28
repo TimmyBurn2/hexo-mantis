@@ -17,13 +17,13 @@ actor-lag watchdog callables (`actor_ckpt_step` / learner step) into `build_run_
 from __future__ import annotations
 
 import sys
-from dataclasses import replace as dataclass_replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, NamedTuple, Sequence
 
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
+from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
@@ -80,19 +80,31 @@ def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
     return resolve_actor_sync_cadence(config.train)
 
 
-def _default_step_coordinator_config() -> StepCoordinatorConfig:
-    """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) — no config-key
-    reads here; the remaining ~24 knobs are unauthored code-side defaults owned by
-    R-TRAINCONFIG-SCHEMA / ADJ-08. `stop_step` is the ONE exception and is no longer set
-    from here: `compose_run` overrides it from `train.max_train_steps` (WPAX S-4), so the
-    `stop_step=0` literal below is a placeholder the config always replaces."""
+def _step_coordinator_config(
+    *,
+    stop_step: int,
+    draw_rate_abort: "DrawRateAbortSpec | None",
+) -> StepCoordinatorConfig:
+    """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) for the ~22 knobs
+    R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78) still owns — no config-key reads here.
+
+    The CONFIG-AUTHORED values are PARAMETERS **with no default of their own**. That is not
+    style: a literal the caller always replaces is a second default authority (R1), and so
+    is a parameter default — the authority would merely MIGRATE from the dataclass field to
+    this signature, leaving every `dataclasses.fields()` assertion green while a caller that
+    omits the argument silently inherits a posture (MF-2 Attack B). `tests/config/
+    test_drawrate_arming_authority.py` pins both parameters' `Parameter.empty` for exactly
+    that reason (R83), and the renamed function is the name-truth half (R73): it no longer
+    DEFAULTS the two facts the config authors.
+    """
     return StepCoordinatorConfig(
         eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
         value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
         training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=0, final_eval_drain_timeout_sec=900.0,
+        instrumentation_enabled=False, stop_step=stop_step,
+        draw_rate_abort=draw_rate_abort, final_eval_drain_timeout_sec=900.0,
     )
 
 
@@ -160,13 +172,16 @@ def compose_run(
     # literals. The two used to duplicate config.py's own defaults (900.0/3.0/14400.0/
     # 14400.0) by coincidence; a future default change there would have silently
     # diverged the two (R1: duplicated default authority).
-    # WPAX S-4: stop_step is the ONE run-length authority and now comes from the config
-    # (train.max_train_steps), never from this builder. The remaining ~24 knobs in
-    # _default_step_coordinator_config are still unauthored code-side defaults, owned by
-    # R-TRAINCONFIG-SCHEMA / ADJ-08 — this seam is where they will land.
-    step_coordinator_cfg = dataclass_replace(
-        _default_step_coordinator_config(),
+    # WPAX S-4 + Phase D: `stop_step` (train.max_train_steps) and `draw_rate_abort`
+    # (train.draw_rate_abort) are the two facts the CONFIG authors, and they are PASSED IN
+    # through their own resolvers rather than replaced afterwards — a `dataclass_replace`
+    # over a defaulted object requires a complete object first, i.e. a literal, and a
+    # literal that is always overwritten is still a second default authority (R1). The
+    # remaining ~22 knobs in `_step_coordinator_config` are still unauthored code-side
+    # defaults, owned by R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78).
+    step_coordinator_cfg = _step_coordinator_config(
         stop_step=resolve_max_train_steps(config.train),
+        draw_rate_abort=resolve_draw_rate_abort(config.train),
     )
 
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)

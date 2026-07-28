@@ -76,7 +76,13 @@ Containment is a SUBPROCESS, not a thread: `build_run_safety`'s `exit_fn` is `os
 without unwinding and the evidence report is never written. A tool whose failure mode is
 "no report" cannot report failure.
 
-Exit codes — every outcome NAMED (DESIGN_P §6.3). A child rc in [10, 41] PROPAGATES
+Exit codes (DESIGN_P §6.3). Every outcome this tool DIAGNOSES is NAMED, and rc 1
+`PreflightInternalError` is the catch-all for a failure it does not: RED-TEAM_P's F-4
+measured that an armed-abort row whose `config_path` does not resolve fell into it, so
+"the tool broke" was reported for a one-line manifest defect. That class is now named at
+rc 31 (`ArmingSurfaceMissingError` -> `PreflightManifestError`, WPAX Phase D); rc 1
+remains what it always was — the outcome nobody diagnosed — and a NEW rc-1 is a finding,
+not a routine failure mode. A child rc in [10, 41] PROPAGATES
 UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. 42 / 43 /
 44 / 45 are RESERVED by the run's own machinery and are never emitted by this tool.
 """
@@ -98,6 +104,7 @@ from mantis.config.armed_aborts import (
     MANIFEST,
     PRODUCTION_CONFIGS,
     ArmedAbort,
+    ArmingSurfaceMissingError,
     Status,
     audit_arming,
 )
@@ -598,10 +605,31 @@ def _load(path: Path) -> RunConfig:
         raise PreflightConfigError(f"load_config({str(path)!r}) raised: {exc}") from exc
 
 
+def _burst_floors(config: RunConfig) -> "list[tuple[str, int, int]]":
+    """Every cross-field rule that binds the burst from below: (key, its value, its floor).
+
+    Enumerated rather than folded into one number, because the number alone stopped being
+    enough at WPAX Phase D: a THIRD rule joined the two (`train.draw_rate_abort.min_step`
+    must be inside the run, the twin of the actor-lag rule), and an operator told only the
+    maximum cannot see WHICH rule moved their floor from 101 to 25001. Each row states its
+    own arithmetic, and `_minimum_legal_burst` is their max.
+    """
+    floors = [("monitor.actor_lag_threshold_steps",
+               int(config.monitor.actor_lag_threshold_steps),
+               int(config.monitor.actor_lag_threshold_steps) + 1),
+              ("train.actor_sync_cadence_steps",
+               int(config.train.actor_sync_cadence_steps),
+               int(config.train.actor_sync_cadence_steps) + 1)]
+    block = config.train.draw_rate_abort
+    if block is not None:
+        floors.append(("train.draw_rate_abort.min_step", int(block.min_step),
+                       int(block.min_step) + 1))
+    return floors
+
+
 def _minimum_legal_burst(config: RunConfig) -> int:
-    """The floor the two cross-field validators impose (`config/schema/core.py:280,307,314`)."""
-    return max(int(config.monitor.actor_lag_threshold_steps),
-               int(config.train.actor_sync_cadence_steps)) + 1
+    """The floor the cross-field validators impose (`config/schema/core.py:280,307,314,321`)."""
+    return max(floor for _key, _value, floor in _burst_floors(config))
 
 
 def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
@@ -616,15 +644,16 @@ def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
         return RunConfig.model_validate(raw)
     except Exception as exc:
         minimum = _minimum_legal_burst(config)
+        rules = "".join(
+            f"    {key} ({value}) must be < train.max_train_steps, so its floor is {floor}\n"
+            for key, value, floor in _burst_floors(config)
+        )
         raise PreflightBurstTooShortError(
             f"--burst-steps {int(burst_steps)} does not survive the config's own cross-field "
             f"validators. The MINIMUM legal burst for this config is {minimum}.\n"
-            f"  The binding rule: monitor.actor_lag_threshold_steps "
-            f"({int(config.monitor.actor_lag_threshold_steps)}) and "
-            f"train.actor_sync_cadence_steps "
-            f"({int(config.train.actor_sync_cadence_steps)}) must BOTH be < "
-            f"train.max_train_steps — 'a threshold the run never reaches is an invariant "
-            f"that can never fire' (config/schema/core.py:307,314).\n"
+            f"  The binding rules — 'a threshold the run never reaches is an invariant that "
+            f"can never fire' (config/schema/core.py:307,314,321):\n"
+            f"{rules}"
             f"  Re-run with --burst-steps {minimum} or more.\n"
             f"  Validator said: {exc}",
             minimum=minimum, requested=int(burst_steps),
@@ -642,11 +671,17 @@ def _config_block(path: Path, config: RunConfig) -> dict:
 
 
 # ── assertion (c) + the manifest (§8) ─────────────────────────────────────────────────
-def _print_deferred_rows() -> None:
+def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> None:
     """R56's loud print, on EVERY run including a green one: registered debt that stops
     being visible stops being debt and starts being the status quo
-    (`silent_encoding_gate.py:346-351`, copied in shape, not reinvented)."""
-    deferred = [row for row in MANIFEST if row.status is Status.DEFERRED]
+    (`silent_encoding_gate.py:346-351`, copied in shape, not reinvented).
+
+    `manifest` is a keyword for the same reason `audit_arming` has one: after WPAX Phase D
+    flipped the draw-rate row the SHIPPED manifest holds ZERO deferred rows, so the only way
+    to drive this mechanism — which survives because CARD-COORD-KNOBS (R78/R80) will feed it
+    rows — is on a synthetic one. Keeping a row deferred so an assertion stayed true was
+    REJECTED by R81: it would shape the shipped manifest to suit a test."""
+    deferred = [row for row in manifest if row.status is Status.DEFERRED]
     if not deferred:
         return
     print(f"preflight: {len(deferred)} DEFERRED abort row(s) — NOT audited, owned, not yet "
@@ -708,7 +743,18 @@ def _audit_manifest_and_configs(paths: "list[Path]") -> dict:
     disarmed: list[str] = []
     audit = None
     for path in paths:
-        audit = audit_arming(_load(path))
+        try:
+            audit = audit_arming(_load(path))
+        except ArmingSurfaceMissingError as exc:
+            # F-4, fixed to its class (R71). The shipped module raises the NAMED error; the
+            # tool maps it onto its own already-defined manifest code. Without this the
+            # AttributeError fell through to main's bare `except Exception` and became rc 1
+            # PreflightInternalError — "the tool broke" — for what is a manifest defect the
+            # operator can fix in one line. The message is carried through verbatim so the
+            # row, the full dotted path and the failing segment survive the mapping.
+            raise PreflightManifestError(
+                f"an armed-abort row's arming surface does not resolve on {path.name}: {exc}"
+            ) from exc
         for row in audit.disarmed:
             disarmed.append(f"{path.name}: {row.name} ({row.config_path})")
     if disarmed:
@@ -961,7 +1007,9 @@ def _boot_main(args) -> int:
     """
     import torch
 
-    from mantis.run import _default_step_coordinator_config, compose_run
+    from mantis.config.resolve.draw_rate import resolve_draw_rate_abort
+    from mantis.config.resolve.run_length import resolve_max_train_steps
+    from mantis.run import _step_coordinator_config, compose_run
     from mantis.selfplay.pool import WorkerPool
     from mantis.train.determinism import seed_everything
     from mantis.train.orchestrator import init_trainer
@@ -987,7 +1035,18 @@ def _boot_main(args) -> int:
             "over a resumed trainer measures nothing while looking like the defect it exists "
             "to find (§4.2)"
         )
-    buffer = _build_buffer(booted, int(_default_step_coordinator_config().capacity))
+    # The coordinator config built HERE is CAPACITY-ONLY and is out of the arming class:
+    # `compose_run` builds the real one for itself (R64/O-9), and the test that bans the
+    # token `StepCoordinatorConfig(` from this file is what keeps it going through the
+    # builder. It passes the REAL resolved values rather than a sentinel — the tool has
+    # `booted` in hand, so threading them costs nothing and means no call site anywhere
+    # constructs a coordinator config without going through the resolvers. A default
+    # parameter on the builder is the alternative, and that is exactly the authority
+    # MIGRATION `tests/config/test_drawrate_arming_authority.py` forbids (MF-2 Attack B).
+    buffer = _build_buffer(booted, int(_step_coordinator_config(
+        stop_step=resolve_max_train_steps(booted.train),
+        draw_rate_abort=resolve_draw_rate_abort(booted.train),
+    ).capacity))
     pool = WorkerPool(model=trainer.model, config=booted.model_dump(),
                       device=torch.device(args.device), replay_buffer=buffer,
                       arch=trainer.arch, sink=None, heartbeat=None)
@@ -1267,7 +1326,7 @@ def main(argv: "list[str] | None" = None) -> int:
         name = getattr(exc, "failure_name", type(exc).__name__)
         report.update(verdict="fail", rc=rc, failure=name)
         print(f"PREFLIGHT NOT GREEN: rc {rc} — {name}: {exc}", file=sys.stderr)
-    except Exception as exc:  # noqa: BLE001 — the tool's own failure is NAMED, never bare
+    except Exception as exc:  # noqa: BLE001 — the UNDIAGNOSED outcome, named as such
         rc = PreflightInternalError.rc
         report.update(verdict="fail", rc=rc, failure="PreflightInternalError")
         print(f"PREFLIGHT NOT GREEN: rc {rc} — PreflightInternalError: {exc!r}",

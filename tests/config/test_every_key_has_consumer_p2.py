@@ -13,7 +13,8 @@ guessed): 36 (current) - 1 (selfplay.legal_move_radius_schedule, removed) + 25 (
 25 (selfplay.* scalars) + 8 (selfplay.mcts.*) + 11 (selfplay.playout_cap.*) +
 8 (inference.*) + 27 (monitor.* scalars) + 4 (monitor.drain.*) = 143;
 WP-UNFREEZE adds 3 (K1/K2/K3 actor-sync knobs) = 146; WPAX S-4 adds 1
-(train.max_train_steps) = 147.
+(train.max_train_steps) = 147; WPAX Phase D adds 1 (train.draw_rate_abort — the block is
+ONE leaf, its three inner keys being invisible to `_leaf_paths`) = 148.
 
 Every consumer string below cites the real read site named in DESIGN_P2.md §1.1 (train)/
 §1.2 (selfplay/inference)/§4.2-4.3 (monitor/drain) — not placeholder text.
@@ -73,7 +74,16 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.checkpoint_interval": "TrainHParams.checkpoint_interval -> core.py:432 periodic save trigger",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
-        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step"
+        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
+    # WPAX Phase D (R65/R80): ONE registry leaf, not three. `_leaf_paths` recurses only into
+    # `isinstance(ann, type) and issubclass(ann, BaseModel)`, and `Optional[
+    # DrawRateAbortConfig]` is not a `type`, so `threshold`/`min_step`/`min_samples` are
+    # INVISIBLE to this bijection. That blindness is why
+    # tests/train/test_drawrate_abort_threading.py::
+    # test_all_THREE_block_keys_reach_their_runtime_destination exists: it observes each of
+    # the three at its own call site, which is the LAW-08 coverage this gate cannot give.
+    "train.draw_rate_abort":
+        "resolve_draw_rate_abort -> compose_run -> StepCoordinatorConfig.draw_rate_abort"
         " -> step.py O2 (WPAX S-4)",
     "train.completed_q_values": "TrainHParams.completed_q_values -> core.py:347 CE-vs-KL loss switch; cross-validated",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
@@ -204,11 +214,14 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_147_entries():
+def test_registry_has_exactly_148_entries():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
-    assert len(CONSUMER_REGISTRY) == 147
-    assert len(_leaf_paths(RunConfig)) == 147
+    # WPAX Phase D adds 1 (train.draw_rate_abort — the BLOCK is one leaf; its
+    # three inner keys are invisible to `_leaf_paths`, see the registry note):
+    # 147 + 1 = 148.
+    assert len(CONSUMER_REGISTRY) == 148
+    assert len(_leaf_paths(RunConfig)) == 148
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

@@ -130,13 +130,17 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
     the same test because a gate that only ever says FAIL is as useless as one that only
     ever says PASS."""
     disarmed = audit_arming(load_config(REPO_ROOT / "configs" / "dev_example.yaml"))
-    assert [row.name for row in disarmed.disarmed] == ["actor_lag"], (
-        "a production config with the actor-lag abort disarmed must name that row and only "
-        f"that row; got {[row.name for row in disarmed.disarmed]}"
+    assert [row.name for row in disarmed.disarmed] == ["actor_lag", "draw_rate_collapse"], (
+        "a production config with BOTH hard aborts disarmed must name those rows and only "
+        "those rows. WPAX Phase D (R87 hunk 1): `dev_example.yaml` ships "
+        "`actor_lag_abort_enabled: false` at `:200` AND `train.draw_rate_abort: null` — the "
+        "second is R59's deliberate smoke disarm, made observable by the `null` spelling "
+        "instead of inferable from an absent key. The 'and only those rows' bite is what "
+        f"this expectation keeps; got {[row.name for row in disarmed.disarmed]}"
     )
     assert [row.config_path for row in disarmed.disarmed] == [
-        "monitor.actor_lag_abort_enabled"
-    ], "the disarmed row must carry the dotted arming surface, so the report can name it"
+        "monitor.actor_lag_abort_enabled", "train.draw_rate_abort.threshold"
+    ], "each disarmed row must carry its dotted arming surface, so the report can name it"
 
     armed = audit_arming(load_config(REPO_ROOT / "configs" / "run5.yaml"))
     assert list(armed.disarmed) == [], (
@@ -159,10 +163,21 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
         "run5 with the arming flipped OFF must fail the audit — the audit reads the "
         "validated config object, never the path it came from"
     )
-    dev_armed = smoke_run_config("dev_example.yaml", monitor={"actor_lag_abort_enabled": True})
+    dev_armed = smoke_run_config(
+        "dev_example.yaml",
+        monitor={"actor_lag_abort_enabled": True},
+        # WPAX Phase D (R87 hunk 2): the manifest now carries TWO required rows, so "the
+        # arming flipped ON" means flipping BOTH postures. Leaving the draw-rate block
+        # `null` here would leave the config disarmed on a row this arm expects nothing
+        # from, and the oracle's real subject — value-not-filename — would be lost behind an
+        # unrelated red. The values are the run5 prereg ones; `min_step` is inside
+        # dev_example's own `max_train_steps`, which the twin cross-validator requires.
+        train={"draw_rate_abort": {"threshold": 0.25, "min_step": 25000,
+                                   "min_samples": 50}},
+    )
     assert list(audit_arming(dev_armed).disarmed) == [], (
-        "dev_example with the arming flipped ON must PASS — otherwise the audit is keyed on "
-        "the filename and assertion (c) is decoration"
+        "dev_example with BOTH armings flipped ON must PASS — otherwise the audit is keyed "
+        "on the filename and assertion (c) is decoration"
     )
 
 
@@ -237,7 +252,33 @@ def test_the_manifest_is_not_vacuous() -> None:
             "on a real RunConfig — a manifest row whose arming surface does not exist is a "
             "phantom gate input (R4 / LAW-07)"
         )
-    for row in _deferred():
+    # WPAX Phase D (R87 hunk 3 — THE VACUOUS ONE). This loop iterated `_deferred()`, and
+    # after the flip the shipped manifest holds ZERO deferred rows: it stopped failing by
+    # stopping to say anything, which is worse than red. R87 requires it re-pointed to a live
+    # subject or deleted with grounds, and the subject is live — the DEFERRED machinery
+    # SURVIVES because CARD-COORD-KNOBS (R78/R80) will feed it rows, and `_print_deferred_rows`
+    # was kept for exactly that reason (R81). So the rule "a deferred row's pin must name a
+    # file that exists" is driven on a synthetic row through `_deferred`'s own `manifest`
+    # parameter — the same seam `audit_arming` exposes — and the post-flip fact is asserted
+    # rather than assumed.
+    assert _deferred() == [], (
+        "the shipped manifest holds ZERO deferred rows after Phase D's flip; a row kept "
+        "deferred so this loop had a subject was REJECTED (R81) — the manifest is a "
+        f"mint-read artifact and does not assert dead deferrals (R87); got {_deferred()}"
+    )
+    probe = ArmedAbort(
+        name="_synthetic_deferred_probe", config_path="train.does_not_exist",
+        mechanism=Mechanism.CONFIG_BOOL, status=Status.DEFERRED, exit_code=None,
+        owner="CARD-COORD-KNOBS (R78)",
+        source_pin=("src/mantis/config/armed_aborts.py", "class ArmedAbort"),
+        note="synthetic subject for the deferred-row invariants; not a shipped row.",
+    )
+    deferred_rows = _deferred((*MANIFEST, probe))
+    assert [row.name for row in deferred_rows] == [probe.name], (
+        "`_deferred` selects on `status` and nothing else — a selector that branched on a "
+        f"row's name or returned a constant is what this arm refuses; got {deferred_rows}"
+    )
+    for row in deferred_rows:
         rel, _text = row.source_pin
         assert (REPO_ROOT / rel).is_file(), (
             f"deferred row {row.name!r} pins {rel!r}, which does not exist"
@@ -293,33 +334,51 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
     branch-free path as `CONFIG_BOOL` (`audit_arming` never branches on `name`), and a
     mechanism that returned a constant would pass only one of the two.
     """
-    deferred = _deferred()
-    assert len(deferred) == 1, (
-        f"§8.2 ships exactly one deferred row (draw_rate_collapse); got "
-        f"{[row.name for row in deferred]}"
+    # WPAX Phase D (R87 hunk 4). Phase D HAS landed, so the shipped manifest holds zero
+    # deferred rows and `len(deferred) == 1` reds. What this test proves survives the flip
+    # unchanged and is the reason it is kept rather than deleted: `audit_arming` DISPATCHES
+    # ON DATA — `status` selects the list, `mechanism` selects the predicate — and no
+    # function branches on a row's name. That claim needs a row to flip, so the subject is
+    # synthetic and the drive is otherwise identical.
+    assert _deferred() == [], (
+        "the flip is landed: the shipped manifest carries no deferred row (R87's own "
+        f"grounds — a mint-read artifact does not assert dead deferrals); got {_deferred()}"
     )
-    row = deferred[0]
+    row = ArmedAbort(
+        name="draw_rate_collapse", config_path="train.draw_rate_abort.threshold",
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO, status=Status.DEFERRED,
+        exit_code=None, owner="CARD-COORD-KNOBS (R78)",
+        source_pin=("src/mantis/run.py", "def compose_run"),
+        note="synthetic pre-flip subject; the shipped row is REQUIRED since Phase D.",
+    )
+    assert [other.name for other in _deferred((*MANIFEST, row))] == [row.name], (
+        "the DEFERRED machinery still works and still selects on status alone — that is what "
+        "makes the flip below a DATA edit rather than a code change"
+    )
     flipped = ArmedAbort(
         name=row.name, config_path=row.config_path, mechanism=row.mechanism,
         status=Status.REQUIRED, exit_code=row.exit_code, owner=None, source_pin=None,
         note=row.note,
     )
-    manifest = tuple(flipped if other is row else other for other in MANIFEST)
+    manifest = tuple(flipped if other.name == row.name else other for other in MANIFEST)
 
-    def _future_config(threshold: float):
-        """The shape Phase D's schema extension will produce. A stub, not a RunConfig:
-        `train.step_coordinator.draw_rate_threshold` does not exist yet — that absence IS
-        the DEFERRED row's reason (ADJ-08)."""
+    def _future_config(threshold: "float | None"):
+        """The shape Phase D's schema extension DID produce. A stub, not a RunConfig — the
+        `RunConfig` drive is `tests/config/test_drawrate_arming_authority.py`'s O-D3, which
+        exists because a stub built FROM `config_path` cannot disagree with it."""
         return SimpleNamespace(
             monitor=SimpleNamespace(actor_lag_abort_enabled=True),
-            train=SimpleNamespace(step_coordinator=SimpleNamespace(
-                draw_rate_threshold=threshold)),
+            train=SimpleNamespace(
+                draw_rate_abort=None if threshold is None
+                else SimpleNamespace(threshold=threshold)),
         )
 
-    off = audit_arming(_future_config(0.0), manifest=manifest)
+    off = audit_arming(_future_config(None), manifest=manifest)
     assert [r.name for r in off.disarmed] == [row.name], (
-        "with the row flipped to `required` and the threshold at the code-side 0.0 literal "
-        f"R65 kills, the audit must report it disarmed; got {[r.name for r in off.disarmed]}"
+        "with the row flipped to `required` and the block EXPLICITLY disarmed, the audit "
+        "must report it disarmed. N-c: the off arm is `None`, not `0.0` — under `gt=0, le=1` "
+        "the system can no longer PRODUCE `0.0`, so an assertion over it would assert "
+        f"behaviour on an unreachable value; got {[r.name for r in off.disarmed]}"
     )
     on = audit_arming(_future_config(0.15), manifest=manifest)
     assert list(on.disarmed) == [], (

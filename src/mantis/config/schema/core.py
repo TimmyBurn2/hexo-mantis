@@ -318,4 +318,18 @@ class RunConfig(StrictModel):
                 f"({total}): a threshold the run never reaches is an invariant that can "
                 f"never fire — armed in the config, absent in effect"
             )
+        # WPAX Phase D (R83, R71's class-fix law): the TWIN of the rule above, on the
+        # draw-rate abort's own step floor. `min_step >= max_train_steps` is a guard the
+        # run never passes, so the row audits ARMED while the abort can never fire — the
+        # same defect, on a third axis (the first two are `threshold > 1.0` and
+        # `min_samples > DRAW_RATE_WINDOW`, both closed at the type in schema/train.py).
+        # `None` is the EXPLICIT disarmed posture and is skipped: there is no floor to
+        # place inside the run when the operator has declined to arm the abort.
+        block = self.train.draw_rate_abort
+        if block is not None and block.min_step >= total:
+            raise ValueError(
+                f"train.draw_rate_abort.min_step ({block.min_step}) must be < "
+                f"train.max_train_steps ({total}): a step floor the run never reaches is "
+                f"an invariant that can never fire — armed in the config, absent in effect"
+            )
         return self

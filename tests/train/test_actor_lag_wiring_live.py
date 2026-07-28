@@ -107,14 +107,18 @@ class _Buffer:
     def save_to_path(self, p) -> None: ...
 
 
-def _bounded_config() -> StepCoordinatorConfig:
+def _bounded_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
     return StepCoordinatorConfig(
         eval_interval=0, log_interval=1, checkpoint_interval=0, composition_interval=0,
         value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
         training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
+        # WPAX Phase D: `draw_rate_abort` is a required parameter with no default
+        # and is passed THROUGH; `stop_step` stays the harness's own bound, which
+        # is this patch's stated reason for existing.
         instrumentation_enabled=False, stop_step=_STOP_STEP,
+        draw_rate_abort=draw_rate_abort,
         final_eval_drain_timeout_sec=900.0,
     )
 
@@ -146,7 +150,7 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, *, abort
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _capture)
-    monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _bounded_config)
+    monkeypatch.setattr(mantis.run, "_step_coordinator_config", _bounded_config)
     mantis.run.compose_run(
         config=smoke_run_config(
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},

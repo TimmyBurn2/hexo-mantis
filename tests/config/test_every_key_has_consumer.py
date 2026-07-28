@@ -82,7 +82,16 @@ CONSUMER_REGISTRY = {
     "train.checkpoint_interval": "TrainHParams.from_config -> Trainer periodic-save gate",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
-        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step"
+        "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
+    # WPAX Phase D (R65/R80): ONE registry leaf, not three. `_leaf_paths` recurses only into
+    # `isinstance(ann, type) and issubclass(ann, BaseModel)`, and `Optional[
+    # DrawRateAbortConfig]` is not a `type`, so `threshold`/`min_step`/`min_samples` are
+    # INVISIBLE to this bijection. That blindness is why
+    # tests/train/test_drawrate_abort_threading.py::
+    # test_all_THREE_block_keys_reach_their_runtime_destination exists: it observes each of
+    # the three at its own call site, which is the LAW-08 coverage this gate cannot give.
+    "train.draw_rate_abort":
+        "resolve_draw_rate_abort -> compose_run -> StepCoordinatorConfig.draw_rate_abort"
         " -> step.py O2 (WPAX S-4)",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
@@ -219,7 +228,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_147_entries():
+def test_registry_has_exactly_148_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
@@ -232,8 +241,11 @@ def test_registry_has_exactly_147_entries():
     # WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
     # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146. WPAX S-4 adds 1
     # (train.max_train_steps, the run-length authority): 146 + 1 = 147.
-    assert len(CONSUMER_REGISTRY) == 147
-    assert len(_leaf_paths(RunConfig)) == 147
+    # WPAX Phase D adds 1 (train.draw_rate_abort — the BLOCK is one leaf; its
+    # three inner keys are invisible to `_leaf_paths`, see the registry note):
+    # 147 + 1 = 148.
+    assert len(CONSUMER_REGISTRY) == 148
+    assert len(_leaf_paths(RunConfig)) == 148
 
 
 def test_no_forward_reference_strings_in_registry():

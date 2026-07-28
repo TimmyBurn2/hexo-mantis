@@ -103,6 +103,7 @@ train:
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
   max_train_steps: 1000000
+  draw_rate_abort: null
   completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution

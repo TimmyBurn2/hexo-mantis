@@ -17,6 +17,7 @@ import threading
 from collections import deque
 from typing import Any
 
+from mantis.util.constants import DRAW_RATE_WINDOW as _DRAW_RATE_WINDOW
 from mantis.util.coordinates import axial_distance
 
 # I1 colony-extension detector. Hex distance threshold above which a stone is
@@ -278,7 +279,7 @@ class PoolInstrumentation:
         self._log_investigation_metrics = log_investigation_metrics
         # Rolling window of last ≤100 completed game move histories.
         self._recent_move_histories: deque[list[tuple[int, int]]] = deque(maxlen=100)
-        # Per-worker rolling last-50-game outcomes (1=draw, 0=decisive).
+        # Per-worker rolling last-`_DRAW_RATE_WINDOW`-game outcomes (1=draw, 0=decisive).
         self._per_worker_draws: dict[int, deque[int]] = {}
         # Cumulative terminal-reason counts (0=six 1=colony 2=cap 3=other_draw).
         self._terminal_reason_counts: dict[int, int] = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -320,7 +321,8 @@ class PoolInstrumentation:
                 self._terminal_reason_counts.get(int(terminal_reason), 0) + 1
             )
             is_draw_outcome = 1 if winner_code == 0 else 0
-            dq = self._per_worker_draws.setdefault(int(worker_id), deque(maxlen=50))
+            dq = self._per_worker_draws.setdefault(
+                int(worker_id), deque(maxlen=_DRAW_RATE_WINDOW))
             dq.append(is_draw_outcome)
             self._mv_range_history.append(
                 (int(mv_min), int(mv_max), int(mv_distinct),
@@ -362,12 +364,25 @@ class PoolInstrumentation:
             sr = sorted(self._stride5_run_history)
         return sr[max(0, int(len(sr) * 0.9) - 1)]
 
-    def per_worker_draw_rates(self, lock: threading.Lock) -> dict[int, float]:
-        """Class-1: rolling last-50-game draw rate per worker."""
+    def per_worker_draw_rates(
+        self, lock: threading.Lock, *, min_samples: int,
+    ) -> dict[int, float]:
+        """Class-1: rolling draw rate per worker over the last <= `_DRAW_RATE_WINDOW`
+        completed games, for workers with at least `min_samples` of them.
+
+        R80/ADJ-14: the inclusion rule is the ESTIMATOR's own guard and it has NO default.
+        It was `len(dq) > 0` — ONE game — so a single drawn game per worker read as a pool
+        draw rate of 1.0, the maximum the metric can take, at or above every legal
+        threshold, at every worker count (the pool statistic is an unweighted mean, so more
+        workers cannot dilute it). `min_samples` is config-authored
+        (`train.draw_rate_abort.min_samples`, resolved by
+        `mantis.config.resolve.draw_rate`); a default here would be a second authority over
+        it (R1), and the value that default would take — 1 — is exactly the defect.
+        """
         with lock:
             out: dict[int, float] = {}
             for wid, dq in self._per_worker_draws.items():
-                if len(dq) > 0:
+                if len(dq) >= min_samples:
                     out[wid] = sum(dq) / len(dq)
             return out
 

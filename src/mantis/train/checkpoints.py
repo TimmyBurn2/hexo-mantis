@@ -685,6 +685,10 @@ def strip_and_restamp(
             "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
             "max_train_steps": 1_000_000,  # WPAX S-4: required run-length key
+            # WPAX Phase D (R65/R80): required key, no code-side default. `None` is the
+            # EXPLICIT disarmed posture, which is the correct placeholder for a payload
+            # that is not a run: a synthetic config must never claim an armed abort.
+            "draw_rate_abort": None,
             "completed_q_values": False,
             "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
             "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,

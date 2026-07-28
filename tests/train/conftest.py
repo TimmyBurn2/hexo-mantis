@@ -165,6 +165,9 @@ def _make_train_block(**over: Any) -> dict[str, Any]:
         "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
         "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
         "actor_sync_cadence_steps": 1, "max_train_steps": 1_000_000,
+        # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
+        # EXPLICIT disarmed posture (R79(1)).
+        "draw_rate_abort": None,
         "completed_q_values": False,
         "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
         "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,

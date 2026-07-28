@@ -104,6 +104,14 @@ train:
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
   max_train_steps: 1000000
+  # WPAX Phase D (R65/R80/R79+R83): the draw-rate collapse hard abort's terms.
+  # `null` is the EXPLICIT off posture and is what the TEMPLATE ships, matching the
+  # conservative `monitor.actor_lag_abort_enabled: false` precedent — a production
+  # config ARMS it with one whole-block mint delta, e.g.
+  #   --set 'train.draw_rate_abort={threshold: 0.25, min_step: 25000, min_samples: 50}'
+  # The three travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
+  # (R82/R85) — never hand-edited in a minted file (R1).
+  draw_rate_abort: null
   completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution

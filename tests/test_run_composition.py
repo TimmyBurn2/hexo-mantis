@@ -63,7 +63,7 @@ def _bounded(smoke_run_config, **monitor_over):
     )
 
 
-def _no_terminal_eval_config() -> StepCoordinatorConfig:
+def _no_terminal_eval_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
     """The ONE builder patch the `eval_enabled=True` drives below still need. The production
     builder defaults `terminal_eval_enabled=True`, so `close_out` runs a terminal eval round
     that reaches `eval/snapshot.py`'s `.arch` read on a fake model. That knob has NO config
@@ -78,7 +78,12 @@ def _no_terminal_eval_config() -> StepCoordinatorConfig:
         training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=0, final_eval_drain_timeout_sec=900.0,
+        # WPAX Phase D: the two CONFIG-AUTHORED values arrive as required keyword
+        # parameters and are passed THROUGH — a harness builder that swallowed them
+        # would be a stand-in dictating a config fact, which is what this delta ends.
+        instrumentation_enabled=False, stop_step=stop_step,
+        draw_rate_abort=draw_rate_abort,
+        final_eval_drain_timeout_sec=900.0,
     )
 
 
@@ -99,7 +104,7 @@ def _patch_eval_side(monkeypatch, capture: dict | None = None):
         )
 
     monkeypatch.setattr(mantis.run, "build_eval_pipeline", _fake_build_eval_pipeline)
-    monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _no_terminal_eval_config)
+    monkeypatch.setattr(mantis.run, "_step_coordinator_config", _no_terminal_eval_config)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",
         lambda **_kw: SimpleNamespace(best_model=None, best_model_step=None,

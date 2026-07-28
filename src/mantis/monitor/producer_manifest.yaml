@@ -22,9 +22,11 @@ gates:
       feeds_from: mantis.selfplay.pool.WorkerPool.per_worker_draw_rates
     note: >-
       keyed on the LIVE per-worker draw rates, NEVER the NaN draw-target phantom at
-      pool_push.py:135 (whose token is grep-banned in this file too — O-15). Ships
-      threshold 0.0 = OFF until the run5 mint (R-MONITORCONFIG-SCHEMA); the inert state
-      is named in every `monitor_gates` event.
+      pool_push.py:135 (whose token is grep-banned in this file too — O-15). Armed BY
+      THE CONFIG since WPAX Phase D (`train.draw_rate_abort`, R65/R80): run5 arms it at
+      threshold 0.25 / min_step 25000 / min_samples 50, and `null` is the explicit OFF
+      posture the four non-production configs carry. The live posture is named in every
+      `monitor_gates` event.
     producer_test: tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer
 
   # (stride5_spam gate REMOVED at close-out per operator directive B — stride5-spam is a

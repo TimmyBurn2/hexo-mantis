@@ -254,7 +254,10 @@ def check_draw_rate_collapse(
     ``history`` is the caller-owned series of ``recent_pool_draw_rate(pool.
     per_worker_draw_rates())`` samples — the LIVE producer. The NaN draw-target phantom
     input at `pool_push.py:135` is NEVER keyed on here (O-15 grep-ban, which bans even the
-    token). ``threshold <= 0`` disables the gate (shipped WP10 default 0.0 = OFF, §f R9).
+    token). ``threshold <= 0`` is a LIBRARY guard with its own tests; it is unreachable
+    from production since WPAX Phase D, where arming became a property of the resolved
+    `train.draw_rate_abort` value (`None` = off) and the caller stopped passing a
+    disabling number (R65/R79/R80).
     """
     if threshold <= 0 or consec <= 0 or len(history) < consec:
         return None

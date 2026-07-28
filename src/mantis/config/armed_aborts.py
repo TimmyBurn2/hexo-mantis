@@ -1,3 +1,9 @@
+# R8 >300 justify (324): the manifest ROWS are data and their reason text IS the row —
+# `note` is a live consumer's field, printed by gate 12 on every run, not a comment that
+# can be trimmed. The two walkers below (`_dotted`, `audit_arming`) are ~35 lines of code
+# carrying the F-4 named-arm and disarmed-short-circuit rationale; splitting them from the
+# rows they walk would put "which aborts must arm" and the predicate that reads it on
+# opposite sides of an import, which is the drift this module exists to prevent.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -59,10 +65,18 @@ class Mechanism(str, Enum):
 class ArmedAbort:
     """One row: an abort, the config surface that arms it, and its ownership posture.
 
-    `owner` and `source_pin` are REQUIRED on a DEFERRED row and FORBIDDEN on a REQUIRED one.
-    Each of the three ways those can disagree is a way for the deferred row to go invisible:
-    an owner-less deferred row has nobody to chase, a pin-less one is not tamper-evident,
-    and a required row carrying an owner reads as already-excused.
+    `owner` and `source_pin` are REQUIRED on a DEFERRED row; `owner` is FORBIDDEN on a
+    REQUIRED one and `source_pin` is UNCONSTRAINED there. Each of the three rules
+    `__post_init__` enforces is a way for a row to go invisible: an owner-less deferred row
+    has nobody to chase, a pin-less one is not tamper-evident, and a required row carrying
+    an owner reads as already-excused.
+
+    N-1 (WPAX Phase D, R73): this sentence used to say `source_pin` was FORBIDDEN on a
+    REQUIRED row. That was FALSE — `__post_init__` never constrained it — and acting on it
+    would have dropped the draw-rate pin at Phase D's flip, leaving the newly-REQUIRED row
+    with no tamper-evidence exactly as it started gating a production mint, and silently
+    emptying the two pin-scan tests that stand on "no pinned row means this test has no
+    subject". A REQUIRED row MAY keep a pin, and this one does.
     """
 
     name: str
@@ -120,20 +134,25 @@ MANIFEST: tuple[ArmedAbort, ...] = (
     ),
     ArmedAbort(
         name="draw_rate_collapse",
-        config_path="train.step_coordinator.draw_rate_threshold",
+        config_path="train.draw_rate_abort.threshold",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
-        status=Status.DEFERRED,
+        status=Status.REQUIRED,
         exit_code=None,
-        owner="R-TRAINCONFIG-SCHEMA / CARD-DRAWRATE-KEY (R65)",
+        owner=None,
         source_pin=(
-            "src/mantis/train/coordinator/config.py",
-            "draw_rate_threshold: float = 0.0",
+            "src/mantis/run.py",
+            "draw_rate_abort=resolve_draw_rate_abort(config.train)",
         ),
         note=(
-            "The arming surface DOES NOT EXIST as a config key yet — the threshold is an "
-            "unauthored code-side default on StepCoordinatorConfig (ADJ-08). The pin goes "
-            "RED the moment Phase D deletes that literal, which is the forcing function "
-            "that makes this row's flip to REQUIRED unforgettable."
+            "The self-play draw-rate collapse hard abort. Armed on configs/run5.yaml at "
+            "threshold 0.25 (R82) with min_step 25000 / min_samples 50 (R80 guards), all "
+            "three pre-registered at mint prereg. The pin binds to the THREADING at the "
+            "construction site, so deleting it, renaming the resolver or reordering the "
+            "call past it all break the R56 scan. exit_code is None because the gate stops "
+            "the run cooperatively (shutdown.running = False) and NO distinct process exit "
+            "code exists — a fired abort is indistinguishable by exit status from a clean "
+            "run. That is TRUTHFUL, not an omission: R84 ratified it and opened "
+            "CARD-ABORT-EXIT (pre-run5-mint, BLOCKING) as the one authorized flip."
         ),
     ),
 )
@@ -228,10 +247,57 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _dotted(obj: Any, path: str) -> Any:
-    """Walk a dotted path into a validated config object."""
+class ArmingSurfaceMissingError(AttributeError):
+    """A row's `config_path` does not resolve on a real `RunConfig` (RED-TEAM_P F-4).
+
+    Subclasses `AttributeError` deliberately: `_dotted`'s failure has always been one, so
+    every existing caller keeps its behaviour and nothing that catches `AttributeError`
+    today starts leaking this one. What changes is that the failure is NAMED and carries
+    the three things an operator needs — WHICH ROW is broken, WHAT PATH it declared, and
+    WHICH SEGMENT of that path does not exist. Pydantic's `BaseModel.__getattr__` supplies
+    only the last, and `preflight_mint.main`'s handler chain then lost even that, collapsing
+    the whole class into rc 1 `PreflightInternalError` — the one outcome that tool's own
+    docstring says cannot exist. The tool maps this to `PreflightManifestError`, rc 31.
+
+    Written to the CLASS, not to one row (R71): the same route swallows a typo in ANY row's
+    `config_path`.
+    """
+
+
+def _dotted(obj: Any, path: str, *, row: str = "<unnamed row>") -> Any:
+    """Walk a dotted path into a validated config object.
+
+    Two arms beyond the plain walk, and each is load-bearing:
+
+    * a MISSING attribute raises `ArmingSurfaceMissingError` naming the row, the full path
+      and the failing segment. `try/except AttributeError` PER SEGMENT rather than a
+      `hasattr` pre-check, because only the former can say which segment failed and because
+      the AttributeError comes from pydantic's `BaseModel.__getattr__`, not a plain lookup;
+    * a `None` met MID-WALK is an EXPLICITLY DISARMED block and short-circuits to `None`.
+      Without it a legitimately disarmed config — `train.draw_rate_abort: null`, the posture
+      R59 permits for smoke configs and four of the five committed configs carry — would
+      raise `'NoneType' object has no attribute 'threshold'` and fail gate 12 at rc 31
+      instead of being reported DISARMED.
+
+    DISCLOSED RESIDUAL: a typo AFTER a legitimately-`None` segment reports "disarmed"
+    rather than raising, because the walk short-circuits before reaching it. It is caught
+    where it gates — `PRODUCTION_CONFIGS` is run5 and run5 is ARMED, so the walk reaches the
+    leaf and the typo raises. Both arms are pinned by
+    `tests/tools/test_drawrate_arming_surface_named_failure.py`.
+    """
     for part in path.split("."):
-        obj = getattr(obj, part)
+        if obj is None:
+            return None
+        try:
+            obj = getattr(obj, part)
+        except AttributeError as exc:
+            raise ArmingSurfaceMissingError(
+                f"armed-abort row {row!r} declares config_path {path!r}, but segment "
+                f"{part!r} is absent on {type(obj).__name__}: a manifest row whose arming "
+                "surface does not exist on a real RunConfig is a phantom gate input "
+                "(R4 / LAW-07), and it must be a NAMED failure rather than the tool's own "
+                "unnamed internal error"
+            ) from exc
     return obj
 
 
@@ -245,7 +311,8 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
     required = tuple(row for row in manifest if row.status is Status.REQUIRED)
     deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
     disarmed = tuple(
-        row for row in required if not row.mechanism.is_armed(_dotted(config, row.config_path))
+        row for row in required
+        if not row.mechanism.is_armed(_dotted(config, row.config_path, row=row.name))
     )
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
 
@@ -255,6 +322,7 @@ __all__ = [
     "MANIFEST",
     "PRODUCTION_CONFIGS",
     "ArmedAbort",
+    "ArmingSurfaceMissingError",
     "AuditResult",
     "Mechanism",
     "Status",

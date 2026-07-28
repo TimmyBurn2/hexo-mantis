@@ -53,7 +53,9 @@ is this the only witness to" rationale LAW-07 requires.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -64,7 +66,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from mantis.config.armed_aborts import EXEMPT_CONFIGS, MANIFEST, PRODUCTION_CONFIGS
+from mantis.config.armed_aborts import (
+    EXEMPT_CONFIGS,
+    MANIFEST,
+    PRODUCTION_CONFIGS,
+    ArmedAbort,
+    Mechanism,
+    Status,
+    audit_arming,
+)
 from mantis.config.loader import discover_configs, load_config
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
@@ -76,6 +86,14 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 #: run5's own constants, read from the file rather than restated (§14 item 17 / ADJ-12).
 RUN5 = REPO_ROOT / "configs" / "run5.yaml"
 _N = 101
+#: WPAX Phase D: the burst floor for `configs/run5.yaml` MOVED. run5 now arms the draw-rate
+#: abort at `min_step: 25000`, and the same cross-field rule that binds
+#: `monitor.actor_lag_threshold_steps` inside the run binds this floor too — so a burst the
+#: run5 step floor never reaches is refused at rc 11, exactly as a burst below the lag
+#: threshold is. `_N` stays 101 for every drive that is about the a/b assertion arithmetic;
+#: the drives that push a REAL `configs/run5.yaml` through `_apply_burst_override` use this.
+#: (Measured, not assumed: `max(100, 1, 25000) + 1`.)
+_RUN5_BURST = 25001
 
 
 def _load_tool():
@@ -242,7 +260,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     the docstring's HEAD claim has expired.
     """
     out_dir = tmp_path / "boot"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_N),
+    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "240", "--device", "cpu")
     assert result.returncode == 33, (
         "the documented HEAD outcome is rc 33 PreflightBootFailedError on TD-4; got "
@@ -325,10 +343,16 @@ def test_the_source_pin_scan_runs_inside_the_live_audit_path(tmp_path) -> None:
     deleting the call left the whole default tier green (1773 passed) with the report still
     claiming the scan had run.
 
-    §8.4 calls this scan "the forcing function that makes Phase D's flip unforgettable": when
-    R65's Phase D deletes `draw_rate_threshold: float = 0.0`, gate 12 must go RED. This test
-    is that claim, driven end to end — delete the pinned literal from the tree and the GATE
-    fails, not merely a helper function.
+    §8.4 called this scan "the forcing function that makes Phase D's flip unforgettable", and
+    it did that job: the pin fired on the deletion of `draw_rate_threshold: float = 0.0`.
+    WPAX Phase D has now landed, so the pin's subject MOVED with it rather than retiring —
+    it binds to the THREADING at the construction site
+    (`src/mantis/run.py`, `draw_rate_abort=resolve_draw_rate_abort(config.train)`), which is
+    what keeps the newly-REQUIRED row tamper-evident while it gates a production mint. The
+    claim driven here is unchanged and is read off the manifest, never hardcoded: delete the
+    pinned text from the tree and the GATE fails, not merely a helper function. (N-1: a
+    REQUIRED row MAY carry a pin — `__post_init__` never forbade it, whatever the class
+    docstring used to say.)
     """
     root = _mini_tree(tmp_path)
     pinned = [row for row in MANIFEST if row.source_pin is not None]
@@ -526,8 +550,16 @@ def test_the_manifest_vacuity_guard_fires_before_anything_indexes_the_paths(
         TOOL._run_audit(args, report)
 
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", tuple(PRODUCTION_CONFIGS))
-    monkeypatch.setattr(TOOL, "MANIFEST",
-                        tuple(row for row in MANIFEST if row.status.value == "deferred"))
+    # WPAX Phase D: this used to filter the SHIPPED manifest down to its deferred rows. After
+    # the flip that filter yields `()`, so the arm would have proved the EMPTY case — which
+    # the arm above already proves — and silently lost its own subject: "a manifest that has
+    # rows, none of them REQUIRED". The synthetic row restores exactly that subject.
+    deferred_only = (_SYNTHETIC_DEFERRED,)
+    assert deferred_only and not [row for row in deferred_only
+                                  if row.status.value == "required"], (
+        "harness precondition: the subject is a NON-EMPTY manifest with no required row"
+    )
+    monkeypatch.setattr(TOOL, "MANIFEST", deferred_only)
     with pytest.raises(TOOL.PreflightManifestError) as caught:
         TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
     assert "vacuous" in str(caught.value), (
@@ -536,12 +568,43 @@ def test_the_manifest_vacuity_guard_fires_before_anything_indexes_the_paths(
     )
 
 
+#: WPAX Phase D re-basing (R81's shape, applied to this family). The flip left the SHIPPED
+#: manifest with ZERO deferred rows, so `assert deferred, "no deferred row means this test
+#: has no subject"` below went red — the four pins lost their subject, not their point.
+#: `_print_deferred_rows` SURVIVES (R81 rules it explicitly: CARD-COORD-KNOBS will feed it
+#: rows), so the mechanism is driven on a synthetic row through the `manifest=` keyword the
+#: tool now exposes — the same seam `audit_arming` already had. Keeping a shipped row
+#: deferred so these assertions stayed true was REJECTED: it would shape the manifest a mint
+#: reads to suit a test.
+_SYNTHETIC_DEFERRED = ArmedAbort(
+    name="_synthetic_deferred_probe",
+    config_path="train.does_not_exist",
+    mechanism=Mechanism.CONFIG_BOOL,
+    status=Status.DEFERRED,
+    exit_code=None,
+    owner="CARD-COORD-KNOBS (R78)",
+    source_pin=("src/mantis/run.py", "def compose_run"),
+    note="synthetic subject for R56's loud-debt mechanism; not a shipped row.",
+)
+
+
 @pytest.fixture(scope="module")
 def audit_stdout() -> str:
-    """One `--audit-only` drive, shared by the four field pins below."""
-    result = _run_tool("--audit-only")
-    assert result.returncode == 0, (result.stdout + result.stderr)[-2000:]
-    return result.stdout
+    """R56's loud print, driven on the synthetic deferred row, shared by the four field pins.
+
+    In-process rather than through a subprocess `--audit-only`: after the flip the shipped
+    manifest prints nothing at all, so a real run carries no subject. What is under test is
+    the PRINT, and it is driven directly at the seam that exists for it.
+    """
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        TOOL._print_deferred_rows(manifest=(_SYNTHETIC_DEFERRED,))
+    printed = buffer.getvalue()
+    assert "DEFERRED" in printed, (
+        "the loud print must fire on a manifest that DOES carry debt — if this is empty the "
+        f"mechanism is dead and all four pins below are vacuous; got {printed!r}"
+    )
+    return printed
 
 
 #: field -> (what the print must carry, why dropping it makes the row un-chaseable).
@@ -567,8 +630,11 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
     ways of hollowing the print share ONE failure signature and the report cannot say which
     field went missing. One pin per field, so each drop dies alone.
     """
-    deferred = [row for row in MANIFEST if row.status.value == "deferred"]
-    assert deferred, "no deferred row means this test has no subject"
+    assert [row for row in MANIFEST if row.status.value == "deferred"] == [], (
+        "the post-flip fact this re-basing rests on: the SHIPPED manifest holds zero "
+        "deferred rows, which is why the subject below is synthetic (WPAX Phase D / R81)"
+    )
+    deferred = [_SYNTHETIC_DEFERRED]
     for row in deferred:
         if field == "owner":
             needle = f"{row.name}  owner={row.owner}"
@@ -584,7 +650,9 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
         )
 
 
-def test_the_report_publishes_the_audits_own_deferred_and_required_rows(tmp_path) -> None:
+def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
+    tmp_path, monkeypatch,
+) -> None:
     """RR-07 + the `exit_code` half of SF-I4.
 
     `AuditResult.deferred` had **no live consumer**: the tool re-derived the list from
@@ -599,9 +667,29 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(tmp_path
     manifest = report["manifest"]
     assert [row["name"] for row in manifest["deferred"]] == [
         row.name for row in MANIFEST if row.status.value == "deferred"
-    ], f"the report's deferred block must be the audit's; got {manifest['deferred']!r}"
+    ] == [], (
+        "WPAX Phase D: after the flip the SHIPPED manifest holds ZERO deferred rows, and the "
+        "report must say so rather than omit the block. Stated as an EQUALITY to `[]` on "
+        f"purpose — see below; got {manifest['deferred']!r}"
+    )
+    # …and the field-completeness claim moves onto a manifest that HAS a deferred row. Left
+    # against the shipped one it became `all(...)` over an empty list — an assertion whose
+    # subject vanished, which passes forever and witnesses nothing (LAW-07's own species,
+    # and the shape REVIEW-impl caught in Phase P). `audit_arming`'s `manifest=` default is
+    # bound at DEF time, so BOTH the module attribute and the kwdefault are rebound (F-2).
+    probe_manifest = (*MANIFEST, _SYNTHETIC_DEFERRED)
+    monkeypatch.setattr(TOOL, "MANIFEST", probe_manifest)
+    monkeypatch.setitem(audit_arming.__kwdefaults__, "manifest", probe_manifest)
+    with_debt = TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
+    assert [row["name"] for row in with_debt["deferred"]] == [_SYNTHETIC_DEFERRED.name], (
+        "the published deferred block is read from `AuditResult.deferred`, so a manifest "
+        f"carrying debt must publish it; got {with_debt['deferred']!r}"
+    )
     assert all(row["note"] and row["owner"] and row["source_pin"]
-               for row in manifest["deferred"])
+               for row in with_debt["deferred"]), (
+        "every published deferred row must carry the three fields that make it chaseable: "
+        f"without them the report records a row nobody can act on; got {with_debt['deferred']!r}"
+    )
     assert [row["name"] for row in manifest["required_rows"]] == manifest["required"], (
         "the two required views are one authority and must not drift"
     )
@@ -1851,7 +1939,7 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     what proves the derived sentence survives the real process, on a real artefact.
     """
     out = tmp_path / "boot"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_N),
+    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out), "--timeout-sec", "240", "--device", "cpu")
     assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
     report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
@@ -2130,8 +2218,20 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     # The swap, exactly as an unwitting editor would write it: run5 moves to EXEMPT with a
     # written reason, and an ARMED smoke config takes its place on the production side.
     smoke = root / "configs" / "smoke_gnn.yaml"
-    smoke.write_text(smoke.read_text().replace("actor_lag_abort_enabled: false",
-                                               "actor_lag_abort_enabled: true"))
+    # WPAX Phase D: "an ARMED smoke config" now means armed on BOTH required rows — the
+    # draw-rate row joined the manifest, and a smoke config ships it `null` (R59). Arming it
+    # here keeps the ESCAPE this test demonstrates intact: if the promoted config were
+    # disarmed on either row the swap would fail the audit for its OWN reason and the escape
+    # would look closed by something other than the by-name pin. `min_step` is 1 because this
+    # config's `max_train_steps` is 2000 and the twin cross-validator binds it inside the run.
+    smoke.write_text(smoke.read_text()
+                     .replace("actor_lag_abort_enabled: false",
+                              "actor_lag_abort_enabled: true")
+                     .replace("draw_rate_abort: null",
+                              "draw_rate_abort:\n"
+                              "    threshold: 0.25\n"
+                              "    min_step: 1\n"
+                              "    min_samples: 50"))
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", ("configs/smoke_gnn.yaml",))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
                         (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],
@@ -2549,7 +2649,7 @@ def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_e
     monkeypatch.setattr(TOOL, "_child_argv",
                         lambda args: [sys.executable, "-c", _SCAN_CHILD, str(out_dir), mode])
     report = TOOL._new_report("preflight")
-    args = SimpleNamespace(config=str(RUN5), burst_steps=_N, out_dir=str(out_dir),
+    args = SimpleNamespace(config=str(RUN5), burst_steps=_RUN5_BURST, out_dir=str(out_dir),
                            timeout_sec=120.0, device="cpu")
     with pytest.raises(TOOL.PreflightWatchdogFiredError) as caught:
         TOOL._run_preflight(args, report, out_dir)

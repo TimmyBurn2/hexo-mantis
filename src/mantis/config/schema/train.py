@@ -9,6 +9,50 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from mantis.config.schema._base import StrictModel
+from mantis.util.constants import DRAW_RATE_WINDOW
+
+
+class DrawRateAbortConfig(StrictModel):
+    """The draw-rate collapse hard abort's terms — ONE block, ONE fact (WPAX Phase D,
+    R65 re-scoped by R80, shaped by R79 as amended by R83).
+
+    The fact under single authority is *"is the draw-rate collapse abort armed, and on what
+    terms"*. It has three INSEPARABLE components, which is why they are a nested block and
+    not three flat `X | None` keys: three independent keys give three authorities over one
+    fact and can disagree in ways no predicate can adjudicate (`threshold: 0.25,
+    min_samples: null` is neither armed nor disarmed). The block makes disagreement
+    unrepresentable — the three arrive together or not at all.
+
+    ALL THREE ARE RUN-SCOPED CONSTANTS (R82/R85), pre-registered at mint prereg, which is
+    "the only place they may change". They are not tunables; changing one means re-minting
+    with a recorded delta and a fresh prereg, never editing a config in place (R1).
+
+    The bounds are bounds on the METRIC's own range, not policy:
+
+    * `threshold` — `recent_pool_draw_rate` is an unweighted mean of per-worker rates, a
+      fraction in [0, 1], and the predicate is `all(value >= threshold)`, an UPPER bound.
+      `gt=0` alone leaves the high half open: a threshold > 1.0 can never be met, is
+      accepted, and reads ARMED to the armed-abort manifest — "armed in the config, absent
+      in effect" (`schema/core.py`'s own words for the sibling defect). Reachable by the
+      natural percent slip (an operator meaning 35% writes `35`), so `le=1` closes it.
+      DISCLOSED RESIDUAL: `1e-300` still loads. That is a hair-trigger, not a disarm, and
+      the type does not close it; `min_samples` does (at 50 the smallest non-zero rate the
+      estimator can report is 1/50 = 0.02) together with R82's mint prereg.
+    * `min_step` — R80's second guard. No "disabled" value exists (`ge=1`), and the twin
+      cross-validator in `schema/core.py` closes the top end against
+      `train.max_train_steps`.
+    * `min_samples` — R80's FIRST guard, and ADJ-14's actual mechanism. The estimator's
+      shipped inclusion rule was `len(dq) > 0`, so one drawn game per worker saturated the
+      pool mean at 1.0. `le=DRAW_RATE_WINDOW` because `len(dq)` is bounded by the deque's
+      own `maxlen`: at 51, ten thousand consecutive DRAWN games report 0.0 and the abort
+      can never fire (MF-1's class on a second axis).
+
+    Read by exactly one path: `mantis.config.resolve.draw_rate.resolve_draw_rate_abort`.
+    """
+
+    threshold: float = Field(gt=0, le=1)
+    min_step: int = Field(ge=1)
+    min_samples: int = Field(ge=1, le=DRAW_RATE_WINDOW)
 
 
 class TrainConfig(StrictModel):
@@ -61,6 +105,16 @@ class TrainConfig(StrictModel):
     # `ge=1` is a floor, not THE floor: the reachability validator dominates it. With any
     # legal cadence the smallest expressible run is 3 (cadence 1 < threshold 2 < 3).
     max_train_steps: int = Field(ge=1)
+    # WPAX Phase D (R65/R80/R79+R83): the draw-rate collapse hard abort's ARMING SURFACE.
+    # `None` is EXPLICITLY OFF — a word an operator writes deliberately, never a default
+    # that happens to disable (R79(1)); a block is ARMED on exactly those terms. There is
+    # no boolean enable beside it, because the value already gates its own check and a
+    # boolean would be a second authority over one fact (R79/R1/LAW-08).
+    # `default=...` is this class's own no-terminal-default idiom (see `scheduler_t_max` /
+    # `min_lr` above): absence is an error naming the key (R1/LAW-11).
+    # Consumed by mantis.config.resolve.draw_rate.resolve_draw_rate_abort ->
+    # compose_run -> StepCoordinatorConfig.draw_rate_abort.
+    draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
 
     # loss selection + targets
     completed_q_values: bool

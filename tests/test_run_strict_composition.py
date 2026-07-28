@@ -218,7 +218,7 @@ def _fake_run_safety(**_kwargs):
     )
 
 
-def _no_terminal_eval_config() -> StepCoordinatorConfig:
+def _no_terminal_eval_config(*, stop_step, draw_rate_abort) -> StepCoordinatorConfig:
     """The ONE monkeypatch this file still applies, and only on `eval_enabled=True` drives:
     the production builder defaults `terminal_eval_enabled=True`, `close_out` therefore runs
     a terminal eval round, and `eval/snapshot.py` raises on any fake model that carries no
@@ -233,7 +233,12 @@ def _no_terminal_eval_config() -> StepCoordinatorConfig:
         training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
         recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
         soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=0, final_eval_drain_timeout_sec=900.0,
+        # WPAX Phase D: the two CONFIG-AUTHORED values arrive as required keyword
+        # parameters and are passed THROUGH — a harness builder that swallowed them
+        # would be a stand-in dictating a config fact, which is what this delta ends.
+        instrumentation_enabled=False, stop_step=stop_step,
+        draw_rate_abort=draw_rate_abort,
+        final_eval_drain_timeout_sec=900.0,
     )
 
 
@@ -509,7 +514,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
     monkeypatch.setattr(mantis.run, "build_eval_pipeline", _spy_build_eval_pipeline)
-    monkeypatch.setattr(mantis.run, "_default_step_coordinator_config", _no_terminal_eval_config)
+    monkeypatch.setattr(mantis.run, "_step_coordinator_config", _no_terminal_eval_config)
     # An eval pipeline makes `run_training_loop` seed the anchor, which initialises a real
     # model from `trainer.model` and reads `.arch` off it. Same patch, same reason, as
     # `tests/train/test_actor_sync_real_config.py`'s `_drive`. The assertions below observe

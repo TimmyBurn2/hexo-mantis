@@ -44,6 +44,21 @@ class RecentBufferLike(Protocol):
 
 
 @runtime_checkable
+class DrawRateAbortLike(Protocol):
+    """The RESOLVED draw-rate abort terms, as this seam layer sees them (WPAX Phase D).
+
+    A local Protocol for the same reason every other injected collaborator here has one:
+    this file is the DAG-clean seam layer, so it describes the shape it consumes rather
+    than importing the concrete `mantis.config.resolve.draw_rate.DrawRateAbortSpec`.
+    `None` in the field's type is the EXPLICIT disarmed posture — never an absent value.
+    """
+
+    threshold: float
+    min_step: int
+    min_samples: int
+
+
+@runtime_checkable
 class WorkerPoolLike(Protocol):
     games_completed: int
     n_workers: int
@@ -51,7 +66,7 @@ class WorkerPoolLike(Protocol):
     def start(self) -> None: ...
     def stop(self) -> None: ...
     def buffer_composition(self) -> dict[str, Any]: ...
-    def per_worker_draw_rates(self) -> dict[int, float]: ...
+    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]: ...
     def current_stride5_p90(self) -> int: ...
     def check_producer_health(self) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
@@ -173,15 +188,24 @@ class StepCoordinatorConfig:
     hard_gn_min_steps: int
     instrumentation_enabled: bool
     stop_step: int | None
+    # WPAX Phase D (R65 + R80): NO default, and it sits HERE — beside `stop_step` — because
+    # these are now precisely the two facts the CONFIG authors on this dataclass. `None` is
+    # EXPLICITLY OFF (`train.draw_rate_abort: null`), never an inherited posture: a literal
+    # the caller always replaces is still a second default authority (R1), which is what
+    # `draw_rate_threshold: float = 0.0` was.
+    draw_rate_abort: "DrawRateAbortLike | None"
     final_eval_drain_timeout_sec: float
     eval_final_drain_safety_factor: float = DEFAULT_FINAL_EVAL_DRAIN_SAFETY_FACTOR
     eval_final_drain_hard_cap_sec: float = DEFAULT_FINAL_EVAL_DRAIN_HARD_CAP_SEC
     terminal_eval_enabled: bool = True
     terminal_eval_hard_cap_sec: float = DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC
-    # §D-GOLONG sustained draw-rate hard-abort (threshold <= 0 disables; default OFF).
-    draw_rate_threshold: float = 0.0
+    # §D-GOLONG sustained draw-rate hard-abort. `threshold` and `min_step` moved to the
+    # config (`train.draw_rate_abort`, above) at WPAX Phase D — R80 names exactly three
+    # keys and `consec` is not one of them, so it stays a code-side default owned by
+    # CARD-COORD-KNOBS (R78). That is safe rather than merely bounded: with `min_samples`
+    # closing the saturation route and `min_step` closing the early-run route, `consec` is
+    # no longer load-bearing for the ADJ-14 hazard.
     draw_rate_consec: int = 3
-    draw_rate_min_step: int = 0
     # §178 bot-corpus batch slot (mixing knobs — NOT the killed refresh hook).
     bot_batch_share: float = 0.0
     bot_corpus_path: str = ""
