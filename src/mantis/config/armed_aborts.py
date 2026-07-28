@@ -178,17 +178,23 @@ PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run5.yaml",)
 #: more extension leaves the boundary one extension further out: `configs/run6.txt` and
 #: `configs/run6.YAML` were schema-valid, DISARMED on the required row, mintable, launchable —
 #: and rc 0 from both gates. The asymmetry was never between two globs; it was that DISCOVERY
-#: answered "is this a config" by extension while the LOADER answered it not at all. So
-#: `load_config` now REFUSES a suffix outside `CONFIG_SUFFIXES` (`ConfigSuffixError`) and
-#: discovery filters with the same predicate, `is_config_path`. With that, and only with that:
+#: answered "is this a config" by extension while the LOADER answered it by CONTENT, so the
+#: complement of every enumeration stayed launchable and invisible.
 #:
-#: Adding a config to `configs/` — any file this repo's loader will read, at any depth — now
-#: FORCES a one-line declaration here or in `PRODUCTION_CONFIGS`; it can no longer be forgotten
-#: into exemption, and a file at a suffix neither tuple names is not a config anywhere, so the
-#: gates' silence about it is correct rather than a hole. The one limit still standing, stated
-#: rather than implied: this binds `configs/`, and a loadable `.yaml` OUTSIDE that directory is
-#: reachable by `--config` and by `python -m mantis.run` without being discovered
-#: (CARD-CONFIG-DISCOVERY-ROOT).
+#: **R75 rules which side closes it.** Not the loader — narrowing its accept-set was DECLINED,
+#: and a run may be launched from a path of any shape. The protection is the **shared-authority
+#: invariant**: whatever the loader accepts, the audit must see. `discover_configs` is therefore
+#: name-agnostic — every path under `configs/` except a real directory, which `read_text`
+#: refuses by type. With that, and only with that:
+#:
+#: Adding ANY file to `configs/` — at any name, at any depth — now FORCES a one-line declaration
+#: here or in `PRODUCTION_CONFIGS`; it can no longer be forgotten into exemption, and there is
+#: no longer a class of file the gates are silent about. The cost is deliberate: `configs/` may
+#: hold only complete configs, so a stray note or an editor backup is a red gate rather than a
+#: quiet resident of the audit root. The one limit still standing, stated rather than implied:
+#: this binds `configs/`, and a loadable config OUTSIDE that directory is reachable by
+#: `python -m mantis.run` without being discovered (CARD-CONFIG-DISCOVERY-ROOT) — `--config`
+#: does audit it, shape-agnostically, which is what covers the mint path.
 #:
 #: `(repo-relative path, why it is exempt)`. The reason is data, printed by the tool on the
 #: failure path, so an exemption cannot be a bare path nobody can justify later.

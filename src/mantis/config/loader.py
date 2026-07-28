@@ -3,42 +3,57 @@ no defaults, no env expansion. Missing key and unknown key both raise pydantic.V
 (loud, listing every error). A duplicate YAML key (frozen loader silently last-won) is a
 HARD error here (judgment #8).
 
-This module is also the ONE authority on **what counts as a config file on disk**
-(`CONFIG_SUFFIXES` + `is_config_path` + `discover_configs`) — R71 / ADJ-13 F-1, corrected by
-the post-recheck corrective pass (R-2).
+This module also carries `discover_configs` — the ONE enumeration both gate 7 and gate 12
+consume (R71 / ADJ-13 F-1), governed by the **shared-authority invariant** (R75).
 
-**The class, stated at the level the three escapes actually shared.** It is not "gate 12's glob
-is narrower than gate 7's". It is: **discovery answered "is this a config?" by EXTENSION while
-loading answered it by NOTHING AT ALL** — `load_config` was `yaml.load(Path(path).read_text())`,
-which accepts any suffix, no suffix, or a suffix nobody has thought of yet. While that asymmetry
-stood, the set of files a run could be LAUNCHED from was strictly larger than the set either
-gate could SEE, and every fix that widened discovery by one more extension just moved the
-boundary: `configs/run6.yaml` (MF-7) → `configs/run6.yml` + `configs/prod/` (RED-TEAM) →
-`configs/run6.txt` + `configs/run6.YAML` (RECHECK R-2). Enumerating extensions can never close
-it, because the loader accepts the complement of every enumeration.
+**The class, in one sentence.** A file under the audit root that the loader will READ but
+discovery will not ENUMERATE is a production config nobody audits — and every name-based
+discovery filter creates exactly that gap, because the loader's accept-set is defined by
+CONTENT, not by name.
 
-So the loader NARROWS (recheck shape (b)). `is_config_path` is the ONE predicate, and it governs
-BOTH directions:
+Four escapes, each one the complement of the previous fix's enumeration:
 
-* `discover_configs` selects with it — what the gates look at;
-* `load_config` REFUSES anything it rejects (`ConfigSuffixError`) — what a run can be launched
-  from, `tools/mint_config.py --out` can write, and `python -m mantis.run <path>` can consume.
+    configs/run6.yaml   (MF-7)      -> fixed, and run6.yml walked through
+    configs/run6.yml    (RED-TEAM)  -> fixed, and configs/prod/ walked through
+    configs/prod/*.yaml (RED-TEAM)  -> fixed, and run6.txt walked through
+    configs/run6.txt, run6.YAML (RECHECK R-2)
 
-A file under `configs/` whose suffix is not in `CONFIG_SUFFIXES` is therefore not a config
-ANYWHERE, which is what makes a gate's silence about it correct rather than a hole. Measured
-before this pass: `configs/run6.txt` was schema-valid, `audit_arming`-DISARMED on the required
-`actor_lag` row, loadable, launchable, and BOTH gates returned rc 0.
+**The invariant, stated as the rule this module holds:**
+
+    load_config(p) succeeds  =>  p in discover_configs(root)      for every p under root
+
+Equivalently, and this is the form to test: *a file discovery skips must be a file the loader
+refuses.* It closes the class from the discovery side, WITHOUT constraining what a run may be
+launched from — a run may be launched from a path of any shape, which is what the loader did
+before ADJ-13's corrective pass and does again (R75 DECLINED that narrowing).
+
+**Why discovery is name-agnostic.** `load_config` decides by content: it reads the bytes and
+hands them to the schema. No suffix test can bound that set from above, so any suffix test in
+discovery leaves the complement launchable-and-invisible. Discovery therefore enumerates
+EVERYTHING under the root and drops exactly one kind of path — a **real directory** — because
+`read_text()` on a directory raises `IsADirectoryError` unconditionally, for every directory,
+by type rather than by name. That is a proof, not a heuristic, and it is the only such proof
+available. A symlink TO a directory is deliberately NOT dropped: `rglob` does not recurse
+through it, so dropping it would hide a whole subtree of loadable configs (the input just
+outside this boundary — R71). Kept, it is a loud gate-7 failure instead of a silent hole.
+
+**The measured cost, and it is the point rather than a side effect.** Gate 7 schema-validates
+whatever discovery returns and gate 12 requires it to be declared, so `configs/` may now contain
+ONLY complete configs: a stray `README.md`, a `.gitkeep` or an editor's `run5.yaml.bak` is a red
+gate. That is CORRECT, not a defect — `run5.yaml.bak` is a near-copy of a production config in
+the audit root and it IS loadable, i.e. escape #5; and the only way to spare the `README.md`
+without sparing the `.bak` is a name filter, which is the class. Notes belong in `docs/`.
+
+**What this does NOT close:** where a config may LIVE. A loadable file outside `configs/` —
+`<repo>/scratch/run6.yaml`, `/tmp/run6.yaml` — is launchable and `discover_configs(configs/)`
+will never see it. Deliberate (preflighting a candidate from a scratch directory is the normal
+case, and every `--config` route depends on it), carded as `CARD-CONFIG-DISCOVERY-ROOT`. The
+mint path is covered shape-agnostically instead: `preflight_mint.py --config <path>` unions any
+named path into the audit set regardless of its shape (`_audit_paths`).
 
 SF-4 is preserved: `discover_configs` takes the directory as an ARGUMENT and resolves no repo
 root. `REPO_ROOT` stays in the tool (`preflight_mint.py:104`), where `parents[2]` is structurally
 sound rather than dependent on an editable install.
-
-**What this does NOT close, stated so the next reader does not read more into it than was
-built:** the loader answers "what is a config", not "where may a config live". A `.yaml` file
-outside `configs/` — `<repo>/scratch/run6.yaml`, `/tmp/run6.yaml` — is still loadable and still
-launchable, and `discover_configs(configs/)` will never see it. That is deliberate (an operator
-preflighting a candidate from a scratch directory is the normal case, and every `--config`
-route depends on it) and it is carded as `CARD-CONFIG-DISCOVERY-ROOT` rather than taken here.
 """
 from pathlib import Path
 
@@ -46,25 +61,9 @@ import yaml
 
 from mantis.config.schema import RunConfig
 
-#: The extensions a config file may carry. DATA, and the reason it is a tuple rather than a
-#: glob or three: it is read by ONE predicate (`is_config_path`) that both discovery and the
-#: loader consume, so widening it widens what the gates SEE and what a run can be LAUNCHED from
-#: **together**. Those two moving apart is the whole of ADJ-13 F-1.
-CONFIG_SUFFIXES: tuple[str, ...] = (".yaml", ".yml")
-
 
 class DuplicateKeyError(ValueError):
     """A YAML mapping declared the same key twice (silent last-wins is banned)."""
-
-
-class ConfigSuffixError(ValueError):
-    """A path whose suffix is not in `CONFIG_SUFFIXES` was handed to the loader.
-
-    Loud rather than best-effort, and that direction is the fix (recheck R-2): a loader that
-    reads `configs/run6.txt` makes that file launchable while leaving it invisible to every
-    gate, which is a disarmed production config nobody audits. A file the gates do not count
-    is a file the loader does not read.
-    """
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -87,52 +86,43 @@ class _UniqueKeyLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep=deep)
 
 
-def is_config_path(path: str | Path) -> bool:
-    """THE predicate — "is this path a config file?" — with exactly one implementation.
-
-    Read by `discover_configs` (what the gates enumerate) and by `load_config` (what a run can
-    be launched from). One predicate is the entire point: two, however carefully kept in step,
-    is the R1 / LAW-08 two-authorities shape, and the gap between them is where every one of
-    F-1's three escapes lived.
-
-    Deliberately a NAME test, not a `stat`: it must answer the same way for a path that is a
-    directory or a broken symlink. A `configs/adir.yaml` directory and a dangling
-    `configs/broken.yaml` are CONFIG-SHAPED and BROKEN, which is a loud gate-7 failure
-    (`OSError` out of `read_text`) — not something to filter into silence. Adding an
-    `is_file()` conjunct here is what made gate 7 stop rejecting both shapes (recheck R-4).
-    """
-    return Path(path).suffix in CONFIG_SUFFIXES
-
-
 def discover_configs(configs_dir: str | Path) -> list[Path]:
-    """Every config file under `configs_dir`, RECURSIVELY, in sorted order.
+    """EVERY path under `configs_dir` that is not a real directory, RECURSIVELY, sorted.
 
-    The one authority both gate 7 and gate 12 consume (R71). Recursive because
-    `tools/mint_config.py --out` takes a free path, so `configs/prod/run6.yaml` is a supported
-    output of the repo's own minting tool, not a contrived input; sorted so two consumers of
-    the same tree cannot disagree about order.
+    The one enumeration both gate 7 and gate 12 consume (R71), and the discovery side of the
+    shared-authority invariant (R75): *a file discovery skips must be a file the loader
+    refuses.* Name-agnostic on purpose — `load_config` decides by content, so a suffix filter
+    here leaves its complement launchable-and-invisible, which is ADJ-13 F-1's whole class.
+
+    The one exclusion, and why it cannot become a hole. `path.is_dir() and not
+    path.is_symlink()` is a REAL directory: `read_text()` on it raises `IsADirectoryError` for
+    every directory unconditionally, so the loader provably refuses it, and `rglob` recurses
+    THROUGH it, so everything loadable beneath it is enumerated anyway. Both halves are needed:
+
+    * drop `is_dir()` and `configs/prod/` — a supported `mint_config.py --out` target — becomes
+      a gate-7 failure for existing;
+    * drop `not is_symlink()` and a symlink to a directory is dropped too, while `rglob` refuses
+      to recurse through it (measured: `link/hidden_cfg.yaml` absent from `rglob("*")`), so an
+      entire subtree of loadable, disarmed configs goes invisible to both gates. That is the
+      input just outside this boundary (R71), and keeping the symlink in the enumeration is
+      what closes it: gate 7 hits `IsADirectoryError` and goes loud.
+
+    Sorted so two consumers of one tree cannot disagree about order. Dotfiles and hidden
+    subdirectories are included — `pathlib.rglob` does not skip them (measured), and
+    `configs/.yaml` was escape #6.
     """
-    return sorted(path for path in Path(configs_dir).rglob("*") if is_config_path(path))
+    return sorted(path for path in Path(configs_dir).rglob("*")
+                  if not (path.is_dir() and not path.is_symlink()))
 
 
 def load_config(path: str | Path) -> RunConfig:
     """Load and schema-validate one complete config file (duplicate keys rejected).
 
-    Refuses a path `is_config_path` rejects (recheck R-2). This is a PRODUCTION behaviour
-    change and it is the fix: while the loader was extension-agnostic, `configs/run6.txt` was
-    schema-valid, DISARMED on the manifest's one required row, mintable via
-    `tools/mint_config.py --out`, launchable via `python -m mantis.run <path>`, and invisible
-    to gate 7 and gate 12 alike. Now discovery's filter and the loader's accept-set are the
-    same call, so "not discovered" and "not loadable" cannot come apart.
+    Shape-agnostic: a run may be launched from a path of any name (R75 DECLINED the accept-set
+    narrowing that briefly stood here). What keeps that safe is not a suffix test but the
+    invariant `discover_configs` holds — whatever this function accepts under the audit root,
+    the audit sees.
     """
-    if not is_config_path(path):
-        raise ConfigSuffixError(
-            f"{path}: not a config file — its suffix is not in CONFIG_SUFFIXES "
-            f"{CONFIG_SUFFIXES}. A file the gates do not enumerate is a file this loader does "
-            "not read: reading it would make it launchable while leaving it unaudited by "
-            "gate 7 and gate 12 (ADJ-13 F-1). Rename it, or widen CONFIG_SUFFIXES — which "
-            "widens discovery and the loader together, which is the point."
-        )
     raw = yaml.load(Path(path).read_text(), Loader=_UniqueKeyLoader)
     if not isinstance(raw, dict):
         raise TypeError(f"{path}: config root must be a mapping")

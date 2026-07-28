@@ -65,13 +65,7 @@ from types import SimpleNamespace
 import pytest
 
 from mantis.config.armed_aborts import EXEMPT_CONFIGS, MANIFEST, PRODUCTION_CONFIGS
-from mantis.config.loader import (
-    CONFIG_SUFFIXES,
-    ConfigSuffixError,
-    discover_configs,
-    is_config_path,
-    load_config,
-)
+from mantis.config.loader import discover_configs, load_config
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
@@ -1128,7 +1122,14 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
 #: demonstrated and the only one MF-7's fix closed; the other three are the ways a config can
 #: enter `configs/` that gate 7 blesses and gate 12 could not see. `tools/mint_config.py --out`
 #: takes a free path, so every one of these is a supported output of the repo's own tool.
-_F1_PLANT_PATHS = ("run6.yaml", "run6.yml", "prod/run6.yaml", "prod/nested/run6.yml")
+#:
+#: R75 widened this list to **every escape this class has ever produced**, because the
+#: protection is now the shared-authority invariant rather than a loader refusal: each of these
+#: is loadable, so each must be discovered, so each must be UNDECLARED. `run6.txt` / `run6.YAML`
+#: (recheck R-2), `run6.yaml.bak`, `.yaml` and `run6.yamlx` (RED-TEAM) were previously caught by
+#: `load_config` refusing them; they are caught HERE now, which is the whole re-ruling.
+_F1_PLANT_PATHS = ("run6.yaml", "run6.yml", "prod/run6.yaml", "prod/nested/run6.yml",
+                   "run6.txt", "run6.YAML", "run6.yaml.bak", ".yaml", "run6.yamlx")
 
 
 def _plant_disarmed(root: Path, rel: str) -> Path:
@@ -1215,191 +1216,256 @@ def test_a_declared_SUBDIRECTORY_config_is_audited_and_never_reported_STALE(
     )
 
 
-#: **The class boundary the first two fixes both missed.** MF-7's fix closed the reviewer's
-#: `configs/run6.yaml`; the ADJ-13 fix closed `run6.yml` and `configs/prod/`; the recheck walked
-#: `configs/run6.txt` and `configs/run6.YAML` straight through both gates. The escape recurred
-#: because the fixes kept widening ONE side: discovery filtered by extension while `load_config`
-#: was `yaml.load(Path(path).read_text())` — no filter at all — so the LAUNCHABLE set stayed
-#: strictly larger than the DISCOVERED set and the complement of every enumeration was the next
-#: exploit. Rows below are the complement, not another enumeration: a plain unknown suffix, a
-#: CASE variant of a known one, no suffix at all, and a known suffix that is not final.
-_F1_UNRECOGNISED = ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.YML", "run6.yamL")
+#: **The class boundary the first two fixes both missed, and the third fix got backwards.**
+#: MF-7's fix closed the reviewer's `configs/run6.yaml`; the ADJ-13 fix closed `run6.yml` and
+#: `configs/prod/`; the recheck walked `configs/run6.txt` and `configs/run6.YAML` straight
+#: through both gates. The corrective pass then closed it by making `load_config` REFUSE those
+#: suffixes — and **R75 DECLINED that**: a run may be launched from a path of any shape. The
+#: protection is the shared-authority invariant instead (loader accepts => audit sees), so the
+#: rows below assert the OPPOSITE of what they asserted at `4d11147`: each of these files is
+#: loadable, therefore DISCOVERED, therefore UNDECLARED, therefore gate 12 is RED.
+#:
+#: Still the complement of an enumeration rather than another enumeration: a plain unknown
+#: suffix, a CASE variant of a known one, no suffix at all, a known suffix that is not final,
+#: and a dotfile named like a suffix.
+_F1_UNRECOGNISED = ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.YML", "run6.yamL",
+                    ".yaml", "run6.yamlx")
 
 
 @pytest.mark.parametrize("rel", _F1_UNRECOGNISED)
-def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_not_a_config_ANYWHERE(
+def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITED(
     tmp_path, monkeypatch, rel,
 ) -> None:
-    """R71's novel-extension row, driven at the boundary rather than at a demo input.
+    """R71's novel-extension row, driven at the boundary rather than at a demo input, and
+    INVERTED by R75.
 
     Each planted file is a **byte-for-byte copy of run5 with the one REQUIRED armed-abort row
-    disarmed** — so if anything in the repo will read it, it is a production config with the
-    actor-lag hard abort off, which is precisely MF-7's hazard. Measured before this pass, on
-    `configs/run6.txt`: schema-valid, `audit_arming` reporting `actor_lag` DISARMED, gate 7
-    **rc 0**, gate 12 **rc 0**, mintable via `mint_config.py --out`, launchable via
-    `python -m mantis.run <path>`.
+    disarmed** — so anything in the repo that will read it reads a production config with the
+    actor-lag hard abort off, which is precisely MF-7's hazard. Measured before ADJ-13's
+    corrective pass, on `configs/run6.txt`: schema-valid, `audit_arming` reporting `actor_lag`
+    DISARMED, gate 7 **rc 0**, gate 12 **rc 0**, mintable, launchable.
 
-    The fix is not a wider enumeration — it is that `load_config` now REFUSES what discovery
-    rejects, from the one predicate both call. So the assertion is the whole biconditional: the
-    gates' silence about this file is CORRECT exactly because nothing can read it.
+    The loader still reads every one of them (R75). What closes the class is that discovery no
+    longer filters by name, so "loadable" and "audited" cannot come apart: the file is
+    enumerated, reported UNDECLARED, and gate 12 exits 31. The three assertions are the
+    invariant's chain — loadable, discovered, red — because a row that only checked rc could
+    pass on a gate that went red for some unrelated reason.
     """
     root = _mini_tree(tmp_path)
     planted = _plant_disarmed(root, rel)
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
+    relposix = planted.relative_to(root).as_posix()
 
-    assert not is_config_path(planted), f"{rel} must not be a config to the one predicate"
-    with pytest.raises(ConfigSuffixError):
-        load_config(planted)
-    assert planted.relative_to(root).as_posix() not in TOOL._discovered_configs(), (
-        f"{rel} is not loadable, so it must not be enumerated either — discovery and the "
-        "loader are the same predicate or they are two authorities again"
+    assert load_config(planted).run_id == "run5", (
+        f"{rel} must still LOAD — R75 declined the accept-set narrowing, so the protection has "
+        "to come from the audit seeing it, not from the loader refusing it"
+    )
+    assert relposix in TOOL._discovered_configs(), (
+        f"{rel} is loadable, so discovery MUST enumerate it — that is the shared-authority "
+        f"invariant, and its failure is ADJ-13 F-1; got {TOOL._discovered_configs()}"
     )
     undeclared, _stale, _overlapping = TOOL._config_declaration_drift()
-    assert planted.relative_to(root).as_posix() not in undeclared, (
-        "…and the exclusion must be SILENT, not a false UNDECLARED red. That silence is only "
-        "defensible because the loader refuses the file, which the two assertions above "
-        f"measure; got {undeclared}"
+    assert relposix in undeclared, (
+        f"{rel} is a launchable, disarmed config nobody declared; it must be UNDECLARED rather "
+        f"than silently exempt; got {undeclared}"
     )
     result = _run_tool("--audit-only", cwd=root,
                        tool=root / "tools" / "ci_gates" / "preflight_mint.py")
-    assert result.returncode == 0, (
-        "gate 12 must stay green over a file nothing can read; got "
+    assert result.returncode == 31, (
+        "gate 12 must go RED on a launchable config it cannot account for; got "
         f"{result.returncode}\n{(result.stdout + result.stderr)[-2000:]}"
     )
 
 
-def test_the_LAUNCH_route_refuses_what_the_gates_cannot_see(tmp_path) -> None:
-    """The third of the three facts that made `configs/run6.txt` a real hazard rather than a
-    contrived one: `src/mantis/run.py:254` calls `load_config(argv[0])` on a FREE path, so a
-    file no gate enumerates was one command away from being the config a run booted from.
+def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> None:
+    """`src/mantis/run.py:252` calls `load_config(argv[0])` on a FREE path. That was one of the
+    three facts that made `configs/run6.txt` a real hazard; R75 rules it is **not** the fact to
+    change — the operator keeps a free launch path, and the audit is what must not have a blind
+    spot.
 
-    Driven through the real entry point as a process, because that is the surface an operator
-    actually types. The control arm is the same drive on a real config, so a row that passed by
-    breaking `mantis.run` outright would be red.
+    So this row measures both halves at once: the entry point ACCEPTS the odd shape (the
+    backout of `4d11147` at the surface an operator actually types), and the same file under
+    `configs/` is red at gate 12 (the protection that replaced the refusal). The control arm is
+    the same drive on a real config, so a row that passed by breaking `mantis.run` outright
+    would be red.
     """
-    unreadable = tmp_path / "run6.txt"
-    unreadable.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                                   "actor_lag_abort_enabled: false"))
-    refused = subprocess.run([sys.executable, "-m", "mantis.run", str(unreadable)],
-                             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
-    assert refused.returncode != 0, (
-        "a schema-valid, actor-lag-DISARMED config at an unrecognised suffix launched a run; "
-        f"got rc 0\n{refused.stdout[-2000:]}"
+    disarmed_body = RUN5.read_text().replace("actor_lag_abort_enabled: true",
+                                             "actor_lag_abort_enabled: false")
+    odd = tmp_path / "run6.txt"
+    odd.write_text(disarmed_body)
+    launched = subprocess.run([sys.executable, "-m", "mantis.run", str(odd)],
+                              cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
+    assert launched.returncode == 0, (
+        "R75: a run may be launched from a path of any shape; the loader accept-set narrowing "
+        f"is out. got rc {launched.returncode}\n{(launched.stdout + launched.stderr)[-2000:]}"
     )
-    assert "ConfigSuffixError" in refused.stderr, refused.stderr[-2000:]
+    assert "run_id=run5" in launched.stdout, launched.stdout[-2000:]
+    assert "ConfigSuffixError" not in launched.stderr, (
+        "the refusal must be gone from the launch path entirely, not merely downgraded"
+    )
     allowed = subprocess.run([sys.executable, "-m", "mantis.run", str(RUN5)],
-                            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
+                             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
     assert allowed.returncode == 0, (
         "the control arm: a real config must still launch, or this row passes by breaking the "
         f"entry point. got {allowed.returncode}\n{(allowed.stdout + allowed.stderr)[-2000:]}"
     )
 
 
-def test_the_MINT_route_refuses_an_out_path_the_loader_would_refuse(tmp_path) -> None:
-    """The second of the three facts: `tools/mint_config.py --out` is a free path with no
-    suffix constraint, so the repo's OWN minting tool would produce the unreadable file on
-    request. Refused from the same predicate rather than from a fourth copy of the answer.
+def test_the_MINT_route_is_free_and_the_PREFLIGHT_covers_it_SHAPE_AGNOSTICALLY(tmp_path) -> None:
+    """R75's second consequence, and the claim it rests on — verified rather than asserted.
+
+    `tools/mint_config.py --out` is a free path again: the suffix guard the corrective pass put
+    there is out, because the ruling is that *the preflight covers the mint path
+    shape-agnostically*. That sentence is only true if `--config <path>` really audits a minted
+    config of any shape, so this row mints one at `.txt` and drives the audit at it.
+
+    Both arms are load-bearing. Mint-succeeds alone would pass on a tool that wrote an
+    unauditable file; audit-is-red alone would pass on a tool that could not mint at all.
     """
     mint = REPO_ROOT / "tools" / "mint_config.py"
-    bad = tmp_path / "minted.txt"
-    refused = subprocess.run([sys.executable, str(mint), "--template", "dev", "--out", str(bad),
-                              "--set", "run_id=x"], cwd=str(REPO_ROOT), capture_output=True,
-                             text=True, timeout=300)
-    assert refused.returncode == 2, (refused.stdout + refused.stderr)[-2000:]
-    assert not bad.exists(), "refused BEFORE anything was written, or the refusal is cosmetic"
-    for suffix in CONFIG_SUFFIXES:
-        good = tmp_path / f"minted{suffix}"
-        allowed = subprocess.run([sys.executable, str(mint), "--template", "dev", "--out",
-                                  str(good), "--set", "run_id=x"], cwd=str(REPO_ROOT),
-                                 capture_output=True, text=True, timeout=300)
-        assert allowed.returncode == 0 and good.is_file(), (
-            f"the inverse: EVERY suffix in CONFIG_SUFFIXES must still mint, or the fix is "
-            f"'refuse everything but .yaml'. {suffix}: rc {allowed.returncode}\n"
-            f"{(allowed.stdout + allowed.stderr)[-1500:]}"
-        )
+    odd = tmp_path / "minted.txt"
+    minted = subprocess.run([sys.executable, str(mint), "--template", "dev", "--out", str(odd),
+                             "--set", "run_id=x"], cwd=str(REPO_ROOT), capture_output=True,
+                            text=True, timeout=300)
+    assert minted.returncode == 0 and odd.is_file(), (
+        "R75: `--out` carries no shape constraint; the guard is out. got rc "
+        f"{minted.returncode}\n{(minted.stdout + minted.stderr)[-2000:]}"
+    )
+    assert load_config(odd).run_id == "x", "…and the minted file must be readable"
+
+    audited = _run_tool("--audit-only", "--config", str(odd))
+    assert audited.returncode == 30, (
+        "the preflight must AUDIT a named config whatever its shape — that is what 'the "
+        "preflight covers the mint path shape-agnostically' means, and the dev template is "
+        f"disarmed by design (R59). got rc {audited.returncode}\n"
+        f"{(audited.stdout + audited.stderr)[-2000:]}"
+    )
+    assert "minted.txt" in (audited.stdout + audited.stderr), (
+        "…and it must name the file it audited, or the rc is about something else"
+    )
 
 
-def test_the_exclusion_BOTH_gates_share_is_backed_by_the_LOADER_refusing_the_file(
-    monkeypatch, tmp_path,
-) -> None:
-    """ADJ-13 F-1's structural half — INVERTED by the corrective pass.
+def test_there_is_NO_excluded_class_left_under_configs(monkeypatch, tmp_path) -> None:
+    """ADJ-13 F-1's structural half — inverted once by the corrective pass, and again by R75.
 
-    The row this replaces asserted `configs/run6.conf` must not be reported UNDECLARED, and
-    planted it as a two-line stub so it never asked whether a `.conf` file could be a real
-    config. As written it **required the escape to stay open**: a defect with a green test
-    defending it. The silence is still the right behaviour — a gate that goes red on a README
-    is a gate operators route around — but it is only defensible if the excluded file is not a
-    config anywhere, so that is what this row now measures, on a REAL disarmed config rather
-    than on a stub.
+    The row two revisions ago asserted `configs/run6.conf` must NOT be reported UNDECLARED,
+    planted as a two-line stub so it never asked whether a `.conf` file could be a real config;
+    it **required the escape to stay open**. The corrective pass made the silence defensible by
+    having the loader refuse the file. R75 declines that, so the silence goes instead: there is
+    no excluded class under `configs/` at all, and the argument that used to justify one — "a
+    gate that goes red on a README is a gate operators route around" — is answered by putting
+    the README somewhere else. `configs/` is the audit root; it holds configs.
 
     The tree carries every shape at once: flat `.yaml`, flat `.yml`, nested `.yaml`, a disarmed
-    `.conf`, a disarmed `.txt`, and a genuine non-config.
+    `.conf`, a disarmed `.txt`, and a genuine non-config that is not even valid YAML for a
+    config — the hardest case for this ruling, and it is red on purpose.
     """
     root = _mini_tree(tmp_path)
-    _plant_disarmed(root, "run6.yml")
-    _plant_disarmed(root, "prod/run6.yaml")
-    excluded = [_plant_disarmed(root, "run6.conf"), _plant_disarmed(root, "run6.txt")]
+    planted = [_plant_disarmed(root, rel)
+               for rel in ("run6.yml", "prod/run6.yaml", "run6.conf", "run6.txt")]
     notes = root / "configs" / "NOTES.md"
     notes.write_text("not a config\n")
-    excluded.append(notes)
+    planted.append(notes)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     discovered = TOOL._discovered_configs()
     authority = [path.relative_to(root).as_posix()
                  for path in discover_configs(root / "configs")]
     assert discovered == authority, (
-        "gate 12's audit set IS the loader's discovery authority — not a copy of it and not a "
-        f"second glob (R71). got {discovered} vs {authority}"
+        "gate 12's audit set IS the loader's discovery enumeration — not a copy of it and not "
+        f"a second glob (R71). got {discovered} vs {authority}"
     )
-    assert "configs/run6.yml" in discovered and "configs/prod/run6.yaml" in discovered
     undeclared, _stale, _overlapping = TOOL._config_declaration_drift()
-    for path in excluded:
+    for path in planted:
         rel = path.relative_to(root).as_posix()
-        assert rel not in discovered, f"{rel} is outside CONFIG_SUFFIXES; got {discovered}"
-        assert rel not in undeclared, (
-            f"a false UNDECLARED red on {rel} is as much a divergence as a false green; got "
-            f"{undeclared}"
+        assert rel in discovered, (
+            f"{rel} is under the audit root and is not a directory, so it is discovered — "
+            f"there is no name-shaped exclusion left to hide behind; got {discovered}"
         )
-        with pytest.raises(ConfigSuffixError):
-            load_config(path)
-    assert set(CONFIG_SUFFIXES) == {".yaml", ".yml"}, (
-        "the authority's own contents, pinned: widening this tuple widens discovery AND the "
-        f"loader together, which is the property F-1 broke; got {CONFIG_SUFFIXES}"
+        assert rel in undeclared, (
+            f"{rel} is on disk and in neither declaration tuple; UNDECLARED is the only honest "
+            f"report. got {undeclared}"
+        )
+    shutil.copy2(REPO_ROOT / "tools" / "ci_gates" / "validate_configs.py",
+                 root / "tools" / "ci_gates" / "validate_configs.py")
+    gate7 = _run_tool(cwd=root, tool=root / "tools" / "ci_gates" / "validate_configs.py")
+    assert gate7.returncode == 1 and "FAIL configs/NOTES.md" in gate7.stderr, (
+        "the MEASURED COST of the ruling, driven rather than argued: a stray non-config under "
+        f"configs/ is a loud gate-7 failure. got rc {gate7.returncode}\n{gate7.stderr[-2000:]}"
     )
 
 
-#: Recheck R-4 — a REGRESSION the ADJ-13 delta introduced in a gate that was green. Adding an
-#: `is_file()` conjunct to `discover_configs` made gate 7 stop rejecting two shapes it rejected
-#: at `c3ab028` (HEAD rc 1 on each; delta rc 0, both gates silent). The predicate is a NAME
-#: test again, so a config-shaped-and-broken file is a loud gate-7 failure rather than a
-#: filtered-away one.
-_R4_BROKEN = ("directory", "broken_symlink")
+#: Recheck R-4 — a REGRESSION the ADJ-13 delta briefly introduced in a gate that was green:
+#: an `is_file()` conjunct in `discover_configs` made gate 7 stop rejecting shapes it rejected
+#: at `c3ab028`. Under R75 the exclusion is by TYPE, not by name, so the two shapes part
+#: company and the row says which is which:
+#:
+#: * a dangling symlink is a broken FILE reference — the loader's refusal is an accident of the
+#:   target's absence, not a property of the path's type — so it stays enumerated and gate 7 is
+#:   LOUD, as at `c3ab028`;
+#: * a real DIRECTORY is refused by `read_text` unconditionally and is walked THROUGH by
+#:   `rglob`, so skipping it cannot hide anything. It is skipped uniformly — `configs/prod/` and
+#:   `configs/adir.yaml` are treated alike, where HEAD treated them differently on their NAMES,
+#:   which is the shape R75 removes. Gate 7's silence about a directory is now a rule with a
+#:   reason rather than a side effect of a glob.
+_R4_BROKEN = ("broken_symlink", "symlinked_directory")
 
 
 @pytest.mark.parametrize("kind", _R4_BROKEN)
 def test_a_config_SHAPED_but_BROKEN_path_is_a_LOUD_gate_7_failure_and_not_silence(
     tmp_path, kind,
 ) -> None:
-    """Driven through gate 7 as a process, in a mini tree, because rc is the observable."""
+    """Driven through gate 7 as a process, in a mini tree, because rc is the observable.
+
+    The `symlinked_directory` arm is the input just outside the exclusion's boundary (R71):
+    `rglob` will not walk through it, so if discovery ALSO dropped it the subtree behind it
+    would be invisible to both gates. Enumerated, it is a loud gate-7 failure that names the
+    path an operator has to look at.
+    """
     root = _mini_tree(tmp_path)
     shutil.copy2(REPO_ROOT / "tools" / "ci_gates" / "validate_configs.py",
                  root / "tools" / "ci_gates" / "validate_configs.py")
     broken = root / "configs" / "broken.yaml"
-    if kind == "directory":
-        broken.mkdir()
-    else:
+    if kind == "broken_symlink":
         broken.symlink_to(tmp_path / "nowhere" / "target.yaml")
+    else:
+        hidden = tmp_path / "hidden_subtree"
+        hidden.mkdir()
+        (hidden / "run6.yaml").write_text(RUN5.read_text())
+        broken.symlink_to(hidden)
 
     result = _run_tool(cwd=root, tool=root / "tools" / "ci_gates" / "validate_configs.py")
     assert result.returncode == 1, (
-        f"a {kind} at configs/broken.yaml is config-SHAPED and BROKEN — gate 7 rejected it at "
-        f"HEAD and must still. got rc {result.returncode}\n"
-        f"{(result.stdout + result.stderr)[-2000:]}"
+        f"a {kind} at configs/broken.yaml must be a LOUD gate-7 failure. got rc "
+        f"{result.returncode}\n{(result.stdout + result.stderr)[-2000:]}"
     )
     assert "FAIL configs/broken.yaml" in result.stderr, result.stderr[-2000:]
     assert result.stdout.count("OK ") == len(discover_configs(REPO_ROOT / "configs")), (
         "…and every real config must still validate, so the row cannot pass by breaking the "
         f"gate outright. got {result.stdout!r}"
+    )
+
+
+def test_a_REAL_directory_is_skipped_UNIFORMLY_and_never_by_its_name(tmp_path, monkeypatch):
+    """The other half of R-4, stated as a rule rather than left as a behaviour change.
+
+    At `c3ab028` gate 7 globbed `**/*.yaml`, so a DIRECTORY named `configs/adir.yaml` was red
+    while `configs/prod/` was silent — the same path type, two answers, chosen by the name. R75
+    removes name from the question: both are skipped, and nothing is lost because `rglob` walks
+    through both and enumerates everything loadable inside them.
+    """
+    root = _mini_tree(tmp_path)
+    (root / "configs" / "adir.yaml").mkdir()
+    (root / "configs" / "adir.yaml" / "inner.yaml").write_text(RUN5.read_text())
+    monkeypatch.setattr(TOOL, "REPO_ROOT", root)
+
+    discovered = TOOL._discovered_configs()
+    assert "configs/adir.yaml" not in discovered, (
+        f"a real directory is refused by read_text by TYPE, so it is skipped; got {discovered}"
+    )
+    assert "configs/adir.yaml/inner.yaml" in discovered, (
+        "…and the skip hides nothing, because rglob walked through it. A loadable config "
+        f"inside a config-NAMED directory is still enumerated; got {discovered}"
     )
 
 

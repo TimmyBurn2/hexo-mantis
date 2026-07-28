@@ -4,14 +4,7 @@ Imports only pydantic + yaml + mantis.encoding/util (DAG: config → encoding, u
 torch (resolve_amp_dtype returns a string token; the model maps token → torch.dtype).
 """
 from mantis.config.emit import ResolvedConfig, ResolvedKnob, resolve_config
-from mantis.config.loader import (
-    CONFIG_SUFFIXES,
-    ConfigSuffixError,
-    DuplicateKeyError,
-    discover_configs,
-    is_config_path,
-    load_config,
-)
+from mantis.config.loader import DuplicateKeyError, discover_configs, load_config
 from mantis.config.resolve import (
     AbsentEncodingError,
     BootstrapNotFoundError,
@@ -32,11 +25,9 @@ from mantis.config.schema import (
 )
 
 __all__ = [
-    "CONFIG_SUFFIXES",
     "SCHEMA_VERSION",
     "AbsentEncodingError",
     "BootstrapNotFoundError",
-    "ConfigSuffixError",
     "DuplicateKeyError",
     "EncodingConflictError",
     "EvalConfig",
@@ -48,7 +39,6 @@ __all__ = [
     "StrictModel",
     "TrainConfig",
     "discover_configs",
-    "is_config_path",
     "load_config",
     "reconcile_encoding",
     "resolve_amp_dtype",

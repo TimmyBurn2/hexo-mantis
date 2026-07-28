@@ -301,14 +301,15 @@ def _discovered_configs() -> "list[str]":
     declaration can name what discovery finds. R71: one authority, and widening it widens both
     gates together.
 
-    **Corrective pass (recheck R-2).** Unifying the two globs was not the class. The class was
-    that discovery filtered by EXTENSION while `load_config` filtered by nothing, so the
-    launchable set stayed strictly larger than the discovered set and the next suffix walked
-    through: `configs/run6.txt` and `configs/run6.YAML` were schema-valid, DISARMED on the
-    required row, and rc 0 from gate 7 AND gate 12. The loader now refuses what discovery
-    rejects (`is_config_path` — ONE predicate, both directions), so "not discovered" and "not
-    loadable" are the same statement and this function's left-hand side is complete against
-    everything a run can be launched from under `configs/`.
+    **Corrective pass (recheck R-2), as re-ruled by R75.** Unifying the two globs was not the
+    class. The class was that discovery filtered by EXTENSION while `load_config` filtered by
+    CONTENT, so the launchable set stayed strictly larger than the discovered set and the next
+    suffix walked through: `configs/run6.txt` and `configs/run6.YAML` were schema-valid,
+    DISARMED on the required row, and rc 0 from gate 7 AND gate 12. R75 declined closing that
+    from the loader's side; the protection is the **shared-authority invariant** (loader accepts
+    => audit sees), so `discover_configs` is name-agnostic and this function's left-hand side is
+    complete against everything a run can be launched from under `configs/`, whatever it is
+    called.
     """
     return sorted(path.relative_to(REPO_ROOT).as_posix()
                   for path in discover_configs(REPO_ROOT / CONFIG_DIR_REL))
@@ -338,16 +339,16 @@ def _config_declaration_drift() -> "tuple[list[str], list[str], list[str]]":
     "forgotten" stop being the same observable, which is the whole defect.
 
     **The scope of that claim, stated exactly** (ADJ-13 F-1 falsified the earlier, wider
-    wording; the recheck falsified the replacement): "a config" here means a file
-    `is_config_path` accepts — any `CONFIG_SUFFIXES` file at any depth under `configs/`, which
-    is precisely the set gate 7 validates AND precisely the set `load_config` will read. A file
-    under `configs/` with some other suffix is not a config to either gate **and is not
-    loadable, mintable or launchable either**, which is what makes the shared exclusion safe
-    rather than a hole. Pinned by, in `tests/tools/test_preflight_mint_process.py`,
-    `test_the_exclusion_BOTH_gates_share_is_backed_by_the_LOADER_refusing_the_file`
+    wording; the recheck falsified the replacement; R75 rules the third): "a config" here means
+    ANY path under `configs/` that is not a real directory — precisely the set gate 7 validates,
+    and a superset of everything `load_config` will read, which is the **shared-authority
+    invariant**. There is no excluded class left to be a hole: a name the loader would read is a
+    name this partition binds. Pinned by, in `tests/tools/test_preflight_mint_process.py`,
+    `test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITED`
     and
-    `test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_not_a_config_ANYWHERE`
-    — so a later widening of the predicate cannot silently re-open the gap.
+    `test_gate_12_is_RED_on_every_escape_that_ever_walked_through`,
+    and at the loader level by `tests/config/test_config_discovery_authority.py`'s invariant
+    row — so a later narrowing of discovery cannot silently re-open the gap.
     """
     present = set(_discovered_configs())
     production = set(PRODUCTION_CONFIGS)
@@ -678,7 +679,8 @@ def _audit_manifest_and_configs(paths: "list[Path]") -> dict:
         raise PreflightManifestError(
             "the config declaration no longer partitions the configs/ tree, so assertion "
             "(c)'s SCOPE is not knowable (MF-7; scope widened to gate 7's own discovery by "
-            "ADJ-13 F-1 — every CONFIG_SUFFIXES file at any depth):\n"
+            "ADJ-13 F-1 and made name-agnostic by R75 — every path at any depth under "
+            "configs/ that is not a directory):\n"
             f"  UNDECLARED (on disk, in neither tuple — NEVER audited): {undeclared}\n"
             "    -> add each to PRODUCTION_CONFIGS (it gets audited) or to EXEMPT_CONFIGS "
             "with a written reason (R59 permits deliberate disarming off the production "
