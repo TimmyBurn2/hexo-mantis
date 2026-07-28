@@ -1,8 +1,11 @@
 """CI gate 7: every file under configs/ schema-validates.
 
-Globs configs/**/*.yaml + *.yml; an EMPTY glob is a failure ("no configs found") so the
-gate can never go vacuous. Prints `OK <path>` per valid file; collects all failures
-before exiting. Exit 0 all valid; 1 any failure; 2 on internal error.
+Discovery is `mantis.config.loader.discover_configs` — the ONE authority on what counts as a
+config on disk, shared with gate 12's declaration partition (R71 / ADJ-13 F-1). It used to be
+an inline `**/*.yaml` + `**/*.yml` glob here and a FLAT `*.yaml` glob there, so a file this
+gate blessed could be invisible to gate 12 and never audited. An EMPTY discovery is a failure
+("no configs found") so the gate can never go vacuous. Prints `OK <path>` per valid file;
+collects all failures before exiting. Exit 0 all valid; 1 any failure; 2 on internal error.
 """
 import sys
 from pathlib import Path
@@ -10,12 +13,12 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 
 
 def main() -> int:
     configs_dir = Path("configs")
-    files = sorted(configs_dir.glob("**/*.yaml")) + sorted(configs_dir.glob("**/*.yml"))
+    files = discover_configs(configs_dir)
     if not files:
         print("no configs found under configs/ — gate 7 must never be vacuous", file=sys.stderr)
         return 1

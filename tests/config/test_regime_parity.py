@@ -11,7 +11,7 @@ O12-replacement assertion.
 """
 from pathlib import Path
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.encoding import lookup
@@ -22,7 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def test_representation_matches_registry_for_every_config():
     # identity-key consistency (LAW-11): a config's representation must equal the registry's for
     # its encoding. This is the representation-consistency consumer named in O15's registry.
-    configs = sorted((REPO_ROOT / "configs").glob("*.yaml"))
+    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # which gate 7 and gate 12 both now make legal.
+    configs = discover_configs(REPO_ROOT / "configs")
     assert configs
     for cfg_path in configs:
         cfg = load_config(cfg_path)

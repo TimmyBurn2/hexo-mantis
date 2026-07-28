@@ -64,7 +64,7 @@ import pytest
 from pydantic import ValidationError
 
 import mantis.run
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.composition import (  # RED-at-import anchor: module absent at HEAD
     UnvalidatedConfigError,
     require_run_config,
@@ -83,7 +83,13 @@ _CONFIGS_DIR = _REPO / "configs"
 #: The axis, DERIVED from the minted directory rather than re-typed. A sixth minted config
 #: joins every parametrized oracle below automatically; it can never be silently left off
 #: the axis, which is the F-A defect one directory listing away from returning.
-_MINTED: tuple[str, ...] = tuple(sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")))
+#: ADJ-13 F-1 corrective pass (recheck R-5): derived from the ONE discovery authority,
+#: and as a path RELATIVE to configs/ so a subdirectory config is unambiguous on the
+#: axis. A flat `*.yaml` glob is a sixth answer to "what is a config" and is blind to
+#: exactly the `configs/prod/run6.yaml` shape both gates now make legal.
+_MINTED: tuple[str, ...] = tuple(
+    path.relative_to(_CONFIGS_DIR).as_posix() for path in discover_configs(_CONFIGS_DIR)
+)
 
 #: `cadence < threshold < max_train_steps` (the F-2 reachability bound) makes 3 the
 #: smallest legal run at cadence 1. The drives below use 4 and 5 — IMPL may not "simplify"

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from mantis.config.loader import discover_configs
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINT = REPO_ROOT / "tools" / "mint_config.py"
 DIFF = REPO_ROOT / "tools" / "config_diff.py"
@@ -113,7 +115,10 @@ def test_invalid_config_exits_2(tmp_path):
 
 # ── F2 — arm --from-header structurally over the SHIPPED configs (CI test tier, gate 3) ──
 def test_every_committed_config_header_is_truthful():
-    configs = sorted((REPO_ROOT / "configs").glob("*.yaml"))
+    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # which gate 7 and gate 12 both now make legal.
+    configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found"
     for cfg in configs:
         res = _from_header(cfg)

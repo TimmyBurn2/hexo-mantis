@@ -22,7 +22,7 @@ import pytest
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -77,7 +77,10 @@ _PARITY_LADDER = {
 
 
 def _config_paths() -> list[Path]:
-    paths = sorted(_CONFIGS_DIR.glob("*.yaml"))
+    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # which gate 7 and gate 12 both now make legal.
+    paths = discover_configs(_CONFIGS_DIR)
     for name in ("dev.yaml", "grid.yaml"):
         p = _TEMPLATES_DIR / name
         if p.exists():

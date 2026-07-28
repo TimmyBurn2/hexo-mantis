@@ -6,7 +6,8 @@ CLI: uv run python tools/mint_config.py --template dev --out configs/<name>.yaml
 Every --set key MUST already exist in the template (creating a new key via mint is an
 error — the schema would reject it anyway). The delta is stamped into the file header
 (repo_design §5 copy-drift antidote). Exit 0 ok; 2 on unknown template, unknown delta
-key, schema-invalid result, existing output without --force, or usage error.
+key, schema-invalid result, an --out path this repo's loader would refuse, existing output
+without --force, or usage error.
 """
 import argparse
 import sys
@@ -15,6 +16,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from mantis.config.loader import CONFIG_SUFFIXES, is_config_path
 from mantis.config.schema import RunConfig
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "config_templates"
@@ -76,6 +78,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     out_path = Path(args.out)
+    # ADJ-13 F-1, corrective pass (recheck R-2). `--out` is a free path, so this tool was one
+    # of the three facts that made `configs/run6.txt` a REAL hazard rather than a contrived
+    # one: the repo's own minting tool would produce it on request. The loader now refuses that
+    # suffix, so minting one would write a file nothing can read — refused here, at the point
+    # where the operator can still fix the name, and from the SAME predicate the loader and
+    # both gates use rather than from a fourth copy of the answer.
+    if not is_config_path(out_path):
+        print(f"refusing to mint {out_path}: its suffix is not in CONFIG_SUFFIXES "
+              f"{CONFIG_SUFFIXES}, so mantis.config.loader.load_config would refuse to read "
+              "it and neither gate 7 nor gate 12 would ever see it", file=sys.stderr)
+        return 2
     if out_path.exists() and not args.force:
         print(f"refusing to overwrite {out_path} (use --force)", file=sys.stderr)
         return 2

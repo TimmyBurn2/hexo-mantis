@@ -140,6 +140,17 @@ MANIFEST: tuple[ArmedAbort, ...] = (
 
 #: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them
 #: is the tool's (SF-4).
+#:
+#: ADJ-13 N-1: `configs/run5.yaml`'s membership here is not decoration and is not free to
+#: move. Nothing pinned it, so moving run5 to `EXEMPT_CONFIGS` with a written reason and
+#: promoting an armed smoke config in its place kept gate 12 at **rc 0 with run5 disarmed** —
+#: the partition stayed a partition and every exemption still carried a reason, so every
+#: existing check was satisfied by the swap. The producer is
+#: `test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable`
+#: — the run the operator is about to mint is audited BY NAME, and
+#: exempting it is a red gate rather than a bookkeeping edit. (Recheck R-8: this citation
+#: named a test that does not exist — a LAW-07 producer citation that greps to nothing is
+#: LAW-07's own failure mode. Every citation in this pass was `grep`-verified.)
 PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run5.yaml",)
 
 #: The OTHER half of the same authority (MF-7). R59's "deliberate disarming remains legal for
@@ -147,20 +158,51 @@ PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run5.yaml",)
 #: "deliberately exempt" and "nobody remembered to list it" the SAME observable, and a
 #: disarmed `configs/run6.yaml` dropped into the tree audited GREEN (measured: rc 0).
 #:
-#: So the exemption is now WRITTEN, and the two tuples must PARTITION `configs/*.yaml`
-#: exactly. The tool hard-fails (rc 31) on either kind of drift: a config present on disk and
+#: So the exemption is now WRITTEN, and the two tuples must PARTITION the config set EXACTLY.
+#: The tool hard-fails (rc 31) on either kind of drift: a config present on disk and
 #: named by neither tuple, and a tuple naming a config that is not on disk. That is gate 11's
 #: `KNOWN_DEBT` shape (`silent_encoding_gate.py:126,338-344`) applied to the config set —
-#: registered debt whose staleness is itself a failure. Adding a config to `configs/` now
-#: FORCES a one-line declaration here or in `PRODUCTION_CONFIGS`; it can no longer be
-#: forgotten into exemption.
+#: registered debt whose staleness is itself a failure.
+#:
+#: **What "the config set" means, and why the earlier wording was FALSE** (ADJ-13 F-1). This
+#: comment used to say `configs/*.yaml`, and the tool implemented exactly that — a flat
+#: `*.yaml` glob — while gate 7 validated `**/*.yaml` + `**/*.yml`. So `configs/run6.yml` and
+#: `configs/prod/run6.yaml` passed gate 7 and were never audited by gate 12: the claim below
+#: was measured FALSE for two of the three ways to add a config, because MF-7's fix had been
+#: fitted to the reviewer's `run6.yaml` rather than to the class. Discovery is now
+#: `mantis.config.loader.discover_configs` — ONE authority, consumed by both gates (R71) —
+#: and the declaration accepts subdirectory-relative paths, which it previously reported STALE
+#: while the file sat on disk.
+#:
+#: **That was still not enough, and the recheck measured why** (R-2). Widening discovery by one
+#: more extension leaves the boundary one extension further out: `configs/run6.txt` and
+#: `configs/run6.YAML` were schema-valid, DISARMED on the required row, mintable, launchable —
+#: and rc 0 from both gates. The asymmetry was never between two globs; it was that DISCOVERY
+#: answered "is this a config" by extension while the LOADER answered it not at all. So
+#: `load_config` now REFUSES a suffix outside `CONFIG_SUFFIXES` (`ConfigSuffixError`) and
+#: discovery filters with the same predicate, `is_config_path`. With that, and only with that:
+#:
+#: Adding a config to `configs/` — any file this repo's loader will read, at any depth — now
+#: FORCES a one-line declaration here or in `PRODUCTION_CONFIGS`; it can no longer be forgotten
+#: into exemption, and a file at a suffix neither tuple names is not a config anywhere, so the
+#: gates' silence about it is correct rather than a hole. The one limit still standing, stated
+#: rather than implied: this binds `configs/`, and a loadable `.yaml` OUTSIDE that directory is
+#: reachable by `--config` and by `python -m mantis.run` without being discovered
+#: (CARD-CONFIG-DISCOVERY-ROOT).
 #:
 #: `(repo-relative path, why it is exempt)`. The reason is data, printed by the tool on the
 #: failure path, so an exemption cannot be a bare path nobody can justify later.
 EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
     (
         "configs/dev_example.yaml",
-        "developer template, never minted for a run; disarmed at `:200` by design (R59).",
+        "developer template, never minted for a run; disarmed at `:200` by design (R59). "
+        "ADJ-13 N-3: this file is ALSO the mutation corpus's M1 row (the one real committed "
+        "config that demonstrates the audit going red), and exempting it moved gate 12's "
+        "red-capability on the real `configs/` tree onto `--config` — which had no producer "
+        "in that direction until F-5's. Both halves are now pinned: the declared-production "
+        "half by `test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set`'s "
+        "bare drive, the `--config` half by "
+        "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
     ),
     (
         "configs/smoke_gnn.yaml",

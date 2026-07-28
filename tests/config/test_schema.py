@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import (
     SCHEMA_VERSION,
     DrainCapsConfig,
@@ -231,7 +231,10 @@ def test_f1_unknown_encoding_rejected_at_validate():
 
 # ── O16 — schema round-trip + every-config-validates + no code-side defaults ──
 def test_o16_every_committed_config_validates():
-    configs = sorted((REPO_ROOT / "configs").glob("*.yaml"))
+    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
+    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
+    # which gate 7 and gate 12 both now make legal.
+    configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found (gate 7 must never be vacuous)"
     for cfg_path in configs:
         load_config(cfg_path)  # raises on any failure

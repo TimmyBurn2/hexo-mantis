@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1090 lines total, 126 in the child closure, 643 in
-# parent-only function bodies. Two reasons, because the first covers only 126 of the 1090
+# this file's own top-level functions — 1284 lines total, 126 in the child closure, 809 in
+# parent-only function bodies. Re-measured at ADJ-13's R72 CLOSING PASS (was 1234/126/764 at
+# the corrective pass, 1156/126/691 before it, 1090/126/643 before that): this pass added 50
+# lines — `_watchdog_reason` (F-3's species a second time: the rc-34 parenthetical derived
+# from the segments the run actually READ instead of a constant that named a search which in
+# one reachable posture never happened) and the post-child scan's `segments_scanned` record —
+# every one of them on the PARENT side, and the child closure is STILL 126 lines and STILL
+# exactly the same six functions, which is the justification's load-bearing claim. Two
+# reasons, because the first covers only 126 of the 1284
 # and saying so is the point (SF-7's own ruling: a justification that is not true is worse
 # than none):
 #
@@ -14,7 +21,7 @@
 #      moved, renamed or unshipped sibling) in the one code path whose whole job is to
 #      survive a child that dies without unwinding.
 #
-#  (2) PARENT SIDE (643 lines: the two predicate evaluators, the classifier, the exit
+#  (2) PARENT SIDE (809 lines: the two predicate evaluators, the classifier, the exit
 #      taxonomy, the audit path, the report writer). Reason (1) does NOT reach these — they
 #      could move to a sibling module with zero effect on the self-exec, and REVIEW-impl
 #      measured exactly that (SF-I1: 462 parent-only lines before this pass added to them).
@@ -94,7 +101,7 @@ from mantis.config.armed_aborts import (
     Status,
     audit_arming,
 )
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 
 #: SF-4: every repo-root resolution lives HERE, never in the shipped package.
@@ -112,10 +119,26 @@ A_KEYS = ("a1", "a2", "a3", "a4")
 B_KEYS = ("b0", "b1", "b2", "b3", "b4a", "b4b", "b4c", "b5a")
 A4_PINS = "single-producer / no sink line loss"
 B1_SCOPE = "source-mutation detector; vacuous against an unmodified watchdog"
-NOT_RUN_REASON = "mode=audit — no boot, no burst"
+#: The modes `_new_report` may be called with. DATA, and there is NO default (R1): a mode with
+#: no entry is a named internal failure, because falling back would publish some other mode's
+#: disclaimer, which is ADJ-13 F-3 itself.
+REPORT_MODES: tuple[str, ...] = ("audit", "preflight")
+#: The `not_run` disclaimer's two halves, selected by WHAT THE RUN DID rather than by what it
+#: intended. See `_not_run_reason`.
+NOT_BOOTED_REASON = ("NO boot was spawned and NO burst was attempted, so (a) sync-cadence and "
+                     "(b) lag-transport had nothing to measure")
+BOOTED_REASON = ("a boot WAS spawned and a burst attempted, but the run did not reach the "
+                 "point where (a) and (b) could be evaluated")
+#: Recheck R-9: printed at the TOP of `_run_audit`, i.e. before `_audit_manifest_and_configs`
+#: can raise, so it appears on rc-30 and rc-31 runs too. Made CONDITIONAL rather than moved:
+#: it is the first line a CI log reader sees and it must be true on a red run as well as a
+#: green one. The pinned substring `rc 0 covers assertion (c) ONLY` is preserved verbatim —
+#: `tests/tools/test_preflight_mint.py::test_audit_only_is_green_on_the_real_tree` (BYTE-FROZEN,
+#: `bd8e65e682c6a2dc`) asserts it, and rewording past it is an R43 event. Measured: the first
+#: attempt at this nit dropped the substring and turned the frozen oracle red.
 AUDIT_STDOUT_LINE = (
     "preflight: mode=AUDIT — assertions (a) sync and (b) lag were NOT RUN (no boot, no "
-    "burst). rc 0 covers assertion (c) ONLY."
+    "burst). If this run is green, rc 0 covers assertion (c) ONLY."
 )
 RC_CONVENTION = (
     "POSIX Popen.returncode — NEGATIVE on signal death, never 128+N"
@@ -259,20 +282,48 @@ CONFIG_DIR_REL = "configs"
 
 
 def _discovered_configs() -> "list[str]":
-    """Every config actually on disk, repo-relative. The scope check's left-hand side."""
-    return sorted(f"{CONFIG_DIR_REL}/{path.name}"
-                  for path in (REPO_ROOT / CONFIG_DIR_REL).glob("*.yaml"))
+    """Every config actually on disk, repo-relative. The scope check's left-hand side.
+
+    ADJ-13 F-1. This used to be its own flat `glob("*.yaml")` — a SECOND answer to "what is a
+    config", beside gate 7's `**/*.yaml` + `**/*.yml`. Measured consequence, both halves:
+
+    * a disarmed `configs/run6.yml` or `configs/prod/run6.yaml` validated under gate 7 (`OK
+      configs/run6.yml`) and was **never audited** by gate 12 — rc 0, no UNDECLARED line, with
+      the actor-lag abort off. MF-7's fix had been fitted to the reviewer's `run6.yaml` rather
+      than to the class, so two of the three ways to add a config still walked through.
+    * the INVERSE, which is worse than a scope miss: a subdirectory config could not be legally
+      DECLARED either. Named in `PRODUCTION_CONFIGS` and present on disk, `configs/prod/run6.yaml`
+      was reported STALE — "declared, absent from disk" — a false statement about a file the
+      tool was looking straight at.
+
+    Discovery is now `mantis.config.loader.discover_configs`, the same call gate 7 makes, and
+    the path is emitted relative to the repo root INCLUDING subdirectory components, so a
+    declaration can name what discovery finds. R71: one authority, and widening it widens both
+    gates together.
+
+    **Corrective pass (recheck R-2).** Unifying the two globs was not the class. The class was
+    that discovery filtered by EXTENSION while `load_config` filtered by nothing, so the
+    launchable set stayed strictly larger than the discovered set and the next suffix walked
+    through: `configs/run6.txt` and `configs/run6.YAML` were schema-valid, DISARMED on the
+    required row, and rc 0 from gate 7 AND gate 12. The loader now refuses what discovery
+    rejects (`is_config_path` — ONE predicate, both directions), so "not discovered" and "not
+    loadable" are the same statement and this function's left-hand side is complete against
+    everything a run can be launched from under `configs/`.
+    """
+    return sorted(path.relative_to(REPO_ROOT).as_posix()
+                  for path in discover_configs(REPO_ROOT / CONFIG_DIR_REL))
 
 
 def _config_declaration_drift() -> "tuple[list[str], list[str], list[str]]":
-    """MF-I7 (i). `PRODUCTION_CONFIGS` and `EXEMPT_CONFIGS` must PARTITION `configs/*.yaml`.
+    """MF-I7 (i). The two tuples must PARTITION `discover_configs(configs/)` — EXACTLY the set
+    gate 7 validates, which after ADJ-13 F-1 is one authority rather than two globs.
 
     Returns (undeclared, stale, overlapping) — all three empty is the only legal state:
 
     * **undeclared** — a config on disk named by neither tuple. This is the escape REVIEW-impl
       demonstrated: `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run5.yaml >
       configs/run6.yaml` then `--audit-only` → **rc 0**, because a config that is not listed is
-      never audited. Nothing pinned `configs/*.yaml ⊆ declared`.
+      never audited. Nothing pinned `discover_configs(configs/) ⊆ declared`.
     * **stale** — a tuple naming a config that is not on disk. R65's Phase D re-mints run5; if
       the re-mint lands under a new filename, an unchecked tuple goes on auditing a file
       nobody will run. This is `silent_encoding_gate.py:338-344`'s stale-`KNOWN_DEBT` rule.
@@ -285,6 +336,18 @@ def _config_declaration_drift() -> "tuple[list[str], list[str], list[str]]":
     (`PRODUCTION_CONFIGS`) and makes its COMPLETENESS machine-checked, so adding a config to
     `configs/` forces a one-line declaration on one side or the other. "Exempt" and
     "forgotten" stop being the same observable, which is the whole defect.
+
+    **The scope of that claim, stated exactly** (ADJ-13 F-1 falsified the earlier, wider
+    wording; the recheck falsified the replacement): "a config" here means a file
+    `is_config_path` accepts — any `CONFIG_SUFFIXES` file at any depth under `configs/`, which
+    is precisely the set gate 7 validates AND precisely the set `load_config` will read. A file
+    under `configs/` with some other suffix is not a config to either gate **and is not
+    loadable, mintable or launchable either**, which is what makes the shared exclusion safe
+    rather than a hole. Pinned by, in `tests/tools/test_preflight_mint_process.py`,
+    `test_the_exclusion_BOTH_gates_share_is_backed_by_the_LOADER_refusing_the_file`
+    and
+    `test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_not_a_config_ANYWHERE`
+    — so a later widening of the predicate cannot silently re-open the gap.
     """
     present = set(_discovered_configs())
     production = set(PRODUCTION_CONFIGS)
@@ -301,10 +364,19 @@ def _audit_paths(named: "Path | None") -> "list[Path]":
     `_run_preflight` UNIONED it, so `--audit-only --config X` and the full preflight returned
     rc 0 and rc 30 on the same tree. Two authorities for one law, in one tool. Union is the
     safe direction: naming a config can only ever ADD scrutiny, never remove it.
+
+    **Recheck R-6 — F-2's class at a site F-2's own census missed.** Set membership IS a
+    path-identity comparison, and the two sides normalised differently: `named` arrives
+    `.resolve()`d from `_resolve_config_path`, while `_resolve_production_configs()` returns a
+    plain `REPO_ROOT / rel`. Under a symlinked `configs/run5.yaml` the union held both spellings
+    of ONE config, which was then audited twice and published twice in `audited_configs`. The
+    direction was fail-safe, which is why it survived; the SCOPING is the lesson — F-2 was
+    censused over `os.path.abspath` call SITES rather than over path COMPARISONS. Both sides
+    now normalise through the same call, so the set is a set of configs rather than of spellings.
     """
-    paths = set(_resolve_production_configs())
+    paths = {path.resolve() for path in _resolve_production_configs()}
     if named is not None:
-        paths.add(named)
+        paths.add(Path(named).resolve())
     return sorted(paths)
 
 
@@ -604,8 +676,9 @@ def _audit_manifest_and_configs(paths: "list[Path]") -> dict:
     if undeclared or stale or overlapping:
         reasons = dict(EXEMPT_CONFIGS)
         raise PreflightManifestError(
-            "the config declaration no longer partitions configs/*.yaml, so assertion (c)'s "
-            "SCOPE is not knowable (MF-7):\n"
+            "the config declaration no longer partitions the configs/ tree, so assertion "
+            "(c)'s SCOPE is not knowable (MF-7; scope widened to gate 7's own discovery by "
+            "ADJ-13 F-1 — every CONFIG_SUFFIXES file at any depth):\n"
             f"  UNDECLARED (on disk, in neither tuple — NEVER audited): {undeclared}\n"
             "    -> add each to PRODUCTION_CONFIGS (it gets audited) or to EXEMPT_CONFIGS "
             "with a written reason (R59 permits deliberate disarming off the production "
@@ -667,7 +740,61 @@ def _audit_manifest_and_configs(paths: "list[Path]") -> dict:
 
 
 # ── the evidence report (§9.1) ────────────────────────────────────────────────────────
+def _not_run_reason(report: dict) -> str:
+    """The `not_run` disclaimer for (a) and (b), derived from **what the run DID**.
+
+    ADJ-13 F-3, and its CORRECTIVE PASS. **Class: a shipped constant asserting something the
+    run measured otherwise, in the evidence artifact a mint sign-off reads.** The first fix
+    keyed the disclaimer on `mode`, which is the run's INTENT, not its history — so every mode
+    PREFLIGHT failure landing before `_run_child` (rc 10 config-path, rc 11 burst-below-floor,
+    rc 30 arming, rc 31 manifest) published "a boot was spawned and a burst attempted" beside
+    `"child": null`, and the sentence's own pointer ("see `child` … and `events`") aimed at two
+    null fields. That is the SAME class the fix was closing, inverted: the pre-fix string was
+    false about the mode and true about the boot; the post-fix string was true about the mode
+    and false about the boot. Measured at rc 11 by the recheck, on the fix's own producer drive.
+
+    So the discriminator is `report["child"]` — the field that records whether a boot happened —
+    and the mode is merely NAMED, never used to assert a fact. The report is the single source:
+    the sentence and the `child` block cannot disagree, because one is computed from the other.
+
+    Called twice by design: once by `_new_report` (where `child` is `None`, and "no boot" is
+    true at that instant) and once by `_finalise_not_run` immediately before the report is
+    written, when `child` records what actually happened.
+    """
+    mode = report["mode"]
+    if mode not in REPORT_MODES:
+        raise PreflightInternalError(
+            f"unknown report mode {mode!r} — the not_run disclaimer names the mode and there "
+            "is no code-side default (R1). A fallback here would publish ANOTHER mode's "
+            "disclaimer into the evidence artifact, which is exactly ADJ-13 F-3."
+        )
+    child = report.get("child")
+    if child is None:
+        return f"mode={mode} — {NOT_BOOTED_REASON}; see `failure` for where the run stopped"
+    return (f"mode={mode} — {BOOTED_REASON} (child rc {child.get('rc')}); see `child`, "
+            "`failure` and `events` for where it stopped")
+
+
+def _finalise_not_run(report: dict) -> dict:
+    """Re-derive every still-`not_run` disclaimer from the report's OWN final state.
+
+    The report is built before the run and written in a `finally` (LAW-14), so any sentence
+    stamped at construction time is a PREDICTION. This is where the prediction is replaced by
+    the measurement. Blocks that reached a real verdict are left alone — only a block still
+    saying `not_run` has a disclaimer to correct.
+    """
+    for name in ("a_sync", "b_lag"):
+        block = report["assertions"][name]
+        if block.get("verdict") == "not_run":
+            block["reason"] = _not_run_reason(report)
+    return report
+
+
 def _new_report(mode: str) -> dict:
+    """The report skeleton. The `not_run` reason is a PREDICTION here (no boot has happened
+    yet, and `child` is None, so "no boot was spawned" is true at this instant);
+    `_finalise_not_run` re-derives it from the run's own history before the write."""
+    not_run_reason = _not_run_reason({"mode": mode, "child": None})
     return {
         "schema": REPORT_SCHEMA,
         "tool_sha256": _sha256(Path(os.path.abspath(__file__))),
@@ -675,8 +802,8 @@ def _new_report(mode: str) -> dict:
         "mode": mode, "verdict": "pass", "rc": 0, "failure": None,
         "config": None, "override": None, "manifest": None,
         "assertions": {
-            "a_sync": {"verdict": "not_run", "reason": NOT_RUN_REASON},
-            "b_lag": {"verdict": "not_run", "reason": NOT_RUN_REASON},
+            "a_sync": {"verdict": "not_run", "reason": not_run_reason},
+            "b_lag": {"verdict": "not_run", "reason": not_run_reason},
             "c_arming": {"verdict": "not_run", "reason": "the audit did not complete"},
         },
         "child": None, "events": None,
@@ -691,7 +818,13 @@ def _report_name(report: dict) -> str:
 
 def _write_report(out_dir: Path, report: dict) -> None:
     """LAW-14: written in a `finally`, ALWAYS. The one case a `finally` cannot cover is the
-    write itself failing, and that is rc 41 — loud and fatal, never a silent except."""
+    write itself failing, and that is rc 41 — loud and fatal, never a silent except.
+
+    `_finalise_not_run` runs HERE rather than at the call site so that the invariant — no
+    report on disk claims a boot its own `child` block does not record — holds for every write
+    path there will ever be, and cannot be lost by a second caller forgetting the step.
+    """
+    _finalise_not_run(report)
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / _report_name(report)).write_text(
@@ -748,10 +881,27 @@ def _git_toplevel() -> Path:
 def _checked_out_dir(raw: str) -> Path:
     """§9.2. The child's `log_dir` is a real `JsonlEventSink` writing `*.jsonl`, and gate 6
     rejects stray `*.jsonl` outside `tests/fixtures/`. A gate that can dirty the tree it
-    gates is a gate that will — so the refusal lands BEFORE anything is created."""
-    out_dir = Path(raw).expanduser()
-    resolved = out_dir if out_dir.is_absolute() else (Path.cwd() / out_dir)
-    resolved = Path(os.path.abspath(resolved))
+    gates is a gate that will — so the refusal lands BEFORE anything is created.
+
+    ADJ-13 F-2. Both sides of the comparison must resolve symlinks or the comparison is
+    between two different naming schemes. This line was `Path(os.path.abspath(resolved))`,
+    which normalises `..` and makes absolute but does NOT follow symlinks, while
+    `_git_toplevel()` returns a `.resolve()`d path — so a symlink whose target was inside the
+    working tree compared unequal, the refusal never fired, and the tool wrote its evidence
+    report into the repo (measured: `?? reports_redteam_probe/`, rc 33 from the boot wall
+    rather than rc 13 from this guard). The `..`-relative and plain-absolute-inside forms were
+    refused because `abspath` handles those TEXTUALLY; only the one form that needs the
+    filesystem escaped, which is the signature of this class. `.resolve()` is non-strict, so a
+    symlink to a path that does not exist yet still resolves to its target — which is exactly
+    the case that matters, because the guard runs before anything is created.
+
+    Recheck R-10: the line was `resolved = out_dir if out_dir.is_absolute() else (Path.cwd() /
+    out_dir)` followed by `.resolve()`. Once `abspath` became `.resolve()` that cwd-join was
+    DEAD — `Path("rel").resolve()` already resolves against the cwd — and the recheck's own
+    mutation of it was a proven no-op at full tier. A conjunct that cannot change an outcome
+    cannot have a flip row, so it is deleted rather than covered.
+    """
+    resolved = Path(raw).expanduser().resolve()
     toplevel = _git_toplevel()
     if resolved == toplevel or toplevel in resolved.parents:
         raise PreflightOutDirInsideRepoError(
@@ -856,6 +1006,47 @@ def _child_argv(args) -> "list[str]":
             "--device", str(args.device)]
 
 
+def _watchdog_reason(child: dict) -> str:
+    """The parenthetical in rc-34's message, DERIVED from what the run actually READ.
+
+    ADJ-13 F-3's species, found by the R72 CLOSING PASS in the same report. **Class: a
+    shipped constant asserting something the run measured otherwise, in the evidence
+    artifact a mint sign-off reads.** This line was
+    `child.get('fired_reason') or 'reason not found in the segment'`, and the fallback names
+    a search that in one reachable posture NEVER HAPPENED. Measured on the shipped
+    `_run_preflight`, three postures, one watchdog rc each:
+
+        segment carries the event + a reason -> "(actor_lag_exceeded)"
+        segment read, event NOT in it        -> "(reason not found in the segment)"   true
+        `out_dir/logs` never written         -> "(reason not found in the segment)"   FALSE
+
+    In the third the `events` block of the very same report says
+    `segments: [], lines: 0, sha256: null` — nothing was read, so nothing could be "not found
+    in" it, and the two indistinguishable sentences send an operator to look for a segment
+    that does not exist. Exactly F-3: the report's own measurement contradicts the report's
+    own sentence.
+
+    So the sentence is derived from `child["segments_scanned"]`, the list `_run_preflight`
+    publishes of the segments it actually read. `None` means no scan is recorded on this
+    block at all (a child classified without a post-child scan, e.g. driven directly); `[]`
+    means the scan ran and read nothing. The three are distinguishable in the message because
+    they are distinguishable in the run, and each sentence is computed from the field beside
+    it, so the two cannot disagree.
+    """
+    reason = child.get("fired_reason")
+    if reason:
+        return str(reason)
+    scanned = child.get("segments_scanned")
+    if scanned is None:
+        return ("no segment scan is recorded on this child block, so no reason was read — "
+                "see `events`")
+    if not scanned:
+        return ("NO segment was read for this run, so no reason could be found — see "
+                "`events` and the child's own `stderr_tail`")
+    return (f"{len(scanned)} segment(s) were read and none of them carries a "
+            "`heartbeat_watchdog_fired` reason")
+
+
 def _classify_child(child: dict) -> None:
     """§6.3a's total order. The first matching arm wins, and NO arm may be skipped because
     the event stream looks plausible: the child's exit status is evaluated BEFORE any
@@ -873,8 +1064,7 @@ def _classify_child(child: dict) -> None:
         )
     if rc in WATCHDOG_CODES:
         raise PreflightWatchdogFiredError(
-            f"the run's own watchdog fired: child rc {rc} "
-            f"({child.get('fired_reason') or 'reason not found in the segment'})"
+            f"the run's own watchdog fired: child rc {rc} ({_watchdog_reason(child)})"
         )
     if rc == RELAUNCH_BUDGET_CODE:
         raise PreflightBootFailedError(
@@ -1008,6 +1198,11 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     log_dir = out_dir / "logs"
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
                         if log_dir.is_dir() else ([], []))
+    # R72 CLOSING PASS. The scan PUBLISHES what it read, so `_watchdog_reason` can say which
+    # of "read and not found" / "nothing was read" actually happened instead of asserting the
+    # first unconditionally. `[]` and "no scan recorded" are different facts and the child
+    # block now distinguishes them.
+    child["segments_scanned"] = [str(segment) for segment in segments]
     fired = [event for event in events if event.get("event") == "heartbeat_watchdog_fired"]
     if fired:
         child["fired_reason"] = fired[-1].get("reason")
