@@ -35,6 +35,13 @@ What each block is the only witness to (LAW-07):
 - **SF-I2** the evidence block's integrity claim and the segment glob's run scoping.
 - **SF-I3** rc 22, the burst-completeness refusal (RR-14).
 - **ADJ-12** the arithmetic that decides run5's expected preflight outcome, rc 23 vs rc 25.
+- **CARD-D-BURST-FLOOR** (WPMINT Phase B) the report's MINT TIER — which tier the accepted
+  burst was and what it does NOT prove. The only witness to three things nothing else pins:
+  that `_burst_tier` reads the config's own floor rows rather than "cleared the max" (which
+  would claim draw-rate reachability on a config that arms no draw-rate abort), that coverage
+  tracks the OUTCOME rather than the burst length (at HEAD every child dies at TD-4, so
+  `covered` is `[]` and both tiers stay OWED), and that tier `sync_lag` is UNREACHABLE on a
+  production config — the measured ground for the card's one deviation.
 
 R64 posture: nothing here patches, fakes or monkeypatches anything INSIDE the tool. The
 mini-tree rig copies the real tool byte-for-byte to a scratch root so that its own
@@ -2849,3 +2856,261 @@ def test_a_verdict_with_NO_inversion_reason_ends_cleanly_and_never_prints_a_PLAC
         "with no inversion reason the message must END at the sub_reason — the `.strip()` "
         f"exists for exactly that. got {str(caught.value)!r}"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# WPMINT Phase B — CARD-D-BURST-FLOOR: the MINT TIER the report publishes
+#
+# CLASS: **an evidence artifact that reports a run's LENGTH without reporting what that
+# length bought.** run5's minimum legal burst is 25001 because arming
+# `train.draw_rate_abort` at `min_step: 25000` puts a third row in `_burst_floors`. The floor
+# cannot be shrunk (a run5 armed value, mint-prereg-only, R82/R85) and a shorter burst that
+# pretended to cover the draw-rate axis is out under R64 — so the honest move is for the
+# report to say which tier ran and what that tier does NOT prove.
+#
+# Every row below drives the SHIPPED functions on the REAL committed configs. Nothing here
+# patches the tool, and nothing here estimates a wall-clock: at HEAD no burst of any length
+# has ever run (TD-4), which is precisely the fact `covered: []` publishes.
+# ══════════════════════════════════════════════════════════════════════════════════════
+def _tier_config(path: Path):
+    return load_config(path)
+
+
+def test_every_mint_tier_has_a_NOT_PROVEN_entry_and_there_is_NO_default() -> None:
+    """R1 at the tier boundary — `REPORT_MODES`' discipline, one field over.
+
+    `_new_report`'s mode table has no default because "falling back would publish some other
+    mode's disclaimer, which is ADJ-13 F-3 itself". A tier disclaimer inherits that verbatim:
+    a `.get(tier, <some tier>)` would satisfy every other row in this block while publishing
+    the `full` tier's reachability claim under a `sync_lag` run. The fallback IS the defect,
+    so there is no fallback.
+    """
+    tiers = {TOOL.TIER_NONE, TOOL.TIER_SYNC_LAG, TOOL.TIER_FULL}
+    assert set(TOOL.TIER_NOT_PROVEN) == tiers, (
+        "every tier `_tier_disclaimer` can be called with must declare what it does NOT "
+        f"prove; got {sorted(TOOL.TIER_NOT_PROVEN)}"
+    )
+    assert len(set(TOOL.TIER_NOT_PROVEN.values())) == len(tiers), (
+        "two tiers sharing one disclaimer is the overclaim with an extra dict key — one of "
+        "them is publishing the other's coverage"
+    )
+    assert tuple(TOOL.MINT_REQUIRED_TIERS) == (TOOL.TIER_SYNC_LAG, TOOL.TIER_FULL), (
+        "the card requires BOTH tiers for a mint; got "
+        f"{tuple(TOOL.MINT_REQUIRED_TIERS)}"
+    )
+    with pytest.raises(TOOL.PreflightInternalError) as caught:
+        TOOL._tier_disclaimer({"tier": {"tier": "quick"}})
+    assert "no code-side default" in str(caught.value)
+
+
+def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
+    """`_burst_tier` reads `_burst_floors`, so the tier and the refusal message an operator
+    was shown come off ONE row set. Driven on the real committed configs at three lengths.
+
+    The third assertion is the one that matters and the one a "cleared the max floor"
+    implementation gets wrong: on a config whose `train.draw_rate_abort` is absent, ANY burst
+    clears every floor the config has — and calling that `full` would claim draw-rate
+    reachability on a config that arms no draw-rate abort at all. That is the overclaim this
+    whole block exists to prevent, so it is pinned at a burst LONGER than run5's own floor.
+    """
+    run5 = _tier_config(RUN5)
+    minimum = TOOL._minimum_legal_burst(run5)
+    assert minimum == _RUN5_BURST, f"run5's floor moved: {minimum}"
+    assert TOOL._burst_tier(run5, minimum) == TOOL.TIER_FULL
+    assert TOOL._burst_tier(run5, minimum - 1) == TOOL.TIER_NONE, (
+        "a burst below the max floor is not a shorter tier — it is a burst the validators "
+        "refuse, and no tier ran at all"
+    )
+    unarmed = [path for path in discover_configs(REPO_ROOT / "configs")
+               if _tier_config(path).train.draw_rate_abort is None]
+    assert unarmed, "this row is vacuous unless some committed config leaves the row absent"
+    for path in unarmed:
+        config = _tier_config(path)
+        assert TOOL._burst_tier(config, TOOL._minimum_legal_burst(config)) == TOOL.TIER_SYNC_LAG
+        assert TOOL._burst_tier(config, _RUN5_BURST) == TOOL.TIER_SYNC_LAG, (
+            f"{path.name} declares no {TOOL.DRAW_RATE_FLOOR_KEY} row, so no burst length on "
+            "it can reach the draw-rate abort's first firing step. Tier `full` here would be "
+            "a reachability claim about an abort this config does not arm"
+        )
+
+
+def test_a_PRODUCTION_config_can_never_be_preflighted_in_the_SHORT_tier() -> None:
+    """**The measured ground for deviating from the card's presumptive two-RUN shape.**
+
+    The card offered "a short burst asserts sync/lag/arming-audit, a long tier asserts
+    draw-rate live-fire reachability, BOTH required for mint". On a production config the
+    short tier is not merely unrun — it is UNREACHABLE, and this is the producer for that
+    claim rather than an argument for it. Three links, each driven:
+
+    1. `draw_rate_collapse` is a REQUIRED manifest row, so a production config that disarms
+       it fails assertion (c) at rc 30 (`audit_arming` here; the rc-30 drive is F-5's);
+    2. an armed row puts `min_step + 1` into `_burst_floors`;
+    3. `_apply_burst_override` refuses every burst below the max at rc 11.
+
+    So the ONLY route to tier `sync_lag` on run5 is to disarm the row the mint exists to arm —
+    a change to a run5 armed value (R82/R85, hard stop) and a faked axis (R64). The two tiers
+    are two COVERAGE claims, not two runs, and `full` covers `sync_lag`.
+    """
+    assert PRODUCTION_CONFIGS, "vacuous unless something is declared production"
+    required = [row.name for row in MANIFEST if row.status is Status.REQUIRED]
+    assert "draw_rate_collapse" in required, (
+        "link 1: if the draw-rate row stops being REQUIRED, a production config may be minted "
+        "with it disarmed and the short tier becomes reachable again"
+    )
+    for rel in PRODUCTION_CONFIGS:
+        config = _tier_config(REPO_ROOT / rel)
+        keys = [key for key, _value, _floor in TOOL._burst_floors(config)]
+        assert TOOL.DRAW_RATE_FLOOR_KEY in keys, f"link 2 broken for {rel}: {keys}"
+        minimum = TOOL._minimum_legal_burst(config)
+        assert TOOL._burst_tier(config, minimum) == TOOL.TIER_FULL
+        with pytest.raises(TOOL.PreflightBurstTooShortError) as caught:
+            TOOL._apply_burst_override(config, minimum - 1)
+        assert int(caught.value.rc) == 11 and "MINIMUM legal burst" in str(caught.value), (
+            "link 3: the only burst that would tier as `sync_lag` on a production config is "
+            "one the config's own cross-field validators refuse"
+        )
+
+
+#: The two answers to "did this run actually cover a tier". Not two tiers — a tier is
+#: REQUESTED by the burst and COVERED by the outcome, and at HEAD those never coincide.
+_TIER_HISTORIES = ("no_verdict", "verdict")
+
+
+@pytest.mark.parametrize("history", _TIER_HISTORIES)
+def test_a_tier_is_COVERED_only_when_the_run_reached_a_verdict(history) -> None:
+    """`_finalise_tier` re-derives coverage from the report's own (a)/(b) verdicts, so the
+    coverage claim and the assertion blocks beside it cannot disagree — one is computed from
+    the other, exactly as `_finalise_not_run` computes the boot disclaimer from `child`.
+
+    A constant in EITHER direction fails one of these two rows. The `no_verdict` row is the
+    HEAD posture: every mode-PREFLIGHT child dies at TD-4 with (a) and (b) still `not_run`,
+    so a `covered` that tracked the burst length instead of the outcome would publish full
+    mint coverage for a run that never took a step.
+    """
+    report = TOOL._new_report("preflight")
+    report["tier"] = TOOL._tier_block(_tier_config(RUN5), _RUN5_BURST)
+    assert report["tier"]["tier"] == TOOL.TIER_FULL
+    if history == "verdict":
+        for name in ("a_sync", "b_lag"):
+            report["assertions"][name] = {"verdict": "pass"}
+    TOOL._finalise_tier(report)
+    block = report["tier"]
+    if history == "verdict":
+        assert block["covered"] == [TOOL.TIER_SYNC_LAG, TOOL.TIER_FULL], (
+            "`full` clears every floor `sync_lag` clears and one more, so one green `full` "
+            f"run discharges both required tiers; got {block['covered']}"
+        )
+        assert block["owed"] == [] and "still OWED: (none)" in block["does_not_prove"]
+    else:
+        assert block["covered"] == [], (
+            "the burst was long enough for tier `full`, but the run reached no verdict — "
+            f"coverage tracks the OUTCOME, not the argument. got {block['covered']}"
+        )
+        assert block["owed"] == list(TOOL.MINT_REQUIRED_TIERS), (
+            "a tier that could not be run today must say so and stay OWED, never report "
+            f"`not_run` as though it were optional. got {block['owed']}"
+        )
+        assert "NOTHING in this tier is demonstrated" in block["does_not_prove"]
+
+
+def test_the_tier_disclaimer_is_RE_DERIVED_at_write_time_and_never_the_prediction(
+        tmp_path) -> None:
+    """The tier block stamped by `_new_report` is a PREDICTION (`none`, before any burst was
+    accepted). `_write_report` calls `_finalise_tier` beside `_finalise_not_run` so the
+    prediction is replaced by the measurement for every write path there will ever be.
+
+    Driven through the real writer, asserted against the bytes ON DISK — a re-derivation that
+    happens only at the call site is one a second caller can forget, and the artifact is the
+    only thing a mint sign-off reads.
+    """
+    report = TOOL._new_report("preflight")
+    assert report["tier"]["tier"] == TOOL.TIER_NONE and report["tier"]["burst_steps"] is None
+    stale = report["tier"]["does_not_prove"]
+    report["tier"] = TOOL._tier_block(_tier_config(RUN5), _RUN5_BURST)
+    assert report["tier"]["does_not_prove"] is None, (
+        "`_tier_block` must not compose the disclaimer — the run has not happened yet"
+    )
+    TOOL._write_report(tmp_path, report)
+    written = json.loads(next(iter(tmp_path.glob("preflight_*.json"))).read_text())
+    assert written["tier"]["does_not_prove"] != stale
+    assert written["tier"]["does_not_prove"].startswith(f"tier={TOOL.TIER_FULL} ")
+    assert TOOL.TIER_NOT_PROVEN[TOOL.TIER_FULL] in written["tier"]["does_not_prove"]
+    assert written["tier"]["floors"] == [
+        {"key": key, "value": value, "floor": floor, "cleared": True}
+        for key, value, floor in TOOL._burst_floors(_tier_config(RUN5))
+    ], "the block must name WHICH rule made the tier what it is, row by row"
+
+
+def test_the_none_tier_disclaimer_is_TRUE_in_mode_AUDIT_and_not_only_at_rc_11() -> None:
+    """ADJ-13 F-3, caught inside this card's own first draft and pinned so it stays caught.
+
+    The `none` disclaimer was first written as *"no burst SURVIVED the config's own
+    cross-field validators"*. Measured false on the very next drive: mode AUDIT requests no
+    burst, so nothing was refused — the sentence told an AUDIT reader their burst had been
+    rejected. Same class as the `not_run` disclaimer that was keyed on `mode`, committed
+    inside the fix for it. The wording is now pinned to the FIELD that records the fact.
+    """
+    for mode in TOOL.REPORT_MODES:
+        sentence = TOOL._new_report(mode)["tier"]["does_not_prove"]
+        assert "tier.burst_steps` is null" in sentence, (
+            "the `none` disclaimer must point at the field that records the fact rather than "
+            f"assert a story about how the run got there; mode={mode} got {sentence!r}"
+        )
+        assert "survived" not in sentence, (
+            "the measured-false draft, verbatim: it asserts a refusal that never happened in "
+            "mode AUDIT"
+        )
+
+
+def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> None:
+    """The rc-11 posture, driven through the REAL tool as a process.
+
+    A burst the validators refuse is not a shorter tier, and the artifact must not read as
+    though some coverage was obtained. Pinned end-to-end because the tier is stamped in
+    `_run_preflight` AFTER `_apply_burst_override` returns — a stamp one line earlier would
+    publish `tier: sync_lag` for a run that never started.
+    """
+    out_dir = tmp_path / "refused"
+    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST - 1),
+                       "--out-dir", str(out_dir), "--timeout-sec", "60", "--device", "cpu")
+    assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
+    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
+    assert report["child"] is None and report["override"] is None
+    assert report["tier"]["tier"] == TOOL.TIER_NONE
+    assert report["tier"]["burst_steps"] is None and report["tier"]["floors"] is None
+    assert report["tier"]["owed"] == list(TOOL.MINT_REQUIRED_TIERS)
+    assert report["tier"]["does_not_prove"] in result.stdout, (
+        "the sentence printed to the operator and the sentence on disk must be the same "
+        "bytes — a second composition site is a second thing that can disagree with the "
+        "artifact"
+    )
+
+
+@pytest.mark.integration
+def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove(
+        tmp_path) -> None:
+    """The card's headline requirement, measured on the real tool at run5's real floor.
+
+    This is `test_the_real_boot_terminates_where_the_docstring_says`'s twin: that row pins
+    WHERE the boot stops, this one pins what the artifact then CLAIMS. At HEAD the child dies
+    at TD-4, so the honest report is tier `full` REQUESTED, `covered: []`, both tiers still
+    OWED — and when CARD-POOL-ENCODING-BRIDGE lands this row is what tells the next reader
+    that a green burst may finally cover something.
+    """
+    out_dir = tmp_path / "tiered"
+    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "240", "--device", "cpu")
+    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
+    report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
+    block = report["tier"]
+    assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST
+    assert all(row["cleared"] for row in block["floors"])
+    assert block["covered"] == [] and block["owed"] == list(TOOL.MINT_REQUIRED_TIERS), (
+        "the burst cleared every floor, but the run never took a step — the report must not "
+        f"read as coverage. got covered={block['covered']} owed={block['owed']}"
+    )
+    assert "REACHABILITY and nothing else" in block["does_not_prove"], (
+        "even a COMPLETED `full` burst proves the run reaches the abort's first firing step "
+        "and nothing more; the artifact has to say so"
+    )
+    assert "NOTHING in this tier is demonstrated" in block["does_not_prove"]

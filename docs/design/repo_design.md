@@ -225,6 +225,24 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
    `train.max_train_steps`, and every fire-floor in the config must stay inside the run. The
    tool now enumerates each binding rule with its own floor rather than reporting only the
    maximum. See IMPL_NOTES_D's STOP-2.
+4. **The 101→25001 tension is resolved by DISCLOSURE, not by a shorter burst** (WPMINT Phase B
+   / CARD-D-BURST-FLOOR). The floor cannot be shrunk — `min_step` is a run5 armed value and is
+   mint-prereg-only (R82/R85) — and a shorter burst that pretended to cover the draw-rate axis
+   is barred by R64. The preflight's evidence report therefore carries a `tier` block naming
+   which mint tier the burst it ACCEPTED belongs to (`none` / `sync_lag` / `full`, derived from
+   `_burst_floors`) and, in words, what that tier does NOT prove. **Both `sync_lag` and `full`
+   are required for a mint, and `full` covers `sync_lag`** — one green `full` run discharges
+   both. This deviates from the two-SEPARATE-RUNS shape the card presumed, on a measured
+   ground: a `PRODUCTION_CONFIGS` row must arm `draw_rate_collapse` (gate 12 assertion (c)), an
+   armed row puts `min_step + 1` in the floor set, and the override refuses anything below the
+   max at rc 11 — so on a production config tier `sync_lag` is UNREACHABLE, and the only route
+   to it is disarming the row the mint exists to arm. Measured, HEAD: run5's floor is 25001 and
+   every other `configs/` entry's is 101, because only run5 arms the abort. Also measured: no
+   burst of any length has ever run here — the boot child dies at TD-4 before `compose_run` —
+   so `covered` is `[]` and both tiers stay OWED on every report the tool can currently write.
+   The cost of the `full` tier is a published LOWER BOUND (`>= 1042 s` from WP10's 41.66
+   ms/train-step floor) whose missing term — game-bound self-play generation for `>= 25001`
+   completed games on one worker — is named rather than estimated.
 
 ## 5. Config system
 
@@ -330,7 +348,9 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
     (`tools/ci_gates/preflight_mint.py --audit-only`). A `deferred` row is printed loudly on
     every run, is tamper-evident through a pinned source literal, and does not gate. The
     same tool's full mint preflight — a real `compose_run` boot plus a bounded burst,
-    asserting sync cadence and lag transport — is MANUAL and is invoked by no CI step.
+    asserting sync cadence and lag transport — is MANUAL and is invoked by no CI step. Its
+    evidence report states which MINT TIER the accepted burst was and what that tier does not
+    prove (§4 item 4); a tier that could not be run stays OWED rather than reading as optional.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 

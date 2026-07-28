@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1452 lines total, 195 in the child closure, 846 in
-# parent-only function bodies. RE-MEASURED at WPMINT Phase X, and the previous figures
-# (1284/126/809, six child functions) were MEASURED STALE at this pass: the committed file at
-# `5548516` was already 1353/159/835 across seven child functions, so DS/DR grew both sides
-# without restating the header, and `_burst_floors` had entered the closure via
-# `_minimum_legal_burst` unrecorded. Corrected rather than extended, because SF-7's own ruling
-# is that a justification which is not true is worse than none — and the sentence that had
-# gone false ("the child closure is STILL 126 lines and STILL exactly the same six functions")
-# was the justification's load-bearing claim, which makes it the one sentence a stale figure
-# may not be left on. Phase X's own delta is +94 lines: the rc-taxonomy extension for the
-# authored abort code 46 and `PreflightArmedAbortFiredError` on the PARENT side, and
-# `_abort_rc` — the card's one real process boundary — as the child closure's EIGHTH function.
-# Two reasons, because the first covers only 195 of the 1452 and saying so is the point:
+# this file's own top-level functions — 1672 lines total, 194 in the child closure, 970 in
+# parent-only function bodies. RE-MEASURED at WPMINT Phase B; Phase X's figures (1452/195/846,
+# the same eight child functions) were true when written and are restated here rather than
+# left to go stale, per SF-7: a justification which is not true is worse than none. Phase X in
+# turn corrected a header that HAD gone false — it claimed "the same six functions" against a
+# measured eight, with `_burst_floors` having entered the closure via `_minimum_legal_burst`
+# unrecorded. Phase B's own delta is +220 lines and lands ENTIRELY on the parent side (846 ->
+# 970): the mint-tier vocabulary (`TIER_*`, `MINT_REQUIRED_TIERS`, `TIER_NOT_PROVEN`),
+# `_burst_tier` / `_tier_block` / `_tier_covered` / `_tier_disclaimer` / `_finalise_tier`, and
+# the docstring's tier section. The child closure did NOT grow — it shrank by 1 line, because
+# `_burst_floors`' last row now names its key from `DRAW_RATE_FLOOR_KEY` on one line instead of
+# two — and that is a deliberate property of this card, not an accident: the tier is a REPORT
+# fact and the report is parent-only, so nothing about it belongs in the process whose whole
+# job is to boot.
+# Two reasons, because the first covers only 194 of the 1672 and saying so is the point:
 #
-#  (1) CHILD SIDE (195 lines: _boot_main, _abort_rc, _build_buffer, _load,
+#  (1) CHILD SIDE (194 lines: _boot_main, _abort_rc, _build_buffer, _load,
 #      _apply_burst_override, _minimum_legal_burst, _burst_floors, _resolve_config_path).
 #      `_abort_rc` belongs on this side by the same rule as the rest: it runs IN the child,
 #      after `compose_run` returns, and it is what turns the run's own `abort_rule` into the
@@ -26,8 +28,9 @@
 #      moved, renamed or unshipped sibling) in the one code path whose whole job is to
 #      survive a child that dies without unwinding.
 #
-#  (2) PARENT SIDE (846 lines: the two predicate evaluators, the classifier, the exit
-#      taxonomy, the audit path, the report writer). Reason (1) does NOT reach these — they
+#  (2) PARENT SIDE (970 lines: the two predicate evaluators, the classifier, the exit
+#      taxonomy, the audit path, the report writer, the tier block). Reason (1) does NOT reach
+#      these — they
 #      could move to a sibling module with zero effect on the self-exec, and REVIEW-impl
 #      measured exactly that (SF-I1: 462 parent-only lines before this pass added to them).
 #      They stay for a different and narrower reason: `evaluate_assertions` and
@@ -107,6 +110,38 @@ resolver returns `None` — `grad_norm_hard_abort` and `sealbot_wr_abort` are no
 pre-registered) is rc 33 `PreflightBootFailedError` naming the rule: an abort that stopped the
 run is never reported as a clean boot, and no exit code is invented for a rule nobody
 registered.
+
+MINT TIERS (WPMINT Phase B / CARD-D-BURST-FLOOR). `configs/run5.yaml`'s minimum legal burst is
+**25001**, because arming `train.draw_rate_abort` at `min_step: 25000` puts a third row in
+`_burst_floors` (measured: `max(100+1, 1+1, 25000+1)`). The floor cannot be shrunk — `min_step`
+is a run5 armed value, mint-prereg-only (R82/R85) — and a shorter burst that pretended to cover
+the draw-rate axis is out under R64. So the report says what the burst it ran DOES and DOES NOT
+prove, in a `tier` block derived from `_burst_floors` and finalised by `_finalise_tier`:
+`none` (no burst accepted), `sync_lag` (actor-lag + sync-cadence floors only, on a config with
+no draw-rate row), `full` (a draw-rate `min_step` floor cleared too). BOTH `sync_lag` and
+`full` are required for a mint; `full` COVERS `sync_lag`, so one green `full` run discharges
+both.
+
+That is a deviation from the card's presumptive shape — two SEPARATE preflight runs — and the
+grounds are measured, not argued: `PRODUCTION_CONFIGS` rows must arm `draw_rate_collapse`
+(assertion (c), rc 30 otherwise), an armed row puts `min_step + 1` in the floor set, and
+`_apply_burst_override` refuses anything below the max at rc 11 (measured on the real tool:
+`--burst-steps 101` on run5 -> rc 11, `child: null`, no boot). **On a production config tier
+`sync_lag` is therefore unreachable**, and the only way to reach it is to disarm the row the
+mint exists to arm. Measured on the committed tree: run5's floor is 25001 and the other four
+`configs/` entries' floor is 101 — because only run5 arms the abort. The short tier is not a
+shorter run of run5; it is what a config WITHOUT the armed row already gets.
+
+What the `full` tier costs is an ESTIMATE and a LOWER BOUND, and this tool cannot measure it:
+TD-4 stops the child before `compose_run`, so no burst of any length has ever run here. Basis
+— WP10's recorded bench floor, median 41.66 ms/train-step (IQR 0.76, n=200, gnn_axis_v1/graph/
+bf16, CPU 1-thread, `b29f0bc`) -> 25001 steps is **>= 1042 s** of pure train-step compute. The
+MISSING TERM, named rather than guessed: the coordinator is GAME-BOUND. With
+`training_steps_per_game=1.0` and `max_train_burst=1` (`run.py:100-108`), `_steps_budget`
+returns exactly 1, and a round with no new game sleeps instead of training
+(`train/coordinator/step.py:260-266`) — so 25001 train steps needs >= 25001 COMPLETED self-play
+games, generated on run5's `selfplay.n_workers: 1`. That generation time is not in 41.66 ms and
+is not estimated here.
 """
 from __future__ import annotations
 
@@ -160,6 +195,56 @@ NOT_BOOTED_REASON = ("NO boot was spawned and NO burst was attempted, so (a) syn
                      "(b) lag-transport had nothing to measure")
 BOOTED_REASON = ("a boot WAS spawned and a burst attempted, but the run did not reach the "
                  "point where (a) and (b) could be evaluated")
+#: The row key `_burst_floors` gives the draw-rate rule, named ONCE so `_burst_tier` can select
+#: it without re-typing the dotted path. Two spellings of one row key is how a tier silently
+#: stops matching the floor it is derived from.
+DRAW_RATE_FLOOR_KEY = "train.draw_rate_abort.min_step"
+#: The MINT TIERS (WPMINT Phase B / CARD-D-BURST-FLOOR). A tier names WHICH of `_burst_floors`'
+#: rules the burst the validators ACCEPTED actually cleared — so, like `_not_run_reason`, it is
+#: derived from what the run DID and never from what it intended. `--burst-steps` is a request;
+#: only a burst that survives `_apply_burst_override` is a tier.
+TIER_NONE = "none"
+TIER_SYNC_LAG = "sync_lag"
+TIER_FULL = "full"
+#: BOTH are required for a mint, and `full` COVERS `sync_lag` (it clears every floor `sync_lag`
+#: clears and one more), so a single green `full` run discharges both. That is not the card's
+#: presumptive shape — two SEPARATE runs — and the deviation is MEASURED, not argued: on a
+#: production config the short tier is unreachable. `PRODUCTION_CONFIGS` rows must arm
+#: `draw_rate_collapse` (assertion (c), rc 30 otherwise), an armed row puts `min_step + 1` into
+#: `_burst_floors`, and `_apply_burst_override` refuses anything under the max at rc 11. So the
+#: only way to run a production config in tier `sync_lag` is to disarm the row the mint exists
+#: to arm — a change to a run5 armed value (R82/R85, hard stop) and a faked axis (R64). The two
+#: tiers are therefore two COVERAGE CLAIMS, not two runs.
+MINT_REQUIRED_TIERS: tuple[str, ...] = (TIER_SYNC_LAG, TIER_FULL)
+#: What each tier does NOT prove. DATA, and there is NO default (R1) — the same discipline as
+#: `REPORT_MODES`, for the same reason: a tier with no entry is a named internal failure,
+#: because falling back would publish ANOTHER tier's disclaimer into the evidence artifact,
+#: which is ADJ-13 F-3 itself.
+TIER_NOT_PROVEN: "dict[str, str]" = {
+    # Worded to be true on EVERY route that lands here, which is not the same as worded for
+    # the route it was written for. Drafting this as "no burst SURVIVED the cross-field
+    # validators" was measured false in mode AUDIT on the first drive — AUDIT requests no
+    # burst, so nothing was refused — and that is ADJ-13 F-3 committed inside the fix for it.
+    # The claim is now pinned to the field that records the fact (`tier.burst_steps` is null)
+    # rather than to a story about how it got that way.
+    TIER_NONE: ("NO burst was accepted — `tier.burst_steps` is null, whether because none was "
+                "requested (mode AUDIT) or because the run stopped at or before "
+                "`_apply_burst_override` (rc 10 / 11 / 30 / 31) — so this report proves "
+                "nothing about any tier: not (a) sync-cadence, not (b) lag-transport, and not "
+                "that the run reaches the step at which train.draw_rate_abort can fire"),
+    TIER_SYNC_LAG: ("the accepted burst clears the actor-lag and sync-cadence floors ONLY. "
+                    "This config declares no " + DRAW_RATE_FLOOR_KEY + " floor, so NO burst "
+                    "length on it can show the run reaching the draw-rate abort's first "
+                    "firing step — tier `full` is UNAVAILABLE on this config, not merely "
+                    "unrun, and a config that cannot reach tier `full` is not a config this "
+                    "tool can preflight for a mint"),
+    TIER_FULL: ("the accepted burst clears " + DRAW_RATE_FLOOR_KEY + ", so a run that "
+                "COMPLETES it reaches the first step at which the draw-rate abort can fire. "
+                "That is REACHABILITY and nothing else: it does not show the abort firing, it "
+                "does not show it firing CORRECTLY, and a healthy run must NOT fire it. The "
+                "statistic's correctness is pinned by the coordinator's own oracles, never by "
+                "this tool"),
+}
 #: Recheck R-9: printed at the TOP of `_run_audit`, i.e. before `_audit_manifest_and_configs`
 #: can raise, so it appears on rc-30 and rc-31 runs too. Made CONDITIONAL rather than moved:
 #: it is the first line a CI log reader sees and it must be true on a red run as well as a
@@ -679,14 +764,38 @@ def _burst_floors(config: RunConfig) -> "list[tuple[str, int, int]]":
                int(config.train.actor_sync_cadence_steps) + 1)]
     block = config.train.draw_rate_abort
     if block is not None:
-        floors.append(("train.draw_rate_abort.min_step", int(block.min_step),
-                       int(block.min_step) + 1))
+        floors.append((DRAW_RATE_FLOOR_KEY, int(block.min_step), int(block.min_step) + 1))
     return floors
 
 
 def _minimum_legal_burst(config: RunConfig) -> int:
     """The floor the cross-field validators impose (`config/schema/core.py:280,307,314,321`)."""
     return max(floor for _key, _value, floor in _burst_floors(config))
+
+
+def _burst_tier(config: RunConfig, burst_steps: int) -> str:
+    """Which mint tier a burst of this length on this config IS — read off `_burst_floors`.
+
+    Derived from the same three rows the refusal message prints, so the tier a report claims
+    and the floor arithmetic an operator was shown cannot drift apart. Three outcomes:
+
+    * below the max floor -> `none`. No burst was accepted, so no tier was run. Defensive
+      rather than dead: `_run_preflight` calls this only AFTER `_apply_burst_override`
+      returned, but a caller that computed a tier from a REQUESTED burst would publish a tier
+      for a run that never happened, which is the ADJ-13 F-3 class one field over;
+    * clears every floor AND the config declares a draw-rate floor -> `full`;
+    * clears every floor and the config declares NO draw-rate floor -> `sync_lag`.
+
+    The third arm is why the tier is not just "cleared the max": on a config with
+    `train.draw_rate_abort: null` the max floor is 101 and clearing it says nothing whatever
+    about draw-rate reachability. Calling that `full` would be the overclaim this block exists
+    to prevent — it is the WHOLE of the card's "what does it NOT prove".
+    """
+    floors = _burst_floors(config)
+    if int(burst_steps) < max(floor for _key, _value, floor in floors):
+        return TIER_NONE
+    draw = [floor for key, _value, floor in floors if key == DRAW_RATE_FLOOR_KEY]
+    return TIER_FULL if draw else TIER_SYNC_LAG
 
 
 def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
@@ -895,12 +1004,110 @@ def _finalise_not_run(report: dict) -> dict:
     return report
 
 
+def _tier_skeleton() -> dict:
+    """The tier block before any burst has been accepted. `none` is TRUE at this instant."""
+    return {"tier": TIER_NONE, "burst_steps": None, "floors": None,
+            "required_for_mint": list(MINT_REQUIRED_TIERS),
+            "covered": [], "owed": list(MINT_REQUIRED_TIERS), "does_not_prove": None}
+
+
+def _tier_block(config: RunConfig, burst_steps: int) -> dict:
+    """The tier block for a burst the cross-field validators ACCEPTED.
+
+    Built in `_run_preflight` AFTER `_apply_burst_override` returns, never before: a burst that
+    was refused (rc 11) is not a tier that ran, and stamping one would publish a coverage claim
+    for a run that never started. `floors` carries every row with its own `cleared` flag so the
+    operator can see WHICH rule made the tier what it is rather than re-deriving it.
+    """
+    return {"tier": _burst_tier(config, burst_steps),
+            "burst_steps": int(burst_steps),
+            "floors": [{"key": key, "value": value, "floor": floor,
+                        "cleared": int(burst_steps) >= floor}
+                       for key, value, floor in _burst_floors(config)],
+            "required_for_mint": list(MINT_REQUIRED_TIERS),
+            "covered": [], "owed": list(MINT_REQUIRED_TIERS), "does_not_prove": None}
+
+
+def _tier_covered(report: dict) -> "list[str]":
+    """Which mint tiers this run actually COVERED — from the report's own verdicts.
+
+    A tier is *requested* by the burst and *covered* by the outcome, and the two are not the
+    same fact. At HEAD they are never the same fact: every mode-PREFLIGHT child dies at TD-4
+    (CARD-POOL-ENCODING-BRIDGE) with (a) and (b) still `not_run`, so `covered` is `[]` and
+    BOTH tiers stay owed. That is the answer the card wants published — a tier that cannot be
+    run today says so, instead of a `not_run` an operator can read as optional.
+
+    `full` covers `sync_lag` because it clears every floor `sync_lag` clears and one more; the
+    subsumption is stated here, in the one place that computes coverage, rather than left for a
+    reader of `MINT_REQUIRED_TIERS` to infer.
+    """
+    block = report.get("tier")
+    if block is None:
+        return []
+    assertions = report.get("assertions") or {}
+    verdicts = {(assertions.get(name) or {}).get("verdict") for name in ("a_sync", "b_lag")}
+    if verdicts != {"pass"}:
+        return []
+    tier = block["tier"]
+    if tier == TIER_FULL:
+        return [TIER_SYNC_LAG, TIER_FULL]
+    if tier == TIER_SYNC_LAG:
+        return [TIER_SYNC_LAG]
+    return []
+
+
+def _tier_disclaimer(report: dict) -> str:
+    """WHICH TIER RAN and WHAT IT DOES NOT PROVE — the card's explicit requirement.
+
+    Same discipline as `_not_run_reason`, and deliberately the same shape: the sentence is
+    computed from the report's own fields (`tier`, then the (a)/(b) verdicts), so the
+    disclaimer and the blocks beside it cannot disagree. An unknown tier is a NAMED internal
+    failure and never a fallback — a `.get(tier, <some tier>)` here would publish one tier's
+    disclaimer under another tier's name, which is ADJ-13 F-3 with the mode swapped for the
+    tier.
+    """
+    block = report.get("tier")
+    tier = TIER_NONE if block is None else block["tier"]
+    if tier not in TIER_NOT_PROVEN:
+        raise PreflightInternalError(
+            f"unknown mint tier {tier!r} — the tier disclaimer names the tier and there is no "
+            "code-side default (R1). A fallback here would publish ANOTHER tier's 'what this "
+            "does not prove' into the evidence artifact, which is exactly ADJ-13 F-3."
+        )
+    covered = _tier_covered(report)
+    owed = [name for name in MINT_REQUIRED_TIERS if name not in covered]
+    reached = ("The run REACHED a verdict on (a) sync-cadence and (b) lag-transport"
+               if covered else
+               "The run did NOT reach a verdict on (a) or (b), so NOTHING in this tier is "
+               "demonstrated by this report")
+    return (f"tier={tier} — {TIER_NOT_PROVEN[tier]}. {reached}. mint tiers still OWED: "
+            f"{', '.join(owed) if owed else '(none)'}")
+
+
+def _finalise_tier(report: dict) -> dict:
+    """Re-derive `covered`, `owed` and the disclaimer from the report's OWN final state.
+
+    The twin of `_finalise_not_run`, and it runs beside it in `_write_report` for the same
+    reason: everything stamped at construction time is a PREDICTION, and this is where the
+    prediction is replaced by the measurement.
+    """
+    block = report.get("tier")
+    if block is None:
+        return report
+    covered = _tier_covered(report)
+    block["covered"] = covered
+    block["owed"] = [name for name in MINT_REQUIRED_TIERS if name not in covered]
+    block["does_not_prove"] = _tier_disclaimer(report)
+    return report
+
+
 def _new_report(mode: str) -> dict:
     """The report skeleton. The `not_run` reason is a PREDICTION here (no boot has happened
     yet, and `child` is None, so "no boot was spawned" is true at this instant);
-    `_finalise_not_run` re-derives it from the run's own history before the write."""
+    `_finalise_not_run` re-derives it from the run's own history before the write. The `tier`
+    block is a prediction in exactly the same sense, and `_finalise_tier` is its half."""
     not_run_reason = _not_run_reason({"mode": mode, "child": None})
-    return {
+    return _finalise_tier({
         "schema": REPORT_SCHEMA,
         "tool_sha256": _sha256(Path(os.path.abspath(__file__))),
         "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -911,8 +1118,8 @@ def _new_report(mode: str) -> dict:
             "b_lag": {"verdict": "not_run", "reason": not_run_reason},
             "c_arming": {"verdict": "not_run", "reason": "the audit did not complete"},
         },
-        "child": None, "events": None,
-    }
+        "child": None, "events": None, "tier": _tier_skeleton(),
+    })
 
 
 def _report_name(report: dict) -> str:
@@ -928,8 +1135,18 @@ def _write_report(out_dir: Path, report: dict) -> None:
     `_finalise_not_run` runs HERE rather than at the call site so that the invariant — no
     report on disk claims a boot its own `child` block does not record — holds for every write
     path there will ever be, and cannot be lost by a second caller forgetting the step.
+    `_finalise_tier` rides the same rule for the same reason.
+
+    The tier disclaimer is PRINTED from the finalised report rather than composed for stdout,
+    so the sentence on the terminal is byte-identical to the one on disk. A second composition
+    site is a second thing that can disagree with the artifact, which is the F-3 class this
+    file keeps closing.
     """
     _finalise_not_run(report)
+    _finalise_tier(report)
+    tier_block = report.get("tier")
+    if tier_block is not None:
+        print(f"preflight: {tier_block['does_not_prove']}")
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / _report_name(report)).write_text(
@@ -1355,6 +1572,9 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["assertions"]["c_arming"] = {"verdict": "pass", "disarmed": [],
                                         "required_armed": report["manifest"]["required"]}
     booted = _apply_burst_override(config, args.burst_steps)
+    # WPMINT Phase B: the tier is stamped only once the validators have ACCEPTED the burst, so
+    # a rc-11 refusal leaves `tier: none` — which is the truth, not a placeholder.
+    report["tier"] = _tier_block(config, int(args.burst_steps))
     report["override"] = {"keys": list(OVERRIDE_KEYS),
                           "from": int(config.train.max_train_steps),
                           "to": int(args.burst_steps),
