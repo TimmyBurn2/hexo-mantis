@@ -2231,7 +2231,7 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
                               "draw_rate_abort:\n"
                               "    threshold: 0.25\n"
                               "    min_step: 1\n"
-                              "    min_samples: 50"))
+                              "    N_pool_min: 50"))
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", ("configs/smoke_gnn.yaml",))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
                         (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],

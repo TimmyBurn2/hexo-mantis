@@ -1,7 +1,7 @@
 """Run-config schema (contract run-config-schema v1).
 
->300 justify (R8): this file carries the `RunConfig` root model and the five
-`model_validator`s of this schema's cross-field rules — the three on `RunConfig` span
+>300 justify (R8): this file carries the `RunConfig` root model and the six
+`model_validator`s of this schema's cross-field rules — the four on `RunConfig` span
 SECTIONS (train x selfplay, train x monitor), so they cannot live in any section module.
 
 Every model is strict: unknown key = hard error, missing key = hard error, silent scalar
@@ -19,6 +19,7 @@ from mantis.config.schema.monitor import MonitorSchemaConfig
 from mantis.config.schema.selfplay import InferenceConfig, SelfplayConfig
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
+from mantis.util.constants import DRAW_RATE_WINDOW
 
 SCHEMA_VERSION = 1
 
@@ -322,7 +323,8 @@ class RunConfig(StrictModel):
         # draw-rate abort's own step floor. `min_step >= max_train_steps` is a guard the
         # run never passes, so the row audits ARMED while the abort can never fire — the
         # same defect, on a third axis (the first two are `threshold > 1.0` and
-        # `min_samples > DRAW_RATE_WINDOW`, both closed at the type in schema/train.py).
+        # `N_pool_min > DRAW_RATE_WINDOW * selfplay.n_workers`, the first closed at the type
+        # in schema/train.py and the second by the validator below).
         # `None` is the EXPLICIT disarmed posture and is skipped: there is no floor to
         # place inside the run when the operator has declined to arm the abort.
         block = self.train.draw_rate_abort
@@ -331,5 +333,46 @@ class RunConfig(StrictModel):
                 f"train.draw_rate_abort.min_step ({block.min_step}) must be < "
                 f"train.max_train_steps ({total}): a step floor the run never reaches is "
                 f"an invariant that can never fire — armed in the config, absent in effect"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _draw_rate_evidence_bar_is_reachable(self) -> "RunConfig":
+        """WPMINT Phase DS (R92): the FOURTH axis of "armed in the config, absent in effect",
+        and the one R92's own change creates.
+
+        The draw-rate abort's evidence bar is compared against `Sum(completed)` over the
+        UNION of the pool's per-worker windows. Each window is a `deque(maxlen=
+        DRAW_RATE_WINDOW)`, so that sum is bounded above by
+        `DRAW_RATE_WINDOW * selfplay.n_workers` — measured at 1/2/8/32 workers in
+        `tests/selfplay/test_drawrate_pooled_statistic.py`, not inferred. An `N_pool_min`
+        above that ceiling is a condition no history can satisfy: the gate makes NO
+        observation for the entire run, the abort history stays empty, and gate 12 audits
+        the row ARMED.
+
+        This validator is what re-establishes the load-bearing bound R92 deleted.
+        `min_samples` carried `le=DRAW_RATE_WINDOW` (`util/constants.py`'s LOAD-BEARING
+        COUPLING note), and deleting the key would have deleted its pin. The bound could not
+        follow it onto `N_pool_min` as a plain `le=`, because the ceiling now depends on
+        `selfplay.n_workers` — a config-authored value in ANOTHER SECTION. `RunConfig` is
+        the one model that sees both, exactly as it is for the actor-sync twin above.
+
+        It carries its OWN name rather than joining the validator above: that one is about
+        the STEP CLOCK and this one is about EVIDENCE. A rule hidden inside a validator named
+        for a different axis is a false name at the moment it fires (R73).
+        """
+        block = self.train.draw_rate_abort
+        if block is None:
+            return self
+        ceiling = DRAW_RATE_WINDOW * self.selfplay.n_workers
+        if block.N_pool_min > ceiling:
+            raise ValueError(
+                f"train.draw_rate_abort.N_pool_min ({block.N_pool_min}) must be <= "
+                f"{ceiling} = DRAW_RATE_WINDOW ({DRAW_RATE_WINDOW}) * selfplay.n_workers "
+                f"({self.selfplay.n_workers}): the pool's per-worker draw windows cannot "
+                f"hold more completed games than that between them, so a larger bar is an "
+                f"evidence threshold the run can never meet — the gate would observe "
+                f"NOTHING for the whole run while auditing ARMED, which is armed in the "
+                f"config, absent in effect"
             )
         return self

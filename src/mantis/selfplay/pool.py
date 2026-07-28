@@ -235,15 +235,15 @@ class WorkerPool:
         """Rolling P90 of stride5_run over the last ≤50 games."""
         return self._instrumentation.current_stride5_p90(self._lock)
 
-    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]:
-        """Rolling draw rate per worker, over workers with >= `min_samples` completed games.
+    def pooled_draw_counts(self) -> tuple[int, int]:
+        """`(Sum(draws), Sum(completed))` over the union of the per-worker draw windows.
 
-        `min_samples` is REQUIRED and carries no default at any layer on this path (R80):
-        the bar is `train.draw_rate_abort.min_samples`, and a default here would re-create
-        the ADJ-14 saturation the moment a caller omitted it.
+        WPMINT Phase DS (R92): raw counts, no parameters. The evidence bar
+        (`train.draw_rate_abort.N_pool_min`) is applied at the abort DECISION, not here —
+        this path carries no config authority at all now, which is one fewer layer that
+        could hold a second default over the operator's pre-registered value (R1).
         """
-        return self._instrumentation.per_worker_draw_rates(
-            self._lock, min_samples=min_samples)
+        return self._instrumentation.pooled_draw_counts(self._lock)
 
     def terminal_reason_counts(self) -> dict[str, int]:
         """Cumulative terminal-reason counts since pool start.

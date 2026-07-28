@@ -67,7 +67,7 @@ FROZEN_PROPERTIES = (
 )
 FROZEN_METHODS = (
     "runner_stats", "inference_stats", "check_producer_health", "stop", "start",
-    "buffer_composition", "per_worker_draw_rates", "current_stride5_p90",
+    "buffer_composition", "pooled_draw_counts", "current_stride5_p90",
     "update_checkpoint_step", "sync_inference_weights", "latest_replay_path",
     "model_version_summary", "terminal_reason_counts",
 )

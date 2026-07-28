@@ -45,7 +45,7 @@ from mantis.train.coordinator.config import (
     RealClock,
     StepCoordinatorConfig,
     StepOutcome,
-    recent_pool_draw_rate,
+    pooled_draw_rate,
 )
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.events import emit_axis_distribution, emit_training_events
@@ -408,13 +408,14 @@ class StepCoordinator:
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.
 
-        draw-rate reads `recent_pool_draw_rate(pool.per_worker_draw_rates(min_samples=…))`
-        — the inclusion bar is config-authored (R80) — never the NaN
-        draw-target phantom at `pool_push.py:135`, whose very TOKEN is grep-banned here
-        (O-15). A missing producer is SKIP-counted (LAW-18), never silently read as a healthy
-        signal. (The stride5-spam gate was REMOVED at close-out, operator directive B.)
+        draw-rate reads `pooled_draw_rate(pool.pooled_draw_counts(), N_pool_min=…)` — the
+        POOLED COUNT-WEIGHTED rate over the union of worker windows (R92), with the evidence
+        bar config-authored — never the NaN draw-target phantom at `pool_push.py:135`, whose
+        very TOKEN is grep-banned here (O-15). A missing producer AND insufficient evidence
+        are both SKIP-counted (LAW-18), never silently read as a healthy signal. (The
+        stride5-spam gate was REMOVED at close-out, operator directive B.)
         """
-        rates_fn = getattr(self.pool, "per_worker_draw_rates", None)
+        counts_fn = getattr(self.pool, "pooled_draw_counts", None)
         spec = cfg.draw_rate_abort
         # WPAX Phase D: `is not None`, NOT `> 0`. Under the type change `draw_rate_abort` is
         # `None` on every disarmed run, and `None > 0` would raise TypeError here once per
@@ -428,16 +429,26 @@ class StepCoordinator:
         # `spec is not None`: the conjunct had NO flip-set and the `elif` arm was provably
         # unreachable (its LAW-18 comment was measured false). The early return keeps `spec`
         # narrowed for the type checker without a conjunct that no input can flip.
-        if spec is None or rates_fn is None:
+        if spec is None or counts_fn is None:
             self._sample("draw_rate_collapse", self._draw_rate_history, None)
             return False
-        # Past the early return the producer is non-None, so `_sample` appends and returns
-        # True unconditionally; its return is deliberately not branched on (a `if not
-        # self._sample(...)` here would be a second no-flip-set conjunct, R72).
-        self._sample(
+        # WPMINT Phase DS (R92): `_sample`'s return IS branched on now, and the conjunct DR-1
+        # ruled out has become live. Pre-R92 the producer could only yield a float, so past
+        # the early return `_sample` returned True unconditionally and branching on it would
+        # have been a second no-flip-set conjunct (R72). `pooled_draw_rate` returns `None`
+        # when `Sum(completed) < N_pool_min` — INSUFFICIENT EVIDENCE, which R92 makes a NO
+        # OBSERVATION rather than a fabricated healthy 0.0 (DR-4) — so the False arm has a
+        # real flip-set: an armed spec, a live producer, and a pool below the bar. Its
+        # witness is `test_drawrate_gate_branch_flipset.py`'s drive B5.
+        #
+        # The return is required, not tidy: `consec` counts consecutive OBSERVATIONS, so
+        # running the rule when nothing was appended would re-decide the abort on a stale
+        # tail. `_sample` has already skip-counted this case (LAW-18, ONE skip site).
+        if not self._sample(
             "draw_rate_collapse", self._draw_rate_history,
-            lambda: recent_pool_draw_rate(rates_fn(min_samples=spec.min_samples)),
-        )
+            lambda: pooled_draw_rate(counts_fn(), N_pool_min=spec.N_pool_min),
+        ):
+            return False
         message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
                                            threshold=spec.threshold,
                                            consec=cfg.draw_rate_consec,
@@ -445,12 +456,25 @@ class StepCoordinator:
         return self._fire_hard_abort("draw_rate_collapse", message)
 
     def _sample(self, gate: str, history: list[float], producer: Any) -> bool:
-        """Append one LIVE producer sample to ``history``; False (+skip) when it is absent."""
+        """Append one LIVE producer sample to ``history``; False (+skip) when there is no
+        observation to append.
+
+        TWO absences, ONE counter (LAW-18). The producer itself may be absent — a disarmed
+        gate, or a producer that has not landed — and a LIVE producer may return `None`,
+        which under R92 means INSUFFICIENT EVIDENCE (`Sum(completed) < N_pool_min`). Both are
+        skips and neither appends: an unobserved interval must never enter an abort history
+        as a number, in either direction. R72: both arms have flip-sets, driven in
+        `test_drawrate_gate_branch_flipset.py` (B1/B2 for the first, B5 for the second).
+        """
         self._gate_stats[gate]["checks"] += 1
         if producer is None:
             self._gate_stats[gate]["skips"] += 1
             return False
-        history.append(float(producer()))
+        value = producer()
+        if value is None:
+            self._gate_stats[gate]["skips"] += 1
+            return False
+        history.append(float(value))
         del history[:-_GATE_HISTORY_DEPTH]
         return True
 

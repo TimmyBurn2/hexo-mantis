@@ -104,13 +104,16 @@ train:
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
   max_train_steps: 1000000
-  # WPAX Phase D (R65/R80/R79+R83): the draw-rate collapse hard abort's terms.
-  # `null` is the EXPLICIT off posture and is what the TEMPLATE ships, matching the
-  # conservative `monitor.actor_lag_abort_enabled: false` precedent — a production
-  # config ARMS it with one whole-block mint delta, e.g.
-  #   --set 'train.draw_rate_abort={threshold: 0.25, min_step: 25000, min_samples: 50}'
+  # WPAX Phase D (R65/R80/R79+R83), statistic replaced by R92 (WPMINT Phase DS): the
+  # draw-rate collapse hard abort's terms. `null` is the EXPLICIT off posture and is what
+  # the TEMPLATE ships, matching the conservative `monitor.actor_lag_abort_enabled: false`
+  # precedent — a production config ARMS it with one whole-block mint delta, e.g.
+  #   --set 'train.draw_rate_abort={threshold: 0.25, min_step: 25000, N_pool_min: 50}'
+  # `N_pool_min` is R92's evidence bar on the POOLED count-weighted rate (it replaced the
+  # per-worker `min_samples` inclusion bar); it must be <= DRAW_RATE_WINDOW *
+  # selfplay.n_workers, which schema/core.py enforces at load.
   # The three travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
-  # (R82/R85) — never hand-edited in a minted file (R1).
+  # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
   completed_q_values: false
   value_target: pure_outcome_z

@@ -162,7 +162,7 @@ def test_swallow_census_bites_planted_swallow(tmp_path: Path) -> None:
 # ── O-15 draw_target_fraction ban ─────────────────────────────────────────────────────
 def test_draw_target_fraction_absent_from_monitor_and_coordinator_gates() -> None:
     """O-15 / P-15 — zero `draw_target_fraction` references in `monitor/**` or
-    `train/coordinator/**`. The draw-rate gate keys on the LIVE `recent_pool_draw_rate`, never
+    `train/coordinator/**`. The draw-rate gate keys on the LIVE `pooled_draw_rate`, never
     the NaN `draw_target_fraction` phantom (`pool_push.py:135`).
 
     The scan covers `*.yaml` as well as `*.py` (REVIEW-impl F-8): `producer_manifest.yaml` is

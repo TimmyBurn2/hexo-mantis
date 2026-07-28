@@ -21,7 +21,7 @@ WHAT THIS ORACLE IS THE SOLE WITNESS FOR. Three things no other test in the tree
 
 * **branch reachability, measured rather than read**: every executable line of
   `_run_hard_abort_gates` (its own code object AND the producer lambda nested in it) is
-  executed by at least one of the four drives below, collected with `sys.settrace`. A dead
+  executed by at least one of the five drives below, collected with `sys.settrace`. A dead
   arm re-introduced anywhere in the function makes the union fall short and reds this test.
   `test_drawrate_abort_threading.py`'s O-D8/O-D10 drive the gate but never observe WHICH
   lines ran, so a resurrected unreachable arm stays invisible to them.
@@ -32,6 +32,11 @@ WHAT THIS ORACLE IS THE SOLE WITNESS FOR. Three things no other test in the tree
   gate run on a disarmed run), not the `>= 1` inequalities O-D8 uses. DR-1's fix moved the
   disarmed posture from a two-site accounting (`_sample`'s skip plus a dead `elif`) to a
   one-site accounting, and an inequality could not tell a single skip from a double.
+* **the NO-OBSERVATION contract R92 adds** (WPMINT Phase DS): insufficient evidence
+  (`Sum(completed) < N_pool_min`) must skip-count through the SAME one site and append
+  NOTHING — never the healthy `0.0` that DR-4 measured being recorded as a real reading.
+  Drive B5 and `test_insufficient_evidence_appends_nothing_and_counts_a_skip` are its
+  witnesses, and the second states the mutation that reds it.
 
 `_run_hard_abort_gates` is called DIRECTLY here (not via `step()`) so that ONE gate run is
 one call — the whole point of the accounting pin. No monkeypatch of the subject and no
@@ -54,35 +59,40 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
-#: A spec whose `min_step=0` / `min_samples=1` put the live path in reach of a single drive;
-#: the FIRE arm additionally needs `draw_rate_consec` consecutive samples at/above threshold.
-_LIVE = DrawRateAbortSpec(threshold=0.4, min_step=0, min_samples=1)
+#: A spec whose `min_step=0` puts the live path in reach of a single drive; the FIRE arm
+#: additionally needs `draw_rate_consec` consecutive samples at/above threshold.
+#: `N_pool_min=10` is deliberately > 1 (WPMINT Phase DS): the NO-OBSERVATION arm R92 adds
+#: needs a bar a drive can sit UNDER, and a bar of 1 would make that arm unreachable.
+_LIVE = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10)
 _ZERO = {"checks": 0, "fires": 0, "skips": 0, "warns": 0}
 _GATE = "draw_rate_collapse"
 
 
 # ── local fakes (R5: no cross-test import) ────────────────────────────────────────────
 class _Pool:
-    """The pool surface the draw-rate gate touches, and only that."""
+    """The pool surface the draw-rate gate touches, and only that.
+
+    WPMINT Phase DS (R92): the producer is `pooled_draw_counts() -> (draws, completed)` and
+    takes no bar — the evidence bar is applied at the abort decision."""
 
     games_completed = 0
 
-    def __init__(self, rates: dict[int, float]) -> None:
-        self._rates = dict(rates)
-        self.min_samples_seen: list[int] = []
+    def __init__(self, counts: tuple[int, int]) -> None:
+        self._counts = (int(counts[0]), int(counts[1]))
+        self.counts_calls = 0
 
-    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]:
-        self.min_samples_seen.append(int(min_samples))
-        return dict(self._rates)
+    def pooled_draw_counts(self) -> tuple[int, int]:
+        self.counts_calls += 1
+        return self._counts
 
 
 class _NoProducerPool(_Pool):
-    """A pool whose `per_worker_draw_rates` reads as absent — the shape
-    `getattr(self.pool, "per_worker_draw_rates", None)` sees when the producer has not
+    """A pool whose `pooled_draw_counts` reads as absent — the shape
+    `getattr(self.pool, "pooled_draw_counts", None)` sees when the producer has not
     landed. Subclassing keeps every other surface identical, so B2 differs from B3 in
     exactly one input."""
 
-    per_worker_draw_rates = None
+    pooled_draw_counts = None
 
 
 class _Buffer:
@@ -168,26 +178,38 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
       disjunct alone. B1 and B2 together are why neither disjunct is decoration.
     * **B3** — both LIVE, the rule returns no message: the full live path, no fire.
     * **B4** — both LIVE, sustained collapse: the live path's FIRE arm.
+    * **B5** — both LIVE, evidence BELOW `N_pool_min`: the NO-OBSERVATION return that
+      WPMINT Phase DS (R92) adds. This is the drive that makes the new
+      `if not self._sample(...)` conjunct non-decorative. DR-1 correctly ruled that
+      conjunct out when `_sample` could only return True past the early return; R92's
+      `pooled_draw_rate` returns `None` on insufficient evidence, so the False arm has a
+      real flip-set now and B5 is it.
 
-    The union of the four must cover every executable line of the function. That is the
+    The union of the five must cover every executable line of the function. That is the
     assertion a resurrected dead arm cannot survive: a line no input reaches is exactly the
     `elif draw:` defect this oracle exists for, in whatever shape it comes back.
     """
-    b1 = _coordinator(spec=None, pool=_Pool({0: 0.99}))
+    b1 = _coordinator(spec=None, pool=_Pool((99, 100)))
     fired1, lines1 = _run_traced(b1)
-    b2 = _coordinator(spec=_LIVE, pool=_NoProducerPool({0: 0.99}))
+    b2 = _coordinator(spec=_LIVE, pool=_NoProducerPool((99, 100)))
     fired2, lines2 = _run_traced(b2)
-    b3 = _coordinator(spec=_LIVE, pool=_Pool({0: 0.0}))
+    b3 = _coordinator(spec=_LIVE, pool=_Pool((0, 100)))
     fired3, lines3 = _run_traced(b3)
-    assert (fired1, fired2, fired3) == (False, False, False), (
-        "none of B1/B2/B3 may report a fire: two are absent-input early returns and the "
-        "third is a live sample below threshold"
+    # B5 — a LIVE producer whose answer is `None`: `_LIVE.N_pool_min - 1` completed games,
+    # every one of them DRAWN. The rate would be 1.0 and would fire instantly if it were
+    # observed at all, so a gate that ignored the bar reds here rather than passing quietly.
+    b5 = _coordinator(spec=_LIVE, pool=_Pool((_LIVE.N_pool_min - 1, _LIVE.N_pool_min - 1)))
+    fired5, lines5 = _run_traced(b5)
+    assert (fired1, fired2, fired3, fired5) == (False, False, False, False), (
+        "none of B1/B2/B3/B5 may report a fire: two are absent-input early returns, one is a "
+        "live sample below threshold, and B5 is a total collapse the gate has INSUFFICIENT "
+        "EVIDENCE to report (R92)"
     )
 
     # B4 — the FIRE arm needs `draw_rate_consec` consecutive samples at/above threshold, so
     # ONE coordinator is driven until the rule speaks. `consec` is read off the shipped
     # config, never written as a literal here (R78 keeps it a coordinator-owned knob).
-    b4 = _coordinator(spec=_LIVE, pool=_Pool({0: 0.9}))
+    b4 = _coordinator(spec=_LIVE, pool=_Pool((90, 100)))
     lines4: set[int] = set()
     fired4 = False
     for _ in range(b4.config.draw_rate_consec + 2):
@@ -206,19 +228,29 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
         "B1 and B2 must take the early return — no sample may be appended when EITHER "
         "input is absent, or a disarmed gate is feeding the abort history"
     )
-    assert b1.pool.min_samples_seen == [], (
-        "on the disarmed posture the producer must never be CALLED: there is no "
-        "`min_samples` to pass it (R80)"
+    assert b1.pool.counts_calls == 0, (
+        "on the disarmed posture the producer must never be CALLED: there is no bar to "
+        "judge its answer against (R80/R92)"
     )
     assert b3.coord._draw_rate_history == [0.0], (
         "B3 differs from B1 only in `spec` and from B2 only in the producer, and it must "
         "take the LIVE path. If it did not, neither disjunct would have a flip-set and the "
         "early return would be as dead as the arm it replaced"
     )
+    assert b5.pool.counts_calls == 1 and b5.coord._draw_rate_history == [], (
+        "B5's flip-set, stated as the divergence it is: the producer WAS called (so this is "
+        "not B1 or B2 wearing a different hat) and NOTHING was appended (so this is not B3). "
+        f"A total collapse below the bar must leave the history empty; got "
+        f"{b5.coord._draw_rate_history}"
+    )
+    assert b5.coord._gate_stats[_GATE] == {"checks": 1, "fires": 0, "skips": 1, "warns": 0}, (
+        "…and it must SKIP-COUNT through `_sample`'s ONE counter (LAW-18), exactly as an "
+        f"absent producer does: {b5.coord._gate_stats[_GATE]}"
+    )
 
     # ── reachability: no line of the gate is dead ─────────────────────────────────────
     executable = _executable_lines(StepCoordinator._run_hard_abort_gates.__code__)
-    covered = lines1 | lines2 | lines3 | lines4
+    covered = lines1 | lines2 | lines3 | lines4 | lines5
     assert executable - covered == set(), (
         "these lines of `_run_hard_abort_gates` are executed by NO input: "
         f"{sorted(executable - covered)}. R72: a branch with no flip-set is dead code, and "
@@ -244,7 +276,7 @@ def test_a_disarmed_gate_run_records_exactly_one_check_and_one_skip() -> None:
     producer, directly, and IS observed to advance both counters. That is the fact the
     deleted in-code comment denied.
     """
-    harness = _coordinator(spec=None, pool=_Pool({0: 0.99}))
+    harness = _coordinator(spec=None, pool=_Pool((99, 100)))
     stats = harness.coord._gate_stats[_GATE]
     assert stats == _ZERO, "harness precondition: the gate's counters start at zero"
 
@@ -273,4 +305,61 @@ def test_a_disarmed_gate_run_records_exactly_one_check_and_one_skip() -> None:
         "`_sample` itself counts the check AND the skip for an absent producer. The skip arm "
         f"DR-1 deleted claimed to be what counted the EXPLICIT-off case; it never ran. "
         f"before={before} after={after}"
+    )
+
+
+# ── R92 — insufficient evidence is a SKIP, never a fabricated healthy reading ─────────
+def test_insufficient_evidence_appends_nothing_and_counts_a_skip() -> None:
+    """WPMINT Phase DS (R92), the answer to RECHECK_D finding DR-4, driven as a behaviour.
+
+    At `d0b3974` an empty included set produced `recent_pool_draw_rate({}) == 0.0` and the
+    gate APPENDED it to `_draw_rate_history` as a real measurement — a healthy reading
+    fabricated from no evidence, and (DR-4) at its worst precisely when the pool was
+    collapsing, because drawn games are the LONGEST games and a collapsing pool banks
+    completed games slower.
+
+    R92 makes that unrepresentable by TYPE. The drive below is the maximally adversarial
+    input for both directions at once: every completed game is a DRAW (so an unguarded gate
+    would read 1.0 and fire) and there is exactly one game less than `N_pool_min` (so the
+    guarded gate must report nothing at all).
+
+    THE MUTATION THAT REDS THIS TEST, stated so a later reader can run it: make
+    `pooled_draw_rate` return `0.0` instead of `None` below the bar. `_draw_rate_history`
+    becomes `[0.0]` — DR-4's exact defect — and the first assertion fails. Make it return the
+    rate unguarded instead and the history becomes `[1.0]`; the same assertion fails from the
+    other side. Neither mutation touches the disarmed accounting the test above pins, so the
+    two are independent subjects rather than one assertion twice.
+    """
+    bar = _LIVE.N_pool_min
+    harness = _coordinator(spec=_LIVE, pool=_Pool((bar - 1, bar - 1)))
+    assert harness.coord._run_hard_abort_gates(harness.config) is False
+
+    assert harness.coord._draw_rate_history == [], (
+        "insufficient evidence must append NOTHING. A `0.0` here is DR-4's fabricated "
+        "healthy reading; a `1.0` is a total-collapse abort taken on evidence the operator "
+        f"declared insufficient; got {harness.coord._draw_rate_history}"
+    )
+    assert harness.coord._gate_stats[_GATE] == {"checks": 1, "fires": 0, "skips": 1, "warns": 0}, (
+        "…and it must be visible in-run as ONE check and ONE skip (LAW-18), through "
+        "`_sample`'s single counter — the same site an absent producer uses, because 'no "
+        f"observation' is one fact however it arises; got {harness.coord._gate_stats[_GATE]}"
+    )
+    assert harness.pool.counts_calls == 1, (
+        "harness precondition: the producer WAS called exactly once. A gate that short-"
+        "circuited before it would satisfy both assertions above while witnessing nothing"
+    )
+
+    # ONE more completed game — the ONLY difference — and the same collapse is observed.
+    at_bar = _coordinator(spec=_LIVE, pool=_Pool((bar, bar)))
+    assert at_bar.coord._run_hard_abort_gates(at_bar.config) is False, (
+        "one observation is not `consec` observations, so this run must not fire yet"
+    )
+    assert at_bar.coord._draw_rate_history == [1.0], (
+        "at the bar the SAME collapse is a real observation of 1.0. Without this arm a gate "
+        "that never observed anything would pass the whole test above"
+    )
+    assert at_bar.coord._gate_stats[_GATE] == {"checks": 1, "fires": 0, "skips": 0, "warns": 0}, (
+        "…and it must count a check with NO skip: the two postures are distinguishable in "
+        f"the LAW-18 stream, which is what makes the skip counter informative; got "
+        f"{at_bar.coord._gate_stats[_GATE]}"
     )

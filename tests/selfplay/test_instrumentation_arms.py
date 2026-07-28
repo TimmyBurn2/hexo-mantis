@@ -65,12 +65,13 @@ def test_g01_draws_counter_increments_on_draw_terminal() -> None:
     lk = _lock()
     _game_complete(instr, lk, winner_code=0, worker_id=0)  # draw
     _game_complete(instr, lk, winner_code=1, worker_id=0)  # win
-    # WPAX Phase D (R80): the inclusion bar is a REQUIRED keyword with no default at any
-    # layer — `min_samples=1` reproduces the pre-delta `len(dq) > 0` rule this unit
-    # arm was written against, so the arm keeps its original subject.
-    rates = instr.per_worker_draw_rates(lk, min_samples=1)
-    assert 0 in rates
-    assert abs(rates[0] - 0.5) < 1e-9
+    # WPMINT Phase DS (R92): the estimator reports RAW POOLED COUNTS and no longer takes an
+    # inclusion bar (that bar died with the filtered-mean statistic). G-01's subject —
+    # "one draw then one win is a draw rate of 0.5" — is unchanged; it is read off the
+    # counts instead of off a per-worker map.
+    draws, completed = instr.pooled_draw_counts(lk)
+    assert (draws, completed) == (1, 2)
+    assert abs(draws / completed - 0.5) < 1e-9
 
 
 # ── G-02 — terminal-reason histogram accumulates ─────────────────────────────────────

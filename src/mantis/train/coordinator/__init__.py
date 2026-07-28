@@ -19,8 +19,8 @@ from mantis.train.coordinator.config import (
     TracemallocLike,
     TrainerLike,
     WorkerPoolLike,
+    pooled_draw_rate,
     promotion_capable_rounds,
-    recent_pool_draw_rate,
 )
 from mantis.train.coordinator.step import StepCoordinator
 
@@ -38,6 +38,6 @@ __all__ = [
     "TracemallocLike",
     "TrainerLike",
     "WorkerPoolLike",
+    "pooled_draw_rate",
     "promotion_capable_rounds",
-    "recent_pool_draw_rate",
 ]

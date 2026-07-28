@@ -94,9 +94,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.draw_rate_abort.min_step":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(min_step=)",
-    "train.draw_rate_abort.min_samples":
+    "train.draw_rate_abort.N_pool_min":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
-        " _run_hard_abort_gates -> pool.per_worker_draw_rates(min_samples=)",
+        " _run_hard_abort_gates -> pooled_draw_rate(N_pool_min=) [R92]",
     "train.completed_q_values": "TrainHParams.completed_q_values -> core.py:347 CE-vs-KL loss switch; cross-validated",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "RunConfig cross-section validator (policy_target/completed_q_values consistency, §2)",

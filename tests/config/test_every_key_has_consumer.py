@@ -109,9 +109,9 @@ CONSUMER_REGISTRY = {
     "train.draw_rate_abort.min_step":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(min_step=)",
-    "train.draw_rate_abort.min_samples":
+    "train.draw_rate_abort.N_pool_min":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
-        " _run_hard_abort_gates -> pool.per_worker_draw_rates(min_samples=)",
+        " _run_hard_abort_gates -> pooled_draw_rate(N_pool_min=) [R92]",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
@@ -294,6 +294,9 @@ def test_registry_has_exactly_150_entries():
     # 148 - 1 + 3 = 150. Measured, not derived: `train.draw_rate_abort` is the ONLY
     # `Block | None` field anywhere in `RunConfig`, so those three are the whole blast
     # radius; `eval.ladder.rungs` is a `list[LadderRung]` and stays one leaf under NIT-3.
+    # WPMINT Phase DS (R92) SWAPS one of those three (`min_samples` -> `N_pool_min`) and the
+    # count is unchanged at 150 — recorded because a swap that silently dropped or doubled a
+    # key would move this number, and the bijection above would then be the only witness.
     assert len(CONSUMER_REGISTRY) == 150
     assert len(_leaf_paths(RunConfig)) == 150
 
@@ -350,7 +353,7 @@ def test_the_walker_descends_into_an_OPTIONAL_block_not_only_a_required_one():
 
     leaves = set(_leaf_paths(RunConfig))
     assert {"train.draw_rate_abort.threshold", "train.draw_rate_abort.min_step",
-            "train.draw_rate_abort.min_samples"} <= leaves, (
+            "train.draw_rate_abort.N_pool_min"} <= leaves, (
         "the real arming block's three inner keys must each carry their own LAW-08 "
         "obligation now, not hide behind the block key"
     )

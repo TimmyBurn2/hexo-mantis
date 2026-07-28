@@ -251,8 +251,12 @@ def check_draw_rate_collapse(
 ) -> str | None:
     """Sustained self-play draw-rate collapse past ``min_step``.
 
-    ``history`` is the caller-owned series of ``recent_pool_draw_rate(pool.
-    per_worker_draw_rates())`` samples — the LIVE producer. The NaN draw-target phantom
+    ``history`` is the caller-owned series of ``pooled_draw_rate(pool.pooled_draw_counts(),
+    N_pool_min=…)`` samples — the LIVE producer, and by R92 (WPMINT Phase DS) it carries ONLY
+    real observations: an interval with less than ``N_pool_min`` completed games yields
+    ``None`` at the producer, is skip-counted, and never enters this series. So ``consec``
+    counts consecutive OBSERVATIONS here, not consecutive gate runs over an unchanging
+    reading. The NaN draw-target phantom
     input at `pool_push.py:135` is NEVER keyed on here (O-15 grep-ban, which bans even the
     token). ``threshold <= 0`` is a LIBRARY guard with its own tests; it is unreachable
     from production since WPAX Phase D, where arming became a property of the resolved

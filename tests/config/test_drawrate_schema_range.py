@@ -12,11 +12,19 @@ The oracles, and the defect each is the ONLY witness to:
 
 - O-D6 `test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range` — **MF-1's
   class, in both directions, on all three keys**. A threshold `> 1.0` passes `gt=0`, audits
-  ARMED, and can NEVER fire; a `min_samples` above the deque's own `maxlen` is permanently
-  unsatisfiable; a `min_step` at or past `train.max_train_steps` is a guard the run never
-  passes. All three are "armed in the config, absent in effect" — `schema/core.py:314-320`'s
-  own words for the sibling defect it already forbids. Not caught by the audit oracles, which
-  only ever see values that already loaded.
+  ARMED, and can NEVER fire; an `N_pool_min` above `DRAW_RATE_WINDOW * selfplay.n_workers`
+  is permanently unsatisfiable; a `min_step` at or past `train.max_train_steps` is a guard
+  the run never passes. All are "armed in the config, absent in effect" —
+  `schema/core.py`'s own words for the sibling defect it already forbids. Not caught by the
+  audit oracles, which only ever see values that already loaded.
+- **WPMINT Phase DS (R92) re-points the third key's arms.** `min_samples` is DELETED with the
+  filtered-mean statistic it guarded, and `N_pool_min` takes its place with the SAME defect
+  class on BOTH ends — `test_the_evidence_bar_must_be_reachable_within_the_pools_own_window`
+  (the ceiling, a cross-SECTION rule against `selfplay.n_workers`, which is why it is not an
+  `le=` on the field) and
+  `test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires` (the floor, DR-9's
+  class transferred). The behaviour those bounds describe is
+  `tests/selfplay/test_drawrate_pooled_statistic.py`.
 - O-D7 `test_every_config_states_its_draw_rate_posture_explicitly` — a config that INHERITS
   its posture instead of stating it, and a newly added config skipping the requirement.
   Enumerated through the ONE discovery authority (R71/R75), never a second glob.
@@ -36,6 +44,7 @@ from pydantic import ValidationError
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.draw_rate import resolve_draw_rate_abort  # RED anchor (R80)
 from mantis.config.schema import RunConfig
+from mantis.util.constants import DRAW_RATE_WINDOW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
@@ -43,7 +52,7 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is "the only
 #: place they may change", so they are written here as the pin that makes an in-place edit
 #: visible instead of silent.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "min_samples": 50}
+RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50}
 
 
 def _with_block(payload):
@@ -64,31 +73,34 @@ def _with_block(payload):
 # ── O-D6 — MF-1's class, in both directions, on all three keys ────────────────────────
 def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> None:
     """MF-1: loop 0 claimed "the schema cannot express a disarming number". FALSE — `gt=0`
-    forecloses only the `<= 0` half. `recent_pool_draw_rate` is an unweighted mean of
-    per-worker rates, i.e. a fraction in `[0, 1]` (`coordinator/config.py:141-146`), and the
-    predicate is `all(value >= threshold)` — an UPPER bound (`rules.py:264`). So ANY
-    threshold `> 1.0` can never be met, is accepted by `gt=0`, and reads ARMED to the
-    manifest: "armed in the config, absent in effect", which is `schema/core.py:314-320`'s
-    own words for the sibling defect it already forbids. It is reachable by the natural
-    percent slip — an operator meaning 35% writes `35` — through the mint path.
+    forecloses only the `<= 0` half. `pooled_draw_rate` is `Sum(draws)/Sum(completed)`, i.e.
+    a fraction in `[0, 1]`, and the predicate is `all(value >= threshold)` — an UPPER bound
+    (`rules.py`). So ANY threshold `> 1.0` can never be met, is accepted by `gt=0`, and reads
+    ARMED to the manifest: "armed in the config, absent in effect", which is
+    `schema/core.py`'s own words for the sibling defect it already forbids. It is reachable
+    by the natural percent slip — an operator meaning 35% writes `35` — through the mint path.
 
-    R83 closes it at both ends, and R71's class-fix law puts the same bound on the two other
-    axes of the same defect: `min_samples > _DRAW_RATE_WINDOW` is permanently unsatisfiable
-    (the 51-counterexample, O-D9), and `min_step >= train.max_train_steps` is a guard the run
-    never passes.
+    R83 closes it at both ends, and R71's class-fix law puts the same bound on the other axes
+    of the same defect: `min_step >= train.max_train_steps` is a guard the run never passes,
+    and `N_pool_min > DRAW_RATE_WINDOW * selfplay.n_workers` is evidence the run can never
+    bank (the two tests below this one).
 
-    THE RESIDUAL, ASSERTED RATHER THAN GLOSSED: `1e-300` still loads. That is a
-    maximum-sensitivity hair-trigger, not a disarm, and `le=1` does not address it.
-    WPMINT DR-2 correction: `min_samples` does not address it either, and this docstring
-    used to claim it did. `1/min_samples = 0.02` bounds ONE WORKER's rate; the value
-    compared against `threshold` is `recent_pool_draw_rate`, an unweighted MEAN over the N
-    included workers, whose smallest non-zero value is `1/(min_samples * N)` — measured
-    0.000625 at N=32 and 0.0003125 at N=64 (`coordinator/config.py`'s own estimator). So
-    thresholds below 0.02 are NOT indistinguishable from 0.02; the old claim understated
-    the residual by a factor of N. R82's mint prereg is what holds the value today, and the
-    statistic is under replacement (R92). The arm is here so the residual is VISIBLE; if a
-    later phase closes it at the type, this red is the correct signal to re-adjudicate the
-    disclosure, not a bug.
+    THE MF-1 RESIDUAL IS NOW CLOSED — a measured side effect of R92, recorded here rather
+    than left for a reader to discover. Every earlier revision of this docstring disclosed
+    that `1e-300` STILL LOADS: a maximum-sensitivity hair-trigger that `le=1` does not
+    address, and (WPMINT DR-2, measured) that `min_samples` did not address either, because
+    `1/min_samples = 0.02` bounded ONE WORKER's rate while the compared value was an
+    unweighted MEAN over N included workers whose floor was `1/(min_samples * N)` —
+    0.000625 at N=32, 0.0003125 at N=64, understated by a factor of N.
+
+    Under R92 the compared value IS `Sum(draws)/Sum(completed)`, so its smallest non-zero
+    value at the bar is exactly `1/N_pool_min` at EVERY worker count — and
+    `_one_drawn_game_cannot_fire_the_abort` requires `1/N_pool_min < threshold`. On a
+    one-worker pool `N_pool_min <= 50`, so `1/N_pool_min >= 0.02`, so **any threshold at or
+    below 0.02 is now REJECTED AT LOAD**: it is a threshold a single drawn game would meet,
+    which is a hair-trigger and not a threshold. That is MF-1's residual closed at the type
+    on the axis DR-2 proved the old claim false on. The arm below asserts the REJECTION, and
+    the boundary is asserted on both sides so the bound is the arithmetic and not a literal.
     """
     armed = dict(RUN5_PREREG)
     assert _with_block(armed).train.draw_rate_abort.threshold == 0.25
@@ -99,13 +111,10 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "`null` is the EXPLICIT off state (R79(1)): a word, not a number, and nobody types "
         "it by accident"
     )
-    assert _with_block({**armed, "threshold": 1e-300}).train.draw_rate_abort.threshold == 1e-300, (
-        "DISCLOSED RESIDUAL (MF-1 ancillary): the type does NOT close the hair-trigger end, "
-        "and neither does `min_samples` — the compared mean's floor is 1/(min_samples*N), "
-        "not 1/min_samples (WPMINT DR-2). R82's mint prereg is what holds the value"
-    )
 
     rejected = {
+        "threshold 1e-300 — MF-1's disclosed hair-trigger, CLOSED by R92's floor rule":
+            ({**armed, "threshold": 1e-300}, "N_pool_min"),
         "threshold 0.0 — the status-quo spelling of OFF, now a NAMED rejection":
             ({**armed, "threshold": 0.0}, "threshold"),
         "threshold -1.0 — below the metric's floor": ({**armed, "threshold": -1.0}, "threshold"),
@@ -116,16 +125,18 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "threshold .inf — the same class at the limit":
             ({**armed, "threshold": float("inf")}, "threshold"),
         "threshold true — a bool is not a fraction": ({**armed, "threshold": True}, "threshold"),
-        "min_samples 51 — permanently unsatisfiable: len(dq) is bounded by the deque's maxlen":
-            ({**armed, "min_samples": 51}, "min_samples"),
-        "min_samples 0 — no worker ever has fewer than zero games, so the guard is inert":
-            ({**armed, "min_samples": 0}, "min_samples"),
+        "N_pool_min 51 — unreachable evidence on a 1-worker pool (R92's fourth axis)":
+            ({**armed, "N_pool_min": 51}, "N_pool_min"),
+        "N_pool_min 0 — no pool ever banks fewer than zero games, so the bar is inert":
+            ({**armed, "N_pool_min": 0}, "N_pool_min"),
         "min_step 0 — the ADJ-14 hair-trigger the R80 guards exist to close":
             ({**armed, "min_step": 0}, "min_step"),
         "min_step == train.max_train_steps — a guard the run never passes":
             ({**armed, "min_step": 1_000_000}, "min_step"),
         "a partial block — the three components are inseparable (R80)":
-            ({"threshold": 0.25, "min_step": 25000}, "min_samples"),
+            ({"threshold": 0.25, "min_step": 25000}, "N_pool_min"),
+        "the RETIRED key — `min_samples` is gone (R92) and must not load silently":
+            ({**armed, "min_samples": 50}, "min_samples"),
         "an unknown inner key — extra='forbid' reaches inside the block too":
             ({**armed, "consec": 3}, "consec"),
     }
@@ -155,6 +166,86 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "no-terminal-default idiom in this very class (`schema/train.py:41,43`). A key that "
         "may be omitted has a default somewhere, and that default is a second authority "
         "(R1/LAW-11)"
+    )
+
+
+# ── DS-7 — the evidence bar's CEILING (R92's fourth axis) ─────────────────────────────
+def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> None:
+    """WPMINT Phase DS (R92) — the bound that REPLACES `min_samples: le=DRAW_RATE_WINDOW`.
+
+    `min_samples` carried a load-bearing `le=` (`util/constants.py`'s own words) and R92
+    deletes the key. Deleting it would have deleted the safety property with it, so the bound
+    moves — and it CANNOT move onto `N_pool_min` as a field bound, because the ceiling is
+    `DRAW_RATE_WINDOW * selfplay.n_workers` and `selfplay` is a different SECTION. It lives
+    in `schema/core.py::_draw_rate_evidence_bar_is_reachable`, the twin of the actor-sync
+    rule, on the ONE model that sees both sections.
+
+    A bar above the ceiling is the FOURTH "armed in the config, absent in effect" axis and
+    the one R92's own change creates: `Sum(completed)` never reaches it, the gate makes NO
+    observation for the entire run, and gate 12 audits the row ARMED.
+
+    Three arms, because two of them alone are satisfied by a re-spelled `le=50`:
+    the boundary on both sides at `n_workers: 1`, and the SAME value ACCEPTED once the worker
+    count is raised. The behaviour the bound describes is
+    `tests/selfplay/test_drawrate_pooled_statistic.py`.
+    """
+    assert load_config(CONFIGS_DIR / "run5.yaml").selfplay.n_workers == 1, (
+        "harness precondition: run5 is a ONE-worker pool, which is what makes 50 the ceiling "
+        "here. If this ever changes the two boundary arms below move with it"
+    )
+    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW})
+    assert at_ceiling.train.draw_rate_abort.N_pool_min == DRAW_RATE_WINDOW, (
+        "AT the ceiling the bar is satisfiable (the deque saturates exactly there), so it "
+        "must load — a bound that also forbade the reachable value would disarm the abort"
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1})
+    assert "N_pool_min" in str(caught.value) and "n_workers" in str(caught.value), (
+        "one game above the ceiling must be REJECTED, and the message must name BOTH keys: "
+        "the operator cannot act on 'too big' without knowing what it is too big FOR; got "
+        f"{caught.value}"
+    )
+
+    wider = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
+    wider["selfplay"]["n_workers"] = 2
+    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1}
+    assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == (
+        DRAW_RATE_WINDOW + 1), (
+        "the SAME value must be accepted on a two-worker pool: the bound is the PRODUCT "
+        "`DRAW_RATE_WINDOW * selfplay.n_workers`, not a re-spelled `le=DRAW_RATE_WINDOW`. "
+        "Without this arm the cross-section rule is indistinguishable from a field bound"
+    )
+
+
+# ── DS-8 — the evidence bar's FLOOR (DR-9's class, transferred by R92) ────────────────
+def test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires() -> None:
+    """ADJ-14's own defect, re-expressed on R92's statistic. WPMINT DR-9 found `min_samples:
+    1` — "the exact ADJ-14 defect value" — accepted and reading ARMED; `min_samples` is gone,
+    but the class transfers verbatim.
+
+    The pooled rate's smallest non-zero value at the bar is `1/N_pool_min`, so at
+    `N_pool_min = 4` with `threshold = 0.25` a SINGLE drawn game meets the threshold. That is
+    the one-game saturation R80 ordered closed, one statistic later.
+    `DrawRateAbortConfig._one_drawn_game_cannot_fire_the_abort` closes it from values already
+    inside the block — no invented number.
+
+    Boundary on both sides at run5's own threshold, so the rule is the arithmetic
+    `1/N_pool_min < threshold` and not a literal floor.
+    """
+    with pytest.raises(ValidationError) as caught:
+        _with_block({**RUN5_PREREG, "N_pool_min": 4})
+    assert "N_pool_min" in str(caught.value), (
+        f"N_pool_min=4 at threshold 0.25 lets ONE drawn game in four fire a HARD ABORT — "
+        f"1/4 = 0.25 >= 0.25. It must be rejected, naming the key; got {caught.value}"
+    )
+    assert _with_block({**RUN5_PREREG, "N_pool_min": 5}).train.draw_rate_abort.N_pool_min == 5, (
+        "…and 5 must load: 1/5 = 0.2 < 0.25, so one drawn game is NOT enough. A floor that "
+        "rejected both sides would be a policy number rather than the metric's arithmetic"
+    )
+    assert 1.0 / RUN5_PREREG["N_pool_min"] < RUN5_PREREG["threshold"], (
+        "run5's own pre-registered pair must satisfy the rule with margin (0.02 vs 0.25) — "
+        "if it ever did not, the armed production config would be unloadable"
     )
 
 
@@ -191,8 +282,8 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
             "that invents a posture is a second authority (R80)"
         )
         if block is not None:
-            assert (resolved.threshold, resolved.min_step, resolved.min_samples) == (
-                float(block.threshold), int(block.min_step), int(block.min_samples)), (
+            assert (resolved.threshold, resolved.min_step, resolved.N_pool_min) == (
+                float(block.threshold), int(block.min_step), int(block.N_pool_min)), (
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
@@ -201,10 +292,10 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         "audits it — a disarmed run5 is R59's whole subject"
     )
     run5 = postures["run5.yaml"]
-    assert (run5.threshold, run5.min_step, run5.min_samples) == (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["min_samples"]), (
+    assert (run5.threshold, run5.min_step, run5.N_pool_min) == (
+        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"]), (
         f"run5's three values are RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's "
-        f"threshold and R85's guards, "
+        f"threshold, R85's min_step and R92's evidence bar, "
         f"'the only place they may change'. Got {run5}, expected {RUN5_PREREG}. Changing one "
         "in place is R1's hand-varied config; it is re-minted with a recorded delta or not "
         "at all"

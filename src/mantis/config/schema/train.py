@@ -9,57 +9,91 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from mantis.config.schema._base import StrictModel
-from mantis.util.constants import DRAW_RATE_WINDOW
 
 
 class DrawRateAbortConfig(StrictModel):
     """The draw-rate collapse hard abort's terms — ONE block, ONE fact (WPAX Phase D,
-    R65 re-scoped by R80, shaped by R79 as amended by R83).
+    R65 re-scoped by R80, shaped by R79 as amended by R83; the STATISTIC replaced by R92).
 
     The fact under single authority is *"is the draw-rate collapse abort armed, and on what
     terms"*. It has three INSEPARABLE components, which is why they are a nested block and
     not three flat `X | None` keys: three independent keys give three authorities over one
     fact and can disagree in ways no predicate can adjudicate (`threshold: 0.25,
-    min_samples: null` is neither armed nor disarmed). The block makes disagreement
+    N_pool_min: null` is neither armed nor disarmed). The block makes disagreement
     unrepresentable — the three arrive together or not at all.
 
-    ALL THREE ARE RUN-SCOPED CONSTANTS (R82/R85), pre-registered at mint prereg, which is
-    "the only place they may change". They are not tunables; changing one means re-minting
-    with a recorded delta and a fresh prereg, never editing a config in place (R1).
+    ALL THREE ARE RUN-SCOPED CONSTANTS (R82/R85/R92), pre-registered at mint prereg, which
+    is "the only place they may change". They are not tunables; changing one means
+    re-minting with a recorded delta and a fresh prereg, never editing a config in place
+    (R1).
+
+    WPMINT Phase DS (R92) DELETED `min_samples` and added `N_pool_min`. The per-worker
+    inclusion bar is gone with the statistic it guarded: the gated metric is now the POOLED
+    COUNT-WEIGHTED rate `Sum(draws) / Sum(completed)` over the union of worker windows
+    (`train.coordinator.config.pooled_draw_rate`). Phase DR measured the retired metric —
+    an unweighted mean over the *included* set — firing at a true pool rate of 0.0319 and
+    staying silent at 0.968 (DR-3), and fabricating a healthy `0.0` from an empty included
+    set (DR-4). The count-weighted rate cannot exclude anyone, so neither defect has a
+    surface left.
 
     The bounds are bounds on the METRIC's own range, not policy:
 
-    * `threshold` — `recent_pool_draw_rate` is an unweighted mean of per-worker rates, a
-      fraction in [0, 1], and the predicate is `all(value >= threshold)`, an UPPER bound.
-      `gt=0` alone leaves the high half open: a threshold > 1.0 can never be met, is
-      accepted, and reads ARMED to the armed-abort manifest — "armed in the config, absent
-      in effect" (`schema/core.py`'s own words for the sibling defect). Reachable by the
-      natural percent slip (an operator meaning 35% writes `35`), so `le=1` closes it.
+    * `threshold` — `pooled_draw_rate` is `Sum(draws)/Sum(completed)`, a fraction in [0, 1],
+      and the predicate is `all(value >= threshold)`, an UPPER bound. `gt=0` alone leaves
+      the high half open: a threshold > 1.0 can never be met, is accepted, and reads ARMED
+      to the armed-abort manifest — "armed in the config, absent in effect"
+      (`schema/core.py`'s own words for the sibling defect). Reachable by the natural
+      percent slip (an operator meaning 35% writes `35`), so `le=1` closes it.
       DISCLOSED RESIDUAL: `1e-300` still loads. That is a hair-trigger, not a disarm, and
-      the type does not close it. NEITHER DOES `min_samples` (WPMINT DR-2 correction; the
-      earlier claim here — "at 50 the smallest non-zero rate the estimator can report is
-      1/50 = 0.02" — was arithmetically FALSE for the value actually compared against this
-      threshold). `1/min_samples` bounds ONE WORKER's rate; the compared value is
-      `recent_pool_draw_rate`, an unweighted MEAN over the N included workers, so its
-      smallest non-zero value is `1/(min_samples * N)` — measured 0.02 at N=1, 0.000625 at
-      N=32 and 0.0003125 at N=64, i.e. understated by a factor of N. What holds the value
-      today is R82's mint prereg alone. This bound does not close the residual; the
-      statistic itself is under replacement (R92), and no revised bound is asserted here.
-    * `min_step` — R80's second guard. No "disabled" value exists (`ge=1`), and the twin
-      cross-validator in `schema/core.py` closes the top end against
+      the type does not close it — but `N_pool_min` now bounds it HONESTLY, which is the
+      claim `min_samples` could not make. WPMINT DR-2 measured the old docstring's
+      mitigation to be arithmetically FALSE: `1/min_samples` bounded ONE WORKER's rate while
+      the compared value was a MEAN over N included workers, whose floor was
+      `1/(min_samples*N)` — 0.0003125 at N=64, understated by a factor of N. Under R92 the
+      compared value IS `Sum/Sum`, so its smallest non-zero value at the bar is exactly
+      `1/N_pool_min` (0.02 at run5's 50) AT EVERY WORKER COUNT. The residual survives only
+      BELOW that floor, and `_one_drawn_game_cannot_fire_the_abort` closes the part of it
+      that matters (a single drawn game reaching the threshold).
+    * `min_step` — R80's second guard, unchanged by R92. No "disabled" value exists
+      (`ge=1`), and the twin cross-validator in `schema/core.py` closes the top end against
       `train.max_train_steps`.
-    * `min_samples` — R80's FIRST guard, and ADJ-14's actual mechanism. The estimator's
-      shipped inclusion rule was `len(dq) > 0`, so one drawn game per worker saturated the
-      pool mean at 1.0. `le=DRAW_RATE_WINDOW` because `len(dq)` is bounded by the deque's
-      own `maxlen`: at 51, ten thousand consecutive DRAWN games report 0.0 and the abort
-      can never fire (MF-1's class on a second axis).
+    * `N_pool_min` — R92's evidence bar, proposed at 50 by DESIGN_DS from measured deque
+      geometry. Below it the gate makes NO OBSERVATION (a `None`, skip-counted, never
+      appended), so ADJ-19's healthy-`0.0`-from-nothing is answered by TYPE rather than by
+      value. Its TOP end is closed by `schema/core.py`'s
+      `_draw_rate_evidence_bar_is_reachable`, NOT by an `le=` here: the ceiling is
+      `DRAW_RATE_WINDOW * selfplay.n_workers` (measured — `Sum(len(dq))` saturates there),
+      which spans two sections and so cannot live on this field. That cross-validator is
+      what re-establishes the load-bearing bound `min_samples: le=DRAW_RATE_WINDOW` carried;
+      for every config on this tree (`n_workers: 1`) it evaluates to the same number.
 
     Read by exactly one path: `mantis.config.resolve.draw_rate.resolve_draw_rate_abort`.
     """
 
     threshold: float = Field(gt=0, le=1)
     min_step: int = Field(ge=1)
-    min_samples: int = Field(ge=1, le=DRAW_RATE_WINDOW)
+    N_pool_min: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _one_drawn_game_cannot_fire_the_abort(self) -> "DrawRateAbortConfig":
+        """ADJ-14's own defect, re-expressed on R92's statistic (WPMINT DR-9's class).
+
+        `ge=1` alone admits `N_pool_min` values at which a SINGLE drawn game meets the
+        threshold: the pooled rate's smallest non-zero value at the bar is `1/N_pool_min`,
+        so at `N_pool_min=4` with `threshold=0.25` one drawn game in four fires the hard
+        abort. That is the one-game saturation R80 ordered closed, on a new axis. The rule
+        is derived entirely from values already in this block — no invented number — and
+        run5 satisfies it with three orders of margin (0.02 < 0.25).
+        """
+        if 1.0 / self.N_pool_min >= self.threshold:
+            raise ValueError(
+                f"train.draw_rate_abort.N_pool_min ({self.N_pool_min}) is too small for "
+                f"threshold {self.threshold}: the pooled rate's smallest non-zero value at "
+                f"the bar is 1/{self.N_pool_min} = {1.0 / self.N_pool_min}, so ONE drawn "
+                f"game would meet the threshold and fire the hard abort. Raise N_pool_min "
+                f"above {int(1.0 / self.threshold)} or lower the threshold"
+            )
+        return self
 
 
 class TrainConfig(StrictModel):

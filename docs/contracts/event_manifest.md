@@ -76,7 +76,7 @@ producers is a phantom-armed abort chain waiting to happen).
 
 | id | kind | producer | producer test |
 |---|---|---|---|
-| `draw_rate_collapse` | symbol | `train.coordinator.config.recent_pool_draw_rate` ← `selfplay.pool.WorkerPool.per_worker_draw_rates` | `tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer` |
+| `draw_rate_collapse` | symbol | `train.coordinator.config.pooled_draw_rate` ← `selfplay.pool.WorkerPool.pooled_draw_counts` | `tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer` |
 | `sealbot_wr_warn` | symbol (+`also`) | `eval.rounds.build_round_result` (field `wr_sealbot`) + `train.coordinator.step.StepCoordinator.on_eval_round_complete` | `tests/eval/test_wr_sealbot_handshake.py::test_round_result_always_carries_wr_sealbot` |
 | `grad_norm_hard_abort` | symbol | `train.coordinator.step.StepCoordinator._run_training_step` | `tests/train/test_coordinator_gates.py::test_grad_norm_gate_fires_with_the_uniform_contract` |
 | `heartbeat.train_step` | event_literal | `train.coordinator.step` / `train_step` | `tests/train/test_coordinator_gates.py::test_step_loop_beats` |
@@ -116,12 +116,19 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   routes `wr_sealbot: None`, which the coordinator skip-counts loudly
   (`sealbot_wr_gate_skipped`), never silently.
 - `draw_rate_collapse` is armed **by the config** (WPAX Phase D, R65/R80): the
-  `train.draw_rate_abort` block — `threshold` / `min_step` / `min_samples`, one block and one
+  `train.draw_rate_abort` block — `threshold` / `min_step` / `N_pool_min`, one block and one
   resolver — is the sole authority, and `null` is the EXPLICIT off posture (R79: arming is a
   property of the resolved value; there is no boolean beside it). `configs/run5.yaml` arms it
-  at `0.25 / 25000 / 50` (R82/R85, pre-registered at mint prereg); the four non-production
+  at `0.25 / 25000 / 50` (R82/R85/R92, pre-registered at mint prereg); the four non-production
   configs carry `null` (R59). The `monitor_gates` event's `draw_rate_threshold` field keeps
   its name and now carries `null` on a disarmed run rather than the retired `0.0` spelling.
+  **WPMINT Phase DS (R92) replaced the gated statistic** and with it the block's third key
+  (`min_samples` -> `N_pool_min`): the metric is the POOLED COUNT-WEIGHTED rate
+  `Sum(draws)/Sum(completed)` over the union of worker windows, and an interval with fewer
+  than `N_pool_min` completed games yields NO OBSERVATION — skip-counted in the gate's own
+  `monitor_gates` counters, never appended to the abort history as a healthy `0.0`. An
+  observer therefore reads insufficient evidence as a rising `skips` count, not as a healthy
+  reading.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

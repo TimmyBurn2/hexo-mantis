@@ -43,7 +43,7 @@ def _covers(claimed: str, actual: str) -> bool:
     """True iff a delta claimed on `claimed` accounts for the real diff at `actual`.
 
     Exact match, or `actual` sits INSIDE the block `claimed` names. A mint delta may set a
-    whole BLOCK — `--set 'train.draw_rate_abort={threshold: …, min_step: …, min_samples: …}'`
+    whole BLOCK — `--set 'train.draw_rate_abort={threshold: …, min_step: …, N_pool_min: …}'`
     — and in some cases it MUST: `mint_config._resolve_parent` requires every path segment to
     exist in the template, so a leaf inside a template block that ships `null` cannot be
     addressed at all. The header then truthfully claims one key while the flattened diff

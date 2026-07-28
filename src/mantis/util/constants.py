@@ -28,13 +28,17 @@ HISTORY_LEN: int = 8
 # completed game). Self-play telemetry geometry, not an encoding parameter — kept here for
 # the same reason HISTORY_LEN is: it is a SINGLE SoT read by two layers that must not drift.
 #
-# LOAD-BEARING COUPLING (WPAX Phase D, R80/R83): the config-authored inclusion bar
-# `train.draw_rate_abort.min_samples` is bounded by this window
-# (`config/schema/train.py`'s `le=DRAW_RATE_WINDOW`), because `len(dq)` can never exceed
-# the deque's own `maxlen` — a `min_samples` above it is a condition no history can
-# satisfy, so the abort audits ARMED and can never fire ("armed in the config, absent in
-# effect", measured at 51 under total collapse). A second independent literal on either
-# side would re-open that dead zone silently, which is why both sides import THIS name.
-# `tests/selfplay/test_drawrate_min_samples_inclusion.py` asserts the equality against the
-# real deque rather than against the number.
+# LOAD-BEARING COUPLING (WPAX Phase D R80/R83, RE-EXPRESSED at WPMINT Phase DS by R92):
+# the config-authored evidence bar `train.draw_rate_abort.N_pool_min` is bounded by this
+# window TIMES the worker count. The abort's statistic is the pooled count-weighted rate
+# over the UNION of the per-worker windows, so the evidence available to it is
+# `sum(len(dq))`, and each deque's `maxlen` is this constant — measured to saturate at
+# `DRAW_RATE_WINDOW * n_workers` at 1/2/8/32 workers. A bar above that ceiling is a
+# condition no history can satisfy, so the abort audits ARMED and can never fire ("armed in
+# the config, absent in effect"). The bound therefore CANNOT be an `le=` on the schema
+# field the way `min_samples` (R92-DELETED) carried one: it spans two sections, and it
+# lives in `config/schema/core.py::_draw_rate_evidence_bar_is_reachable`. A second
+# independent literal on either side would re-open that dead zone silently, which is why
+# both sides import THIS name. `tests/selfplay/test_drawrate_pooled_statistic.py` asserts
+# the equality against the real deque rather than against the number.
 DRAW_RATE_WINDOW: int = 50

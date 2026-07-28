@@ -68,8 +68,8 @@ class _SyncRecordingPool:
     def check_producer_health(self) -> None:
         return None
 
-    def per_worker_draw_rates(self) -> dict[int, float]:
-        return {}
+    def pooled_draw_counts(self) -> tuple[int, int]:
+        return (0, 0)
 
     def current_stride5_p90(self) -> int:
         return 1

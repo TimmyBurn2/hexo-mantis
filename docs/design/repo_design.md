@@ -195,13 +195,25 @@ That is a dispatcher reading pending operator ratification, not a settled rule.
 left as silent drift (R9); the S-4 amendment above is the precedent this follows verbatim.
 
 1. **The bump.** `train.draw_rate_abort` is a NEW **required** field on `RunConfig` — a nested
-   block (`threshold` `gt=0, le=1`, `min_step` `ge=1`, `min_samples` `ge=1, le=DRAW_RATE_
-   WINDOW`) or `null`, which is the EXPLICIT disarmed posture. Incompatible for the same
+   block (`threshold` `gt=0, le=1`, `min_step` `ge=1`, `N_pool_min` `ge=1`) or `null`, which
+   is the EXPLICIT disarmed posture. Incompatible for the same
    reason S-4's was: a config lacking the key fails to load. Contract #5's row moves
    **v2 → v3**; the config files' own `schema_version:` file-format pin is unchanged at `1`.
    A second cross-field rule joins `RunConfig`'s validators: `train.draw_rate_abort.min_step`
    must be `< train.max_train_steps`, the twin of the actor-lag rule and the same defect class
    ("armed in the config, absent in effect").
+
+   **WPMINT Phase DS amendment (operator ruling R92), same contract row.** The block's third
+   key was `min_samples` (`ge=1, le=DRAW_RATE_WINDOW`) and is now `N_pool_min` (`ge=1`),
+   because the gated STATISTIC changed: it is the pooled count-weighted rate
+   `Σ draws / Σ completed` over the union of worker windows, and insufficient evidence
+   (`Σ completed < N_pool_min`) is a NO OBSERVATION rather than a healthy `0.0`. Two
+   validators replace the retired `le=` bound, one at each end of the same defect class:
+   `RunConfig._draw_rate_evidence_bar_is_reachable` (`N_pool_min <= DRAW_RATE_WINDOW *
+   selfplay.n_workers` — a cross-SECTION rule, which is why it cannot be a field bound) and
+   `DrawRateAbortConfig._one_drawn_game_cannot_fire_the_abort` (`1/N_pool_min < threshold`).
+   The block stays required and `null` stays the explicit disarmed posture, so the contract
+   row does not move again.
 2. **The doc half is OWED and BLOCKED, and the owner is still WP14.** R11 bars this phase from
    `docs/contracts/run_config_schema.md` exactly as it barred Phase S, so the same-commit
    clause is half-kept again: version bumped here, contract doc deferred. The run5-mint

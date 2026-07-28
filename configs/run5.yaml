@@ -4,7 +4,7 @@
 # delta: seed: 20260716 -> 20260718
 # delta: eval.random_floor_games: 4 -> 0
 # delta: monitor.actor_lag_abort_enabled: False -> True
-# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, 'min_samples': 50}
+# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, 'N_pool_min': 50}
 schema_version: 1
 run_id: run5
 seed: 20260718
@@ -109,7 +109,7 @@ train:
   draw_rate_abort:
     threshold: 0.25
     min_step: 25000
-    min_samples: 50
+    N_pool_min: 50
   completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution

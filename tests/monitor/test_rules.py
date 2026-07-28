@@ -12,7 +12,7 @@ Decision-parity is asserted against the OLD-side semantics in
   * O-21 warn rules at the registered boundaries (1.0 / 1.5 nats, 10.0 gn incl. the NaN
     `gn == gn` pin, 3-window strictly-increasing), and the headless emitter routing one
     `training_alert` event per fired rule through the injected sink, in rule order;
-  * O-03 draw-rate collapse over `recent_pool_draw_rate` history (LIVE producer — the NaN
+  * O-03 draw-rate collapse over `pooled_draw_rate` history (LIVE producer — the NaN
     `draw_target_fraction` phantom is never keyed on).
 
 (O-04 stride5-spam was REMOVED at close-out per operator directive B.)
@@ -29,7 +29,7 @@ import math
 import pytest
 
 # LIVE producer for the draw-rate rule's input (torch-free stdlib module).
-from mantis.train.coordinator.config import recent_pool_draw_rate
+from mantis.train.coordinator.config import pooled_draw_rate
 
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
@@ -193,17 +193,32 @@ def test_headless_emitter_nan_grad_norm_does_not_fire() -> None:
 
 
 # ══ O-03 draw-rate collapse rule (on the LIVE producer) ═══════════════════════════════
-def test_recent_pool_draw_rate_empty_map_is_zero() -> None:
-    """O-03 — the LIVE producer returns 0.0 for an empty worker map, so the gate can never
-    fire on empty signal (never the NaN `draw_target_fraction` phantom)."""
-    assert recent_pool_draw_rate({}) == 0.0
-    assert recent_pool_draw_rate({0: 0.4, 1: 0.6}) == pytest.approx(0.5)
+def test_pooled_draw_rate_below_the_bar_is_no_observation() -> None:
+    """O-03, RE-POINTED by WPMINT Phase DS (R92). The retired assertion was
+    `recent_pool_draw_rate({}) == 0.0` — "the LIVE producer returns 0.0 for an empty worker
+    map, so the gate can never fire on empty signal". Phase DR measured the other half of
+    that: the `0.0` was APPENDED to the abort history as a real healthy measurement (DR-4).
+
+    R92 replaces the value with a TYPE. Below `N_pool_min` completed games the producer
+    reports `None` — no observation — which never reaches this rule's `history` at all, so
+    the gate still cannot fire on empty signal AND cannot record a healthy reading it did
+    not measure. Both halves asserted, because either alone is satisfied by the old
+    behaviour."""
+    assert pooled_draw_rate((0, 0), N_pool_min=50) is None
+    assert pooled_draw_rate((3, 3), N_pool_min=50) is None, (
+        "three drawn games is not evidence: a 1.0 here would be a total-collapse abort on "
+        "evidence the operator declared insufficient"
+    )
+    assert pooled_draw_rate((0, 50), N_pool_min=50) == 0.0, (
+        "a MEASURED zero over sufficient evidence is still a real healthy reading"
+    )
+    assert pooled_draw_rate((25, 50), N_pool_min=50) == pytest.approx(0.5)
 
 
 def test_draw_rate_collapse_fires_on_sustained_high_rate_past_min_step() -> None:
     """O-03 / P-03 — fires iff the last `consec` samples are all >= threshold AND
     current_step >= min_step. Empty/zero history never fires."""
-    history = [recent_pool_draw_rate({0: 0.4, 1: 0.5}) for _ in range(3)]  # ~0.45 each
+    history = [pooled_draw_rate((45, 100), N_pool_min=50) for _ in range(3)]  # 0.45 each
     assert check_draw_rate_collapse(history, 50000, threshold=0.4, consec=3, min_step=20000) is not None
 
 
@@ -227,7 +242,7 @@ def test_draw_rate_collapse_threshold_nonpositive_disables() -> None:
 
 def test_draw_rate_collapse_empty_signal_never_fires() -> None:
     """O-03 — a history of 0.0 (no worker has a game yet) never fires even when configured."""
-    history = [recent_pool_draw_rate({}) for _ in range(5)]
+    history = [pooled_draw_rate((0, 50), N_pool_min=50) for _ in range(5)]
     assert all(x == 0.0 for x in history)
     assert check_draw_rate_collapse(history, 50000, threshold=0.4, consec=3, min_step=0) is None
 

@@ -11,7 +11,7 @@ RED-at-import until IMPL lands the delta. Three anchors, in the order they fire:
    failure.py`; it is imported here so this file cannot go green against a half-landed delta.
 
 The fact under single authority is *"is the draw-rate collapse abort armed, and on what
-terms"*. It has three inseparable components (`threshold`, `min_step`, `min_samples`) and
+terms"*. It has three inseparable components (`threshold`, `min_step`, `N_pool_min`) and
 therefore one nested block, `train.draw_rate_abort`, whose `None` is the EXPLICIT off state
 (R79(1) as amended by R83). No boolean sits beside it, because a boolean could contradict it.
 
@@ -85,7 +85,7 @@ ROW_NAME = "draw_rate_collapse"
 
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place
 #: they may change, so they are written here as the pin that makes an in-place edit visible.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "min_samples": 50}
+RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50}
 
 
 def _load_tool():
@@ -218,7 +218,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
             "the wrong config fact"
         )
 
-    spec = DrawRateAbortSpec(threshold=0.5, min_step=3, min_samples=7)
+    spec = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7)
     complete = _complete_kwargs(spec)
     without = {key: value for key, value in complete.items() if key != "draw_rate_abort"}
     with pytest.raises(TypeError):
@@ -249,7 +249,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     # Measured at WPMINT Phase DR: field defaults on all three keys, and a `__post_init__` +
     # `object.__setattr__` normalisation, BOTH left the full tier green.
     spec_fields = {field.name: field for field in dataclasses.fields(DrawRateAbortSpec)}
-    assert set(spec_fields) == {"threshold", "min_step", "min_samples"}, (
+    assert set(spec_fields) == {"threshold", "min_step", "N_pool_min"}, (
         "the resolved spec must carry R80's three keys and nothing else — a fourth field "
         f"here is a term the schema block never authored; got {sorted(spec_fields)}"
     )
@@ -266,10 +266,10 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "restored AFTER construction with `dataclasses.fields()` still reporting MISSING. "
         "This is R83's Attack A on the sibling class (MF-2's lesson one seam over)"
     )
-    probe = DrawRateAbortSpec(threshold=0.5, min_step=3, min_samples=7)
-    assert dataclasses.asdict(probe) == {"threshold": 0.5, "min_step": 3, "min_samples": 7}, (
+    probe = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7)
+    assert dataclasses.asdict(probe) == {"threshold": 0.5, "min_step": 3, "N_pool_min": 7}, (
         "the resolved terms must survive construction VERBATIM. The probe values are "
-        "deliberately off-prereg (min_samples 7 is under R85's 50, min_step 3 is under "
+        "deliberately off-prereg (N_pool_min 7 is under DESIGN_DS's 50, min_step 3 is under "
         "R82's 25000) so a normaliser that clamps toward the pre-registered numbers is "
         f"visible here rather than silently agreeing with run5; got {dataclasses.asdict(probe)}"
     )

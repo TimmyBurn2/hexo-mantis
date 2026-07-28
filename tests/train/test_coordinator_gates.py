@@ -55,7 +55,7 @@ class _RunnerStats:
 
 
 class FakePool:
-    def __init__(self, *, stride5=1, draw_rates=None) -> None:
+    def __init__(self, *, stride5=1, draw_counts=(0, 0)) -> None:
         self.games_completed = 0
         self.gumbel_mcts = True                 # → iteration_complete cluster stats are None
         self.avg_game_length = 20.0
@@ -66,19 +66,19 @@ class FakePool:
         self.batch_fill_pct = 0.9
         self.recent_move_histories: list = []   # empty → emit_axis_distribution returns early
         self._stride5 = stride5
-        self._draw_rates = dict(draw_rates or {})
-        self.min_samples_seen: list[int] = []
+        self._draw_counts = (int(draw_counts[0]), int(draw_counts[1]))
+        self.counts_calls = 0
 
     def check_producer_health(self) -> None:
         return None
 
-    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]:
-        # WPAX Phase D (R80): the widened `WorkerPoolLike` surface. The bar is asserted, not
-        # applied — this fake serves rates directly, and the rule the bar drives lives one
-        # layer down in `PoolInstrumentation` (its own oracle is
-        # tests/selfplay/test_drawrate_min_samples_inclusion.py).
-        self.min_samples_seen.append(int(min_samples))
-        return dict(self._draw_rates)
+    def pooled_draw_counts(self) -> tuple[int, int]:
+        # WPMINT Phase DS (R92): the `WorkerPoolLike` surface serves RAW COUNTS
+        # `(draws, completed)` and takes no evidence bar — the bar is applied at the abort
+        # decision (`pooled_draw_rate`). The statistic's own oracle is
+        # tests/selfplay/test_drawrate_pooled_statistic.py.
+        self.counts_calls += 1
+        return self._draw_counts
 
     def current_stride5_p90(self) -> int:
         return self._stride5
@@ -296,12 +296,12 @@ def test_sealbot_absent_key_skips_and_counts() -> None:
 # (O-04 stride5-spam gate REMOVED at close-out per operator directive B.)
 def test_draw_rate_gate_fires_on_live_producer() -> None:
     """O-03 — the manifest `draw_rate_collapse` producer test. Keyed on the LIVE
-    `recent_pool_draw_rate(per_worker_draw_rates(min_samples=…))` (never the NaN
-    `draw_target_fraction`): a
-    sustained 0.9 draw rate past min_step fires. Grad-norm is quiet, so the fire is draw-rate."""
-    pool = FakePool(draw_rates={0: 0.9, 1: 0.9})
+    `pooled_draw_rate(pooled_draw_counts(), N_pool_min=…)` (never the NaN
+    `draw_target_fraction`): a sustained 0.9 pooled draw rate over sufficient evidence, past
+    min_step, fires. Grad-norm is quiet, so the fire is draw-rate."""
+    pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
-                                                        min_samples=1),
+                                                        N_pool_min=10),
                        draw_rate_consec=3)
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h)
@@ -316,7 +316,7 @@ def test_draw_rate_gate_default_off_does_not_fire() -> None:
     """O-03 — on the EXPLICITLY disarmed posture (`train.draw_rate_abort: null`, WPAX Phase
     D — it used to be the code-side `threshold 0.0`), a high draw rate NEVER fires. Bites a
     gate that ships hot against the config the operator actually wrote."""
-    pool = FakePool(draw_rates={0: 0.99, 1: 0.99})
+    pool = FakePool(draw_counts=(99, 100))
     cfg = _make_config()  # draw_rate_abort is None — EXPLICITLY off
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=6)
@@ -369,10 +369,10 @@ def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:
     draw rate of 0.9 (>= 0.4, consec 3), the draw-rate gate collects its 3rd sample at step 15
     and fires THERE. A once-per-burst implementation would sample at most at step 20 and could
     not have fired yet — the `consec` window silently stretched by the burst factor."""
-    pool = FakePool(draw_rates={0: 0.9, 1: 0.9})
+    pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
-                                                        min_samples=1),
+                                                        N_pool_min=10),
                        draw_rate_consec=3, hard_gn_threshold=1e9)
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=8)

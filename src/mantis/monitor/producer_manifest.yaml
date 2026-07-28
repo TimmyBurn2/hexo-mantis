@@ -14,19 +14,22 @@ channel: jsonl_event_sink            # the ONE channel: the JSONL event sink (st
 gates:
   # ── hard-abort gates ──────────────────────────────────────────────────────────────
   - id: draw_rate_collapse
-    input: recent_pool_draw_rate
+    input: pooled_draw_rate
     producer:
       kind: symbol
       module: mantis.train.coordinator.config
-      symbol: recent_pool_draw_rate
-      feeds_from: mantis.selfplay.pool.WorkerPool.per_worker_draw_rates
+      symbol: pooled_draw_rate
+      feeds_from: mantis.selfplay.pool.WorkerPool.pooled_draw_counts
     note: >-
-      keyed on the LIVE per-worker draw rates, NEVER the NaN draw-target phantom at
+      keyed on the LIVE pooled draw counts, NEVER the NaN draw-target phantom at
       pool_push.py:135 (whose token is grep-banned in this file too — O-15). Armed BY
       THE CONFIG since WPAX Phase D (`train.draw_rate_abort`, R65/R80): run5 arms it at
-      threshold 0.25 / min_step 25000 / min_samples 50, and `null` is the explicit OFF
-      posture the four non-production configs carry. The live posture is named in every
-      `monitor_gates` event.
+      threshold 0.25 / min_step 25000 / N_pool_min 50, and `null` is the explicit OFF
+      posture the four non-production configs carry. WPMINT Phase DS (R92) replaced the
+      statistic: it is the POOLED COUNT-WEIGHTED rate Sum(draws)/Sum(completed) over the
+      union of worker windows, and below `N_pool_min` completed games the producer reports
+      NO OBSERVATION (None, skip-counted) rather than a fabricated healthy 0.0. The live
+      posture is named in every `monitor_gates` event.
     producer_test: tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer
 
   # (stride5_spam gate REMOVED at close-out per operator directive B — stride5-spam is a

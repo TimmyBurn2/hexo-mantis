@@ -145,8 +145,15 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         ),
         note=(
             "The self-play draw-rate collapse hard abort. Armed on configs/run5.yaml at "
-            "threshold 0.25 (R82) with min_step 25000 / min_samples 50 (R80 guards), all "
-            "three pre-registered at mint prereg. The pin binds to the THREADING at the "
+            "threshold 0.25 (R82) with min_step 25000 and N_pool_min 50 (R92's guards; the "
+            "per-worker min_samples bar was DELETED with the filtered-mean statistic it "
+            "guarded), all three pre-registered at mint prereg. The gated statistic is the "
+            "pooled count-weighted rate Sum(draws)/Sum(completed) over the union of worker "
+            "windows; below N_pool_min completed games the gate makes NO OBSERVATION "
+            "(skip-counted), never a healthy 0.0. NOTE for the mint record (WPMINT DR-8): "
+            "consec=3 counts consecutive CHECKS at a stride of log_interval train steps, so "
+            "at the shipped log_interval 1000 the earliest possible fire is step 27000, not "
+            "25000. The pin binds to the THREADING at the "
             "construction site, so deleting it, renaming the resolver or reordering the "
             "call past it all break the R56 scan. exit_code is None because the gate stops "
             "the run cooperatively (shutdown.running = False) and NO distinct process exit "

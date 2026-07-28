@@ -25,7 +25,8 @@ The oracles, and the defect each is the ONLY witness to:
   did not when this oracle was written). That obligation is a key-set bijection against a
   registry STRING, though: it proves someone wrote down a consumer, never that the value
   arrives. This oracle is still the only thing that watches `threshold` / `min_step` land on
-  `check_draw_rate_collapse(...)` and `min_samples` land on `per_worker_draw_rates(...)`.
+  `check_draw_rate_collapse(...)` and `N_pool_min` decides the OBSERVATION BOUNDARY
+  (WPMINT Phase DS re-point, R92 — the bar no longer travels through the pool).
   Not caught by O-D2, which asserts the spec object rather than the three call sites.
 
 R7 / gate 6: nothing here writes a `*.jsonl`; every drive writes under `tmp_path`.
@@ -60,7 +61,7 @@ from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE re
 )
 from mantis.monitor.config import MonitorConfig
 from mantis.run import _step_coordinator_config  # RED anchor — the renamed builder (R73)
-from mantis.train.coordinator.config import StepCoordinatorConfig, recent_pool_draw_rate
+from mantis.train.coordinator.config import StepCoordinatorConfig, pooled_draw_rate
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
@@ -69,7 +70,7 @@ _DRIVE_STEPS = 4
 #: Deliberately NOT run5's `{0.25, 25000, 50}`. O-D2 asserts transport, and a harness that
 #: drives the production values cannot distinguish "the config reached the coordinator" from
 #: "the builder hardcodes the same numbers the config happens to carry".
-_OFF_PREREG = {"threshold": 0.37, "min_step": 2, "min_samples": 7}
+_OFF_PREREG = {"threshold": 0.37, "min_step": 2, "N_pool_min": 7}
 
 
 # ── fakes (the `tests/test_run_strict_composition.py:113-205` shapes) ─────────────────
@@ -83,9 +84,16 @@ class _RunnerStats:
 
 class _Pool:
     """The pool surface `compose_run` and `StepCoordinator` touch, plus a recorder on the
-    ONE method whose signature this delta widens."""
+    ONE method whose shape this delta changes.
 
-    def __init__(self, *, draw_rates: dict[int, float] | None = None,
+    WPMINT Phase DS (R92): the producer is `pooled_draw_counts() -> (draws, completed)` and
+    it takes NO bar — the evidence bar moved to the abort decision. The recorder therefore
+    counts CALLS rather than the argument values it used to see; the bar's own transport is
+    observed BEHAVIOURALLY in O-D10 (where the observation boundary falls), which is a
+    stronger pin than reading back an argument the fake was handed.
+    """
+
+    def __init__(self, *, counts: tuple[int, int] = (0, 0),
                  fresh_game_per_read: bool = True) -> None:
         self._games = 0
         self._fresh = fresh_game_per_read
@@ -96,9 +104,9 @@ class _Pool:
         self.recent_move_histories: list = []
         self.started = self.stopped = False
         self.n_workers = 1
-        self._draw_rates = dict(draw_rates or {})
-        #: every `min_samples` this method was called with, in order — O-D10's observation.
-        self.min_samples_seen: list[int] = []
+        self._counts = (int(counts[0]), int(counts[1]))
+        #: how many times the producer was CALLED — O-D10's disarmed-arm observation.
+        self.counts_calls = 0
 
     @property
     def games_completed(self) -> int:
@@ -115,9 +123,9 @@ class _Pool:
     def check_producer_health(self) -> None:
         return None
 
-    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]:
-        self.min_samples_seen.append(int(min_samples))
-        return dict(self._draw_rates)
+    def pooled_draw_counts(self) -> tuple[int, int]:
+        self.counts_calls += 1
+        return self._counts
 
     def current_stride5_p90(self) -> int:
         return 1
@@ -266,7 +274,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
         "threading the resolved value, which is exactly the state where the audit reads "
         "0.37 from the config and the run aborts on nothing"
     )
-    for key in ("threshold", "min_step", "min_samples"):
+    for key in ("threshold", "min_step", "N_pool_min"):
         assert getattr(runtime, key) == getattr(resolved, key) == getattr(block, key), (
             f"the three readers disagree on {key!r}: schema says {getattr(block, key)!r}, "
             f"the resolver says {getattr(resolved, key)!r}, the coordinator runs on "
@@ -310,7 +318,7 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
     `tests/train/test_drawrate_gate_branch_flipset.py`; the `>=` here is deliberate, because
     this oracle drives a whole `step()` rather than one gate run.
     """
-    pool = _Pool(draw_rates={0: 0.99})
+    pool = _Pool(counts=(99, 100))
     h = _coordinator(config=_coordinator_config(None), pool=pool)
     h.pool._games = 5
     h.coord.step()
@@ -330,8 +338,8 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
 
     h2 = _coordinator(
         config=_coordinator_config(
-            DrawRateAbortSpec(threshold=0.4, min_step=0, min_samples=1)),
-        pool=_Pool(draw_rates={0: 0.9, 1: 0.9}))
+            DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=1)),
+        pool=_Pool(counts=(90, 100)))
     for _ in range(8):
         if not h2.shutdown.running:
             break
@@ -344,8 +352,8 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
 
     h3 = _coordinator(
         config=_coordinator_config(
-            DrawRateAbortSpec(threshold=0.4, min_step=10**9, min_samples=1)),
-        pool=_Pool(draw_rates={0: 0.9, 1: 0.9}))
+            DrawRateAbortSpec(threshold=0.4, min_step=10**9, N_pool_min=1)),
+        pool=_Pool(counts=(90, 100)))
     for _ in range(8):
         h3.pool._games += 5
         h3.coord.step()
@@ -364,13 +372,22 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
     `types.UnionType`, so the whole block was ONE registry leaf. WPMINT DR-6 (R93) closed
     that — the three inner keys are separate registry leaves now. What the gate still cannot
     say is whether the value ARRIVES: it is a key-set bijection against a hand-written
-    consumer STRING, so a `min_samples` that reached nothing would pass it with the string
+    consumer STRING, so an `N_pool_min` that reached nothing would pass it with the string
     intact.
 
-    Each key is therefore observed AT ITS OWN CALL SITE: `threshold` and `min_step` at
-    `check_draw_rate_collapse(...)`, `min_samples` at `pool.per_worker_draw_rates(...)`. The
-    expected values are read off `configs/run5.yaml` through the resolver — never written as
-    literals here — so a delta that threads a constant into any one of the three fails.
+    Each key is therefore observed AT ITS OWN DESTINATION: `threshold` and `min_step` at
+    `check_draw_rate_collapse(...)`, and `N_pool_min` at the OBSERVATION BOUNDARY it decides.
+    The expected values are read off `configs/run5.yaml` through the resolver — never written
+    as literals here — so a delta that threads a constant into any one of the three fails.
+
+    WPMINT Phase DS (R92) RE-POINTS the third key's arm, and to a stronger observation. The
+    bar used to be handed to `pool.per_worker_draw_rates(min_samples=)`, so the fake could
+    read it back as an argument — which proves the value was PASSED, not that it DECIDED
+    anything. R92 moves the bar off the pool entirely (the pool reports raw counts), so the
+    arm below drives the boundary instead: at `N_pool_min - 1` completed games there is NO
+    OBSERVATION (nothing appended, nothing compared, a skip counted) and at exactly
+    `N_pool_min` there is one. A delta that threaded a different number would move that
+    boundary; a delta that threaded none could not produce it at all.
     """
     cfg = load_config(_CONFIGS / "run5.yaml")
     spec = resolve_draw_rate_abort(cfg.train)
@@ -381,7 +398,7 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
         return None
 
     monkeypatch.setattr(step_module, "check_draw_rate_collapse", _spy)
-    pool = _Pool(draw_rates={0: 0.9})
+    pool = _Pool(counts=(90, 100))
     h = _coordinator(config=_coordinator_config(spec), pool=pool)
     h.pool._games = 5
     h.coord.step()
@@ -406,52 +423,88 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
         "with CARD-COORD-KNOBS, and this arm pins that boundary rather than leaving the "
         "reader to guess which of the four the config authors"
     )
-    assert pool.min_samples_seen and set(pool.min_samples_seen) == {spec.min_samples}, (
-        f"train.draw_rate_abort.min_samples must reach "
-        f"`pool.per_worker_draw_rates(min_samples=)` on EVERY call; config says "
-        f"{cfg.train.draw_rate_abort.min_samples!r}, the pool saw {pool.min_samples_seen!r}. "
-        "A default at that seam would re-create the ADJ-14 saturation the moment any caller "
-        "omitted it (R1, and MF-2's lesson one seam over)"
+    # `N_pool_min` at ITS destination: the observation boundary. Both sides of the boundary
+    # are driven, because "no observation ever" and "observation always" each satisfy one
+    # side alone, and the config's own number is what separates them.
+    bar = spec.N_pool_min
+    below = _coordinator(config=_coordinator_config(spec), pool=_Pool(counts=(bar - 1, bar - 1)))
+    below.pool._games = 5
+    below.coord.step()
+    assert below.coord._draw_rate_history == [], (
+        f"with {bar - 1} completed games — ONE under train.draw_rate_abort.N_pool_min "
+        f"({cfg.train.draw_rate_abort.N_pool_min!r}) — the gate must make NO OBSERVATION. A "
+        "1.0 appended here is a total-collapse reading taken on evidence the operator "
+        "declared insufficient; a 0.0 is DR-4's fabricated healthy reading"
+    )
+    assert below.coord._gate_stats["draw_rate_collapse"]["skips"] >= 1, (
+        "…and it must SKIP-COUNT (LAW-18): insufficient evidence is a posture an operator "
+        f"must be able to read in-run; {below.coord._gate_stats['draw_rate_collapse']}"
+    )
+    assert below.pool.counts_calls >= 1, (
+        "harness precondition: the producer must have been CALLED — a gate that never reached "
+        "it would satisfy the two arms above while witnessing nothing"
     )
 
-    disarmed = _coordinator(config=_coordinator_config(None), pool=_Pool(draw_rates={0: 0.9}))
+    at_bar = _coordinator(config=_coordinator_config(spec), pool=_Pool(counts=(bar, bar)))
+    at_bar.pool._games = 5
+    at_bar.coord.step()
+    assert at_bar.coord._draw_rate_history == [1.0], (
+        f"at exactly {bar} completed games the bar is MET and the observation is the true "
+        f"pooled rate (1.0 here). If the boundary sat anywhere but at the config's own "
+        f"N_pool_min, one of these two drives would disagree"
+    )
+
+    disarmed = _coordinator(config=_coordinator_config(None), pool=_Pool(counts=(90, 100)))
     disarmed.pool._games = 5
     disarmed.coord.step()
-    assert disarmed.pool.min_samples_seen == [], (
-        "on the disarmed posture `rates_fn` must never be CALLED: there is no `min_samples` "
-        "to pass, and calling it with a stand-in would put a second authority on the axis "
-        "the config just declined to arm (§4.5's disarmed path — `_sample` takes its "
-        "producer-absent arm and SKIP-counts)"
+    assert disarmed.pool.counts_calls == 0, (
+        "on the disarmed posture the producer must never be CALLED: there is no `N_pool_min` "
+        "to judge its answer against, and sampling it anyway would put a reading in the abort "
+        "history on the axis the config just declined to arm (the disarmed path — `_sample` "
+        "takes its producer-absent arm and SKIP-counts)"
     )
 
 
-def test_the_pool_mean_is_the_thing_the_threshold_is_compared_against() -> None:
+def test_the_pooled_rate_is_the_thing_the_threshold_is_compared_against() -> None:
     """The unit statement O-D10's numbers only mean something against, and the reason `le=1`
-    is the right ceiling (MF-1). `recent_pool_draw_rate` is an UNWEIGHTED MEAN of per-worker
-    rates (`coordinator/config.py:141-146`), i.e. a fraction in `[0, 1]`, and
-    `check_draw_rate_collapse`'s predicate is `all(value >= threshold)` — an UPPER bound
-    (`rules.py:264`). A threshold above 1.0 is therefore unreachable BY ARITHMETIC, not by
+    is the right ceiling (MF-1). WPMINT Phase DS (R92): `pooled_draw_rate` is
+    `Sum(draws)/Sum(completed)` over the union of worker windows, i.e. a fraction in
+    `[0, 1]`, and `check_draw_rate_collapse`'s predicate is `all(value >= threshold)` — an
+    UPPER bound. A threshold above 1.0 is therefore unreachable BY ARITHMETIC, not by
     convention, which is what makes `le=1` a bound on the metric rather than a policy.
+
+    The empty arm is where R92 changed the answer, and the change is asserted rather than
+    described: the retired `recent_pool_draw_rate({})` returned the fail-safe `0.0`, which
+    DR-4 measured being APPENDED to the abort history as a real healthy measurement. It is
+    `None` now — a different TYPE, so the two cases can no longer be confused.
     """
-    assert recent_pool_draw_rate({}) == 0.0, (
-        "the empty arm is the fail-safe direction: while no worker qualifies the pool rate "
-        "is BELOW every legal threshold, so the gate cannot fire on absent signal"
+    assert pooled_draw_rate((0, 0), N_pool_min=1) is None, (
+        "no completed games is NO OBSERVATION, not a healthy 0.0 (DR-4). The old function "
+        "returned 0.0 here and the gate recorded it as a reading"
     )
-    assert recent_pool_draw_rate({0: 1.0, 1: 0.0}) == 0.5
-    assert recent_pool_draw_rate({w: 1.0 for w in range(8)}) == 1.0, (
+    assert pooled_draw_rate((5, 100), N_pool_min=50) == 0.05
+    assert pooled_draw_rate((100, 100), N_pool_min=50) == 1.0, (
         "1.0 is the metric's maximum at every worker count — no legal input can exceed it, "
         "so any threshold > 1.0 is 'armed in the config, absent in effect'"
+    )
+    assert pooled_draw_rate((0, 100), N_pool_min=50) == 0.0, (
+        "…and a MEASURED zero over sufficient evidence is a real healthy reading that must "
+        "still be a float. R92 removed the fabricated zero, not the measured one"
     )
 
 
 def test_the_harness_pool_refuses_the_call_shape_this_delta_retires() -> None:
-    """The harness's own vacuity guard. O-D10 reads `min_samples` off `_Pool`, so if the fake
-    silently accepted the OLD zero-argument call, a delta that never threaded `min_samples`
-    would show up as `min_samples_seen == []` on the armed arm and could be mistaken for the
-    disarmed arm's expected silence. Asserted here so the fake cannot drift into agreement
-    with the defect it exists to detect."""
-    pool = _Pool(draw_rates={3: 0.25})
-    assert pool.per_worker_draw_rates(min_samples=9) == {3: 0.25}
-    assert pool.min_samples_seen == [9]
+    """The harness's own vacuity guard. O-D10's disarmed arm asserts `counts_calls == 0`, so
+    if the fake still carried the RETIRED `per_worker_draw_rates` the coordinator would find
+    that attribute by `getattr`, take the live path against it, and the failure would surface
+    somewhere other than here. Asserted so the fake cannot drift into agreement with the
+    defect it exists to detect."""
+    pool = _Pool(counts=(1, 4))
+    assert pool.pooled_draw_counts() == (1, 4)
+    assert pool.counts_calls == 1
+    assert not hasattr(pool, "per_worker_draw_rates"), (
+        "the retired producer must be GONE from the fake, not merely unused: `step.py` reaches "
+        "it by `getattr(self.pool, ...)`, so a surviving attribute is a live call site"
+    )
     with pytest.raises(TypeError):
-        pool.per_worker_draw_rates()  # type: ignore[call-arg]
+        pool.pooled_draw_counts(min_samples=9)  # type: ignore[call-arg]

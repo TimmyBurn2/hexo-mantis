@@ -364,27 +364,34 @@ class PoolInstrumentation:
             sr = sorted(self._stride5_run_history)
         return sr[max(0, int(len(sr) * 0.9) - 1)]
 
-    def per_worker_draw_rates(
-        self, lock: threading.Lock, *, min_samples: int,
-    ) -> dict[int, float]:
-        """Class-1: rolling draw rate per worker over the last <= `_DRAW_RATE_WINDOW`
-        completed games, for workers with at least `min_samples` of them.
+    def pooled_draw_counts(self, lock: threading.Lock) -> tuple[int, int]:
+        """Class-1: `(Sum(draws), Sum(completed))` over the UNION of the per-worker rolling
+        windows — the raw counts R92's pooled statistic is computed from.
 
-        R80/ADJ-14: the inclusion rule is the ESTIMATOR's own guard and it has NO default.
-        It was `len(dq) > 0` — ONE game — so a single drawn game per worker read as a pool
-        draw rate of 1.0, the maximum the metric can take, at or above every legal
-        threshold, at every worker count (the pool statistic is an unweighted mean, so more
-        workers cannot dilute it). `min_samples` is config-authored
-        (`train.draw_rate_abort.min_samples`, resolved by
-        `mantis.config.resolve.draw_rate`); a default here would be a second authority over
-        it (R1), and the value that default would take — 1 — is exactly the defect.
+        WPMINT Phase DS (R92) replaced `per_worker_draw_rates(lock, *, min_samples)` with
+        this. Two things changed and both matter:
+
+        * **The statistic.** The retired method returned per-worker rates for workers past a
+          config-authored inclusion bar, and the coordinator took an UNWEIGHTED MEAN over
+          that filtered set — neither a pool rate nor a worker rate. Phase DR measured it
+          firing at a true pool draw rate of 0.0319 (one saturated worker carrying the mean
+          while 31 healthy ones were excluded) and staying SILENT at 0.968 (31 collapsing
+          workers excluded into invisibility) — RECHECK_D finding DR-3. `Sum/Sum` over the
+          union is count-weighted and has no inclusion bar to exclude anyone with.
+        * **The bar left this layer.** There is no `min_samples`/`N_pool_min` parameter here
+          by design. Under R92 the bar is an EVIDENCE-SUFFICIENCY rule on the abort
+          DECISION (`train.coordinator.config.pooled_draw_rate`), not an inclusion rule for
+          computing the metric, so telemetry has no business knowing it. A parameter here
+          would put the config authority back inside `mantis.selfplay` (R1).
+
+        `Sum(completed)` is bounded above by `_DRAW_RATE_WINDOW * n_workers` — each deque's
+        own `maxlen` — which is the ceiling `schema/core.py`'s
+        `_draw_rate_evidence_bar_is_reachable` bounds `N_pool_min` against.
         """
         with lock:
-            out: dict[int, float] = {}
-            for wid, dq in self._per_worker_draws.items():
-                if len(dq) >= min_samples:
-                    out[wid] = sum(dq) / len(dq)
-            return out
+            draws = sum(sum(dq) for dq in self._per_worker_draws.values())
+            completed = sum(len(dq) for dq in self._per_worker_draws.values())
+        return int(draws), int(completed)
 
     def terminal_reason_counts(self, lock: threading.Lock) -> dict[str, int]:
         """Class-3: cumulative terminal-reason counts since pool start."""

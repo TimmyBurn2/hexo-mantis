@@ -177,7 +177,7 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
         # unrelated red. The values are the run5 prereg ones; `min_step` is inside
         # dev_example's own `max_train_steps`, which the twin cross-validator requires.
         train={"draw_rate_abort": {"threshold": 0.25, "min_step": 25000,
-                                   "min_samples": 50}},
+                                   "N_pool_min": 50}},
     )
     assert list(audit_arming(dev_armed).disarmed) == [], (
         "dev_example with BOTH armings flipped ON must PASS — otherwise the audit is keyed "

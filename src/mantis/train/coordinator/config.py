@@ -55,7 +55,7 @@ class DrawRateAbortLike(Protocol):
 
     threshold: float
     min_step: int
-    min_samples: int
+    N_pool_min: int
 
 
 @runtime_checkable
@@ -66,7 +66,7 @@ class WorkerPoolLike(Protocol):
     def start(self) -> None: ...
     def stop(self) -> None: ...
     def buffer_composition(self) -> dict[str, Any]: ...
-    def per_worker_draw_rates(self, *, min_samples: int) -> dict[int, float]: ...
+    def pooled_draw_counts(self) -> tuple[int, int]: ...
     def current_stride5_p90(self) -> int: ...
     def check_producer_health(self) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
@@ -153,12 +153,48 @@ def promotion_capable_rounds(stop_step: int | None, eval_interval: int, best_str
     return [r for r in range(1, n_rounds + 1) if r % stride == 0]
 
 
-def recent_pool_draw_rate(per_worker_rates: "dict[int, float]") -> float:
-    """Pool-wide recent self-play draw rate (unweighted mean over workers with a game). 0.0
-    when no worker has a game yet, so the draw-rate hard-abort gate can't fire on empty signal."""
-    if not per_worker_rates:
-        return 0.0
-    return sum(per_worker_rates.values()) / len(per_worker_rates)
+def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | None:
+    """The draw-rate abort's gated statistic (WPMINT Phase DS, operator ruling R92).
+
+    `counts` is `(draws, completed)` — IN THAT ORDER — summed over the UNION of the pool's
+    per-worker draw windows (`WorkerPool.pooled_draw_counts`). The statistic is the POOLED
+    COUNT-WEIGHTED rate `draws / completed`, a fraction in [0, 1].
+
+    Returns **`None` = NO OBSERVATION** when `completed < N_pool_min`, and a `float`
+    otherwise — including a genuine `0.0`, which is a real healthy measurement and belongs
+    in the abort history. R92 answers ADJ-19 by TYPE, not by value: below the evidence bar
+    the gate reports nothing, and a healthy-looking `0.0` synthesised from no evidence
+    becomes unrepresentable rather than merely unlikely. Zero-completion starvation lands in
+    the same `None` arm and is explicitly the STALL family's jurisdiction (R92), not this
+    gate's.
+
+    WHAT IT REPLACES, and why by ruling rather than by preference. `recent_pool_draw_rate`
+    took an UNWEIGHTED MEAN over the workers past a per-worker inclusion bar — neither a
+    pool rate nor a worker rate. WPMINT Phase DR measured it (RECHECK_D DR-3/DR-4):
+
+    * 32 workers, one at 50 games all drawn, 31 healthy at 49 → included set = {that one},
+      mean = 1.0, **FIRED** at a true pool draw rate of 0.0319;
+    * the inverse — 31 workers drawing 100% at 49 games, 1 healthy at 50 → mean = 0.0,
+      **SILENT** at a true pool draw rate of 0.968;
+    * total collapse with nobody past the bar → empty map → `0.0`, appended to the abort
+      history as a real healthy measurement.
+
+    Count-weighting kills the first two (no worker can carry the pool, none can be excluded
+    into invisibility — there is no inclusion bar left), and the `None` kills the third.
+    Both counterexamples are PERMANENT regression oracles by R92
+    (`tests/selfplay/test_drawrate_pooled_statistic.py`).
+
+    `N_pool_min` is keyword-only and has NO default: it is
+    `train.draw_rate_abort.N_pool_min`, and this is the ONE signature on the path that takes
+    it, so a default here would be a second authority over the operator's pre-registered
+    value (R1). Its top end is bounded by `schema/core.py` against
+    `DRAW_RATE_WINDOW * selfplay.n_workers` — a bar above that ceiling would make this
+    function return `None` for the whole run while the abort audited ARMED.
+    """
+    draws, completed = counts
+    if completed < N_pool_min:
+        return None
+    return draws / completed
 
 
 @dataclass(frozen=True)
@@ -202,9 +238,16 @@ class StepCoordinatorConfig:
     # §D-GOLONG sustained draw-rate hard-abort. `threshold` and `min_step` moved to the
     # config (`train.draw_rate_abort`, above) at WPAX Phase D — R80 names exactly three
     # keys and `consec` is not one of them, so it stays a code-side default owned by
-    # CARD-COORD-KNOBS (R78). That is safe rather than merely bounded: with `min_samples`
-    # closing the saturation route and `min_step` closing the early-run route, `consec` is
-    # no longer load-bearing for the ADJ-14 hazard.
+    # CARD-COORD-KNOBS (R78). WPMINT Phase DS re-read that boundary rather than assuming
+    # it: R92's prereg row NAMES `consec=3` among the values that "stand", which
+    # pre-registers a constant without making it a config key, and R80's assignment of it
+    # to CARD-COORD-KNOBS is untouched. It stays here, and Phase K still owns it.
+    # Safe rather than merely bounded: with `N_pool_min` closing the one-drawn-game route
+    # (schema/train.py `_one_drawn_game_cannot_fire_the_abort`) and `min_step` closing the
+    # early-run route, `consec` is not load-bearing for the ADJ-14 hazard.
+    # DISCLOSED (WPMINT DR-8): `consec` counts consecutive CHECKS at a stride of
+    # `log_interval` train steps, so at the shipped log_interval=1000 a `consec` of 3 is
+    # 3000 sustained steps and run5's earliest possible fire is step 27000, not 25000.
     draw_rate_consec: int = 3
     # §178 bot-corpus batch slot (mixing knobs — NOT the killed refresh hook).
     bot_batch_share: float = 0.0
