@@ -388,6 +388,15 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
         "smoke config — bounded local drive, not a production run (R59).",
     ),
     (
+        "configs/smoke_preflight_armed.yaml",
+        "armed preflight-rehearsal smoke config (WPTS Phase F, R103): NOT a production run, "
+        "but unlike the R59 smokes it ARMS both required rows at burst-scale guard values so "
+        "mode PREFLIGHT can run a completed bounded burst off-run5. Exempt from the "
+        "every-production-config gate-12 sweep for the same reason the other smokes are; "
+        "`--config` still unions it into the audit set, and its live consumer is the burst "
+        "oracle in tests/tools/test_preflight_armed_smoke.py (LAW-08).",
+    ),
+    (
         "configs/smoke_radius_curriculum.yaml",
         "smoke config — bounded local drive, not a production run (R59).",
     ),

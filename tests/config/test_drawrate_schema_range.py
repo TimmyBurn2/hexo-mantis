@@ -324,8 +324,27 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         "at all"
     )
 
+    # WPTS Phase F re-point (R90a; the subject deliberately changed by R103): exactly ONE
+    # non-production config is ARMED — `smoke_preflight_armed.yaml`, the preflight-rehearsal
+    # target R103 granted, at its own minted burst-scale guard values (NOT run5's prereg
+    # constants — asserting the distinction keeps run5's values run-scoped). Every OTHER
+    # non-production config still disarms DELIBERATELY (R59), and `null` is what makes that
+    # observable rather than forgotten.
     others = {name: block for name, block in postures.items() if name != "run5.yaml"}
+    armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
+    assert armed_smoke is not None, (
+        "configs/smoke_preflight_armed.yaml must ARM the draw-rate row — an armed rehearsal "
+        "target that ships disarmed is refused at the preflight's own arming audit (rc 30) "
+        "and its burst oracle goes red (R103)"
+    )
+    assert (armed_smoke.threshold, armed_smoke.min_step, armed_smoke.N_pool_min,
+            armed_smoke.consec) != (
+        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
+        RUN5_PREREG["consec"]), (
+        "the armed smoke config must carry its OWN burst-scale guard values, never a copy of "
+        "run5's pre-registered constants — those are run-scoped (R82/R85/R92)"
+    )
     assert others and all(block is None for block in others.values()), (
-        "the four non-production configs disarm DELIBERATELY (R59), and `null` is what makes "
-        f"that observable rather than forgotten: {others}"
+        "every remaining non-production config disarms DELIBERATELY (R59), and `null` is what "
+        f"makes that observable rather than forgotten: {others}"
     )
