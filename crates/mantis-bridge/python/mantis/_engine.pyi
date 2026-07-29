@@ -3,6 +3,7 @@
 Twin of src/mantis/_engine.pyi (the type-checker-visible copy in the editable src
 package). This copy ships in the mantis-engine wheel beside the compiled module and
 also keeps the PEP 420 namespace dir (python/mantis/) tracked so fresh clones build.
+>300 justify (R8): a 1:1 typed mirror of the compiled mantis._engine surface (11 pyclasses + free functions) — its length is the bridge API's, and a module stub cannot be split.
 Keep both stubs identical when the bridge API changes.
 
 Generated for the WP7 assembly: 11 pyclasses + 4 free fns + 3 module fns +
@@ -562,6 +563,7 @@ class ReplayBuffer:
         numpy.ndarray,
     ]: ...
     def resize(self, new_capacity: int) -> None: ...
+    def outcome_in_range_count(self, lo: float, hi: float) -> int: ...
     def set_weight_schedule(
         self, thresholds: list[int], weights: list[float], default_weight: float
     ) -> None: ...

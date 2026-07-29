@@ -3,6 +3,7 @@
 Twin of crates/mantis-bridge/python/mantis/_engine.pyi (the wheel-shipped copy): this
 copy makes the extension visible to type checkers against the editable src package —
 a regular package shadows namespace portions, so the wheel copy alone is not seen.
+>300 justify (R8): a 1:1 typed mirror of the compiled mantis._engine surface (11 pyclasses + free functions) — its length is the bridge API's, and a module stub cannot be split.
 Keep both stubs identical when the bridge API changes. Invisible to the runtime
 importer (.pyi files are never imported); the real module is the compiled .so.
 
