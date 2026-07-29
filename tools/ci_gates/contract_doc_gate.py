@@ -36,6 +36,18 @@ leaves, and it does not check prose for truth. It is a citation check: every con
 every `mantis.*` symbol the doc NAMES must exist (or, under the absent heading, must not). A
 claim the doc simply omits is invisible to it. That bound is stated rather than hidden, because
 a gate whose real reach is narrower than its name is the class this repo keeps closing.
+
+THE BARE-SYMBOL ARM AND ITS BOUND (WPCLEAN Phase RES, closing the DSV2-2 blind spot). The
+WPMINT close-out measured that a doc naming a DELETED validator by bare name left this gate
+at rc 0 — `_SYMBOL_RE` sees only `mantis.`-rooted dotted names. The closure is structural,
+not doc-wide: in the `## Cross-field rules` table, the first two cells of every data row are
+LIVE-claim citations (validator name, model name) and each backticked identifier there must
+be a name DEFINED in the schema package (static AST walk over `src/mantis/config/schema` —
+no imports, no side effects). Doc-wide bare-name checking is deliberately NOT done: the doc
+legitimately cites retired names as history (`min_samples` in the version table), and a
+word-list exemption for "retired"-flavored prose is exactly the teach-people-to-word-around-
+the-gate failure the armed-abort census warns about. The bound: a stale bare name in PROSE
+still passes; one in the claim columns reds.
 """
 from __future__ import annotations
 
@@ -62,8 +74,34 @@ _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 _COUNT_RE = re.compile(r"\*\*(\d+) leaf key-paths\*\*")
 #: The heading below which every citation is checked in REVERSE (see the module docstring).
 ABSENT_HEADING = "## Deliberately absent"
-#: Where the reversed region ends. Any later `## ` heading closes it.
+#: The heading whose table's first two cells are LIVE-claim bare citations (the DSV2-2 arm).
+_CROSS_FIELD_HEADING = "## Cross-field rules"
+#: Where a region ends. Any later `## ` heading closes it.
 _HEADING_RE = re.compile(r"^## ")
+#: A backticked bare identifier (no dots) — only consulted inside the claim columns.
+_BARE_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
+
+
+def _schema_defined_names() -> set[str]:
+    """Every name DEFINED in the schema package, by static AST walk — no imports.
+
+    The bare-symbol arm's universe. Static on purpose: importing arbitrary modules to
+    build a name set would execute them, and the universe must exist even while the
+    package is broken enough that the doc's claims are exactly what needs checking.
+    """
+    import ast
+
+    names: set[str] = set()
+    for path in (REPO_ROOT / "src" / "mantis" / "config" / "schema").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
 
 
 def _nested_block(ann: object) -> type[BaseModel] | None:
@@ -135,12 +173,31 @@ def check(doc_path: Path) -> list[str]:
         for stop in range(1, len(parts)):
             valid.add(".".join(parts[:stop]))
 
+    schema_names = _schema_defined_names()
     in_absent = False
     saw_absent = False
+    in_cross_field = False
+    saw_cross_field_rows = 0
     for lineno, line in enumerate(text.splitlines(), start=1):
         if _HEADING_RE.match(line):
             in_absent = line.strip() == ABSENT_HEADING
             saw_absent = saw_absent or in_absent
+            in_cross_field = line.strip().startswith(_CROSS_FIELD_HEADING)
+        # The bare-symbol arm (DSV2-2): the first two cells of a cross-field table row are
+        # live-claim citations — validator name, model name — and must be DEFINED names.
+        if in_cross_field and line.lstrip().startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            claim_tokens = [
+                tok for cell in cells[:2] for tok in _BARE_RE.findall(cell)
+            ]
+            if claim_tokens:
+                saw_cross_field_rows += 1
+            for tok in claim_tokens:
+                if tok not in schema_names:
+                    failures.append(
+                        f"{doc_path}:{lineno}: cross-field claim column cites `{tok}`, "
+                        f"which is not defined anywhere in mantis.config.schema"
+                    )
         for match in _KEY_RE.finditer(line):
             key = match.group(1)
             if key.split(".")[0] not in sections:
@@ -173,6 +230,12 @@ def check(doc_path: Path) -> list[str]:
         failures.append(
             f'{doc_path}: has no "{ABSENT_HEADING}" section. The reversed-citation region is '
             f"part of this gate's reach; removing the heading would silently retire it"
+        )
+    if saw_cross_field_rows == 0:
+        failures.append(
+            f'{doc_path}: the "{_CROSS_FIELD_HEADING}" table has no claim-column citations. '
+            f"The bare-symbol arm is part of this gate's reach (DSV2-2); a moved or emptied "
+            f"table would silently retire it"
         )
 
     stated = _COUNT_RE.search(text)

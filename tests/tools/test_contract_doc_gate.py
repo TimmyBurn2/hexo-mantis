@@ -137,6 +137,45 @@ def test_the_absent_section_accepts_a_key_that_really_is_gone(tmp_path, doc_text
     assert _run(doc).returncode == 0
 
 
+# ── the bare-symbol arm (WPCLEAN Phase RES — the DSV2-2 blind-spot closure) ────────────
+
+def test_a_dead_validator_name_in_the_claim_column_reds_the_gate(tmp_path, doc_text):
+    """The DSV2-2 reproduction, now with the opposite verdict: at WPMINT close-out a doc
+    naming a validator that does not exist left this gate at rc 0 (the recorded blind
+    spot). The bare-symbol arm makes exactly that mutation red."""
+    doc = _mutate(tmp_path, doc_text, "`_draw_rate_evidence_bar_within_configured_capacity`",
+                  "`_draw_rate_floor_validator_that_never_existed`", 1)
+    res = _run(doc)
+    assert res.returncode == 1
+    assert "_draw_rate_floor_validator_that_never_existed" in res.stdout
+    assert "not defined anywhere in mantis.config.schema" in res.stdout
+
+
+def test_a_stale_bare_name_in_prose_stays_clean_the_stated_bound(tmp_path, doc_text):
+    """The discriminating negative that DOCUMENTS the arm's bound: `min_samples` is a
+    retired key cited as history in the version table and in a rule cell's prose — both
+    legitimate, both outside the claim columns, both must stay rc 0. The arm is a
+    claim-column check, not a doc-wide truth oracle (the gate docstring says so)."""
+    assert "`min_samples`" in doc_text  # the historical citations are really there
+    assert _run(REAL_DOC).returncode == 0
+
+
+def test_emptying_the_cross_field_table_cannot_silently_retire_the_arm(tmp_path, doc_text):
+    doc = _mutate(tmp_path, doc_text, "## Cross-field rules (the invariants no single field can carry)",
+                  "## Former rules table")
+    res = _run(doc)
+    assert res.returncode == 1
+    assert "bare-symbol arm" in res.stdout
+
+
+def test_a_dead_model_name_in_the_second_cell_reds_the_gate(tmp_path, doc_text):
+    doc = _mutate(tmp_path, doc_text, "| `_entropy_sign` | `TrainConfig` |",
+                  "| `_entropy_sign` | `RetiredTrainConfig` |", 1)
+    res = _run(doc)
+    assert res.returncode == 1
+    assert "RetiredTrainConfig" in res.stdout
+
+
 # ── the schema-side mutation: the gate reads the LIVE authority ────────────────────────
 
 def test_the_unmutated_schema_agrees_with_the_shipped_doc(gate_module):
