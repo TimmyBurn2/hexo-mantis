@@ -12,13 +12,13 @@ import numpy as np
 
 from mantis.encoding import lookup as _lookup_encoding
 
-BOARD_SIZE: int = _lookup_encoding("v6").board_size
+_V6_BOARD_SIZE: int = _lookup_encoding("v6").board_size
 
 _policy_scatters_cache: list[np.ndarray] | None = None
 
 
 def get_policy_scatters(
-    board_size: int = BOARD_SIZE,
+    board_size: int = _V6_BOARD_SIZE,
     has_pass: bool = True,
 ) -> list[np.ndarray]:
     """Return 12 policy-scatter index arrays.
@@ -32,11 +32,11 @@ def get_policy_scatters(
     scatter for out-of-window cells).
 
     Cached on first call for the canonical default config
-    (board_size=BOARD_SIZE, has_pass=True). Non-canonical callers do not hit
+    (board_size=_V6_BOARD_SIZE, has_pass=True). Non-canonical callers do not hit
     the cache.
     """
     global _policy_scatters_cache
-    is_canonical_default = board_size == BOARD_SIZE and has_pass
+    is_canonical_default = board_size == _V6_BOARD_SIZE and has_pass
     if _policy_scatters_cache is not None and is_canonical_default:
         return _policy_scatters_cache
 

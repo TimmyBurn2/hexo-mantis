@@ -45,8 +45,8 @@ from mantis.encoding import (
 _LOG = logging.getLogger(__name__)
 
 _V6 = _lookup_encoding("v6")
-BOARD_SIZE: int = _V6.board_size
-BUFFER_CHANNELS: int = _V6.n_planes
+_V6_BOARD_SIZE: int = _V6.board_size
+_V6_BUFFER_CHANNELS: int = _V6.n_planes
 
 
 # ── Mixed-batch result + pre-allocated buffers ───────────────────────────────────────────
@@ -87,9 +87,9 @@ class BatchBuffers:
 def allocate_batch_buffers(
     batch_size: int,
     n_actions: int,
-    trunk_size: int = BOARD_SIZE,
+    trunk_size: int = _V6_BOARD_SIZE,
     aux_stride: int | None = None,
-    n_planes: int = BUFFER_CHANNELS,
+    n_planes: int = _V6_BUFFER_CHANNELS,
 ) -> BatchBuffers:
     """Allocate the shared batch arrays once at startup (encoding-derived spatial shapes)."""
     if aux_stride is None:
@@ -159,7 +159,7 @@ def load_pretrained_buffer(
 
     t0 = time.time()
     data = np.load(pretrained_path, mmap_mode="r")
-    board_size = config.get("board_size", BOARD_SIZE)
+    board_size = config.get("board_size", _V6_BOARD_SIZE)
     pre_states = data["states"]
     pre_policies = data["policies"]
     pre_outcomes = data["outcomes"]
@@ -231,7 +231,7 @@ def _augment_recent_rows(
     sym_indices = np.random.randint(0, 12, size=n)
 
     states_f32 = s_r.astype(np.float32)
-    if board_size == BOARD_SIZE:
+    if board_size == _V6_BOARD_SIZE:
         states_f32 = _engine.apply_symmetries_batch(states_f32, sym_indices.tolist())
         s_r = states_f32.astype(np.float16)
     else:

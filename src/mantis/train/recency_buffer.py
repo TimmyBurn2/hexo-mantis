@@ -16,9 +16,9 @@ import numpy as np
 from mantis.encoding import lookup as _lookup_encoding
 
 _V6 = _lookup_encoding("v6")
-BOARD_SIZE: int = _V6.board_size
-BUFFER_CHANNELS: int = _V6.n_planes
-NUM_CELLS: int = _V6.n_cells
+_V6_BOARD_SIZE: int = _V6.board_size
+_V6_BUFFER_CHANNELS: int = _V6.n_planes
+_V6_NUM_CELLS: int = _V6.n_cells
 
 
 class RecentBuffer:
@@ -34,9 +34,9 @@ class RecentBuffer:
     def __init__(
         self,
         capacity: int,
-        state_shape: tuple[int, ...] = (BUFFER_CHANNELS, BOARD_SIZE, BOARD_SIZE),
-        policy_len: int = NUM_CELLS + 1,
-        aux_stride: int = NUM_CELLS,
+        state_shape: tuple[int, ...] = (_V6_BUFFER_CHANNELS, _V6_BOARD_SIZE, _V6_BOARD_SIZE),
+        policy_len: int = _V6_NUM_CELLS + 1,
+        aux_stride: int = _V6_NUM_CELLS,
     ) -> None:
         if capacity < 1:
             raise ValueError(f"capacity must be >= 1, got {capacity}")

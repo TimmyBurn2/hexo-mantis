@@ -33,6 +33,7 @@ import os
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
+import mantis.train.buffer_persist as _buffer_persist
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     check_draw_rate_collapse,
@@ -40,7 +41,6 @@ from mantis.monitor.rules import (
     emit_training_step_alerts,
     sealbot_wr_trajectory_alert,
 )
-import mantis.train.buffer_persist as _buffer_persist
 from mantis.train.buffer_persist import try_save_buffer as _try_save_buffer
 from mantis.train.coordinator.config import (
     ClockLike,
