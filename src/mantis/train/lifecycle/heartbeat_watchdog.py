@@ -450,14 +450,18 @@ class HeartbeatWatchdog:
     def _fire(self, code: int, *, reason: str, detail: Mapping[str, Any] | None = None) -> None:
         """LOUD event → BOUNDED snapshot → outcome event → BOUNDED sink close → exit.
 
-        Guarantee, stated exactly: the fire runs ENTIRELY on the watchdog thread (O-10/O-14 —
-        the wedged main thread is never asked to cooperate) and reaches ``exit_fn`` even when
-        an optional effect RAISES (`best_effort` counts it) **or HANGS** (each effect gets a
-        hard `snapshot_timeout_sec` budget on its own worker thread; the budget expiring is
-        counted and the fire proceeds). A hung effect therefore delays the exit by at most one
-        budget per effect — it can no longer suppress it, which the previous
-        "`best_effort` … cannot swallow the exit" docstring wrongly claimed (`best_effort`
-        catches exceptions, not hangs).
+        Guarantee, stated exactly (restated at WPCLEAN Phase RES — the WP13-A N3 row): the
+        fire runs ENTIRELY on the watchdog thread (O-10/O-14 — the wedged main thread is
+        never asked to cooperate) and reaches ``exit_fn`` even when an optional effect
+        RAISES (`best_effort` counts it). The HANG bound is narrower and holds for exactly
+        TWO of the four effects: the snapshot and the sink close run under `_bounded`'s hard
+        `snapshot_timeout_sec` budget on their own worker threads; the two `_emit` calls are
+        exception-safe but NOT time-bounded — a sink whose ``emit`` wedges (hung log
+        filesystem) still suspends the fire. That residual is deliberate here (bounding the
+        emits is a fire-path timing change carded with N1's cross-check, not a docstring
+        fix) and its backstop is external: a suspended fire stops the heartbeat-file writer
+        with it, which is exactly the staleness the process-level supervisor acts on (N3's
+        own row: "supervisor backstop covers").
 
         Order note: the `.watchdog` snapshot now runs BEFORE the sink close so its OUTCOME can
         be recorded in the ONE channel (`heartbeat_watchdog_fire_complete`). Previously a
