@@ -1,8 +1,8 @@
-""">300 justify (R8), stated at this file's MEASURED size of 335 lines: it is ~90% DATA — the
+""">300 justify (R8), stated at this file's MEASURED size of 341 lines: it is ~70% DATA — the
 SECOND copy of the 170-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves.
 Splitting it would create a THIRD copy to keep in sync, which is the drift the duplication
-exists to detect. The four tests below are ~40 lines together.
+exists to detect. The three tests below are ~24 lines together.
 
 SC-A1..A4 oracle — O15 every-key-has-consumer bijection, re-asserted against the FULL
 POST-Phase-2 leaf set (DESIGN_P2.md §1.1/§1.2/§4.2/§4.3 / PREREG_P2.md suite #10; edit-

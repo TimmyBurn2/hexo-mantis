@@ -144,9 +144,9 @@ shorter run of run5; it is what a config WITHOUT the armed row already gets.
 What the `full` tier costs is an ESTIMATE and a LOWER BOUND, and this tool cannot measure it:
 TD-4 stops the child before `compose_run`, so no burst of any length has ever run here. Basis
 — WP10's recorded bench floor, median 41.66 ms/train-step (IQR 0.76, n=200, gnn_axis_v1/graph/
-bf16, CPU 1-thread, `b29f0bc`) -> 25001 steps is **>= 1042 s** of pure train-step compute. The
+bf16, CPU 1-thread, `b29f0bc`) -> 25001 steps is **>= 1041.5 s** of pure train-step compute. The
 MISSING TERM, named rather than guessed: the coordinator is GAME-BOUND. With
-`training_steps_per_game=1.0` and `max_train_burst=1` (`run.py:100-108`), `_steps_budget`
+`training_steps_per_game=1.0` and `max_train_burst=1` (`configs/run5.yaml:120-121`), `_steps_budget`
 returns exactly 1, and a round with no new game sleeps instead of training
 (`train/coordinator/step.py:260-266`) — so 25001 train steps needs >= 25001 COMPLETED self-play
 games, generated on run5's `selfplay.n_workers: 1`. That generation time is not in 41.66 ms and

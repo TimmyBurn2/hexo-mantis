@@ -138,7 +138,7 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `train/coordinator/step.py` — `stop()`, the O2 iteration limit, the O3 shutdown-save and
   `_fire_hard_abort` — and nothing recorded which one fired: a collapsed run and a completed
   run were the same observable, in state and in exit status. `_fire_hard_abort` now records the
-  RULE NAME on `ShutdownState.abort_rule` beside the stop (`None` on both clean stops), and
+  RULE NAME on `ShutdownState.abort_rule` beside the stop (`None` on all three clean stops), and
   `mantis.config.armed_aborts.exit_code_for_abort` resolves that name to the manifest row's
   `exit_code` at a process boundary. The `draw_rate_collapse` row's `exit_code` is **46**
   (`monitor.heartbeat.DRAW_RATE_COLLAPSE_EXIT_CODE`, the fail-fast family's cooperative

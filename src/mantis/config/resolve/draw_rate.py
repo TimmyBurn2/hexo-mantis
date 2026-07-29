@@ -5,7 +5,7 @@ replaced by R92 at WPMINT Phase DS).
 `train.draw_rate_abort` is read HERE and nowhere else. The composition root
 (`mantis.run.compose_run`) passes the resolved spec into
 `StepCoordinatorConfig.draw_rate_abort`, which `coordinator/step.py`'s hard-abort gate
-gates the whole draw-rate check on and whose three fields reach, respectively,
+gates the whole draw-rate check on and whose four fields reach, respectively,
 `check_draw_rate_collapse(threshold=…, min_step=…, consec=…)` and
 `pooled_draw_rate(…, N_pool_min=…)`.
 
@@ -14,12 +14,12 @@ boolean could contradict it (`enabled=true, block=null` → the flag lies; `enab
 threshold=0.25` → the config lies). `None` is ARMED=NO, explicitly; a spec is ARMED=YES on
 those terms. The two are disjoint TYPES, not two regions of one range.
 
-THE THREE TRAVEL TOGETHER, and that is the point (R80). A threshold without `min_step` /
-`N_pool_min` is ADJ-14's hair-trigger in one spelling or another: pre-R92 the shipped
-inclusion rule `len(dq) > 0` counted a worker after ONE game and one drawn game per worker
-saturated the pool mean at 1.0; post-R92 an `N_pool_min` of 4 lets one drawn game in four
-meet a threshold of 0.25. Guards that could be set independently of the threshold could be
-set to nothing, so the block arrives whole or not at all.
+THE FOUR TRAVEL TOGETHER, and that is the point (R80, extended to `consec` at WPMINT Phase
+K-B). A threshold without `min_step` / `N_pool_min` is ADJ-14's hair-trigger in one spelling
+or another: pre-R92 the shipped inclusion rule `len(dq) > 0` counted a worker after ONE game
+and one drawn game per worker saturated the pool mean at 1.0; post-R92 an `N_pool_min` of 4
+lets one drawn game in four meet a threshold of 0.25. Guards that could be set independently
+of the threshold could be set to nothing, so the block arrives whole or not at all.
 
 RUN-SCOPED CONSTANTS (R82/R85/R92): `threshold`, `min_step`, `N_pool_min` and (since
 WPMINT Phase K-B) `consec` are pre-registered at mint prereg and that is "the only place they may change" — not tunables,

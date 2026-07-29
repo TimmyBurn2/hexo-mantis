@@ -1,5 +1,5 @@
-# >300 justify (R8), stated at this file's MEASURED size of 454 lines (was 430 at K-B; WPMINT
-# DSV-2 adds R94's ratification grounds to the floor validator). WPMINT Phase K-B
+# >300 justify (R8), stated at this file's MEASURED size of 455 lines (was 430 at K-B, 454 at
+# DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
@@ -26,13 +26,14 @@ class DrawRateAbortConfig(StrictModel):
     R65 re-scoped by R80, shaped by R79 as amended by R83; the STATISTIC replaced by R92).
 
     The fact under single authority is *"is the draw-rate collapse abort armed, and on what
-    terms"*. It has three INSEPARABLE components, which is why they are a nested block and
-    not three flat `X | None` keys: three independent keys give three authorities over one
+    terms"*. It has four INSEPARABLE components (`threshold`, `min_step`, `N_pool_min`,
+    `consec`), which is why they are a nested block and not four flat `X | None` keys: four
+    independent keys give four authorities over one
     fact and can disagree in ways no predicate can adjudicate (`threshold: 0.25,
     N_pool_min: null` is neither armed nor disarmed). The block makes disagreement
-    unrepresentable — the three arrive together or not at all.
+    unrepresentable — the four arrive together or not at all.
 
-    ALL THREE ARE RUN-SCOPED CONSTANTS (R82/R85/R92), pre-registered at mint prereg, which
+    ALL FOUR ARE RUN-SCOPED CONSTANTS (R82/R85/R92), pre-registered at mint prereg, which
     is "the only place they may change". They are not tunables; changing one means
     re-minting with a recorded delta and a fresh prereg, never editing a config in place
     (R1).

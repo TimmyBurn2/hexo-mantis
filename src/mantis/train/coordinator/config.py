@@ -1,11 +1,11 @@
 # >300 justify (R8), stated at this file's MEASURED size of 310 lines. It crossed the cap at
-# WPMINT Phase K-B, which DELETED six fields and added no code — the growth is entirely the
-# `StepCoordinatorConfig` docstring recording WHY six fields are gone, why no field may carry a
-# default, and where `draw_rate_consec` moved to. This module is the DAG-clean seam layer: the
-# injected-collaborator Protocols, the config dataclass they are typed against, and the outcome
-# record. Splitting it would put a Protocol and the dataclass that consumes it on opposite sides
-# of an import for no gain, and `pooled_draw_rate` sits here because `DrawRateAbortLike` is the
-# shape it is bounded by. Roughly two thirds of the file is that rationale.
+# WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
+# onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
+# docstring recording WHY six fields are gone and why no field may carry a default. This module
+# is the DAG-clean seam layer: the injected-collaborator Protocols, the config dataclass they are
+# typed against, and the outcome record. Splitting it would put a Protocol and the dataclass that
+# consumes it on opposite sides of an import for no gain, and `pooled_draw_rate` sits here
+# because `DrawRateAbortLike` is the shape it is bounded by. Roughly two fifths is that rationale.
 """Step-coordinator collaborator Protocols + config + outcome (WP10 §a.4 split — `config` slice).
 
 The 13-class god-module `training/step_coordinator.py` splits by responsibility (collaborator

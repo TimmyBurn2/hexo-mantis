@@ -30,10 +30,10 @@ SCHEMA_VERSION = 1
 #: `float("inf")` (raises `OverflowError` deep inside `selectors.select()`), so a
 #: floor-only bound (`gt=0`/`ge=0`) that admits `+inf` is not actually a bound for this
 #: arithmetic. One day (86400.0s) is deliberately more generous than the
-#: `StepCoordinatorConfig` drain-cap family (coordinator/config.py
-#: DEFAULT_*_HARD_CAP_SEC = 14400.0, 4h) since these two fields bound a single eval round
-#: / kill-grace, never a whole drain budget — named module constant, never an inline
-#: magic literal (R1).
+#: `StepCoordinatorConfig` drain-cap family (`monitor.drain.eval_final_drain_hard_cap_sec`
+#: / `terminal_eval_hard_cap_sec`, minted 14400.0 = 4h; the `DEFAULT_*_HARD_CAP_SEC`
+#: constants were DELETED at WPMINT K-A) since these two bound a single eval round /
+#: kill-grace, never a whole drain budget — a named constant, never an inline literal (R1).
 _EVAL_TIMEOUT_CEILING_SEC = 86400.0
 
 

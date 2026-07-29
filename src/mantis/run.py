@@ -1,13 +1,13 @@
 # >300 justify (R8), stated at this file's MEASURED size of 335 lines. It crossed the cap at
 # WPMINT Phase K-B, and the whole delta is `_step_coordinator_config`'s: with the 19 coordinator
-# knobs authored, its body became a 26-field assembly from four resolved specs and its docstring
+# knobs authored, its body became a 25-field assembly from four resolved specs and its docstring
 # had to record what the literals it replaced were doing. That assembly cannot move: this module
 # is the ONE composition root (§a.4/§c.6), it is the only module importing both `mantis.train`
 # and `mantis.eval` at top level, and splitting the builder out would either put a `mantis.run
 # -> sibling` import in the one place the DAG forbids new edges or create a second place a
 # `StepCoordinatorConfig` can be built — which is exactly the authority migration
 # `tests/config/test_drawrate_arming_authority.py` and `test_coordinator_knobs_wiring.py` exist
-# to forbid. The executable content is ~90 lines; the rest is the per-decision rationale (R64,
+# to forbid. The executable content is ~170 lines; the rest is the per-decision rationale (R64,
 # MF-1/MF-2, S-4/Phase D/K-A/K-B) that made those authority defects findable.
 """mantis.run — the run composition root (design §a.4/§c.6; MUST-FIX 4: RELOCATE).
 

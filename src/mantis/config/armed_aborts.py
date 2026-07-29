@@ -1,4 +1,4 @@
-# R8 >300 justify (524, re-measured at WPMINT Phase K-B; was 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
+# R8 >300 justify (527, re-measured at WPMINT Phase K-B; was 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
 # Phase D, and the
 # figure is restated at the file's MEASURED size rather than the size it was written for —
 # `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
@@ -260,8 +260,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "the supervisor's READING of the rc, not in the delivery mechanism. What makes a "
             "fired abort distinguishable from a clean run is ShutdownState.abort_rule, which "
             "_fire_hard_abort sets to the rule NAME beside the stop; a process boundary maps "
-            "it here through exit_code_for_abort. The two clean stops (O2 iteration limit, O3 "
-            "shutdown-save) leave the field None."
+            "it here through exit_code_for_abort. The three clean stops (stop(), O2 "
+            "iteration limit, O3 shutdown-save) leave the field None."
         ),
     ),
     ArmedAbort(

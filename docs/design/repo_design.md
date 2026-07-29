@@ -241,7 +241,7 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
    every other `configs/` entry's is 101, because only run5 arms the abort. Also measured: no
    burst of any length has ever run here — the boot child dies at TD-4 before `compose_run` —
    so `covered` is `[]` and both tiers stay OWED on every report the tool can currently write.
-   The cost of the `full` tier is a published LOWER BOUND (`>= 1042 s` from WP10's 41.66
+   The cost of the `full` tier is a published LOWER BOUND (`>= 1041.5 s` from WP10's 41.66
    ms/train-step floor) whose missing term — game-bound self-play generation for `>= 25001`
    completed games on one worker — is named rather than estimated.
 

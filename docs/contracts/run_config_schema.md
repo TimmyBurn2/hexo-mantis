@@ -118,7 +118,7 @@ happens at the schema and does not propagate into the runtime object.
 | `train.entropy_reg_weight` sign law; `policy_target`/`completed_q_values` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |
 | the nineteen coordinator knobs are read by ONE resolver and each moves the behaviour it names | tests/config/test_coordinator_knobs_wiring.py |
 | the four `monitor.drain.*` keys each move the join bound the eval pipeline uses; the builder takes them as a required keyword-only parameter | tests/config/test_drain_caps_wiring.py |
-| `train.draw_rate_abort` bounds, the evidence-bar reachability rule, the one-drawn-game rule, and every config stating its posture explicitly | tests/config/test_drawrate_schema_range.py |
+| `train.draw_rate_abort` bounds, the evidence-bar CAPACITY rule, the one-drawn-game rule, and every config stating its posture explicitly | tests/config/test_drawrate_schema_range.py |
 | the arming authority is the block and only the block — no second enable flag | tests/config/test_drawrate_arming_authority.py |
 | `eval` numeric bounds (out-of-domain rejected, in-domain boundary accepted) including the `inf`/`nan` sweep | tests/config/test_eval_schema_bounds.py |
 | `selfplay` / `mcts` / `playout_cap` bounds and the PCR mutual-exclusion rules | tests/config/test_selfplay_schema.py, tests/config/test_mcts_playout_cap_schema.py, tests/config/test_selfplay_playout_cap_mutual_exclusion.py |

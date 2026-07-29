@@ -18,9 +18,9 @@ it broken:
   The second half is the load-bearing one: the resolver is mutated against a synthetic
   manifest and must follow it. A resolver that answered `46` from its own literal would pass
   the first half forever and be a second authority.
-* **X-3** — a CLEAN run leaves `abort_rule is None`, at BOTH clean stop sites. One of them is
-  not enough: O2 and O3 are separate writes of `running = False`, and pinning one leaves the
-  other free to grow an abort_rule it has no business having.
+* **X-3** — a CLEAN run leaves `abort_rule is None`, at ALL THREE clean stop sites. One of
+  them is not enough: `stop()`, O2 and O3 are separate writes of `running = False`, and
+  pinning one leaves the others free to grow an abort_rule they have no business having.
 * **X-4** — an abort with no authored code resolves to `None`, never to a fabricated number.
   R84 refused to invent a code for `grad_norm_hard_abort` / `sealbot_wr_abort`; this is what
   stops the refusal being undone one layer down.
@@ -37,9 +37,9 @@ and deliberately minimal: everything the card asserts on is real. The `StepCoord
 objects; only the trainer/buffer/pool collaborators are fakes, and none of them touches the
 abort decision.
 
->300 justify (R8), at the file's MEASURED size of 440 lines (Phase X wrote 420; K-A restated 428; WPMINT Phase
-K-A's coordinator-census consolidation is the delta, and the number is restated rather than
-left stale per SF-7). Two components, and neither is
+>300 justify (R8), at the file's MEASURED size of 440 lines (Phase X wrote 420; K-A's
+coordinator-census consolidation restated 428; WPMINT Phase K-B's `resolve_coordinator_knobs`
+harness threading is the 428 -> 440 delta, restated per SF-7). Two components, and neither is
 splittable without losing what it is for. (1) ~110 lines are the local `StepCoordinator`
 harness, which exists ONLY because R5 bars cross-test imports — the alternative is a shared
 fixture module, which is the collection-shadowing shape R5 forbids. (2) The rest is one card's
@@ -278,7 +278,7 @@ def test_the_resolver_never_branches_on_a_rules_identity() -> None:
     assert exit_code_for_abort(invented.name, manifest=(*MANIFEST, invented)) == 77
 
 
-# ══ X-3 — a clean run leaves the field alone, at BOTH clean stop sites ═════════════════
+# ══ X-3 — a clean run leaves the field alone, at ALL THREE clean stop sites ════════════
 def test_the_O2_iteration_limit_is_a_clean_stop() -> None:
     """X-3, site one (`step.py`'s O2 arm): the run reached `stop_step` and stopped. It set
     `running = False` exactly as an abort does, so it is the site an abort is most easily
