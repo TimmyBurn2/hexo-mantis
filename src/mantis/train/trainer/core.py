@@ -581,17 +581,14 @@ class Trainer:
 
 
 def _resolve_spec(config: Any):
-    """Resolve the encoding spec from a config, bridging the WP8 NESTED `identity.encoding`
-    shape and the legacy FLAT `encoding` shape. `resolve_from_config` only reads the flat key
-    (defaulting to v6), so a WP8 config's declared encoding must be lifted from `identity` first
-    — this keeps `metadata.encoding_name` consistent with `config.identity.encoding` (the loader's
-    stamp-source check, T-CK-30)."""
-    cfg = dict(config) if isinstance(config, dict) else {}
-    ident = cfg.get("identity")
-    if isinstance(ident, dict) and isinstance(ident.get("encoding"), str) and "encoding" not in cfg:
-        from mantis.encoding import lookup
-        return lookup(ident["encoding"])
-    return resolve_from_config(cfg)
+    """Resolve the encoding spec from a config. Both the WP8 NESTED `identity.encoding` shape
+    and the legacy FLAT `encoding` shape are read by `resolve_from_config` itself, which is the
+    ONE authority for where an encoding may be declared (TD-4 / CARD-POOL-ENCODING-BRIDGE); this
+    function is now just the non-dict coercion the Trainer's own callers need. Keeps
+    `metadata.encoding_name` consistent with `config.identity.encoding` (the loader's
+    stamp-source check, T-CK-30) — unchanged, and now by the same route every other caller
+    takes rather than by a private bridge only this module had."""
+    return resolve_from_config(dict(config) if isinstance(config, dict) else {})
 
 
 def _prune_policy_targets(pi: torch.Tensor, threshold_frac: float) -> torch.Tensor:

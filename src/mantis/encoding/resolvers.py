@@ -395,17 +395,31 @@ def expand_auto_paths(config: dict[str, Any], spec: Any) -> None:
 
 
 def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
-    """Return an `EncodingSpec` from a config mapping.
+    """Return an `EncodingSpec` from a config mapping. THE one authority for
+    *where in a config an encoding is declared* (CARD-POOL-ENCODING-BRIDGE / TD-4).
 
-    Accepts both forms:
-      - `cfg['encoding'] = "v6w25"`            (string form)
-      - `cfg['encoding'] = {'version': 'v6'}`  (mapping form)
+    Accepts three DECLARED shapes, in precedence order:
+      - `cfg['encoding'] = "v6w25"`             (legacy flat, string form)
+      - `cfg['encoding'] = {'version': 'v6'}`   (legacy flat, mapping form)
+      - `cfg['identity']['encoding'] = "v6w25"` (WP8 nested — what `RunConfig`
+        actually dumps; `IdentityConfig.encoding` is a required, defaultless,
+        registry-cross-checked field, `config/schema/core.py:50`)
+
+    The nested shape is NOT a fallback and NOT a default: it reads a key the
+    schema requires the operator to declare, and an absent declaration still
+    raises. Before TD-4 this knowledge was duplicated in two private bridges
+    (`train/trainer/core.py::_resolve_spec`, `train/orchestrator.py`) and absent
+    from five other call sites — the pool among them, which is why mode
+    PREFLIGHT could not boot. Adding a shape here rather than a sixth private
+    bridge is the R1 "one authority" requirement: a caller-side
+    `d["encoding"] = d["identity"]["encoding"]` injection is exactly the
+    code-side default authority R1 and LAW-11 forbid.
 
     Raises:
-        MissingEncodingError: if `cfg` is `None`, has no `encoding` key, or
-            has a mapping-form `encoding` with no `version` key — an explicit
-            encoding is required (LAW-11, R28); the v6 default arm is
-            retired.
+        MissingEncodingError: if `cfg` is `None`, declares an encoding in NONE
+            of the three shapes, or has a mapping-form `encoding` with no
+            `version` key — an explicit encoding is required (LAW-11, R28); the
+            v6 default arm is retired.
     """
     if cfg is None:
         raise MissingEncodingError(
@@ -414,10 +428,14 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
         )
     section = cfg.get("encoding")
     if section is None:
+        identity = cfg.get("identity")
+        if isinstance(identity, Mapping):
+            section = identity.get("encoding")
+    if section is None:
         raise MissingEncodingError(
-            "config has no 'encoding' key; an explicit `encoding: <name>` "
-            "declaration is required (LAW-11, R28) — the v6 default arm is "
-            "retired"
+            "config declares no encoding: neither a flat `encoding: <name>` key "
+            "nor a nested `identity.encoding` one. An explicit declaration is "
+            "required (LAW-11, R28) — the v6 default arm is retired"
         )
     spec: EncodingSpec
     if isinstance(section, str):

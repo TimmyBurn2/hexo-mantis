@@ -74,19 +74,39 @@ never defaulted — LAW-11), and hands them to the real `compose_run`, which bui
 is missing a method the tool does NOT supply one: the `AttributeError` reaches the process
 boundary and is reported as `PreflightTreeDefectError` naming the attribute and the card.
 
-At HEAD mode PREFLIGHT terminates on **CARD-POOL-ENCODING-BRIDGE** (TD-4): `WorkerPool`
-construction calls `resolve_pool_encoding` -> `resolve_from_config`, which raises
-`MissingEncodingError` because `RunConfig.model_dump()` carries `identity.encoding` and no
-flat top-level `encoding` key. Parent rc **33**, child rc 1, ~1.4 s, with a real `Trainer`
-already built through the real `init_trainer`. That is a useful preflight result: it is the
-answer to "can run5 launch?", and the answer is no, for a nameable reason.
+**CARD-POOL-ENCODING-BRIDGE (TD-4) HAS LANDED (WPBRIDGE Phase T).** Mode PREFLIGHT used to
+terminate there: `WorkerPool` construction calls `resolve_pool_encoding` ->
+`resolve_from_config`, which raised `MissingEncodingError` because `RunConfig.model_dump()`
+carries `identity.encoding` and no flat top-level `encoding` key. Parent rc **33**, child
+rc 1, ~1.4 s. `resolve_from_config` now reads the nested shape as one of its declared forms
+— one authority, no caller-side injection — and that wall is GONE.
+
+Where the boot stops NOW, measured on the WPBRIDGE dev-box rehearsal (2026-07-29, CPU,
+`--burst-steps 25001 --timeout-sec 300`): **nowhere, inside the rehearsal window.** The child
+boots clean through `init_trainer`, `WorkerPool`, `compose_run`, `build_run_safety` and
+`run_training_loop`, arms both watchdogs (`heartbeat_watchdog_armed`,
+`selfplay_stall_watchdog_armed`), streams `actor_lag_sample` and `system_stats`, and is still
+running healthily when `--timeout-sec` kills it: parent rc **40** `PreflightTimeoutError`,
+child rc -15, EMPTY stderr. `buffer_size` is **0** for the whole window — one CPU self-play
+worker at run5's settings finishes no games, so the coordinator never leaves its warmup arm
+(`_run_loop` O4, `buffer.size < cfg.min_buf_size`) and never takes a training step.
+
+**CARD-TRAINSTEP-ADAPTER (TD-1) IS STILL LIVE AND IS NOW THE NEXT WALL.**
+`step.py:640` calls `self.trainer.train_step(self.buffer, ...)`; `Trainer` defines only
+`train_step_from_tensors` / `train_step_from_graph_batch`, and `TrainerLike`
+(`coordinator/config.py:35`) does not declare `train_step` at all. It sits BEHIND the warmup
+gate, so a CPU rehearsal cannot reach it — TD-1 is live-but-UNREACHED here, and this box
+therefore CANNOT demonstrate a completed burst. The binding measurement is the training-box
+run. Do not read rc 40 as "TD-1 is fixed"; read it as "TD-1 was never reached".
 
 This docstring previously named CARD-TRAINSTEP-ADAPTER (`train/coordinator/step.py:573`,
 rc 32) as the terminal wall, copying DESIGN_P §3.4. That was **measured false**
-by IMPL and re-produced independently by REVIEW-impl: TD-4 fires FIRST, before `compose_run`
-is ever called, so TD-1 is BEHIND TD-4, not in front of it. Corrected here rather than carded
-— a gate whose own docstring states a measured-false fact is the first thing the next reader
-believes about it. DESIGN_P's copy of the same sentence is CARD-DESIGN-P-3.4-ORDERING.
+by IMPL and re-produced independently by REVIEW-impl: TD-4 fired FIRST, before `compose_run`
+was ever called, so TD-1 was BEHIND TD-4, not in front of it. Corrected here rather than
+carded — a gate whose own docstring states a measured-false fact is the first thing the next
+reader believes about it. DESIGN_P's copy of the same sentence is CARD-DESIGN-P-3.4-ORDERING.
+With TD-4 landed, TD-1 is once again the frontier — but by clearing the wall in front of it,
+not by the ordering DESIGN_P asserted.
 
 Containment is a SUBPROCESS, not a thread: `build_run_safety`'s `exit_fn` is `os._exit` and
 `compose_run` does not override it, so an in-process boot that trips exit 42/43/45 dies

@@ -322,30 +322,58 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     """MF-2's actual producer: the real boot, on the real tree, in production posture.
 
     This is the only test in the repo that drives a preflight child to completion. It is the
-    integration tier because it imports torch and builds a real `Trainer` (~1.4 s of child
-    plus interpreter start), and because its subject is the state of the TREE, not of the
-    tool: when CARD-POOL-ENCODING-BRIDGE lands, this test is what tells the next reader that
-    the docstring's HEAD claim has expired.
+    integration tier because it imports torch and builds a real `Trainer`, and because its
+    subject is the state of the TREE, not of the tool.
+
+    RE-POINTED by WPBRIDGE Phase T under the R90(a) settled-class grant. It used to assert
+    the boot died at rc 33 on `MissingEncodingError` — and said, in its own docstring, that
+    "when CARD-POOL-ENCODING-BRIDGE lands, this test is what tells the next reader that the
+    docstring's HEAD claim has expired". That card has now landed, so the assertion is
+    re-pointed at the wall the boot actually reaches, MEASURED (2026-07-29, this box, CPU):
+    it reaches NO wall inside the window. The child boots clean and is still running when
+    `--timeout-sec` kills it — rc 40, child rc -15, EMPTY stderr.
+
+    What that does and does not prove is the whole point of the re-point. It PROVES TD-4 is
+    gone (the old wall fired in ~1.4 s; nothing fires now). It does NOT prove the burst can
+    complete: `buffer_size` stays 0 because one CPU self-play worker finishes no games, so
+    the coordinator never leaves warmup and never takes a training step — which means
+    CARD-TRAINSTEP-ADAPTER (TD-1, `step.py:640`, still live) is never REACHED here. This is
+    a box-conditional result; the training box is the binding measurement.
+
+    The timeout is short deliberately: the subject is "does the boot clear TD-4 and reach a
+    running loop", which is decided within seconds. Waiting out a 240 s window bought nothing
+    but integration-tier wall-clock once the outcome stopped being a fast failure.
     """
     out_dir = tmp_path / "boot"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "240", "--device", "cpu")
-    assert result.returncode == 33, (
-        "the documented HEAD outcome is rc 33 PreflightBootFailedError on TD-4; got "
-        f"{result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--device", "cpu")
+    assert result.returncode == 40, (
+        "post-TD-4 the boot runs until the timeout kills it: rc 40 PreflightTimeoutError. "
+        f"got {result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
     report = json.loads(reports[0].read_text())
-    assert report["failure"] == "PreflightBootFailedError"
-    assert report["child"]["rc"] == 1 and report["child"]["timed_out"] is False
-    assert "MissingEncodingError" in report["child"]["stderr_tail"], (
-        "the wall the docstring names must be the wall in the evidence; got tail "
+    assert report["failure"] == "PreflightTimeoutError"
+    assert report["child"]["timed_out"] is True
+    assert "MissingEncodingError" not in report["child"]["stderr_tail"], (
+        "CARD-POOL-ENCODING-BRIDGE has landed; the pool resolves `identity.encoding` through "
+        "the ONE resolver. A MissingEncodingError here is that card regressing. got tail "
         f"{report['child']['stderr_tail'][-600:]!r}"
     )
     assert "train_step" not in report["child"]["stderr_tail"], (
-        "TD-1 is BEHIND TD-4: the child never reaches `step.py:573`, which is exactly what "
-        "DESIGN §3.4 got wrong and what MF-2 corrects in the docstring"
+        "TD-1 is not reached on a CPU box — it sits BEHIND the warmup gate, and the buffer "
+        "never fills. If this ever fires, the box got far enough to need "
+        "CARD-TRAINSTEP-ADAPTER, which would be news worth reading."
+    )
+    # The positive half: the child did not merely fail to crash, it ran. The run's own
+    # segment is the witness (LAW-18 in-run observability), not the tool's say-so.
+    segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
+    assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
+    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
+    assert {"run_segment_started", "heartbeat_watchdog_armed",
+            "selfplay_stall_watchdog_armed"} <= events, (
+        f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
     )
 
 
@@ -2087,10 +2115,14 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     """
     out = tmp_path / "boot"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out), "--timeout-sec", "240", "--device", "cpu")
-    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
+                       "--out-dir", str(out), "--timeout-sec", "45", "--device", "cpu")
+    # RE-POINTED by WPBRIDGE Phase T (R90(a)): rc 33/child rc 1 was TD-4. That card landed,
+    # so the boot now runs to the timeout — rc 40, child rc -15. The SUBJECT is unchanged and
+    # is the reason this row exists: a run that spawned a child must not carry the
+    # NOT_BOOTED disclaimer, whatever the child then did.
+    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
-    assert report["child"] is not None and report["child"]["rc"] == 1
+    assert report["child"] is not None and report["child"]["timed_out"] is True
     for name in ("a_sync", "b_lag"):
         reason = report["assertions"][name]["reason"]
         assert TOOL.BOOTED_REASON in reason and TOOL.NOT_BOOTED_REASON not in reason, (
@@ -3164,15 +3196,21 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     """The card's headline requirement, measured on the real tool at run5's real floor.
 
     This is `test_the_real_boot_terminates_where_the_docstring_says`'s twin: that row pins
-    WHERE the boot stops, this one pins what the artifact then CLAIMS. At HEAD the child dies
-    at TD-4, so the honest report is tier `full` REQUESTED, `covered: []`, both tiers still
-    OWED — and when CARD-POOL-ENCODING-BRIDGE lands this row is what tells the next reader
-    that a green burst may finally cover something.
+    WHERE the boot stops, this one pins what the artifact then CLAIMS.
+
+    RE-POINTED by WPBRIDGE Phase T (R90(a)). It used to say "when CARD-POOL-ENCODING-BRIDGE
+    lands this row is what tells the next reader that a green burst may finally cover
+    something." The card landed — and the answer is NO, not on this box. The burst is
+    accepted and every floor clears, but the run is killed at the timeout with a training
+    step never taken, so `covered` is STILL `[]` and both tiers are STILL owed. That is the
+    assertion that matters: clearing TD-4 moved the boot forward without buying one unit of
+    tier coverage, and an artifact that started claiming coverage here would be overclaiming
+    on the strength of a run that did nothing but warm up.
     """
     out_dir = tmp_path / "tiered"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "240", "--device", "cpu")
-    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--device", "cpu")
+    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     block = report["tier"]
     assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST

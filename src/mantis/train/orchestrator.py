@@ -124,17 +124,14 @@ def init_trainer(
             declared_keys=declared_keys, sink=sink, device=device,
         )
 
-    from mantis.encoding import lookup, resolve_from_config
+    from mantis.encoding import resolve_from_config
     from mantis.model import arch_from_spec_and_config, build_net
 
-    # Bridge the WP8 nested `identity.encoding` shape (resolve_from_config reads only the flat
-    # `encoding` key, defaulting to v6) so a fresh Trainer builds the DECLARED arch.
+    # `resolve_from_config` reads the WP8 nested `identity.encoding` shape as well as the legacy
+    # flat one (TD-4 / CARD-POOL-ENCODING-BRIDGE), so a fresh Trainer builds the DECLARED arch
+    # without this site carrying its own copy of that knowledge.
     cfg = dict(config)
-    ident = cfg.get("identity")
-    if isinstance(ident, dict) and isinstance(ident.get("encoding"), str) and "encoding" not in cfg:
-        spec = lookup(ident["encoding"])
-    else:
-        spec = resolve_from_config(cfg)
+    spec = resolve_from_config(cfg)
     arch = arch_from_spec_and_config(spec, cfg)
     model = build_net(arch)
     # Pass the DECLARED arch (the SOLE arch source at save) + the injected sink through so a
