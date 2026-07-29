@@ -103,7 +103,7 @@ def _eval_cfg() -> EvalConfig:
     return EvalConfig(
         random_model_sims=4, sealbot_model_sims=4, kraken_model_sims=4,
         strix_model_sims=4, random_floor_games=2, worker_device="cpu",
-        round_timeout_sec=90.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
+        round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
     )
 
 
@@ -126,10 +126,10 @@ def _build_pipeline(tmp_path: Path):
     return build_eval_pipeline(
         eval_cfg=_eval_cfg(),
         coordinator_cfg_caps=DrainCaps(
-            final_eval_drain_timeout_sec=90.0,
+            final_eval_drain_timeout_sec=600.0,
             eval_final_drain_safety_factor=1.0,
-            eval_final_drain_hard_cap_sec=90.0,
-            terminal_eval_hard_cap_sec=90.0,
+            eval_final_drain_hard_cap_sec=600.0,
+            terminal_eval_hard_cap_sec=600.0,
         ),
         encoding="v6",
         run_id="oracle_e2e_run",
@@ -140,6 +140,15 @@ def _build_pipeline(tmp_path: Path):
 
 
 def _poll_until_complete(pipeline, *, timeout: float) -> dict:
+    """CARD-EVAL-CLOCK closure (R62, WPCLEAN Phase RES) — the RESTRUCTURE arm, with the
+    injection arm measured out: this suite's whole point is a REAL out-of-process worker
+    (module docstring), so a fake pipeline clock cannot compress the round — it can only
+    disarm the pipeline's own budget kills while the subprocess still needs real seconds.
+    The load-sensitivity R62 recorded (red three times under contaminated load) came from
+    90 s ceilings doing double duty as timing claims. They are not timing claims: every
+    ceiling here is a runaway bound, and 600 s bounds runaway exactly as well while no
+    plausible load contamination reaches it. Healthy rounds complete in seconds and are
+    unaffected."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = pipeline.poll_completed()
@@ -156,7 +165,7 @@ def test_full_headless_round_end_to_end(tmp_path) -> None:
                                        full_config={}, best_model_step=None)
         assert ack["kicked"] is True
 
-        result = _poll_until_complete(pipeline, timeout=90.0)
+        result = _poll_until_complete(pipeline, timeout=600.0)
         assert result["eval_broken"] is False
         assert "wr_sealbot" in result   # G-2 handshake: always present, even with no sealbot games
         assert "schedule_next" in result and result["schedule_next"]
@@ -178,7 +187,7 @@ def test_round_records_carry_regime_key_on_every_record(tmp_path) -> None:
     try:
         pipeline.run_evaluation(_tiny_model(weight_seed=20260625), 1000, None,
                                  full_config={}, best_model_step=None)
-        result = _poll_until_complete(pipeline, timeout=90.0)
+        result = _poll_until_complete(pipeline, timeout=600.0)
         rungs_played = {name: info for name, info in result["rungs"].items() if info["games"] > 0}
         assert rungs_played
         regime_keys = [info["regime_key"] for info in rungs_played.values()]
@@ -201,11 +210,11 @@ def test_second_round_scheduling_reflects_first_round_bt(tmp_path) -> None:
     try:
         pipeline.run_evaluation(_tiny_model(weight_seed=42), 1000, None,
                                  full_config={}, best_model_step=None)
-        result1 = _poll_until_complete(pipeline, timeout=90.0)
+        result1 = _poll_until_complete(pipeline, timeout=600.0)
 
         pipeline.run_evaluation(_tiny_model(weight_seed=1337), 2000, None,
                                  full_config={}, best_model_step=None)
-        result2 = _poll_until_complete(pipeline, timeout=90.0)
+        result2 = _poll_until_complete(pipeline, timeout=600.0)
 
         p_hat_1 = result1["bt"]["p_hat"]
         p_hat_2 = result2["bt"]["p_hat"]
