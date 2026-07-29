@@ -1,3 +1,4 @@
+# >300 justify (R8), stated at this file's MEASURED size of 421 lines: five mechanical censuses (J-01..J-05) over the ONE package src/mantis/selfplay, each with its LAW-07 bite arm; J-01's mutation self-tests re-drive the same _loop_census/_find_function primitives they prove bite, and each remaining census is 30-90 lines — a per-census split would duplicate the AST walker or import test-from-test.
 """Suite J — census pins over `src/mantis/selfplay` (J-01 … J-05).
 
 IMPL-written (non-⊕). These are mechanical, review-blocking censuses: each is a grep/AST

@@ -1,3 +1,4 @@
+//! R8-justify (662 lines): the relocated O-16..O-30 HEXG oracle roster (33 tests incl. the frozen v1 byte-golden O-21 and the D6 aug-coherence/ADV-7 canaries) binds ONE buffer type, HexgBuffer, through one shared record/path/symmetry helper set; a split would break the frozen O-numbering and duplicate the helpers.
 //! HEXG (graph) oracle suite — the 32-test module relocated out of src (R5).
 //! Ported from the predecessor engine's `replay_buffer/hexg/tests.rs`; every
 //! `sample_graph_batch_impl` assertion is re-anchored from the deferred

@@ -1,3 +1,4 @@
+# >300 justify (R8), stated at this file's MEASURED size of 361 lines: the G-01..G-15 old-suite port (vectors and assertions frozen to hexo_rl's test_instrumentation.py) + the G-17 DV-10 scipy pin all bind ONE module, selfplay/instrumentation.py, through one shared _game_complete driver; a split would scatter a single frozen suite's numbering across files.
 """Suite G remainder — G-01 … G-15 (old-suite ports) + G-17 (the DV-10 scipy pin).
 
 IMPL-written (non-⊕). `test_instrumentation.py` is the ⊕ file and carries G-16 ONLY (the

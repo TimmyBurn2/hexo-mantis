@@ -1,4 +1,4 @@
-""">300 justify (R8), stated at this file's MEASURED size of 729 lines: it is R93's evidence
+""">300 justify (R8), stated at this file's MEASURED size of 762 lines: it is R93's evidence
 for NINETEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
 knob, observe the consumer", never a shared arm a sibling could ride. Roughly half the length
 is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the ~120-line

@@ -1,3 +1,4 @@
+# >300 justify (R8), stated at this file's MEASURED size of 349 lines: ONE finding (RED-TEAM-2 F-RT2-1) — the _bounded_join_timeout layer-2 guard driven on both paths that reach it (escalate_and_finalize, drain_pending); over half the file is the self-contained fixture copy the eval-suite house convention requires (no shared conftest), incl. the _RealisticFakeProcess reproducing CPython's join(inf) OverflowError.
 """RED-TEAM-2 F-RT2-1 (BLOCKER) FIX, layer 2 — `_bounded_join_timeout` structural guard
 (mantis-migration/wp/WP11A/REDTEAM_2.md Finding F-RT2-1).
 
