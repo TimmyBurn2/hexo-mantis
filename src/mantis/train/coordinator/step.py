@@ -40,6 +40,7 @@ from mantis.monitor.rules import (
     emit_training_step_alerts,
     sealbot_wr_trajectory_alert,
 )
+import mantis.train.buffer_persist as _buffer_persist
 from mantis.train.buffer_persist import try_save_buffer as _try_save_buffer
 from mantis.train.coordinator.config import (
     ClockLike,
@@ -546,6 +547,10 @@ class StepCoordinator:
             # is readable in the ONE channel while the run is alive, not only in the
             # `heartbeat_watchdog_fire_complete` event emitted moments before `os._exit`.
             "watchdog_best_effort": self._watchdog_counters(),
+            # R-BUFFER-PERSIST-COUNTER (WPCLEAN Phase RES): the best-effort buffer-save
+            # swallows are counted and read HERE, live — a module-attribute read, never a
+            # from-import of the int (the subsystems.py counter-binding rule).
+            "buffer_save_errors_total": int(_buffer_persist.buffer_save_errors_total),
         })
 
     def _watchdog_counters(self) -> dict[str, int]:

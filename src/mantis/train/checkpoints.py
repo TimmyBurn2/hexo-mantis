@@ -49,8 +49,15 @@ CHECKPOINT_SCHEMA_VERSION = 2
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 
 # Persist-fatal counter (repo_design §11 / LAW-14): a swallowed persist failure is banned;
-# a failed/quarantined write increments this, never `except: pass`.
+# a FAILED write increments this, never `except: pass`. The watchdog's persist-fatal rule
+# is the literal `> 0` (rc 43), so ONLY run-fatal facts may feed it.
 persist_errors_total = 0
+
+# Quarantine counter (WPCLEAN Phase RES, paying R-QUARANTINE-COUNTER): a quarantine write is
+# the survive-run clause WORKING — deliberately NOT run-fatal — so it counts HERE, not in
+# `persist_errors_total`. Before this split a survivable quarantine fed the watchdog's
+# `> 0` fatal rule and would have killed the run it existed to save.
+quarantine_writes_total = 0
 
 
 class CheckpointStampError(RuntimeError):
@@ -319,8 +326,10 @@ def _write_quarantine(
     checkpoint_dir: str | Path,
 ) -> Path:
     """Survive-run clause (repo_design §6 / C4.5): an unstampable save writes
-    `<path>.quarantine` (NEVER a canonical `.ckpt`) and increments the persist counter."""
-    global persist_errors_total
+    `<path>.quarantine` (NEVER a canonical `.ckpt`) and increments the QUARANTINE counter —
+    not the persist-fatal one (R-QUARANTINE-COUNTER: this path is deliberately survivable,
+    and the watchdog aborts on any nonzero persist count)."""
+    global quarantine_writes_total
     md = dict(metadata_kwargs)
     q_meta = {
         "encoding_name": md.get("encoding_name") or "",
@@ -339,7 +348,7 @@ def _write_quarantine(
     cdir.mkdir(parents=True, exist_ok=True)
     qpath = cdir / (checkpoint_filename(q_meta["run_id"], step, sha8) + ".quarantine")
     torch.save(payload, qpath)
-    persist_errors_total += 1
+    quarantine_writes_total += 1
     return qpath
 
 

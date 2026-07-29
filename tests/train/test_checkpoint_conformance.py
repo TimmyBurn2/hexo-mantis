@@ -310,23 +310,28 @@ def test_unstamped_save_fails_loud_and_writes_nothing(tmp_path, tiny_net, optim_
 def test_quarantine_path_when_run_must_survive(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                                tiny_arch, monkeypatch):
     """T-CK-12 — PASS iff, with the survive-run flag, an unstampable save writes <path>.quarantine
-    + increments the counter, NEVER a canonical name. Bites: a canonical unstamped artifact.
+    + increments the QUARANTINE counter and NOT the persist-fatal one, NEVER a canonical name.
+    Bites: a canonical unstamped artifact, and (post R-QUARANTINE-COUNTER, WPCLEAN Phase RES)
+    a survivable quarantine leaking into the watchdog's `> 0` persist-fatal rule — the exact
+    conflation the debt row recorded: the survive-run clause used to feed rc 43.
 
-    `persist_errors_total` is a process-wide module GLOBAL and this test increments it via
-    `global … += 1`, which no assertion can undo. The monkeypatch pins it to 0 for the test AND
-    RESTORES the pre-test value at teardown, so the leak cannot reach another suite (WP13-A
-    REVIEW-impl F-2: the watchdog's persist-fatal rule is the literal `> 0`, so a leaked count
-    would make a later, healthy watchdog abort on inherited state)."""
+    Both counters are process-wide module GLOBALS incremented via `global … += 1`, which no
+    assertion can undo. The monkeypatch pins them to 0 for the test AND RESTORES the pre-test
+    values at teardown, so a leak cannot reach another suite (WP13-A REVIEW-impl F-2)."""
     monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
+    monkeypatch.setattr(checkpoints, "quarantine_writes_total", 0)
     opt, scaler, sched = optim_scaler_sched
     unstampable = {"run_id": "runa", "arch": tiny_arch}
-    before = checkpoints.persist_errors_total
     p = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                    config=valid_config, meta=unstampable, allow_quarantine=True)
     assert str(p).endswith(".quarantine")
     assert p.exists()
     assert list(tmp_path.glob("*.ckpt")) == []
-    assert checkpoints.persist_errors_total == before + 1
+    assert checkpoints.quarantine_writes_total == 1
+    assert checkpoints.persist_errors_total == 0, (
+        "a survivable quarantine fed the persist-FATAL counter — the watchdog would abort "
+        "(rc 43) on the run this clause exists to save (R-QUARANTINE-COUNTER)"
+    )
 
 
 # ═══ weights_only on every load surface ══════════════════════════════════════════════════════
