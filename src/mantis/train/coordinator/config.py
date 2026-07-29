@@ -1,7 +1,8 @@
-# >300 justify (R8), stated at this file's MEASURED size of 310 lines. It crossed the cap at
+# >300 justify (R8), stated at this file's MEASURED size of 364 lines. It crossed the cap at
 # WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
 # onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
-# docstring recording WHY six fields are gone and why no field may carry a default. This module
+# docstring recording WHY six fields are gone and why no field may carry a default; WPCLEAN
+# Phase PC (R106) then completed the protocol declarations against their concretes. This module
 # is the DAG-clean seam layer: the injected-collaborator Protocols, the config dataclass they are
 # typed against, and the outcome record. Splitting it would put a Protocol and the dataclass that
 # consumes it on opposite sides of an import for no gain, and `pooled_draw_rate` sits here
@@ -58,9 +59,37 @@ class ReplayBufferLike(Protocol):
 
 
 @runtime_checkable
+class GraphRouteBufferLike(Protocol):
+    """The graph route-key (WPCLEAN Phase PC, R106 — declaring dispatch.py's probe).
+
+    Deliberately ONE member and deliberately NOT folded into `ReplayBufferLike`: each engine
+    buffer carries exactly one sampler, and the OTHER route's absence is the
+    `RepresentationRouteError` mismatch signal (`coordinator/dispatch.py`, R102). A shared
+    protocol claiming both members would erase the very asymmetry the typed route keys on.
+    """
+
+    def sample_graph_batch(self, batch_size: int, *, augment: bool, recent_frac: float) -> Any: ...
+
+
+@runtime_checkable
+class GridRouteBufferLike(Protocol):
+    """The grid route-key — `GraphRouteBufferLike`'s dense twin; same grounds, same fence."""
+
+    def sample_batch_with_pos(self, n: int, augment: bool) -> Any: ...
+
+
+@runtime_checkable
 class RecentBufferLike(Protocol):
+    """Completed against `train/recency_buffer.py` (WPCLEAN Phase PC re-census): `size` is
+    read by `coordinator/dispatch.py`'s grid arm and `save_to_path` by
+    `train/buffer_persist.py`'s best-effort snapshot — both existed on the concrete,
+    neither was declared (the C-2b-adjacent drift class R106 rules on)."""
+
+    size: int
+
     def push(self, *args: Any, **kwargs: Any) -> None: ...
     def sample(self, *args: Any, **kwargs: Any) -> Any: ...
+    def save_to_path(self, path: str) -> int: ...
 
 
 @runtime_checkable
@@ -96,7 +125,16 @@ class WorkerPoolLike(Protocol):
 @runtime_checkable
 class EvalPipelineLike(Protocol):
     """The injected eval seam — the ONLY way the coordinator reaches eval (no `train → eval`
-    import). WP11 supplies the concrete pipeline."""
+    import). WP11 supplies the concrete pipeline.
+
+    Completed against the concrete (WPCLEAN Phase PC, R106 / CENSUS_C C-10/C-11/C-16):
+    `poll_completed` (step.py's every-iteration mailbox read), `drain_pending` (the
+    teardown flush) and `apply_gate_decision` (the promotion applier) were
+    called-and-undeclared. Declaring them changes NO runtime posture: drain.py keeps its
+    getattr guards — an absent `drain_pending` still no-ops the flush and an absent
+    `apply_gate_decision` still logs `eval_promotion_unapplied` LOUD — the conformance gate
+    (`tests/train/test_trainer_seam_conformance.py`) is what now reds an undeclared call.
+    """
 
     def run_evaluation(
         self,
@@ -108,6 +146,10 @@ class EvalPipelineLike(Protocol):
         best_model_step: int | None,
         ignore_stride: bool = False,
     ) -> dict[str, Any]: ...
+
+    def poll_completed(self) -> "dict[str, Any] | list[Any] | None": ...
+    def drain_pending(self) -> "dict[str, Any] | list[Any] | None": ...
+    def apply_gate_decision(self, result: Any) -> "int | None": ...
 
 
 @runtime_checkable

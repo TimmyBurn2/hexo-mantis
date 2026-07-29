@@ -3,21 +3,51 @@
 Ported behaviour-exact from the old `training/events.py`, but every payload is funnelled
 through the injected `EventSink.emit` instead of importing `monitoring.events.emit_event` —
 the DAG stays clean (no `train → monitor` hard edge). Payload SHAPES are unchanged. The
-step-coordinator/probe collaborators (`pool`/`gpu_monitor`/`early_game_probe`/`tb_writer`)
-are duck-typed (`Any`) so this module carries no top-level monitor import; the real
-alert-RULE evaluation + LAW-07 producer tests are WP13.
+probe collaborators (`gpu_monitor`/`early_game_probe`/`tb_writer`) are duck-typed (`Any`)
+so this module carries no top-level monitor import; the real alert-RULE evaluation +
+LAW-07 producer tests are WP13. `pool` is typed by `PoolTelemetryLike` below (WPCLEAN
+Phase PC, R106).
 """
 from __future__ import annotations
 
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from mantis.train.axis_distribution import compute_axis_fractions
 from mantis.train.emit import EventSink, emit_via
 
 _LOG = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class PoolTelemetryLike(Protocol):
+    """The narrow READ-side pool surface this module consumes (WPCLEAN Phase PC, R106 —
+    the CENSUS_C C-6/C-7 nine, completed against `selfplay/pool.py`'s concretes).
+
+    Deliberately NOT folded into `coordinator.config.WorkerPoolLike` (the R106 design
+    question, decided with grounds): the coordinator's pool reads are load-bearing control
+    flow (watchdog arm / health abort / draw-rate gate) while these nine are emission-only,
+    the two member sets are disjoint, and their failure postures differ — an absent
+    operational member is an abort-integrity bug, an absent telemetry member breaks a
+    payload (`avg_game_length` is even hasattr-guarded to 0.0, ported behaviour). Defined
+    HERE rather than in `coordinator/config.py` because the seam layer describes the shape
+    it consumes (the `DrawRateAbortLike` precedent) and because `coordinator/__init__`
+    imports `step`, which imports this module — the reverse import would cycle. Pinned by
+    `tests/train/test_trainer_seam_conformance.py`'s widened matrix.
+    """
+
+    gumbel_mcts: bool
+    avg_game_length: float
+    x_winrate: float
+    o_winrate: float
+    draws: int
+    sims_per_sec: float
+    batch_fill_pct: float
+    recent_move_histories: list[list[tuple[int, int]]]
+
+    def runner_stats(self) -> Any: ...  # RunnerStats — Any keeps the no-`train → selfplay` edge
 
 # The old monitoring.early_game_probe threshold, inlined. The PROBE itself is DEFER/ARCH
 # (file_map row 64; the F-27/F-30 class — a probe is never a run-gate: the value-spread
@@ -88,7 +118,7 @@ def replay_pretrain_events(log_dir: str | Path, sink: EventSink) -> None:
 
 def emit_axis_distribution(
     train_step: int,
-    pool: Any,
+    pool: PoolTelemetryLike,
     monitor_cfg: Any,
     baseline: dict[str, float],
     tb_writer: Any,
@@ -158,7 +188,7 @@ def emit_training_events(
     w_pre: float,
     games_played: int,
     last_iter_games: int,
-    pool: Any,
+    pool: PoolTelemetryLike,
     buffer: Any,
     gpu_monitor: Any,
     config: dict[str, Any],
