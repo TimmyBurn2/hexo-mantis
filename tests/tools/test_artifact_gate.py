@@ -96,3 +96,56 @@ def test_artifact_dirs_rejected_at_any_size(tmp_path):
     res = _run_gate(tmp_path, {"checkpoints/tiny.pt": b"x"})
     assert res.returncode == 1, res.stdout + res.stderr
     assert "VIOLATION artifact-dir: checkpoints/tiny.pt" in res.stdout
+
+
+# ── WP0 RED-TEAM row A closure (WPCLEAN Phase RES): renames and case arrive too ────────
+
+def _run_gate_rename(tree: Path, old_rel: str, new_rel: str, blob: bytes) -> subprocess.CompletedProcess:
+    """Base commit CONTAINS old_rel; the commit under test `git mv`s it to new_rel — an
+    R-status entry, the exact shape the old `status == "A"` guard let through."""
+    env = _git_env()
+    tree.mkdir(parents=True, exist_ok=True)
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tree, env=env, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main")
+    target = tree / old_rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(blob)
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    (tree / new_rel).parent.mkdir(parents=True, exist_ok=True)
+    git("mv", old_rel, new_rel)
+    git("commit", "-qm", "rename under test")
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--base", "HEAD~1"],
+        cwd=tree, env=env, capture_output=True, text=True, check=False,
+    )
+
+
+def test_a_rename_carrying_a_jsonl_out_of_fixtures_is_rejected(tmp_path):
+    res = _run_gate_rename(tmp_path, "tests/fixtures/probe.jsonl", "docs/probe.jsonl", b"{}\n" * 64)
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert "VIOLATION jsonl-outside-fixtures: docs/probe.jsonl" in res.stdout
+
+
+def test_a_rename_carrying_an_oversize_file_out_of_fixtures_is_rejected(tmp_path):
+    res = _run_gate_rename(tmp_path, "tests/fixtures/big.bin", "docs/big.bin",
+                           b"\0" * (MAX_ADDED_BYTES + 1))
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert "VIOLATION large-file: docs/big.bin" in res.stdout
+
+
+def test_a_rename_within_fixtures_still_passes(tmp_path):
+    """The discriminating negative: covering R-status new-paths is not a blanket refusal
+    of every rename."""
+    res = _run_gate_rename(tmp_path, "tests/fixtures/a.jsonl", "tests/fixtures/b.jsonl",
+                           b"{}\n" * 64)
+    assert res.returncode == 0, res.stdout + res.stderr
+
+
+def test_an_uppercase_jsonl_outside_fixtures_is_rejected(tmp_path):
+    res = _run_gate(tmp_path, {"docs/probe.JSONL": b"{}\n"})
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert "VIOLATION jsonl-outside-fixtures: docs/probe.JSONL" in res.stdout

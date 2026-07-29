@@ -51,25 +51,29 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     fields = raw.split("\0")
-    changed: list[tuple[str, str]] = []  # (status, path)
+    # (status, path, arrives) — `arrives` marks a path whose CONTENT enters the tree at
+    # HEAD: an add, or the NEW side of a rename/copy. WP0 RED-TEAM row A measured that
+    # gating the size/jsonl checks on `status == "A"` alone let an R-status move carry an
+    # oversize or *.jsonl file OUT of tests/fixtures/ unexamined (WPCLEAN Phase RES).
+    changed: list[tuple[str, str, bool]] = []
     i = 0
     while i < len(fields) and fields[i]:
         status = fields[i]
         if status[0] in ("R", "C"):
             old, new = fields[i + 1], fields[i + 2]
-            changed.append((status[0], old))
-            changed.append((status[0], new))
+            changed.append((status[0], old, False))
+            changed.append((status[0], new, True))
             i += 3
         else:
-            changed.append((status[0], fields[i + 1]))
+            changed.append((status[0], fields[i + 1], status[0] == "A"))
             i += 2
 
     violations = 0
-    for status, path in changed:
+    for _status, path, arrives in changed:
         if path.startswith(ARTIFACT_DIRS):
             print(f"VIOLATION artifact-dir: {path}")
             violations += 1
-        if status == "A":
+        if arrives:
             try:
                 size = int(_git("cat-file", "-s", f"HEAD:{path}").strip())
             except subprocess.CalledProcessError as exc:
@@ -83,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
             elif size > MAX_ADDED_BYTES:
                 print(f"VIOLATION large-file: {path}")
                 violations += 1
-            if path.endswith(".jsonl") and not in_fixtures:
+            # Case-folded: `.JSONL` is the same artifact class (WP0 RED-TEAM row A).
+            if path.lower().endswith(".jsonl") and not in_fixtures:
                 print(f"VIOLATION jsonl-outside-fixtures: {path}")
                 violations += 1
     return 1 if violations else 0
