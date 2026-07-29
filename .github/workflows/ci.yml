@@ -59,17 +59,15 @@ jobs:
       # way the doc did.
       - name: "gate 13: contract-doc drift (run config schema)"
         run: uv run python tools/ci_gates/contract_doc_gate.py
-      # ADVISORY, NOT BLOCKING (R57 / CARD-LINT-TYPE). Both have been red for the entire
-      # migration — 612 ruff findings and 1238 pyright findings at the time of demotion —
-      # and neither has ever been observed failing, because this repo has no git remote so
-      # Actions has never run. Leaving them nominally required while permanently red makes
-      # every other gate's result unreadable: a red job says nothing about the change.
-      # They report, loudly, and do not gate. CARD-LINT-TYPE (WP-R family) owns burning
-      # them down; the BINDING pre-cutover gate is the local serialized sweep (R57).
-      - name: "advisory: ruff (CARD-LINT-TYPE — non-blocking)"
-        run: uv run ruff check . || true
-      - name: "advisory: pyright (CARD-LINT-TYPE — non-blocking)"
-        run: uv run pyright || true
+      # Gate 14 (WPCLEAN Phase LG, executing CARD-LINT-GATE / R98): the advisory `|| true`
+      # posture this step replaces was demoted at R57 with 612 ruff / 1238 pyright findings
+      # standing; the WPCLEAN census re-measured 692 / 1301 (CENSUS_LT — the historicals did
+      # not reproduce), Phase LT burned the configured surface to ZERO with the remainder
+      # dispositioned in config comments, and R98's law then permits a gate: no gate over a
+      # dirty baseline, every rule tied to a named in-repo defect class (see the script
+      # header), trigger self-tested on every run.
+      - name: "gate 14: curated lint/type gate (R98)"
+        run: bash tools/ci_gates/lint_gate.sh --self-test
 
   hygiene:
     runs-on: ubuntu-latest

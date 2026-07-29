@@ -120,6 +120,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
     may not cite a config key or a `mantis.*` symbol the shipped schema lacks, and its stated
     leaf-count must equal the live one. Every check is derived from `RunConfig` itself, never a
     transcribed key list; the "deliberately absent" section is checked in REVERSE.
+14. Curated lint/type gate (tools/ci_gates/lint_gate.sh; `make lint`) — the pyproject ruff
+    select + pyright (basic, src+tools) held at ZERO. A rule is adopted only with a named
+    in-repo defect class AND a clean baseline (R98); exclusions are enumerated with grounds
+    in pyproject.toml; the trigger self-tests every run.
 
 Every gate's check logic is a repo-local script or make target under tools/ — nothing
 lives only in workflow YAML.

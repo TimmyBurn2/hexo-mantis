@@ -7,13 +7,16 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_makefile_has_exactly_the_nine_dispatched_targets():
+def test_makefile_has_exactly_the_ten_dispatched_targets():
+    """Nine → ten at WPCLEAN Phase LG: `lint` joins as CI gate 14's local runner (R98) —
+    the same settled-class re-point as the gate itself; the set stays EXACT so a stray
+    target still reds this pin."""
     text = (REPO_ROOT / "Makefile").read_text()
     targets = {
         m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_.]*):", text, flags=re.MULTILINE)
     }
     assert targets == {
-        "build", "build.native", "test", "test.integration",
+        "build", "build.native", "test", "test.integration", "lint",
         "bench", "bench.baseline", "check.wasm", "vendor", "clean",
     }
 
@@ -108,27 +111,29 @@ def test_every_ci_gate_script_is_invoked_by_ci_yaml():
     )
 
 
-def test_lint_and_type_steps_are_advisory_not_blocking():
-    """R57 / CARD-LINT-TYPE: ruff and pyright report, they do not gate.
+def test_lint_and_type_gate_is_blocking_and_self_tested():
+    """The R57 advisory pin, RE-POINTED by its own designed path (WPCLEAN Phase LG, R98).
 
-    Both were nominally required and permanently red (612 and 1238 findings) for the whole
-    migration, unnoticed because this repo has no remote and Actions never ran. A
-    permanently-red required step makes every other gate's result unreadable.
-
-    This pin cuts both ways deliberately. Re-blocking them is CARD-LINT-TYPE's job and is
-    welcome — but it must happen by burning the findings down, not by flipping the flag and
-    leaving the job red. If you are here because this test failed after you removed the
-    `|| true`, check that `ruff check .` and `pyright` are actually clean first.
+    The old pin's docstring said re-blocking "must happen by burning the findings down, not
+    by flipping the flag" — Phase LT burned the configured surface to zero (CENSUS_LT), so
+    the flip is now legal and this pin inverts to guard the NEW posture: exactly one
+    lint/type step, running the gate script (invocation, not mention), with NO `|| true`
+    escape and the self-test armed on every run. An advisory `|| true` creeping back is
+    what this test now reds on — a permanently-advisory green is the fog R98 ended.
     """
     commands = _ci_run_commands()
-    for tool in ("ruff check", "pyright"):
-        steps = [c for c in commands if tool in c]
-        assert steps, f"{tool} step vanished from ci.yml — it should report, not disappear"
-        for step in steps:
-            assert "|| true" in step, (
-                f"{tool} is blocking again. R57 demoted it to advisory under "
-                f"CARD-LINT-TYPE; re-block it only once it is green."
-            )
+    gate_steps = [c for c in commands if "lint_gate.sh" in c]
+    assert len(gate_steps) == 1, (
+        f"expected exactly one lint_gate.sh step in ci.yml, found {len(gate_steps)}"
+    )
+    step = gate_steps[0]
+    assert "--self-test" in step, "gate 14 must arm its own trigger on every CI run"
+    assert "|| true" not in step, "gate 14 is a GATE (R98); an advisory escape defeats it"
+    # The old standalone advisory invocations must not linger beside the gate — one
+    # authority for the lint verdict, not a gate plus a shadow report.
+    strays = [c for c in commands
+              if ("ruff check" in c or "pyright" in c) and "lint_gate.sh" not in c]
+    assert not strays, f"standalone ruff/pyright steps beside the gate: {strays}"
 
 
 def test_gate_01_script_actually_fresh_clones_and_syncs():

@@ -1,4 +1,4 @@
-.PHONY: build build.native test test.integration bench bench.baseline check.wasm vendor clean
+.PHONY: build build.native test test.integration lint bench bench.baseline check.wasm vendor clean
 
 UV ?= uv
 
@@ -16,6 +16,10 @@ test:
 
 test.integration:
 	$(UV) run pytest -m integration
+
+# CI gate 14 (R98): curated lint/type gate — zero-error baseline, self-tested trigger.
+lint:
+	bash tools/ci_gates/lint_gate.sh --self-test
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1

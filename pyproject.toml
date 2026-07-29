@@ -61,12 +61,33 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "BLE"]
+# WPCLEAN Phase LT (R98): every selected rule is ZERO at HEAD over src/ + tools/ and gated
+# by tools/ci_gates/lint_gate.sh — an advisory rule nobody reads is the fog CARD-LINT-GATE
+# was ratified to end. PLE joins the select with a named catch (PLE0303, a live
+# TypeError-in-waiting in data/sources/base.py, fixed same-phase).
+select = ["E", "F", "W", "I", "UP", "B", "BLE", "PLE"]
 # BLE = flake8-blind-except: `except Exception:` without re-raise is banned repo-wide
 # (repo_design §11 "except Exception: pass is lint-banned").
+# E501 dispositioned NEVER (WPCLEAN CENSUS_LT §7): 266 findings at census, ~all
+# comment/doc lines, zero defect history, no auto-fix — a permanently-red advisory rule.
+# The 100-column preference stays prose guidance for new code.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# tests/ is an oracle-write corpus: files are edit-averse by frozen-oracle discipline, and
+# every code below is a zero-defect-value class there (style churn, unused-in-test noise,
+# the deliberate re-import idiom). The ADOPTED defect classes — F601, the 3.11-floor parse,
+# PLE — stay LIVE over tests: none of them appears in this list (CENSUS_LT / DESIGN_LG_LT).
+"tests/**" = ["UP", "I001", "F401", "F811", "F841", "E741", "E402", "BLE001", "B007", "B905", "UP031"]
 
 [tool.pyright]
-include = ["src", "tools", "tests"]
+# WPCLEAN Phase LT config-honesty (R57 measured): `strict = ["src"]` produced 932 of 1301
+# errors (71.6%) as strict-mode-only artifacts cascading off torch/numpy partial typing —
+# an advisory wall nobody read. Strictness is CARDED as adopt-later (WPCLEAN
+# ADJUDICATION_QUEUE: CARD-PYRIGHT-STRICT), not silently dropped. tests/ is excluded with
+# grounds: the corpus is frozen-oracle discipline (edit-averse) and its ~312 diagnostics
+# were measured test-idiom noise, runtime-guarded by the tests themselves (CENSUS_LT §5b);
+# the basic-mode src surface is held at ZERO by tools/ci_gates/lint_gate.sh.
+include = ["src", "tools"]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
-strict = ["src"]

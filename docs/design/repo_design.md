@@ -481,6 +481,15 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
     schema change alone reds it. The "deliberately absent" section is checked in REVERSE — a
     retired key that comes back reds the gate — rather than exempted. Trigger demonstrated in
     both directions by `tests/tools/test_contract_doc_gate.py`.
+14. Curated lint/type gate (`tools/ci_gates/lint_gate.sh`, WPCLEAN Phase LG / R98) — the
+    ruff select in `pyproject.toml` and pyright's basic src+tools surface are held at ZERO.
+    Adoption law (R98): a rule enters the select only with a named in-repo defect class it
+    would have caught (the mapping lives in the gate's header — F601's ca237d2 incident, the
+    3.12-under-3.11 floor class, PLE0303) and only after being burned to zero — no gate over
+    a dirty baseline. Exclusions are enumerated with grounds in `pyproject.toml`, never
+    ambient (E501 dispositioned NEVER; tests/ style-exempt under frozen-oracle edit-aversion
+    with the adopted defect classes still live there; pyright strict CARDED adopt-later).
+    The trigger self-tests on every run (`--self-test`: one planted violation per arm).
 
 ## 10. Performance doctrine (design constraint, not a pass)
 
