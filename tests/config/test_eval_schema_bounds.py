@@ -1,3 +1,10 @@
+# >300 justify (R8), stated at this file's MEASURED size of 406 lines. Pre-existing gap, closed
+# by WPMINT Phase W. The file is a per-FIELD bounds census over the `eval` section's 30 leaves:
+# each field contributes a parametrized out-of-domain rejection and an in-domain boundary
+# acceptance, so the length tracks the section's field count rather than any logic. Splitting it
+# by sub-model would put `EvalConfig`, `GateConfig` and `LadderConfig` bounds in three files
+# while the defect class (a silently-loaded out-of-domain value) is one class with one triage
+# protocol; the census reads as a census only while it is whole.
 """RED-TEAM-FIX WP11-A F2 (MAJOR) — numeric-bounds validation on eval/gate/ladder schema
 fields (mantis-migration/wp/WP11A/RED_TEAM.md Finding F2).
 

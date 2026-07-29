@@ -53,6 +53,12 @@ jobs:
       # mint gate. rc 0 here covers assertion (c) alone, and the tool says so on stdout.
       - name: "gate 12: armed-abort manifest audit (production configs)"
         run: uv run python tools/ci_gates/preflight_mint.py --audit-only
+      # Contract #5's doc drifted through four schema versions with every gate green,
+      # because nothing in the repo read it. Every check below is answered by importing
+      # RunConfig and the module tree — a transcribed key list would have rotted the same
+      # way the doc did.
+      - name: "gate 13: contract-doc drift (run config schema)"
+        run: uv run python tools/ci_gates/contract_doc_gate.py
       # ADVISORY, NOT BLOCKING (R57 / CARD-LINT-TYPE). Both have been red for the entire
       # migration — 612 ruff findings and 1238 pyright findings at the time of demotion —
       # and neither has ever been observed failing, because this repo has no git remote so

@@ -147,6 +147,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
+| 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -315,6 +316,56 @@ the precedent this follows verbatim.
    `train.max_train_steps`, `train.draw_rate_abort` (including `consec`) and the nineteen
    `train.*` coordinator knobs.
 
+### AMENDMENT — the deferred doc half is DISCHARGED; contract #10 is added
+
+**WPMINT Phase W (WP14), operator rulings R66 and R91.** The three amendments above each
+half-kept the same-commit clause and deferred the doc to WP14. This is that commit.
+
+1. **`docs/contracts/run_config_schema.md` is committed and current at v4.** It carries the
+   version history v1 -> v4, the run-length key, the draw-rate block including `consec` and the
+   `min_samples` -> `N_pool_min` swap, the nineteen coordinator knobs with their three
+   schema-vs-runtime renames, the `ReplayCapacityStage` sub-block, and every cross-field
+   validator by name. The run5-mint checklist item raised in the v2 amendment is **discharged**:
+   all three owed entries are in the doc.
+2. **The curation was TRUTH-CHECKED, not merely extended.** Every claim inherited from the WP8
+   working copy was grepped against the tree and a claim that could not be verified was removed
+   or corrected rather than softened. Five were FALSE at HEAD: the status line's "checkpoints
+   land in WP10" (WP10 landed at `b29f0bc`), an assertion row calling the legal-move radius
+   schedule a REQUIRED field (the field and its resolver module are RETIRED), the resolver list
+   naming `radius`, an emit payload described as 9 knobs (it is 8), and a regime-parity row
+   whose radius arm now asserts the field's ABSENCE. The corrections are in the doc; the
+   evidence is in `wp/WPMINT/IMPL_NOTES_W.md`.
+3. **R11 is discharged and it never had repo-side enforcement.** Re-measured at this commit:
+   `git grep R11` over `tools/ src/ tests/ Makefile .github/ docs/` returns only this file's
+   own prose (plus one unrelated `§f-R11` fixture id). The rule lived entirely in the migration
+   workspace, so "every gate asserting the exception drops it" was a no-op in the tree — the
+   deferral was kept by discipline alone, exactly as the v2 amendment's item 4 predicted. That
+   item's measured claim (*"`grep -rn "run_config_schema" .` returns no hits outside this
+   amendment"*) is now **superseded**: item 4 below is its remedy.
+4. **CI gate 13 closes the missing handshake** (R91's design question, answered by BUILDING).
+   `tools/ci_gates/contract_doc_gate.py` refuses a contract doc that cites a config key or a
+   `mantis.*` symbol the shipped schema does not have, or that states a leaf-key-path count
+   other than the live one. It follows the gate-12 pattern strictly: every check is answered by
+   importing `RunConfig` and the module tree, so a schema change ALONE reds it — pinned by a
+   mutation that adds a leaf to `RunConfig` and leaves the doc untouched. The "deliberately
+   absent" section is checked in REVERSE rather than exempted, so a retired key returning is
+   also a red. Its one transcription — the leaf walker — is self-defending: the two
+   consumer-registry copies assert `170` against the same schema, so a walker that diverged
+   here would disagree with the doc and red this gate.
+5. **`docs/contracts/checkpoint_envelope.md` is filled** (R11's second named item): status
+   SKELETON -> LIVE, with the v2 filename/payload/metadata shape, the eleven assertions and
+   their pinning tests. The subsystem landed at WP10; only the contract half was outstanding.
+6. **Contract #10 is ADDED — the mint preflight evidence report** (Phase B's F-B3). The
+   artifact has carried the version string `preflight-mint-v1` since WPAX and Phase B added a
+   top-level `tier` field to it, while nothing under `docs/contracts/` described it. A
+   versioned artifact with no contract is a version string that means nothing, so it is
+   written rather than deferred a fourth time. It documents the shape, the always-written rule,
+   the derived-from-what-the-run-DID discipline and the measured F-B1 gap.
+7. **What this amendment does NOT close.** Gate 13 is a CITATION check: a claim the doc omits
+   entirely is invisible to it, and it does not read prose for truth. Stated here rather than
+   left for a reader to discover, because a gate whose real reach is narrower than its name is
+   the class §9 keeps closing.
+
 
 ## 5. Config system
 
@@ -423,6 +474,13 @@ the precedent this follows verbatim.
     asserting sync cadence and lag transport — is MANUAL and is invoked by no CI step. Its
     evidence report states which MINT TIER the accepted burst was and what that tier does not
     prove (§4 item 4); a tier that could not be run stays OWED rather than reading as optional.
+13. Contract-doc drift — `docs/contracts/run_config_schema.md` may not cite a config key or a
+    `mantis.*` symbol the shipped schema does not have, and its stated leaf-key-path count must
+    equal the live one (`tools/ci_gates/contract_doc_gate.py`). Every check is answered by
+    importing `RunConfig` and the module tree, never by consulting a transcribed key list, so a
+    schema change alone reds it. The "deliberately absent" section is checked in REVERSE — a
+    retired key that comes back reds the gate — rather than exempted. Trigger demonstrated in
+    both directions by `tests/tools/test_contract_doc_gate.py`.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 

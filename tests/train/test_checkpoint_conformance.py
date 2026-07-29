@@ -1,3 +1,9 @@
+# >300 justify (R8), stated at this file's MEASURED size of 785 lines. Pre-existing gap, closed
+# by WPMINT Phase W. This is ⊕⊕ Suite A, an oracle-first conformance suite whose every test is
+# numbered against a PREREG row (`T-CK-*`) and was written and reviewed BEFORE the port existed.
+# Splitting it renumbers nothing but breaks the 1:1 test->spec mapping REVIEW-design reads it
+# through, and the suite's value is that ONE file answers "does this envelope conform" — the
+# LAW-12 stamp/provenance/loader contract has one subject, not four.
 """⊕⊕ Suite A — checkpoint CONFORMANCE (WP10, 33 tests: T-CK-01 … T-CK-33).
 
 Written oracle-first against repo_design §6 (the envelope-v2 contract) + the dispatcher
