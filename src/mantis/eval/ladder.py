@@ -210,7 +210,7 @@ class LadderState:
             for i in range(max(remainder, 0)):
                 alloc_arr[order[i % len(order)]] += 1
             alloc_arr = np.maximum(alloc_arr, self._cfg.min_games_per_active_rung)
-            for name, n in zip(active_names, alloc_arr):
+            for name, n in zip(active_names, alloc_arr, strict=True):
                 alloc[name] = min(int(n), games_max[name])
 
         for rung in self._cfg.rungs:

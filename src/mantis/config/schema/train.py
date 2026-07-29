@@ -445,7 +445,7 @@ class TrainConfig(StrictModel):
         config) satisfies this vacuously.
         """
         steps = [stage.step for stage in self.replay_capacity_schedule]
-        if any(later <= earlier for earlier, later in zip(steps, steps[1:])):
+        if any(later <= earlier for earlier, later in zip(steps, steps[1:], strict=False)):
             raise ValueError(
                 f"train.replay_capacity_schedule steps must be strictly increasing; got "
                 f"{steps}. The consumer's cursor only moves forward, so an out-of-order or "

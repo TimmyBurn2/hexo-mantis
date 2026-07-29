@@ -696,16 +696,16 @@ def _evaluate_lag(events: list[dict], *, cadence_steps: int,
                           if float(event.get("ts", 0.0)) <= cutoff})
 
     block["b1"] = all(lag == learner - actor
-                      for lag, learner, actor in zip(lags, learners, actors))
+                      for lag, learner, actor in zip(lags, learners, actors, strict=True))
     block["b2"] = max(learners) > min(learners) and max(learners) >= 1
     block["b3"] = max(actors) > min(actors)
     block["b4a"] = set(actors) <= ({0} | sync_steps)
-    block["b4b"] = all(first <= second for first, second in zip(actors, actors[1:]))
+    block["b4b"] = all(first <= second for first, second in zip(actors, actors[1:], strict=False))
     block["b4c"] = all(int(sample["actor_ckpt_step"]) >= _visible_floor(sample)
                        for sample in samples)
     block["b5a"] = (not negatives) and all(lag >= 0 for lag in lags)
 
-    discriminating = sum(1 for learner, actor in zip(learners, actors) if learner != actor)
+    discriminating = sum(1 for learner, actor in zip(learners, actors, strict=True) if learner != actor)
     block["discriminating_samples"] = discriminating
     block["inversion_discrimination"] = "proven" if discriminating >= 1 else "unproven"
 
@@ -1743,7 +1743,7 @@ def _run_audit(args, report: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    if getattr(args, "_boot"):
+    if args._boot:
         try:
             return _boot_main(args)
         except PreflightError as exc:

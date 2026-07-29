@@ -57,7 +57,7 @@ def compute_axis_fractions(games: Sequence[list[tuple[int, int]]]) -> dict[str, 
                     if stone_color[nbr] == color:
                         same[i] += 1
 
-    fracs = [s / t if t > 0 else 0.0 for s, t in zip(same, total)]
+    fracs = [s / t if t > 0 else 0.0 for s, t in zip(same, total, strict=True)]
     max_idx = int(np.argmax(fracs)) if any(t > 0 for t in total) else 0
     return {
         "axis_q": fracs[0],
