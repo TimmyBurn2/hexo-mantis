@@ -196,7 +196,7 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     deletes the key. Deleting it would have deleted the safety property with it, so the bound
     moves — and it CANNOT move onto `N_pool_min` as a field bound, because the ceiling is
     `DRAW_RATE_WINDOW * selfplay.n_workers` and `selfplay` is a different SECTION. It lives
-    in `schema/core.py::_draw_rate_evidence_bar_is_reachable`, the twin of the actor-sync
+    in `schema/core.py::_draw_rate_evidence_bar_within_configured_capacity`, the twin of the actor-sync
     rule, on the ONE model that sees both sections.
 
     A bar above the ceiling is the FOURTH "armed in the config, absent in effect" axis and

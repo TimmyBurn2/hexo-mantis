@@ -1,4 +1,5 @@
-# >300 justify (R8), stated at this file's MEASURED size of 430 lines. WPMINT Phase K-B
+# >300 justify (R8), stated at this file's MEASURED size of 454 lines (was 430 at K-B; WPMINT
+# DSV-2 adds R94's ratification grounds to the floor validator). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
@@ -70,7 +71,7 @@ class DrawRateAbortConfig(StrictModel):
       geometry. Below it the gate makes NO OBSERVATION (a `None`, skip-counted, never
       appended), so ADJ-19's healthy-`0.0`-from-nothing is answered by TYPE rather than by
       value. Its TOP end is closed by `schema/core.py`'s
-      `_draw_rate_evidence_bar_is_reachable`, NOT by an `le=` here: the ceiling is
+      `_draw_rate_evidence_bar_within_configured_capacity`, NOT by an `le=` here: the ceiling is
       `DRAW_RATE_WINDOW * selfplay.n_workers` (measured — `Sum(len(dq))` saturates there),
       which spans two sections and so cannot live on this field. That cross-validator is
       what re-establishes the load-bearing bound `min_samples: le=DRAW_RATE_WINDOW` carried;
@@ -113,7 +114,30 @@ class DrawRateAbortConfig(StrictModel):
         so at `N_pool_min=4` with `threshold=0.25` one drawn game in four fires the hard
         abort. That is the one-game saturation R80 ordered closed, on a new axis. The rule
         is derived entirely from values already in this block — no invented number — and
-        run5 satisfies it with three orders of margin (0.02 < 0.25).
+        run5 satisfies it by a factor of **12.5** (0.02 < 0.25), i.e. ~1.1 orders.
+        (WPMINT DSV-2 confirmatory pass, DSV2-1: this sentence read "three orders of margin"
+        from `75bdaf0` until 2026-07-29. That was arithmetically FALSE — `0.25 / 0.02 = 12.5`
+        — and it CONTRADICTED the R94 grounds three lines below, which state the separate and
+        correct 80x figure for floor-vs-healthy. Two different ratios had been conflated:
+        floor-vs-THRESHOLD is 12.5x, floor-vs-HEALTHY is 80x.)
+
+        RATIFIED BY **R94** (ADJ-21), with the operator's grounds recorded HERE so the next
+        reader finds them at the constraint rather than in a register they may not open.
+        This validator was added unbidden by Phase DS — no ruling had asked for it — so it
+        was queued rather than assumed, and R94 ratified it on measured grounds:
+
+        * **healthy draw rate ≈ 0.00025** (draws arise only from ply-cap truncation);
+        * the induced threshold floor is `1/N_pool_min` = **0.02** at run5's `N_pool_min=50`,
+          i.e. **≈ 80x above healthy** — far enough above the healthy rate that no
+          legitimate arming posture is lost, and near enough that it is not an arbitrary wall.
+
+        WHAT IT COSTS, STATED PLAINLY: this makes `threshold <= 1/N_pool_min` INEXPRESSIBLE
+        (measured on a one-worker pool: 0.25 and 0.03 accepted; 0.02, 0.019 and 1e-300
+        rejected). R94's escape hatch is deliberately expensive — **a sub-floor threshold
+        requires a `docs(design)` schema amendment, not a config edit**, which is R9's shape
+        applied to a bound. Side effect the operator accepted: this closes MF-1's long-
+        DISCLOSED `1e-300` hair-trigger residual at the type, which R83 could not close and
+        R92 did not aim at.
         """
         if 1.0 / self.N_pool_min >= self.threshold:
             raise ValueError(

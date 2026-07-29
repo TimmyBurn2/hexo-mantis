@@ -210,7 +210,7 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
    `Σ draws / Σ completed` over the union of worker windows, and insufficient evidence
    (`Σ completed < N_pool_min`) is a NO OBSERVATION rather than a healthy `0.0`. Two
    validators replace the retired `le=` bound, one at each end of the same defect class:
-   `RunConfig._draw_rate_evidence_bar_is_reachable` (`N_pool_min <= DRAW_RATE_WINDOW *
+   `RunConfig._draw_rate_evidence_bar_within_configured_capacity` (`N_pool_min <= DRAW_RATE_WINDOW *
    selfplay.n_workers` — a cross-SECTION rule, which is why it cannot be a field bound) and
    `DrawRateAbortConfig._one_drawn_game_cannot_fire_the_abort` (`1/N_pool_min < threshold`).
    The block stays required and `null` stays the explicit disarmed posture, so the contract

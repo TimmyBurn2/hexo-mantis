@@ -1,6 +1,7 @@
 """Run-config schema (contract run-config-schema v1).
 
->300 justify (R8): this file carries the `RunConfig` root model and the six
+>300 justify (R8), at this file's MEASURED size of 397 lines (WPMINT DSV-2 re-scoped the
+draw-rate capacity validator per R95): this file carries the `RunConfig` root model and the six
 `model_validator`s of this schema's cross-field rules — the four on `RunConfig` span
 SECTIONS (train x selfplay, train x monitor), so they cannot live in any section module.
 
@@ -337,18 +338,34 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _draw_rate_evidence_bar_is_reachable(self) -> "RunConfig":
-        """WPMINT Phase DS (R92): the FOURTH axis of "armed in the config, absent in effect",
-        and the one R92's own change creates.
+    def _draw_rate_evidence_bar_within_configured_capacity(self) -> "RunConfig":
+        """WPMINT Phase DS (R92), **re-scoped by R95 (ADJ-22)**.
 
-        The draw-rate abort's evidence bar is compared against `Sum(completed)` over the
-        UNION of the pool's per-worker windows. Each window is a `deque(maxlen=
-        DRAW_RATE_WINDOW)`, so that sum is bounded above by
-        `DRAW_RATE_WINDOW * selfplay.n_workers` — measured at 1/2/8/32 workers in
-        `tests/selfplay/test_drawrate_pooled_statistic.py`, not inferred. An `N_pool_min`
-        above that ceiling is a condition no history can satisfy: the gate makes NO
-        observation for the entire run, the abort history stays empty, and gate 12 audits
-        the row ARMED.
+        WHAT THIS ASSERTS, AND WHAT IT DELIBERATELY DOES NOT. It asserts one CONFIG-DOMAIN
+        fact: `N_pool_min` does not exceed the evidence CAPACITY the config itself declares.
+        The draw-rate abort's bar is compared against `Sum(completed)` over the UNION of the
+        pool's per-worker windows; each window is a `deque(maxlen=DRAW_RATE_WINDOW)`, so the
+        sum can never exceed `DRAW_RATE_WINDOW * selfplay.n_workers` — measured at 1/2/8/32
+        workers in `tests/selfplay/test_drawrate_pooled_statistic.py`, not inferred. Both
+        operands are visible at load time: one is a shipped constant, the other a config key.
+        A bar above that ceiling asks for more evidence than the configured pool can
+        physically hold, and THAT is a fact this validator can witness.
+
+        It does **NOT** assert that the bar is REACHABLE. This validator used to be called
+        `_draw_rate_evidence_bar_is_reachable`, and that name was an OVERCLAIM (ADJ-22):
+        reachability depends on how many workers actually report, which load time cannot
+        see. At the ceiling (`N_pool_min == DRAW_RATE_WINDOW * n_workers`, which is run5's
+        posture — 50 == 50 x 1) EVERY configured worker must fill its entire window before
+        the bar is met, so a single silent worker leaves it unmet for the whole run while
+        the config validates clean. No config-time arithmetic can close that, because the
+        missing input is a runtime one.
+
+        R95 settles it by fixing the CLAIM rather than widening the check: **a validator's
+        name and message may assert only what its inputs can witness.** Evidence sufficiency
+        stays runtime's, where R92 already owns it — below the bar the gate makes NO
+        OBSERVATION (a `None`, skip-counted, never appended), so an unmet bar is visible as
+        an absence of observations rather than fabricated into a healthy `0.0`, and
+        zero-completion starvation is explicitly the STALL family's jurisdiction (R92).
 
         This validator is what re-establishes the load-bearing bound R92 deleted.
         `min_samples` carried `le=DRAW_RATE_WINDOW` (`util/constants.py`'s LOAD-BEARING
@@ -370,9 +387,11 @@ class RunConfig(StrictModel):
                 f"train.draw_rate_abort.N_pool_min ({block.N_pool_min}) must be <= "
                 f"{ceiling} = DRAW_RATE_WINDOW ({DRAW_RATE_WINDOW}) * selfplay.n_workers "
                 f"({self.selfplay.n_workers}): the pool's per-worker draw windows cannot "
-                f"hold more completed games than that between them, so a larger bar is an "
-                f"evidence threshold the run can never meet — the gate would observe "
-                f"NOTHING for the whole run while auditing ARMED, which is armed in the "
-                f"config, absent in effect"
+                f"hold more completed games than that between them, so a larger bar asks "
+                f"for more evidence than this configuration can physically hold. "
+                f"(R95: this is a CAPACITY check, not a reachability one — whether the bar "
+                f"is actually met depends on how many workers report, which load time "
+                f"cannot see. An unmet bar is visible at runtime as an absence of "
+                f"observations, never as a healthy 0.0 — R92.)"
             )
         return self

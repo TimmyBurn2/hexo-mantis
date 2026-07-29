@@ -37,7 +37,7 @@ HISTORY_LEN: int = 8
 # condition no history can satisfy, so the abort audits ARMED and can never fire ("armed in
 # the config, absent in effect"). The bound therefore CANNOT be an `le=` on the schema
 # field the way `min_samples` (R92-DELETED) carried one: it spans two sections, and it
-# lives in `config/schema/core.py::_draw_rate_evidence_bar_is_reachable`. A second
+# lives in `config/schema/core.py::_draw_rate_evidence_bar_within_configured_capacity`. A second
 # independent literal on either side would re-open that dead zone silently, which is why
 # both sides import THIS name. `tests/selfplay/test_drawrate_pooled_statistic.py` asserts
 # the equality against the real deque rather than against the number.

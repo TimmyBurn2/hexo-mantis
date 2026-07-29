@@ -386,7 +386,7 @@ class PoolInstrumentation:
 
         `Sum(completed)` is bounded above by `_DRAW_RATE_WINDOW * n_workers` — each deque's
         own `maxlen` — which is the ceiling `schema/core.py`'s
-        `_draw_rate_evidence_bar_is_reachable` bounds `N_pool_min` against.
+        `_draw_rate_evidence_bar_within_configured_capacity` bounds `N_pool_min` against.
         """
         with lock:
             draws = sum(sum(dq) for dq in self._per_worker_draws.values())
