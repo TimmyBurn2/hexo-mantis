@@ -26,8 +26,19 @@ is named by ≥ 1 config or ≥ 1 anchor artifact.
   so a stale extension cannot serve a stale registry).
 - `manifests.rs` — corpus/anchor pin loud-parse (same discipline; sibling `manifests.toml`,
   which keeps `registry.toml` pure encoding-shape).
-- audit backend — registry census (§1) + cross-table sha reconciliation (§6); severity maps
-  to exit codes 0 = info, 1 = warn, 2 = error. (Filesystem/torch/npz sections land in WP7.)
+- `crates/mantis-encoding/src/audit.rs` (the audit backend's pure-data core) — registry census (§1) + cross-table
+  sha reconciliation (§6); severity maps to exit codes 0 = info, 1 = warn, 2 = error.
+- Python side (`mantis.encoding`): `audit.py` + `audit_sections.py` carry the
+  filesystem/torch/npz audit sections over the Rust core; `_probes.py` holds their probe
+  helpers; `resolvers.py` is THE one encoding-resolution authority (agreement-or-raise on
+  dual-shape configs, R104); `__main__.py` is the `python -m mantis.encoding audit` CLI.
 
 ## Pinning tests
 `crates/mantis-encoding/tests/{registry_census.rs, manifests.rs, audit_backend.rs}`.
+
+## Audit trail
+WPCLEAN Phase RES (2026-07-29): the carried "Rust-crate audit, not a docs pass" card was
+executed — every file, pinning test, exit-code mapping, sha mechanism and the pruned-set
+claim above was re-verified against HEAD and found TRUE; the drift found was staleness only
+(a WP7 future-tense line, the missing Python-side rows above, the unnamed audit-core file),
+fixed in this revision. Grounds: mantis-migration wp/WPCLEAN/GROUND_RES.md §7.
