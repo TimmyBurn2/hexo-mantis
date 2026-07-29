@@ -36,6 +36,15 @@ class ShapeMismatchError(Exception):
     """Raised when state-dict shapes contradict an EncodingSpec."""
 
 
+class EncodingDeclarationConflictError(EncodingRegistryError):
+    """Raised when a config declares an encoding in TWO shapes that DISAGREE (R104).
+
+    NOT a subclass of `MissingEncodingError`, deliberately: a corrupt declaration must
+    never be classified as an absent one — the anchor maps `MissingEncodingError → None`
+    (absence is legal there) and a conflict must not degrade into "no declaration".
+    """
+
+
 class MissingEncodingError(EncodingRegistryError):
     """Raised when an encoding value is absent (R28, LAW-11).
 
@@ -398,12 +407,18 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
     """Return an `EncodingSpec` from a config mapping. THE one authority for
     *where in a config an encoding is declared* (CARD-POOL-ENCODING-BRIDGE / TD-4).
 
-    Accepts three DECLARED shapes, in precedence order:
+    Accepts three DECLARED shapes:
       - `cfg['encoding'] = "v6w25"`             (legacy flat, string form)
       - `cfg['encoding'] = {'version': 'v6'}`   (legacy flat, mapping form)
       - `cfg['identity']['encoding'] = "v6w25"` (WP8 nested — what `RunConfig`
         actually dumps; `IdentityConfig.encoding` is a required, defaultless,
         registry-cross-checked field, `config/schema/core.py:50`)
+
+    AGREEMENT-OR-RAISE (WPTS Phase P, ADJ-25/R104): there is no precedence
+    between the shapes. A config carrying BOTH must carry the SAME name; two
+    declarations that disagree raise `EncodingDeclarationConflictError` — a
+    dual-shape config that disagrees with itself is corrupt input, and the one
+    authority refuses to silently pick a side.
 
     The nested shape is NOT a fallback and NOT a default: it reads a key the
     schema requires the operator to declare, and an absent declaration still
@@ -427,10 +442,27 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
             "R28) — the v6 default arm is retired"
         )
     section = cfg.get("encoding")
+    nested = None
+    identity = cfg.get("identity")
+    if isinstance(identity, Mapping):
+        nested = identity.get("encoding")
     if section is None:
-        identity = cfg.get("identity")
-        if isinstance(identity, Mapping):
-            section = identity.get("encoding")
+        section = nested
+    elif nested is not None:
+        # WPTS Phase P (ADJ-25 / R104): BOTH shapes declared. Disagreement is CORRUPT
+        # INPUT, not a precedence question — the one authority refuses to silently pick a
+        # winner (the same posture `checkpoints.py` takes on ambiguous payloads). Flat
+        # malformation raises its own error below before the comparison can pass.
+        flat_name = section if isinstance(section, str) else (
+            section.get("version") if isinstance(section, Mapping) else None
+        )
+        if isinstance(flat_name, str) and isinstance(nested, str) and flat_name != nested:
+            raise EncodingDeclarationConflictError(
+                f"config declares TWO encodings that disagree: flat "
+                f"`encoding` says {flat_name!r}, nested `identity.encoding` says "
+                f"{nested!r}. A dual-shape config whose declarations disagree is "
+                "corrupt input — fix the config; no precedence arm exists (R104)"
+            )
     if section is None:
         raise MissingEncodingError(
             "config declares no encoding: neither a flat `encoding: <name>` key "

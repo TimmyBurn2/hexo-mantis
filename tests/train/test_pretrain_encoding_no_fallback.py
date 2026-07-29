@@ -14,7 +14,11 @@ import argparse
 
 import pytest
 
-from mantis.encoding.resolvers import MissingEncodingError
+from mantis.encoding.resolvers import (
+    EncodingDeclarationConflictError,
+    EncodingRegistryError,
+    MissingEncodingError,
+)
 from mantis.train.pretrain.cli import _resolve_encoding_name
 from mantis.train.pretrain.validate import _config_encoding
 
@@ -22,23 +26,27 @@ from mantis.train.pretrain.validate import _config_encoding
 
 
 def test_checkpoint_config_with_no_encoding_at_all_raises():
-    with pytest.raises(MissingEncodingError, match="carries no encoding"):
+    # WPTS Phase P (R104): `_config_encoding` is a veneer over THE one resolver, so the
+    # message is the resolver's own spelling; the raise-arm is unchanged (LAW-11 re-pin).
+    with pytest.raises(MissingEncodingError, match="declares no encoding"):
         _config_encoding({"board_size": 19})
 
 
 def test_checkpoint_config_with_empty_encoding_mapping_raises():
-    with pytest.raises(MissingEncodingError, match="no string 'version' key"):
+    with pytest.raises(MissingEncodingError, match="no 'version' key"):
         _config_encoding({"encoding": {}})
 
 
 def test_checkpoint_config_with_non_string_version_raises():
-    with pytest.raises(MissingEncodingError, match="no string 'version' key"):
+    # Present-but-malformed is the one authority's `EncodingRegistryError` classification
+    # (MissingEncodingError subclasses it, so the family narrowed, not the raise).
+    with pytest.raises(EncodingRegistryError, match="must be a string"):
         _config_encoding({"encoding": {"version": 6}})
 
 
 def test_checkpoint_config_with_identity_but_non_string_encoding_raises():
     """`identity.encoding` present but not a string must not fall through to a default."""
-    with pytest.raises(MissingEncodingError):
+    with pytest.raises(EncodingRegistryError):
         _config_encoding({"identity": {"encoding": 6}})
 
 
@@ -48,13 +56,23 @@ def test_checkpoint_config_with_identity_but_non_string_encoding_raises():
         ({"identity": {"encoding": "v6w25"}}, "v6w25"),
         ({"encoding": "gnn_axis_v1"}, "gnn_axis_v1"),
         ({"encoding": {"version": "v6_live2_ls"}}, "v6_live2_ls"),
-        # identity wins over a conflicting flat key — the WP8 nested form is authoritative
-        ({"identity": {"encoding": "v6w25"}, "encoding": "v6"}, "v6w25"),
+        # AGREEING dual-shape resolves (WPTS Phase P re-point, R104: the old row here
+        # pinned "identity wins over a conflicting flat key" — the precedence R104 rejects;
+        # the conflict raise is pinned below).
+        ({"identity": {"encoding": "v6w25"}, "encoding": "v6w25"}, "v6w25"),
     ],
 )
 def test_explicit_encodings_still_resolve(cfg, expected):
     """Positive controls: closing the default arms must not break real resolution."""
     assert _config_encoding(cfg) == expected
+
+
+def test_conflicting_dual_shape_is_corrupt_input_and_raises():
+    """WPTS Phase P (ADJ-25/R104): a checkpoint config declaring two encodings that
+    disagree is corrupt; the veneer surfaces the one authority's named error rather than
+    silently preferring either shape."""
+    with pytest.raises(EncodingDeclarationConflictError):
+        _config_encoding({"identity": {"encoding": "v6w25"}, "encoding": "v6"})
 
 
 # ── cli._resolve_encoding_name (ADJ-03, the sixth arm) ───────────────────────────────

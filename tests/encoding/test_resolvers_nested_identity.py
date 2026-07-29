@@ -46,14 +46,17 @@ def test_nested_identity_resolves_the_graph_encoding_run5_declares() -> None:
     assert spec.representation == "graph"
 
 
-def test_flat_shape_takes_precedence_over_nested() -> None:
-    """Precedence is FLAT-first, preserving the deleted bridges' own order
-    (`"encoding" not in cfg` guarded their nested arm). Under `extra="forbid"` a real
-    `RunConfig` can never carry both, so this pins intent, not a live path."""
-    spec = resolve_from_config(
-        {"encoding": "v6", "identity": {"encoding": "gnn_axis_v1"}}
-    )
-    assert spec.name == "v6"
+def test_disagreeing_dual_shape_raises_not_a_precedence_pick() -> None:
+    """WPTS Phase P re-point (R90a; the subject deliberately changed by R104). This test
+    pinned FLAT-first precedence — the WPBRIDGE bridge-parity intent. The operator ruled
+    precedence is the wrong question: a dual-shape config whose declarations DISAGREE is
+    corrupt input, and the one authority RAISES rather than silently picking a winner.
+    Under `extra="forbid"` a real `RunConfig` still can never carry both, so this pins
+    intent, not a live path — the intent is now agreement-or-raise."""
+    from mantis.encoding.resolvers import EncodingDeclarationConflictError
+
+    with pytest.raises(EncodingDeclarationConflictError):
+        resolve_from_config({"encoding": "v6", "identity": {"encoding": "gnn_axis_v1"}})
 
 
 # ── LAW-11: the accept-set widened, the no-default posture did not ──────────────────────

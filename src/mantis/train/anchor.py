@@ -389,18 +389,26 @@ def load_best_model_resilient(
 
 # ══ resolve_anchor (injected eval_pipeline; representation off the declared arch) ══════
 def _resolve_declared_encoding(config: Any) -> str | None:
-    """Lift the declared encoding from a WP8 nested `identity.encoding` or a legacy flat
-    `encoding` key (no shape-sniff)."""
-    if isinstance(config, dict):
-        ident = config.get("identity")
-        if isinstance(ident, dict) and isinstance(ident.get("encoding"), str):
-            return ident["encoding"]
-        enc = config.get("encoding")
-        if isinstance(enc, str):
-            return enc
-        if isinstance(enc, dict):
-            return enc.get("version") or enc.get("name")
-    return None
+    """The declared encoding NAME via THE one resolver (WPTS Phase P, ADJ-25/R104) — the
+    private identity-first shape-read this function used to carry is dead, closing the
+    nine-caller family WPBRIDGE collapsed.
+
+    Absence is legal HERE and only here: a WP10-only launch hands the anchor a bare hparams
+    dict that declares nothing, and `AnchorState` carries that truthfully as None. Only
+    `MissingEncodingError` maps to None — a dual-shape declaration that DISAGREES raises
+    `EncodingDeclarationConflictError` through this veneer (corrupt input must not degrade
+    into "no declaration"), and an UNREGISTERED name raises from the registry lookup (the
+    old read returned any string; the cross-check is the LAW-11 posture). The anchor-private
+    `{'encoding': {'name': ...}}` form died with the private read.
+    """
+    if not isinstance(config, dict):
+        return None
+    from mantis.encoding.resolvers import MissingEncodingError, resolve_from_config
+
+    try:
+        return resolve_from_config(config).name
+    except MissingEncodingError:
+        return None
 
 
 def resolve_anchor(

@@ -19,42 +19,21 @@ from pathlib import Path
 import torch
 
 from mantis.encoding import lookup as _lookup_encoding
-from mantis.encoding.resolvers import MissingEncodingError
+from mantis.encoding.resolvers import resolve_from_config as _resolve_from_config
 from mantis.model import arch_from_spec_and_config, build_net
 
 _LOG = logging.getLogger(__name__)
 
 
 def _config_encoding(cfg: dict) -> str:
-    """Resolve the encoding name from a saved checkpoint config — the WP8 nested
-    `identity.encoding`, a legacy `{version: …}` dict, or a flat string.
-
-    Raises:
-        MissingEncodingError: if none of those forms carries an explicit encoding
-            name. A checkpoint that does not say what it was encoded with cannot be
-            validated against a guess (LAW-11, R28, R45) — the v6 default arms this
-            function used to carry are retired.
-    """
-    ident = cfg.get("identity")
-    if isinstance(ident, dict) and isinstance(ident.get("encoding"), str):
-        return ident["encoding"]
-    enc = cfg.get("encoding")
-    if isinstance(enc, str):
-        return enc
-    if isinstance(enc, dict):
-        version = enc.get("version")
-        if not isinstance(version, str):
-            raise MissingEncodingError(
-                "pretrain checkpoint config's 'encoding' mapping has no string "
-                "'version' key; an explicit encoding is required (LAW-11, R45) — "
-                "the v6 default arm is retired"
-            )
-        return version
-    raise MissingEncodingError(
-        "pretrain checkpoint config carries no encoding: expected "
-        "'identity.encoding', a string 'encoding', or an 'encoding' mapping with a "
-        "'version' key (LAW-11, R45) — the v6 default arm is retired"
-    )
+    """The checkpoint config's declared encoding NAME via THE one resolver (WPTS Phase P,
+    ADJ-25/R104) — the private identity-first shape-read is dead; the nine-caller family
+    is closed. A checkpoint that does not say what it was encoded with cannot be validated
+    against a guess: absence still raises `MissingEncodingError` (LAW-11, R28, R45), a
+    dual-shape declaration that DISAGREES raises `EncodingDeclarationConflictError`, and a
+    present-but-malformed declaration raises `EncodingRegistryError` — the one authority's
+    classification, all inside the same error family."""
+    return _resolve_from_config(cfg).name
 
 
 def validate(ckpt_path: Path, device: torch.device) -> None:
