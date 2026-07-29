@@ -177,7 +177,7 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
         # unrelated red. The values are the run5 prereg ones; `min_step` is inside
         # dev_example's own `max_train_steps`, which the twin cross-validator requires.
         train={"draw_rate_abort": {"threshold": 0.25, "min_step": 25000,
-                                   "N_pool_min": 50}},
+                                   "N_pool_min": 50, "consec": 3}},
     )
     assert list(audit_arming(dev_armed).disarmed) == [], (
         "dev_example with BOTH armings flipped ON must PASS — otherwise the audit is keyed "
@@ -228,7 +228,7 @@ def test_the_pinned_row_source_pin_is_tamper_evident(tmp_path) -> None:
     (tampered_root / rel).parent.mkdir(parents=True)
     (tampered_root / rel).write_text(original.replace(text, "# pinned literal deleted\n"))
     assert [broken.name for broken in TOOL.verify_source_pins(
-        MANIFEST, repo_root=tampered_root)] == [row.name], (
+        (row,), repo_root=tampered_root)] == [row.name], (
         f"deleting the pinned text from {rel} must report exactly the {row.name!r} row as "
         "broken — the pin is what makes an edit at the pinned site visible to gate 12"
     )
@@ -236,9 +236,11 @@ def test_the_pinned_row_source_pin_is_tamper_evident(tmp_path) -> None:
     absent_root = tmp_path / "absent"
     absent_root.mkdir()
     assert [broken.name for broken in TOOL.verify_source_pins(
-        MANIFEST, repo_root=absent_root)] == [row.name], (
+        MANIFEST, repo_root=absent_root)] == [candidate.name for candidate in pinned], (
         "a pinned file that does not exist must be reported broken, never skipped — "
-        "'nothing to scan' is how a tamper-evidence gate goes silently vacuous"
+        "'nothing to scan' is how a tamper-evidence gate goes silently vacuous. EVERY pinned "
+        "row must be reported here, not just the first: a scan that stopped at one would go "
+        "half-vacuous the moment a second row was pinned (WPMINT K-B added one)"
     )
 
 
@@ -279,11 +281,22 @@ def test_the_manifest_is_not_vacuous() -> None:
     # file that exists" is driven on a synthetic row through `_deferred`'s own `manifest`
     # parameter — the same seam `audit_arming` exposes — and the post-flip fact is asserted
     # rather than assumed.
-    assert _deferred() == [], (
-        "the shipped manifest holds ZERO deferred rows after Phase D's flip; a row kept "
-        "deferred so this loop had a subject was REJECTED (R81) — the manifest is a "
-        f"mint-read artifact and does not assert dead deferrals (R87); got {_deferred()}"
+    # WPMINT Phase K-B (call K-c) UPDATES the post-flip fact: the deferred list is no longer
+    # empty. `grad_norm_hard_abort` is exactly the row R81 and R87 both predicted would arrive
+    # ("CARD-COORD-KNOBS will feed it rows"), so the machinery kept alive for it now has a
+    # SHIPPED subject and the rule below is asserted on the real manifest first. The synthetic
+    # probe stays, because it is still the only way to drive a row whose pinned file is ABSENT.
+    assert [row.name for row in _deferred()] == ["grad_norm_hard_abort"], (
+        "the shipped manifest's deferred set is exactly the grad-norm row (WPMINT K-B): a "
+        "live gate whose threshold nobody pre-registered, printed loudly and gating nothing. "
+        f"A row appearing or vanishing here is a mint-visible change; got {_deferred()}"
     )
+    for shipped in _deferred():
+        rel, text = shipped.source_pin
+        assert (REPO_ROOT / rel).is_file() and text in (REPO_ROOT / rel).read_text(), (
+            f"deferred row {shipped.name!r} pins {rel!r}/{text!r}, which does not resolve in "
+            "the real tree — a deferred row that is not tamper-evident rots into the status quo"
+        )
     probe = ArmedAbort(
         name="_synthetic_deferred_probe", config_path="train.does_not_exist",
         mechanism=Mechanism.CONFIG_BOOL, status=Status.DEFERRED, exit_code=None,
@@ -292,11 +305,13 @@ def test_the_manifest_is_not_vacuous() -> None:
         note="synthetic subject for the deferred-row invariants; not a shipped row.",
     )
     deferred_rows = _deferred((*MANIFEST, probe))
-    assert [row.name for row in deferred_rows] == [probe.name], (
+    assert [row.name for row in deferred_rows] == ["grad_norm_hard_abort", probe.name], (
         "`_deferred` selects on `status` and nothing else — a selector that branched on a "
-        f"row's name or returned a constant is what this arm refuses; got {deferred_rows}"
+        "row's name or returned a constant is what this arm refuses. It must return BOTH the "
+        "shipped deferred row (grad-norm, WPMINT K-B) and the synthetic one, in manifest "
+        f"order; got {deferred_rows}"
     )
-    for row in deferred_rows:
+    for row in [candidate for candidate in deferred_rows if candidate.name == probe.name]:
         rel, _text = row.source_pin
         assert (REPO_ROOT / rel).is_file(), (
             f"deferred row {row.name!r} pins {rel!r}, which does not exist"
@@ -358,9 +373,12 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
     # ON DATA — `status` selects the list, `mechanism` selects the predicate — and no
     # function branches on a row's name. That claim needs a row to flip, so the subject is
     # synthetic and the drive is otherwise identical.
-    assert _deferred() == [], (
-        "the flip is landed: the shipped manifest carries no deferred row (R87's own "
-        f"grounds — a mint-read artifact does not assert dead deferrals); got {_deferred()}"
+    # WPMINT Phase K-B: the shipped deferred set is the grad-norm row and nothing else. The
+    # DRAW-RATE row must not be among them — that is the fact this arm protects, and it is
+    # stated directly now that "empty" has stopped being true.
+    assert "draw_rate_collapse" not in [other.name for other in _deferred()], (
+        "the flip is landed: the draw-rate row must not be deferred (a deferred row prints "
+        f"and does not gate); got {_deferred()}"
     )
     row = ArmedAbort(
         name="draw_rate_collapse", config_path="train.draw_rate_abort.threshold",
@@ -369,9 +387,10 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         source_pin=("src/mantis/run.py", "def compose_run"),
         note="synthetic pre-flip subject; the shipped row is REQUIRED since Phase D.",
     )
-    assert [other.name for other in _deferred((*MANIFEST, row))] == [row.name], (
+    assert row.name in [other.name for other in _deferred((*MANIFEST, row))], (
         "the DEFERRED machinery still works and still selects on status alone — that is what "
-        "makes the flip below a DATA edit rather than a code change"
+        "makes the flip below a DATA edit rather than a code change. (The shipped grad-norm "
+        "row is deferred too since WPMINT K-B, so this asks for membership, not identity)"
     )
     flipped = ArmedAbort(
         name=row.name, config_path=row.config_path, mechanism=row.mechanism,
@@ -403,8 +422,10 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         "a positive threshold arms the row — CONFIG_THRESHOLD_GT_ZERO must be a real "
         "predicate over the value, not a constant"
     )
-    assert list(off.deferred) == [] and list(on.deferred) == [], (
-        "after the flip there is no deferred row left; `status` selects the list and it is "
+    assert ([r.name for r in off.deferred] == [r.name for r in on.deferred]
+            == ["grad_norm_hard_abort"]), (
+        "the draw-rate row's synthetic flip must not disturb the deferred list, which holds "
+        "exactly the shipped grad-norm row (WPMINT K-B): `status` selects the list and it is "
         "DATA — no function may branch on the row's name"
     )
 
@@ -417,6 +438,89 @@ def test_the_mechanisms_are_real_predicates_in_both_directions() -> None:
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(0.15) is True
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(0.0) is False
     assert Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(-1.0) is False
+
+    # WPMINT Phase K-B (call K-c) — the UPPER-bounded mechanism, real in BOTH of its two
+    # inputs. `CONFIG_THRESHOLD_GT_ZERO` cannot judge `train.hard_gn_threshold`: its range is
+    # genuinely unbounded above, so the shipped `1e9` reads ARMED while no finite gradient
+    # norm reaches it. Every arm below moves ONE operand, so neither the value nor the
+    # ceiling can be the constant this test exists to refuse.
+    below = Mechanism.CONFIG_THRESHOLD_BELOW_CEILING
+    assert below.is_armed(5.0, ceiling=10.0) is True
+    assert below.is_armed(10.0, ceiling=10.0) is True, "the ceiling itself is IN range"
+    assert below.is_armed(1e9, ceiling=10.0) is False, (
+        "the shipped grad-norm threshold against the shipped monitor.alert_grad_norm_max — "
+        "this False is the whole reason the mechanism exists"
+    )
+    assert below.is_armed(1e9, ceiling=1e10) is True, (
+        "…and the SAME value must arm once the ceiling moves above it. Without this arm the "
+        "predicate could ignore its ceiling and still pass every other line here"
+    )
+    assert below.is_armed(0.0, ceiling=10.0) is False
+    assert below.is_armed(-1.0, ceiling=10.0) is False
+    assert below.is_armed(5.0, ceiling=None) is False, (
+        "a row with no usable ceiling must report DISARMED — an unjudgeable row fails toward "
+        "visibility, never toward silence"
+    )
+    assert below.is_armed(float("inf"), ceiling=10.0) is False
+    assert below.is_armed(5.0, ceiling=float("nan")) is False
+    assert below.is_armed(True, ceiling=10.0) is False, "a bool is not a threshold"
+
+    # …and the ceiling is DATA on the row, enforced in both directions.
+    common = dict(name="probe", config_path="train.hard_gn_threshold",
+                  status=Status.REQUIRED, exit_code=None, owner=None, source_pin=None,
+                  note="oracle probe")
+    with pytest.raises(ValueError, match="ceiling_path"):
+        ArmedAbort(mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING, **common)
+    with pytest.raises(ValueError, match="ceiling_path"):
+        ArmedAbort(mechanism=Mechanism.CONFIG_BOOL, ceiling_path="monitor.axis_warn", **common)
+    ArmedAbort(mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
+               ceiling_path="monitor.alert_grad_norm_max", **common)
+
+
+def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_config) -> None:
+    """The DEFERRED grad-norm row (WPMINT Phase K-B, call K-c), audited against a REAL
+    RunConfig in both directions.
+
+    `Mechanism.is_armed` is a pure predicate; this is the other half — `audit_arming` must
+    RESOLVE the row's `ceiling_path` on the config and hand it over, or the mechanism's second
+    operand is a claim nothing feeds (LAW-07's phantom-input class). The row is DEFERRED, so
+    it is flipped to REQUIRED in an in-memory copy to make it audit at all: that is the same
+    `manifest=` seam O-7 uses, and it is also the exact edit that CLOSES the row, so this test
+    is a rehearsal of the close.
+    """
+    row = [candidate for candidate in MANIFEST
+           if candidate.name == "grad_norm_hard_abort"][0]
+    assert row.status is Status.DEFERRED and row.exit_code is None, (
+        "the row must stay DEFERRED with no invented exit code: flipping it REQUIRED would "
+        "gate run5's mint on a threshold nobody pre-registered (R84's class)"
+    )
+    assert row.ceiling_path == "monitor.alert_grad_norm_max"
+
+    def _required(manifest_row):
+        return ArmedAbort(
+            name=manifest_row.name, config_path=manifest_row.config_path,
+            ceiling_path=manifest_row.ceiling_path, mechanism=manifest_row.mechanism,
+            status=Status.REQUIRED, exit_code=manifest_row.exit_code, owner=None,
+            source_pin=manifest_row.source_pin, note=manifest_row.note,
+        )
+
+    manifest = (_required(row),)
+    shipped = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    assert [r.name for r in audit_arming(shipped, manifest=manifest).disarmed] == [row.name], (
+        "as shipped (threshold 1e9 against alert_grad_norm_max 10.0) the gate is DISARMED — "
+        "that is the finding the row exists to publish"
+    )
+
+    reachable = smoke_run_config("run5.yaml", train={"hard_gn_threshold": 5.0})
+    assert list(audit_arming(reachable, manifest=manifest).disarmed) == [], (
+        "a threshold at or below the warn line ARMS the row — the audit must read the CONFIG "
+        "through both paths, not a constant"
+    )
+    raised = smoke_run_config("run5.yaml", monitor={"alert_grad_norm_max": 1e10})
+    assert list(audit_arming(raised, manifest=manifest).disarmed) == [], (
+        "and raising the CEILING alone must arm the SAME shipped threshold — the second "
+        "operand really is resolved from `ceiling_path` and is not a literal"
+    )
 
 
 # ── O-11 — SF-10: the burst override's central premise ────────────────────────────────

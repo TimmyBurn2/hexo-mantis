@@ -116,11 +116,15 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   routes `wr_sealbot: None`, which the coordinator skip-counts loudly
   (`sealbot_wr_gate_skipped`), never silently.
 - `draw_rate_collapse` is armed **by the config** (WPAX Phase D, R65/R80): the
-  `train.draw_rate_abort` block — `threshold` / `min_step` / `N_pool_min`, one block and one
-  resolver — is the sole authority, and `null` is the EXPLICIT off posture (R79: arming is a
-  property of the resolved value; there is no boolean beside it). `configs/run5.yaml` arms it
-  at `0.25 / 25000 / 50` (R82/R85/R92, pre-registered at mint prereg); the four non-production
-  configs carry `null` (R59). The `monitor_gates` event's `draw_rate_threshold` field keeps
+  `train.draw_rate_abort` block — `threshold` / `min_step` / `N_pool_min` / `consec`, one
+  block and one resolver — is the sole authority, and `null` is the EXPLICIT off posture
+  (R79: arming is a property of the resolved value; there is no boolean beside it).
+  `configs/run5.yaml` arms it at `0.25 / 25000 / 50 / 3` (R82/R85/R92, pre-registered at mint
+  prereg); the four non-production configs carry `null` (R59). **WPMINT Phase K-B (R78/R80,
+  call K-b) authored the FOURTH term**: `consec` was the coordinator's own code-side default
+  `draw_rate_consec = 3` and is now `train.draw_rate_abort.consec`, inside the block because a
+  term of a DISARMED abort is not a fact. Its value is unchanged, so nothing an observer reads
+  moves; what moved is who says it. The `monitor_gates` event's `draw_rate_threshold` field keeps
   its name and now carries `null` on a disarmed run rather than the retired `0.0` spelling.
   **WPMINT Phase DS (R92) replaced the gated statistic** and with it the block's third key
   (`min_samples` -> `N_pool_min`): the metric is the POOLED COUNT-WEIGHTED rate
@@ -161,6 +165,18 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   either way. The field KEEPS its historical name (`elo_ci_lower_boot`) for run3-parity
   continuity; a future consumer must read the VALUE as a re-centered win-rate bound, never
   as Elo points.
+
+`grad_norm_hard_abort` has an armed-abort manifest row since **WPMINT Phase K-B** (call K-c),
+and it is **DEFERRED**: its threshold is `train.hard_gn_threshold`, authored by the same phase
+and minted at `1e9`, which no finite gradient norm reaches — so the gate is LIVE, fires through
+the same `_fire_hard_abort` contract as every other, and is effectively OFF. The row makes that
+visible instead of silent: gate 12 prints it loudly on every run and gates nothing, because a
+REQUIRED row would demand a number nobody pre-registered (R84's class). Its predicate is
+`Mechanism.CONFIG_THRESHOLD_BELOW_CEILING`, which reads its ceiling off
+`monitor.alert_grad_norm_max` — a hard abort set orders of magnitude above the line the run
+already WARNS at is not a hard abort. Its `exit_code` is `None`, truthfully: R84 authored a
+code for the draw-rate family only. Closing the row is a mint-prereg value plus a one-field
+flip to REQUIRED.
 
 The one gate LIVE the moment a coordinator runs is `grad_norm_hard_abort`. The heartbeat
 watchdog, persist-fatal and the heartbeat file are code-complete and oracle-tested but are

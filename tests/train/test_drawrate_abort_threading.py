@@ -20,7 +20,9 @@ The oracles, and the defect each is the ONLY witness to:
   `is not None` is REQUIRED BY THE TYPE CHANGE rather than a tidy-up. Every other oracle here
   uses an armed config or never reaches `_run_hard_abort_gates`.
 - O-D10 `test_all_THREE_block_keys_reach_their_runtime_destination` — each key observed AT
-  ITS OWN CALL SITE. WPMINT DR-6 (R93) fixed `_leaf_paths` to descend through
+  ITS OWN CALL SITE. (WPMINT Phase K-B: the block has FOUR keys now — `consec` joined it by
+  call K-b — and the name is kept because THREE names the oracle, not the arity; every key
+  the block carries is observed at its own destination, which is the invariant.) WPMINT DR-6 (R93) fixed `_leaf_paths` to descend through
   `Block | None`, so the three inner keys DO carry a consumer-registry obligation now (they
   did not when this oracle was written). That obligation is a key-set bijection against a
   registry STRING, though: it proves someone wrote down a consumer, never that the value
@@ -55,6 +57,7 @@ import mantis.train.coordinator.step as step_module
 # `mantis.*` siblings, which is where it belongs the moment IMPL lands it.
 from mantis.config.armed_aborts import audit_arming
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE read path
     DrawRateAbortSpec,
@@ -71,7 +74,7 @@ _DRIVE_STEPS = 4
 #: Deliberately NOT run5's `{0.25, 25000, 50}`. O-D2 asserts transport, and a harness that
 #: drives the production values cannot distinguish "the config reached the coordinator" from
 #: "the builder hardcodes the same numbers the config happens to carry".
-_OFF_PREREG = {"threshold": 0.37, "min_step": 2, "N_pool_min": 7}
+_OFF_PREREG = {"threshold": 0.37, "min_step": 2, "N_pool_min": 7, "consec": 2}
 
 
 # ── fakes (the `tests/test_run_strict_composition.py:113-205` shapes) ─────────────────
@@ -243,7 +246,8 @@ def _coordinator_config(spec, **overrides) -> StepCoordinatorConfig:
     """
     base = _step_coordinator_config(
         stop_step=10**9, draw_rate_abort=spec,
-        drain_caps=resolve_drain_caps(load_config(_CONFIGS / "dev_example.yaml").monitor))
+        drain_caps=resolve_drain_caps(load_config(_CONFIGS / "dev_example.yaml").monitor),
+        knobs=resolve_coordinator_knobs(load_config(_CONFIGS / "dev_example.yaml").train))
     return dataclasses.replace(base, log_interval=1, eval_interval=1, min_buf_size=1,
                                terminal_eval_enabled=False, **overrides)
 
@@ -282,7 +286,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
         "threading the resolved value, which is exactly the state where the audit reads "
         "0.37 from the config and the run aborts on nothing"
     )
-    for key in ("threshold", "min_step", "N_pool_min"):
+    for key in ("threshold", "min_step", "N_pool_min", "consec"):
         assert getattr(runtime, key) == getattr(resolved, key) == getattr(block, key), (
             f"the three readers disagree on {key!r}: schema says {getattr(block, key)!r}, "
             f"the resolver says {getattr(resolved, key)!r}, the coordinator runs on "
@@ -346,7 +350,7 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
 
     h2 = _coordinator(
         config=_coordinator_config(
-            DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=1)),
+            DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=1, consec=3)),
         pool=_Pool(counts=(90, 100)))
     for _ in range(8):
         if not h2.shutdown.running:
@@ -360,7 +364,7 @@ def test_a_disarmed_threshold_skip_counts_and_never_raises_TypeError() -> None:
 
     h3 = _coordinator(
         config=_coordinator_config(
-            DrawRateAbortSpec(threshold=0.4, min_step=10**9, N_pool_min=1)),
+            DrawRateAbortSpec(threshold=0.4, min_step=10**9, N_pool_min=1, consec=3)),
         pool=_Pool(counts=(90, 100)))
     for _ in range(8):
         h3.pool._games += 5
@@ -426,10 +430,19 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
         f"config says {cfg.train.draw_rate_abort.min_step!r}, the rule saw "
         f"{call.get('min_step')!r}"
     )
-    assert call["consec"] == h.coord.config.draw_rate_consec, (
-        "`consec` still comes from the coordinator's own code-side default — R78 keeps it "
-        "with CARD-COORD-KNOBS, and this arm pins that boundary rather than leaving the "
-        "reader to guess which of the four the config authors"
+    # WPMINT Phase K-B (call K-b) RE-POINTS this arm — the DELIBERATE BOUNDARY MARKER stays,
+    # read from the other side. It said "`consec` still comes from the coordinator's own
+    # code-side default", which was true while R78/R80 kept that term with CARD-COORD-KNOBS.
+    # K-B IS CARD-COORD-KNOBS, so `consec` is the block's FOURTH authored term now, and the
+    # marker's job — "do not leave the reader to guess which of these the config authors" —
+    # is served by asserting it at the same call site as the other two, against the config's
+    # own value. The coordinator dataclass no longer carries a `draw_rate_consec` field at
+    # all, so this arm would be unwritable in its old form.
+    assert call["consec"] == spec.consec == cfg.train.draw_rate_abort.consec, (
+        f"train.draw_rate_abort.consec must reach `check_draw_rate_collapse(consec=)`; "
+        f"config says {cfg.train.draw_rate_abort.consec!r}, the rule saw "
+        f"{call.get('consec')!r}. It is a CONFIG term since WPMINT Phase K-B, not the "
+        "coordinator's own default — that boundary is what this arm has always marked"
     )
     # `N_pool_min` at ITS destination: the observation boundary. Both sides of the boundary
     # are driven, because "no observation ever" and "observation always" each satisfy one

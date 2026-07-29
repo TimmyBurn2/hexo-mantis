@@ -142,7 +142,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; 18 assertions, 15+ named errors; single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
-| 5 | run config schema | v3 | pydantic models, extra=forbid; schema_version key in every file |
+| 5 | run config schema | v4 | pydantic models, extra=forbid; schema_version key in every file |
 | 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
@@ -243,6 +243,78 @@ left as silent drift (R9); the S-4 amendment above is the precedent this follows
    The cost of the `full` tier is a published LOWER BOUND (`>= 1042 s` from WP10's 41.66
    ms/train-step floor) whose missing term — game-bound self-play generation for `>= 25001`
    completed games on one worker — is named rather than estimated.
+
+### AMENDMENT — contract #5 v3 → v4: the step-coordinator knobs are CONFIG
+
+**WPMINT Phase K-B (card `CARD-COORD-KNOBS`), R78 as clarified by R80, method bound by R93.**
+Recorded here rather than left as silent drift (R9); the S-4 and Phase D amendments above are
+the precedent this follows verbatim.
+
+1. **The bump.** Twenty NEW **required** leaves on `RunConfig`, so contract #5's row moves
+   **v3 → v4**; the config files' own `schema_version:` file-format pin is unchanged at `1`.
+   Nineteen are flat `train.*` keys — `eval_interval`, `log_interval`, `buffer_save_interval`,
+   `min_buf_size`, `replay_capacity`, `replay_capacity_schedule`, `training_steps_per_game`,
+   `max_train_burst`, `batch_size`, `augment`, `recency_weight`, `mixing_initial_w`,
+   `mixing_min_w`, `mixing_decay_steps`, `hard_gn_threshold`, `hard_gn_min_steps`,
+   `terminal_eval_enabled`, `bot_batch_share`, `selfplay_stall_timeout_sec` — read by ONE
+   resolver, `mantis.config.resolve.coordinator.resolve_coordinator_knobs`. The twentieth is
+   `train.draw_rate_abort.consec`, which joins the abort family's block because R80 says its
+   terms travel together. Incompatible for the same reason S-4's and Phase D's were: a config
+   lacking any of them fails to load. `mantis.run._step_coordinator_config` now holds **zero
+   literals** — every `StepCoordinatorConfig` field arrives from a resolver.
+
+   **They are FLAT `train.*` keys, not a `train.coordinator` block, and that is a decision.**
+   `train.step_coordinator.*` was RULED AGAINST at Phase D (§2, pinned verbatim by
+   `tests/config/test_drawrate_arming_authority.py`) on the ground that a config block named
+   after a dataclass is named after the wrong thing; these are training hyperparameters, and
+   the coordinator is the object that reads them, not the fact they express. An OPTIONAL block
+   was independently barred: `_leaf_paths` counts a `Block | None` as one leaf, so ~20 keys
+   would have bought a cheap registry count by hiding from the LAW-08 bijection that justifies
+   them.
+
+   **Three names differ from their runtime fields, each for a measured reason.**
+   `buffer_save_interval` -> `checkpoint_interval` (the coordinator's is the REPLAY-BUFFER
+   save cadence; `train.checkpoint_interval` is the already-authored TRAINER cadence, and two
+   config keys with one spelling is the duplicated-authority class R1 exists to kill);
+   `replay_capacity` -> `capacity` and `replay_capacity_schedule` -> `buffer_schedule` (a bare
+   `train.capacity` names nothing on its own).
+
+2. **SIX coordinator fields are DELETED, not authored** (adjudication call K-a):
+   `composition_interval`, `value_probe_interval`, `soft_ew_threshold`, `soft_ew_min_pts`,
+   `instrumentation_enabled`, `bot_corpus_path` had no reader anywhere in `src/`, re-verified
+   at HEAD by grep AND by recording every attribute read on a live `StepCoordinatorConfig`
+   across the whole test tier. R1 requires a live consumer per key, so typing them in would
+   have CREATED the violation the card meant to close.
+
+3. **One value moves, and it is a correction, not a change.** `train.batch_size` is minted at
+   **256**, not the dead field's `8`: WPMINT Phase K-A measured that
+   `coordinator/step.py::_run_training_step` read
+   `train_cfg.get("batch_size", full_config.get("batch_size", 256))`, that both lookups miss on
+   the production path, and that the run's real batch size was therefore the literal `256`.
+   Every other authored value is the value the code already used, proven by rebuilding
+   `StepCoordinatorConfig` from all five minted configs at the parent commit and comparing
+   field for field.
+
+4. **`grad_norm_hard_abort` joins the armed-abort manifest as a DEFERRED row**
+   (adjudication call K-c), with a new `Mechanism.CONFIG_THRESHOLD_BELOW_CEILING` and a
+   `ceiling_path` naming `monitor.alert_grad_norm_max`. DEFERRED because a REQUIRED row would
+   gate run5's mint on a grad-norm threshold nobody pre-registered — the class R84 refused.
+   The mechanism is upper-bounded because `CONFIG_THRESHOLD_GT_ZERO` reads the shipped `1e9`
+   as ARMED, which is "armed in the config, absent in effect".
+
+5. **R78's first design question is ANSWERED YES and implemented.** The mint preflight's
+   evidence JSON now carries a `coordinator` block — the resolved knobs, drain caps,
+   `stop_step` and draw-rate terms, DERIVED from the shipped resolvers and never restated —
+   in both AUDIT and PREFLIGHT mode. It witnesses the config -> resolver -> builder seam and
+   explicitly NOT a child that was handed something else.
+
+6. **The doc half is OWED and BLOCKED, and the owner is still WP14 / Phase W.** R11 bars this
+   phase from `docs/contracts/run_config_schema.md` exactly as it barred Phase S and Phase D,
+   so the same-commit clause is half-kept a third time: version bumped here, contract doc
+   deferred. The run5-mint checklist item now covers **three** owed entries —
+   `train.max_train_steps`, `train.draw_rate_abort` (including `consec`) and the nineteen
+   `train.*` coordinator knobs.
+
 
 ## 5. Config system
 

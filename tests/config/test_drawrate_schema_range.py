@@ -1,4 +1,12 @@
-"""⊕ WPAX Phase D ORACLE — `CARD-DRAWRATE-KEY`: what the draw-rate block can EXPRESS, and
+""">300 justify (R8), stated at this file's MEASURED size of 331 lines. The file was already
+over the cap with NO justify at all (a pre-existing gap WPMINT Phase K-A flagged); WPMINT Phase
+K-B touches it to author `train.draw_rate_abort.consec`, so it is written now rather than left.
+One block, one rejection corpus: the ~15 rejected payloads and the per-config posture census are
+DATA whose reason text IS the assertion — each row names the defect the bound closes and the
+spelling an operator would actually write. Splitting them would separate a rejection from the
+prereg pin it is judged against, and R5 bars the cross-test import that would rejoin them.
+
+⊕ WPAX Phase D ORACLE — `CARD-DRAWRATE-KEY`: what the draw-rate block can EXPRESS, and
 what each committed config actually says (DESIGN_D §1.1, §6.2, §6.3; MF-1 closed by R83).
 
 RED-at-import until IMPL lands the delta: `mantis.config.resolve.draw_rate` is the ONE read
@@ -52,7 +60,11 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is "the only
 #: place they may change", so they are written here as the pin that makes an in-place edit
 #: visible instead of silent.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50}
+#: WPMINT Phase K-B (call K-b) adds `consec`, the FOURTH term. R92's prereg row already
+#: NAMED `consec=3` among the values that stand; this phase moves who SAYS it — from a
+#: `StepCoordinatorConfig` code-side default into the block the other three live in — so
+#: the number is unchanged and this pin now covers all four.
+RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
 def _with_block(payload):
@@ -137,8 +149,15 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
             ({"threshold": 0.25, "min_step": 25000}, "N_pool_min"),
         "the RETIRED key — `min_samples` is gone (R92) and must not load silently":
             ({**armed, "min_samples": 50}, "min_samples"),
+        # WPMINT Phase K-B (call K-b) FLIPS this row: `consec` is an authored key now, so the
+        # `extra='forbid'` claim needs a key that is genuinely not in the block. It is
+        # re-pointed rather than deleted — the property (strictness reaches INSIDE the nested
+        # block, not just at the top level) is exactly as load-bearing as it was, and DS left
+        # this row named as the pin K would have to flip consciously.
         "an unknown inner key — extra='forbid' reaches inside the block too":
-            ({**armed, "consec": 3}, "consec"),
+            ({**armed, "consec_rounds": 3}, "consec_rounds"),
+        "consec 0 — a rule that needs zero consecutive observations is not a rule":
+            ({**armed, "consec": 0}, "consec"),
     }
     for reason, (payload, key) in rejected.items():
         with pytest.raises(ValidationError) as caught:
@@ -282,8 +301,10 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
             "that invents a posture is a second authority (R80)"
         )
         if block is not None:
-            assert (resolved.threshold, resolved.min_step, resolved.N_pool_min) == (
-                float(block.threshold), int(block.min_step), int(block.N_pool_min)), (
+            assert (resolved.threshold, resolved.min_step, resolved.N_pool_min,
+                    resolved.consec) == (
+                float(block.threshold), int(block.min_step), int(block.N_pool_min),
+                int(block.consec)), (
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
@@ -292,10 +313,12 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         "audits it — a disarmed run5 is R59's whole subject"
     )
     run5 = postures["run5.yaml"]
-    assert (run5.threshold, run5.min_step, run5.N_pool_min) == (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"]), (
-        f"run5's three values are RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's "
-        f"threshold, R85's min_step and R92's evidence bar, "
+    assert (run5.threshold, run5.min_step, run5.N_pool_min, run5.consec) == (
+        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
+        RUN5_PREREG["consec"]), (
+        f"run5's four values are RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's "
+        f"threshold, R85's min_step, R92's evidence bar and R92's consec (authored at "
+        f"WPMINT Phase K-B, value unchanged), "
         f"'the only place they may change'. Got {run5}, expected {RUN5_PREREG}. Changing one "
         "in place is R1's hand-varied config; it is re-minted with a recorded delta or not "
         "at all"

@@ -40,6 +40,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
@@ -54,6 +55,10 @@ from mantis.train.lifecycle.signals import ShutdownState
 #: rest of this file's coordinator config now follows (see `_make_config`).
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
+#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
+#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
+_KNOBS = resolve_coordinator_knobs(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
 
 
 # ── fakes ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +195,7 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     """
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS),
+                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
         **{"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides},
     )
 
@@ -316,8 +321,7 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
     min_step, fires. Grad-norm is quiet, so the fire is draw-rate."""
     pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
-                                                        N_pool_min=10),
-                       draw_rate_consec=3)
+                                                        N_pool_min=10, consec=3))
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h)
     assert h.shutdown.running is False, "a sustained pool draw-rate collapse must hard-abort"
@@ -387,8 +391,8 @@ def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:
     pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
-                                                        N_pool_min=10),
-                       draw_rate_consec=3, hard_gn_threshold=1e9)
+                                                        N_pool_min=10, consec=3),
+                       hard_gn_threshold=1e9)
     h = _make_coordinator(pool=pool, config=cfg)
     _drive_until_stopped(h, cap=8)
 

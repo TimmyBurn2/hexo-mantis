@@ -698,10 +698,15 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
     ways of hollowing the print share ONE failure signature and the report cannot say which
     field went missing. One pin per field, so each drop dies alone.
     """
-    assert [row for row in MANIFEST if row.status.value == "deferred"] == [], (
-        "the post-flip fact this re-basing rests on: the SHIPPED manifest holds zero "
-        "deferred rows, which is why the subject below is synthetic (WPAX Phase D / R81)"
-    )
+    # WPMINT Phase K-B: the shipped manifest holds ONE deferred row now
+    # (`grad_norm_hard_abort`, call K-c). The subject below stays SYNTHETIC anyway, and
+    # deliberately: this test hollows the print one field at a time, and a shipped row would
+    # make each drop's failure depend on that row's own field values rather than on the
+    # print. What is re-pointed is only the premise, which is now the weaker and true one.
+    assert [row.name for row in MANIFEST if row.status.value == "deferred"] == [
+        "grad_norm_hard_abort"
+    ], ("the shipped deferred set is the grad-norm row; the synthetic subject below is "
+        "additional to it, never a stand-in for an empty manifest (WPAX Phase D / R81)")
     deferred = [_SYNTHETIC_DEFERRED]
     for row in deferred:
         if field == "owner":
@@ -716,6 +721,68 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
             f"the DEFERRED print must carry {row.name}'s {field}: "
             f"{_DEFERRED_FIELDS[field]}. Missing {needle!r} from:\n{audit_stdout}"
         )
+
+
+def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
+    """R78's first design question, ANSWERED YES and driven (WPMINT Phase K-B).
+
+    R78 made "the preflight's JSON dump of the resolved coordinator config" where
+    CARD-COORD-KNOBS starts. Phase K's census measured the answer at HEAD as NO: the tool
+    built a coordinator config and read exactly `.capacity` off it, so the ~30 knobs that
+    decide a run's shape were invisible in the artifact a mint sign-off reads. K-B authors
+    them and publishes them.
+
+    Three arms, because the block is only worth anything if all three hold:
+
+    * it is PRESENT and complete — every field of the two resolved specs, by NAME, taken from
+      the dataclasses rather than from a list written here (a hand-written key census would
+      agree with the code by maintenance, which is the shape this whole card exists to kill);
+    * it AGREES with the config on disk, key for key. A block that published defaults would
+      be `_not_run_reason`'s named defect — "a shipped constant asserting something the run
+      measured otherwise, in the evidence artifact a mint sign-off reads";
+    * it MOVES when the config moves. The audit runs on a real minted config, so the drive
+      compares two different ones rather than mutating a shipped file.
+    """
+    import dataclasses
+
+    from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
+    from mantis.config.resolve.drain import DrainCapsSpec
+
+    _run_tool("--audit-only", "--config", "configs/run5.yaml",
+              "--out-dir", str(tmp_path / "coord"))
+    report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text())
+    block = report["coordinator"]
+    assert block is not None, (
+        "the resolved coordinator config must be IN the evidence artifact — R78's rider, and "
+        "the census measured its absence"
+    )
+
+    config = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    assert set(block["knobs"]) == {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)}
+    assert set(block["drain_caps"]) == {f.name for f in dataclasses.fields(DrainCapsSpec)}
+    assert block["knobs"] == json.loads(json.dumps(
+        dataclasses.asdict(resolve_coordinator_knobs(config.train)))), (
+        "the published knobs must be the RESOLVED ones, field for field — a block built from "
+        f"anything else is a restated literal; got {block['knobs']}"
+    )
+    assert block["stop_step"] == int(config.train.max_train_steps)
+    assert block["draw_rate_abort"] == {"threshold": 0.25, "min_step": 25000,
+                                        "N_pool_min": 50, "consec": 3}, (
+        "run5's armed terms, as the run will really see them — the four travel together"
+    )
+
+    _run_tool("--audit-only", "--config", "configs/smoke_gnn.yaml",
+              "--out-dir", str(tmp_path / "smoke"))
+    other = json.loads(
+        sorted((tmp_path / "smoke").glob("preflight_*.json"))[0].read_text())["coordinator"]
+    assert other["stop_step"] == 2000 != block["stop_step"], (
+        "the block must MOVE with the config it was resolved from; a constant would report "
+        f"the same run length for both, got {other['stop_step']} and {block['stop_step']}"
+    )
+    assert other["draw_rate_abort"] is None, (
+        "a DISARMED config must publish an explicit `null`, not an omitted key: absence would "
+        "be indistinguishable from a block the tool forgot to fill"
+    )
 
 
 def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
@@ -735,10 +802,11 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     manifest = report["manifest"]
     assert [row["name"] for row in manifest["deferred"]] == [
         row.name for row in MANIFEST if row.status.value == "deferred"
-    ] == [], (
-        "WPAX Phase D: after the flip the SHIPPED manifest holds ZERO deferred rows, and the "
-        "report must say so rather than omit the block. Stated as an EQUALITY to `[]` on "
-        f"purpose — see below; got {manifest['deferred']!r}"
+    ] == ["grad_norm_hard_abort"], (
+        "the report's deferred block must be the SHIPPED manifest's, row for row. WPMINT "
+        "Phase K-B (call K-c) gives it a real subject — the grad-norm row — where WPAX "
+        "Phase D left it empty; the equality is against the manifest either way, so the "
+        f"published block and the audit that produced it cannot disagree; got {manifest['deferred']!r}"
     )
     # …and the field-completeness claim moves onto a manifest that HAS a deferred row. Left
     # against the shipped one it became `all(...)` over an empty list — an assertion whose
@@ -749,9 +817,12 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     monkeypatch.setattr(TOOL, "MANIFEST", probe_manifest)
     monkeypatch.setitem(audit_arming.__kwdefaults__, "manifest", probe_manifest)
     with_debt = TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
-    assert [row["name"] for row in with_debt["deferred"]] == [_SYNTHETIC_DEFERRED.name], (
+    assert [row["name"] for row in with_debt["deferred"]] == [
+        "grad_norm_hard_abort", _SYNTHETIC_DEFERRED.name
+    ], (
         "the published deferred block is read from `AuditResult.deferred`, so a manifest "
-        f"carrying debt must publish it; got {with_debt['deferred']!r}"
+        "carrying debt must publish ALL of it — the shipped grad-norm row (WPMINT K-B) and "
+        f"the probe, in manifest order; got {with_debt['deferred']!r}"
     )
     assert all(row["note"] and row["owner"] and row["source_pin"]
                for row in with_debt["deferred"]), (
@@ -2307,7 +2378,8 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
                               "draw_rate_abort:\n"
                               "    threshold: 0.25\n"
                               "    min_step: 1\n"
-                              "    N_pool_min: 50"))
+                              "    N_pool_min: 50\n"
+                              "    consec: 3"))
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", ("configs/smoke_gnn.yaml",))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
                         (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],

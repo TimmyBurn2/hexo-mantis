@@ -689,6 +689,17 @@ def strip_and_restamp(
             # EXPLICIT disarmed posture, which is the correct placeholder for a payload
             # that is not a run: a synthetic config must never claim an armed abort.
             "draw_rate_abort": None,
+            # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 19 step-coordinator knobs are
+            # required `train.*` keys now. Placeholder values, same posture as the rest of this
+            # payload — they are the template's own values because a synthetic config that is
+            # not a run must not invent a different run shape.
+            "eval_interval": 1000, "log_interval": 1000, "buffer_save_interval": 0,
+            "min_buf_size": 1, "replay_capacity": 100_000, "replay_capacity_schedule": [],
+            "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
+            "augment": False, "recency_weight": 0.0, "mixing_initial_w": 0.0,
+            "mixing_min_w": 0.0, "mixing_decay_steps": 1.0, "hard_gn_threshold": 1e9,
+            "hard_gn_min_steps": 3, "terminal_eval_enabled": True, "bot_batch_share": 0.0,
+            "selfplay_stall_timeout_sec": 1800.0,
             "completed_q_values": False,
             "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
             "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,

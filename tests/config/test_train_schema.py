@@ -45,6 +45,30 @@ VALID_TRAIN_PAYLOAD: dict = {
     # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
     # EXPLICIT disarmed posture (R79(1)).
     "draw_rate_abort": None,
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78 as clarified by R80): the 19 step-coordinator
+    # knobs. Every value is the one `mantis.run._step_coordinator_config` already used, so
+    # this census records a change of AUTHOR and not of behaviour — except `batch_size`,
+    # which is 256 because K-A MEASURED that the production path's dict lookups both missed
+    # and the run really used the literal 256, never the dead field's 8.
+    "eval_interval": 1000,
+    "log_interval": 1000,
+    "buffer_save_interval": 0,
+    "min_buf_size": 1,
+    "replay_capacity": 100_000,
+    "replay_capacity_schedule": [],
+    "training_steps_per_game": 1.0,
+    "max_train_burst": 1,
+    "batch_size": 256,
+    "augment": False,
+    "recency_weight": 0.0,
+    "mixing_initial_w": 0.0,
+    "mixing_min_w": 0.0,
+    "mixing_decay_steps": 1.0,
+    "hard_gn_threshold": 1e9,
+    "hard_gn_min_steps": 3,
+    "terminal_eval_enabled": True,
+    "bot_batch_share": 0.0,
+    "selfplay_stall_timeout_sec": 1800.0,
     "completed_q_values": False,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",
@@ -85,6 +109,28 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("aux_chain_weight", -0.1),
     ("ply_index_weight", -0.1),
     ("threat_pos_weight", 0.0),
+    # WPMINT Phase K-B — one violation per knob whose bound makes a real defect
+    # inexpressible, named at the value that defect is actually written as.
+    ("eval_interval", 0),               # the entire eval/promotion pipeline, silently off
+    ("log_interval", 0),                # DR-7: the whole hard-abort family AND monitor_gates
+    ("buffer_save_interval", -1),
+    ("min_buf_size", 0),                # "train on an empty buffer"
+    ("replay_capacity", 0),
+    ("training_steps_per_game", 0.0),   # reads as off; `_steps_budget`'s max(1, ...) is not
+    ("max_train_burst", 0),             # here it really does stop the learner forever
+    ("batch_size", 0),
+    ("recency_weight", -0.1),
+    ("recency_weight", 1.1),            # the sampler clamps, so above 1 is a difference the
+                                        # config can express and the run cannot have
+    ("mixing_initial_w", 1.5),
+    ("mixing_min_w", -0.1),
+    ("mixing_decay_steps", 0.0),        # a divisor: ZeroDivisionError on the first mixed step
+    ("hard_gn_threshold", 0.0),         # fires on every finite step
+    ("hard_gn_threshold", float("inf")),  # accepted, reads ARMED, can never be met
+    ("hard_gn_min_steps", 0),           # fires on the FIRST breach — not "sustained"
+    ("bot_batch_share", 1.5),
+    ("selfplay_stall_timeout_sec", 0.0),   # LAW-16's always-armed guard, silently disarmed
+    ("selfplay_stall_timeout_sec", -1.0),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [

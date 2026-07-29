@@ -108,13 +108,59 @@ train:
   # draw-rate collapse hard abort's terms. `null` is the EXPLICIT off posture and is what
   # the TEMPLATE ships, matching the conservative `monitor.actor_lag_abort_enabled: false`
   # precedent — a production config ARMS it with one whole-block mint delta, e.g.
-  #   --set 'train.draw_rate_abort={threshold: 0.25, min_step: 25000, N_pool_min: 50}'
+  #   --set 'train.draw_rate_abort={threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}'
+  # `consec` (WPMINT Phase K-B, R78/R80) is the FOURTH term: consecutive OBSERVATIONS above
+  # the threshold before the abort fires. It was a code-side default `draw_rate_consec = 3`
+  # and is authored INSIDE the block because a term of a disarmed abort is not a fact.
   # `N_pool_min` is R92's evidence bar on the POOLED count-weighted rate (it replaced the
   # per-worker `min_samples` inclusion bar); it must be <= DRAW_RATE_WINDOW *
   # selfplay.n_workers, which schema/core.py enforces at load.
-  # The three travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
+  # The four travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
   # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
+  # ── the step-coordinator knobs (WPMINT Phase K-B — CARD-COORD-KNOBS, R78/R80) ────────
+  # Until this phase these nineteen were LITERALS inside `mantis.run._step_coordinator_config`
+  # and terminal defaults on `StepCoordinatorConfig`: they decided what a run WAS while no
+  # config could see them and no mint record published them. Every value below is the value
+  # the code already used, so this template is a change of AUTHOR, not of behaviour — with
+  # ONE deliberate exception, `batch_size`, which is minted at the 256 the production path
+  # really used rather than the 8 the dead dataclass field said (WPMINT K-A's measurement).
+  # Six sibling fields had no reader at all and were DELETED rather than authored (call K-a).
+  # Read by ONE path: mantis.config.resolve.coordinator.resolve_coordinator_knobs.
+  eval_interval: 1000
+  log_interval: 1000
+  # NOT `train.checkpoint_interval` above — this is the REPLAY-BUFFER save cadence; `0` means
+  # no cadence save (close-out and the shutdown signal still save).
+  buffer_save_interval: 0
+  min_buf_size: 1
+  replay_capacity: 100000
+  # `[]` = no ramp. Each stage is `{step: <train step>, capacity: <new capacity>}` and the
+  # steps must be STRICTLY INCREASING (the consumer's cursor never rewinds).
+  replay_capacity_schedule: []
+  training_steps_per_game: 1.0
+  max_train_burst: 1
+  batch_size: 256
+  augment: false
+  recency_weight: 0.0
+  mixing_initial_w: 0.0
+  mixing_min_w: 0.0
+  mixing_decay_steps: 1.0
+  # The `grad_norm_hard_abort` gate. 1e9 is the shipped value and it is effectively OFF — no
+  # finite gradient norm reaches it. That is now VISIBLE rather than silent: WPMINT Phase K-B
+  # registered the gate as a DEFERRED armed-abort row (`src/mantis/config/armed_aborts.py`),
+  # so gate 12 prints it loudly on every run without gating the mint on a threshold nobody
+  # has pre-registered (R84's class). Closing the row means pre-registering a value here.
+  hard_gn_threshold: 1000000000.0
+  hard_gn_min_steps: 3
+  terminal_eval_enabled: true
+  # A fraction of each batch drawn from the bot corpus. Its sibling `bot_corpus_path` was one
+  # of the six DEAD fields deleted at Phase K-B, so only an injecting caller can supply a bot
+  # buffer — 0.0 is the only value the composition root can honour.
+  bot_batch_share: 0.0
+  # The self-play stall watchdog's budget (LAW-16 says it is ALWAYS armed, so `gt=0`: the
+  # schema cannot express the `<= 0` off switch `watchdog.py` still honours for direct
+  # constructions).
+  selfplay_stall_timeout_sec: 1800.0
   completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution

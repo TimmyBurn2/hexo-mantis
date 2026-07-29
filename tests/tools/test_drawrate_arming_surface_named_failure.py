@@ -235,7 +235,18 @@ def test_the_shipped_manifest_still_audits_green_so_the_rc_31_arm_is_not_vacuous
         "the SHIPPED manifest must audit the real tree green after the flip: run5 arms both "
         "required rows, so rc 0 here is the state Phase D lands in"
     )
-    assert [row.status for row in MANIFEST].count(Status.DEFERRED) == 0, (
-        "…and it holds ZERO deferred rows, which is why `_print_deferred_rows` prints nothing "
-        "and why the R81 hunk re-points its assertion onto a synthetic row"
+    # WPMINT Phase K-B (call K-c): the shipped manifest no longer holds zero deferred rows —
+    # `grad_norm_hard_abort` is one, which is the deferred mechanism finally being fed the
+    # kind of row R81 kept it alive for. The CONTROL's real subject is unchanged: rc 0 above
+    # is the whole point, and a DEFERRED row cannot change it because deferred rows print and
+    # do not gate. That is asserted directly here rather than inferred from an empty list.
+    deferred = [row for row in MANIFEST if row.status is Status.DEFERRED]
+    assert [row.name for row in deferred] == ["grad_norm_hard_abort"], (
+        "…and the deferred set is exactly the grad-norm row, whose presence must not move "
+        f"the rc above: a deferred row prints loudly and gates nothing; got {deferred}"
+    )
+    assert all(row.status is Status.REQUIRED for row in MANIFEST
+               if row.name != "grad_norm_hard_abort"), (
+        "every other shipped row must still be REQUIRED — a row quietly demoted to DEFERRED "
+        "would stop gating a production mint while this control stayed green"
     )

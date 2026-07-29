@@ -72,6 +72,7 @@ from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissi
     exit_code_for_abort,
 )
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import (  # RED anchor #1 — the ONE read path (R80)
     DrawRateAbortSpec,
@@ -91,9 +92,14 @@ ROW_NAME = "draw_rate_collapse"
 #: than as four more literals to keep in step.
 _MINTED_DRAIN_CAPS = resolve_drain_caps(load_config(CONFIGS_DIR / "dev_example.yaml").monitor)
 
+#: WPMINT Phase K-B (R78/R80): the builder's FOURTH config-authored parameter, from the same
+#: minted config, for the same reason — this file is about THRESHOLD authority, so the 19
+#: coordinator knobs arrive derived rather than as nineteen more literals to keep in step.
+_MINTED_KNOBS = resolve_coordinator_knobs(load_config(CONFIGS_DIR / "dev_example.yaml").train)
+
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place
 #: they may change, so they are written here as the pin that makes an in-place edit visible.
-RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50}
+RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
 def _load_tool():
@@ -137,7 +143,7 @@ def _complete_kwargs(spec) -> dict:
     that phase wired.
     """
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
-                                     drain_caps=_MINTED_DRAIN_CAPS)
+                                     drain_caps=_MINTED_DRAIN_CAPS, knobs=_MINTED_KNOBS)
     return {field.name: getattr(built, field.name)
             for field in dataclasses.fields(StepCoordinatorConfig)}
 
@@ -201,11 +207,21 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "train.draw_rate_abort even when every caller replaces them (R1). Still present: "
         f"{sorted(set(fields) & {'draw_rate_threshold', 'draw_rate_min_step'})}"
     )
-    assert "draw_rate_consec" in fields and (
-        fields["draw_rate_consec"].default is not dataclasses.MISSING), (
-        "R78/R80 bound this phase to THREE keys. `draw_rate_consec` is not one of them, so "
-        "it must remain a code-side default owned by CARD-COORD-KNOBS — authoring it here "
-        "would be the scope creep R78 forecloses"
+    # WPMINT Phase K-B (adjudication call K-b) RE-POINTS this arm, and it is the same
+    # boundary marker read from the other side. It used to assert that `draw_rate_consec`
+    # REMAINED a code-side default on `StepCoordinatorConfig` — correctly, because R80 bound
+    # PHASE D to three keys and assigned the fourth term to `CARD-COORD-KNOBS`. K-B IS
+    # `CARD-COORD-KNOBS`, so authoring it here is that assignment being discharged, not the
+    # scope creep R78 foreclosed. The marker survives because the defect it guards survives:
+    # a coordinator field that carries the term as well would be a SECOND authority beside
+    # `train.draw_rate_abort.consec`, exactly the shape `draw_rate_threshold: float = 0.0`
+    # had. So the assertion inverts — the field must be GONE — and the term is asserted at
+    # its new home in the same breath, where it has no default either.
+    assert "draw_rate_consec" not in fields, (
+        "`draw_rate_consec` must be DELETED from StepCoordinatorConfig, not left beside the "
+        "authored key: with `train.draw_rate_abort.consec` live, a same-fact field here is "
+        "the duplicated-default class R1 kills, and a disarmed run would carry a term for an "
+        "abort nobody armed (R80: the terms travel together)"
     )
 
     field = fields["draw_rate_abort"]
@@ -232,7 +248,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
             "the wrong config fact"
         )
 
-    spec = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7)
+    spec = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7, consec=2)
     complete = _complete_kwargs(spec)
     without = {key: value for key, value in complete.items() if key != "draw_rate_abort"}
     with pytest.raises(TypeError):
@@ -249,7 +265,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     )
 
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
-                                     drain_caps=_MINTED_DRAIN_CAPS)
+                                     drain_caps=_MINTED_DRAIN_CAPS, knobs=_MINTED_KNOBS)
     assert built.draw_rate_abort is spec and built.stop_step == 11, (
         "the builder must hand ON both config-authored values. A builder that takes them as "
         "required parameters and then ignores them satisfies every signature and field "
@@ -264,9 +280,11 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     # Measured at WPMINT Phase DR: field defaults on all three keys, and a `__post_init__` +
     # `object.__setattr__` normalisation, BOTH left the full tier green.
     spec_fields = {field.name: field for field in dataclasses.fields(DrawRateAbortSpec)}
-    assert set(spec_fields) == {"threshold", "min_step", "N_pool_min"}, (
-        "the resolved spec must carry R80's three keys and nothing else — a fourth field "
-        f"here is a term the schema block never authored; got {sorted(spec_fields)}"
+    assert set(spec_fields) == {"threshold", "min_step", "N_pool_min", "consec"}, (
+        "the resolved spec must carry the block's keys and nothing else — a further field "
+        "here is a term the schema block never authored. `consec` joined the set at WPMINT "
+        "Phase K-B (call K-b): R80 assigned it to CARD-COORD-KNOBS and this is that card, so "
+        f"it is authored INSIDE the block the other three live in; got {sorted(spec_fields)}"
     )
     for name, field in spec_fields.items():
         assert (field.default is dataclasses.MISSING
@@ -281,11 +299,13 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "restored AFTER construction with `dataclasses.fields()` still reporting MISSING. "
         "This is R83's Attack A on the sibling class (MF-2's lesson one seam over)"
     )
-    probe = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7)
-    assert dataclasses.asdict(probe) == {"threshold": 0.5, "min_step": 3, "N_pool_min": 7}, (
+    probe = DrawRateAbortSpec(threshold=0.5, min_step=3, N_pool_min=7, consec=2)
+    assert dataclasses.asdict(probe) == {"threshold": 0.5, "min_step": 3, "N_pool_min": 7,
+                                         "consec": 2}, (
         "the resolved terms must survive construction VERBATIM. The probe values are "
         "deliberately off-prereg (N_pool_min 7 is under DESIGN_DS's 50, min_step 3 is under "
-        "R82's 25000) so a normaliser that clamps toward the pre-registered numbers is "
+        "R82's 25000, consec 2 is under R92's 3) so a normaliser that clamps toward the "
+        "pre-registered numbers is "
         f"visible here rather than silently agreeing with run5; got {dataclasses.asdict(probe)}"
     )
 
@@ -345,10 +365,19 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "the flipped row must be in the audit's REQUIRED list — that list is what the "
         "evidence report publishes as `required_armed`"
     )
-    assert list(audit.deferred) == [], (
-        "after the flip the shipped manifest holds ZERO deferred rows. This is the fact that "
-        "forces the R81 hunk and re-bases the four `_DEFERRED_FIELDS` pins; a row kept "
-        "deferred so those assertions stayed true was REJECTED by R81"
+    # WPMINT Phase K-B (adjudication call K-c) RE-POINTS this arm. It used to assert ZERO
+    # deferred rows — true at Phase D, and the fact that forced the R81 hunk. K-B feeds the
+    # deferred mechanism the row R81's own text anticipated ("CARD-COORD-KNOBS will feed it
+    # rows", `preflight_mint._print_deferred_rows`): `grad_norm_hard_abort`, a live gate whose
+    # threshold nobody has pre-registered. What the arm actually protects is unchanged and is
+    # now stated positively — THIS row must not be among the deferred, because a draw-rate row
+    # quietly demoted back to DEFERRED would stop gating run5's mint while every other
+    # assertion here stayed green.
+    assert ROW_NAME not in [r.name for r in audit.deferred], (
+        "the draw-rate row must never appear in the DEFERRED list: a deferred row prints and "
+        "does not gate, so demoting this one un-does R65's whole flip silently. Other rows "
+        "MAY be deferred (grad-norm is, by call K-c, because its threshold is un-pre-registered "
+        f"— R84's class); got {[r.name for r in audit.deferred]}"
     )
 
     value = _walk(cfg, row.config_path)
@@ -389,16 +418,24 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
     flowing."** The comment-retention defeat is inherited and out of scope for the scan
     itself; the code-text arm below closes it for this one pin.
     """
+    # WPMINT Phase K-B: this arm used to assert the draw-rate row was the manifest's ONLY
+    # pinned row. K-B's `grad_norm_hard_abort` row carries a pin of its own (a DEFERRED row
+    # MUST — `__post_init__` requires it, because a deferred row that is not tamper-evident
+    # rots into the status quo), so "only" is no longer the fact. The fact that was ever
+    # load-bearing is that THIS row keeps ITS pin: that is what stops
+    # `test_the_source_pin_scan_runs_inside_the_live_audit_path` and
+    # `test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered` — both of which open
+    # with `assert pinned, "no pinned row means this test has no subject"` — going vacuous.
     pinned = [row for row in MANIFEST if row.source_pin is not None]
-    assert [row.name for row in pinned] == [ROW_NAME], (
-        "the flipped row must KEEP its pin and remain the manifest's only pinned row: "
-        "`__post_init__` (`armed_aborts.py:77-93`) constrains `owner` on a REQUIRED row and "
-        "leaves `source_pin` unconstrained — the class docstring at `:62` claiming otherwise "
-        "is FALSE and R73 obliges its correction in this same change (N-1). Dropping the pin "
+    assert ROW_NAME in [row.name for row in pinned], (
+        "the flipped row must KEEP its pin: "
+        "`__post_init__` (`armed_aborts.py`) constrains `owner` on a REQUIRED row and "
+        "leaves `source_pin` unconstrained — the class docstring claiming otherwise "
+        "was FALSE and R73 obliged its correction (N-1). Dropping the pin "
         "would silently empty `test_the_source_pin_scan_runs_inside_the_live_audit_path` and "
         f"`test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered`; got {pinned!r}"
     )
-    row = pinned[0]
+    row = [candidate for candidate in pinned if candidate.name == ROW_NAME][0]
     rel, text = row.source_pin
     assert rel == "src/mantis/run.py", (
         "R79(3): the pin binds to the RESOLVED RUNTIME VALUE AT THE CONSTRUCTION SITE. "
@@ -422,11 +459,17 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
         "rotted at oracle-write time is a manifest bug, not a Phase D signal"
     )
 
+    # The two tamper drives run against a manifest holding ONLY this row, so they still
+    # report an exact list (WPMINT K-B): with the whole MANIFEST the grad-norm row's own pin
+    # would also break in a tree that holds one file, and "exactly this row" — the property
+    # under test — would be unassertable. The scan is fed data, so restricting the data is
+    # the same instrument, not a weaker one.
+    only_this_row = (row,)
     tampered = tmp_path / "tampered"
     (tampered / rel).parent.mkdir(parents=True)
     (tampered / rel).write_text(pinned_file.read_text().replace(text, "# threading deleted\n"))
     assert [broken.name for broken in TOOL.verify_source_pins(
-        MANIFEST, repo_root=tampered)] == [row.name], (
+        only_this_row, repo_root=tampered)] == [row.name], (
         f"deleting the threading from {rel} must report exactly {row.name!r} broken — this "
         "is the tamper-evidence the flip would otherwise have lost"
     )
@@ -434,7 +477,7 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
     absent = tmp_path / "absent"
     absent.mkdir()
     assert [broken.name for broken in TOOL.verify_source_pins(
-        MANIFEST, repo_root=absent)] == [row.name], (
+        only_this_row, repo_root=absent)] == [row.name], (
         "a pinned file that does not exist must be reported broken, never skipped — "
         "'nothing to scan' is how a tamper-evidence gate goes silently vacuous (R56's "
         "asymmetry, `silent_encoding_gate.py:338-344`)"

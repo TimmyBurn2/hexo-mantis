@@ -1,3 +1,11 @@
+# >300 justify (R8), stated at this file's MEASURED size of 310 lines. It crossed the cap at
+# WPMINT Phase K-B, which DELETED six fields and added no code — the growth is entirely the
+# `StepCoordinatorConfig` docstring recording WHY six fields are gone, why no field may carry a
+# default, and where `draw_rate_consec` moved to. This module is the DAG-clean seam layer: the
+# injected-collaborator Protocols, the config dataclass they are typed against, and the outcome
+# record. Splitting it would put a Protocol and the dataclass that consumes it on opposite sides
+# of an import for no gain, and `pooled_draw_rate` sits here because `DrawRateAbortLike` is the
+# shape it is bounded by. Roughly two thirds of the file is that rationale.
 """Step-coordinator collaborator Protocols + config + outcome (WP10 §a.4 split — `config` slice).
 
 The 13-class god-module `training/step_coordinator.py` splits by responsibility (collaborator
@@ -56,6 +64,7 @@ class DrawRateAbortLike(Protocol):
     threshold: float
     min_step: int
     N_pool_min: int
+    consec: int
 
 
 @runtime_checkable
@@ -201,14 +210,33 @@ def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | Non
 
 @dataclass(frozen=True)
 class StepCoordinatorConfig:
-    """Per-step coordinator knobs. `bot_corpus_refresh_*` (the KILLED bot_refresh subprocess
-    family) is DROPPED; `bot_batch_share`/`bot_corpus_path` are batch-mixing knobs, kept."""
+    """Per-step coordinator knobs. EVERY field is CONFIG-AUTHORED and NONE carries a default
+    (WPMINT Phase K-B, `CARD-COORD-KNOBS` / R78 as clarified by R80).
+
+    `bot_corpus_refresh_*` (the KILLED bot_refresh subprocess family) was DROPPED at WP10.
+    Phase K-B deletes six more — `composition_interval`, `value_probe_interval`,
+    `soft_ew_threshold`, `soft_ew_min_pts`, `instrumentation_enabled`, `bot_corpus_path` —
+    which had NO reader anywhere in `src/` (re-verified at HEAD by grep AND by recording every
+    attribute read on a live instance across the whole test tier). They are deleted rather
+    than authored because a config key with no live consumer is an R1/LAW-08 violation, so
+    typing them into the schema would have created the defect the card exists to close
+    (adjudication call K-a). `bot_batch_share` survives and is authored — it is read, at
+    `step.py::_run_training_step` — even though its sibling path knob is gone; that asymmetry
+    is disclosed on `train.bot_batch_share` itself.
+
+    `draw_rate_consec` is gone too, in the other direction: it MOVED, into
+    `train.draw_rate_abort.consec` and thence onto `DrawRateAbortLike.consec`, because a term
+    of a DISARMED abort is not a fact (R80's "the terms travel together").
+
+    NO FIELD HAS A DEFAULT, and that is the invariant, not a coincidence: with the schema
+    authoritative a default here is a second authority a caller silently inherits, which is
+    exactly what `draw_rate_threshold: float = 0.0` was and what the drain caps' four
+    `DEFAULT_*` constants were. Construction fails rather than assuming anything.
+    """
 
     eval_interval: int
     log_interval: int
     checkpoint_interval: int
-    composition_interval: int
-    value_probe_interval: int
     min_buf_size: int
     capacity: int
     buffer_schedule: tuple[dict[str, Any], ...]
@@ -220,11 +248,8 @@ class StepCoordinatorConfig:
     mixing_initial_w: float
     mixing_min_w: float
     mixing_decay_steps: float
-    soft_ew_threshold: float
-    soft_ew_min_pts: int
     hard_gn_threshold: float
     hard_gn_min_steps: int
-    instrumentation_enabled: bool
     stop_step: int | None
     # WPAX Phase D (R65 + R80): NO default, and it sits HERE — beside `stop_step` — because
     # these are now precisely the two facts the CONFIG authors on this dataclass. `None` is
@@ -244,30 +269,20 @@ class StepCoordinatorConfig:
     eval_final_drain_safety_factor: float
     eval_final_drain_hard_cap_sec: float
     terminal_eval_hard_cap_sec: float
-    terminal_eval_enabled: bool = True
-    # §D-GOLONG sustained draw-rate hard-abort. `threshold` and `min_step` moved to the
-    # config (`train.draw_rate_abort`, above) at WPAX Phase D — R80 names exactly three
-    # keys and `consec` is not one of them, so it stays a code-side default owned by
-    # CARD-COORD-KNOBS (R78). WPMINT Phase DS re-read that boundary rather than assuming
-    # it: R92's prereg row NAMES `consec=3` among the values that "stand", which
-    # pre-registers a constant without making it a config key, and R80's assignment of it
-    # to CARD-COORD-KNOBS is untouched. It stays here, and Phase K still owns it.
-    # Safe rather than merely bounded: with `N_pool_min` closing the one-drawn-game route
-    # (schema/train.py `_one_drawn_game_cannot_fire_the_abort`) and `min_step` closing the
-    # early-run route, `consec` is not load-bearing for the ADJ-14 hazard.
-    # DISCLOSED (WPMINT DS-VERIFY, correcting the WITHDRAWN DR-8): `consec` counts
-    # consecutive CHECKS at a stride of `log_interval` train steps, so at the shipped
-    # log_interval=1000 three samples SPAN 2000 steps — `consec` is a sustained-ness bar in
-    # steps, not in checks. It does NOT delay the first fire: sampling is not gated by
-    # `min_step`, so the history accumulates from step 1000 and already holds 25 samples at
-    # step 25000. run5's earliest possible fire is step 25000. DR-8 claimed 27000; that was
-    # measured false and withdrawn before it reached any ruling.
-    draw_rate_consec: int = 3
-    # §178 bot-corpus batch slot (mixing knobs — NOT the killed refresh hook).
-    bot_batch_share: float = 0.0
-    bot_corpus_path: str = ""
-    # Self-play stall watchdog (2026-07-11 run2 eval-boundary wedge; <= 0 disables).
-    selfplay_stall_timeout_sec: float = 1800.0
+    # WPMINT Phase K-B: the last three terminal defaults on this dataclass are GONE. Each was
+    # a second authority that would have survived the schema key beside it —
+    # `terminal_eval_enabled`'s was the LAST of three (Phase K-A retired the
+    # `getattr(cfg, "terminal_eval_enabled", True)` shadow in `drain.py`), and
+    # `selfplay_stall_timeout_sec = 1800.0` sat beside a watchdog LAW-16 calls always-armed
+    # while `watchdog.py`'s own contract lets `<= 0` disable the fire AND still emit the
+    # arm-log. `train.selfplay_stall_timeout_sec`'s `gt=0` is what makes that posture
+    # unwritable; the watchdog keeps its arm for direct constructions.
+    terminal_eval_enabled: bool
+    # §178 bot-corpus batch slot (a mixing knob — NOT the killed refresh hook). Its sibling
+    # `bot_corpus_path` was one of the six DEAD fields deleted by this phase.
+    bot_batch_share: float
+    # Self-play stall watchdog (2026-07-11 run2 eval-boundary wedge).
+    selfplay_stall_timeout_sec: float
 
 
 @dataclass(frozen=True)

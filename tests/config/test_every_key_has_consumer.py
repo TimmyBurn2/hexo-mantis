@@ -1,4 +1,4 @@
-""">300 justify (R8): this file is ~85% DATA — the 150-entry `CONSUMER_REGISTRY` is the
+""">300 justify (R8): this file is ~85% DATA — the 170-entry `CONSUMER_REGISTRY` is the
 LAW-08 authority itself, one line per schema leaf, and splitting it would create a second
 registry copy to keep in sync (there is already exactly one deliberate duplicate,
 `test_every_key_has_consumer_p2.py`). The four tests below are ~60 lines together.
@@ -112,6 +112,138 @@ CONSUMER_REGISTRY = {
     "train.draw_rate_abort.N_pool_min":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> pooled_draw_rate(N_pool_min=) [R92]",
+    "train.draw_rate_abort.consec":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 19 step-coordinator knobs. Every
+    # citation below names the path from the ONE resolver to the line that READS the value,
+    # and every one was verified BY MUTATION per R93 (set the knob, drive the production
+    # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
+    # never by grep, because DR-11 proved a grep cannot tell a reader from a `pop`.
+    "train.eval_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
+        " round boundary (+ promotion_capable_rounds)",
+    "train.log_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_log_interval"
+        " boundary (payload events + WARN rules + both hard-abort gates + monitor_gates)",
+    "train.buffer_save_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.checkpoint_interval -> step.py D4 _try_save_buffer cadence",
+    "train.min_buf_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O4 warmup floor",
+    "train.replay_capacity":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
+        " payload) and preflight_mint.py _build_buffer sizing",
+    "train.replay_capacity_schedule":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
+    "train.training_steps_per_game":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
+        " _steps_budget(new_games, this, max_train_burst)",
+    "train.max_train_burst":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6 _steps_budget"
+        " ceiling",
+    "train.batch_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step batch size (replaced the train_cfg/full_config dict lookup whose"
+        " literal 256 was the real production value, WPMINT K-A)",
+    "train.augment":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> trainer.train_step(augment=) / assemble_mixed_batch(augment=)",
+    "train.recency_weight":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> assemble_mixed_batch recency window weighting",
+    "train.mixing_initial_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(initial_w=) (mixed batch + axis payload)",
+    "train.mixing_min_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(min_w=)",
+    "train.mixing_decay_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(decay_steps=)",
+    "train.hard_gn_threshold":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
+    "train.hard_gn_min_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort consecutive-step count",
+    "train.terminal_eval_enabled":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
+        " run_terminal_eval close-out gate",
+    "train.bot_batch_share":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step n_bot batch slots",
+    "train.selfplay_stall_timeout_sec":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
+    "train.draw_rate_abort.consec":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 19 step-coordinator knobs. Every
+    # citation below names the path from the ONE resolver to the line that READS the value,
+    # and every one was verified BY MUTATION per R93 (set the knob, drive the production
+    # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
+    # never by grep, because DR-11 proved a grep cannot tell a reader from a `pop`.
+    "train.eval_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
+        " round boundary (+ promotion_capable_rounds)",
+    "train.log_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_log_interval"
+        " boundary (payload events + WARN rules + both hard-abort gates + monitor_gates)",
+    "train.buffer_save_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.checkpoint_interval -> step.py D4 _try_save_buffer cadence",
+    "train.min_buf_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O4 warmup floor",
+    "train.replay_capacity":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
+        " payload) and preflight_mint.py _build_buffer sizing",
+    "train.replay_capacity_schedule":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
+    "train.training_steps_per_game":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
+        " _steps_budget(new_games, this, max_train_burst)",
+    "train.max_train_burst":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6 _steps_budget"
+        " ceiling",
+    "train.batch_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step batch size (replaced the train_cfg/full_config dict lookup whose"
+        " literal 256 was the real production value, WPMINT K-A)",
+    "train.augment":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> trainer.train_step(augment=) / assemble_mixed_batch(augment=)",
+    "train.recency_weight":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> assemble_mixed_batch recency window weighting",
+    "train.mixing_initial_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(initial_w=) (mixed batch + axis payload)",
+    "train.mixing_min_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(min_w=)",
+    "train.mixing_decay_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(decay_steps=)",
+    "train.hard_gn_threshold":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
+    "train.hard_gn_min_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort consecutive-step count",
+    "train.terminal_eval_enabled":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
+        " run_terminal_eval close-out gate",
+    "train.bot_batch_share":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step n_bot batch slots",
+    "train.selfplay_stall_timeout_sec":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
     "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
@@ -280,7 +412,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_150_entries():
+def test_registry_has_exactly_170_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
@@ -302,8 +434,16 @@ def test_registry_has_exactly_150_entries():
     # WPMINT Phase DS (R92) SWAPS one of those three (`min_samples` -> `N_pool_min`) and the
     # count is unchanged at 150 — recorded because a swap that silently dropped or doubled a
     # key would move this number, and the bijection above would then be the only witness.
-    assert len(CONSUMER_REGISTRY) == 150
-    assert len(_leaf_paths(RunConfig)) == 150
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80) adds 20: the 19 flat `train.*`
+    # step-coordinator knobs plus `train.draw_rate_abort.consec`, the fourth abort term R80
+    # left with this card. 150 + 20 = 170. SIX further coordinator fields were DELETED rather
+    # than authored (adjudication call K-a) precisely so this count would not rise by 26 with
+    # six of them naming nothing — a registry entry for a dead field is the LAW-08 violation
+    # this test exists to catch, written down by hand. `train.replay_capacity_schedule` is a
+    # `list[ReplayCapacityStage]` and stays ONE leaf under NIT-3, exactly like
+    # `eval.ladder.rungs`, so its two inner names are covered by the schedule's own entry.
+    assert len(CONSUMER_REGISTRY) == 170
+    assert len(_leaf_paths(RunConfig)) == 170
 
 
 def test_no_forward_reference_strings_in_registry():

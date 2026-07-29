@@ -1,4 +1,4 @@
-# R8 >300 justify (399, re-measured at WPMINT Phase X; was 343 at DS-VERIFY and 324 at WPAX
+# R8 >300 justify (524, re-measured at WPMINT Phase K-B; was 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
 # Phase D, and the
 # figure is restated at the file's MEASURED size rather than the size it was written for —
 # `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
@@ -10,7 +10,10 @@
 # opposite sides of an import, which is the drift this module exists to prevent. Phase X adds
 # `exit_code_for_abort` (+52 lines, 8 of them code) for the same reason: "which code does a
 # fired abort exit with" is answered BY the rows, and a resolver living anywhere else becomes
-# a second authority for that answer the first time a row's `exit_code` moves.
+# a second authority for that answer the first time a row's `exit_code` moves. Phase K-B adds
+# a third row (+43 lines, 8 of them fields) and the `ceiling_path` mechanism it needs: the row
+# is where "why is grad-norm deferred, and what closes it" is written, and gate 12 prints that
+# text on every run.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -35,6 +38,7 @@ pair as "draw-rate + actor-lag". A later reader must not "fix" it in.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -47,6 +51,20 @@ from typing import Any
 # written. `mantis.monitor.heartbeat` imports nothing from `mantis` (stdlib only), so this is
 # a leaf edge in the same direction `config/resolve/monitor.py` already takes (gate 9).
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
+
+
+def _is_real_number(value: Any) -> bool:
+    """True for a finite `int`/`float` that is not a `bool` (WPMINT Phase K-B).
+
+    Extracted from `Mechanism.is_armed`'s own guard so the ceiling and the value are judged
+    by ONE rule. `bool` is excluded because `isinstance(True, int)` is True and `True`
+    arriving on a threshold path is a type confusion, not a threshold. Non-finite is excluded
+    because `inf` compares greater than every ceiling and `nan` compares False against all of
+    them — both would decide an arming question by accident.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(float(value))
 
 
 class Status(str, Enum):
@@ -66,14 +84,48 @@ class Mechanism(str, Enum):
 
     CONFIG_BOOL = "config_bool"
     CONFIG_THRESHOLD_GT_ZERO = "config_threshold_gt_zero"
+    #: WPMINT Phase K-B (adjudication call K-c). An UPPER-bounded threshold: armed iff the
+    #: value is a real, finite, positive number that is ALSO no greater than a ceiling read
+    #: off a second config path (`ArmedAbort.ceiling_path`).
+    #:
+    #: Why a second member rather than a tighter `CONFIG_THRESHOLD_GT_ZERO`: `> 0` is the
+    #: correct and complete predicate for `train.draw_rate_abort.threshold`, whose schema
+    #: already closes the high end at `le=1`. It is the WRONG predicate for
+    #: `train.hard_gn_threshold`, whose range is genuinely unbounded above and whose shipped
+    #: `1e9` is finite, positive and unreachable by any real gradient norm — `> 0` reads that
+    #: as ARMED, which is the "armed in the config, absent in effect" defect this manifest
+    #: exists to make visible.
+    #:
+    #: Why the ceiling is DATA on the row and not a number here: a literal ceiling in this
+    #: enum would be a policy value nobody pre-registered, which is the class R84 refused when
+    #: it ratified `exit_code=None` rather than fabricating a `46`. The row names a config
+    #: path instead, so the ceiling is a value the operator already minted for the same
+    #: quantity, it moves when the config moves, and `is_armed` stays a pure predicate.
+    CONFIG_THRESHOLD_BELOW_CEILING = "config_threshold_below_ceiling"
 
-    def is_armed(self, value: Any) -> bool:
+    def is_armed(self, value: Any, *, ceiling: Any = None) -> bool:
         """True iff `value` arms the abort. A real predicate in BOTH directions — a
-        constant here would silently arm or disarm every row at once."""
+        constant here would silently arm or disarm every row at once.
+
+        `ceiling` is consumed ONLY by `CONFIG_THRESHOLD_BELOW_CEILING` and is resolved by
+        `audit_arming` from the row's own `ceiling_path`; the other two mechanisms ignore it,
+        which is why it is keyword-only with a `None` that means "no ceiling was named". A
+        `CONFIG_THRESHOLD_BELOW_CEILING` row with no usable ceiling reports DISARMED rather
+        than ARMED: an unjudgeable row must fail toward visibility, never toward silence.
+
+        `CONFIG_THRESHOLD_GT_ZERO`'s arms are BYTE-UNCHANGED, deliberately: this phase authors
+        knobs and changes no verdict. `_is_real_number`'s finiteness test is applied only on
+        the new branch, so `is_armed(inf)` still answers True for the `> 0` mechanism (a value
+        `train.draw_rate_abort.threshold`'s `le=1` cannot produce anyway).
+        """
         if self is Mechanism.CONFIG_BOOL:
             return value is True
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return False
+        if self is Mechanism.CONFIG_THRESHOLD_BELOW_CEILING:
+            if not _is_real_number(value) or not _is_real_number(ceiling):
+                return False
+            return 0.0 < float(value) <= float(ceiling)
         return float(value) > 0.0
 
 
@@ -103,6 +155,15 @@ class ArmedAbort:
     owner: str | None
     source_pin: tuple[str, str] | None
     note: str
+    #: WPMINT Phase K-B: the SECOND config path a `CONFIG_THRESHOLD_BELOW_CEILING` row needs
+    #: — where its upper bound is minted. It is the one field here that carries a default,
+    #: and the default is safe for the reason the other three rules are enforced rather than
+    #: documented: `__post_init__` REQUIRES it on the mechanism that consumes it and FORBIDS
+    #: it on the two that do not, in both directions, so `None` can neither arm a row nor
+    #: excuse one. A no-default field would instead have forced nine frozen-oracle
+    #: construction sites to type `ceiling_path=None`, which buys nothing the predicate below
+    #: does not already guarantee.
+    ceiling_path: str | None = None
 
     def __post_init__(self) -> None:
         if self.status is Status.DEFERRED and not self.owner:
@@ -120,6 +181,20 @@ class ArmedAbort:
                 f"armed-abort row {self.name!r} is REQUIRED and carries an `owner`: an "
                 "owner on a required row reads as already-excused; drop the owner or "
                 "declare the row DEFERRED"
+            )
+        needs_ceiling = self.mechanism is Mechanism.CONFIG_THRESHOLD_BELOW_CEILING
+        if needs_ceiling and not self.ceiling_path:
+            raise ValueError(
+                f"armed-abort row {self.name!r} uses {self.mechanism.value} and names no "
+                "`ceiling_path`: that predicate is DISARMED without a ceiling, so the row "
+                "would read disarmed forever for a reason nobody could see in the row"
+            )
+        if not needs_ceiling and self.ceiling_path:
+            raise ValueError(
+                f"armed-abort row {self.name!r} names a `ceiling_path` "
+                f"({self.ceiling_path!r}) but its mechanism {self.mechanism.value} ignores "
+                "it: a config path the predicate never reads is a claim the audit does not "
+                "make (LAW-07's phantom-input class)"
             )
 
 
@@ -187,6 +262,51 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "_fire_hard_abort sets to the rule NAME beside the stop; a process boundary maps "
             "it here through exit_code_for_abort. The two clean stops (O2 iteration limit, O3 "
             "shutdown-save) leave the field None."
+        ),
+    ),
+    ArmedAbort(
+        name="grad_norm_hard_abort",
+        config_path="train.hard_gn_threshold",
+        ceiling_path="monitor.alert_grad_norm_max",
+        mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
+        status=Status.DEFERRED,
+        exit_code=None,
+        owner="CARD-COORD-KNOBS follow-up — the operator, at run5 mint prereg",
+        source_pin=(
+            "src/mantis/train/coordinator/step.py",
+            "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:",
+        ),
+        note=(
+            "The optimizer-instability hard abort (`grad_norm_hard_abort`, coordinator/step.py "
+            "D3): fire when grad_norm exceeds train.hard_gn_threshold for "
+            "train.hard_gn_min_steps consecutive training steps. It has a real gate, a real "
+            "`_gate_stats` counter and a real `_fire_hard_abort` path, and it had NO manifest "
+            "row at all until WPMINT Phase K-B — while its threshold sat at the unauthored "
+            "code-side literal 1e9, which no finite gradient norm reaches. So the run shipped a "
+            "hard abort that could not fire and nothing said so. "
+            "WHY DEFERRED AND NOT REQUIRED (adjudication call K-c): flipping it REQUIRED would "
+            "gate run5's mint on a grad-norm threshold nobody has pre-registered, and the tool "
+            "would then be demanding a number this repo would have to invent — the class R84 "
+            "refused when it ratified exit_code=None rather than fabricating a 46. A DEFERRED "
+            "row prints loudly on every gate-12 run and gates nothing, which is exactly the "
+            "posture for a live gate whose value is owed. "
+            "WHY THE MECHANISM IS NEW: CONFIG_THRESHOLD_GT_ZERO would read 1e9 as ARMED, which "
+            "is 'armed in the config, absent in effect' — the defect the manifest exists to "
+            "surface. CONFIG_THRESHOLD_BELOW_CEILING reads the ceiling off `ceiling_path`, "
+            "monitor.alert_grad_norm_max: the value the operator ALREADY minted as 'this grad "
+            "norm is worth warning about' (10.0 on every committed config). A hard abort set "
+            "orders of magnitude above the line the run already WARNS at is not a hard abort. "
+            "That ceiling is derived from the config, never from this file, so no number is "
+            "invented here either. "
+            "TO CLOSE THIS ROW: pre-register a threshold at mint prereg, mint it into "
+            "train.hard_gn_threshold, and flip status to REQUIRED — a one-field data edit, the "
+            "same shape Phase D's flip took. Until then run5 mints with this abort disarmed, "
+            "knowingly and in writing. exit_code is None, truthfully: `_fire_hard_abort` stops "
+            "the run cooperatively and R84 authored a code for the draw-rate family only; "
+            "inventing one here would be that same refused class one layer down "
+            "(`exit_code_for_abort`'s docstring says so by name). The pin binds to the gate's "
+            "own comparison, so deleting the gate, renaming the field or inverting the test all "
+            "break the R56 scan."
         ),
     ),
 )
@@ -346,7 +466,15 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
     deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
     disarmed = tuple(
         row for row in required
-        if not row.mechanism.is_armed(_dotted(config, row.config_path, row=row.name))
+        if not row.mechanism.is_armed(
+            _dotted(config, row.config_path, row=row.name),
+            # WPMINT Phase K-B: resolved through the SAME walker as the value, so a typo in a
+            # `ceiling_path` raises `ArmingSurfaceMissingError` naming the row exactly as a
+            # typo in a `config_path` does. Still no branch on a row's identity — `mechanism`
+            # selects the predicate and the row supplies both operands.
+            ceiling=(None if row.ceiling_path is None
+                     else _dotted(config, row.ceiling_path, row=row.name)),
+        )
     )
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
 

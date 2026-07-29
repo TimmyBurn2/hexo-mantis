@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1677 lines total, 196 in the child closure, 970 in
-# parent-only function bodies. RE-MEASURED at WPMINT Phase K-A, whose whole delta here is +2
-# lines INSIDE `_boot_main` (the `resolve_drain_caps` import and the argument it feeds the
-# coordinator builder, R93) — so the child closure grew by exactly 2 and the parent side did
-# not move. Phase B's figures were 1672/194/970; Phase X's (1452/195/846,
+# this file's own top-level functions — 1767 lines total, 198 in the child closure, 1049 in
+# parent-only function bodies. RE-MEASURED at WPMINT Phase K-B, whose child-side delta is +2
+# lines INSIDE `_boot_main` (the `resolve_coordinator_knobs` import and the argument it feeds
+# the coordinator builder, R78/R80) — the same shape and the same size as Phase K-A's, which
+# was +2 for `resolve_drain_caps` against 1677/196/970. The other +79 lands ENTIRELY on the
+# parent side: `_coordinator_block` (R78's first design question — the resolved coordinator
+# config, published in the evidence artifact), `_run_audit`'s `_publish` hoist, and the R73
+# re-prose of `_print_deferred_rows`' arming-surface line. Same deliberate property Phase B
+# recorded: an EVIDENCE fact belongs to the report, the report is parent-only, and nothing
+# about it belongs in the process whose whole job is to boot. Phase B's figures were 1672/194/970; Phase X's (1452/195/846,
 # the same eight child functions) were true when written and are restated here rather than
 # left to go stale, per SF-7: a justification which is not true is worse than none. Phase X in
 # turn corrected a header that HAD gone false — it claimed "the same six functions" against a
@@ -18,9 +23,9 @@
 # two — and that is a deliberate property of this card, not an accident: the tier is a REPORT
 # fact and the report is parent-only, so nothing about it belongs in the process whose whole
 # job is to boot.
-# Two reasons, because the first covers only 194 of the 1672 and saying so is the point:
+# Two reasons, because the first covers only 198 of the 1767 and saying so is the point:
 #
-#  (1) CHILD SIDE (194 lines: _boot_main, _abort_rc, _build_buffer, _load,
+#  (1) CHILD SIDE (198 lines: _boot_main, _abort_rc, _build_buffer, _load,
 #      _apply_burst_override, _minimum_legal_burst, _burst_floors, _resolve_config_path).
 #      `_abort_rc` belongs on this side by the same rule as the rest: it runs IN the child,
 #      after `compose_run` returns, and it is what turns the run's own `abort_rule` into the
@@ -31,8 +36,9 @@
 #      moved, renamed or unshipped sibling) in the one code path whose whole job is to
 #      survive a child that dies without unwinding.
 #
-#  (2) PARENT SIDE (970 lines: the two predicate evaluators, the classifier, the exit
-#      taxonomy, the audit path, the report writer, the tier block). Reason (1) does NOT reach
+#  (2) PARENT SIDE (1049 lines: the two predicate evaluators, the classifier, the exit
+#      taxonomy, the audit path, the report writer, the tier block, the coordinator
+#      block). Reason (1) does NOT reach
 #      these — they
 #      could move to a sibling module with zero effect on the self-exec, and REVIEW-impl
 #      measured exactly that (SF-I1: 462 parent-only lines before this pass added to them).
@@ -149,6 +155,7 @@ is not estimated here.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
@@ -839,6 +846,60 @@ def _config_block(path: Path, config: RunConfig) -> dict:
             "representation": config.identity.representation}
 
 
+def _coordinator_block(config: RunConfig) -> dict:
+    """The RESOLVED step-coordinator config, for the evidence artifact (WPMINT Phase K-B).
+
+    R78'S FIRST DESIGN QUESTION, ANSWERED YES. R78 made the preflight's JSON dump of the
+    resolved coordinator config "where CARD-COORD-KNOBS starts — i.e. make the unauthored
+    values visible in the mint record before deciding which become config". Phase K's census
+    measured the answer at HEAD as NO: the report's key set was
+    schema/tool_sha256/ts_utc/mode/verdict/rc/failure/config/override/manifest/assertions/
+    child/events/tier, the tool built a coordinator config and read exactly `.capacity` from
+    it, and the ~30 knobs that decide a run's shape were invisible in the artifact a mint
+    sign-off reads.
+
+    Two things changed with K-B, and together they turn the rider into a real instrument:
+
+    * the values are AUTHORED now, so this block is no longer "here are some code constants".
+      It is the second half of a COMPARISON — `config.sha256` says what the operator wrote,
+      this says what the composition root actually produced from it. O-D1's named RED is
+      exactly that gap ("the config says 0.25 while the runtime uses something else, so the
+      audit reads the config, goes green, and the run is disarmed"), and until now nothing in
+      the evidence artifact could witness it for anything but the two armed-abort rows;
+    * it is DERIVED, never restated. Every value comes from the SHIPPED resolvers via
+      `dataclasses.asdict`, and the key set comes from the dataclasses themselves — no
+      literal key list, no hand-typed number. `_not_run_reason`'s doctrine names the opposite
+      as the defect class: "a shipped constant asserting something the run measured
+      otherwise, in the evidence artifact a mint sign-off reads". A hand-written census here
+      would be that, one block over.
+
+    THE DISARMED ARM IS A NAMED `None`, not an omission: `train.draw_rate_abort: null` is a
+    real posture four of the five committed configs carry, and `draw_rate_abort: null` in the
+    report is that posture stated. An absent KEY would be indistinguishable from a block this
+    function forgot to fill.
+
+    WHAT IT DOES NOT PROVE, stated because the tier block's own discipline demands it: this
+    is the value the RESOLVERS produce from the config, taken in the PARENT. It is not a
+    read-back from the booted child, so it witnesses the config -> resolver -> builder seam
+    and NOT a child that was handed something else. That would need the child to publish its
+    own coordinator config as an event, which is a bigger contract than this card owns.
+    """
+    from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+    from mantis.config.resolve.drain import resolve_drain_caps
+    from mantis.config.resolve.draw_rate import resolve_draw_rate_abort
+    from mantis.config.resolve.run_length import resolve_max_train_steps
+
+    abort = resolve_draw_rate_abort(config.train)
+    return {
+        "source": "resolved in the preflight PARENT from the config's own resolvers; see"
+                  " _coordinator_block for what this does and does not witness",
+        "knobs": dataclasses.asdict(resolve_coordinator_knobs(config.train)),
+        "drain_caps": dataclasses.asdict(resolve_drain_caps(config.monitor)),
+        "stop_step": int(resolve_max_train_steps(config.train)),
+        "draw_rate_abort": None if abort is None else dataclasses.asdict(abort),
+    }
+
+
 # ── assertion (c) + the manifest (§8) ─────────────────────────────────────────────────
 def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> None:
     """R56's loud print, on EVERY run including a green one: registered debt that stops
@@ -857,7 +918,15 @@ def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> No
           "closed:")
     for row in deferred:
         print(f"  {row.name}  owner={row.owner}")
-        print(f"    arming surface DOES NOT EXIST yet: {row.config_path}")
+        # R73 name-truth (WPMINT Phase K-B): this line read "arming surface DOES NOT EXIST
+        # yet", which was true of the only deferred row that had ever existed and is FALSE of
+        # the first one to actually reach it — `grad_norm_hard_abort` names
+        # `train.hard_gn_threshold`, a key this same phase authored, and the row is deferred
+        # because nobody has PRE-REGISTERED a value, not because the surface is missing. The
+        # print says which of the two it is instead of asserting one.
+        print(f"    arming surface: {row.config_path} "
+              f"({'present' if row.ceiling_path is None else 'present, ceiling '
+                 + row.ceiling_path}) — NOT audited, so a mint does not gate on it")
         if row.source_pin is not None:
             rel, text = row.source_pin
             print(f"    pinned to {rel}: {text!r}")
@@ -1115,7 +1184,7 @@ def _new_report(mode: str) -> dict:
         "tool_sha256": _sha256(Path(os.path.abspath(__file__))),
         "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "mode": mode, "verdict": "pass", "rc": 0, "failure": None,
-        "config": None, "override": None, "manifest": None,
+        "config": None, "coordinator": None, "override": None, "manifest": None,
         "assertions": {
             "a_sync": {"verdict": "not_run", "reason": not_run_reason},
             "b_lag": {"verdict": "not_run", "reason": not_run_reason},
@@ -1284,6 +1353,7 @@ def _boot_main(args) -> int:
     """
     import torch
 
+    from mantis.config.resolve.coordinator import resolve_coordinator_knobs
     from mantis.config.resolve.drain import resolve_drain_caps
     from mantis.config.resolve.draw_rate import resolve_draw_rate_abort
     from mantis.config.resolve.run_length import resolve_max_train_steps
@@ -1325,6 +1395,7 @@ def _boot_main(args) -> int:
         stop_step=resolve_max_train_steps(booted.train),
         draw_rate_abort=resolve_draw_rate_abort(booted.train),
         drain_caps=resolve_drain_caps(booted.monitor),
+        knobs=resolve_coordinator_knobs(booted.train),
     ).capacity))
     pool = WorkerPool(model=trainer.model, config=booted.model_dump(),
                       device=torch.device(args.device), replay_buffer=buffer,
@@ -1573,6 +1644,7 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     path = _resolve_config_path(args.config)
     config = _load(path)
     report["config"] = _config_block(path, config)
+    report["coordinator"] = _coordinator_block(config)
     report["manifest"] = _audit_manifest_and_configs(_audit_paths(path))
     report["assertions"]["c_arming"] = {"verdict": "pass", "disarmed": [],
                                         "required_armed": report["manifest"]["required"]}
@@ -1614,12 +1686,30 @@ def _run_audit(args, report: dict) -> None:
     print(AUDIT_STDOUT_LINE)
     named = _resolve_config_path(args.config) if args.config else None
     paths = _audit_paths(named)
+
+    def _publish(subject: Path) -> None:
+        """The subject's own blocks: WHICH config this report is about, and what the
+        composition root resolves from it.
+
+        WPMINT Phase K-B (R78's first design question) adds the coordinator block and
+        publishes both in AUDIT mode — the per-commit gate is the report a reader sees most,
+        and the block costs no boot. It is hoisted into a closure so a NAMED subject can be
+        published BEFORE the manifest audit: a red audit used to write a report whose
+        `config` was still `null`, so the artifact could not say which config failed.
+        """
+        subject_config = _load(subject)
+        report["config"] = _config_block(subject, subject_config)
+        report["coordinator"] = _coordinator_block(subject_config)
+
+    if named is not None:
+        _publish(named)
     # SF-I9: the manifest audit runs BEFORE anything indexes `paths`. It carries the vacuity
     # guard, so an empty PRODUCTION_CONFIGS is rc 31 by name rather than an `IndexError`
-    # collapsing through the generic handler into an unnamed rc 1.
+    # collapsing through the generic handler into an unnamed rc 1. The hoist above touches
+    # `named` only, which is never an index, so that guard is untouched.
     report["manifest"] = _audit_manifest_and_configs(paths)
-    subject = named if named is not None else paths[0]
-    report["config"] = _config_block(subject, _load(subject))
+    if named is None:
+        _publish(paths[0])
     report["assertions"]["c_arming"] = {"verdict": "pass", "disarmed": [],
                                         "required_armed": report["manifest"]["required"]}
 

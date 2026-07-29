@@ -1,3 +1,14 @@
+# >300 justify (R8), stated at this file's MEASURED size of 335 lines. It crossed the cap at
+# WPMINT Phase K-B, and the whole delta is `_step_coordinator_config`'s: with the 19 coordinator
+# knobs authored, its body became a 26-field assembly from four resolved specs and its docstring
+# had to record what the literals it replaced were doing. That assembly cannot move: this module
+# is the ONE composition root (§a.4/§c.6), it is the only module importing both `mantis.train`
+# and `mantis.eval` at top level, and splitting the builder out would either put a `mantis.run
+# -> sibling` import in the one place the DAG forbids new edges or create a second place a
+# `StepCoordinatorConfig` can be built — which is exactly the authority migration
+# `tests/config/test_drawrate_arming_authority.py` and `test_coordinator_knobs_wiring.py` exist
+# to forbid. The executable content is ~90 lines; the rest is the per-decision rationale (R64,
+# MF-1/MF-2, S-4/Phase D/K-A/K-B) that made those authority defects findable.
 """mantis.run — the run composition root (design §a.4/§c.6; MUST-FIX 4: RELOCATE).
 
 TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that
@@ -23,6 +34,7 @@ from typing import Any, Callable, NamedTuple, Sequence
 
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
+from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.monitor import resolve_monitor_config
@@ -86,9 +98,18 @@ def _step_coordinator_config(
     stop_step: int,
     draw_rate_abort: "DrawRateAbortSpec | None",
     drain_caps: DrainCapsSpec,
+    knobs: CoordinatorKnobsSpec,
 ) -> StepCoordinatorConfig:
-    """Smoke-grade defaults (R-10: injection-first, pre-WP-SCHEMA-CLOSE) for the ~22 knobs
-    R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78) still owns — no config-key reads here.
+    """Assemble `StepCoordinatorConfig` from RESOLVED CONFIG FACTS ONLY — zero literals
+    (WPMINT Phase K-B closes `CARD-COORD-KNOBS`, R78 as clarified by R80).
+
+    This function's own docstring used to open "Smoke-grade defaults … for the ~22 knobs
+    R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78) still owns", and the literal below carried
+    them: `eval_interval`, `log_interval`, `batch_size`, `hard_gn_threshold`,
+    `selfplay_stall_timeout_sec` and fourteen more decided what every run WAS from a number
+    no config could see and no mint record published. R78 named the deadline (pre-run5-mint);
+    `knobs` is it. Six further fields had no reader at all and are DELETED rather than
+    authored (call K-a) — see `mantis.config.resolve.coordinator`.
 
     The CONFIG-AUTHORED values are PARAMETERS **with no default of their own**. That is not
     style: a literal the caller always replaces is a second default authority (R1), and so
@@ -96,11 +117,12 @@ def _step_coordinator_config(
     this signature, leaving every `dataclasses.fields()` assertion green while a caller that
     omits the argument silently inherits a posture (MF-2 Attack B). `tests/config/
     test_drawrate_arming_authority.py` pins `stop_step`/`draw_rate_abort`'s
-    `Parameter.empty` for exactly that reason (R83) and
-    `tests/config/test_drain_caps_wiring.py` pins `drain_caps`'; the renamed function is the
-    name-truth half (R73): it no longer DEFAULTS the facts the config authors.
+    `Parameter.empty` for exactly that reason (R83),
+    `tests/config/test_drain_caps_wiring.py` pins `drain_caps`' and
+    `tests/config/test_coordinator_knobs_wiring.py` pins `knobs`'; the renamed function is
+    the name-truth half (R73): it no longer DEFAULTS the facts the config authors.
 
-    WPMINT Phase K-A (R93): `drain_caps` is the third such fact. The `900.0` that used to
+    WPMINT Phase K-A (R93): `drain_caps` was the third such fact. The `900.0` that used to
     sit in the literal below, and the three `StepCoordinatorConfig` terminal defaults beside
     it, were the run's REAL drain caps while the minted, schema-validated,
     registry-claimed `monitor.drain.*` block was popped and discarded by
@@ -108,17 +130,31 @@ def _step_coordinator_config(
     `resolve_drain_caps`, or this call raises.
     """
     return StepCoordinatorConfig(
-        eval_interval=1000, log_interval=1000, checkpoint_interval=0, composition_interval=0,
-        value_probe_interval=0, min_buf_size=1, capacity=100_000, buffer_schedule=(),
-        training_steps_per_game=1.0, max_train_burst=1, batch_size=8, augment=False,
-        recency_weight=0.0, mixing_initial_w=0.0, mixing_min_w=0.0, mixing_decay_steps=1.0,
-        soft_ew_threshold=0.0, soft_ew_min_pts=0, hard_gn_threshold=1e9, hard_gn_min_steps=3,
-        instrumentation_enabled=False, stop_step=stop_step,
+        eval_interval=knobs.eval_interval,
+        log_interval=knobs.log_interval,
+        checkpoint_interval=knobs.checkpoint_interval,
+        min_buf_size=knobs.min_buf_size,
+        capacity=knobs.capacity,
+        buffer_schedule=knobs.buffer_schedule,
+        training_steps_per_game=knobs.training_steps_per_game,
+        max_train_burst=knobs.max_train_burst,
+        batch_size=knobs.batch_size,
+        augment=knobs.augment,
+        recency_weight=knobs.recency_weight,
+        mixing_initial_w=knobs.mixing_initial_w,
+        mixing_min_w=knobs.mixing_min_w,
+        mixing_decay_steps=knobs.mixing_decay_steps,
+        hard_gn_threshold=knobs.hard_gn_threshold,
+        hard_gn_min_steps=knobs.hard_gn_min_steps,
+        stop_step=stop_step,
         draw_rate_abort=draw_rate_abort,
         final_eval_drain_timeout_sec=drain_caps.final_eval_drain_timeout_sec,
         eval_final_drain_safety_factor=drain_caps.eval_final_drain_safety_factor,
         eval_final_drain_hard_cap_sec=drain_caps.eval_final_drain_hard_cap_sec,
         terminal_eval_hard_cap_sec=drain_caps.terminal_eval_hard_cap_sec,
+        terminal_eval_enabled=knobs.terminal_eval_enabled,
+        bot_batch_share=knobs.bot_batch_share,
+        selfplay_stall_timeout_sec=knobs.selfplay_stall_timeout_sec,
     )
 
 
@@ -186,18 +222,19 @@ def compose_run(
     # used to duplicate config.py's own defaults (900.0/3.0/14400.0/14400.0) by
     # coincidence; a future default change there would have silently diverged the two
     # (R1: duplicated default authority).
-    # WPAX S-4 + Phase D + WPMINT Phase K-A: `stop_step` (train.max_train_steps),
-    # `draw_rate_abort` (train.draw_rate_abort) and `drain_caps` (monitor.drain) are the
-    # facts the CONFIG authors, and they are PASSED IN through their own resolvers rather
-    # than replaced afterwards — a `dataclass_replace` over a defaulted object requires a
-    # complete object first, i.e. a literal, and a literal that is always overwritten is
-    # still a second default authority (R1). The remaining ~22 knobs in
-    # `_step_coordinator_config` are still unauthored code-side defaults, owned by
-    # R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78).
+    # WPAX S-4 + Phase D + WPMINT Phase K-A/K-B: `stop_step` (train.max_train_steps),
+    # `draw_rate_abort` (train.draw_rate_abort), `drain_caps` (monitor.drain) and `knobs`
+    # (the 19 `train.*` step-coordinator keys) are the facts the CONFIG authors, and they are
+    # PASSED IN through their own resolvers rather than replaced afterwards — a
+    # `dataclass_replace` over a defaulted object requires a complete object first, i.e. a
+    # literal, and a literal that is always overwritten is still a second default authority
+    # (R1). With `knobs` there are no unauthored knobs left: `_step_coordinator_config` holds
+    # zero literals and R78's card is closed.
     step_coordinator_cfg = _step_coordinator_config(
         stop_step=resolve_max_train_steps(config.train),
         draw_rate_abort=resolve_draw_rate_abort(config.train),
         drain_caps=resolve_drain_caps(config.monitor),
+        knobs=resolve_coordinator_knobs(config.train),
     )
 
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)

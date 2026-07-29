@@ -6,7 +6,7 @@ replaced by R92 at WPMINT Phase DS).
 (`mantis.run.compose_run`) passes the resolved spec into
 `StepCoordinatorConfig.draw_rate_abort`, which `coordinator/step.py`'s hard-abort gate
 gates the whole draw-rate check on and whose three fields reach, respectively,
-`check_draw_rate_collapse(threshold=…, min_step=…)` and
+`check_draw_rate_collapse(threshold=…, min_step=…, consec=…)` and
 `pooled_draw_rate(…, N_pool_min=…)`.
 
 ARMING IS A PROPERTY OF THIS VALUE (R79) — there is no boolean enable beside it, because a
@@ -21,8 +21,8 @@ saturated the pool mean at 1.0; post-R92 an `N_pool_min` of 4 lets one drawn gam
 meet a threshold of 0.25. Guards that could be set independently of the threshold could be
 set to nothing, so the block arrives whole or not at all.
 
-RUN-SCOPED CONSTANTS (R82/R85/R92): `threshold`, `min_step` and `N_pool_min` are
-pre-registered at mint prereg and that is "the only place they may change" — not tunables,
+RUN-SCOPED CONSTANTS (R82/R85/R92): `threshold`, `min_step`, `N_pool_min` and (since
+WPMINT Phase K-B) `consec` are pre-registered at mint prereg and that is "the only place they may change" — not tunables,
 and never hand-varied in a committed config (R1). WPMINT Phase DS replaced `min_samples`
 with `N_pool_min` by ruling R92: the per-worker inclusion bar died with the filtered-mean
 statistic it guarded (DR-3/DR-4), and the evidence bar that replaced it is a property of the
@@ -52,6 +52,14 @@ class DrawRateAbortSpec:
     threshold: float
     min_step: int
     N_pool_min: int
+    #: WPMINT Phase K-B (R78/R80, call K-b): the FOURTH term, promoted from
+    #: `StepCoordinatorConfig.draw_rate_consec` — a code-side default `= 3` that survived
+    #: Phase D because R80 bound that phase to three keys and assigned this one to
+    #: `CARD-COORD-KNOBS`. It rides HERE and not on the coordinator dataclass because a
+    #: term of a DISARMED abort is not a fact: with `train.draw_rate_abort: null` the
+    #: spec does not exist and neither does `consec`, which is what "the terms travel
+    #: together" means when the block is off.
+    consec: int
 
 
 def resolve_draw_rate_abort(train_section: Any) -> DrawRateAbortSpec | None:
@@ -63,6 +71,7 @@ def resolve_draw_rate_abort(train_section: Any) -> DrawRateAbortSpec | None:
         threshold=float(block.threshold),
         min_step=int(block.min_step),
         N_pool_min=int(block.N_pool_min),
+        consec=int(block.consec),
     )
 
 

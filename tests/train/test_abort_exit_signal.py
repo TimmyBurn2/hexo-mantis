@@ -37,7 +37,7 @@ and deliberately minimal: everything the card asserts on is real. The `StepCoord
 objects; only the trainer/buffer/pool collaborators are fakes, and none of them touches the
 abort decision.
 
->300 justify (R8), at the file's MEASURED size of 428 lines (Phase X wrote 420; WPMINT Phase
+>300 justify (R8), at the file's MEASURED size of 440 lines (Phase X wrote 420; K-A restated 428; WPMINT Phase
 K-A's coordinator-census consolidation is the delta, and the number is restated rather than
 left stale per SF-7). Two components, and neither is
 splittable without losing what it is for. (1) ~110 lines are the local `StepCoordinator`
@@ -59,6 +59,7 @@ from typing import Any
 import pytest
 from mantis.config.armed_aborts import MANIFEST, ArmedAbort, Mechanism, Status, exit_code_for_abort
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
@@ -74,6 +75,10 @@ RULE = "draw_rate_collapse"
 #: from a MINTED config, never restated here.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
+#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
+#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
+_KNOBS = resolve_coordinator_knobs(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
 
 
 # ── the minimum real-coordinator harness ──────────────────────────────────────────────
@@ -156,7 +161,7 @@ def _config(**overrides) -> StepCoordinatorConfig:
     default and neither does this factory."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS),
+                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
         **{"eval_interval": 0, "log_interval": 1, "min_buf_size": 10, **overrides},
     )
 
@@ -208,7 +213,7 @@ def test_the_armed_gate_fires_through_the_same_contract_and_names_the_rule() -> 
     covers the chain a real run takes: `_check_draw_rate` -> `_sample` -> the rule ->
     `_fire_hard_abort` -> `ShutdownState`.
     """
-    spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50)
+    spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50, consec=3)
     h = _coordinator(pool=_Pool(draws=900, completed=1000),
                      config=_config(draw_rate_abort=spec, log_interval=1))
     for _ in range(12):
@@ -326,10 +331,17 @@ def test_an_abort_with_no_authored_code_resolves_to_None(rule: str) -> None:
     resolver with a `dict.get(rule, SOME_DEFAULT)` would hand both the same fabricated number,
     and a resolver that raised would turn an un-carded abort into a crash at the boundary.
     """
-    assert rule not in [row.name for row in MANIFEST], (
-        "the premise: this rule has no manifest row. If one is ever authored for it, this "
-        "oracle must be re-pointed rather than deleted — a code appearing without a card is "
-        "the class R84 refused"
+    # WPMINT Phase K-B RE-POINTS the premise, exactly as this assertion's own text
+    # instructed. `grad_norm_hard_abort` HAS a manifest row now (a DEFERRED one, call K-c) —
+    # what it still has not got is an authored exit code, and that is the subject. The two
+    # were the same fact when this was written and are not any more, so the premise says the
+    # narrower thing it always meant.
+    row = [candidate for candidate in MANIFEST if candidate.name == rule]
+    assert all(candidate.exit_code is None for candidate in row), (
+        "the premise: this rule has NO AUTHORED EXIT CODE. A row may exist for it — "
+        "grad_norm_hard_abort gained a DEFERRED one at WPMINT Phase K-B — but a code "
+        "appearing without a card is the class R84 refused, and inventing one at the "
+        f"resolver is that class one layer down; got {[c.exit_code for c in row]}"
     )
     assert exit_code_for_abort(rule) is None
 

@@ -1,4 +1,10 @@
-"""SC-A1..A4 oracle — O15 every-key-has-consumer bijection, re-asserted against the FULL
+""">300 justify (R8), stated at this file's MEASURED size of 335 lines: it is ~90% DATA — the
+SECOND copy of the 170-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves.
+Splitting it would create a THIRD copy to keep in sync, which is the drift the duplication
+exists to detect. The four tests below are ~40 lines together.
+
+SC-A1..A4 oracle — O15 every-key-has-consumer bijection, re-asserted against the FULL
 POST-Phase-2 leaf set (DESIGN_P2.md §1.1/§1.2/§4.2/§4.3 / PREREG_P2.md suite #10; edit-
 target was tests/config/test_every_key_has_consumer.py).
 
@@ -15,7 +21,11 @@ guessed): 36 (current) - 1 (selfplay.legal_move_radius_schedule, removed) + 25 (
 WP-UNFREEZE adds 3 (K1/K2/K3 actor-sync knobs) = 146; WPAX S-4 adds 1
 (train.max_train_steps) = 147; WPAX Phase D adds 1 (train.draw_rate_abort, registered as
 ONE opaque block leaf) = 148; WPMINT DR-6 (R93) makes `_leaf_paths` descend through
-OPTIONAL blocks, retiring that block leaf and surfacing its three inner keys = 150.
+OPTIONAL blocks, retiring that block leaf and surfacing its three inner keys = 150;
+WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80) adds 20 — the 19 flat `train.*`
+step-coordinator knobs plus `train.draw_rate_abort.consec` — = 170. Six further coordinator
+fields were DELETED, not authored (call K-a): they had no reader in `src/`, so a registry
+entry for them would have been the exact defect this bijection exists to catch.
 
 This file is the SECOND copy of the registry and the walker; both copies must agree, so
 every DR-6 edit landed here byte-for-byte in meaning (`tests/config/
@@ -97,6 +107,72 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.draw_rate_abort.N_pool_min":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> pooled_draw_rate(N_pool_min=) [R92]",
+    "train.draw_rate_abort.consec":
+        "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
+        " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 19 step-coordinator knobs. Every
+    # citation below names the path from the ONE resolver to the line that READS the value,
+    # and every one was verified BY MUTATION per R93 (set the knob, drive the production
+    # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
+    # never by grep, because DR-11 proved a grep cannot tell a reader from a `pop`.
+    "train.eval_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
+        " round boundary (+ promotion_capable_rounds)",
+    "train.log_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_log_interval"
+        " boundary (payload events + WARN rules + both hard-abort gates + monitor_gates)",
+    "train.buffer_save_interval":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.checkpoint_interval -> step.py D4 _try_save_buffer cadence",
+    "train.min_buf_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O4 warmup floor",
+    "train.replay_capacity":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
+        " payload) and preflight_mint.py _build_buffer sizing",
+    "train.replay_capacity_schedule":
+        "resolve_coordinator_knobs -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
+    "train.training_steps_per_game":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6"
+        " _steps_budget(new_games, this, max_train_burst)",
+    "train.max_train_burst":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O6 _steps_budget"
+        " ceiling",
+    "train.batch_size":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step batch size (replaced the train_cfg/full_config dict lookup whose"
+        " literal 256 was the real production value, WPMINT K-A)",
+    "train.augment":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> trainer.train_step(augment=) / assemble_mixed_batch(augment=)",
+    "train.recency_weight":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
+        " -> assemble_mixed_batch recency window weighting",
+    "train.mixing_initial_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(initial_w=) (mixed batch + axis payload)",
+    "train.mixing_min_w":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(min_w=)",
+    "train.mixing_decay_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _compute_pretrained_weight(decay_steps=)",
+    "train.hard_gn_threshold":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
+    "train.hard_gn_min_steps":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
+        " grad_norm_hard_abort consecutive-step count",
+    "train.terminal_eval_enabled":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
+        " run_terminal_eval close-out gate",
+    "train.bot_batch_share":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " _run_training_step n_bot batch slots",
+    "train.selfplay_stall_timeout_sec":
+        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
+        " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
     "train.completed_q_values": "TrainHParams.completed_q_values -> core.py:347 CE-vs-KL loss switch; cross-validated",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
     "train.policy_target": "RunConfig cross-section validator (policy_target/completed_q_values consistency, §2)",
@@ -244,7 +320,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_150_entries():
+def test_registry_has_exactly_170_entries():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
     # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
@@ -252,8 +328,8 @@ def test_registry_has_exactly_150_entries():
     # keys: 148 - 1 + 3 = 150. `train.draw_rate_abort` is the ONLY `Block | None` field in
     # `RunConfig`, so those three are the whole blast radius. This count and the sibling
     # copy's must stay equal.
-    assert len(CONSUMER_REGISTRY) == 150
-    assert len(_leaf_paths(RunConfig)) == 150
+    assert len(CONSUMER_REGISTRY) == 170
+    assert len(_leaf_paths(RunConfig)) == 170
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

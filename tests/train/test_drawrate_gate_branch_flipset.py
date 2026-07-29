@@ -1,4 +1,11 @@
-"""⊕ WPMINT DR-FIX ORACLE — `_run_hard_abort_gates` carries no branch without a flip-set
+""">300 justify (R8), stated at this file's MEASURED size of 389 lines. Already over the cap
+with NO justify (the pre-existing gap WPMINT Phase K-A flagged); K-B touches it for
+`DrawRateAbortSpec.consec`, so it is written now. One gate, one branch table: every drive below
+exercises a different arm of `_run_hard_abort_gates`/`_sample` against the SAME coordinator
+harness, and the "which branch has no input that takes it" claim is only checkable while the
+drives sit together.
+
+⊕ WPMINT DR-FIX ORACLE — `_run_hard_abort_gates` carries no branch without a flip-set
 (R72), and its LAW-18 skip accounting is unchanged by the fix (finding DR-1).
 
 WHAT WENT WRONG. WPAX Phase D shipped the gate as::
@@ -55,6 +62,7 @@ from pathlib import Path
 from types import CodeType, SimpleNamespace
 
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
@@ -63,10 +71,11 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 #: A spec whose `min_step=0` puts the live path in reach of a single drive; the FIRE arm
-#: additionally needs `draw_rate_consec` consecutive samples at/above threshold.
+#: additionally needs `consec` consecutive samples at/above threshold (WPMINT K-B moved
+#: that term off the coordinator dataclass and into `train.draw_rate_abort.consec`).
 #: `N_pool_min=10` is deliberately > 1 (WPMINT Phase DS): the NO-OBSERVATION arm R92 adds
 #: needs a bar a drive can sit UNDER, and a bar of 1 would make that arm unreachable.
-_LIVE = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10)
+_LIVE = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
 _ZERO = {"checks": 0, "fires": 0, "skips": 0, "warns": 0}
 _GATE = "draw_rate_collapse"
 
@@ -118,12 +127,16 @@ class _SpySink:
 #: authority over `monitor.drain.*`, which is the DR-11 defect in miniature.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
+#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
+#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
+_KNOBS = resolve_coordinator_knobs(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
 
 
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec,
-                                 drain_caps=_DRAIN_CAPS),
+                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
         log_interval=1, eval_interval=1, min_buf_size=1, terminal_eval_enabled=False,
     )
     shutdown = ShutdownState()
@@ -217,13 +230,13 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
         "EVIDENCE to report (R92)"
     )
 
-    # B4 — the FIRE arm needs `draw_rate_consec` consecutive samples at/above threshold, so
+    # B4 — the FIRE arm needs `consec` consecutive samples at/above threshold, so
     # ONE coordinator is driven until the rule speaks. `consec` is read off the shipped
     # config, never written as a literal here (R78 keeps it a coordinator-owned knob).
     b4 = _coordinator(spec=_LIVE, pool=_Pool((90, 100)))
     lines4: set[int] = set()
     fired4 = False
-    for _ in range(b4.config.draw_rate_consec + 2):
+    for _ in range(_LIVE.consec + 2):
         fired4, seen = _run_traced(b4)
         lines4 |= seen
         if fired4:

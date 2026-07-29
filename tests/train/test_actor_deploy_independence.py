@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from mantis.config.loader import load_config
+from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision  # RED-at-import anchor
 from mantis.monitor.config import MonitorConfig
@@ -37,6 +38,10 @@ from mantis.train.lifecycle.signals import ShutdownState
 #: from a MINTED config, never restated here.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
+#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
+#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
+_KNOBS = resolve_coordinator_knobs(
+    load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
 
 
 # ── shared spies ──────────────────────────────────────────────────────────────────────
@@ -195,7 +200,7 @@ def _kick_config() -> StepCoordinatorConfig:
     a MINTED `monitor.drain` block (R93/DR-11)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS),
+                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
         eval_interval=4, log_interval=0,
     )
 
