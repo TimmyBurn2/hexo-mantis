@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — 1767 lines total, 198 in the child closure, 1049 in
+# this file's own top-level functions — re-measured at WPCLEAN Phase PFC (F-B1 witness +
+# spool/reuse cards landed): 1875 lines total, 198 in the child closure, 1110 in
 # parent-only function bodies. RE-MEASURED at WPMINT Phase K-B, whose child-side delta is +2
 # lines INSIDE `_boot_main` (the `resolve_coordinator_knobs` import and the argument it feeds
 # the coordinator builder, R78/R80) — the same shape and the same size as Phase K-A's, which
@@ -23,7 +24,7 @@
 # two — and that is a deliberate property of this card, not an accident: the tier is a REPORT
 # fact and the report is parent-only, so nothing about it belongs in the process whose whole
 # job is to boot.
-# Two reasons, because the first covers only 198 of the 1767 and saying so is the point:
+# Two reasons, because the first covers only 198 of the 1875 and saying so is the point:
 #
 #  (1) CHILD SIDE (198 lines: _boot_main, _abort_rc, _build_buffer, _load,
 #      _apply_burst_override, _minimum_legal_burst, _burst_floors, _resolve_config_path).
@@ -36,7 +37,7 @@
 #      moved, renamed or unshipped sibling) in the one code path whose whole job is to
 #      survive a child that dies without unwinding.
 #
-#  (2) PARENT SIDE (1049 lines: the two predicate evaluators, the classifier, the exit
+#  (2) PARENT SIDE (1110 lines: the two predicate evaluators, the classifier, the exit
 #      taxonomy, the audit path, the report writer, the tier block, the coordinator
 #      block). Reason (1) does NOT reach
 #      these — they
@@ -71,8 +72,13 @@ object. It constructs the real `Trainer` through the real `init_trainer`, the re
 `WorkerPool`, the real buffer selected off `config.identity.representation` (never sniffed,
 never defaulted — LAW-11), and hands them to the real `compose_run`, which builds
 `build_run_safety`, `StepCoordinatorConfig` and `ActorSync` for itself. When a collaborator
-is missing a method the tool does NOT supply one: the `AttributeError` reaches the process
-boundary and is reported as `PreflightTreeDefectError` naming the attribute and the card.
+is missing a method the tool does NOT supply one: the failure reaches the process boundary
+uncaught. Classification honesty (CARD-PREFLIGHT-WALL-CLASSIFIER, resolved at WPCLEAN Phase
+PFC to this WORDING rather than to a wall table): rc 32 is a FALLBACK SNIFF — the literal
+`"object has no attribute"` in the child's stderr tail — not a wall registry. A wall that
+surfaces any other way lands rc 33 with its traceback in the tail, and the register of
+known walls stays the TD cards; an exception-type→card table in this tool would be a second
+authority beside the register (the card's own named risk), so none exists.
 
 **CARD-POOL-ENCODING-BRIDGE (TD-4) HAS LANDED (WPBRIDGE Phase T).** Mode PREFLIGHT used to
 terminate there: `WorkerPool` construction calls `resolve_pool_encoding` ->
@@ -345,6 +351,15 @@ class PreflightConfigIdentityError(PreflightError):
     (F-B1 closure, WPCLEAN Phase RES): the evidence artifact would describe one config
     while the burst ran another. A NAMED failure, never a footnote in a green report."""
     rc = 14
+
+
+class PreflightOutDirReusedError(PreflightError):
+    """The out-dir already holds THIS run_id's event segments
+    (CARD-PREFLIGHT-OUTDIR-REUSE, executed WPCLEAN Phase PFC): `_read_segment` scopes by
+    run_id, so a same-run_id reuse of a dirty --out-dir would read a PREVIOUS burst's
+    events as this run's evidence. Refused before the boot, a NAMED rc — never an mtime
+    heuristic quietly picking which evidence to believe."""
+    rc = 15
 
 
 class PreflightArmingAuditError(PreflightError):
@@ -704,6 +719,11 @@ def _evaluate_lag(events: list[dict], *, cadence_steps: int,
 
     block["b1"] = all(lag == learner - actor
                       for lag, learner, actor in zip(lags, learners, actors, strict=True))
+    # CARD-B2-POSITIVITY-CONJUNCT (WPCLEAN Phase PFC, the card's justify arm): the second
+    # conjunct is PROVABLY redundant for the non-negative learner steps this stream carries
+    # (R72 row L5; recheck VERIFIED the proof) — `max > min >= 0` already forces `max >= 1`.
+    # Kept as a stated-domain guard: it is load-bearing only if a NEGATIVE learner step ever
+    # enters the stream, and deleting shipped predicate behaviour needs its own oracle event.
     block["b2"] = max(learners) > min(learners) and max(learners) >= 1
     block["b3"] = max(actors) > min(actors)
     block["b4a"] = set(actors) <= ({0} | sync_steps)
@@ -1603,10 +1623,25 @@ def _run_child(args, report: dict) -> dict:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             stdout, stderr = proc.communicate()
     rc = int(proc.returncode)
+    # CARD-PREFLIGHT-CHILD-STDERR-BUDGET (WPCLEAN Phase PFC, the card's spool arm): the
+    # 4000-char tails were an invented budget AND the classifier's input — a truncated
+    # traceback silently downgrades a tree defect from 32 to 33 (REVIEW_IMPL_P's widening).
+    # The FULL streams now spool beside the report; the tails stay (report readability +
+    # the process tests' carriage semantics), and the classifier keeps reading the tail —
+    # a wall's `AttributeError` line is the traceback's LAST line, which a tail keeps and
+    # a head would lose. Spool failure is a run-fatal report defect, not a swallow (LAW-14):
+    # the spool exists precisely for the bytes the tail dropped.
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)  # a child may die before creating it
+    stdout_spool = out_dir / "child_stdout.log"
+    stderr_spool = out_dir / "child_stderr.log"
+    stdout_spool.write_text(stdout or "", encoding="utf-8")
+    stderr_spool.write_text(stderr or "", encoding="utf-8")
     child = {"rc": rc, "rc_convention": RC_CONVENTION,
              "raised_by": "child" if rc in PASS_THROUGH else "parent",
              "wall_clock_sec": round(time.monotonic() - started, 3), "timed_out": timed_out,
-             "stdout_tail": (stdout or "")[-4000:], "stderr_tail": (stderr or "")[-4000:]}
+             "stdout_tail": (stdout or "")[-4000:], "stderr_tail": (stderr or "")[-4000:],
+             "stdout_spool": str(stdout_spool), "stderr_spool": str(stderr_spool)}
     if rc < 0:
         child["signal"] = -rc
         child["signal_name"] = signal.Signals(-rc).name
@@ -1708,8 +1743,19 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
                           # THE one identity authority (F-B1): the same function the child's
                           # compose_run hashes its own loaded config with.
                           "booted_config_sha256": config_identity_sha256(booted)}
-    child = _run_child(args, report)
     log_dir = out_dir / "logs"
+    # CARD-PREFLIGHT-OUTDIR-REUSE: refuse a dirty out-dir BEFORE the boot. Scoped exactly
+    # to the hole the card measured — pre-existing segments under THIS run_id, the ones
+    # `_read_segment`'s scope would believe — so a fresh dir, a foreign run_id's litter and
+    # every audit-mode drive are untouched.
+    stale = sorted(log_dir.glob(f"events_{booted.run_id}_*.jsonl")) if log_dir.is_dir() else []
+    if stale:
+        raise PreflightOutDirReusedError(
+            f"--out-dir {out_dir} already holds {len(stale)} event segment(s) for run_id "
+            f"{booted.run_id!r} (first: {stale[0].name}): a same-run_id reuse would read a "
+            "previous burst's events as this run's evidence. Use a fresh out-dir"
+        )
+    child = _run_child(args, report)
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
                         if log_dir.is_dir() else ([], []))
     # R72 CLOSING PASS. The scan PUBLISHES what it read, so `_watchdog_reason` can say which

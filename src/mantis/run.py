@@ -33,13 +33,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, NamedTuple
 
+from mantis.config.loader import config_identity_sha256
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
 from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.monitor import resolve_monitor_config
-from mantis.config.loader import config_identity_sha256
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline

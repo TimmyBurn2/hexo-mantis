@@ -2187,7 +2187,9 @@ def test_the_reports_raised_by_field_records_WHICH_SIDE_named_the_outcome(
     monkeypatch.setattr(TOOL, "_child_argv",
                         lambda args: [sys.executable, "-c", f"raise SystemExit({child_rc})"])
     report = TOOL._new_report("preflight")
-    child = TOOL._run_child(SimpleNamespace(timeout_sec=60.0), report)
+    # out_dir joined the rig at WPCLEAN Phase PFC: `_run_child` spools the full child
+    # streams beside the report (CARD-PREFLIGHT-CHILD-STDERR-BUDGET).
+    child = TOOL._run_child(SimpleNamespace(timeout_sec=60.0, out_dir=str(tmp_path)), report)
     assert child["rc"] == child_rc
     assert child["raised_by"] == expected, (
         f"child rc {child_rc} is {'inside' if child_rc in TOOL.PASS_THROUGH else 'outside'} "
@@ -2884,7 +2886,7 @@ def test_a_child_with_NO_stderr_tail_reports_an_EMPTY_tail_and_never_a_PLACEHOLD
     )
 
 
-def test_the_child_block_carries_the_childs_OWN_stdout_AND_stderr_tails(monkeypatch) -> None:
+def test_the_child_block_carries_the_childs_OWN_stdout_AND_stderr_tails(monkeypatch, tmp_path) -> None:
     """R72 closing pass. **Conjunct: the `stdout` leaf of
     `"stdout_tail": (stdout or "")[-4000:]`.**
 
@@ -2902,7 +2904,8 @@ def test_the_child_block_carries_the_childs_OWN_stdout_AND_stderr_tails(monkeypa
         "import sys; sys.stdout.write('OUT-MARKER'); sys.stderr.write('ERR-MARKER'); "
         "raise SystemExit(7)"])
     report = TOOL._new_report("preflight")
-    child = TOOL._run_child(SimpleNamespace(timeout_sec=60.0), report)
+    # out_dir joined the rig at WPCLEAN Phase PFC (stream spooling beside the report).
+    child = TOOL._run_child(SimpleNamespace(timeout_sec=60.0, out_dir=str(tmp_path)), report)
     assert child["rc"] == 7, "the rig is only a witness if the real child really ran"
     assert child["stdout_tail"] == "OUT-MARKER", (
         "the child's OWN stdout must reach the report — a constant here empties half the "
