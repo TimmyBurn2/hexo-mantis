@@ -125,7 +125,7 @@ impl ReplayBuffer {
             is_full_search: vec![1u8; capacity], // 1 = full-search default
             value_target_valid: vec![1u8; capacity], // 1 = supervise value default
             position_indices: vec![0u16; capacity],
-            sym_tables: sym_tables_for(spec),
+            sym_tables: sym_tables_for(spec), // unread on the graph path (see spawn.rs R28 note)
             weight_schedule: WeightSchedule::uniform(),
             next_game_id: 0,
             rng,

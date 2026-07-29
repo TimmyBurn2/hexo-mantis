@@ -48,6 +48,12 @@ impl SelfPlayRunner {
         // §130/§173: the spec-keyed 12-fold dihedral scatter tables (shared
         // `&'static SymTables`). No `None → v6` fallback — an absent spec is an
         // error at `new()` (LAW-11).
+        // UNREAD ON THE GRAPH PATH (R28 rider, labeled at WPCLEAN): under `gnn_axis_v1`
+        // this binding still materializes the size_19 dense scatter singleton, but the
+        // graph record dispatch takes no tables and HEXG D6 augmentation rotates via the
+        // shared `rotate_axial` primitive (`replay/sym.rs`), not these scatters. The
+        // binding is kept unconditional because it is spec-keyed, cheap (shared static),
+        // and the dense arms of the same worker loop do read it.
         let sym_tables_static: &'static SymTables = sym_tables_for(self.spec);
 
         // D2: resolve the per-worker geometry ONCE via the closed-match resolver
