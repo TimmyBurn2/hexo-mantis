@@ -55,6 +55,8 @@ SF-4 is preserved: `discover_configs` takes the directory as an ARGUMENT and res
 root. `REPO_ROOT` stays in the tool (`preflight_mint.py:104`), where `parents[2]` is structurally
 sound rather than dependent on an editable install.
 """
+import hashlib
+import json
 from pathlib import Path
 
 import yaml
@@ -127,3 +129,19 @@ def load_config(path: str | Path) -> RunConfig:
     if not isinstance(raw, dict):
         raise TypeError(f"{path}: config root must be a mapping")
     return RunConfig.model_validate(raw)
+
+
+def config_identity_sha256(config: RunConfig) -> str:
+    """The ONE canonical identity hash of an in-memory config (WPCLEAN Phase RES, F-B1).
+
+    sha256 over the sorted-keys JSON of `model_dump()` — byte-for-byte the computation the
+    mint preflight always published as `override.booted_config_sha256`. Hoisted HERE so the
+    boot side (`compose_run`'s `run_boot_identity` event) and the preflight parent hash with
+    one authority: F-B1 was precisely that parent and child read the config independently
+    with only the parent's identity published, so a child that read a DIFFERENT file was
+    invisible in the evidence artifact. Two call sites, one function — a second copy of this
+    expression would reopen the gap it closes.
+    """
+    return hashlib.sha256(
+        json.dumps(config.model_dump(), sort_keys=True, default=str).encode()
+    ).hexdigest()

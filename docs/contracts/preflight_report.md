@@ -66,10 +66,17 @@ Top-level keys, all present in every report (`_new_report`):
 | a tier is COVERED only when the run reached a verdict; a refused burst publishes `tier: none` and owes BOTH tiers | tests/tools/test_preflight_mint_process.py |
 | the disclaimer is re-derived at write time and the `none`-tier sentence is TRUE in mode AUDIT, not only at rc 11 | tests/tools/test_preflight_mint_process.py |
 
-## Known gap
+## Former gap F-B1 — CLOSED (WPCLEAN Phase RES), residual disclosed
 
-The report cannot witness WHICH config the boot child loaded. Parent and child call the loader
-independently, and only the parent's config identity is published, so a child that read a
-different file would not be visible in the artifact. Structural, measured, and not closed here;
-it is why the `tier` block keys off the report's own outcome fields rather than off the
-requested `--burst-steps`.
+The report now witnesses WHICH config the boot child loaded: `compose_run` publishes a
+`run_boot_identity` event (the child's own post-revalidation config sha) into the JSONL
+segment the parent already scans, both sides hashing through the ONE authority
+(`mantis.config.loader.config_identity_sha256`). The parent copies it into
+`child.booted_config_sha256` and verdicts `child.config_identity` as `match` /
+`mismatch` / `unwitnessed`; a MISMATCH is a NAMED failure (`PreflightConfigIdentityError`,
+rc 14) raised before the predicates — a burst on the wrong config proves nothing.
+
+Residual, disclosed rather than papered over: a child that dies BEFORE its sink exists
+publishes nothing and the report says `unwitnessed`, never a silently-assumed match — the
+same reached-vs-assumed distinction the `tier` block keys on (it still keys off the
+report's own outcome fields rather than the requested `--burst-steps`).

@@ -264,6 +264,50 @@ class _DrivableBuffer:
         return None
 
 
+def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+) -> None:
+    """F-B1 closure producer arm (WPCLEAN Phase RES; LAW-07): `compose_run` must emit
+    `run_boot_identity` carrying `config_identity_sha256` of the config it actually runs,
+    and it must land BEFORE `pool.start` — the witness has to exist even if the burst later
+    wedges. The sha is asserted against the ONE authority so a second hashing expression
+    cannot drift in silently (the preflight parent compares with the same function)."""
+    from mantis.config.loader import config_identity_sha256
+
+    mantis_run = mantis.run
+    order = _OrderSpy()
+    pool = FakePoolNeverStarted(order)
+    watchdog = FakeWatchdog(order)
+    emitted: list[dict] = []
+
+    def _fake_build_run_safety(**kwargs):
+        return SimpleNamespace(
+            sink=SimpleNamespace(emit=lambda e: (emitted.append(e),
+                                                 order.calls.append("sink.emit:" + e.get("event", "")))[0]),
+            registry=SimpleNamespace(beat=lambda s: None),
+            watchdog=watchdog,
+            heartbeat=lambda s: None,
+        )
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
+    config = _bounded(smoke_run_config)
+    mantis_run.compose_run(
+        config=config, trainer=_DrivableTrainer(),
+        pool=pool, buffer=mk_graph_buffer(n_records=32),
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
+        eval_enabled=False,
+    )
+    identity = [e for e in emitted if e.get("event") == "run_boot_identity"]
+    assert len(identity) == 1, f"exactly one boot-identity event, got {len(identity)}"
+    assert identity[0]["config_sha256"] == config_identity_sha256(config), (
+        "the published identity must be the ONE authority's hash of the composed config"
+    )
+    first_identity = order.calls.index("sink.emit:run_boot_identity")
+    assert first_identity < order.calls.index("pool.start"), (
+        f"the identity witness must exist before anything can wedge: {order.calls[:6]}"
+    )
+
+
 def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:

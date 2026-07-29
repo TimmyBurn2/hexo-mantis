@@ -39,6 +39,7 @@ from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coor
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.monitor import resolve_monitor_config
+from mantis.config.loader import config_identity_sha256
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
@@ -47,6 +48,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.train.actor_sync import ActorSync
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
+from mantis.train.emit import emit_via
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
 from mantis.train.subsystems import build_run_safety
@@ -204,6 +206,17 @@ def compose_run(
         actor_ckpt_step_fn=lambda: actor_sync.actor_ckpt_step(),
         learner_step_fn=lambda: int(trainer.step),
     )
+
+    # F-B1 closure (WPCLEAN Phase RES): the booted process publishes ITS OWN post-revalidation
+    # config identity into the run's event stream, first thing after the sink exists — before
+    # anything can wedge. One authority (`config_identity_sha256`) on both sides: the mint
+    # preflight's parent hashes the config IT loaded with the same function and compares, so
+    # a child that read a different file is a NAMED preflight failure instead of invisible.
+    emit_via(run_safety.sink, {
+        "event": "run_boot_identity",
+        "run_id": run_id,
+        "config_sha256": config_identity_sha256(config),
+    })
 
     # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
     # or eval state may make actor sync conditional (pinned by

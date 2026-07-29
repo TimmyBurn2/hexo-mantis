@@ -200,7 +200,7 @@ from mantis.config.armed_aborts import (
     audit_arming,
     exit_code_for_abort,
 )
-from mantis.config.loader import discover_configs, load_config
+from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.config.schema import RunConfig
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 
@@ -338,6 +338,13 @@ class PreflightResumedTrainerError(PreflightError):
 
 class PreflightOutDirInsideRepoError(PreflightError):
     rc = 13
+
+
+class PreflightConfigIdentityError(PreflightError):
+    """The child's published boot identity does not match the config the parent audited
+    (F-B1 closure, WPCLEAN Phase RES): the evidence artifact would describe one config
+    while the burst ran another. A NAMED failure, never a footnote in a green report."""
+    rc = 14
 
 
 class PreflightArmingAuditError(PreflightError):
@@ -1666,6 +1673,23 @@ def _verdict_exit(blocks: dict) -> None:
                 f"{block.get('inversion_reason') or ''}".strip())
 
 
+def child_config_identity(events: list, *, parent_sha: str) -> tuple:
+    """The child-side half of F-B1's witness: `(child_sha, verdict)` from the scanned events.
+
+    Three verdicts, honestly distinct: "match" (the child published an identity and it is
+    the parent's), "mismatch" (published and DIFFERENT — the caller raises, rc 14), and
+    "unwitnessed" (no `run_boot_identity` event in the scanned segments — a child that died
+    before its sink existed, or a pre-closure segment; disclosed, never silently equal).
+    The LAST event wins when several exist: segments are run_id-scoped and appended in boot
+    order, so the last is the burst under audit.
+    """
+    identity = [e for e in events if e.get("event") == "run_boot_identity"]
+    if not identity:
+        return None, "unwitnessed"
+    child_sha = str(identity[-1].get("config_sha256"))
+    return child_sha, ("match" if child_sha == parent_sha else "mismatch")
+
+
 def _run_preflight(args, report: dict, out_dir: Path) -> None:
     path = _resolve_config_path(args.config)
     config = _load(path)
@@ -1681,9 +1705,9 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["override"] = {"keys": list(OVERRIDE_KEYS),
                           "from": int(config.train.max_train_steps),
                           "to": int(args.burst_steps),
-                          "booted_config_sha256": hashlib.sha256(
-                              json.dumps(booted.model_dump(), sort_keys=True,
-                                         default=str).encode()).hexdigest()}
+                          # THE one identity authority (F-B1): the same function the child's
+                          # compose_run hashes its own loaded config with.
+                          "booted_config_sha256": config_identity_sha256(booted)}
     child = _run_child(args, report)
     log_dir = out_dir / "logs"
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
@@ -1698,6 +1722,20 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
         child["fired_reason"] = fired[-1].get("reason")
     report["events"] = _events_block(segments, events)
     _classify_child(child)  # the child's status is evaluated BEFORE the predicates
+    # F-B1 closure: copy the child's OWN published boot identity into the child block and
+    # compare it to the parent's. Ordered AFTER _classify_child (a dead child is a
+    # child-status failure, not an identity one) and BEFORE the predicates (a burst on the
+    # wrong config proves nothing about sync or lag).
+    child["booted_config_sha256"], child["config_identity"] = child_config_identity(
+        events, parent_sha=str(report["override"]["booted_config_sha256"]))
+    if child["config_identity"] == "mismatch":
+        raise PreflightConfigIdentityError(
+            f"the child's run_boot_identity sha ({child['booted_config_sha256']}) does not "
+            f"match the config the parent audited "
+            f"({report['override']['booted_config_sha256']}): parent and child read "
+            "different configs, and every other block of this report would be evidence "
+            "about the wrong run (F-B1)"
+        )
     blocks = evaluate_assertions(events,
                                  cadence_steps=int(booted.train.actor_sync_cadence_steps),
                                  burst_steps=int(args.burst_steps),
