@@ -100,13 +100,19 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -179,7 +185,7 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
     return captured, pool, trainer, _real_run_config()
 
 
-def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monkeypatch):
+def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monkeypatch, mk_graph_buffer):
     """The premise. If the real arm is not taken, everything below is vacuous."""
     captured, pool, trainer, cfg = _drive(monkeypatch)
     assert mantis.run._resolve_actor_sync_cadence_steps(cfg) == _CADENCE, (
@@ -188,7 +194,7 @@ def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monke
     )
 
 
-def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monkeypatch):
+def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
     """Kills the resolver unit-slip half of RED-TEAM-2's mutation on its own.
 
     A `* 1000` slip makes the cadence unreachable inside the run, so the actor takes its
@@ -196,7 +202,7 @@ def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monke
     """
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(
-        config=cfg, trainer=trainer, pool=pool, buffer=_Buffer(),
+        config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
 
@@ -213,7 +219,7 @@ def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monke
     )
 
 
-def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypatch):
+def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
     """Kills the lag-lambda half on its own — so each edit of the pair dies alone.
 
     RED-TEAM-2 paired the resolver slip with a `getattr(config, X, None)` fallback on the
@@ -222,7 +228,7 @@ def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypat
     """
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(
-        config=cfg, trainer=trainer, pool=pool, buffer=_Buffer(),
+        config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
 

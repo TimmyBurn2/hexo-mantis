@@ -157,23 +157,27 @@ class _ComposePool(_Pool):
 
 
 class _Trainer:
+    """WPTS/TD-1 re-point (R90a; the straight arm's subject deliberately changed): the dead
+    `train_step` fake is GONE — the double conforms to the DECLARED seam (typed entry points
+    + `device`), and augment observation moved to the sampler the dispatcher actually
+    threads it to (`_Buffer.augment_seen`)."""
+
     def __init__(self, grad_norm: float = 0.1) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self._gn = grad_norm
-        self.augment_seen: list[bool] = []
 
     def _loss(self) -> dict[str, float]:
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": self._gn,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
         self.step += 1
-        self.augment_seen.append(bool(augment))
         return self._loss()
 
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
+    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
         self.step += 1
         return self._loss()
 
@@ -189,6 +193,8 @@ class _Buffer:
         self.capacity = capacity
         self.resizes: list[int] = []
         self.saves: list[str] = []
+        self.augment_seen: list[bool] = []
+        self.sampled: list[int] = []
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -196,6 +202,14 @@ class _Buffer:
 
     def save_to_path(self, p) -> None:
         self.saves.append(str(p))
+
+    def sample_batch_with_pos(self, n: int, augment: bool):
+        """The grid route's sampler (WPTS dispatcher). Rows are opaque to the fake trainer,
+        so sentinels suffice; what matters is that the DISPATCHER asked, with the
+        config-authored augment."""
+        self.sampled.append(int(n))
+        self.augment_seen.append(bool(augment))
+        return (None,) * 9
 
 
 class _Sink:
@@ -219,8 +233,13 @@ def _fake_run_safety(**_kwargs):
 
 
 # ══ HALF ONE — transport, through the REAL composition root ════════════════════════════
-def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, **train_over):
-    """The `StepCoordinatorConfig` a REAL `compose_run` hands the running coordinator."""
+def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
+                                 **train_over):
+    """The `StepCoordinatorConfig` a REAL `compose_run` hands the running coordinator.
+
+    WPTS/TD-1: the drive's buffer is a REAL preloaded `HexgBuffer` — smoke_gnn declares
+    `graph`, and the declared route runs real sampling+collate; a shapeless fake buffer is
+    refused at dispatch by design."""
     import mantis.train.anchor as _anchor
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
@@ -231,6 +250,10 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, **trai
     )
     config = smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
+               # WPTS/TD-1: the drive now runs the REAL graph route (sample + collate) per
+               # step; the minted 256 batch is pure drag here, so the baseline drives at 8.
+               # The batch_size transport assertion stays honest: baseline(8) != mutated(41).
+               "batch_size": 8,
                # `mixing_min_w` cannot be mutated alone against a minted `mixing_initial_w`
                # of 0.0 — `_mixing_floor_is_below_its_start` rejects a floor above the start,
                # by design. Both drives (baseline and mutated) therefore share a raised start,
@@ -239,7 +262,10 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, **trai
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
     )
     handles = mantis.run.compose_run(
-        config=config, trainer=_Trainer(), pool=_ComposePool(), buffer=_Buffer(),
+        config=config, trainer=_Trainer(), pool=_ComposePool(),
+        # 32 records: above every distinguishable warmup floor (`min_buf_size: 29`), so no
+        # mutated drive can wedge in warmup against a too-small real buffer.
+        buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False, run_id="knob_wiring",
     )
@@ -248,7 +274,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, **trai
 
 @pytest.mark.parametrize("key", _KNOB_KEYS)
 def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
-    key, tmp_path, monkeypatch, smoke_run_config,
+    key, tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """Set ONE `train.*` knob to a distinguishable value; the coordinator the run holds must
     carry it, and NO sibling may move with it.
@@ -260,9 +286,10 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
     field would satisfy any single-key assertion.
     """
     field = _SCHEMA_TO_FIELD.get(key, key)
-    baseline = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config)
+    baseline = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
+                                            mk_graph_buffer)
     mutated = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
-                                           **{key: _DISTINGUISHABLE[key]})
+                                           mk_graph_buffer, **{key: _DISTINGUISHABLE[key]})
 
     expected = _DISTINGUISHABLE[key]
     if key == "replay_capacity_schedule":
@@ -303,7 +330,11 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
-        full_config={}, train_cfg={}, mixing_cfg=mixing_cfg or {}, sink=sink, bot_buffer=bot,
+        # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity
+        # (LAW-11) — an identity-less full_config now raises MissingEncodingError, so the
+        # unit drives declare the grid identity their `_Buffer` fake serves.
+        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        train_cfg={}, mixing_cfg=mixing_cfg or {}, sink=sink, bot_buffer=bot,
         monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, buffer=buffer, sink=sink,
@@ -491,12 +522,14 @@ def test_batch_size_is_the_batch_the_assembler_is_asked_for(monkeypatch) -> None
 
 
 def test_augment_reaches_both_training_paths(monkeypatch) -> None:
-    """`train.augment` -> `trainer.train_step(augment=)` on the plain path and
-    `assemble_mixed_batch(augment=)` on the mixed one. Both, because the knob is read twice
-    and a wire that fixed one would leave the other on a code-side False."""
+    """`train.augment` -> the dispatcher's sampler (`sample_batch_with_pos(augment=)`) on the
+    plain path (WPTS/TD-1: augment is a SAMPLING knob and travels to the buffer draw, not to
+    the trainer) and `assemble_mixed_batch(augment=)` on the mixed one. Both, because the
+    knob is read twice and a wire that fixed one would leave the other on a code-side
+    False."""
     plain = _coordinator(augment=True)
     _drive(plain, steps=2, games=1)
-    assert plain.trainer.augment_seen and all(plain.trainer.augment_seen)
+    assert plain.buffer.augment_seen and all(plain.buffer.augment_seen)
 
     mixed = _coordinator(pretrained=_Buffer(size=500), augment=True)
     assert all(call["augment"] for call in _mixed_batch_calls(monkeypatch, mixed, steps=3))

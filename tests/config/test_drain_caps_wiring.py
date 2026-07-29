@@ -112,12 +112,17 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): typed seam; the dead `train_step` fake is gone.
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return {"w": "SENTINEL"}
@@ -142,7 +147,7 @@ def _fake_run_safety(**_kwargs):
     )
 
 
-def _composed_caps(tmp_path, monkeypatch, smoke_run_config, **drain_over):
+def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **drain_over):
     """The `DrainCaps` a REAL `compose_run` hands `build_eval_pipeline`, for a config whose
     `monitor.drain` block carries `drain_over`."""
     import mantis.train.anchor as _anchor
@@ -166,11 +171,13 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, **drain_over):
     )
 
     config = smoke_run_config(
-        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS},
+        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
+               # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
+               "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, "drain": drain_over},
     )
     mantis.run.compose_run(
-        config=config, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+        config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=True, run_id="drain_wiring",
     )
@@ -181,14 +188,14 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, **drain_over):
 # ── the four mutations, one per key (R93) ─────────────────────────────────────────────
 @pytest.mark.parametrize("key", _DRAIN_KEYS)
 def test_each_drain_key_changes_the_caps_the_eval_pipeline_bounds_its_joins_with(
-    key, tmp_path, monkeypatch, smoke_run_config,
+    key, tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """Set ONE `monitor.drain` key to a distinguishable value; the composed `DrainCaps` must
     carry it. Before this phase every one of these four was green-at-the-config and dead at
     the consumer, so the parametrization is the finding's own shape: four keys, four
     demonstrations, no shared arm that could carry a sibling."""
-    baseline = _composed_caps(tmp_path, monkeypatch, smoke_run_config)
-    mutated = _composed_caps(tmp_path, monkeypatch, smoke_run_config,
+    baseline = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
+    mutated = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                              **{key: _DISTINGUISHABLE[key]})
 
     assert getattr(baseline, key) != _DISTINGUISHABLE[key], (
@@ -209,20 +216,20 @@ def test_each_drain_key_changes_the_caps_the_eval_pipeline_bounds_its_joins_with
 
 
 def test_the_drain_budget_arithmetic_moves_with_the_config(
-    tmp_path, monkeypatch, smoke_run_config,
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """The registry's cited consumer, driven: `drain_budget_sec` = `min(timeout * factor,
     hard_cap)`. Both branches of that `min` are exercised from the CONFIG, so the citation
     names an arithmetic the config genuinely feeds rather than a function it merely reaches."""
     safety_bound = _composed_caps(
-        tmp_path, monkeypatch, smoke_run_config,
+        tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
         final_eval_drain_timeout_sec=10.0, eval_final_drain_safety_factor=2.0,
         eval_final_drain_hard_cap_sec=100.0,
     )
     assert drain_budget_sec(safety_bound) == 20.0
 
     hard_cap_bound = _composed_caps(
-        tmp_path, monkeypatch, smoke_run_config,
+        tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
         final_eval_drain_timeout_sec=1000.0, eval_final_drain_safety_factor=100.0,
         eval_final_drain_hard_cap_sec=5.0,
     )
@@ -230,12 +237,12 @@ def test_the_drain_budget_arithmetic_moves_with_the_config(
 
 
 def test_the_terminal_round_budget_is_the_configured_terminal_hard_cap(
-    tmp_path, monkeypatch, smoke_run_config,
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """`_run_terminal_sync` passes `self._caps.terminal_eval_hard_cap_sec` as its
     `budget_sec` (eval/pipeline.py). Its registry entry cites that line, so the composed
     value must be the configured one and not the drain budget it sits beside."""
-    caps = _composed_caps(tmp_path, monkeypatch, smoke_run_config,
+    caps = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                           terminal_eval_hard_cap_sec=4242.0,
                           eval_final_drain_hard_cap_sec=5.0)
     assert caps.terminal_eval_hard_cap_sec == 4242.0

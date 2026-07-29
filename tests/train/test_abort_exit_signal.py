@@ -120,13 +120,19 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.saves = 0
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def save_checkpoint(self, loss_info) -> None:
         self.saves += 1
@@ -142,6 +148,10 @@ class _Buffer:
 
     def save_to_path(self, p) -> None:
         return None
+
+    def sample_batch_with_pos(self, n: int, augment: bool):
+        # The grid route's sampler (WPTS dispatcher); rows are opaque to the fake.
+        return (None,) * 9
 
 
 class _Sink:
@@ -175,7 +185,7 @@ def _coordinator(*, pool=None, config=None, shutdown=None):
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None,
-        config=config or _config(), full_config={}, train_cfg={}, mixing_cfg={},
+        config=config or _config(), full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}}, train_cfg={}, mixing_cfg={},
         sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,

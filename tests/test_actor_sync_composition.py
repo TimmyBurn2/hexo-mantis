@@ -88,13 +88,19 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -115,7 +121,7 @@ class _Buffer:
 
 
 def test_compose_run_syncs_actor_on_cadence_without_eval(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """The dependency-absence proof: `eval_enabled=False` means no gate, no promotion
     hooks, no eval pipeline exist ANYWHERE in the process, yet the pool records
@@ -147,9 +153,11 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
         # reachability bound: cadence < threshold < max_train_steps, so this hunk depends
         # on _STOP_STEP >= 3
         config=smoke_run_config(
-            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
+                   # WPTS/TD-1: real graph route per step; the minted 256 batch is drag.
+                   "batch_size": 8},
             monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
-        trainer=trainer, pool=pool, buffer=_Buffer(),
+        trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False,
     )

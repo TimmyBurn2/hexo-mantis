@@ -175,13 +175,19 @@ class _Trainer:
     def __init__(self, step: int = 0) -> None:
         self.step = step
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -195,7 +201,10 @@ class _SentinelTrainError(RuntimeError):
 
 
 class _ExplodingTrainer(_Trainer):
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
+        raise _SentinelTrainError("the drive failed")
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
         raise _SentinelTrainError("the drive failed")
 
 
@@ -208,6 +217,10 @@ class _Buffer:
 
     def save_to_path(self, p) -> None:
         return None
+
+    def sample_batch_with_pos(self, n: int, augment: bool):
+        # The grid route's sampler (WPTS dispatcher); rows are opaque to _Trainer.
+        return (None,) * 9
 
 
 def _fake_run_safety(**_kwargs):
@@ -246,7 +259,9 @@ def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STE
     `max_train_steps` alone leaves the config's own minted threshold of 100 above the new
     ceiling and the config stops loading (DESIGN_S §6.6 MF-3)."""
     return factory(name,
-                   train={"actor_sync_cadence_steps": 1, "max_train_steps": steps},
+                   train={"actor_sync_cadence_steps": 1, "max_train_steps": steps,
+                          # WPTS/TD-1: graph drives run the real route; 256 batch is drag.
+                          "batch_size": 8},
                    monitor={"actor_lag_threshold_steps": steps - 1})
 
 
@@ -482,7 +497,7 @@ def test_the_config_gate_is_compose_runs_FIRST_statement():
 
 # ── O-S1a — the composed encoding is the declared, REGISTERED one (LAW-11 / LAW-12) ───────
 def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """The retired arm substituted the literal `"unknown"` for the encoding at TWO sites,
     and the second one is permanent: `DeployTagHooks.encoding` is the value
@@ -524,7 +539,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
     )
 
     mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
 
@@ -544,7 +559,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
 
 # ── O-S1b — `full_config` carries the real config (the C-6 answer) ────────────────────────
 def test_full_config_carries_the_real_config_not_an_empty_dict(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """The retired arm was `full_config=(config if isinstance(config, dict) else {})`, i.e.
     `{}` for every real `RunConfig`. Both of `{}`'s destinations are inert today (a
@@ -557,7 +572,7 @@ def test_full_config_carries_the_real_config_not_an_empty_dict(
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
 
@@ -663,7 +678,7 @@ def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
 
 @pytest.mark.parametrize("name", ("smoke_gnn.yaml", "smoke_radius_curriculum.yaml"))
 def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
-    tmp_path, monkeypatch, smoke_run_config, name: str
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, name: str
 ):
     """Point 2 — the bounded drive, on BOTH representations (`gnn_axis_v1` / graph from the
     `dev` template, `v6w25` / grid from the `grid` template). This is the behavioural half of
@@ -684,7 +699,10 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=trainer, pool=pool, buffer=_Buffer(),
+        config=cfg, trainer=trainer, pool=pool,
+        # WPTS/TD-1: per-representation buffer — the graph arm samples a REAL HexgBuffer,
+        # the grid arm drives the dispatcher's dense sampler on the fake.
+        buffer=mk_graph_buffer(n_records=32) if name == "smoke_gnn.yaml" else _Buffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
 
@@ -701,7 +719,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
 
 
 def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """Point 4 — the resume arm (V-NOOP's fifth row).
 
@@ -734,7 +752,7 @@ def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
 
 # ── O-S5 — a drive failure is FATAL, and close_out still ran ──────────────────────────────
 def test_a_drive_failure_propagates_and_close_out_still_ran(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """The two blanket `except Exception -> log -> return` blocks existed so a fakes harness
     could not crash this root — the same defect as the smoke resolver arm (accommodating
@@ -752,7 +770,7 @@ def test_a_drive_failure_propagates_and_close_out_still_ran(
 
     with pytest.raises(_SentinelTrainError):
         mantis.run.compose_run(
-            config=cfg, trainer=_ExplodingTrainer(), pool=pool, buffer=_Buffer(),
+            config=cfg, trainer=_ExplodingTrainer(), pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
         )
 

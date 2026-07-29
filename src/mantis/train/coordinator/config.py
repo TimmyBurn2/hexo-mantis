@@ -29,10 +29,22 @@ from typing import Any, Protocol, runtime_checkable
 # ── Protocols (no torch import; the DAG-clean injected seams) ───────────────────────────
 @runtime_checkable
 class TrainerLike(Protocol):
+    """The DECLARED coordinator↔trainer seam (WPTS Phase T, R102 class-kill).
+
+    The members here are exactly what the coordinator-side call sites use (`step.py`,
+    `coordinator/dispatch.py`, `loop.py`), pinned both ways by
+    `tests/train/test_trainer_seam_conformance.py` — an undeclared call site on this seam
+    reds that gate. `train_step` is DEAD (TD-1): the seam is the two TYPED entry points,
+    dispatched by `coordinator/dispatch.py` off the declared representation — never a
+    buffer sniff, and never an untyped adapter joining a buffer to "whichever" path.
+    """
+
     step: int
     model: Any
+    device: Any
 
     def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]: ...
+    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
     def save_checkpoint(self, loss_info: dict[str, float] | None) -> Any: ...
 
 

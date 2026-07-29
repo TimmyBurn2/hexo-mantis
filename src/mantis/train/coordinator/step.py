@@ -47,6 +47,11 @@ from mantis.train.coordinator.config import (
     StepOutcome,
     pooled_draw_rate,
 )
+from mantis.train.coordinator.dispatch import (
+    RepresentationRouteError,
+    resolve_step_spec,
+    run_declared_train_step,
+)
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.events import emit_axis_distribution, emit_training_events
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
@@ -149,6 +154,10 @@ class StepCoordinator:
         self._schedule_idx = 0
         self.last_warmup_log = 0.0
         self._last_loss_info: dict[str, float] | None = None
+        # WPTS Phase T: the resolved encoding spec (lazy, once) — the straight arm's typed
+        # route dispatches off spec.representation, resolved from the DECLARED config this
+        # coordinator already holds, through THE one resolver (never a buffer sniff).
+        self._resolved_step_spec: Any | None = None
         self._initial_policy_loss: float | None = None
         self._consec_high_gn = 0
         self._eval_round_last_step = -1
@@ -613,6 +622,17 @@ class StepCoordinator:
         batch_size = cfg.batch_size
         if (self.pretrained_buffer is not None and self.pretrained_buffer.size > 0
                 and self.buffer.size > 0):
+            # WPTS Phase T (CENSUS_C C-2b): the mixed feed is DENSE-ONLY by construction
+            # (`sample_batch_with_pos`, `buffer.encoding`, (N,C,H,W) shapes). Entering it
+            # under a graph declaration must die at the ROUTE with a named error, not
+            # mid-assembly on an AttributeError. No graph-mixed route exists — none is
+            # carded and none has a producer.
+            spec = self._step_spec()
+            if spec.representation != "grid":
+                raise RepresentationRouteError(
+                    f"the mixed (corpus + selfplay) arm is a dense-only feed; declared "
+                    f"representation {spec.representation!r} has no mixed-batch route"
+                )
             from mantis.train.batch_assembly import assemble_mixed_batch  # lazy (heavy deps)
 
             w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
@@ -635,10 +655,22 @@ class StepCoordinator:
                 position_indices=batch.position_indices,
                 value_target_valid=batch.value_target_valid,
             )
-        # straight self-play step (the injected buffer owns sampling; a graph HexgBuffer routes
-        # to the trainer's graph path inside train_step).
-        return self.trainer.train_step(self.buffer, augment=cfg.augment,
-                                       recent_buffer=self.recent_buffer)
+        # Straight self-play step (WPTS Phase T / TD-1 / R102): the DECLARED dispatcher
+        # routes off the resolved representation to the trainer's TYPED entry points
+        # (`train_step_from_graph_batch` / `train_step_from_tensors`). `train_step` is dead.
+        return run_declared_train_step(
+            self.trainer, self.buffer, self._step_spec(),
+            batch_size=batch_size, augment=cfg.augment,
+            recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
+        )
+
+    def _step_spec(self) -> Any:
+        """The resolved encoding spec, lazily resolved ONCE from the declared config this
+        coordinator holds (`full_config`), through THE one resolver. An undeclared encoding
+        raises `MissingEncodingError` — the LAW-11 posture, never a default arm."""
+        if self._resolved_step_spec is None:
+            self._resolved_step_spec = resolve_step_spec(self.full_config)
+        return self._resolved_step_spec
 
     # ── eval kickoff at the boundary (via the INJECTED EvalPipelineLike; no train→eval) ───
     def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> "tuple[bool, bool]":

@@ -148,13 +148,19 @@ class _Trainer:
     def __init__(self, step: int = 0) -> None:
         self.step = step
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -171,6 +177,10 @@ class _Buffer:
 
     def save_to_path(self, p) -> None:
         return None
+
+    def sample_batch_with_pos(self, n: int, augment: bool):
+        # The grid route's sampler (WPTS dispatcher); rows are opaque to _Trainer.
+        return (None,) * 9
 
 
 class _SpySink:
@@ -203,7 +213,9 @@ def _bounded(factory, *, block, name: str = "smoke_gnn.yaml", steps: int = _DRIV
     """
     return factory(name,
                    train={"actor_sync_cadence_steps": 1, "max_train_steps": steps,
-                          "draw_rate_abort": block},
+                          "draw_rate_abort": block,
+                          # WPTS/TD-1: the compose drive runs the real graph route.
+                          "batch_size": 8},
                    monitor={"actor_lag_threshold_steps": steps - 1,
                             # WPAX ADJ-18 (operator-authorized R43 event). `smoke_gnn.yaml`
                             # ships actor-lag DISARMED by R59's deliberate smoke allowance, so
@@ -229,7 +241,8 @@ def _coordinator(*, config, pool, trainer=None):
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None, config=config,
-        full_config={}, train_cfg={}, mixing_cfg={}, sink=sink,
+        # WPTS/TD-1: unit drives declare the grid identity their _Buffer fake serves.
+        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}}, train_cfg={}, mixing_cfg={}, sink=sink,
         heartbeat=None, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
@@ -254,7 +267,7 @@ def _coordinator_config(spec, **overrides) -> StepCoordinatorConfig:
 
 # ── O-D2 — the audited value IS the value the coordinator runs on ─────────────────────
 def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
-    tmp_path, monkeypatch, smoke_run_config,
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """R79(3)'s named RED, on its behavioural side. The config can say `0.25` while the
     runtime uses something else — the resolved value never reaching the construction site —
@@ -277,7 +290,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
     runtime = handles.coordinator.config.draw_rate_abort
@@ -299,7 +312,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
 
     disarmed_cfg = _bounded(smoke_run_config, block=None)
     handles = mantis.run.compose_run(
-        config=disarmed_cfg, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+        config=disarmed_cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "off"), checkpoint_dir=str(tmp_path / "off_ckpt"),
         eval_enabled=False,
     )

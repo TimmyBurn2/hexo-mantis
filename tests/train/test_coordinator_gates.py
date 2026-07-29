@@ -107,16 +107,27 @@ class FakePool:
 
 
 class FakeTrainer:
+    """Conforms to the DECLARED seam (WPTS/TD-1 re-point, R90a): typed entry points +
+    `device`; the dead `train_step` fake is gone with the card."""
+
     def __init__(self, grad_norm: float = 0.1) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self._gn = grad_norm
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
-        self.step += 1
+    def _loss(self) -> dict[str, float]:
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": self._gn,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3, "opp_reply_loss": 0.0,
                 "loss_total": 1.0}
+
+    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
+        self.step += 1
+        return self._loss()
+
+    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
+        self.step += 1
+        return self._loss()
 
     def save_checkpoint(self, loss_info) -> None:
         return None
@@ -132,6 +143,10 @@ class FakeBuffer:
 
     def save_to_path(self, p) -> None:
         return None
+
+    def sample_batch_with_pos(self, n: int, augment: bool):
+        # The grid route's sampler (WPTS dispatcher); rows are opaque to FakeTrainer.
+        return (None,) * 9
 
 
 class FakeEvalPipeline:
@@ -212,7 +227,11 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None,
-        config=config or _make_config(), full_config={}, train_cfg={}, mixing_cfg={},
+        # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
+        # unit drives declare the grid identity FakeBuffer's sampler serves.
+        config=config or _make_config(),
+        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        train_cfg={}, mixing_cfg={},
         sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,

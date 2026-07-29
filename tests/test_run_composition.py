@@ -59,7 +59,9 @@ def _bounded(smoke_run_config, **monitor_over):
     """A REAL minted `RunConfig`, bounded so a drive terminates (WPAX S-1: the strict gate
     means no `SimpleNamespace()` reaches this root any more — smoke runs get smoke CONFIGS)."""
     return smoke_run_config(
-        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS},
+        train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
+               # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
+               "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **monitor_over},
     )
 
@@ -226,16 +228,23 @@ class FakePoolNeverStarted:
 
 
 class _DrivableTrainer:
+    """WPTS/TD-1 re-point (R90a): conforms to the DECLARED seam — typed entry points +
+    `device`; the dead `train_step` fake is gone with the card."""
+
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.inference_sd: dict = {}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -256,7 +265,7 @@ class _DrivableBuffer:
 
 
 def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """Spy order: pool.start() -> watchdog.start() (subsystems.py contract; the composition
     root is the ONE place this order is enforced). `build_run_safety` must be called exactly
@@ -279,7 +288,7 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     handles = mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
-        pool=pool, buffer=_DrivableBuffer(),
+        pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False,
     )
@@ -294,7 +303,7 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
 
 
 def test_wired_sources_include_eval_round_iff_pipeline_built(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """`wired_sources` passed to `build_run_safety` includes "eval_round" iff an eval
     pipeline is actually built (`eval_enabled=True`); absent when `eval_enabled=False`."""
@@ -316,7 +325,7 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
     _patch_eval_side(monkeypatch)
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
-        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
+        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
     assert "eval_round" in seen["with_eval"], (
@@ -326,7 +335,7 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("no_eval"))
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
-        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
+        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
     assert "eval_round" not in seen["no_eval"], (
@@ -355,7 +364,7 @@ def test_close_out_with_never_started_pool_does_not_raise() -> None:
 
 
 def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """The `run_safety.sink` / `run_safety.heartbeat` built by `build_run_safety` must reach
     BOTH the eval pipeline (if built) and the `StepCoordinator` — asserted via identity spies
@@ -376,7 +385,7 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
 
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
-        pool=FakePoolNeverStarted(), buffer=_DrivableBuffer(),
+        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
     )
     assert captured.get("sink") is sink, "the eval pipeline must receive the SAME sink"
@@ -387,7 +396,7 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
 
 # ── STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0) ─────────
 def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """A real `config.monitor` (MonitorSchemaConfig) flows through compose_run's own
     resolve_monitor_config call into the MonitorConfig handed to build_run_safety /
@@ -418,7 +427,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     cfg = _bounded(smoke_run_config, alert_entropy_min=2.75)
     mantis_run.compose_run(
         config=cfg, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(),
-        buffer=_DrivableBuffer(),
+        buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
     )
     assert captured["monitor_cfg"] is not None
@@ -428,7 +437,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
 
 # ── RED-TEAM F-3 — the composition root RE-VALIDATES, it does not merely type-check ───────
 def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """The twelfth route: a genuine `RunConfig` that never re-ran its cross-field validators.
 
@@ -474,7 +483,7 @@ def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
 
     with pytest.raises(UnvalidatedConfigError, match="must be < train.max_train_steps"):
         mantis.run.compose_run(
-            config=rigged, trainer=trainer, pool=pool, buffer=_DrivableBuffer(),
+            config=rigged, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
         )
 

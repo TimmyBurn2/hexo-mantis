@@ -81,3 +81,22 @@ def make_run_config_from_minted(name: str = "smoke_gnn.yaml", **section_override
 def smoke_run_config():
     """The factory itself, so a test can vary the config NAME as well as its deltas."""
     return make_run_config_from_minted
+
+
+@pytest.fixture
+def mk_graph_buffer():
+    """Factory: a REAL `HexgBuffer` preloaded through the real graph push path — the
+    smallest buffer the DECLARED graph training route serves (WPTS/TD-1, R102). Composition
+    drives use it wherever a minted graph config's straight arm executes: the typed route
+    refuses a shapeless fake at dispatch (`RepresentationRouteError`), by design."""
+    from mantis._engine import HexgBuffer
+
+    def make(n_records: int = 8, capacity: int = 64, encoding: str = "gnn_axis_v1"):
+        hb = HexgBuffer(capacity, encoding)
+        for i in range(n_records):
+            stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+            hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i,
+                                   True, 1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+        return hb
+
+    return make

@@ -91,13 +91,17 @@ child rc -15, EMPTY stderr. `buffer_size` is **0** for the whole window — one 
 worker at run5's settings finishes no games, so the coordinator never leaves its warmup arm
 (`_run_loop` O4, `buffer.size < cfg.min_buf_size`) and never takes a training step.
 
-**CARD-TRAINSTEP-ADAPTER (TD-1) IS STILL LIVE AND IS NOW THE NEXT WALL.**
-`step.py:640` calls `self.trainer.train_step(self.buffer, ...)`; `Trainer` defines only
-`train_step_from_tensors` / `train_step_from_graph_batch`, and `TrainerLike`
-(`coordinator/config.py:35`) does not declare `train_step` at all. It sits BEHIND the warmup
-gate, so a CPU rehearsal cannot reach it — TD-1 is live-but-UNREACHED here, and this box
-therefore CANNOT demonstrate a completed burst. The binding measurement is the training-box
-run. Do not read rc 40 as "TD-1 is fixed"; read it as "TD-1 was never reached".
+**CARD-TRAINSTEP-ADAPTER (TD-1) IS DEAD (WPTS, R102).** The straight self-play arm no longer
+calls a `train_step` that does not exist: `step.py::_run_training_step` routes through the
+DECLARED dispatcher (`coordinator/dispatch.py::run_declared_train_step`), keyed on the
+resolved `identity.representation` — graph → `sample_graph_batch` → collate →
+`trainer.train_step_from_graph_batch`; grid → `sample_batch_with_pos` →
+`trainer.train_step_from_tensors`; anything else raises. `TrainerLike` declares both typed
+entry points and the seam is conformance-gated
+(`tests/train/test_trainer_seam_conformance.py`). A real graph gradient step from the
+coordinator path is pinned by `tests/train/test_train_step_dispatch.py`. What a CPU
+rehearsal still cannot prove is THROUGHPUT: one CPU worker at run5's settings may not leave
+warmup inside the window, and that remains a box fact, not a tree defect.
 
 This docstring previously named CARD-TRAINSTEP-ADAPTER (`train/coordinator/step.py:573`,
 rc 32) as the terminal wall, copying DESIGN_P §3.4. That was **measured false**

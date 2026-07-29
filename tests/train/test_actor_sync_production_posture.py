@@ -83,13 +83,19 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -161,7 +167,7 @@ def _install_harness(monkeypatch):
 
 
 def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """THE F-1 pin. Production posture, observed by consequence rather than syntax.
 
@@ -174,9 +180,10 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
 
     handles = mantis.run.compose_run(
         config=smoke_run_config(
-            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
+                   "batch_size": 8},
             monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
-        trainer=trainer, pool=pool, buffer=_Buffer(),
+        trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=True,
     )
@@ -197,7 +204,7 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
 
 
 def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
-    tmp_path, monkeypatch, smoke_run_config
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """Both postures must sync. A difference between them IS the coupling R49 forbids."""
     results = {}
@@ -206,9 +213,10 @@ def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
         _install_harness(monkeypatch)
         mantis.run.compose_run(
             config=smoke_run_config(
-                train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+                train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
+                       "batch_size": 8},
                 monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
-            trainer=trainer, pool=pool, buffer=_Buffer(),
+            trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / label), checkpoint_dir=str(tmp_path / label / "ckpt"),
             eval_enabled=eval_enabled,
         )

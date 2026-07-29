@@ -86,13 +86,19 @@ class _Trainer:
     def __init__(self) -> None:
         self.step = 0
         self.model = object()
+        self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    def train_step(self, buffer, augment=False, recent_buffer=None) -> dict[str, float]:
+    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
+    # conforms to the DECLARED seam (typed entry points + `device`).
+    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
                 "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
                 "opp_reply_loss": 0.0, "loss_total": 1.0}
+
+    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
+        return self.train_step_from_tensors()
 
     def inference_state_dict(self) -> dict:
         return self.inference_sd
@@ -122,7 +128,8 @@ def _bounded_config(**kwargs) -> StepCoordinatorConfig:
                                eval_interval=0, log_interval=1, stop_step=_STOP_STEP)
 
 
-def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, *, abort_enabled=None):
+def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
+                               *, abort_enabled=None):
     """Run `compose_run` and return (captured_kwargs, pool, trainer).
 
     Captures what the composition root ACTUALLY hands `build_run_safety`, rather than
@@ -152,36 +159,38 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, *, abort
     monkeypatch.setattr(mantis.run, "_step_coordinator_config", _bounded_config)
     mantis.run.compose_run(
         config=smoke_run_config(
-            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},
+            train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
+                   # WPTS/TD-1: real graph route per step; the minted 256 batch is drag.
+                   "batch_size": 8},
             monitor=monitor_overrides),
-        trainer=trainer, pool=pool, buffer=_Buffer(),
+        trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         eval_enabled=False,
     )
     return captured, pool, trainer
 
 
-def test_composition_root_supplies_both_lag_callables(tmp_path, monkeypatch, smoke_run_config):
-    captured, _pool, _trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config)
+def test_composition_root_supplies_both_lag_callables(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
+    captured, _pool, _trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     for name in ("actor_ckpt_step_fn", "learner_step_fn"):
         assert name in captured, f"composition root did not supply {name}"
         assert callable(captured[name])
 
 
-def test_learner_step_fn_reads_the_live_trainer(tmp_path, monkeypatch, smoke_run_config):
+def test_learner_step_fn_reads_the_live_trainer(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
     """Not a captured snapshot: mutating the trainer must move the reading.
 
     A build-time snapshot would freeze `learner_step` and the lag would never grow, so the
     invariant could never fire however far the actor fell behind.
     """
-    captured, _pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config)
+    captured, _pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     trainer.step = 4242
     assert captured["learner_step_fn"]() == 4242
 
 
-def test_actor_ckpt_step_fn_reads_the_live_sync_engine(tmp_path, monkeypatch, smoke_run_config):
+def test_actor_ckpt_step_fn_reads_the_live_sync_engine(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
     """It must report the actor's real synced step, not a constant and not the trainer."""
-    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config)
+    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     assert pool.step_calls, "harness precondition: the actor synced at least once"
     assert captured["actor_ckpt_step_fn"]() == pool.step_calls[-1]
 
@@ -191,13 +200,13 @@ def test_actor_ckpt_step_fn_reads_the_live_sync_engine(tmp_path, monkeypatch, sm
     assert captured["actor_ckpt_step_fn"]() == before
 
 
-def test_the_two_lag_callables_are_not_swapped(tmp_path, monkeypatch, smoke_run_config):
+def test_the_two_lag_callables_are_not_swapped(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
     """Swapping them inverts the invariant into a permanent false-negative.
 
     `learner_step − actor_ckpt_step` would go negative rather than positive, so a starved
     actor would read as healthy no matter how far behind it fell.
     """
-    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config)
+    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     trainer.step = pool.step_calls[-1] + 500
 
     learner = captured["learner_step_fn"]()
@@ -210,9 +219,9 @@ def test_the_two_lag_callables_are_not_swapped(tmp_path, monkeypatch, smoke_run_
     )
 
 
-def test_neither_callable_is_a_constant(tmp_path, monkeypatch, smoke_run_config):
+def test_neither_callable_is_a_constant(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
     """Kills the `lambda: 0` stub directly — the cheapest way to blind the gate."""
-    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config)
+    captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     trainer.step = 7
     assert captured["learner_step_fn"]() == 7
     trainer.step = 8
@@ -229,7 +238,7 @@ def test_neither_callable_is_a_constant(tmp_path, monkeypatch, smoke_run_config)
 
 @pytest.mark.parametrize("armed", [True, False])
 def test_the_composed_monitor_cfg_carries_the_declared_arming(
-    tmp_path, monkeypatch, smoke_run_config, armed
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, armed
 ):
     """The arming value must survive the WHOLE chain, not just its first arrow.
 
@@ -249,7 +258,7 @@ def test_the_composed_monitor_cfg_carries_the_declared_arming(
     assertion that only checked `is True` would be satisfied by a hardcoded `True`.
     """
     captured, _pool, _trainer = _compose_capturing_lag_fns(
-        tmp_path, monkeypatch, smoke_run_config, abort_enabled=armed)
+        tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, abort_enabled=armed)
     assert captured["monitor_cfg"].actor_lag_abort_enabled is armed, (
         f"config declared actor_lag_abort_enabled={armed} but build_run_safety received "
         f"{captured['monitor_cfg'].actor_lag_abort_enabled} — the arming was lost in transit"
