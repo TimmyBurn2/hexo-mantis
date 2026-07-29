@@ -45,6 +45,7 @@ class CorpusSource(ABC):
     def __iter__(self) -> Iterator[GameRecord]:
         """Yield one :class:`GameRecord` per completed game."""
 
-    def __len__(self) -> int | None:
-        """Return the number of games if known, else ``None``."""
-        return None
+    # No base `__len__`: the old `__len__ -> int | None` returning None made `len(source)`
+    # a runtime TypeError anyway (PLE0303 — len() rejects non-int), just a misleading one.
+    # A source that knows its length declares its own int-returning `__len__`
+    # (`HumanSource` does); on the rest, `len()` fails loud and honestly (WPCLEAN Phase LT).
