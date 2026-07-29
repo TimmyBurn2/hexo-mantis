@@ -14,8 +14,9 @@ set of not threading every new schema leaf into this payload).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.encoding import reconcile_encoding

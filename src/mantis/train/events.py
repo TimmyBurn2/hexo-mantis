@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from mantis.train.axis_distribution import compute_axis_fractions
 from mantis.train.emit import EventSink, emit_via
@@ -123,7 +123,7 @@ def emit_axis_distribution(
     baseline: dict[str, float],
     tb_writer: Any,
     sink: EventSink,
-) -> Optional[float]:
+) -> float | None:
     """Compute + emit selfplay axis-distribution metrics through the injected sink.
 
     `monitor_cfg` is a `MonitorConfig`-like (duck-typed — `train/events.py` is NOT one of
@@ -195,11 +195,11 @@ def emit_training_events(
     mcts_config: dict[str, Any],
     capacity: int,
     games_per_hour_fn: Any,
-    qfire_delta: Optional[int],
+    qfire_delta: int | None,
     sink: EventSink,
-    early_game_probe: Optional[Any] = None,
-    trainer_model: Optional[Any] = None,
-    solver_deltas: Optional[dict[str, Any]] = None,
+    early_game_probe: Any | None = None,
+    trainer_model: Any | None = None,
+    solver_deltas: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Emit `training_step` + `iteration_complete` events through the injected sink and
     RETURN the `training_step` payload.

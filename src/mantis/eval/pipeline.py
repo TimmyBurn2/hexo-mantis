@@ -22,9 +22,10 @@ import math
 import multiprocessing
 import threading
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -94,7 +95,7 @@ def drain_budget_sec(caps: DrainCaps) -> float:
 
 def drain_or_kill(
     proc: Any, *, budget_sec: float, worker_kill_grace_sec: float, clock: Callable[[], float]
-) -> "tuple[bool, str]":
+) -> tuple[bool, str]:
     """Bounded join -> (if still alive) terminate -> bounded join -> kill -> bounded join.
     Returns `(broken, reason)`; every join carries a bound (isolation law 2)."""
     del clock  # the caller advances/consults its own clock; every join below is bounded
@@ -128,7 +129,7 @@ def emit_round_started(
 
 def emit_round_complete(
     sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int,
-    promoted: bool, wr_sealbot: "float | None",
+    promoted: bool, wr_sealbot: float | None,
 ) -> dict[str, Any]:
     payload = {
         "event": "eval_round_complete", "round_id": round_id, "step": step,
@@ -145,7 +146,7 @@ def emit_round_skipped_busy(sink: Any, *, step: int, in_flight_round_id: str) ->
     return payload
 
 
-def emit_rung_skip_events(round_id: str, skipped: "list[Mapping[str, str]]", sink: Any) -> None:
+def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink: Any) -> None:
     """Per skipped rung: ONE `eval_rung_skipped` event AND one ERROR log line — never
     silent (all three: event + log + the caller's own `skipped_rungs` record)."""
     for entry in skipped:
@@ -175,11 +176,11 @@ class EvalPipeline:
         caps: DrainCaps,
         encoding: str,
         run_id: str,
-        spool_dir: "str | Path",
-        ladder_state_path: "str | Path",
+        spool_dir: str | Path,
+        ladder_state_path: str | Path,
         promotion: DeployTagHooks,
         sink: Any = None,
-        heartbeat: "Callable[[str], None] | None" = None,
+        heartbeat: Callable[[str], None] | None = None,
         clock: Callable[[], float] = time.monotonic,
         mp_ctx_name: str = "spawn",
     ) -> None:
@@ -203,16 +204,16 @@ class EvalPipeline:
         self._mp_ctx_name = mp_ctx_name
 
         self._lock = threading.Lock()
-        self._inflight: "dict[str, Any] | None" = None
-        self._mailbox: "list[dict[str, Any]]" = []
+        self._inflight: dict[str, Any] | None = None
+        self._mailbox: list[dict[str, Any]] = []
         self._round_counter = 0
-        self._last_p_hat: "dict[str, float]" = {}
+        self._last_p_hat: dict[str, float] = {}
 
         # LAZY: the ladder state is only ever needed once a round is actually kicked
         # (`_build_round_spec`/`_success_result`) — deferring construction means a
         # pipeline built for a narrow purpose (e.g. only exercising the heartbeat poller)
         # need not hand a fully-populated `eval_cfg.ladder` up front.
-        self._ladder_state: "LadderState | None" = None
+        self._ladder_state: LadderState | None = None
 
         self._stop_event = threading.Event()
         self._poller = threading.Thread(
@@ -255,7 +256,7 @@ class EvalPipeline:
             if elapsed > self._eval_cfg.round_timeout_sec:
                 self._escalate_and_finalize(inflight)
 
-    def _escalate_and_finalize(self, inflight: "dict[str, Any]") -> None:
+    def _escalate_and_finalize(self, inflight: dict[str, Any]) -> None:
         # F-RT2-1 layer 2: `_bounded_join_timeout` is the ONLY guard between this call
         # and a real OverflowError -- this method is invoked directly from `_poll_loop`,
         # entirely OUTSIDE `_finalize_round`'s F1 layer-2 catch-all, so an uncaught
@@ -271,7 +272,7 @@ class EvalPipeline:
     # ── kick / ack ───────────────────────────────────────────────────────────────────
     def run_evaluation(
         self, model: Any, step: int, best: Any, *, full_config: dict[str, Any],
-        best_model_step: "int | None", ignore_stride: bool = False,
+        best_model_step: int | None, ignore_stride: bool = False,
     ) -> dict[str, Any]:
         if ignore_stride:
             return self._run_terminal_sync(model, step, best, best_model_step=best_model_step)
@@ -299,18 +300,18 @@ class EvalPipeline:
         )
         return {"kicked": True, "round_id": round_id, "step": step, "reason": None}
 
-    def _current_p_hat(self) -> "dict[str, float]":
+    def _current_p_hat(self) -> dict[str, float]:
         if self._last_p_hat:
             return dict(self._last_p_hat)
         return {rung.name: 0.5 for rung in self._eval_cfg.ladder.rungs}
 
     def _build_round_spec(
         self, model: Any, step: int, best: Any, *, round_id: str, round_idx: int, terminal: bool,
-    ) -> "tuple[RoundSpec, dict[str, int], bool, Path]":
+    ) -> tuple[RoundSpec, dict[str, int], bool, Path]:
         cfg = self._eval_cfg
         candidate_path = self._spool_dir / f"{round_id}_candidate.pt"
         write_model_snapshot(model, candidate_path)
-        best_path: "Path | None" = None
+        best_path: Path | None = None
         if best is not None:
             best_path = self._spool_dir / f"{round_id}_best.pt"
             write_model_snapshot(best, best_path)
@@ -372,13 +373,13 @@ class EvalPipeline:
         return proc
 
     # ── mailbox / bounded drains ───────────────────────────────────────────────────────
-    def poll_completed(self) -> "dict | list | None":
+    def poll_completed(self) -> dict | list | None:
         with self._lock:
             if not self._mailbox:
                 return None
             return self._mailbox.pop(0)
 
-    def drain_pending(self) -> "dict | list | None":
+    def drain_pending(self) -> dict | list | None:
         with self._lock:
             inflight = self._inflight
         if inflight is None:
@@ -395,7 +396,7 @@ class EvalPipeline:
         return self._finalize_round(inflight)
 
     def _finalize_round(
-        self, inflight: "dict[str, Any]", *, escalated_reason: "str | None" = None,
+        self, inflight: dict[str, Any], *, escalated_reason: str | None = None,
     ) -> dict[str, Any]:
         proc = inflight["proc"]
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
@@ -430,7 +431,7 @@ class EvalPipeline:
         return result
 
     def _round_completion_error_result(
-        self, inflight: "dict[str, Any]", exc: Exception, *, wall_sec: float,
+        self, inflight: dict[str, Any], exc: Exception, *, wall_sec: float,
     ) -> dict[str, Any]:
         """The F1 layer-2 catch-all result: reason names the exception CLASS
         (`round_completion_error`, not a bare "something broke"), the event AND the routed
@@ -460,7 +461,7 @@ class EvalPipeline:
         return result
 
     def _read_worker_result(
-        self, inflight: "dict[str, Any]", *, exit_code: "int | None", wall_sec: float,
+        self, inflight: dict[str, Any], *, exit_code: int | None, wall_sec: float,
     ) -> dict[str, Any]:
         spec: RoundSpec = inflight["spec"]
         result_path = Path(spec.result_path)
@@ -478,7 +479,7 @@ class EvalPipeline:
         return self._success_result(inflight, raw, wall_sec=wall_sec)
 
     def _broken_result(
-        self, inflight: "dict[str, Any]", *, reason: str, exit_code: "int | None",
+        self, inflight: dict[str, Any], *, reason: str, exit_code: int | None,
         wall_sec: float, phase: str,
     ) -> dict[str, Any]:
         _emit(self._sink, {
@@ -500,7 +501,7 @@ class EvalPipeline:
         return result
 
     def _success_result(
-        self, inflight: "dict[str, Any]", raw: dict[str, Any], *, wall_sec: float,
+        self, inflight: dict[str, Any], raw: dict[str, Any], *, wall_sec: float,
     ) -> dict[str, Any]:
         round_idx = inflight["round_idx"]
         rungs_raw: dict[str, Any] = raw.get("rungs", {})
@@ -589,7 +590,7 @@ class EvalPipeline:
 
     # ── terminal (synchronous, ignore_stride) ───────────────────────────────────────────
     def _run_terminal_sync(
-        self, model: Any, step: int, best: Any, *, best_model_step: "int | None",
+        self, model: Any, step: int, best: Any, *, best_model_step: int | None,
     ) -> dict[str, Any]:
         round_idx = self._round_counter + 1
         round_id = f"r{round_idx:06d}_{step}_terminal"
@@ -612,7 +613,7 @@ class EvalPipeline:
         return self._finalize_round(inflight)
 
     # ── gate-decision delegation (the ONE call site lives in promote.py) ────────────────
-    def apply_gate_decision(self, result: Mapping[str, Any]) -> "int | None":
+    def apply_gate_decision(self, result: Mapping[str, Any]) -> int | None:
         return apply_gate_decision(self._promotion, result)
 
     # ── teardown ─────────────────────────────────────────────────────────────────────
@@ -635,11 +636,11 @@ def build_eval_pipeline(
     coordinator_cfg_caps: DrainCaps,
     encoding: str,
     run_id: str,
-    spool_dir: "str | Path",
-    ladder_state_path: "str | Path",
+    spool_dir: str | Path,
+    ladder_state_path: str | Path,
     promotion: DeployTagHooks,
     sink: Any = None,
-    heartbeat: "Callable[[str], None] | None" = None,
+    heartbeat: Callable[[str], None] | None = None,
     clock: Callable[[], float] = time.monotonic,
     mp_ctx: str = "spawn",
 ) -> EvalPipeline:

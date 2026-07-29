@@ -9,8 +9,9 @@ Import constraint (DAG): stdlib + mantis.encoding ONLY — no torch, no eval/sel
 from __future__ import annotations
 
 import types
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from mantis.encoding import normalize_encoding_name as _normalize
 

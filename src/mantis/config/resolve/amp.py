@@ -10,7 +10,7 @@ graph branch.
 from __future__ import annotations
 
 
-def resolve_amp_dtype(representation: str, declared_amp_dtype: "str | None" = None) -> str:
+def resolve_amp_dtype(representation: str, declared_amp_dtype: str | None = None) -> str:
     """Resolve the autocast dtype token for a representation.
 
     "graph" -> "bf16" unconditionally (pinned constant, LAW-06); ``declared_amp_dtype`` is

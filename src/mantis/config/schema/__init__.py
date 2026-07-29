@@ -6,6 +6,7 @@ the cap while re-exporting the full pre-split public surface so every existing
 `from mantis.config.schema import X` call site is unaffected by the split.
 """
 from mantis.config.schema.core import (
+    _EVAL_TIMEOUT_CEILING_SEC,
     SCHEMA_VERSION,
     EvalConfig,
     GateConfig,
@@ -14,7 +15,6 @@ from mantis.config.schema.core import (
     LadderRung,
     RunConfig,
     StrictModel,
-    _EVAL_TIMEOUT_CEILING_SEC,
 )
 from mantis.config.schema.monitor import DrainCapsConfig, MonitorSchemaConfig
 from mantis.config.schema.selfplay import (

@@ -16,7 +16,8 @@ reachable without Slice 3.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from mantis.train.emit import emit_via
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
@@ -27,15 +28,15 @@ _LOG = logging.getLogger(__name__)
 def run_training_loop(
     *,
     trainer: Any,
-    shutdown_state: Optional[ShutdownState] = None,
-    resolve_anchor: Optional[Callable[..., Any]] = None,
+    shutdown_state: ShutdownState | None = None,
+    resolve_anchor: Callable[..., Any] | None = None,
     eval_pipeline: Any = None,
     coordinator: Any = None,
-    step_fn: Optional[Callable[[], Any]] = None,
-    max_steps: Optional[int] = None,
+    step_fn: Callable[[], Any] | None = None,
+    max_steps: int | None = None,
     anchor_state: Any = None,
     sink: Any = None,
-    loss_info: Optional[dict] = None,
+    loss_info: dict | None = None,
 ) -> ShutdownState:
     """Drive the training loop under the §c.8 injection contract; return the final state.
 

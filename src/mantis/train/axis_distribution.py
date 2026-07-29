@@ -11,7 +11,7 @@ Three axes (matching env.game_state._HEX_AXES order):
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 

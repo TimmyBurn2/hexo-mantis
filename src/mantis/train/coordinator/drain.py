@@ -15,7 +15,8 @@ pool's lifecycle state is irrelevant to a gate decision. With no pipeline inject
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Mapping, Sequence, cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
 
 from mantis.train.emit import emit_via
 
@@ -136,7 +137,7 @@ def run_terminal_eval(coord: Any) -> Any:
     ))
 
 
-def close_out(coord: Any, on_drained: "Callable[[], None] | None" = None) -> None:
+def close_out(coord: Any, on_drained: Callable[[], None] | None = None) -> None:
     """The run epilogue (§D-LOOPFIX W1): (0) DISARM the heartbeat watchdog's staleness fire,
     (1) DRAIN the in-flight eval, (2) ``on_drained()`` (the caller passes ``pool.stop`` so
     the terminal eval runs on an UNLOADED GPU), (3) TERMINAL full-battery eval on the final

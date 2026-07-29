@@ -29,9 +29,10 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ class JsonlEventSink:
                 "run_id": self._run_id,
                 "segment": self._segment,
                 "pid": os.getpid(),
-                "created_utc": datetime.now(timezone.utc).isoformat(),
+                "created_utc": datetime.now(UTC).isoformat(),
                 "contract": EVENT_CONTRACT,
             }
         )

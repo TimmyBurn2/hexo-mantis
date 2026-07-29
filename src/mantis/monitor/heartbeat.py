@@ -22,9 +22,10 @@ import os
 import random
 import threading
 import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, cast
+from typing import Any, cast
 
 # The pipeline stages whose liveness the watchdog keys on (name pins — the manifest rows,
 # the coordinator beat, the pool/server beats and the arm-log all use these tokens).

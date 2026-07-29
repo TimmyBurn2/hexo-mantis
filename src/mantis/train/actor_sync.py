@@ -21,7 +21,8 @@ carrying the lever's own fire-rate fields through the injected sink.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class ActorSync:

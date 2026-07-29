@@ -15,7 +15,8 @@ the baked `identity.encoding`. Its LAW-08 live consumer is the conformance suite
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 # ── The checkpoint-owned frozen key set — SINGLE source of truth (repo_design §c.2) ────
 # Keys that MUST come from the CHECKPOINT on resume, never from the launch variant; the
@@ -30,7 +31,7 @@ RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
 })
 
 
-def compute_declared_keys(layers: "list[dict] | None") -> frozenset[str]:
+def compute_declared_keys(layers: list[dict] | None) -> frozenset[str]:
     """Top-level keys the OPERATOR declared in a `config`/`variant` layer (CONFRES F1/B3).
 
     A key present in a `config`/`variant` layer is a DECLARATION (incl. an explicit
@@ -54,7 +55,7 @@ def build_resume_config_overrides(
     *,
     override_scheduler_horizon: bool = False,
     allow_fresh_scheduler: bool = False,
-    declared_keys: "frozenset | set | None" = None,
+    declared_keys: frozenset | set | None = None,
 ) -> dict[str, Any]:
     """Build the resume `config_overrides` so the launch variant WINS (D-FULLSPEC E0).
 
@@ -98,7 +99,7 @@ def init_trainer(
     device: Any = None,
     override_scheduler_horizon: bool = False,
     allow_fresh_scheduler: bool = False,
-    declared_keys: "frozenset | set | None" = None,
+    declared_keys: frozenset | set | None = None,
     sink: Any = None,
 ) -> Any:
     """Fresh-run vs resume dispatch, rebuilt thin against the typed config + `build_net(arch)`.

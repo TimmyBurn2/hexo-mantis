@@ -23,9 +23,10 @@ total may undershoot). SATURATED rungs get `calibration_games` every
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -67,7 +68,7 @@ class _RungState:
                 "history": list(self.history)}
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "_RungState":
+    def from_dict(cls, payload: Mapping[str, Any]) -> _RungState:
         return cls(name=payload["name"], status=payload["status"], consec=payload["consec"],
                    history=list(payload.get("history", [])))
 
@@ -80,7 +81,7 @@ class LadderState:
         self._rungs = rung_states
 
     @classmethod
-    def initial(cls, ladder_cfg: LadderConfig) -> "LadderState":
+    def initial(cls, ladder_cfg: LadderConfig) -> LadderState:
         rung_states: dict[str, _RungState] = {}
         for index, rung in enumerate(ladder_cfg.rungs):
             status = _ACTIVE if index == 0 else _DORMANT
@@ -94,7 +95,7 @@ class LadderState:
     def consec(self, rung: str) -> int:
         return self._rungs[rung].consec
 
-    def rungs(self) -> "list[LadderRung]":
+    def rungs(self) -> list[LadderRung]:
         return list(self._cfg.rungs)
 
     # ── round recording (activation + graduation transitions) ──────────────────────────
@@ -222,7 +223,7 @@ class LadderState:
         return alloc
 
     # ── persistence (LAW-14: no silent except) ─────────────────────────────────────────
-    def save(self, path: "str | Path") -> None:
+    def save(self, path: str | Path) -> None:
         target = Path(path)
         payload = {name: state.to_dict() for name, state in self._rungs.items()}
         try:
@@ -234,7 +235,7 @@ class LadderState:
             raise LadderStateError(f"LadderState.save failed for {target}: {exc!r}") from exc
 
     @classmethod
-    def load(cls, path: "str | Path", *, ladder_cfg: "LadderConfig | None" = None) -> "LadderState":
+    def load(cls, path: str | Path, *, ladder_cfg: LadderConfig | None = None) -> LadderState:
         target = Path(path)
         try:
             raw = json.loads(target.read_text())

@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Optional
 
 import numpy as np
 import torch
@@ -121,7 +120,7 @@ def _resolve_encoding_name(args: argparse.Namespace) -> str:
     )
 
 
-def pretrain(argv: Optional[list[str]] = None) -> None:
+def pretrain(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO)
     args = _build_arg_parser().parse_args(argv)
 
@@ -134,7 +133,7 @@ def pretrain(argv: Optional[list[str]] = None) -> None:
     spec = _lookup_encoding(encoding)  # loud raise on an unregistered name
 
     # Plain config dict (training knobs are explicit params — R-TRAINCONFIG-SCHEMA; no yaml files).
-    config: Dict = {
+    config: dict = {
         "encoding": encoding,
         "in_channels": int(spec.n_planes),
         "lr": float(args.lr),
@@ -201,7 +200,7 @@ def pretrain(argv: Optional[list[str]] = None) -> None:
         _resume_into(trainer, args, total_pretrain_steps)
 
     if args.freeze_trunk_entry or args.unfreeze_blocks is not None:
-        unfreeze_set: Optional[set] = None
+        unfreeze_set: set | None = None
         if args.unfreeze_blocks is not None:
             unfreeze_set = {int(s) for s in args.unfreeze_blocks.split(",") if s.strip()}
         report = _apply_finetune_freeze(

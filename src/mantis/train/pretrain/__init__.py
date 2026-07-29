@@ -29,7 +29,7 @@ __all__ = [
 ]
 
 
-def pretrain(argv: "list[str] | None" = None) -> None:
+def pretrain(argv: list[str] | None = None) -> None:
     """The CLI main (lazy import of `cli` so the package imports without argparse side effects)."""
     from mantis.train.pretrain.cli import pretrain as _pretrain
 

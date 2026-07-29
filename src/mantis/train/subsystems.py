@@ -23,9 +23,10 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, NamedTuple, Sequence
+from typing import Any, NamedTuple
 
 import torch
 

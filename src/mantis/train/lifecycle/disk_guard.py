@@ -14,7 +14,7 @@ import shutil
 import signal
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class DiskGuard:
         self.keep_all = keep_all
         self._sink = sink
         self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._loop, daemon=True, name="disk-guard")

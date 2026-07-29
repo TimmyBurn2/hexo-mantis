@@ -42,7 +42,7 @@ def _plain_dict_to_arch(payload: dict[str, Any]) -> Any:
     return arch_cls(**payload)
 
 
-def write_model_snapshot(model: "torch.nn.Module", path: "str | Path") -> str:
+def write_model_snapshot(model: torch.nn.Module, path: str | Path) -> str:
     """Snapshot `model`'s CPU weights + its declared `.arch` to `path`; return the sha256
     of the written file. NO forward, NO `.cuda()`, NO device argument."""
     arch = getattr(model, "arch", None)
@@ -72,7 +72,7 @@ def write_model_snapshot(model: "torch.nn.Module", path: "str | Path") -> str:
     return sha.hexdigest()
 
 
-def load_model_snapshot(path: "str | Path", device: str = "cpu") -> "torch.nn.Module":
+def load_model_snapshot(path: str | Path, device: str = "cpu") -> torch.nn.Module:
     """Worker-side (child-process) load: rebuild the IDENTICAL net from the snapshot's
     plain-dict arch via `build_net`, load its weights, move to `device`."""
     payload = torch.load(Path(path), map_location="cpu", weights_only=True)

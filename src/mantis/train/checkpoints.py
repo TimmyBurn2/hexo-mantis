@@ -20,14 +20,15 @@ import datetime as _datetime
 import hashlib
 import logging
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import torch
 
 from mantis.config.schema import RunConfig
-from mantis.encoding import EncodingRegistryError, lookup
+from mantis.encoding import lookup
 from mantis.model import (
     CnnArch,
     GnnArch,
@@ -110,7 +111,7 @@ def _resolve_commit_sha() -> str:
 
 def _now_iso() -> str:
     return (
-        _datetime.datetime.now(_datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        _datetime.datetime.now(_datetime.UTC).replace(tzinfo=None).isoformat() + "Z"
     )
 
 
@@ -153,7 +154,7 @@ def _wire_signature(spec: Any) -> tuple[int, int, int]:
 
 
 # ── Content hash + filename ────────────────────────────────────────────────────────────
-def _hash_update(h: "hashlib._Hash", obj: Any) -> None:
+def _hash_update(h: hashlib._Hash, obj: Any) -> None:
     if isinstance(obj, torch.Tensor):
         h.update(b"\x01T")
         t = obj.detach().cpu().contiguous()
@@ -779,7 +780,7 @@ def strip_and_restamp(
 def apply_config_overrides_f1(
     baked: Mapping[str, Any] | None,
     overrides: Mapping[str, Any],
-    declared_keys: "frozenset | set | None",
+    declared_keys: frozenset | set | None,
     *,
     sink: Any = None,
 ) -> tuple[dict[str, Any], frozenset[str]]:
@@ -855,7 +856,7 @@ def resume_trainer(
     *,
     fallback_config: Mapping[str, Any] | None = None,
     config_overrides: Mapping[str, Any] | None = None,
-    declared_keys: "frozenset | set | None" = None,
+    declared_keys: frozenset | set | None = None,
     sink: Any = None,
     device: Any = None,
 ) -> Any:

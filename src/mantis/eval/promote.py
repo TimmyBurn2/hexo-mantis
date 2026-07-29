@@ -15,9 +15,10 @@ actor-weight proxy reads).
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class DeployTagHooks:
     guarded_load: Callable[[Any, dict], None]  # injected train.anchor._guarded_load_state_dict
 
 
-def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> "int | None":
+def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int | None:
     """No-op (`None`) unless `result["promoted"] is True` and the round was not broken.
 
     A gate pass advances the deploy tag and ONLY the deploy tag; the actor's weights

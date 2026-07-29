@@ -19,7 +19,8 @@ that never had a config value to give it.
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import mantis.config.resolve.nsims as _nsims_mod
 from mantis.bots.protocol import RungUnresolvable

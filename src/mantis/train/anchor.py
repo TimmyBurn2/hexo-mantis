@@ -36,7 +36,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
 
@@ -78,8 +78,8 @@ class AnchorState:
     is configured (the pre-refactor invariant). `representation` is the DECLARED discriminant
     ("grid"/"graph") read off the arch — never sniffed off a live module (§c.6)."""
 
-    best_model: Optional[torch.nn.Module]
-    best_model_step: Optional[int]
+    best_model: torch.nn.Module | None
+    best_model_step: int | None
     best_model_path: Path
     representation: str
 
@@ -192,7 +192,7 @@ def checkpoint_state_sha256(path: Path) -> str:
 def verify_launch_anchor_pin(
     *,
     expected_anchor_sha256: str | None,
-    checkpoint_path: "str | Path | None",
+    checkpoint_path: str | Path | None,
     trainer_step: int | None,
     run_id: str | None,
 ) -> None:
@@ -271,7 +271,7 @@ def _build_anchor_model(
     *,
     declared_encoding: str | None,
     device: torch.device,
-) -> "tuple[torch.nn.Module, Any]":
+) -> tuple[torch.nn.Module, Any]:
     """Read an anchor file through the ONE loader (weights-only + O3b killed-prefix REJECT +
     declared-arch resolution), build the net via `build_net(metadata.arch)`, and load its weights
     under the (B) corruption guard. Returns `(model, Checkpoint)`; the checkpoint's
@@ -300,7 +300,7 @@ def _try_load_anchor(
     declared_encoding: str | None,
     device: torch.device,
     skip_encoding_mismatch: bool = False,
-) -> "Optional[tuple[torch.nn.Module, Path, Optional[int], str]]":
+) -> tuple[torch.nn.Module, Path, int | None, str] | None:
     """Attempt to load ``candidate`` as an anchor. Returns
     ``(model, path, step, representation)`` on success, None on failure (corrupt zip, unreadable).
 
@@ -346,8 +346,8 @@ def load_best_model_resilient(
     *,
     declared_encoding: str | None,
     device: torch.device,
-    bootstrap_candidates: "tuple[str, ...] | None" = None,
-) -> "Optional[tuple[torch.nn.Module, Path, Optional[int], str]]":
+    bootstrap_candidates: tuple[str, ...] | None = None,
+) -> tuple[torch.nn.Module, Path, int | None, str] | None:
     """Try best_model.pt → its .bak → bootstrap candidates. Returns
     ``(model, source_path, step, representation)`` or None if all fail.
 
@@ -419,11 +419,11 @@ def resolve_anchor(
     sink: Any = None,
     config: dict[str, Any] | None = None,
     device: torch.device | None = None,
-    best_model_path: "str | Path | None" = None,
+    best_model_path: str | Path | None = None,
     declared_encoding: str | None = None,
     run_id: str | None = None,
     expected_anchor_sha256: str | None = None,
-    bootstrap_candidates: "tuple[str, ...] | None" = None,
+    bootstrap_candidates: tuple[str, ...] | None = None,
 ) -> AnchorState:
     """Resolve the best-model anchor (the DEPLOY tag — WP-UNFREEZE, R49: deploy state
     NEVER writes actor weights, at launch or any other time; the old ``inf_model``

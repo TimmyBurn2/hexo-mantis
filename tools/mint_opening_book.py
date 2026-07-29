@@ -45,7 +45,7 @@ def mint_book(*, seed: int, plies: int, n: int) -> dict:
     return {"openings": openings}
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--plies", type=int, required=True)

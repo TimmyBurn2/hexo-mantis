@@ -27,7 +27,8 @@ arguments.
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, MutableSequence, Sequence
+from collections.abc import Mapping, MutableSequence, Sequence
+from typing import Any
 
 from mantis.monitor.config import MonitorConfig
 

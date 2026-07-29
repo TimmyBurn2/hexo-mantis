@@ -10,8 +10,9 @@ input), `winner`, `plies`.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from mantis.arena.regime import RegimeKey
 
@@ -28,13 +29,13 @@ class GameRecord:
     trajectory_hash: str
     winner: str  # "candidate" | "opponent" | "draw"
     plies: int
-    moves: "tuple[tuple[int, int], ...]"
+    moves: tuple[tuple[int, int], ...]
 
 
 def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
     h = hashlib.sha256()
     for q, r in moves:
-        h.update(f"{q},{r};".encode("utf-8"))
+        h.update(f"{q},{r};".encode())
     return h.hexdigest()
 
 
@@ -50,12 +51,12 @@ _DEFAULT_MAX_PLIES = 128
 def _play_one_game(
     candidate_player: Any,
     opponent_bot: Any,
-    opening_moves: "list[tuple[int, int]]",
+    opening_moves: list[tuple[int, int]],
     *,
     candidate_color: int,
     board_factory: Callable[[], Any],
     max_plies: int = _DEFAULT_MAX_PLIES,
-) -> "tuple[str, int, tuple[tuple[int, int], ...]]":
+) -> tuple[str, int, tuple[tuple[int, int], ...]]:
     """Play one game from `opening_moves`; return `(winner, plies, all_moves)`.
 
     `winner` is `"candidate"`, `"opponent"`, or `"draw"`. Both players' `new_game()` fire
@@ -97,13 +98,13 @@ def _play_one_game(
 def play_paired_match(
     candidate_player: Any,
     opponent_bot: Any,
-    openings: "Iterable[Any]",
+    openings: Iterable[Any],
     *,
     regime_key: RegimeKey,
     board_factory: Callable[[], Any],
     record_sink: Any = None,
     max_plies: int = _DEFAULT_MAX_PLIES,
-) -> "list[GameRecord]":
+) -> list[GameRecord]:
     """Play every opening TWICE (colors swapped); return one `GameRecord` per game.
 
     `openings` items need only `.opening_id` and `.moves` (duck-typed — this module does

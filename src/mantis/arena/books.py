@@ -58,7 +58,7 @@ def _load_book_openings(book_id: str, books_dir: Path) -> list[dict]:
 
 
 def paired_openings(
-    book_id: str, n_pairs: int, seed: int, *, books_dir: "Path | str | None" = None
+    book_id: str, n_pairs: int, seed: int, *, books_dir: Path | str | None = None
 ) -> list[Opening]:
     """Deterministically select up to `n_pairs` openings from `book_id` (seeded).
 

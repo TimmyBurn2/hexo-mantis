@@ -25,10 +25,8 @@ colony detection).
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
 
-
-def flat_to_axial(flat_idx: int, board_size: int) -> Tuple[int, int]:
+def flat_to_axial(flat_idx: int, board_size: int) -> tuple[int, int]:
     """Window-local flat index → axial `(q, r)`.
 
     Inverse of `axial_to_flat`. Assumes the window is centred on `(0, 0)`
@@ -48,7 +46,7 @@ def flat_to_axial(flat_idx: int, board_size: int) -> Tuple[int, int]:
     return q, r
 
 
-def axial_to_flat(q: int, r: int, board_size: int) -> Optional[int]:
+def axial_to_flat(q: int, r: int, board_size: int) -> int | None:
     """Axial `(q, r)` → window-local flat index, or `None` if outside window.
 
     Inverse of `flat_to_axial`. Returns `None` when the cell lies outside
@@ -85,7 +83,7 @@ def cell_to_flat(cell_str: str, board_size: int) -> int:
     return flat
 
 
-def axial_distance(a: Tuple[float, float], b: Tuple[float, float]):
+def axial_distance(a: tuple[float, float], b: tuple[float, float]):
     """Hex Manhattan distance between two axial points.
 
     Equivalent to `max(|dq|, |dr|, |dq + dr|)` — this is the three-axis

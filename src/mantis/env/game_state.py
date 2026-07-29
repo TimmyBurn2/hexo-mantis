@@ -1,20 +1,28 @@
 """GameState — immutable snapshot of a Hex Tac Toe board position."""
 
 from __future__ import annotations
+
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, List, Optional, Tuple
+
 import numpy as np
+
 from mantis._engine import Board
 from mantis.encoding import lookup as _lookup_encoding
+
 # Named source-plane offsets (no bare 0/16/17 in the corpus tensor build).
 # resolvers.py mirrors the mantis-core plane consts; the registry
 # kept_plane_indices select from these (registry is canonical).
 from mantis.encoding.resolvers import (
     _CUR_STONE_SRC_PLANE as MY_STONE_PLANE,
+)
+from mantis.encoding.resolvers import (
     _MOVES_REMAINING_SRC_PLANE as MOVES_REMAINING_PLANE,
+)
+from mantis.encoding.resolvers import (
     _PLY_PARITY_SRC_PLANE as PLY_PARITY_PLANE,
 )
+
 # Single SoT for HISTORY_LEN (defined in util.constants, not a second copy here).
 # Load-bearing coupling: the opponent-stone block begins at source plane
 # HISTORY_LEN (== OPP_STONE_PLANE = 8): 8 my-stone history planes (t0..t-7) then
@@ -26,7 +34,7 @@ BOARD_SIZE: int = _lookup_encoding("v6").board_size
 
 # Chain-length plane encoding (Q13). Mirror of the mantis-core HEX_AXES order.
 # Plane layout within the 6-plane block: [a0_cur, a0_opp, a1_cur, a1_opp, a2_cur, a2_opp].
-_HEX_AXES: Tuple[Tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
+_HEX_AXES: tuple[tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
 _CHAIN_CAP: int = 6  # win target; also the saturation cap per the literature review
 
 
@@ -86,7 +94,7 @@ def _chain_plane_for_axis(
     opp: np.ndarray,
     dq: int,
     dr: int,
-    scratch: Optional[np.ndarray] = None,
+    scratch: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute one chain-length plane for a single (axis, player) combination.
 
@@ -167,21 +175,21 @@ class GameState:
     zobrist_hash: int
     ply: int
     # deque(maxlen=HISTORY_LEN): most-recent state is at the right (index -1).
-    move_history: Deque["GameState"] = field(
+    move_history: deque[GameState] = field(
         default_factory=lambda: deque(maxlen=HISTORY_LEN)
     )
     # Each view is shape (2, BOARD_SIZE, BOARD_SIZE): plane 0 = current player's
     # stones, plane 1 = opponent's stones.  This is what Rust's get_cluster_views()
     # returns — 2 planes, not 18.  to_tensor() assembles the full 18-plane tensor
     # by stacking the current snapshot with historical snapshots.
-    views: List[np.ndarray] = field(default_factory=list)
-    centers: List[Tuple[int, int]] = field(default_factory=list)
+    views: list[np.ndarray] = field(default_factory=list)
+    centers: list[tuple[int, int]] = field(default_factory=list)
 
     @staticmethod
     def from_board(
         rust_board: Board,
-        history: Optional[Deque["GameState"]] = None,
-    ) -> "GameState":
+        history: deque[GameState] | None = None,
+    ) -> GameState:
         if history is None:
             history = deque(maxlen=HISTORY_LEN)
         # get_cluster_views returns (list of (2,S,S) float32 numpy arrays, list
@@ -205,13 +213,13 @@ class GameState:
             centers=centers,
         )
 
-    def apply_move(self, rust_board: Board, q: int, r: int) -> "GameState":
+    def apply_move(self, rust_board: Board, q: int, r: int) -> GameState:
         rust_board.apply_move(q, r)
-        new_history: Deque["GameState"] = deque(self.move_history, maxlen=HISTORY_LEN)
+        new_history: deque[GameState] = deque(self.move_history, maxlen=HISTORY_LEN)
         new_history.append(self)
         return GameState.from_board(rust_board, history=new_history)
 
-    def to_tensor(self) -> Tuple[np.ndarray, List[Tuple[int, int]]]:
+    def to_tensor(self) -> tuple[np.ndarray, list[tuple[int, int]]]:
         """Encode the state into K tensors of shape (18, S, S) float16,
         where S = the cluster window size used at construction time
         (default 19 = v6; v6w25 sets 25).

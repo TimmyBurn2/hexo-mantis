@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def try_save_buffer(
     buffer: Any,
     mixing_cfg: dict[str, Any],
     trigger: str,
-    recent_buffer: Optional[Any] = None,
+    recent_buffer: Any | None = None,
 ) -> None:
     """Save the replay buffer (and optionally the recent_buffer) when buffer_persist
     is enabled. A save failure is logged (best-effort) — the canonical resume buffer

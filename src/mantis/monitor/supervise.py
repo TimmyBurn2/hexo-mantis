@@ -25,8 +25,9 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence, TextIO
+from typing import Any, TextIO
 
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (

@@ -6,15 +6,13 @@ CLI when `--freeze-trunk-entry` or `--unfreeze-blocks` is passed. Behaviour-exac
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 
 def _apply_finetune_freeze(
     base_model,
     *,
     freeze_trunk_entry: bool,
-    unfreeze_blocks: Optional[set],
-) -> Dict[str, int]:
+    unfreeze_blocks: set | None,
+) -> dict[str, int]:
     """Apply the §171 A4 fine-tune freeze pattern.
 
     - `freeze_trunk_entry=True`: `requires_grad=False` on `trunk.input_conv` + `trunk.input_gn`.

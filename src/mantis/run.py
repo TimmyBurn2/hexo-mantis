@@ -28,9 +28,10 @@ actor-lag watchdog callables (`actor_ckpt_step` / learner step) into `build_run_
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, NamedTuple, Sequence
+from typing import Any, NamedTuple
 
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
@@ -60,7 +61,7 @@ class RunHandles(NamedTuple):
 
     coordinator: Any
     run_safety: Any
-    eval_pipeline: "Any | None"
+    eval_pipeline: Any | None
     shutdown: ShutdownState
 
 
@@ -96,7 +97,7 @@ def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
 def _step_coordinator_config(
     *,
     stop_step: int,
-    draw_rate_abort: "DrawRateAbortSpec | None",
+    draw_rate_abort: DrawRateAbortSpec | None,
     drain_caps: DrainCapsSpec,
     knobs: CoordinatorKnobsSpec,
 ) -> StepCoordinatorConfig:
@@ -164,8 +165,8 @@ def compose_run(
     trainer: Any,
     pool: Any,
     buffer: Any,
-    log_dir: "str | Path",
-    checkpoint_dir: "str | Path",
+    log_dir: str | Path,
+    checkpoint_dir: str | Path,
     eval_enabled: bool = True,
     run_id: str = "run",
 ) -> RunHandles:
@@ -308,7 +309,7 @@ def _lazy_guarded_load(model: Any, state_dict: Any) -> None:
     _guarded_load_state_dict(model, state_dict)
 
 
-def main(argv: "Sequence[str] | None" = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """`python -m mantis.run <config.yaml>` — smoke-grade until WP-SCHEMA-CLOSE (R-10):
     the pool/trainer/buffer build-out is NOT this WP's property (hparams.py:9-15 legacy
     dict path); this entry point loads + validates the config and reports readiness."""

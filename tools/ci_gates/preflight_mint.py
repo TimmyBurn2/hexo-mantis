@@ -187,7 +187,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from mantis.config.armed_aborts import (
@@ -254,7 +254,7 @@ MINT_REQUIRED_TIERS: tuple[str, ...] = (TIER_SYNC_LAG, TIER_FULL)
 #: `REPORT_MODES`, for the same reason: a tier with no entry is a named internal failure,
 #: because falling back would publish ANOTHER tier's disclaimer into the evidence artifact,
 #: which is ADJ-13 F-3 itself.
-TIER_NOT_PROVEN: "dict[str, str]" = {
+TIER_NOT_PROVEN: dict[str, str] = {
     # Worded to be true on EVERY route that lands here, which is not the same as worded for
     # the route it was written for. Drafting this as "no burst SURVIVED the cross-field
     # validators" was measured false in mode AUDIT on the first drive — AUDIT requests no
@@ -424,8 +424,8 @@ FAILURE_CODES = {
 
 # ── the manifest's repo-root half (SF-4) ──────────────────────────────────────────────
 def verify_source_pins(
-    rows: "tuple[ArmedAbort, ...]", *, repo_root: "str | Path"
-) -> "tuple[ArmedAbort, ...]":
+    rows: tuple[ArmedAbort, ...], *, repo_root: str | Path
+) -> tuple[ArmedAbort, ...]:
     """R56 tamper-evidence: every `source_pin`'s exact text must still be in its file.
 
     Returns the BROKEN rows. The asymmetry is the load-bearing part
@@ -455,7 +455,7 @@ def verify_source_pins(
     return tuple(broken)
 
 
-def _resolve_production_configs() -> "list[Path]":
+def _resolve_production_configs() -> list[Path]:
     """PRODUCTION_CONFIGS holds repo-relative STRINGS (data); resolving them is ours."""
     return [REPO_ROOT / rel for rel in PRODUCTION_CONFIGS]
 
@@ -464,7 +464,7 @@ def _resolve_production_configs() -> "list[Path]":
 CONFIG_DIR_REL = "configs"
 
 
-def _discovered_configs() -> "list[str]":
+def _discovered_configs() -> list[str]:
     """Every config actually on disk, repo-relative. The scope check's left-hand side.
 
     ADJ-13 F-1. This used to be its own flat `glob("*.yaml")` — a SECOND answer to "what is a
@@ -498,7 +498,7 @@ def _discovered_configs() -> "list[str]":
                   for path in discover_configs(REPO_ROOT / CONFIG_DIR_REL))
 
 
-def _config_declaration_drift() -> "tuple[list[str], list[str], list[str]]":
+def _config_declaration_drift() -> tuple[list[str], list[str], list[str]]:
     """MF-I7 (i). The two tuples must PARTITION `discover_configs(configs/)` — EXACTLY the set
     gate 7 validates, which after ADJ-13 F-1 is one authority rather than two globs.
 
@@ -541,7 +541,7 @@ def _config_declaration_drift() -> "tuple[list[str], list[str], list[str]]":
             sorted(production & exempt))
 
 
-def _audit_paths(named: "Path | None") -> "list[Path]":
+def _audit_paths(named: Path | None) -> list[Path]:
     """The configs assertion (c) binds — ONE rule, used by BOTH modes (MF-I7 (ii)).
 
     `_run_audit` used to REPLACE the production set when `--config` was given while
@@ -565,11 +565,11 @@ def _audit_paths(named: "Path | None") -> "list[Path]":
 
 
 # ── the predicate surface (§7) ────────────────────────────────────────────────────────
-def _named(events: "list[dict]", name: str) -> "list[dict]":
+def _named(events: list[dict], name: str) -> list[dict]:
     return [event for event in events if event.get("event") == name]
 
 
-def _step_ground_truth(events: "list[dict]", samples: "list[dict]") -> dict:
+def _step_ground_truth(events: list[dict], samples: list[dict]) -> dict:
     """§7.3. There is no per-step event in a 101-step burst (`log_interval=1000`,
     `run.py:90`), so N comes from an independent witness — and the report NAMES which one
     spoke, so a reader never has to guess."""
@@ -585,7 +585,7 @@ def _step_ground_truth(events: "list[dict]", samples: "list[dict]") -> dict:
     return {"source": "absent", "value": 0}
 
 
-def _evaluate_sync(events: "list[dict]", *, cadence_steps: int, burst_steps: int,
+def _evaluate_sync(events: list[dict], *, cadence_steps: int, burst_steps: int,
                    ground: dict) -> dict:
     """(a) — sync presence and cadence-consistency (§7.1, MF-4).
 
@@ -651,7 +651,7 @@ _LAG_FAILURES = {
 }
 
 
-def _evaluate_lag(events: "list[dict]", *, cadence_steps: int,
+def _evaluate_lag(events: list[dict], *, cadence_steps: int,
                   poll_interval_sec: float) -> dict:
     """(b) — the lag TRANSPORT (§7.4, MF-5). Every predicate is stated so a CONSTANT fails.
 
@@ -742,7 +742,7 @@ def _evaluate_lag(events: "list[dict]", *, cadence_steps: int,
     return block
 
 
-def evaluate_assertions(events: "list[dict]", *, cadence_steps: int, burst_steps: int,
+def evaluate_assertions(events: list[dict], *, cadence_steps: int, burst_steps: int,
                         poll_interval_sec: float) -> dict:
     """The two dynamic assertions over one JSONL segment, in DESIGN §9.1's report shape.
 
@@ -781,7 +781,7 @@ def _load(path: Path) -> RunConfig:
         raise PreflightConfigError(f"load_config({str(path)!r}) raised: {exc}") from exc
 
 
-def _burst_floors(config: RunConfig) -> "list[tuple[str, int, int]]":
+def _burst_floors(config: RunConfig) -> list[tuple[str, int, int]]:
     """Every cross-field rule that binds the burst from below: (key, its value, its floor).
 
     Enumerated rather than folded into one number, because the number alone stopped being
@@ -925,7 +925,7 @@ def _coordinator_block(config: RunConfig) -> dict:
 
 
 # ── assertion (c) + the manifest (§8) ─────────────────────────────────────────────────
-def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> None:
+def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None:
     """R56's loud print, on EVERY run including a green one: registered debt that stops
     being visible stops being debt and starts being the status quo
     (`silent_encoding_gate.py:346-351`, copied in shape, not reinvented).
@@ -963,7 +963,7 @@ def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> No
         print(f"    why: {row.note}")
 
 
-def _audit_manifest_and_configs(paths: "list[Path]") -> dict:
+def _audit_manifest_and_configs(paths: list[Path]) -> dict:
     """Assertion (c) plus manifest integrity. Raises the named outcome; returns the report
     block on success."""
     required = [row for row in MANIFEST if row.status is Status.REQUIRED]
@@ -1126,7 +1126,7 @@ def _tier_block(config: RunConfig, burst_steps: int) -> dict:
             "covered": [], "owed": list(MINT_REQUIRED_TIERS), "does_not_prove": None}
 
 
-def _tier_covered(report: dict) -> "list[str]":
+def _tier_covered(report: dict) -> list[str]:
     """Which mint tiers this run actually COVERED — from the report's own verdicts.
 
     A tier is *requested* by the burst and *covered* by the outcome, and the two are not the
@@ -1208,7 +1208,7 @@ def _new_report(mode: str) -> dict:
     return _finalise_tier({
         "schema": REPORT_SCHEMA,
         "tool_sha256": _sha256(Path(os.path.abspath(__file__))),
-        "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ts_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "mode": mode, "verdict": "pass", "rc": 0, "failure": None,
         "config": None, "coordinator": None, "override": None, "manifest": None,
         "assertions": {
@@ -1437,7 +1437,7 @@ def _boot_main(args) -> int:
     return _abort_rc(handles.shutdown.abort_rule)
 
 
-def _abort_rc(rule: "str | None") -> int:
+def _abort_rc(rule: str | None) -> int:
     """The child's rc, decided by WHETHER AN ABORT FIRED and by nothing else (R84).
 
     This is the card's process boundary, and it is the only one in the repo: `run_until_stopped`
@@ -1474,7 +1474,7 @@ def _abort_rc(rule: "str | None") -> int:
     return int(code)
 
 
-def _child_argv(args) -> "list[str]":
+def _child_argv(args) -> list[str]:
     return [sys.executable, os.path.abspath(__file__), "--_boot",
             "--config", str(args.config), "--burst-steps", str(int(args.burst_steps)),
             "--out-dir", str(args.out_dir), "--timeout-sec", str(float(args.timeout_sec)),
@@ -1607,7 +1607,7 @@ def _run_child(args, report: dict) -> dict:
     return child
 
 
-def _read_segment(log_dir: Path, *, run_id: str) -> "tuple[list[Path], list[dict]]":
+def _read_segment(log_dir: Path, *, run_id: str) -> tuple[list[Path], list[dict]]:
     """The run's OWN segments, in filename order, and every event in them.
 
     SF-I2, half one. The glob is scoped by `run_id` because `JsonlEventSink` writes
@@ -1627,7 +1627,7 @@ def _read_segment(log_dir: Path, *, run_id: str) -> "tuple[list[Path], list[dict
     return segments, events
 
 
-def _events_block(segments: "list[Path]", events: "list[dict]") -> dict:
+def _events_block(segments: list[Path], events: list[dict]) -> dict:
     """The report's evidence-integrity block.
 
     SF-I2, half two. `sha256` used to hash only `segments[-1]` while `lines` counted ALL of
@@ -1740,7 +1740,7 @@ def _run_audit(args, report: dict) -> None:
                                         "required_armed": report["manifest"]["required"]}
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "_boot"):

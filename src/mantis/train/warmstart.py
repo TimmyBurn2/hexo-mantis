@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 
@@ -37,7 +37,7 @@ _LOG = logging.getLogger(__name__)
 # Pre-registered selection (INV-D1 / R5): scalar arm <- arm_A_seed0, dist arm <- arm_B_seed0.
 # These are RELATIVE paths only — the concrete directory is a launch parameter (`head_dir`),
 # never a code-side default (the old absolute host-coupled default is DELETED, WP10 §a.6).
-HEAD_FILE_BY_TYPE: Dict[str, str] = {
+HEAD_FILE_BY_TYPE: dict[str, str] = {
     "scalar": "arm_A_seed0/head_A_seed0.pt",
     "dist65": "arm_B_seed0/head_B_seed0.pt",
 }
@@ -56,7 +56,7 @@ def _base_model(net: Any) -> Any:
     return getattr(net, "_orig_mod", net)
 
 
-def _extract_state(raw: Any) -> Dict[str, torch.Tensor]:
+def _extract_state(raw: Any) -> dict[str, torch.Tensor]:
     """Pull the model state dict out of a loaded artifact — a bare `state_dict`, or a
     `{model_state: …}` / `{state_dict: …}` wrapper. Prefixes are left intact (the BC-transfer
     matcher handles wrapper prefixes itself)."""
@@ -157,7 +157,7 @@ def load_value_head(net: Any, head_pt_path: str, head_type: str) -> None:
             "kind would silently drop the trained bin/scalar weights (C1 regression)."
         )
 
-    head_state: Dict[str, torch.Tensor] = blob["head_state"]
+    head_state: dict[str, torch.Tensor] = blob["head_state"]
     fc2_dst = base.value_fc2 if head_type == "scalar" else base.value_fc2_bins
     fc2_label = "value_fc2" if head_type == "scalar" else "value_fc2_bins"
     mapping = [
@@ -192,7 +192,7 @@ def load_value_head(net: Any, head_pt_path: str, head_type: str) -> None:
 
 def maybe_warmstart_value_head(
     trainer: Any,
-    combined_config: Dict[str, Any],
+    combined_config: dict[str, Any],
 ) -> bool:
     """Seed ``trainer.model``'s value head from the pre-registered head, IF warm_start is
     enabled AND this is a weights-only warm launch. Returns True iff the head was seeded.
@@ -242,7 +242,7 @@ def maybe_warmstart_value_head(
 
 def assert_dist65_bins_seeded(
     trainer: Any,
-    combined_config: Dict[str, Any],
+    combined_config: dict[str, Any],
     warmstart_fired: bool,
 ) -> None:
     """Raise if a dist65 net's value_fc2_bins are untrained/random (neither loaded from the
@@ -272,7 +272,7 @@ def assert_dist65_bins_seeded(
 # ══ GNN BC-prefit transfer (fresh graph launch) ════════════════════════════════════════
 def maybe_warmstart_gnn_from_bc(
     model: Any,
-    combined_config: Dict[str, Any],
+    combined_config: dict[str, Any],
     *,
     spec: Any,
 ) -> bool:

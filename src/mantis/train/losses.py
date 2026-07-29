@@ -17,7 +17,7 @@ Architecture spec (docs/01_architecture.md §2):
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -53,7 +53,7 @@ def compute_policy_loss(
     target_policy: torch.Tensor,
     valid_mask: torch.Tensor,
     device: torch.device,
-    full_search_mask: Optional[torch.Tensor] = None,
+    full_search_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Cross-entropy policy loss, masked on zero-policy rows and quick-search positions."""
     combined = valid_mask
@@ -68,7 +68,7 @@ def ragged_policy_ce(
     policy_logits: torch.Tensor,
     policy_target: torch.Tensor,
     legal_offsets: torch.Tensor,
-    full_search_mask: Optional[torch.Tensor] = None,
+    full_search_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Ragged per-legal-node policy CE for the GNN graph branch — the no-drop replacement
     for the dense-362 `compute_policy_loss`. Per graph: log_softmax over its legal-node
@@ -106,7 +106,7 @@ def compute_kl_policy_loss(
     target_policy: torch.Tensor,
     valid_mask: torch.Tensor,
     device: torch.device,
-    full_search_mask: Optional[torch.Tensor] = None,
+    full_search_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """KL(target || model) policy loss for completed-Q targets — identical gradients to CE,
     more interpretable value (0 when the model matches the target)."""
@@ -125,7 +125,7 @@ def compute_kl_policy_loss(
 def compute_value_loss(
     value_logit: torch.Tensor,
     outcome: torch.Tensor,
-    value_mask: Optional[torch.Tensor] = None,
+    value_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Numerically-stable BCE via `binary_cross_entropy_with_logits`; outcomes {-1,+1}→{0,1}.
 
@@ -149,7 +149,7 @@ def compute_aux_loss(
     target_policy: torch.Tensor,
     valid_mask: torch.Tensor,
     device: torch.device,
-    full_search_mask: Optional[torch.Tensor] = None,
+    full_search_mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Opponent-reply auxiliary loss (policy-shaped; same MCTS visit targets, same gate)."""
     combined = valid_mask
@@ -166,7 +166,7 @@ def compute_aux_loss(
 def compute_chain_loss(
     chain_pred: torch.Tensor,
     chain_target: torch.Tensor,
-    legal_mask: Optional[torch.Tensor] = None,
+    legal_mask: torch.Tensor | None = None,
     huber_delta: float = 1.0,
 ) -> torch.Tensor:
     """Q13-aux smooth-L1 (Huber) loss on 6 chain-length planes.
@@ -190,7 +190,7 @@ def compute_chain_loss(
 
 
 def chain_target_fire_rate(
-    chain_target: torch.Tensor, legal_mask: Optional[torch.Tensor] = None
+    chain_target: torch.Tensor, legal_mask: torch.Tensor | None = None
 ) -> float:
     """Fraction of batch rows whose `chain_planes` target carries signal (any nonzero over
     the 6 planes) — the fire-rate the in-run self-report publishes (LAW-18). When `legal_mask`
@@ -213,11 +213,11 @@ def chain_loss_with_fire_rate(
     chain_target: torch.Tensor,
     weight: float,
     *,
-    legal_mask: Optional[torch.Tensor] = None,
+    legal_mask: torch.Tensor | None = None,
     huber_delta: float = 1.0,
     sink: Any = None,
-    step: Optional[int] = None,
-) -> Optional[torch.Tensor]:
+    step: int | None = None,
+) -> torch.Tensor | None:
     """Compute the `chain_head` smooth-L1 loss AND self-report its fire-rate in-run
     (LAW-07/LAW-18, O-CHAIN). At ``weight <= 0`` the lever is OFF: no loss is returned and
     the report publishes ``fire_rate = 0.0`` (a disabled lever stays VISIBLE). At
@@ -263,19 +263,19 @@ def compute_ply_index_loss(
 def compute_total_loss(
     policy_loss: torch.Tensor,
     value_loss: torch.Tensor,
-    aux_loss: Optional[torch.Tensor] = None,
+    aux_loss: torch.Tensor | None = None,
     aux_weight: float = 0.0,
-    entropy_bonus: Optional[torch.Tensor] = None,
+    entropy_bonus: torch.Tensor | None = None,
     entropy_weight: float = 0.0,
-    uncertainty_loss: Optional[torch.Tensor] = None,
+    uncertainty_loss: torch.Tensor | None = None,
     uncertainty_weight: float = 0.0,
-    ownership_loss: Optional[torch.Tensor] = None,
+    ownership_loss: torch.Tensor | None = None,
     ownership_weight: float = 0.0,
-    threat_loss: Optional[torch.Tensor] = None,
+    threat_loss: torch.Tensor | None = None,
     threat_weight: float = 0.0,
-    chain_loss: Optional[torch.Tensor] = None,
+    chain_loss: torch.Tensor | None = None,
     chain_weight: float = 0.0,
-    ply_index_loss: Optional[torch.Tensor] = None,
+    ply_index_loss: torch.Tensor | None = None,
     ply_index_weight: float = 0.0,
 ) -> torch.Tensor:
     """Combine policy, value, aux, entropy, uncertainty, ownership, threat, chain, ply-index."""

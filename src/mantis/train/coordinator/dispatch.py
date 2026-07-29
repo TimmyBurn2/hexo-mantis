@@ -102,6 +102,7 @@ def _graph_step(
         )
     import numpy as np
     import torch
+
     from mantis.selfplay.graph_collate import collate_graph_batch, stone_mask_from_batch
 
     wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight)

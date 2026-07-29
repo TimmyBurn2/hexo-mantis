@@ -14,7 +14,8 @@ calculator. `PuctEvalPlayer` is deliberately NOT built (legacy temp-0.5 opponent
 from __future__ import annotations
 
 import math
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from mantis._engine import MCTSTree
 
@@ -26,7 +27,7 @@ InferFn = Callable[[Any], tuple[list[float], float]]
 
 
 def select_argmax_child(
-    children_info: "list[ChildInfo]", *, c_visit: float, c_scale: float
+    children_info: list[ChildInfo], *, c_visit: float, c_scale: float
 ) -> tuple[int, int]:
     """Pure g=0 completed-Q argmax over root children (ORACLE-CHOSEN SEAM).
 

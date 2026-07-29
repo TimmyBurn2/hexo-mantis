@@ -10,8 +10,9 @@ points at. `resolve_ladder_rungs` is the parent-side per-rung resolution unit: a
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from mantis.bots.protocol import RungUnresolvable
 from mantis.eval.errors import ResultContractError
@@ -27,7 +28,7 @@ __all__ = [
 # ── the parent-side per-rung resolver unit ──────────────────────────────────────────────
 def resolve_ladder_rungs(
     rungs: Sequence[Any], resolve_bot_fn: Callable[..., Any]
-) -> "tuple[dict[str, Any], list[dict[str, str]]]":
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
     """Attempt `resolve_bot_fn(rung.bot, depth=rung.depth, opponent_sims=rung.opponent_sims)`
     per rung; a `RungUnresolvable` is CAUGHT and appended to `skipped` — NEVER raised
     further (never fatal to the round). Re-evaluated fresh every call (never sticky)."""
@@ -49,8 +50,8 @@ class RungJob:
     name: str
     bot: str
     variant: str
-    depth: "int | None"
-    opponent_sims: "int | None"
+    depth: int | None
+    opponent_sims: int | None
     opening_book: str
     deploy_matched: bool
     games: int
@@ -78,12 +79,12 @@ class RoundSpec:
     round_id: str
     step: int
     candidate_snapshot: str
-    best_snapshot: "str | None"
-    best_step: "int | None"
+    best_snapshot: str | None
+    best_step: int | None
     encoding: str
     worker_device: str
     gate: GateSpec
-    rung_jobs: "list[RungJob]"
+    rung_jobs: list[RungJob]
     random_floor_games: int
     random_model_sims: int
     sealbot_model_sims: int
@@ -106,7 +107,7 @@ class RoundSpec:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "RoundSpec":
+    def from_dict(cls, payload: Mapping[str, Any]) -> RoundSpec:
         payload = dict(payload)
         payload["gate"] = GateSpec(**payload["gate"])
         payload["rung_jobs"] = [RungJob(**job) for job in payload["rung_jobs"]]
@@ -133,7 +134,7 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
 # ── the round-result builder (§c.2) ─────────────────────────────────────────────────────
 def _first_sealbot_wr(
     rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
-) -> "float | None":
+) -> float | None:
     """`wr_sealbot` = the FIRST sealbot-kind rung (ladder order) with >=1 game this round;
     None if no sealbot rung ever recorded a game (skip-counted at the coordinator, G-2)."""
     for rung in rungs_config:
@@ -148,7 +149,7 @@ def _first_sealbot_wr(
     return None
 
 
-def _gate_result_to_mapping(gate_result: Any) -> "dict[str, Any] | None":
+def _gate_result_to_mapping(gate_result: Any) -> dict[str, Any] | None:
     if gate_result is None:
         return None
     if dataclasses.is_dataclass(gate_result) and not isinstance(gate_result, type):
@@ -184,10 +185,10 @@ def build_round_result(
     schedule_next: Mapping[str, int],
     eval_round_wall_sec: float,
     eval_broken: bool,
-    error: "str | None",
-    random_wr: "float | None",
-    worker_pid: "int | None" = None,
-    candidate_snapshot_path: "str | None" = None,
+    error: str | None,
+    random_wr: float | None,
+    worker_pid: int | None = None,
+    candidate_snapshot_path: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the coordinator-facing round-result mapping (§c.2). `wr_sealbot` is
     UNCONDITIONALLY present — success, broken, and all-skip rounds alike."""

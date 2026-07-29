@@ -20,8 +20,9 @@ is already computed. Either "moves" or "trajectory_hash" satisfies the LAW-04 de
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -64,7 +65,7 @@ def _traj_key(record: Mapping[str, Any]) -> str:
         )
     h = hashlib.sha256()
     for q, r in moves:
-        h.update(f"{int(q)},{int(r)};".encode("utf-8"))
+        h.update(f"{int(q)},{int(r)};".encode())
     return h.hexdigest()
 
 
@@ -72,7 +73,7 @@ def _pair_key(record: Mapping[str, Any]) -> tuple[Any, Any]:
     return (record.get("p1"), record.get("p2"))
 
 
-def _distinct_outcomes(records: Sequence[Mapping[str, Any]]) -> "np.ndarray":
+def _distinct_outcomes(records: Sequence[Mapping[str, Any]]) -> np.ndarray:
     """One outcome value per DISTINCT trajectory (LAW-04: copies of one game count once;
     the first-seen record for a trajectory supplies its outcome)."""
     seen: dict[str, float] = {}
@@ -97,8 +98,8 @@ def _distinct_per_pair(records: Sequence[Mapping[str, Any]]) -> int:
 
 # ── pair-bootstrap WR CI (vectorized; degenerate cases never raise) ─────────────────────
 def pair_bootstrap_wr_ci(
-    pair_outcomes: "np.ndarray", *, resamples: int, ci_level: float, seed: int
-) -> "tuple[float | None, float | None]":
+    pair_outcomes: np.ndarray, *, resamples: int, ci_level: float, seed: int
+) -> tuple[float | None, float | None]:
     """Vectorized bootstrap CI over `pair_outcomes` (one value per DISTINCT game, LAW-04):
     `rng.integers` index matrix `[resamples, n]` -> mean over axis 1 -> quantiles. `n == 0`
     degenerates to `(None, None)` — never an exception (all-wins / zero-game inputs both
@@ -123,9 +124,9 @@ class RungAggregate:
     wins: int
     losses: int
     draws: int
-    wr: "float | None"
-    wr_ci_lower: "float | None"
-    wr_ci_upper: "float | None"
+    wr: float | None
+    wr_ci_lower: float | None
+    wr_ci_upper: float | None
     eff_n: int
     regime_key: str
 
@@ -178,7 +179,7 @@ def should_escalate(wr_screen: float, screen_confirm_lo: float) -> bool:
 
 
 def gate_promotion_decision(
-    wr_confirm: float, ci_lo_boot: "float | None", low_power: bool, promotion_winrate: float
+    wr_confirm: float, ci_lo_boot: float | None, low_power: bool, promotion_winrate: float
 ) -> bool:
     """The run3 promotion truth table (:560-563): `wr_ok AND ci_clean AND not low_power`."""
     wr_ok = wr_confirm >= promotion_winrate
@@ -188,13 +189,13 @@ def gate_promotion_decision(
 
 @dataclass(frozen=True)
 class GateAggregate:
-    wr_screen: "float | None"
-    wr_confirm: "float | None"
+    wr_screen: float | None
+    wr_confirm: float | None
     n_screen: int
     n_confirm: int
     n_pooled: int
     escalated: bool
-    elo_ci_lower_boot: "float | None"
+    elo_ci_lower_boot: float | None
     low_power: bool
     eff_n: int
     promoted: bool

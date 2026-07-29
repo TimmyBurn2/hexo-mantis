@@ -13,7 +13,8 @@ all parameters + buffers (`use_buffers=True` semantics), updated in place.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import torch
 
@@ -40,7 +41,7 @@ class EmaModel:
             raise ValueError(f"EMA decay must be in [0, 1); got {decay}")
         self.decay: float = float(decay)
         base = _base_of(model)
-        self._shadow: Dict[str, torch.Tensor] = {
+        self._shadow: dict[str, torch.Tensor] = {
             name: tensor.detach().clone() for name, tensor in base.state_dict().items()
         }
 
@@ -58,7 +59,7 @@ class EmaModel:
                 else:
                     shadow.copy_(cur.detach())
 
-    def state_dict(self) -> Dict[str, torch.Tensor]:
+    def state_dict(self) -> dict[str, torch.Tensor]:
         """Shallow-copied view of the shadow state (tensors are the EMA's own storage
         — callers that mutate must clone first)."""
         return dict(self._shadow)
@@ -69,7 +70,7 @@ class EmaModel:
         base.load_state_dict(self._shadow)
 
     @property
-    def module(self) -> "_EmaModuleView":
+    def module(self) -> _EmaModuleView:
         """A module-like proxy over the shadow (for `state_dict`/`parameters` call
         sites); NOT a real `nn.Module` — it has no `forward`."""
         return _EmaModuleView(self)
@@ -81,7 +82,7 @@ class _EmaModuleView:
     def __init__(self, owner: EmaModel) -> None:
         self._owner = owner
 
-    def state_dict(self) -> Dict[str, torch.Tensor]:
+    def state_dict(self) -> dict[str, torch.Tensor]:
         return self._owner.state_dict()
 
     def parameters(self) -> Iterable[torch.Tensor]:
@@ -95,7 +96,7 @@ def build_ema_model(model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> Ema
     return EmaModel(model, decay=decay)
 
 
-def resolve_ema_config(config: Dict[str, Any]) -> tuple[bool, float, int]:
+def resolve_ema_config(config: dict[str, Any]) -> tuple[bool, float, int]:
     """Read EMA settings — nested ``{"ema": {...}}`` or flat ``ema_*`` keys. Default
     OFF preserves the pre-EMA path."""
     nested = config.get("ema") if isinstance(config.get("ema"), dict) else {}

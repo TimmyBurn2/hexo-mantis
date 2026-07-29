@@ -30,7 +30,8 @@ from __future__ import annotations
 import logging
 import math
 import os
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
@@ -673,7 +674,7 @@ class StepCoordinator:
         return self._resolved_step_spec
 
     # ── eval kickoff at the boundary (via the INJECTED EvalPipelineLike; no train→eval) ───
-    def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> "tuple[bool, bool]":
+    def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> tuple[bool, bool]:
         """Returns `(eval_kicked_off, eval_skipped_busy)`. The kick ACK is consumed ONLY
         for `eval_skipped_busy` (`ack.get("kicked") is False`) — NEVER for WR (P-06)."""
         if self.eval_pipeline is None or cfg.eval_interval <= 0:
@@ -714,6 +715,6 @@ class StepCoordinator:
         from mantis.train.coordinator import drain
         return drain.run_terminal_eval(self)
 
-    def close_out(self, on_drained: "Callable[[], None] | None" = None) -> None:
+    def close_out(self, on_drained: Callable[[], None] | None = None) -> None:
         from mantis.train.coordinator import drain
         drain.close_out(self, on_drained=on_drained)

@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 _LOG = logging.getLogger(__name__)
 

@@ -7,8 +7,8 @@ config-file key → no schema field. ``exists`` is injectable (no torch import).
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 
 class BootstrapNotFoundError(FileNotFoundError):

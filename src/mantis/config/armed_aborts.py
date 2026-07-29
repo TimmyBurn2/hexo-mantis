@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # The exit-code AUTHORITY (WPMINT Phase X, CARD-ABORT-EXIT / R84). 42/43/45 already live in
@@ -67,14 +67,14 @@ def _is_real_number(value: Any) -> bool:
     return math.isfinite(float(value))
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     """REQUIRED rows are audited and gate; DEFERRED rows are printed loudly and do not."""
 
     REQUIRED = "required"
     DEFERRED = "deferred"
 
 
-class Mechanism(str, Enum):
+class Mechanism(StrEnum):
     """The predicate that decides "armed" for a row's value. DATA, not a branch on `name`.
 
     `audit_arming` never branches on a row's identity: `status` selects the list and

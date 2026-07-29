@@ -32,7 +32,7 @@ import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -46,6 +46,8 @@ from mantis.model import (
     ModelArch,
     amp_dtype_for,
     arch_from_spec_and_config,
+)
+from mantis.model import (
     binned_value_loss as _binned_value_loss,
 )
 from mantis.train import checkpoints
@@ -54,8 +56,8 @@ from mantis.train.losses import (
     chain_loss_with_fire_rate,
     compute_aux_loss,
     compute_kl_policy_loss,
-    compute_policy_loss,
     compute_ply_index_loss,
+    compute_policy_loss,
     compute_total_loss,
     compute_uncertainty_loss,
     compute_value_loss,
@@ -109,9 +111,9 @@ class TrainHParams:
     fp16: bool
     lr_schedule: str
     total_steps: int
-    scheduler_t_max: Optional[int]
+    scheduler_t_max: int | None
     eta_min: float
-    min_lr: Optional[float]
+    min_lr: float | None
     checkpoint_interval: int
     completed_q_values: bool
     policy_prune_frac: float
@@ -129,7 +131,7 @@ class TrainHParams:
     ply_cap_value: float
 
     @classmethod
-    def from_config(cls, config: Any) -> "TrainHParams":
+    def from_config(cls, config: Any) -> TrainHParams:
         """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No
         flat-key fallback: `config['train']` (a `TrainConfig.model_dump()`-shaped, no-terminal-
         default dict — every field present) is REQUIRED. `value_target`/`policy_target`'s
@@ -150,7 +152,7 @@ class TrainHParams:
         return cls(**kwargs)
 
 
-def _assert_policy_target_consistency(train: Dict[str, Any], selfplay: Dict[str, Any]) -> None:
+def _assert_policy_target_consistency(train: dict[str, Any], selfplay: dict[str, Any]) -> None:
     """T-B/R34 cross-check: `train.policy_target` must agree with `train.completed_q_values`
     and (once `selfplay` carries the field — SC-A2) `selfplay.completed_q_values`. One
     decision, not two independently-editable knobs (ADJUDICATION_QUEUE closing note). The
@@ -193,12 +195,12 @@ class Trainer:
     def __init__(
         self,
         model: nn.Module,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         *,
-        arch: Optional[ModelArch] = None,
+        arch: ModelArch | None = None,
         checkpoint_dir: str | Path = "checkpoints",
-        device: Optional[torch.device] = None,
-        train_hparams: Optional[TrainHParams] = None,
+        device: torch.device | None = None,
+        train_hparams: TrainHParams | None = None,
         sink: Any = None,
     ) -> None:
         self.device = device or torch.device("cpu")
@@ -246,12 +248,12 @@ class Trainer:
 
         self.step = 0
         # CONFRES F1(A) back-prop: keys the resume F1 defer preserved (empty on a fresh run).
-        self.f1_deferred_keys: "frozenset[str]" = frozenset()
+        self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
         self.ckpt_had_value_fc2_bins = False
 
         _pos_w = float(self.hp.threat_pos_weight)
-        self._threat_pos_weight: Optional[torch.Tensor] = (
+        self._threat_pos_weight: torch.Tensor | None = (
             torch.tensor(_pos_w, dtype=torch.float32, device=self.device) if _pos_w != 1.0 else None
         )
 
@@ -285,15 +287,15 @@ class Trainer:
         states: np.ndarray,
         policies: np.ndarray,
         outcomes: np.ndarray,
-        chain_planes: Optional[Any] = None,
-        ownership_targets: Optional[Any] = None,
-        threat_targets: Optional[Any] = None,
-        is_full_search: Optional[Any] = None,
+        chain_planes: Any | None = None,
+        ownership_targets: Any | None = None,
+        threat_targets: Any | None = None,
+        is_full_search: Any | None = None,
         n_pretrain: int = 0,
         n_recent: int = 0,
-        position_indices: Optional[Any] = None,
-        value_target_valid: Optional[Any] = None,
-    ) -> Dict[str, float]:
+        position_indices: Any | None = None,
+        value_target_valid: Any | None = None,
+    ) -> dict[str, float]:
         """One gradient update from pre-built numpy arrays (dense grid path)."""
         return self._train_on_batch(
             states, policies, outcomes,
@@ -308,15 +310,15 @@ class Trainer:
         states: np.ndarray,
         policies: np.ndarray,
         outcomes: np.ndarray,
-        chain_planes: Optional[Any] = None,
-        ownership_targets: Optional[Any] = None,
-        threat_targets: Optional[Any] = None,
-        is_full_search: Optional[Any] = None,
+        chain_planes: Any | None = None,
+        ownership_targets: Any | None = None,
+        threat_targets: Any | None = None,
+        is_full_search: Any | None = None,
         n_pretrain: int = 0,
         n_recent: int = 0,
-        position_indices: Optional[Any] = None,
-        value_target_valid: Optional[Any] = None,
-    ) -> Dict[str, float]:
+        position_indices: Any | None = None,
+        value_target_valid: Any | None = None,
+    ) -> dict[str, float]:
         """Core dense step: forward, loss, backward, optimizer step (behaviour-exact; the
         KILLED per-class-temperature + track_b branches are SEVERED)."""
         from mantis.train.aux_decode import decode_ownership, decode_winning_line, mask_aux_rows
@@ -335,11 +337,11 @@ class Trainer:
             states_t = states_t.float()
         policies_t = torch.from_numpy(policies).to(self.device)
         outcomes_t = torch.from_numpy(outcomes).to(self.device)
-        full_search_mask_t: Optional[torch.Tensor] = None
+        full_search_mask_t: torch.Tensor | None = None
         if is_full_search is not None:
             full_search_mask_t = torch.from_numpy(
                 np.asarray(is_full_search, dtype=np.uint8)).to(self.device).bool()
-        value_mask_t: Optional[torch.Tensor] = None
+        value_mask_t: torch.Tensor | None = None
         if value_target_valid is not None:
             value_mask_t = torch.from_numpy(
                 np.asarray(value_target_valid, dtype=np.uint8)).to(self.device).bool()
@@ -461,7 +463,7 @@ class Trainer:
             value_accuracy = (pred_win == (outcomes_t > 0).float()).float().mean().item()
         lr = self.optimizer.param_groups[0]["lr"]
 
-        result: Dict[str, float] = {
+        result: dict[str, float] = {
             "loss": loss.item(), "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(), "grad_norm": grad_norm,
             "value_accuracy": value_accuracy, "lr": lr,
@@ -489,9 +491,9 @@ class Trainer:
         legal_offsets: torch.Tensor,
         policy_target: torch.Tensor,
         outcomes: torch.Tensor,
-        value_valid: Optional[torch.Tensor] = None,
-        is_full_search: Optional[torch.Tensor] = None,
-    ) -> Dict[str, float]:
+        value_valid: torch.Tensor | None = None,
+        is_full_search: torch.Tensor | None = None,
+    ) -> dict[str, float]:
         """One gradient update from an ALREADY-collated graph batch (block-diagonal tensors).
 
         The numeric core of the old `_train_on_batch`-graph sibling — factored so the bench
@@ -530,20 +532,20 @@ class Trainer:
         return result
 
     # ── checkpoint IO ─────────────────────────────────────────────────────────────────────
-    def inference_state_dict(self) -> Dict[str, torch.Tensor]:
+    def inference_state_dict(self) -> dict[str, torch.Tensor]:
         """The state_dict self-play / eval / promotion consume (EMA weights when EMA is on)."""
         if self.ema_model is not None:
             return self.ema_model.state_dict()
         return self._base_model().state_dict()
 
-    def _resolve_encoding_name(self) -> Optional[str]:
+    def _resolve_encoding_name(self) -> str | None:
         try:
             return _resolve_spec(dict(self.config)).name
         except Exception as exc:  # noqa: BLE001 — surfaced, but a resolvable config is required
             _LOG.error("checkpoint_encoding_resolve_failed error=%s", exc)
             return None
 
-    def save_checkpoint(self, loss_info: Optional[Dict[str, float]] = None) -> Path:
+    def save_checkpoint(self, loss_info: dict[str, float] | None = None) -> Path:
         """Write an envelope-v2 FULL checkpoint via the ONE writer (§c.7): filename
         `{run_id}_{step:08d}_{sha8}.ckpt`, immutable stamp, config schema-validated on write.
         `encoding_name` from the registry resolver, `arch` from `self.arch`."""
@@ -565,13 +567,13 @@ class Trainer:
         cls,
         checkpoint_path: str | Path,
         *,
-        checkpoint_dir: Optional[str | Path] = None,
-        device: Optional[torch.device] = None,
-        fallback_config: Optional[Dict[str, Any]] = None,
-        config_overrides: Optional[Dict[str, Any]] = None,
-        declared_keys: Optional["frozenset | set"] = None,
+        checkpoint_dir: str | Path | None = None,
+        device: torch.device | None = None,
+        fallback_config: dict[str, Any] | None = None,
+        config_overrides: dict[str, Any] | None = None,
+        declared_keys: frozenset | set | None = None,
         sink: Any = None,
-    ) -> "Trainer":
+    ) -> Trainer:
         """Restore a Trainer — thin delegate to `checkpoints.resume_trainer` (§c.7)."""
         return checkpoints.resume_trainer(
             cls, checkpoint_path, fallback_config=fallback_config,

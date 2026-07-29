@@ -61,11 +61,11 @@ from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.instrumentation import PoolInstrumentation
 from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.pool_hooks import (
+    ActorSyncTarget,
     EventSink,
     HeartbeatFn,
     InferenceStats,
     NullRecorder,
-    ActorSyncTarget,
     RecorderLike,
     RunnerStats,
 )

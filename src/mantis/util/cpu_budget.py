@@ -22,7 +22,6 @@ import os
 import sys
 from typing import Any
 
-
 _THREAD_ENV_VARS: tuple[str, ...] = (
     "OMP_NUM_THREADS",
     "MKL_NUM_THREADS",

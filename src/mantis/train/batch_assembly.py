@@ -20,9 +20,10 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import numpy as np
 
@@ -31,10 +32,14 @@ from mantis.encoding import (
     assert_not_heldout_sha,
     cur_stone_slot,
     heldout_size_bytes,
-    lookup as _lookup_encoding,
-    normalize_encoding_name as _normalize_encoding_name,
     opp_stone_slot,
     resolve_corpus_sha_pin,
+)
+from mantis.encoding import (
+    lookup as _lookup_encoding,
+)
+from mantis.encoding import (
+    normalize_encoding_name as _normalize_encoding_name,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -59,8 +64,8 @@ class BatchAssemblyResult:
     winning_line: np.ndarray
     is_full_search: np.ndarray
     n_recent_actual: int
-    position_indices: Optional[np.ndarray] = None
-    value_target_valid: Optional[np.ndarray] = None
+    position_indices: np.ndarray | None = None
+    value_target_valid: np.ndarray | None = None
 
 
 @dataclass
@@ -83,7 +88,7 @@ def allocate_batch_buffers(
     batch_size: int,
     n_actions: int,
     trunk_size: int = BOARD_SIZE,
-    aux_stride: Optional[int] = None,
+    aux_stride: int | None = None,
     n_planes: int = BUFFER_CHANNELS,
 ) -> BatchBuffers:
     """Allocate the shared batch arrays once at startup (encoding-derived spatial shapes)."""
@@ -108,7 +113,7 @@ def load_pretrained_buffer(
     emit_fn: Callable[[dict[str, Any]], None],
     buffer_size: int,
     buffer_capacity: int,
-) -> Optional[Any]:
+) -> Any | None:
     """Load a corpus NPZ into a Rust `ReplayBuffer` with neutral aux padding (ownership=1,
     winning_line=0 — the `n_pretrain` row-slice masks them from aux losses). Behaviour-exact:
     launch-pin sha gate, held-out contamination gate, plane-count check, §102.a chain-plane
@@ -266,7 +271,7 @@ def _augment_recent_rows(
 def assemble_mixed_batch(
     pretrained_buffer: Any,
     buffer: Any,
-    recent_buffer: Optional[Any],
+    recent_buffer: Any | None,
     n_pre: int,
     n_self: int,
     batch_size: int,
@@ -276,7 +281,7 @@ def assemble_mixed_batch(
     train_step: int,
     augment: bool = True,
     *,
-    bot_buffer: Optional[Any] = None,
+    bot_buffer: Any | None = None,
     n_bot: int = 0,
 ) -> BatchAssemblyResult:
     """Assemble one mixed batch from pretrain + (bot) + self-play (+ optional recent) buffers.
@@ -388,7 +393,7 @@ def _concat_result(pieces: list[tuple[Any, ...]], *, n_recent_actual: int) -> Ba
 
 def _sample_selfplay(
     buffer: Any,
-    recent_buffer: Optional[Any],
+    recent_buffer: Any | None,
     n_self: int,
     recency_weight: float,
     augment: bool = True,

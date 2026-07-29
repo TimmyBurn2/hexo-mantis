@@ -45,7 +45,7 @@ class RegimeKey:
         return _SEP.join(parts)
 
     @classmethod
-    def from_canonical(cls, canonical: str) -> "RegimeKey":
+    def from_canonical(cls, canonical: str) -> RegimeKey:
         parts = canonical.split(_SEP)
         if len(parts) != _N_FIELDS:
             raise ValueError(

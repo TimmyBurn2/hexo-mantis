@@ -66,7 +66,7 @@ def _build_candidate_player(engine: LocalInferenceEngine, n_sims: int) -> Deploy
     return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims)
 
 
-def _play_gate_block(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> "dict | None":
+def _play_gate_block(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> dict | None:
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
     `{"screen": [...], "confirm": [...]}` record lists, or None when there is no best
@@ -113,7 +113,7 @@ def _play_gate_block(spec: RoundSpec, candidate_engine: LocalInferenceEngine, bo
         best_engine.close()
 
 
-def _draw_aware_wr(records: "list[dict[str, Any]]") -> "float | None":
+def _draw_aware_wr(records: list[dict[str, Any]]) -> float | None:
     if not records:
         return None
     wins = sum(1 for r in records if r["winner"] == "p1")
@@ -123,7 +123,7 @@ def _draw_aware_wr(records: "list[dict[str, Any]]") -> "float | None":
 
 def _play_rung_block(
     spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory
-) -> "list[dict[str, Any]]":
+) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
         opponent_sims=_model_sims_for_kind(spec, rung_job.bot),
@@ -150,7 +150,7 @@ def _play_rung_block(
     return [_agg_record(r) for r in records[: rung_job.games]]
 
 
-def _play_random_floor(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> "list[dict[str, Any]]":
+def _play_random_floor(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
     bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
@@ -194,7 +194,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
     try:
         gate_records = _play_gate_block(spec, candidate_engine, board_factory)
-        gate_result: "dict | None" = None
+        gate_result: dict | None = None
         if gate_records is not None:
             gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
             gate_result = {
@@ -260,7 +260,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         candidate_engine.close()
 
 
-def worker_main(spec_path: "str | Path", result_path: "str | Path") -> None:
+def worker_main(spec_path: str | Path, result_path: str | Path) -> None:
     """The spawn-ctx `Process` target. Writes the result ATOMICALLY (tmp + os.replace)."""
     spec = RoundSpec.from_dict(json.loads(Path(spec_path).read_text()))
     result = run_round(spec)
@@ -271,7 +271,7 @@ def worker_main(spec_path: "str | Path", result_path: "str | Path") -> None:
     tmp.replace(target)
 
 
-def _main(argv: "list[str] | None" = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) != 2:
         print("usage: python -m mantis.eval.worker <spec.json> <result.json>", file=sys.stderr)

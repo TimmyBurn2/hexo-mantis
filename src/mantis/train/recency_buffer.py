@@ -10,7 +10,6 @@ Behaviour-exact; the only change is the encoding import (`hexo_rl` → `mantis`)
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 import numpy as np
 
@@ -65,11 +64,11 @@ class RecentBuffer:
     def push(
         self,
         state: np.ndarray,
-        chain_planes: Optional[np.ndarray] = None,
-        policy: Optional[np.ndarray] = None,
+        chain_planes: np.ndarray | None = None,
+        policy: np.ndarray | None = None,
         outcome: float = 0.0,
-        ownership: Optional[np.ndarray] = None,
-        winning_line: Optional[np.ndarray] = None,
+        ownership: np.ndarray | None = None,
+        winning_line: np.ndarray | None = None,
         is_full_search: bool = True,
         value_target_valid: bool = True,
     ) -> None:

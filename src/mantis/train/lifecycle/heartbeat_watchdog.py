@@ -44,9 +44,10 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence, cast
+from typing import Any, cast
 
 from mantis.monitor.best_effort import BestEffortCounters, best_effort
 from mantis.monitor.heartbeat import (
@@ -113,7 +114,7 @@ class HeartbeatWatchdog:
         close_out_deadline_sec: float = DEFAULT_CLOSE_OUT_DEADLINE_SEC,
         snapshot_timeout_sec: float = DEFAULT_FIRE_EFFECT_TIMEOUT_SEC,
         wired_sources: Sequence[str] | None = None,
-        actor_lag: "ActorLagSpec | None" = None,
+        actor_lag: ActorLagSpec | None = None,
     ) -> None:
         self._registry = registry
         self._deadlines = dict(deadlines)

@@ -16,8 +16,6 @@ Imports the WP9-relocated ``mantis.data`` seams (train → data is DAG-legal): t
 """
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
-
 import numpy as np
 import torch
 
@@ -145,7 +143,7 @@ def make_augmented_collate(augment: bool, encoding: str):
     return _collate
 
 
-def _game_winner_from_replay(moves: List[Tuple[int, int]]) -> Optional[int]:
+def _game_winner_from_replay(moves: list[tuple[int, int]]) -> int | None:
     """Replay a move sequence and return the winner (+1 or -1), or None."""
     board = Board()
     for q, r in moves:

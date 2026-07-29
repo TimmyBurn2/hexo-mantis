@@ -28,8 +28,9 @@ import importlib.util
 import inspect
 import re
 import textwrap
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 import yaml
 

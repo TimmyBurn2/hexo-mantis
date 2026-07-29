@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 import torch.optim as optim
@@ -46,7 +46,7 @@ class BootstrapTrainer:
     def __init__(
         self,
         model: torch.nn.Module,
-        config: Dict,
+        config: dict,
         device: torch.device,
         checkpoint_dir: Path,
         *,
@@ -84,10 +84,10 @@ class BootstrapTrainer:
         label_smoothing: float = 0.05,
         aux_weight: float = 0.15,
         chain_weight: float = 0.0,
-        step_budget: Optional[int] = None,
-        start_step: Optional[int] = None,
+        step_budget: int | None = None,
+        start_step: int | None = None,
         log_interval: int = 50,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """One full pass over the dataloader (yields (states, chain_planes, policies, outcomes)).
 
         Returns a dict with loss / policy_loss / value_loss / opp_reply_loss / chain_loss. The
@@ -96,7 +96,7 @@ class BootstrapTrainer:
         """
         budget_origin = start_step if start_step is not None else self.step
         self.model.train()
-        total: Dict[str, float] = {
+        total: dict[str, float] = {
             "loss": 0.0, "policy_loss": 0.0,
             "value_loss": 0.0, "opp_reply_loss": 0.0,
             "chain_loss": 0.0,
@@ -206,7 +206,7 @@ class BootstrapTrainer:
         n = max(n_batches, 1)
         return {k: v / n for k, v in total.items()}
 
-    def save_checkpoint(self, inf_out: Optional[Path] = None) -> Path:
+    def save_checkpoint(self, inf_out: Path | None = None) -> Path:
         """Save a full pretrain checkpoint (LEGACY shape — the T-CK-31 full-v1 read shape) plus a
         bare inference-weights file (the T-CK-32 bare-anchor shape). The bootstrap pretrain
         artifact is a legacy anchor by nature; the run5 envelope-v2 writer is a distinct concern."""
