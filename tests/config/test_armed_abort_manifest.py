@@ -111,7 +111,13 @@ def _code_text(path: Path) -> str:
     filesystem call"), which is the false positive that teaches people to word documents
     around a gate. Tokenizing is the honest form.
     """
-    skip = {tokenize.COMMENT, tokenize.STRING, tokenize.FSTRING_MIDDLE}
+    # FSTRING_MIDDLE exists only on 3.12+ (on the 3.11 floor f-strings tokenize as STRING,
+    # so the skip set is complete there without it) — an unconditional attribute read is an
+    # AttributeError on the pinned CI interpreter (WPCLEAN Phase LT).
+    skip = {tokenize.COMMENT, tokenize.STRING}
+    _fstring_middle = getattr(tokenize, "FSTRING_MIDDLE", None)
+    if _fstring_middle is not None:
+        skip.add(_fstring_middle)
     with path.open("rb") as handle:
         return "\n".join(
             tok.string for tok in tokenize.tokenize(handle.readline) if tok.type not in skip

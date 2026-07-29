@@ -948,9 +948,11 @@ def _print_deferred_rows(*, manifest: "tuple[ArmedAbort, ...]" = MANIFEST) -> No
         # `train.hard_gn_threshold`, a key this same phase authored, and the row is deferred
         # because nobody has PRE-REGISTERED a value, not because the surface is missing. The
         # print says which of the two it is instead of asserting one.
+        # Hoisted out of the f-string: the replacement field spanned a line break, which is
+        # 3.12-only syntax — a SyntaxError on the pinned 3.11 CI floor (WPCLEAN Phase LT).
+        surface = "present" if row.ceiling_path is None else f"present, ceiling {row.ceiling_path}"
         print(f"    arming surface: {row.config_path} "
-              f"({'present' if row.ceiling_path is None else 'present, ceiling '
-                 + row.ceiling_path}) — NOT audited, so a mint does not gate on it")
+              f"({surface}) — NOT audited, so a mint does not gate on it")
         if row.source_pin is not None:
             rel, text = row.source_pin
             print(f"    pinned to {rel}: {text!r}")
