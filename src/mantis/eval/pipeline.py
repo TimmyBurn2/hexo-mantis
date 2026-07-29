@@ -365,7 +365,9 @@ class EvalPipeline:
         spec_path = self._work_dir / f"{spec.round_id}_spec.json"
         spec_path.write_text(json.dumps(spec.to_dict()))
         ctx = multiprocessing.get_context(self._mp_ctx_name)
-        proc = ctx.Process(
+        # typeshed's BaseContext omits Process (it lives on the concrete contexts);
+        # every real context returned by get_context has it.
+        proc = ctx.Process(  # pyright: ignore[reportAttributeAccessIssue]
             target=_worker_entry, args=(str(spec_path), spec.result_path),
             kwargs={}, daemon=True,
         )

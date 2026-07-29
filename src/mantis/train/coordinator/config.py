@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 364 lines. It crossed the cap at
+# >300 justify (R8), stated at this file's MEASURED size of 372 lines. It crossed the cap at
 # WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
 # onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
 # docstring recording WHY six fields are gone and why no field may carry a default; WPCLEAN
@@ -100,12 +100,20 @@ class DrawRateAbortLike(Protocol):
     this file is the DAG-clean seam layer, so it describes the shape it consumes rather
     than importing the concrete `mantis.config.resolve.draw_rate.DrawRateAbortSpec`.
     `None` in the field's type is the EXPLICIT disarmed posture — never an absent value.
+
+    Read-only properties, not plain attributes: the concrete spec is a FROZEN dataclass,
+    and this seam only ever reads the four terms — a writable declaration here would
+    reject the frozen concrete.
     """
 
-    threshold: float
-    min_step: int
-    N_pool_min: int
-    consec: int
+    @property
+    def threshold(self) -> float: ...
+    @property
+    def min_step(self) -> int: ...
+    @property
+    def N_pool_min(self) -> int: ...
+    @property
+    def consec(self) -> int: ...
 
 
 @runtime_checkable

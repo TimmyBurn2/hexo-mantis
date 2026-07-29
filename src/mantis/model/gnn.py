@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Mapping, Sequence
+from typing import TypedDict
 
 import torch
 import torch.nn as nn
@@ -192,6 +193,13 @@ class GnnNet(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
 
+class BcTransferReport(TypedDict):
+    """The docstring-stated return shape of `load_representation_policy_from_bc`."""
+
+    loaded_keys: list[str]
+    verified_tensors: int
+
+
 def load_representation_policy_from_bc(
     net: GnnNet,
     bc_state_dict: Mapping[str, Tensor],
@@ -199,7 +207,7 @@ def load_representation_policy_from_bc(
     prefixes: Sequence[str] = BC_TRANSFER_PREFIXES,
     verify_n: int | None = None,
     seed: int = 0,
-) -> dict[str, object]:
+) -> BcTransferReport:
     """Load ONLY `representation.*` / `policy_head.*` tensors from a BC checkpoint
     state dict onto `net`; `value_head.*` is left fresh-initialized.
 

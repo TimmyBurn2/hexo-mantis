@@ -144,7 +144,8 @@ def load_value_head(net: Any, head_pt_path: str, head_type: str) -> None:
         )
 
     head_shape = blob.get("head_shape")
-    pt_head_type = _SHAPE_TO_HEAD_TYPE.get(head_shape)
+    # Absent/non-str head_shape resolves to None and lands in the raise below.
+    pt_head_type = _SHAPE_TO_HEAD_TYPE.get(head_shape) if isinstance(head_shape, str) else None
     if pt_head_type is None:
         raise ValueError(
             f"{head_pt_path}: unknown head_shape={head_shape!r} "

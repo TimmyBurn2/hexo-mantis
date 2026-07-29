@@ -11,8 +11,8 @@ def _apply_finetune_freeze(
     base_model,
     *,
     freeze_trunk_entry: bool,
-    unfreeze_blocks: set | None,
-) -> dict[str, int]:
+    unfreeze_blocks: set[int] | None,
+) -> dict[str, int | list[int]]:
     """Apply the §171 A4 fine-tune freeze pattern.
 
     - `freeze_trunk_entry=True`: `requires_grad=False` on `trunk.input_conv` + `trunk.input_gn`.

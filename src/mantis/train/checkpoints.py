@@ -402,7 +402,8 @@ def _verify_provenance(
             f"run_id {fn_run_id!r} (provenance re-verify)."
         )
     try:
-        step_ok = int(md_step) == int(fn_step_str)
+        # An absent metadata.step lands in the same mismatch-raise as a non-numeric one.
+        step_ok = md_step is not None and int(md_step) == int(fn_step_str)
     except (TypeError, ValueError):
         step_ok = False
     if not step_ok:
@@ -519,9 +520,14 @@ def load_checkpoint(
     if isinstance(config, dict):
         RunConfig.model_validate(config)  # config schema-validated on read (repo_design §6)
 
+    kind = payload.get("kind")
+    if not isinstance(kind, str):
+        # The v2 writer always stamps kind ("full"/"weights"); a missing one is corruption.
+        raise CheckpointStampError(f"{path.name}: v2 envelope missing its kind field.")
+
     return Checkpoint(
         schema_version=CHECKPOINT_SCHEMA_VERSION,
-        kind=payload.get("kind"),
+        kind=kind,
         model_state=model_state,
         metadata=_rehydrate_metadata(metadata),
         config=config if isinstance(config, dict) else {},
@@ -556,7 +562,8 @@ def load_legacy_weights(
     # Shape sniff (ONCE): envelope {model_state, ...} vs a BARE state dict.
     if isinstance(raw.get("model_state"), dict):
         model_state = raw["model_state"]
-        meta = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+        raw_meta = raw.get("metadata")
+        meta = raw_meta if isinstance(raw_meta, dict) else {}
         is_full = raw.get("optimizer_state") is not None and raw.get("scaler_state") is not None
     else:
         model_state = raw
@@ -574,7 +581,8 @@ def load_legacy_weights(
         )
     spec = lookup(resolved_enc)  # raises EncodingRegistryError (loud) on an unregistered name.
 
-    embedded_config = raw.get("config") if isinstance(raw.get("config"), dict) else {}
+    raw_config = raw.get("config")
+    embedded_config = raw_config if isinstance(raw_config, dict) else {}
     if embedded_config:
         RunConfig.model_validate(embedded_config)  # config snapshot re-validated
     arch = arch_from_spec_and_config(spec, embedded_config)

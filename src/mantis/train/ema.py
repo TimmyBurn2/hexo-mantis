@@ -99,7 +99,8 @@ def build_ema_model(model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> Ema
 def resolve_ema_config(config: dict[str, Any]) -> tuple[bool, float, int]:
     """Read EMA settings — nested ``{"ema": {...}}`` or flat ``ema_*`` keys. Default
     OFF preserves the pre-EMA path."""
-    nested = config.get("ema") if isinstance(config.get("ema"), dict) else {}
+    ema_block = config.get("ema")
+    nested = ema_block if isinstance(ema_block, dict) else {}
     enabled = bool(nested.get("enabled", config.get("ema_enabled", False)))
     decay = float(nested.get("decay", config.get("ema_decay", DEFAULT_DECAY)))
     update_every = int(nested.get("update_every", config.get("ema_update_every", DEFAULT_UPDATE_EVERY)))

@@ -174,6 +174,13 @@ class InferenceServer(threading.Thread):
         `torch.compile` wrapper. Called once at `__init__` — the run loop reads the
         resolved attributes, so there is no per-batch overhead from this helper.
         """
+        if self._shape is None:
+            # Grid-only helper: __init__ calls it exclusively from the dense arm, after
+            # `_shape` is assigned; the graph arm never routes here.
+            raise RuntimeError(
+                "InferenceServer._setup_inference_path: no (C, H, W) shape — the dense "
+                "setup was entered for a graph encoding."
+            )
         # TorchScript trace of the eval forward: collapses ~100 `nn.Module` `_call_impl`
         # invocations per forward into one ScriptModule whose parameters SHARE storage
         # with `model`, so `load_state_dict_safe`'s in-place mutation keeps flowing into
@@ -342,6 +349,13 @@ class InferenceServer(threading.Thread):
             and self._compile_mode == "reduce-overhead"
             and self.device.type == "cuda"
         ):
+            if self._shape is None:
+                # `_compile_inference` is pinned False on the graph arm of __init__, and
+                # the dense arm always sets `_shape` — a None here is a wiring break.
+                raise RuntimeError(
+                    "InferenceServer._warmup_compile_path: compile warmup requires the "
+                    "dense (C, H, W) shape; graph mode never enables compile_inference."
+                )
             try:
                 with self._weights_lock:
                     with torch.inference_mode():
@@ -388,6 +402,16 @@ class InferenceServer(threading.Thread):
         )
 
         spec = self.encoding_spec
+        # A graph spec carries all three graph fields; None means a grid spec routed here.
+        win_length = spec.win_length
+        node_feat_dim = spec.node_feat_dim
+        edge_feat_dim = spec.edge_feat_dim
+        if win_length is None or node_feat_dim is None or edge_feat_dim is None:
+            raise RuntimeError(
+                f"InferenceServer graph loop: encoding spec {spec.name!r} is missing graph "
+                f"fields (win_length={win_length}, node_feat_dim={node_feat_dim}, "
+                f"edge_feat_dim={edge_feat_dim}) — a non-graph spec routed to the graph loop."
+            )
         # First batch after (re)start runs the FULL semantic/geometric layer.
         reset_semantic_canary()
         canary_period = int(self._batch_size)  # cheap; a knob if it ever matters
@@ -406,9 +430,9 @@ class InferenceServer(threading.Thread):
                             wire,
                             expected_version=1,
                             trunk_size=spec.trunk_size,
-                            win_length=spec.win_length,
-                            node_feat_dim=spec.node_feat_dim,
-                            edge_feat_dim=spec.edge_feat_dim,
+                            win_length=win_length,
+                            node_feat_dim=node_feat_dim,
+                            edge_feat_dim=edge_feat_dim,
                             device=str(self.device),
                             semantic="canary",
                             canary_period=canary_period,
@@ -425,7 +449,9 @@ class InferenceServer(threading.Thread):
                                 dtype=self._amp_dtype,
                                 enabled=self.device.type == "cuda",
                             ):
-                                policy_logits, value, _bins = self.model.forward_batch(
+                                # nn.Module.__getattr__ types dynamic attrs as
+                                # Tensor | Module; `forward_batch` is GnnNet's real method.
+                                policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
                                     batch.x,
                                     batch.edge_index,
                                     batch.edge_attr,
@@ -486,6 +512,13 @@ class InferenceServer(threading.Thread):
         if self._is_graph:
             self._run_graph_loop()
             return
+        # Dense loop from here down; the dense arm of __init__ always sets `_shape`.
+        shape = self._shape
+        if shape is None:
+            raise RuntimeError(
+                "InferenceServer.run: dense loop entered with no (C, H, W) shape — "
+                "grid/graph construction invariant broken."
+            )
         _perf = self._perf_timing
         _sync = self._perf_sync_cuda and self.device.type == "cuda"
 
@@ -522,6 +555,9 @@ class InferenceServer(threading.Thread):
                     if not request_ids:
                         continue
                     _t_fetched = time.perf_counter() if _perf else 0.0
+                    # Bound here so the `_perf` log block below is never reading an
+                    # unbound name; the real values are assigned only under `_perf`.
+                    _t_h2d_done = _t_forward_done = _t_d2h_done = 0.0
 
                     self._total_requests += len(request_ids)
 
@@ -554,7 +590,7 @@ class InferenceServer(threading.Thread):
                             # (prior forward + .cpu() synced the default stream), so
                             # reusing the staging buffer is safe.
                             self._h2d_staging[:n].copy_(
-                                torch.from_numpy(batch_np).view(n, *self._shape)
+                                torch.from_numpy(batch_np).view(n, *shape)
                             )
                             if _pad:
                                 # Zero padding for the CUDA graph's fixed shape. Padded
@@ -572,7 +608,7 @@ class InferenceServer(threading.Thread):
                             tensor = (
                                 torch.from_numpy(batch_np)
                                 .to(self.device)
-                                .reshape(n, *self._shape)
+                                .reshape(n, *shape)
                             )
                         if _perf:
                             if _sync:

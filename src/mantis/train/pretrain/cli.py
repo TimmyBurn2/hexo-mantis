@@ -35,7 +35,7 @@ from mantis.encoding import resolve_corpus_path as _resolve_corpus_path
 from mantis.encoding import resolve_from_checkpoint as _resolve_encoding_from_ckpt
 from mantis.encoding.registry import EncodingRegistryError as _EncodingRegistryError
 from mantis.encoding.resolvers import MissingEncodingError
-from mantis.model import arch_from_spec_and_config, build_net, compile_model
+from mantis.model import HexTacToeNet, arch_from_spec_and_config, build_net, compile_model
 from mantis.train.emit import NullEventSink
 from mantis.train.pretrain.dataset import (
     AugmentedBootstrapDataset,
@@ -166,7 +166,9 @@ def pretrain(argv: list[str] | None = None) -> None:
 
     dataset = AugmentedBootstrapDataset(states, policies, outcomes)
     sampler = torch.utils.data.WeightedRandomSampler(
-        weights=torch.from_numpy(np.asarray(weights)).double(),
+        # torch stub gap: WeightedRandomSampler is annotated Sequence[float] but is
+        # documented to take (and internally as_tensor()s) a Tensor.
+        weights=torch.from_numpy(np.asarray(weights)).double(),  # pyright: ignore[reportArgumentType]
         num_samples=len(dataset),
         replacement=True,
     )
@@ -182,6 +184,13 @@ def pretrain(argv: list[str] | None = None) -> None:
     # ── Model — the WP9 construction authority ──
     arch = arch_from_spec_and_config(spec, config)
     model = build_net(arch)
+    if not isinstance(model, HexTacToeNet):
+        # The bootstrap-pretrain pipeline is dense-only (dense corpus NPZ, dense collate,
+        # HexTacToeNet trainer); a graph encoding has no pretrain path through this CLI.
+        raise SystemExit(
+            f"pretrain CLI: encoding {encoding!r} built a {type(model).__name__} — the "
+            "bootstrap-pretrain pipeline is dense-only (no graph corpus route)."
+        )
     if device.type == "cuda" and not args.no_compile:
         model = compile_model(model, mode="default")
 

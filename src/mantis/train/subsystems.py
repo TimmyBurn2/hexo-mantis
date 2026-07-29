@@ -102,7 +102,9 @@ def cuda_warmup(inf_model: torch.nn.Module, device: torch.device, arch: InfModel
                                          dtype=amp_dtype_for(representation, arch.amp_dtype)):
         if representation == "graph":
             x, ei, ea, legal_mask, stone_mask, node_offsets = _synthetic_graph_warmup(arch, device)
-            inf_model.forward_batch(x, ei, ea, legal_mask, stone_mask, node_offsets=node_offsets)
+            # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
+            # `forward_batch` is GnnNet's real method.
+            inf_model.forward_batch(x, ei, ea, legal_mask, stone_mask, node_offsets=node_offsets)  # pyright: ignore[reportCallIssue]
         else:
             base = getattr(inf_model, "_orig_mod", inf_model)
             ch = int(getattr(base, "in_channels", 8))

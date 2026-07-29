@@ -51,5 +51,5 @@ def build_net(arch: ModelArch) -> nn.Module:
     # authority for the run's identity. Plain attribute assignment, so the handle lands in
     # `__dict__` and in NONE of `_parameters` / `_buffers` / `_modules` — `state_dict()` is
     # byte-identical and LAW-12's checkpoint key set is unchanged.
-    net.arch = arch  # pyright: ignore[reportAttributeAccessIssue]
+    net.arch = arch  # pyright: ignore[reportAttributeAccessIssue, reportArgumentType] — plain __dict__ handle; nn.Module.__setattr__ is annotated Tensor | Module only
     return net

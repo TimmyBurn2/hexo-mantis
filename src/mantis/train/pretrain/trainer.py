@@ -22,6 +22,10 @@ from typing import Any
 import torch
 import torch.optim as optim
 
+# Canonical stub-exported locations — `torch.amp` itself does not re-export for type checkers.
+from torch.amp.autocast_mode import autocast
+from torch.amp.grad_scaler import GradScaler
+
 from mantis.train.emit import emit_via
 from mantis.train.losses import (
     compute_aux_loss,
@@ -70,7 +74,7 @@ class BootstrapTrainer:
             lr=float(config.get("lr", 0.002)),
             weight_decay=float(config.get("weight_decay", 0.0001)),
         )
-        self.scaler = torch.amp.GradScaler(device=device.type, enabled=fp16)
+        self.scaler = GradScaler(device=device.type, enabled=fp16)
 
         total_steps = int(config.get("pretrain_total_steps", 50_000))
         eta_min = float(config.get("pretrain_eta_min", 1e-5))
@@ -117,7 +121,7 @@ class BootstrapTrainer:
             self.optimizer.zero_grad()
 
             use_chain = chain_weight > 0.0
-            with torch.amp.autocast(
+            with autocast(
                 device_type=self.device.type,
                 dtype=torch.float16,
                 enabled=self.fp16,

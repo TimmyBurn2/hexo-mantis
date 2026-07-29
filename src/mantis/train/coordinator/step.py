@@ -31,7 +31,7 @@ import logging
 import math
 import os
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
@@ -551,7 +551,11 @@ class StepCoordinator:
     def _watchdog_counters(self) -> dict[str, int]:
         counters = getattr(self.heartbeat_watchdog, "counters", None)
         snapshot = getattr(counters, "snapshot", None)
-        return dict(snapshot()) if callable(snapshot) else {}
+        if not callable(snapshot):
+            return {}
+        # `WatchdogCounters.snapshot()` contract: a str→int mapping (duck-typed here —
+        # the watchdog is an injected Any collaborator).
+        return dict(cast("Mapping[str, int]", snapshot()))
 
     # ── the async eval-RESULT seam — THE sealbot-WR consumer (§c.4b, MUST-1) ──────────
     def on_eval_round_complete(self, result: Mapping[str, Any]) -> None:

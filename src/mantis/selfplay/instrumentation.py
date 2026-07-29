@@ -422,7 +422,8 @@ class PoolInstrumentation:
         rho = None
         if n >= 10:
             try:
-                from scipy.stats import spearmanr
+                # scipy is the optional [analysis] extra, lazy by design (DV-10).
+                from scipy.stats import spearmanr  # pyright: ignore[reportMissingImports]
                 rho_val, p_val = spearmanr(ranges, is_draw)
                 rho = float(rho_val) if rho_val == rho_val else None
                 _ = p_val

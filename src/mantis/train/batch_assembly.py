@@ -275,7 +275,9 @@ def assemble_mixed_batch(
     n_pre: int,
     n_self: int,
     batch_size: int,
-    batch_size_cfg: int,
+    # None = the coordinator was built without a config batch size (its default); it
+    # compares unequal below and keeps the warm-up concat path, same as any mismatch.
+    batch_size_cfg: int | None,
     recency_weight: float,
     bufs: BatchBuffers,
     train_step: int,
@@ -295,6 +297,7 @@ def assemble_mixed_batch(
 
     use_bot = bot_buffer is not None and n_bot > 0 and bot_buffer.size > 0
     if use_bot:
+        assert bot_buffer is not None  # use_bot's first conjunct, restated for the checker
         s_b, c_b, p_b, o_b, own_b, wl_b, _ifs_b, pos_b, _vv_b = \
             bot_buffer.sample_batch_with_pos(n_bot, augment)
         ifs_b = np.ones(len(s_b), dtype=np.uint8)
@@ -319,6 +322,7 @@ def assemble_mixed_batch(
 
     n_recent_actual = 0
     if use_recent:
+        assert recent_buffer is not None  # use_recent's first conjunct, restated for the checker
         n_recent_req = max(1, int(round(n_self * recency_weight)))
         n_uniform = n_self - n_recent_req
         s_r, c_r, p_r, o_r, own_r_flat, wl_r_flat, ifs_r, vv_r = recent_buffer.sample(n_recent_req)

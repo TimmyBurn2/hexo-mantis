@@ -117,7 +117,7 @@ class SelfPlayWorker:
         board: Board,
         use_dirichlet: bool = True,
         temperature: float | None = None,
-    ) -> list[float]:
+    ) -> np.ndarray:
         return self._run_mcts_with_sims(
             board, n_sims=self.n_sims,
             use_dirichlet=use_dirichlet, temperature=temperature,
@@ -130,8 +130,11 @@ class SelfPlayWorker:
         use_dirichlet: bool = True,
         temperature: float | None = None,
         batch_size: int = 8,
-    ) -> list[float]:
-        """Run `n_sims` MCTS simulations from `board` using batched inference."""
+    ) -> np.ndarray:
+        """Run `n_sims` MCTS simulations from `board` using batched inference.
+
+        Returns `MCTSTree.get_policy`'s dense policy vector as the ndarray it already is
+        (consumers index it numerically; no list copy is taken)."""
         self.tree.new_game(board)
         # Dirichlet noise only at the start of a full compound turn, not at an
         # intermediate ply (the second stone of a 2-stone turn). Ply 0 is the opening

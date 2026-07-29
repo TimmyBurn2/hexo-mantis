@@ -38,7 +38,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.amp import GradScaler, autocast
+
+# Canonical stub-exported locations — `torch.amp` itself does not re-export for type checkers.
+from torch.amp.autocast_mode import autocast
+from torch.amp.grad_scaler import GradScaler
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from mantis.encoding import resolve_from_config
@@ -356,8 +359,12 @@ class Trainer:
         assert 0 <= n_pretrain <= batch_n, f"n_pretrain={n_pretrain} out of [0, {batch_n}]"
         use_ownership = ownership_weight > 0.0 and ownership_targets is not None
         use_threat = threat_weight > 0.0 and threat_targets is not None
-        own_t = decode_ownership(ownership_targets, self.device) if use_ownership else None
-        thr_t = decode_winning_line(threat_targets, self.device) if use_threat else None
+        # The redundant `is not None` restates the use_* definitions above so the
+        # None-exclusion is visible to the type checker.
+        own_t = (decode_ownership(ownership_targets, self.device)
+                 if use_ownership and ownership_targets is not None else None)
+        thr_t = (decode_winning_line(threat_targets, self.device)
+                 if use_threat and threat_targets is not None else None)
 
         with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                       enabled=self._autocast_enabled):
@@ -399,18 +406,22 @@ class Trainer:
             else:
                 value_loss = compute_value_loss(value_aux, outcomes_t, value_mask=value_mask_t)
 
-            opp_reply_loss = (
-                compute_aux_loss(opp_reply, policies_t, policy_valid, self.device,
-                                 full_search_mask=full_search_mask_t) if use_aux else None
-            )
+            opp_reply_loss = None
+            if use_aux:
+                # `aux=True` forward contract: fwd carries the opp_reply head output.
+                assert opp_reply is not None
+                opp_reply_loss = compute_aux_loss(opp_reply, policies_t, policy_valid,
+                                                  self.device,
+                                                  full_search_mask=full_search_mask_t)
             entropy_bonus = None
             if entropy_weight > 0.0:
                 p_fp32 = torch.exp(log_policy.float())
                 entropy_bonus = torch.special.entr(p_fp32).sum(dim=-1).mean()
-            unc_loss = (
-                compute_uncertainty_loss(sigma2, outcomes_t, value.detach())
-                if use_uncertainty else None
-            )
+            unc_loss = None
+            if use_uncertainty:
+                # `uncertainty=True` forward contract: fwd carries the sigma2 head output.
+                assert sigma2 is not None
+                unc_loss = compute_uncertainty_loss(sigma2, outcomes_t, value.detach())
             aux_skip_full_pretrain = n_pretrain >= batch_n
             own_loss = None
             if use_ownership and own_pred is not None and own_t is not None and not aux_skip_full_pretrain:
@@ -509,7 +520,9 @@ class Trainer:
         self.optimizer.zero_grad()
         with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                       enabled=self._autocast_enabled):
-            policy_logits, _value, bin_logits = self.model.forward_batch(
+            # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
+            # `forward_batch` is GnnNet's real method.
+            policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
                 x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets=node_offsets)
             policy_loss = ragged_policy_ce(policy_logits, policy_target, legal_offsets,
                                            full_search_mask=is_full_search)

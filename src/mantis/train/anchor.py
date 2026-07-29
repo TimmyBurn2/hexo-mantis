@@ -438,7 +438,11 @@ def resolve_anchor(
     NEVER an arch-off-a-live-module sniff (§c.6).
     """
     config = config if config is not None else dict(getattr(trainer, "config", {}) or {})
-    device = device if device is not None else getattr(trainer, "device", torch.device("cpu"))
+    # A distinct name: rebinding the `device | None` parameter would keep its declared
+    # Optional type; this local is a plain torch.device.
+    resolved_device: torch.device = (
+        device if device is not None else getattr(trainer, "device", torch.device("cpu"))
+    )
     inf_representation = getattr(getattr(trainer, "arch", None), "representation", "grid")
     if declared_encoding is None:
         declared_encoding = _resolve_declared_encoding(config)
@@ -449,7 +453,7 @@ def resolve_anchor(
 
     bmp.parent.mkdir(parents=True, exist_ok=True)
     loaded = load_best_model_resilient(
-        bmp, declared_encoding=declared_encoding, device=device,
+        bmp, declared_encoding=declared_encoding, device=resolved_device,
         bootstrap_candidates=bootstrap_candidates,
     )
     if loaded is not None:
@@ -502,7 +506,7 @@ def resolve_anchor(
         "anchor_fresh_init_no_bootstrap tried=%s (no anchor or bootstrap available — initialising "
         "best_model.pt from current trainer.model).", list(bootstrap_candidates or _BOOTSTRAP_ANCHOR_CANDIDATES),
     )
-    best_model = build_net(trainer.arch).to(device)
+    best_model = build_net(trainer.arch).to(resolved_device)
     best_model.load_state_dict(trainer.inference_state_dict())
     best_model.eval()
     save_best_model_atomic(best_model, bmp)

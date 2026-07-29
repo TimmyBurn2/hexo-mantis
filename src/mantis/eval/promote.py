@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 @dataclass(frozen=True)
@@ -50,8 +50,10 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
     loaded = load_model_snapshot(snapshot_path, device="cpu") if snapshot_path else {}
     # `load_model_snapshot` returns a built nn.Module in production (snapshot.py); the
     # gate-parity oracle monkeypatches it to hand back a bare state_dict directly — both
-    # shapes are handled here without a live-module state read.
-    state_dict = loaded.state_dict() if hasattr(loaded, "state_dict") else loaded
+    # shapes are handled here without a live-module state read. The no-method arm IS the
+    # bare-dict shape, hence the cast.
+    sd_method = getattr(loaded, "state_dict", None)
+    state_dict = cast("dict[str, Any]", sd_method() if callable(sd_method) else loaded)
 
     resolved_anchor = hooks.anchor_state
     hooks.guarded_load(resolved_anchor.best_model, state_dict)

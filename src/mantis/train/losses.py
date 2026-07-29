@@ -22,6 +22,9 @@ from typing import Any
 import torch
 import torch.nn as nn
 
+# Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
+from torch.amp.grad_scaler import GradScaler
+
 from mantis.train.emit import emit_via
 
 
@@ -300,7 +303,7 @@ def compute_total_loss(
 def fp16_backward_step(
     loss: torch.Tensor,
     optimizer: torch.optim.Optimizer,
-    scaler: torch.amp.GradScaler,
+    scaler: GradScaler,
     model: nn.Module,
     fp16: bool,
     max_grad_norm: float = 1.0,

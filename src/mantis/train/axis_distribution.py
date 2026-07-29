@@ -12,6 +12,7 @@ Three axes (matching env.game_state._HEX_AXES order):
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TypedDict
 
 import numpy as np
 
@@ -20,6 +21,15 @@ from mantis.util.constants import HISTORY_LEN  # training/selfplay hyperparam (n
 # Mirrors env.game_state._HEX_AXES — do not reorder.
 _AXES = ((1, 0), (0, 1), (1, -1))
 AXIS_LABELS = ("axis_q", "axis_r", "axis_s")
+
+
+class AxisFractions(TypedDict):
+    """Per-axis same-color fractions plus the max-axis LABEL (a str, not a fraction)."""
+
+    axis_q: float
+    axis_r: float
+    axis_s: float
+    axis_max: str
 
 
 def _assign_colors(move_history: list[tuple[int, int]]) -> dict[tuple[int, int], int]:
@@ -35,7 +45,7 @@ def _assign_colors(move_history: list[tuple[int, int]]) -> dict[tuple[int, int],
     return stone_color
 
 
-def compute_axis_fractions(games: Sequence[list[tuple[int, int]]]) -> dict[str, float]:
+def compute_axis_fractions(games: Sequence[list[tuple[int, int]]]) -> AxisFractions:
     """Compute axis-distribution fractions from completed self-play games.
 
     Aggregates total same-color adjacent pairs / total adjacent pairs across all games for
@@ -67,7 +77,7 @@ def compute_axis_fractions(games: Sequence[list[tuple[int, int]]]) -> dict[str, 
     }
 
 
-def compute_axis_fractions_from_states(states: np.ndarray) -> dict[str, float]:
+def compute_axis_fractions_from_states(states: np.ndarray) -> AxisFractions:
     """Compute axis fractions from a corpus state array.
 
     Args:

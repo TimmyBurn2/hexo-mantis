@@ -5,7 +5,8 @@
 and the RAW per-cluster decode (`infer_batch_per_cluster`) — splitting them would separate
 each decode from the docstring stating what it drops. WPSC Phase 2 SC-A2's explicit
 8-field `InferenceHParams`-default dict literal (replacing the old `{"selfplay": {}}`
-fallback) is what pushed this file from 292 to 303 lines.
+fallback) is what pushed this file from 292 to 303 lines; WPCLEAN Phase LT's
+type-visibility guards (batcher None-guard, canonical autocast import) took it to 323.
 
 One class, three decode contracts that must be read together: the dense `infer_batch`
 scatter-max/min-pool decode, the graph leg that rides the ONE server, and the RAW
@@ -28,6 +29,9 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+
+# Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
+from torch.amp.autocast_mode import autocast
 
 from mantis._engine import Board
 from mantis.encoding import EncodingSpec, lookup
@@ -168,7 +172,7 @@ class LocalInferenceEngine:
         batch_tensor = torch.cat(all_tensors, dim=0).to(self.device)
 
         self.model.eval()
-        with torch.amp.autocast(
+        with autocast(
             device_type=self.device.type,
             enabled=(self.device.type in ("cuda", "mps")),
         ):
@@ -239,7 +243,14 @@ class LocalInferenceEngine:
             (list(board.get_stones()), int(board.current_player), int(board.moves_remaining))
             for board in boards
         ]
-        results = self._graph_batcher.submit_graphs_and_wait(positions)
+        batcher = self._graph_batcher
+        if batcher is None:
+            # Set on every graph __init__; None only for a dense engine or after close().
+            raise RuntimeError(
+                "LocalInferenceEngine._infer_batch_graph: graph batcher is gone — the "
+                "engine was closed (or constructed dense) before this inference call."
+            )
+        results = batcher.submit_graphs_and_wait(positions)
         policies = [dense for dense, _overflow, _value in results]
         values = [float(value) for _dense, _overflow, value in results]
         return policies, values
@@ -296,7 +307,7 @@ class LocalInferenceEngine:
         batch_tensor = torch.cat(all_tensors, dim=0).to(self.device)
 
         self.model.eval()
-        with torch.amp.autocast(
+        with autocast(
             device_type=self.device.type,
             enabled=(self.device.type in ("cuda", "mps")),
         ):
