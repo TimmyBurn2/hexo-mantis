@@ -84,6 +84,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tokenize
@@ -700,17 +701,25 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
     it gates is a gate that will — so the refusal must land BEFORE anything is created."""
     inside = REPO_ROOT / "_preflight_oracle_outdir"
     assert not inside.exists(), "the oracle's probe path must not pre-exist"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_N),
-                       "--out-dir", str(inside), "--timeout-sec", "60", "--device", "cpu")
-    assert result.returncode == 13, (
-        "§6.3 rc 13 PreflightOutDirInsideRepoError; got "
-        f"{result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-2000:]}"
-    )
-    assert not inside.exists(), (
-        "the refusal must precede creation — an out-dir the tool made and then rejected is "
-        "still an untracked artifact directory inside the tree (R7)"
-    )
-    assert "PreflightOutDirInsideRepoError" in (result.stdout + result.stderr)
+    # CARD-PREFLIGHT-ORACLE-OUTDIR-CLEANUP (R43 opening granted via R110/GROUND_PFC): when
+    # the guard under test FAILS, the tool creates this path inside the repo; the finally
+    # removes what the failure created so one red assertion does not also litter the tree
+    # the conftest sweep then has to catch. The guard itself is untouched.
+    try:
+        result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_N),
+                           "--out-dir", str(inside), "--timeout-sec", "60", "--device", "cpu")
+        assert result.returncode == 13, (
+            "§6.3 rc 13 PreflightOutDirInsideRepoError; got "
+            f"{result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-2000:]}"
+        )
+        assert not inside.exists(), (
+            "the refusal must precede creation — an out-dir the tool made and then rejected is "
+            "still an untracked artifact directory inside the tree (R7)"
+        )
+        assert "PreflightOutDirInsideRepoError" in (result.stdout + result.stderr)
+    finally:
+        if inside.is_dir() and not inside.is_symlink():
+            shutil.rmtree(inside)
 
 
 def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
