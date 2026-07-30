@@ -1,7 +1,10 @@
-""">300 justify (R8): this file is ~60% DATA — the 170-entry `CONSUMER_REGISTRY` is the
-LAW-08 authority itself, one entry per schema leaf, and splitting it would create a second
-registry copy to keep in sync (there is already exactly one deliberate duplicate,
-`test_every_key_has_consumer_p2.py`). The five tests below are ~106 lines together.
+""">300 justify (R8), stated at this file's MEASURED size of 479 lines: it is ~60% DATA — the
+175-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
+splitting it would create a second registry copy to keep in sync (there is already exactly one
+deliberate duplicate, `test_every_key_has_consumer_p2.py`). The five tests below are ~106 lines
+together. WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
+`monitor.disk_guard.*` family, R126 `train.device`); both figures are re-measured at HEAD —
+`wc -l` and the live `len(CONSUMER_REGISTRY)` — never transcribed (SF-7, REVIEW-impl F-4).
 
 O15 — every-key-has-consumer bijection (LAW-08).
 

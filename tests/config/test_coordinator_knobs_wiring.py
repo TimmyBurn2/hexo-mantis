@@ -1,4 +1,6 @@
-""">300 justify (R8), stated at this file's MEASURED size of 762 lines: it is R93's evidence
+""">300 justify (R8), stated at this file's MEASURED size of 766 lines (762 before WPMAIN's
+two-line payload completion; `wc -l` at HEAD, re-measured after the edit — SF-7,
+REVIEW-impl F-4): it is R93's evidence
 for NINETEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
 knob, observe the consumer", never a shared arm a sibling could ride. Roughly half the length
 is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the ~120-line

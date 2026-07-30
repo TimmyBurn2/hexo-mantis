@@ -1,6 +1,9 @@
-""">300 justify (R8), stated at this file's MEASURED size of 341 lines: it is ~70% DATA — the
-SECOND copy of the 170-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
-agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves.
+""">300 justify (R8), stated at this file's MEASURED size of 367 lines: it is ~70% DATA — the
+SECOND copy of the 175-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
+WPMAIN moved it 341 -> 367 and the registry 170 -> 175 (R120 `eval_enabled`, R122's
+`monitor.disk_guard.*` family, R126 `train.device`). Both figures are re-measured at HEAD —
+`wc -l` and the live `len(CONSUMER_REGISTRY)` — never transcribed (SF-7, REVIEW-impl F-4).
 Splitting it would create a THIRD copy to keep in sync, which is the drift the duplication
 exists to detect. The three tests below are ~24 lines together.
 

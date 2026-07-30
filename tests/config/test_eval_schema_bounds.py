@@ -1,4 +1,6 @@
-# >300 justify (R8), stated at this file's MEASURED size of 406 lines. Pre-existing gap, closed
+# >300 justify (R8), stated at this file's MEASURED size of 410 lines (406 before WPMAIN's
+# two-line payload completion; `wc -l` at HEAD, re-measured after the edit that moved it —
+# SF-7, REVIEW-impl F-4). Pre-existing gap, closed
 # by WPMINT Phase W. The file is a per-FIELD bounds census over the `eval` section's 30 leaves:
 # each field contributes a parametrized out-of-domain rejection and an in-domain boundary
 # acceptance, so the length tracks the section's field count rather than any logic. Splitting it

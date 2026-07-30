@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 693 lines. WPMAIN made this
+# >300 justify (R8), stated at this file's MEASURED size of 734 lines. WPMAIN made this
 # module the ONE composition authority in fact and not only in name: the collaborator
 # builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
 # `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
@@ -131,8 +131,25 @@ class RunHandles(NamedTuple):
 
 class RunCollaborators(NamedTuple):
     """What `build_run_collaborators` hands back: the three injected collaborators plus the
-    ONE derivation of the run's two output directories (D-8 — parent, child and launcher can
-    no longer derive them differently)."""
+    ONE derivation of the run's two output directories INSIDE THE BOOT (D-8).
+
+    Stated at its measured scope, because the wider claim is false. Before WPMAIN the
+    launcher and the preflight child each derived `logs/` and `checkpoints/` themselves;
+    both now read them off this tuple, so no BOOT can derive them differently. What survives
+    is one derivation OUTSIDE the boot: `tools/ci_gates/preflight_mint.py:1000` writes its
+    own `log_dir = out_dir / "logs"` in the preflight PARENT and uses it for the
+    `PreflightOutDirReusedError` stale-segment refusal and for `_read_segment`. Repo-wide the
+    expression has exactly two producers — `run.py:269` and that line.
+
+    Not folded in here, and the residue is named rather than papered over (REVIEW-impl F-3,
+    queued as Q-D8-PARENT-DERIVATION): the parent half must stay importable WITHOUT torch,
+    which is why the child imports `mantis.run` function-locally at all (DESIGN §1.4) — this
+    module imports `torch` at line 68. Sharing the derivation therefore means a new
+    torch-free module and a new exported symbol, i.e. a live-consumer row and a DAG row, for
+    a two-line expression; that is materially wider than a truth-correction and is not this
+    condition's scope. The consequence a future reader must know: rename the child's
+    directory and the parent's reuse guard silently stops guarding while the segment read
+    goes empty."""
 
     trainer: Any
     pool: Any
@@ -411,7 +428,8 @@ def compose_run(
 
     log_dir = Path(log_dir)
     checkpoint_dir = Path(checkpoint_dir)
-    # The DERIVATION of these two paths lives once, in `build_run_collaborators` (D-8) — this
+    # The DERIVATION of these two paths lives once in the BOOT, in `build_run_collaborators`
+    # (D-8, at the scope `RunCollaborators` states it and no wider) — this
     # is not a second derivation, it is the root making the directory it was HANDED usable.
     # It is load-bearing for LAW-16 leg 3: the disk guard stats `watch_path`, and its poll
     # thread swallows its own errors by design (a monitor thread must not kill the run), so a
@@ -585,11 +603,34 @@ def compose_run(
     finally:
         if coordinator is None:
             # PARTIAL COMPOSITION. `close_out` — the epilogue that owns the drain, the
-            # buffer save, the staleness disarm and the guarded pool stop — never ran and
+            # buffer save, the staleness DISARM and the guarded pool stop — never ran and
             # never will, so this is the only place the run-safety threads and the pool get
-            # stopped. On the COMPLETED path they stay the epilogue's, unchanged: adding a
-            # second watchdog stop / sink close there would be a second authority for a
-            # teardown `close_out` already owns.
+            # stopped.
+            #
+            # Why the arm restriction, stated TRUE (REVIEW-impl F-2 measured the previous
+            # sentence here FALSE and SF-7 makes a false justification worse than none):
+            # `close_out` (`train/coordinator/drain.py:140-171`) does NOT own either call.
+            # It disarms staleness, flushes the eval, runs `on_drained` and runs the terminal
+            # eval — it never touches the watchdog thread and never touches the sink.
+            # Repo-wide, `watchdog.stop()` and `sink.close()` have EXACTLY ONE call site each
+            # in all of `src/`, and it is the two lines below. So on the COMPLETED path
+            # neither runs and nothing else runs them: both are left to process exit, which
+            # is bounded but is not a teardown anybody owns.
+            #
+            # The forcing cause is not a principle, it is DEBT: seven off-list suites stand
+            # in `SimpleNamespace` sinks and watchdogs that implement no `close`/`stop`, so an
+            # unconditional teardown here reds them. R131 countersigned the deviation and
+            # REFUSED to accept it as shape — "production code contorting around
+            # under-implemented test fakes is the tail wagging the dog" — and routed the fix
+            # to CARD-PROTOCOL-COMPLETE (R106): complete the sink/watchdog protocol against
+            # concretes, THEN lift this restriction so teardown runs unconditionally. That
+            # card is the condition under which these two lines move out of the `if`; nothing
+            # here is a reason to close it as a no-op.
+            #
+            # Bounded, meanwhile, and measured rather than assumed: the sink is line-buffered
+            # (`monitor/sink.py:120`), the watchdog thread is a daemon
+            # (`train/lifecycle/heartbeat_watchdog.py:234-239`), and both production callers
+            # exit the process immediately after this returns.
             _stop_pool_if_started(pool, pool_started=pool_started)()
             run_safety.watchdog.stop()
             run_safety.sink.close()

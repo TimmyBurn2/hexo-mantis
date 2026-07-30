@@ -1,5 +1,7 @@
-# >300 justify (R8), stated at this file's MEASURED size of 455 lines (was 430 at K-B, 454 at
-# DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count). WPMINT Phase K-B
+# >300 justify (R8), stated at this file's MEASURED size of 481 lines (was 430 at K-B, 454 at
+# DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count; 455 -> 481 at
+# WPMAIN, which promoted `device` to a typed field per R126 with its grounds). The number is
+# `wc -l` at HEAD, re-measured AFTER the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
