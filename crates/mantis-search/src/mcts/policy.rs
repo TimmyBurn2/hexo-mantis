@@ -366,7 +366,7 @@ impl MCTSTree {
         let mut children: Vec<(usize, u32)> = (first..first + n_ch)
             .map(|i| (i, self.pool[i].n_visits))
             .collect();
-        children.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        children.sort_unstable_by_key(|&(_, visits)| std::cmp::Reverse(visits));
         children.truncate(n);
 
         let q_sign: f32 = if root.moves_remaining == 1 { -1.0 } else { 1.0 };
