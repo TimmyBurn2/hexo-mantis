@@ -311,3 +311,38 @@ added_by = "WP-SP"
 path = "selfplay/instrumentation/pure_function_battery.json"
 sha256 = "75ae22188e4aed0411c46fb6ad750de691732a38cbe0d38d5d7e842ab54f402b"
 added_by = "WP-SP"
+
+# WPMAIN (CARD-RUN-MAIN) — the six minted configs' bytes at `b482243`, the commit this WP
+# branched from. `tests/config/test_minted_config_remint.py` diffs the live configs against
+# these, so the R120/R122/R126 re-mint can be proved ADDITIVE: only the new keys appear, no
+# existing value moves, and run5's armed 0.25 / 25000 / 50 survive byte-identical (R119's
+# HARD STOP — mint-prereg-only).
+[[required]]
+path = "wpmain/config_baseline_b482243/dev_example.yaml"
+sha256 = "613ce0dc684e130085cf452988ce5e93c982d65f160970796e23bbafac74a5ce"
+added_by = "WPMAIN"
+
+[[required]]
+path = "wpmain/config_baseline_b482243/run5.yaml"
+sha256 = "6416ed8b947ec5685cf067d8ed9b1fa3970358eff2c0308b9a478e5f8ad8ef37"
+added_by = "WPMAIN"
+
+[[required]]
+path = "wpmain/config_baseline_b482243/smoke_gnn.yaml"
+sha256 = "8fdd18e2b5c26511f0aeab1b494d65c363d8f2bef77d051db0b42a72b455b40f"
+added_by = "WPMAIN"
+
+[[required]]
+path = "wpmain/config_baseline_b482243/smoke_preflight_armed.yaml"
+sha256 = "4bbabda57e271c3a2c3b5b2493872c79c8c0448fe9854b8fd2d8c40455c6a63e"
+added_by = "WPMAIN"
+
+[[required]]
+path = "wpmain/config_baseline_b482243/smoke_radius_curriculum.yaml"
+sha256 = "3cae31437d337d25565918e5a207b7d29d999ed05724e9f4400fbd87a8e03a1f"
+added_by = "WPMAIN"
+
+[[required]]
+path = "wpmain/config_baseline_b482243/sustained_kcluster.yaml"
+sha256 = "2b526558e3020b190d07b49ba362c0887e47e68baedd2625d1d791cbd4e03bed"
+added_by = "WPMAIN"
