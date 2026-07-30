@@ -1,0 +1,215 @@
+# Production bench floors — WPBOX CB-1/CB-3 (R29; this file IS the R18 implementation).
+# Point estimates are criterion mid estimates (seconds) measured SERIALIZED on the
+# quiet production box; low/high bracket the 95% CI. CONSUMER: LAW-09's bench
+# discipline (one change = one commit = one IQR-gated bench vs these floors) plus
+# tests/tools/test_bench_floors.py (schema/provenance/liveness validation).
+# Provenance carries interpreter/numpy/rustc/CPU-model ONLY (R112 — no host identifiers).
+
+[provenance]
+interpreter = "Python 3.11.15 (main, Jun  2 2026, 22:26:03) [Clang 22.1.3 ]"
+numpy = "2.4.6"
+rustc = "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+cpu_model = "AMD Ryzen 9 9900X 12-Core Processor"
+
+# ── board_bench ──
+[floor.board_bench_win_detection_hashmap_check_win_10]
+bench = "board_bench"
+case = "win_detection/hashmap_check_win/10"
+low_s = 7.044400e-09
+mid_s = 7.044800e-09
+high_s = 7.045300e-09
+
+[floor.board_bench_win_detection_hashmap_check_win_20]
+bench = "board_bench"
+case = "win_detection/hashmap_check_win/20"
+low_s = 6.985200e-09
+mid_s = 6.987100e-09
+high_s = 6.989000e-09
+
+[floor.board_bench_win_detection_hashmap_check_win_40]
+bench = "board_bench"
+case = "win_detection/hashmap_check_win/40"
+low_s = 7.630700e-09
+mid_s = 7.632500e-09
+high_s = 7.634700e-09
+
+[floor.board_bench_win_detection_hashmap_check_win_TRUE]
+bench = "board_bench"
+case = "win_detection/hashmap_check_win_TRUE"
+low_s = 1.396600e-08
+mid_s = 1.397100e-08
+high_s = 1.397600e-08
+
+[floor.board_bench_board_clone_clone_n_stones_5]
+bench = "board_bench"
+case = "board_clone/clone_n_stones/5"
+low_s = 4.412100e-08
+mid_s = 4.413100e-08
+high_s = 4.414300e-08
+
+[floor.board_bench_board_clone_clone_n_stones_15]
+bench = "board_bench"
+case = "board_clone/clone_n_stones/15"
+low_s = 4.913000e-08
+mid_s = 4.917900e-08
+high_s = 4.923900e-08
+
+[floor.board_bench_board_clone_clone_n_stones_30]
+bench = "board_bench"
+case = "board_clone/clone_n_stones/30"
+low_s = 5.170900e-08
+mid_s = 5.176400e-08
+high_s = 5.182800e-08
+
+[floor.board_bench_board_clone_clone_n_stones_60]
+bench = "board_bench"
+case = "board_clone/clone_n_stones/60"
+low_s = 8.221700e-08
+mid_s = 8.222200e-08
+high_s = 8.222800e-08
+
+[floor.board_bench_reconstruct_board_path_replay_clone_and_replay_5]
+bench = "board_bench"
+case = "reconstruct_board_path_replay/clone_and_replay/5"
+low_s = 9.631800e-08
+mid_s = 9.634300e-08
+high_s = 9.636900e-08
+
+[floor.board_bench_reconstruct_board_path_replay_clone_and_replay_10]
+bench = "board_bench"
+case = "reconstruct_board_path_replay/clone_and_replay/10"
+low_s = 1.873800e-07
+mid_s = 1.874000e-07
+high_s = 1.874100e-07
+
+[floor.board_bench_reconstruct_board_path_replay_clone_and_replay_15]
+bench = "board_bench"
+case = "reconstruct_board_path_replay/clone_and_replay/15"
+low_s = 2.894800e-07
+mid_s = 2.895100e-07
+high_s = 2.895400e-07
+
+[floor.board_bench_reconstruct_board_path_replay_clone_and_replay_20]
+bench = "board_bench"
+case = "reconstruct_board_path_replay/clone_and_replay/20"
+low_s = 3.114300e-07
+mid_s = 3.115000e-07
+high_s = 3.116000e-07
+
+[floor.board_bench_zobrist_incremental_apply_move_with_zobrist_update]
+bench = "board_bench"
+case = "zobrist_incremental/apply_move_with_zobrist_update"
+low_s = 1.290600e-07
+mid_s = 1.290700e-07
+high_s = 1.290800e-07
+
+[floor.board_bench_legal_move_gen_rebuild_stones_r5_10]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_stones_r5/10"
+low_s = 2.269900e-06
+mid_s = 2.270700e-06
+high_s = 2.271600e-06
+
+[floor.board_bench_legal_move_gen_rebuild_stones_r5_30]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_stones_r5/30"
+low_s = 6.821400e-06
+mid_s = 6.823200e-06
+high_s = 6.824800e-06
+
+[floor.board_bench_legal_move_gen_rebuild_stones_r5_60]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_stones_r5/60"
+low_s = 1.390200e-05
+mid_s = 1.390600e-05
+high_s = 1.390900e-05
+
+[floor.board_bench_legal_move_gen_rebuild_radius_s30_4]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_radius_s30/4"
+low_s = 4.711200e-06
+mid_s = 4.712900e-06
+high_s = 4.714600e-06
+
+[floor.board_bench_legal_move_gen_rebuild_radius_s30_6]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_radius_s30/6"
+low_s = 9.207300e-06
+mid_s = 9.210500e-06
+high_s = 9.213600e-06
+
+[floor.board_bench_legal_move_gen_rebuild_radius_s30_8]
+bench = "board_bench"
+case = "legal_move_gen/rebuild_radius_s30/8"
+low_s = 1.529500e-05
+mid_s = 1.530000e-05
+high_s = 1.530400e-05
+
+# ── build_bench ──
+[floor.build_bench_axis_graph_build_per_position]
+bench = "build_bench"
+case = "axis_graph_build/per_position"
+low_s = 8.483200e-04
+mid_s = 8.501000e-04
+high_s = 8.518600e-04
+
+[floor.build_bench_axis_graph_build_full_set_all_positions]
+bench = "build_bench"
+case = "axis_graph_build_full_set/all_positions"
+low_s = 2.738000e-01
+mid_s = 2.738300e-01
+high_s = 2.738700e-01
+
+# ── encode_bench ──
+[floor.encode_bench_encode_state_to_buffer_v6]
+bench = "encode_bench"
+case = "encode_state_to_buffer/v6"
+low_s = 3.735300e-08
+mid_s = 3.738400e-08
+high_s = 3.741900e-08
+
+[floor.encode_bench_encode_state_to_buffer_channels_v6_live2_ls]
+bench = "encode_bench"
+case = "encode_state_to_buffer_channels/v6_live2_ls"
+low_s = 4.890700e-08
+mid_s = 4.895600e-08
+high_s = 4.900600e-08
+
+[floor.encode_bench_encode_state_to_buffer_channels_v6w25]
+bench = "encode_bench"
+case = "encode_state_to_buffer_channels/v6w25"
+low_s = 1.183500e-07
+mid_s = 1.183700e-07
+high_s = 1.184000e-07
+
+[floor.encode_bench_encode_chain_planes_v6w25]
+bench = "encode_bench"
+case = "encode_chain_planes/v6w25"
+low_s = 1.128500e-05
+mid_s = 1.130700e-05
+high_s = 1.133200e-05
+
+# ── graph_build_bench ──
+[floor.graph_build_bench_graph_build_gnn_axis_v1_leafcorpus]
+bench = "graph_build_bench"
+case = "graph_build_gnn_axis_v1_leafcorpus"
+low_s = 6.824000e-02
+mid_s = 6.825400e-02
+high_s = 6.826900e-02
+
+# ── replay_sample_bench ──
+[floor.replay_sample_bench_dense_sample_core_v6_b512_aug]
+bench = "replay_sample_bench"
+case = "dense_sample_core_v6_b512_aug"
+low_s = 1.938300e-03
+mid_s = 1.943400e-03
+high_s = 1.948000e-03
+
+# ── smoke_bench ──
+[floor.smoke_bench_apply_move_plus_check_win_20_stones]
+bench = "smoke_bench"
+case = "apply_move_plus_check_win_20_stones"
+low_s = 6.316500e-06
+mid_s = 6.317900e-06
+high_s = 6.319500e-06
+
