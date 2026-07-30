@@ -36,13 +36,20 @@ class DiskGuard:
     def __init__(
         self,
         *,
-        watch_path: str | Path = ".",
-        interval_sec: float = 60.0,
-        warn_gb: float = 10.0,
-        fail_gb: float = 5.0,
-        keep_all: bool = False,
+        watch_path: str | Path,
+        interval_sec: float,
+        warn_gb: float,
+        fail_gb: float,
+        keep_all: bool,
         sink: Any,
     ) -> None:
+        # NO PARAMETER DEFAULTS (MF-2, WPMAIN). The four values below used to default to
+        # `"."` / 60 / 10 / 5 here AND to be re-defaulted by `build_subsystems`' `.get(...)`
+        # over a key no schema carried — two authorities for numbers no operator could see,
+        # in a guard nothing constructed. They are minted config keys now
+        # (`monitor.disk_guard.*`, R122), read by ONE resolver; a parameter default here
+        # would MIGRATE the authority back into this signature, leaving every field census
+        # green while a caller that omits an argument silently inherits a posture.
         self._path = Path(watch_path)
         self._interval = interval_sec
         self._warn_gb = warn_gb

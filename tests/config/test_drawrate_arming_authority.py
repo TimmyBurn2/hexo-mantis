@@ -185,10 +185,14 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     and each has its own defeat:
 
     * the **field** — `dataclasses.fields()` says MISSING. Defeated by a parameter default;
-    * the **builder signature** — MF-2 Attack B. `preflight_mint.py:990` is a zero-arg call
-      that consumes only `.capacity`, and `tests/tools/test_preflight_mint.py:922` bans the
-      token `StepCoordinatorConfig(` from the tool, so the tool MUST go through this builder.
-      That is live pressure for `draw_rate_abort=None` on the signature, at which point the
+    * the **builder signature** — MF-2 Attack B. The throwaway zero-arg call in
+      `preflight_mint.py` that consumed only `.capacity` is GONE (WPMAIN D-3): capacity now
+      comes from `resolve_coordinator_knobs(config.train).capacity` inside
+      `mantis.run.build_run_collaborators`, and the real `StepCoordinatorConfig` is built
+      exactly once, inside `compose_run`. The token `StepCoordinatorConfig(` stays banned
+      from the tool, which now cannot construct one at all. The pressure this bullet names
+      is therefore weaker but NOT gone — any future caller that wants a partial config is
+      live pressure for `draw_rate_abort=None` on the signature, at which point the
       authority has simply moved and every other assertion here stays green;
     * **no resurrection** — Attack A. `StepCoordinatorConfig` is `frozen=True`
       (`coordinator/config.py:149`) and `object.__setattr__` inside `__post_init__` is legal

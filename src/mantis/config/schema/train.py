@@ -197,6 +197,27 @@ class TrainConfig(StrictModel):
     grad_clip: float = Field(gt=0)
     fp16: bool
     amp_dtype: Literal["fp16", "bf16"]  # grid-path only; graph is bf16-pinned regardless (R30b)
+    # WPMAIN / R126 — the run DEVICE is a CONFIG FACT, and it sits here beside the two keys
+    # whose semantics are device-coupled (`fp16` is CUDA-only, forced off elsewhere on CPU;
+    # `amp_dtype` feeds the autocast the runtime device selects).
+    #
+    # It was a CLI-only input on BOTH callers (`--device`, required, any torch device
+    # string), which meant `preflight_mint.py --config configs/run5.yaml --device cpu`
+    # preflighted a CUDA-minted run on the CPU. That is not hypothetical: it is how the
+    # WPBOX 16 GiB GPU OOM (CARD-RUN5-GPU-OOM) could be false-cleared, and LAW-03's
+    # corollary is that an instrument which can be pointed away from the failure it exists
+    # to find is not an instrument. The flag is dead on both callers; the ONE consumer is
+    # `mantis.run.build_run_collaborators`, which computes `torch.device(config.train.device)`
+    # once and threads it into `init_trainer(...)` and `WorkerPool(...)`.
+    #
+    # CLOSED vocabulary, deliberately narrower than the dead flag: device INDICES
+    # (`cuda:1`) are now unrepresentable, matching `eval.worker_device`'s own closed set.
+    # Widening the enum later is a named design act. `eval.worker_device` is the ADJACENT
+    # fact (R126 rules the split topology legitimate — different facts, different seams);
+    # its `Literal["cuda","cpu"]` member order is NOT reconciled with this one's, because
+    # member order carries no validation semantics and reordering an untouched seam is
+    # scope widening for zero behaviour.
+    device: Literal["cpu", "cuda"]
     lr_schedule: Literal["cosine", "none"]
     total_steps: int = Field(ge=1)
     scheduler_t_max: int | None = Field(default=..., ge=1)  # no terminal default; None is real
@@ -255,9 +276,12 @@ class TrainConfig(StrictModel):
     # `eval_interval` — the promotion-decision cadence, in coordinator train steps. `ge=1`
     # for `actor_sync_cadence_steps`' reason: at `<= 0` `_maybe_kick_eval` returns
     # `(False, False)` on every step and `promotion_capable_rounds` returns `[]`, so the
-    # ENTIRE eval/promotion pipeline is off while nothing says so. No disabled value exists;
-    # `compose_run(eval_enabled=False)` is the one place eval is turned off, and it is a
-    # parameter, not a number that happens to disable (R79(1)).
+    # ENTIRE eval/promotion pipeline is off while nothing says so. No disabled value exists:
+    # the entire eval/promotion pipeline is off only when the minted config declares
+    # `eval_enabled: false` — a typed boolean key that IS the fact (R120/R79(1)), not a
+    # number that happens to disable. (This clause used to name
+    # `compose_run(eval_enabled=False)` "a parameter"; WPMAIN deleted that parameter, and
+    # the R79(1) argument STRENGTHENS on the key: a fact is not a proxy.)
     eval_interval: int = Field(ge=1)
     # `log_interval` — the boundary at which the run emits its payload events, runs the WARN
     # rules, runs BOTH live hard-abort gates and publishes the LAW-18 `monitor_gates` summary

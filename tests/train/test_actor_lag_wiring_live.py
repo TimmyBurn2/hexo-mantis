@@ -162,10 +162,11 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
                    # WPTS/TD-1: real graph route per step; the minted 256 batch is drag.
                    "batch_size": 8},
-            monitor=monitor_overrides),
+            monitor=monitor_overrides,
+            # WPMAIN/R120: the eval posture is the CONFIG's fact; no parameter can force it.
+            eval_enabled=False),
         trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=False,
     )
     return captured, pool, trainer
 

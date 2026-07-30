@@ -253,16 +253,21 @@ def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
-def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STEPS):
+def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STEPS,
+             eval_enabled: bool = False):
     """A real minted config, bounded so a drive terminates. The three step-clock knobs are
     co-overridden together because the reachability validator spans them: overriding
     `max_train_steps` alone leaves the config's own minted threshold of 100 above the new
-    ceiling and the config stops loading (DESIGN_S §6.6 MF-3)."""
+    ceiling and the config stops loading (DESIGN_S §6.6 MF-3).
+
+    WPMAIN/R120: `eval_enabled` is a CONFIG fact and `compose_run` has no parameter for it,
+    so each drive declares its posture here; every drive's semantics are byte-preserved."""
     return factory(name,
                    train={"actor_sync_cadence_steps": 1, "max_train_steps": steps,
                           # WPTS/TD-1: graph drives run the real route; 256 batch is drag.
                           "batch_size": 8},
-                   monitor={"actor_lag_threshold_steps": steps - 1})
+                   monitor={"actor_lag_threshold_steps": steps - 1},
+                   eval_enabled=eval_enabled)
 
 
 # ── O-S2 — the named error at every shape (S-1 + S-2; the RED-TEAM lens) ─────────────────
@@ -336,7 +341,7 @@ def test_an_unvalidated_config_is_ONE_named_error_before_any_subsystem_exists(
     with pytest.raises(UnvalidatedConfigError, match="schema-validated"):
         mantis.run.compose_run(
             config=subject, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
-            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         )
 
 
@@ -403,7 +408,10 @@ def test_compose_run_rejects_a_monitor_cfg_KEYWORD_at_call_time(tmp_path, smoke_
         mantis.run.compose_run(
             config=smoke_run_config(), trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-            eval_enabled=False, monitor_cfg=MonitorConfig(),
+            # `eval_enabled=` is GONE from this call deliberately (WPMAIN P-8): CPython names
+            # the FIRST unexpected keyword, so a second dead kwarg here would break
+            # `match="monitor_cfg"` for a reason unrelated to this test's subject.
+            monitor_cfg=MonitorConfig(),
         )
 
 
@@ -422,11 +430,15 @@ def test_compose_runs_parameter_list_is_pinned_so_no_re_add_can_be_silent():
     """
     assert tuple(inspect.signature(mantis.run.compose_run).parameters) == (
         "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir",
-        "eval_enabled", "run_id",
     ), (
         "compose_run's parameter list is pinned: no parameter may carry a CONFIG FACT into "
         "this root (WPAX MF-1 — monitor_cfg bypassed the gate and silently disarmed the "
-        "abort Phase F armed). Adding one is a design decision, not an edit."
+        "abort Phase F armed). Adding one is a design decision, not an edit. WPMAIN shrank "
+        "the tuple to six: `eval_enabled` (R120) and `run_id` (R123) were the last two "
+        "parameters carrying config facts, and they are DELETED rather than merely stripped "
+        "of their defaults — a required parameter is a forcing route with the default "
+        "removed, not a closed one, so R64's 'the preflight may never force False' is only "
+        "structurally unrepresentable with the parameter gone."
     )
 
 
@@ -514,7 +526,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
     """
     import mantis.train.anchor as _anchor
 
-    cfg = _bounded(factory=smoke_run_config)
+    cfg = _bounded(factory=smoke_run_config, eval_enabled=True)
     captured: dict[str, Any] = {}
 
     def _spy_build_eval_pipeline(**kwargs):
@@ -540,7 +552,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
 
     mantis.run.compose_run(
         config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     assert captured["encoding"] == cfg.identity.encoding, (
@@ -573,7 +585,7 @@ def test_full_config_carries_the_real_config_not_an_empty_dict(
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     full_config = handles.coordinator.full_config
@@ -703,7 +715,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
         # WPTS/TD-1: per-representation buffer — the graph arm samples a REAL HexgBuffer,
         # the grid arm drives the dispatcher's dense sampler on the fake.
         buffer=mk_graph_buffer(n_records=32) if name == "smoke_gnn.yaml" else _Buffer(),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     assert handles.eval_pipeline is None, "harness precondition: the deploy side must not exist"
@@ -737,7 +749,7 @@ def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool, buffer=_Buffer(),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     assert trainer.step == 7, (
@@ -771,7 +783,7 @@ def test_a_drive_failure_propagates_and_close_out_still_ran(
     with pytest.raises(_SentinelTrainError):
         mantis.run.compose_run(
             config=cfg, trainer=_ExplodingTrainer(), pool=pool, buffer=mk_graph_buffer(n_records=32),
-            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         )
 
     assert pool.started is True, "harness precondition: the pool was started by this run"

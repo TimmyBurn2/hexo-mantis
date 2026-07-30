@@ -99,12 +99,14 @@ def _valid_monitor_block() -> dict:
             "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
             "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
         },
+        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
     }
 
 
 def _valid_payload() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
+        "eval_enabled": True,
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},

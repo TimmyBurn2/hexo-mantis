@@ -182,10 +182,11 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
         config=smoke_run_config(
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
                    "batch_size": 8},
-            monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
+            monitor={"actor_lag_threshold_steps": _STOP_STEP - 1},
+            # WPMAIN/R120: run5's posture is a CONFIG fact; no parameter can carry it.
+            eval_enabled=True),
         trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=True,
     )
 
     assert handles.eval_pipeline is not None, (
@@ -212,13 +213,16 @@ def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
         pool, trainer = _SyncRecordingPool(), _Trainer()
         _install_harness(monkeypatch)
         mantis.run.compose_run(
+            # WPMAIN/R120: the loop variable is now a CONFIG delta, so ONE config is built
+            # per posture INSIDE the loop — `compose_run` has no `eval_enabled` parameter to
+            # carry it, and both drive semantics are byte-preserved.
             config=smoke_run_config(
                 train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
                        "batch_size": 8},
-                monitor={"actor_lag_threshold_steps": _STOP_STEP - 1}),
+                monitor={"actor_lag_threshold_steps": _STOP_STEP - 1},
+                eval_enabled=eval_enabled),
             trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / label), checkpoint_dir=str(tmp_path / label / "ckpt"),
-            eval_enabled=eval_enabled,
         )
         results[label] = len(pool.sync_payloads)
 

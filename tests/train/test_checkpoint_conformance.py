@@ -655,6 +655,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=1000000, eta_min=0.0005)
     valid_config = {
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
+        "eval_enabled": True,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": _make_eval_block(),
         # WPMINT Phase K-A stage 0: DERIVED from a MINTED config, not a twelfth restatement
@@ -707,6 +708,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
                 "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
                 "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
             },
+                "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
     payload = {  # the real FULL-v1 top-level shape (7 keys) + captured metadata scalars

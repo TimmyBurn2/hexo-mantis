@@ -1,3 +1,12 @@
+# >300 justify (R8), stated at this file's MEASURED size of 333 lines (`wc -l`, never
+# transcribed — SF-7). The file was 248 lines at ORACLE-WRITE and crossed the cap on the R129
+# re-point, which replaced O-B1's one-line checkpoint assertion with the measured truth plus
+# the reasoning a later reader needs to know WHY `checkpoints/` is empty and what would make
+# that expire (CARD-CLEANSTOP-SAVE). A split is argued AGAINST: O-B1, O-B2 and O-B3 are three
+# instruments on ONE surface — `mantis.run`'s launcher — and O-B2's AST census parses the very
+# `run.py` the other two drive, so splitting would give each half its own answer to "what is
+# the launcher's flag surface". Executable content stays a small minority; the rest is the
+# per-oracle "what defect is this the only witness to" rationale LAW-07 requires.
 """⊕ WPMAIN ORACLE — `python -m mantis.run` is a real launcher (DESIGN §1.3/§9, O-B1..O-B3).
 
 RED-at-import until IMPL lands `mantis.run.launch_run` + `UnregisteredAbortExitError`.
@@ -10,10 +19,12 @@ The audit headline this file retires: *`main()` validates a config and exits* �
 The defect each oracle is the only witness to:
 
 - O-B1 — the launcher that composes but never RUNS. Success criterion 1, as amended by
-  R121(c): boots through the one composer into the live run loop, bounded, clean stop, final
-  checkpoint on disk. Real subsystems (R64) — real `init_trainer` -> `build_net`, real
-  `WorkerPool`, real `build_run_safety`, real coordinator config. INTEGRATION tier: it is a
-  real CPU burst, the same class as `tests/train/test_launch_path_smoke.py`.
+  R121(c): boots through the one composer into the live run loop, bounded, clean stop.
+  Real subsystems (R64) — real `init_trainer` -> `build_net`, real `WorkerPool`, real
+  `build_run_safety`, real coordinator config. INTEGRATION tier: it is a real CPU burst,
+  the same class as `tests/train/test_launch_path_smoke.py`. **Re-pointed by R129**: its
+  "final checkpoint on disk" clause was written against a premise DESIGN §9 got wrong and
+  IMPL measured false — a clean bounded stop saves nothing. See the row's own docstring.
 - O-B2 — a code-side default sneaking onto a RUN INPUT at the CLI boundary. `--out-dir` with
   a default is a run-input default (R1), and it is the O-1 doctrine
   (`test_preflight_mint.py:866-882`) applied to the launcher, which never had it.
@@ -22,7 +33,11 @@ The defect each oracle is the only witness to:
   (`preflight_mint.py:929-947`). A launcher that returns 0 after a hard abort fired reports
   a collapsed run as a clean one — and the supervisor above it relaunches into the wall.
 
-Fakes: O-B1 fakes NOTHING. O-B3 substitutes `mantis.run.launch_run` with a stub returning a
+Fakes: O-B1 fakes nothing about the RUN — every collaborator is real and the boot is real.
+Its one substitution is a post-hoc rc read: `launch_run` is monkeypatched to return the
+handles the real boot ALREADY produced, so `main`'s rc policy is driven on a real terminal
+state instead of on a second 30 s boot (disclosed at the row). O-B3 substitutes
+`mantis.run.launch_run` with a stub returning a
 rigged `RunHandles`, disclosed: the SUBJECT is the rc policy, and the run is its harness —
 the same seam the frozen `_abort_rc` trio (`test_preflight_mint_process.py:265-285`) reads
 by calling the mapping directly.
@@ -30,6 +45,7 @@ by calling the mapping directly.
 from __future__ import annotations
 
 import ast
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -208,41 +224,110 @@ def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invente
 # ══ O-B1 — success criterion 1 ════════════════════════════════════════════════════════
 @pytest.mark.integration
 def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
-    tmp_path, smoke_run_config
+    monkeypatch, tmp_path, smoke_run_config
 ) -> None:
     """O-B1 — success criterion 1 as amended by R121(c): "boots through the one composer
     into the live run loop, bounded, clean stop".
 
-    R64 posture, nothing routed around: real `init_trainer` -> `build_net`, real
-    `WorkerPool` self-play on CPU, real graph replay buffer, real `build_run_safety`, real
-    coordinator config, `eval_enabled` from the config's own value. The config is the minted
-    armed smoke — the one config whose values make a burst-scale CPU boot legal (R103) —
-    bounded to a 16-step burst, exactly as `test_preflight_armed_smoke.py` drives it.
+    R64 posture, nothing about the RUN routed around: real `init_trainer` -> `build_net`,
+    real `WorkerPool` self-play on CPU, real graph replay buffer, real `build_run_safety`,
+    real coordinator config, `eval_enabled` from the config's own value. The config is the
+    minted armed smoke — the one config whose values make a burst-scale CPU boot legal
+    (R103) — bounded to a 16-step burst, exactly as `test_preflight_armed_smoke.py` drives
+    it.
+
+    RE-POINTED BY R129 (an R43 grant against a byte-frozen ORACLE-WRITE artefact), because
+    the version written at ORACLE-WRITE asserted a premise that is MEASURED FALSE. It read
+    "the run must leave a stamped checkpoint", on DESIGN §9's reasoning that LAW-16's
+    save-then-exit and LAW-12's stamp land on the same artefact. They do — on the SIGNAL
+    path. A CLEAN bounded stop never takes it: `coordinator/step.py:238-241`'s O2
+    iteration-limit arm sets `shutdown.running = False` and returns WITHOUT saving;
+    `loop.py`'s `_final_save()` fires only on `shutdown_save`; and the trainer's periodic
+    save is guarded by `if interval > 0` (`trainer/core.py:487-489`) against a
+    `checkpoint_interval` this config — and every other minted config — mints at **0**. So
+    `checkpoints/` is legitimately EMPTY here, and the oracle now asserts that, WITH its
+    cause, rather than asserting a checkpoint nothing writes.
+
+    Whether a clean completion SHOULD save is a deliberate lifecycle decision and is
+    explicitly NOT this WP's work: R129 opened CARD-CLEANSTOP-SAVE for it (escalated to
+    mint-blocking, because run5 mints `checkpoint_interval: 0` too). When that card lands,
+    THIS row is what tells the next reader the emptiness expired.
+
+    THE ORACLE MUST NOT GO VACUOUS, and does not: "no checkpoint" is a state a run that
+    never booted would also produce, so the emptiness is asserted only ALONGSIDE the
+    positive truth, and the positive truth is what carries the row —
+
+    * `handles.shutdown.running is False`: `ShutdownState()` is born `running=True`, so this
+      is the O2 arm having FIRED, i.e. the loop was entered and terminated itself;
+    * `trainer.step == _BURST_STEPS`: the learner reached the bound EXACTLY — the loop did
+      not merely start, it ran to its ceiling (measured: 16);
+    * the run's own JSONL segment carries the boot + armed-watchdog witnesses (LAW-18);
+    * `abort_rule is None` and the launcher's own rc policy answers **0** for this state.
 
     MUTATION THAT REDS IT: a launcher that composes and returns without driving the loop
-    (`stop_step=0`, or a `compose_run` whose loop call is removed) — `shutdown.running` never
-    flips and no final checkpoint appears. That is precisely the failure this WP exists to
-    end, and no import-level or AST census can see it.
+    (`stop_step=0`, or a `compose_run` whose loop call is removed) — `running` never flips,
+    `trainer.step` stays 0 and the segment carries no armed-watchdog rows. That is precisely
+    the failure this WP exists to end, and no import-level or AST census can see it.
 
-    Why the checkpoint is asserted rather than a step count: LAW-16's save-then-exit and
-    LAW-12's stamp both land on the SAME artefact, so its existence is one assertion that
-    covers "the loop ran" and "the run's output survived it"."""
+    DISCLOSED FAKE, and it is the ONLY one: the rc assertion re-enters `main` with
+    `launch_run` monkeypatched to hand back **the handles this real boot just produced** —
+    so nothing about the run is faked, and no second 30 s boot is spent to read one integer.
+    Its subject is the composition "a real clean bounded run PRODUCES the state that maps to
+    rc 0"; O-B3 arm 1 pins the mapping itself on a synthetic state, and the two together are
+    what make "rc 0 means the run finished" a claim with a producer at both ends."""
     config = smoke_run_config(_SMOKE_CONFIG, train={"max_train_steps": _BURST_STEPS})
+    assert int(config.train.checkpoint_interval) == 0, (
+        "PREMISE CHECK for the emptiness arm below (R129's own instruction, applied to this "
+        "config rather than to run5): the periodic save is guarded by `interval > 0`. If "
+        f"this config ever mints a nonzero interval — got {config.train.checkpoint_interval!r} "
+        "— the checkpoints-empty assertion stops being the truth and this row must be "
+        "RE-POINTED again, never silenced"
+    )
     handles = launch_run(config=config, out_dir=tmp_path)
 
     assert isinstance(handles, RunHandles), "the launcher returns the composed handles"
     assert handles.shutdown.running is False, (
         "a bounded run reaches its ceiling and stops — a still-running state means the loop "
-        "was never entered or never terminated"
+        "was never entered or never terminated (`ShutdownState()` is born running=True, so "
+        "this flip is the O2 arm having fired)"
+    )
+    assert handles.coordinator is not None, "a composed run hands back its coordinator"
+    assert int(handles.coordinator.trainer.step) == _BURST_STEPS, (
+        "the LOOP RAN TO ITS BOUND — the learner took exactly the burst's steps. This is the "
+        "positive truth the emptiness assertion below must never stand alone against; got "
+        f"step {handles.coordinator.trainer.step!r} against a {_BURST_STEPS}-step ceiling"
     )
     assert handles.shutdown.abort_rule is None, (
         f"the armed smoke completes its burst without firing an abort; got "
         f"{handles.shutdown.abort_rule!r}"
     )
-    checkpoints = sorted((tmp_path / "checkpoints").glob("*.ckpt"))
-    assert checkpoints, (
-        "the run must leave a stamped checkpoint under the ONE derived checkpoint_dir "
-        f"(DESIGN §1.2 item 2); found {sorted((tmp_path / 'checkpoints').iterdir())}"
+
+    # The clean-vs-aborted distinction, asserted intact (R129) on the REAL handles.
+    monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: handles)
+    rc = mantis_run.main(["--config", str(_CONFIGS / _SMOKE_CONFIG), "--out-dir", str(tmp_path)])
+    assert rc == 0, (
+        "a run that completed its burst with no abort fired is a CLEAN run and exits 0; an "
+        f"aborted one exits the manifest's code (O-B3 arm 2, 46). got {rc}"
     )
-    logs = sorted((tmp_path / "logs").glob("*.jsonl"))
-    assert logs, "…and its own JSONL event segment under the ONE derived log_dir"
+
+    residents = sorted(p.name for p in (tmp_path / "checkpoints").iterdir())
+    assert residents == [], (
+        "a CLEAN bounded stop writes NOTHING under the derived checkpoint_dir: the O2 arm "
+        "(`step.py:238-241`) returns without saving, `_final_save()` needs `shutdown_save`, "
+        f"and `checkpoint_interval: 0` disables the periodic save. Found {residents}. If a "
+        "checkpoint appears here, CARD-CLEANSTOP-SAVE has landed (or a save path grew a "
+        "second authority) and this row is the notice — re-point it, do not delete it"
+    )
+    segments = sorted((tmp_path / "logs").glob("events_*.jsonl"))
+    assert segments, (
+        "…while the run's own JSONL event segment IS written under the ONE derived log_dir; "
+        f"found {sorted(p.name for p in (tmp_path / 'logs').iterdir())}"
+    )
+    events = {json.loads(line)["event"]
+              for segment in segments
+              for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()}
+    assert {"run_segment_started", "run_boot_identity", "resolved_config",
+            "heartbeat_watchdog_armed", "selfplay_stall_watchdog_armed"} <= events, (
+        "the boot must reach an ARMED training loop and publish its own identity, not merely "
+        f"construct objects (LAW-18); saw {sorted(events)}"
+    )

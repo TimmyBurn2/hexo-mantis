@@ -667,6 +667,13 @@ def strip_and_restamp(
         "schema_version": 1,
         "run_id": run_id,
         "seed": 0,
+        # WPMAIN / R120 + R127: `eval_enabled` is a REQUIRED top-level key. Literal, not
+        # derived — R127's "derive from schema defaults if mechanical" arm is VACUOUS here,
+        # because the field is required-with-no-default by construction, so there is no
+        # schema default to read. `True` is what every minted config carries, and a stripped
+        # artifact never boots a run, so this is zero-behaviour placeholder posture — the
+        # same one the pre-existing seed=0 / run_id=<caller> placeholders carry.
+        "eval_enabled": True,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
         # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
         # This synthetic config exists only to satisfy the schema-validate-on-write gate
@@ -699,7 +706,14 @@ def strip_and_restamp(
         # values, DESIGN_P2.md §1.1/§1.2).
         "train": {
             "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
-            "amp_dtype": "fp16", "lr_schedule": "cosine", "total_steps": 1_000_000,
+            "amp_dtype": "fp16",
+            # WPMAIN / R126 + R127: `train.device` is a REQUIRED closed-vocabulary key.
+            # Literal for the same measured reason as `eval_enabled` above (no schema
+            # default exists to derive from); `"cpu"` is a schema-valid member and nothing
+            # ever boots from a stripped artifact's snapshot, so no third default authority
+            # is created here.
+            "device": "cpu",
+            "lr_schedule": "cosine", "total_steps": 1_000_000,
             "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
             "max_train_steps": 1_000_000,  # WPAX S-4: required run-length key
@@ -777,6 +791,12 @@ def strip_and_restamp(
                 "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
                 "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
             },
+            # WPMAIN / R122 + R127: the `monitor.disk_guard` family is REQUIRED. Literals at
+            # exactly the MINTED values (60/10/5) for the same measured reason as the two
+            # additions above — required-with-no-default, so nothing to derive from — and at
+            # the minted values so this placeholder can never disagree with a real run's
+            # guard posture.
+            "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
     return _write_v2_payload(

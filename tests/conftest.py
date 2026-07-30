@@ -35,6 +35,36 @@ def _reseed():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _restore_signal_dispositions():
+    """Save/restore SIGINT + SIGTERM around EVERY test (WPMAIN, DESIGN §3 additive).
+
+    `mantis.run.compose_run` installs LAW-16's handlers unconditionally (leg 1: the install
+    used to fire only on `run_training_loop`'s self-construct branch, which the composition
+    root never takes — a live mechanism wired to a branch nothing runs). So every in-process
+    `compose_run` drive now mutates PROCESS-GLOBAL handler state, and without this fixture
+    one drive's handlers would decide a later test's fate.
+
+    Three things stated rather than left implicit:
+      * COST: it runs for the whole collection — two `signal.getsignal` + two `signal.signal`
+        per test. Negligible, and disclosed rather than hidden.
+      * ORDERING vs `_reseed` above: immaterial in substance. This fixture touches no RNG and
+        `_reseed` touches no signal state, so the two are independent; it is declared after
+        `_reseed` and that is the whole of the relationship.
+      * NESTING: semantics are restore-AROUND. The existing inner save/restores
+        (`tests/train/test_lifecycle_contract.py`'s `restore_signals`,
+        `tests/train/test_launch_path_smoke.py`'s try/finally) nest cleanly inside it — each
+        inner restore returns to what IT saved, then this one restores the pre-test
+        disposition. Idempotent.
+    """
+    import signal
+
+    saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+    yield
+    for sig, handler in saved.items():
+        signal.signal(sig, handler)
+
+
 @pytest.fixture
 def seeded_libs() -> list[str]:
     return list(_SEEDED_LIBS)

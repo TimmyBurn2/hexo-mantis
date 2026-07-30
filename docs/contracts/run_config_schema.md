@@ -1,6 +1,6 @@
 # Contract: run config schema
 
-- version: v4
+- version: v5
 - owner: mantis.config.schema
 - status: LIVE since scaffold (WP0). Four growth steps since (v1 -> v4), each recorded as a
   named amendment in docs/design/repo_design.md §4; the last three are *incompatible* — a
@@ -21,10 +21,11 @@ YAML keys and enumerates the audit root name-agnostically.
 | v2 | `train.max_train_steps` becomes a required leaf: the RUN-LENGTH authority, distinct from `train.total_steps`, which is only the LR-scheduler horizon | WPAX Phase S (ADJ-09 Option B) |
 | v3 | `train.draw_rate_abort` becomes a required leaf — a block or `null`, where `null` is the EXPLICIT disarmed posture. Its third key was `min_samples` (`ge=1, le=DRAW_RATE_WINDOW`) and is now `N_pool_min` (`ge=1`), because the gated statistic changed to the pooled count-weighted rate | WPAX Phase D; third-key swap WPMINT Phase DS (R92) |
 | v4 | twenty new required leaves: nineteen flat `train.*` step-coordinator knobs plus `train.draw_rate_abort.consec`. Six sibling coordinator fields were DELETED rather than authored (no reader in `src/`), and `train.batch_size` is minted at the value the code actually used | WPMINT Phase K-B |
+| v5 | five new required leaves, all promotions of authority OUT of code: `eval_enabled` (top-level bool — was a `compose_run` parameter with a code-side default `True`, R120), the `monitor.disk_guard` family `{interval_sec, warn_gb, fail_gb}` (was four dead `dict.get` literals in a function with zero callers, R122) and `train.device` (`Literal["cpu","cuda"]` — was a `--device` CLI flag on BOTH callers, which let a cpu-flagged preflight false-clear a cuda-minted run, R126) | WPMAIN (CARD-RUN-MAIN) |
 
 ## Shape
 
-Nine top-level fields; **170 leaf key-paths** under the walker that descends nested blocks
+Ten top-level fields; **175 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -32,12 +33,13 @@ Nine top-level fields; **170 leaf key-paths** under the walker that descends nes
 | `schema_version` | 1 | int, pinned to `SCHEMA_VERSION` |
 | `run_id` | 1 | str, `^[a-z0-9][a-z0-9_\-]*$` |
 | `seed` | 1 | int |
+| `eval_enabled` | 1 | bool |
 | `identity` | 2 | `IdentityConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `LadderConfig`, `LadderRung` |
-| `train` | 50 | `TrainConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage` |
+| `train` | 51 | `TrainConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage` |
 | `selfplay` | 44 | `SelfplayConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 8 | `InferenceConfig` |
-| `monitor` | 33 | `MonitorSchemaConfig`, `DrainCapsConfig` |
+| `monitor` | 36 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
 
 `mantis.config.schema` is a package, not a module: `_base` carries the ONE `StrictModel` every
 section subclasses, and `core`/`train`/`selfplay`/`monitor` carry the sections. The split is
@@ -64,7 +66,7 @@ what keeps the package's internal import graph a DAG (CI gate 9) — `core` impo
 | two configs differ exactly where claimed | tools/config_diff.py `--expect` |
 | a committed config's stamped header cannot lie about its delta | tools/config_diff.py `--from-header` |
 | every committed config schema-validates (empty set = gate failure) | CI gate 7 (tools/ci_gates/validate_configs.py) |
-| every schema leaf key has a live consumer (170-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
+| every schema leaf key has a live consumer (175-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
 | every `required` armed-abort row is armed in every production config | CI gate 12 (tools/ci_gates/preflight_mint.py `--audit-only`) |
 
 ## Cross-field rules (the invariants no single field can carry)
@@ -112,7 +114,7 @@ happens at the schema and does not propagate into the runtime object.
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
 | regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py, tests/config/test_regime_parity_p2.py |
-| every-key-has-consumer bijection, the 170 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
+| every-key-has-consumer bijection, the 175 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
 | `train.entropy_reg_weight` sign law; `policy_target`/`completed_q_values` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |

@@ -9,9 +9,15 @@ Two ratified changes from the port:
     `build_inference_model` / `build_eval_model` construct via `build_net(arch)` — NOT a
     `model_representation(module)` sniff (WP9-deleted, §c.4/§c.6). No shape-inference.
   * The DISPLAY-boot half (WebDashboard, `register_renderer`/`register_jsonl_sink`, TB
-    `MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH — `build_subsystems`
-    returns only the run-safety subsystems (disk guard + the optional GPU monitor + the
-    injected `EventSink`).
+    `MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH.
+
+WPMAIN (R116/R121(b)) DELETED `build_subsystems` and `LoopSubsystems`. Both had ZERO callers
+and zero test references, and the disk guard they returned had therefore never been
+constructed in any run — LAW-16's third leg was dead, with its `60/10/5` arriving as
+`config.get("disk_guard", {}).get(...)` code-side defaults over a key that existed in no
+schema and no config. The guard is now composed by `mantis.run.compose_run` from the minted
+`monitor.disk_guard` block through `mantis.config.resolve.disk_guard.resolve_disk_guard`.
+This module's surviving subject is `build_run_safety`.
 
 WP13-A adds `build_run_safety` — the composition root for the run-safety triple (the REAL
 JSONL sink, the heartbeat registry, the INDEPENDENT watchdog thread). This is one of the
@@ -24,7 +30,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -35,7 +41,6 @@ from mantis.model import ModelArch, amp_dtype_for, build_net
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
 from mantis.monitor.sink import JsonlEventSink
-from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
 from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
@@ -126,49 +131,6 @@ def _synthetic_graph_warmup(arch: InfModelArch, device: torch.device):
     stone_mask = torch.tensor([True, False], dtype=torch.bool, device=device)
     node_offsets = torch.tensor([0, 2], dtype=torch.long, device=device)
     return x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets
-
-
-@dataclass
-class LoopSubsystems:
-    """The run-safety subsystem bundle (WP10). Display subsystems (probes / TB / dashboards)
-    DEFER→WP13; the `sink` is the seam WP13 wires the real event sink onto."""
-
-    disk_guard: DiskGuard
-    sink: Any
-    gpu_monitor: Any = None
-    composition_interval: int = 0
-    instrumentation_enabled: bool = False
-    axis_baseline: dict = field(default_factory=dict)
-
-    def teardown(self) -> None:
-        stop = getattr(self.gpu_monitor, "stop", None)
-        if stop is not None:
-            stop()
-        self.disk_guard.stop()
-
-
-def build_subsystems(
-    *,
-    checkpoint_dir: str | Path,
-    config: dict[str, Any],
-    sink: Any,
-    gpu_monitor: Any = None,
-) -> LoopSubsystems:
-    """Build + start the run-safety subsystems: the disk guard (emits through the injected
-    `EventSink`, SIGTERMs below fail_gb) and (optionally) an injected GPU monitor. The display
-    subsystems DEFER→WP13."""
-    dg_cfg = config.get("disk_guard", {}) if isinstance(config.get("disk_guard"), dict) else {}
-    disk_guard = DiskGuard(
-        watch_path=checkpoint_dir,
-        interval_sec=float(dg_cfg.get("interval_sec", 60.0)),
-        warn_gb=float(dg_cfg.get("warn_gb", 10.0)),
-        fail_gb=float(dg_cfg.get("fail_gb", 5.0)),
-        keep_all=bool(dg_cfg.get("keep_all", False)),
-        sink=sink,
-    )
-    if gpu_monitor is not None and hasattr(gpu_monitor, "start"):
-        gpu_monitor.start()
-    return LoopSubsystems(disk_guard=disk_guard, sink=sink, gpu_monitor=gpu_monitor)
 
 
 # ── WP13-A run-safety composition root ───────────────────────────────────────────────

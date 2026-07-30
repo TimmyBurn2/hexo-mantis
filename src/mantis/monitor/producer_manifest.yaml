@@ -118,6 +118,22 @@ gates:
       symbol: ActorSync.actor_ckpt_step
     producer_test: tests/train/test_actor_lag_wiring_live.py::test_actor_ckpt_step_fn_reads_the_live_sync_engine
 
+  - id: resolved_config
+    input: resolved_config
+    producer:
+      kind: symbol
+      module: mantis.run
+      symbol: compose_run
+    note: >-
+      WPMAIN §5.4 (LAW-08). `mantis.config.emit.resolve_config` / `to_event_payload` shipped
+      with ZERO production call sites — a resolved-config surface with no emitter, i.e. a
+      payload nobody had ever published. The composition root now publishes the run's own
+      resolved posture into the run's own stream, exactly once per segment, immediately
+      after the `run_boot_identity` witness. The payload IS
+      `to_event_payload(resolve_config(config))`; a hand-assembled copy would be a second
+      authority for the same fact.
+    producer_test: tests/test_run_root_lifecycle.py::test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity_witness
+
   - id: disk_guard
     producer:
       kind: symbol

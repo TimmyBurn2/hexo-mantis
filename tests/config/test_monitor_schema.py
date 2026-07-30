@@ -1,4 +1,6 @@
-"""SC-A3 oracle — `MonitorSchemaConfig` (29 fields; +2 WP-UNFREEZE actor-lag knobs) + `DrainCapsConfig` (4 fields) +
+"""SC-A3 oracle — `MonitorSchemaConfig` (31 fields: 29 scalars + the `drain` and `disk_guard`
+sub-blocks) + `DrainCapsConfig` (4 fields) + `DiskGuardConfig` (schema/liveness pinned in
+tests/config/test_disk_guard_keys.py) +
 `resolve_monitor_config` round-trip (DESIGN_P2.md §4 / PREREG_P2.md suite #6).
 
 RED-at-import until IMPL lands `mantis.config.schema.monitor.MonitorSchemaConfig` /
@@ -43,8 +45,17 @@ VALID_DRAIN: dict = {
     "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
     "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
 }
-VALID_MONITOR: dict = dict(VALID_MONITOR_SCALARS, drain=dict(VALID_DRAIN))
+#: WPMAIN / R122: the minted `monitor.disk_guard` family. It is the SECOND schema-only
+#: sub-block (after `drain`) — it feeds `mantis.train.lifecycle.disk_guard.DiskGuard`
+#: through `resolve_disk_guard` and is NOT part of the 1:1 `MonitorConfig` copy.
+VALID_DISK_GUARD: dict = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
+VALID_MONITOR: dict = dict(VALID_MONITOR_SCALARS, drain=dict(VALID_DRAIN),
+                           disk_guard=dict(VALID_DISK_GUARD))
 
+#: Re-derived from the population this file NAMES, never transcribed: `MONITOR_FIELDS` is
+#: the payload's own key set, which is `MonitorSchemaConfig.model_fields` (29 scalars + the
+#: two sub-blocks = 31). The runtime `MonitorConfig` dataclass stays at 29 — both sub-blocks
+#: are popped by name in `resolve_monitor_config`, each because it has its OWN resolver.
 MONITOR_FIELDS = sorted(VALID_MONITOR)
 DRAIN_FIELDS = sorted(VALID_DRAIN)
 
@@ -128,7 +139,13 @@ def test_drain_caps_has_no_pydantic_level_default():
 
 # ── resolve_monitor_config round-trip (LAW-07 mutation self-test) ─────────────────────
 def test_monitor_schema_scalar_fields_equal_monitor_config_dataclass_fields():
-    schema_fields = set(MONITOR_FIELDS) - {"drain"}
+    # The excluded set is ENUMERATED, one named block per member, and must stay that way:
+    # widening it to "ignore anything the dataclass lacks" would let any future schema field
+    # vanish from this equality silently — which is the same weaken-class move the sibling
+    # census (`tests/config/test_disk_guard_keys.py`) forbids on `resolve_monitor_config`'s
+    # pop. `disk_guard` joins `drain` here for the same reason `drain` was there: it is
+    # schema-only and has its own resolver.
+    schema_fields = set(MONITOR_FIELDS) - {"drain", "disk_guard"}
     dataclass_fields = set(MonitorConfig.__dataclass_fields__)
     assert schema_fields == dataclass_fields, (
         f"schema-only: {schema_fields - dataclass_fields}; "

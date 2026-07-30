@@ -236,6 +236,17 @@ class RunConfig(StrictModel):
     schema_version: int
     run_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_\-]*$")
     seed: int
+    # WPMAIN / R120: the run's eval posture is a CONFIG FACT, not a `compose_run` parameter.
+    # It used to be `compose_run(eval_enabled: bool = True)` — a code-side default for a
+    # decision the minted config is supposed to author (R1), and a forcing route the
+    # preflight child could have used to boot a posture run5 never declared (R64's "may
+    # never force False" was enforced by a COMMENT). The parameter is deleted, so no caller
+    # anywhere can override this; `mantis.run.compose_run` is the one live consumer, reading
+    # it in both branches (the `wired_sources` declaration and the eval-pipeline build).
+    # TOP-LEVEL rather than under `eval`, because it is a root-composition fact spanning the
+    # eval and monitor wired-source surfaces — `train.terminal_eval_enabled` stays the
+    # distinct close-out knob it already is.
+    eval_enabled: bool
     identity: IdentityConfig
     eval: EvalConfig
     train: TrainConfig

@@ -128,6 +128,7 @@ def _monitor_block(**over: object) -> dict:
                   "eval_final_drain_safety_factor": 3.0,
                   "eval_final_drain_hard_cap_sec": 14400.0,
                   "terminal_eval_hard_cap_sec": 14400.0},
+        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         "actor_lag_threshold_steps": 100,   # K2 — minted inert value (DESIGN §5)
         "actor_lag_abort_enabled": False,   # K3 — the config arms it (run5, not this WP)
     }
@@ -138,6 +139,7 @@ def _monitor_block(**over: object) -> dict:
 def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None) -> dict:
     return {
         "schema_version": SCHEMA_VERSION, "run_id": "unit_test", "seed": 1,
+        "eval_enabled": True,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _eval_block(), "train": _train_block(**(train_over or {})),
         "selfplay": _selfplay_block(), "inference": _inference_block(),

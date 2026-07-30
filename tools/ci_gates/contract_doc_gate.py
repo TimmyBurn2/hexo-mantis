@@ -17,7 +17,7 @@ to remember to update.
 THE ONE COPY THIS FILE DOES CARRY, AND WHY IT CANNOT ROT SILENTLY. `_leaf_paths` is a third
 transcription of the walker that `tests/config/test_every_key_has_consumer.py` and its `_p2`
 twin already hold twice. That is deliberate and it is self-defending: those two files assert
-`len(_leaf_paths(RunConfig)) == 170` against the same schema, and this gate asserts the doc's
+`len(_leaf_paths(RunConfig)) == 175` against the same schema, and this gate asserts the doc's
 stated count against ITS walker. A walker here that diverged from theirs would produce a
 different number, disagree with the doc, and red this gate. The alternative — importing the
 walker from a test module — is barred outright (no package named `tests`, no sys.path
@@ -31,7 +31,7 @@ resolve. A retired key that quietly comes back reds this gate, which is the dire
 matters: `selfplay.legal_move_radius_schedule` returning is exactly the consumer-less-knob
 regression the section was written to prevent.
 
-WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not require the doc to enumerate all 170
+WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not require the doc to enumerate all 175
 leaves, and it does not check prose for truth. It is a citation check: every config key and
 every `mantis.*` symbol the doc NAMES must exist (or, under the absent heading, must not). A
 claim the doc simply omits is invisible to it. That bound is stated rather than hidden, because
@@ -70,7 +70,7 @@ DEFAULT_DOC = REPO_ROOT / "docs" / "contracts" / "run_config_schema.md"
 _KEY_RE = re.compile(r"`([a-z_]+(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
 #: A backticked or bare dotted symbol rooted at the package.
 _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
-#: The doc's own statement of the leaf count, e.g. "**170 leaf key-paths**".
+#: The doc's own statement of the leaf count, e.g. "**175 leaf key-paths**".
 _COUNT_RE = re.compile(r"\*\*(\d+) leaf key-paths\*\*")
 #: The heading below which every citation is checked in REVERSE (see the module docstring).
 ABSENT_HEADING = "## Deliberately absent"

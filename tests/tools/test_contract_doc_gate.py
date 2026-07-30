@@ -96,14 +96,14 @@ def test_a_retired_resolver_symbol_reds_the_gate(tmp_path, doc_text):
 
 
 def test_a_stale_leaf_count_reds_the_gate(tmp_path, doc_text):
-    doc = _mutate(tmp_path, doc_text, "**170 leaf key-paths**", "**148 leaf key-paths**")
+    doc = _mutate(tmp_path, doc_text, "**175 leaf key-paths**", "**148 leaf key-paths**")
     res = _run(doc)
     assert res.returncode == 1
     assert "states 148 leaf key-paths" in res.stdout
 
 
 def test_a_doc_that_states_no_count_reds_the_gate(tmp_path, doc_text):
-    doc = _mutate(tmp_path, doc_text, "**170 leaf key-paths**", "a lot of leaves")
+    doc = _mutate(tmp_path, doc_text, "**175 leaf key-paths**", "a lot of leaves")
     res = _run(doc)
     assert res.returncode == 1
     assert "does not state its leaf-key-path count" in res.stdout

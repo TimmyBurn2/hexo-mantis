@@ -34,8 +34,13 @@ CONSUMER_REGISTRY = {
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
     "seed": (
-        "seed_everything (mantis.train.determinism, R30a) -> mantis.run.main() boot + "
+        "seed_everything (mantis.train.determinism, R30a) -> mantis.run.build_run_collaborators, the ONE boot site + "
         "emit source-tag"
+    ),
+    "eval_enabled": (
+        "mantis.run.compose_run -> the `wired_sources` eval_round declaration AND the"
+        " build_eval_pipeline branch (R120; the deleted `compose_run(eval_enabled=…)`"
+        " parameter's code-side default True died with it)"
     ),
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
@@ -82,6 +87,10 @@ CONSUMER_REGISTRY = {
     "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
     "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
     "train.fp16": "TrainHParams.from_config -> Trainer fp16/scaler gate",
+    "train.device":
+        "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
+        " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
+        " on both callers)",
     "train.amp_dtype": (
         "resolve_amp_dtype (R30b single authority) -> amp_dtype_for -> "
         "Trainer/InferenceServer/cuda_warmup autocast dtype"
@@ -134,7 +143,7 @@ CONSUMER_REGISTRY = {
     "train.replay_capacity":
         "resolve_coordinator_knobs -> _step_coordinator_config ->"
         " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
-        " payload) and preflight_mint.py _build_buffer sizing",
+        " payload) and mantis.run.build_run_collaborators buffer sizing",
     "train.replay_capacity_schedule":
         "resolve_coordinator_knobs -> _step_coordinator_config ->"
         " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
@@ -288,6 +297,13 @@ CONSUMER_REGISTRY = {
     # was popped by resolve_monitor_config and never reached the functions named below, which
     # a grep could not tell from a read (DR-11). The path is now named end to end and is
     # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    "monitor.disk_guard.interval_sec":
+        "resolve_disk_guard -> DiskGuard(interval_sec=…) -> the guard thread's poll cadence"
+        " (mantis.run.compose_run, LAW-16 leg 3)",
+    "monitor.disk_guard.warn_gb":
+        "resolve_disk_guard -> DiskGuard(warn_gb=…) -> disk_alert level=warn threshold",
+    "monitor.disk_guard.fail_gb":
+        "resolve_disk_guard -> DiskGuard(fail_gb=…) -> disk_alert level=critical + SIGTERM",
     "monitor.drain.final_eval_drain_timeout_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
     "monitor.drain.eval_final_drain_safety_factor": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
     "monitor.drain.eval_final_drain_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
@@ -346,7 +362,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_170_entries():
+def test_registry_has_exactly_175_entries():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
@@ -376,8 +392,15 @@ def test_registry_has_exactly_170_entries():
     # this test exists to catch, written down by hand. `train.replay_capacity_schedule` is a
     # `list[ReplayCapacityStage]` and stays ONE leaf under NIT-3, exactly like
     # `eval.ladder.rungs`, so its two inner names are covered by the schedule's own entry.
-    assert len(CONSUMER_REGISTRY) == 170
-    assert len(_leaf_paths(RunConfig)) == 170
+    # WPMAIN (CARD-RUN-MAIN) adds 5 and the count becomes 175: `eval_enabled` (R120, the
+    # code-side `compose_run` default promoted to a typed top-level key), the three
+    # `monitor.disk_guard.*` leaves (R122's granted FAMILY — one block, one resolver, three
+    # typed leaves, replacing four dead `dict.get` literals in a function with zero callers)
+    # and `train.device` (R126, the CLI-only run input on both callers promoted to a typed
+    # `train.*` key). 170 + 1 + 3 + 1 = 175. The nested `monitor.disk_guard` block itself is
+    # DESCENDED by `_leaf_paths`, so it contributes three leaves and not four.
+    assert len(CONSUMER_REGISTRY) == 175
+    assert len(_leaf_paths(RunConfig)) == 175
 
 
 def test_no_forward_reference_strings_in_registry():

@@ -227,7 +227,10 @@ def _bounded(factory, *, block, name: str = "smoke_gnn.yaml", steps: int = _DRIV
                             # weakening it to membership. The oracle's subject is its own name
                             # — the audited value is the coordinator's value — not an
                             # incidental census of who else happens to be disarmed.
-                            "actor_lag_abort_enabled": True})
+                            "actor_lag_abort_enabled": True},
+                   # WPMAIN/R120: both compose drives on this config ran `eval_enabled=False`
+                   # and that is now a CONFIG fact, declared here — byte-preserved posture.
+                   eval_enabled=False)
 
 
 def _coordinator(*, config, pool, trainer=None):
@@ -291,7 +294,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     runtime = handles.coordinator.config.draw_rate_abort
     assert runtime is not None, (
@@ -314,7 +317,6 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
     handles = mantis.run.compose_run(
         config=disarmed_cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "off"), checkpoint_dir=str(tmp_path / "off_ckpt"),
-        eval_enabled=False,
     )
     assert handles.coordinator.config.draw_rate_abort is None, (
         "`train.draw_rate_abort: null` is EXPLICITLY OFF and must arrive as `None`. A "

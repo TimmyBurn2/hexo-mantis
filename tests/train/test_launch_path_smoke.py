@@ -131,12 +131,14 @@ def _monitor_block():
             "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
             "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
         },
+        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
     }
 
 
 def _config():
     return {
         "schema_version": 1, "run_id": "smoke", "seed": 20260722,
+        "eval_enabled": True,
         "identity": {"encoding": ENCODING, "representation": "grid"},
         "eval": _eval_block(),
         "train": _train_block(),

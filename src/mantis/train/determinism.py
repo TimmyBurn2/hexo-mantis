@@ -4,9 +4,11 @@ site named below — never at import time (a module-level seed call would fire o
 `import mantis.train.determinism`, including a bare test collection import, which is
 exactly the ambient-nondeterminism failure mode R30a exists to close).
 
-Call site: `mantis.run.main()` (`run.py`), immediately after `load_config` succeeds and
-before any RNG-consuming object (model/optimizer) is constructed — see `run.py`'s own
-docstring note for why this is currently the earliest REAL `cfg.seed`-bearing entry point.
+Call site: `mantis.run.build_run_collaborators` (`run.py`) — the FIRST statement of the ONE
+collaborator builder, before any RNG-consuming object (model/optimizer/pool) exists. WPMAIN
+made that the single site: the launcher and the mint preflight's boot child used to seed
+separately at their own entry points, which is two boot sites for a determinism law that
+says one.
 """
 from __future__ import annotations
 

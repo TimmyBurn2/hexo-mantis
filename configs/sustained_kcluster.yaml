@@ -5,6 +5,7 @@
 schema_version: 1
 run_id: sustained_kcluster
 seed: 20260720
+eval_enabled: true
 identity:
   encoding: v6_live2_ls
   representation: grid
@@ -95,6 +96,7 @@ train:
   grad_clip: 1.0
   fp16: true
   amp_dtype: fp16
+  device: cuda
   lr_schedule: cosine
   total_steps: 1000000
   scheduler_t_max: null
@@ -228,3 +230,7 @@ monitor:
     eval_final_drain_safety_factor: 3.0
     eval_final_drain_hard_cap_sec: 14400.0
     terminal_eval_hard_cap_sec: 14400.0
+  disk_guard:
+    interval_sec: 60.0
+    warn_gb: 10.0
+    fail_gb: 5.0

@@ -34,6 +34,9 @@ VALID_TRAIN_PAYLOAD: dict = {
     "grad_clip": 1.0,
     "fp16": True,
     "amp_dtype": "fp16",
+    # WPMAIN / R126: `train.device` is the run device, a CONFIG FACT with a CLOSED
+    # vocabulary and no code-side default (the retired `--device` flag on both callers).
+    "device": "cpu",
     "lr_schedule": "cosine",
     "total_steps": 1_000_000,
     "scheduler_t_max": None,

@@ -40,8 +40,11 @@ The oracles, and the defect each one is the ONLY witness to:
 - M16 b4c    — a stale-but-legitimate actor mirror. Sole witness that MF-5's replacement did
                not lose the transport-cross-check b4 existed for.
 - O-1…O-5, O-9, O-10 — the anti-evasion pins on the TOOL: no CLI defaults, no stand-ins, no
-               `sys.path` write, one override key, no validator-skipping construction, the
-               four real collaborators, `eval_enabled=True` unconditional (ADJ-11).
+               `sys.path` write, one override key, no validator-skipping construction, and —
+               INVERTED by WPMAIN (R120/R121(a)/R126) — the tool builds NO collaborator of
+               its own, passes NO eval posture, and declares NO device flag. All three are
+               presence->ban re-points with named equal-or-stronger successors (see each
+               test's docstring); the boot itself lives at `mantis.run`.
 - O-12       — an AUDIT-mode report can never carry `"verdict": "pass"` under `a_sync` or
                `b_lag`. Behavioural, not AST.
 - the independence cross-check — the property RED-TEAM will attack. See §"cross-check".
@@ -707,7 +710,7 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
     # the conftest sweep then has to catch. The guard itself is untouched.
     try:
         result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_N),
-                           "--out-dir", str(inside), "--timeout-sec", "60", "--device", "cpu")
+                           "--out-dir", str(inside), "--timeout-sec", "60")
         assert result.returncode == 13, (
             "§6.3 rc 13 PreflightOutDirInsideRepoError; got "
             f"{result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-2000:]}"
@@ -727,7 +730,7 @@ def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
     below on every minted config, so the minimum legal burst is 101. The gate must TEACH
     that (quote the binding validator, state the minimum), not merely reject."""
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "50",
-                       "--out-dir", str(tmp_path), "--timeout-sec", "60", "--device", "cpu")
+                       "--out-dir", str(tmp_path), "--timeout-sec", "60")
     output = result.stdout + result.stderr
     assert result.returncode == 11, (
         f"§6.3 rc 11 PreflightBurstTooShortError; got {result.returncode}\n{output[-2000:]}"
@@ -746,7 +749,7 @@ def test_the_preflight_args_carry_no_defaults_and_are_enforced_per_mode(tmp_path
     gate-12 step invokes `--audit-only` alone. So the four PREFLIGHT inputs are pinned by
     driving each one's absence."""
     full = {"--config": "configs/run5.yaml", "--burst-steps": str(_N),
-            "--out-dir": str(tmp_path), "--timeout-sec": "60", "--device": "cpu"}
+            "--out-dir": str(tmp_path), "--timeout-sec": "60"}
     for omitted in full:
         argv = [token for key, value in full.items() if key != omitted
                 for token in (key, value)]
@@ -867,8 +870,16 @@ def test_the_parser_declares_no_defaults() -> None:
     """O-1's AST half. A `default=` in the parser is a code-side default authority for a run
     input, which is the R1 defect this whole repo is arranged against."""
     calls = _add_argument_calls()
-    assert len(calls) >= 6, (
-        f"the tool must declare at least the six documented CLI inputs; found {len(calls)}"
+    # WPMAIN/R126: `--device` DIED on both callers (device is `config.train.device`), so the
+    # surface is FIVE documented inputs plus the suppressed `--_boot`. The bound is pinned
+    # rather than floored: `>= 6` kept passing NUMERICALLY across the removal while the
+    # census silently under-described the surface. The equal-or-stronger successor for the
+    # dropped `--device` entry is the O-G3 device-flag BAN over BOTH parsers
+    # (`tests/config/test_train_device_authority.py`), which also catches `--gpu` /
+    # `--torch-device` — the presence->ban pattern R121(a) sanctions.
+    assert len(calls) == 6, (
+        f"the tool declares exactly the five documented CLI inputs plus the suppressed "
+        f"--_boot; found {len(calls)}"
     )
     for call in calls:
         names = [arg.value for arg in call.args if isinstance(arg, ast.Constant)]
@@ -879,7 +890,7 @@ def test_the_parser_declares_no_defaults() -> None:
         )
     declared = {arg.value for call in calls for arg in call.args
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str)}
-    for option in ("--config", "--burst-steps", "--out-dir", "--timeout-sec", "--device",
+    for option in ("--config", "--burst-steps", "--out-dir", "--timeout-sec",
                    "--audit-only"):
         assert option in declared, f"the tool must declare {option}; got {sorted(declared)}"
 
@@ -938,48 +949,68 @@ def test_the_tool_never_constructs_a_config_by_a_validator_skipping_route() -> N
 
 
 def test_compose_run_is_driven_with_the_four_real_collaborators() -> None:
-    """O-9 / §4.1 + R64. Exactly one call site, four injected collaborators, and NOTHING the
-    composition root builds for itself is passed in or patched: `build_run_safety`,
-    `StepCoordinatorConfig` and `ActorSync` are `compose_run`'s to construct."""
+    """O-9 / §4.1 + R64, INVERTED by WPMAIN (CARD-RUN-MAIN, R121(a)).
+
+    Exactly one `compose_run` call site, driven with the SIX explicit kwargs the re-cut root
+    declares, and NOTHING the composition root builds for itself is passed in or patched.
+
+    What changed, and why it is a re-point and not a weakening: the builder tokens
+    (`init_trainer` / `WorkerPool` / `HexgBuffer` / `ReplayBuffer`) used to be REQUIRED to
+    appear in this tool. That was the one-authority violation the card ended — a CI gate
+    owning the only real collaborator build — so they are BANNED here now, on the same
+    presence->ban pattern O-10 already used. The equal-or-stronger successors for the "the
+    collaborators are real" claim are NAMED: `tests/test_run_one_authority.py`'s
+    builder-reality census (a bound CALL at the code's new home, strictly stronger than a
+    token appearing anywhere in a file) PAIRED with the behavioural drives
+    `tests/test_run_buffer_route.py` and `tests/test_run_launcher.py`. Token presence alone
+    was MEASURED insufficient by this very tree (`test_preflight_mint_process.py`: a
+    silent-default mutation left 1773 tests green), which is why the successor is
+    census+behaviour and not another token census.
+    """
     calls = [node for node in ast.walk(TOOL_TREE) if isinstance(node, ast.Call)
              and getattr(node.func, "id", getattr(node.func, "attr", None)) == "compose_run"]
     assert len(calls) == 1, f"exactly one compose_run call site; found {len(calls)}"
     keywords = {kw.arg: kw.value for kw in calls[0].keywords}
-    for name in ("config", "trainer", "pool", "buffer", "eval_enabled"):
+    for name in ("config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir"):
         assert name in keywords, (
             f"compose_run must be called with {name}= explicitly; got {sorted(keywords)}"
         )
     for name in ("trainer", "pool", "buffer"):
-        assert isinstance(keywords[name], ast.Name), (
-            f"{name}= must be a constructed object bound to a name, never a literal or an "
-            f"inline stand-in; got {ast.dump(keywords[name])[:120]}"
+        assert isinstance(keywords[name], ast.Attribute), (
+            f"{name}= must be the collaborator the ONE builder made, read off its result; "
+            f"got {ast.dump(keywords[name])[:120]}"
         )
-    for token in ("init_trainer", "WorkerPool", "HexgBuffer", "ReplayBuffer"):
-        assert token in TOOL_CODE, (
-            f"§4.1: the real {token} is what mode PREFLIGHT constructs; missing"
-        )
-    assert "identity" in TOOL_CODE and "representation" in TOOL_CODE, (
-        "the buffer is selected off config.identity.representation — never sniffed, never "
-        "defaulted (LAW-11)"
-    )
-    for token in ("build_run_safety(", "StepCoordinatorConfig("):
+    for token in ("init_trainer", "WorkerPool", "HexgBuffer", "ReplayBuffer",
+                  "build_run_safety(", "StepCoordinatorConfig("):
         assert token not in TOOL_CODE, (
-            f"{token} is compose_run's to build (§4.1); a tool that builds it is no longer "
-            "driving the REAL composition root"
+            f"{token} is the composition root's to build (§4.1 / D-1); a CI gate that builds "
+            "its own collaborators preflights a run nobody will launch"
         )
+    assert "build_run_collaborators" in TOOL_CODE, (
+        "…and the child must reach them through the ONE builder at `mantis.run`"
+    )
 
 
 def test_eval_enabled_is_the_literal_True_and_is_not_derived() -> None:
-    """O-10 / ADJ-11. There is no `eval_enabled` config key — it is a `compose_run`
-    parameter with a code-side default `True` (`run.py:107`), filed as
-    CARD-EVAL-ENABLED-KEY. R64 BANS `eval_enabled=False` as an escape, so the literal must
-    be unconditional: not a flag, not a config read, not a boolean expression."""
+    """O-10 / ADJ-11, re-pointed by WPMAIN (R120). The SUBJECT moves from "the literal True"
+    to "NO ROUTE AT ALL", which strictly dominates it.
+
+    `eval_enabled` used to be a `compose_run` parameter with a code-side default `True`, and
+    this tool hardcoded the literal so R64's "the preflight may never force False" could be
+    enforced by inspection. R120 made it a typed, required config key and DELETED the
+    parameter, so the child now passes NOTHING and CAN pass nothing: forcing a posture the
+    minted config did not declare is unrepresentable rather than merely unwritten.
+
+    The CLI ban survives verbatim — it is the half that must, and
+    `tests/test_run_eval_enabled_authority.py` extends it to the launcher, which never had
+    it. The no-local-assignment ban survives too: a local `eval_enabled = …` was how the
+    banned escape came back quietly."""
     calls = [node for node in ast.walk(TOOL_TREE) if isinstance(node, ast.Call)
              and getattr(node.func, "id", getattr(node.func, "attr", None)) == "compose_run"]
-    value = {kw.arg: kw.value for kw in calls[0].keywords}["eval_enabled"]
-    assert isinstance(value, ast.Constant) and value.value is True, (
-        "eval_enabled= must be the literal True (ADJ-11 / R64); got "
-        f"{ast.dump(value)[:160]}"
+    keywords = {kw.arg for kw in calls[0].keywords}
+    assert "eval_enabled" not in keywords, (
+        "the child must pass NO eval posture — the CONFIG governs it (R120/R64); got "
+        f"{sorted(keywords)}"
     )
     assigned = [target.id for node in ast.walk(TOOL_TREE) if isinstance(node, ast.Assign)
                 for target in node.targets if isinstance(target, ast.Name)]

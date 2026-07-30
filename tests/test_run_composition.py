@@ -55,14 +55,19 @@ _SRC = _REPO / "src" / "mantis"
 _DRIVE_STEPS = 3
 
 
-def _bounded(smoke_run_config, **monitor_over):
+def _bounded(smoke_run_config, *, eval_enabled: bool = False, **monitor_over):
     """A REAL minted `RunConfig`, bounded so a drive terminates (WPAX S-1: the strict gate
-    means no `SimpleNamespace()` reaches this root any more — smoke runs get smoke CONFIGS)."""
+    means no `SimpleNamespace()` reaches this root any more — smoke runs get smoke CONFIGS).
+
+    WPMAIN/R120: `eval_enabled` is the CONFIG's fact — `compose_run` has no such parameter —
+    so each drive declares its posture here instead of at the call. Every drive's semantics
+    are byte-preserved (a False drive stays a False drive)."""
     return smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
                "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **monitor_over},
+        eval_enabled=eval_enabled,
     )
 
 
@@ -295,7 +300,6 @@ def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority
         config=config, trainer=_DrivableTrainer(),
         pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=False,
     )
     identity = [e for e in emitted if e.get("event") == "run_boot_identity"]
     assert len(identity) == 1, f"exactly one boot-identity event, got {len(identity)}"
@@ -334,7 +338,6 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
         pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=False,
     )
     assert build_calls["n"] == 1, "build_run_safety must be called exactly once"
     assert "pool.start" in order.calls and "watchdog.start" in order.calls, (
@@ -368,9 +371,9 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("with_eval"))
     _patch_eval_side(monkeypatch)
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config, eval_enabled=True), trainer=_DrivableTrainer(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert "eval_round" in seen["with_eval"], (
         f"eval_enabled=True must declare eval_round wired: {seen['with_eval']}"
@@ -380,7 +383,7 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert "eval_round" not in seen["no_eval"], (
         f"eval_enabled=False must NOT declare eval_round wired: {seen['no_eval']}"
@@ -428,9 +431,9 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
     _patch_eval_side(monkeypatch, captured)
 
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config, eval_enabled=True), trainer=_DrivableTrainer(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert captured.get("sink") is sink, "the eval pipeline must receive the SAME sink"
     assert captured.get("heartbeat") is heartbeat_fn, (
@@ -472,7 +475,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     mantis_run.compose_run(
         config=cfg, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(),
         buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert captured["monitor_cfg"] is not None
     assert captured["monitor_cfg"].alert_entropy_min == 2.75
@@ -528,7 +531,7 @@ def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
     with pytest.raises(UnvalidatedConfigError, match="must be < train.max_train_steps"):
         mantis.run.compose_run(
             config=rigged, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
-            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=False,
+            log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         )
 
     assert trainer.step == 0, (

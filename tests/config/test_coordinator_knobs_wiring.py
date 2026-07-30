@@ -260,6 +260,9 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
                # so the comparison stays one-key-at-a-time.
                "mixing_initial_w": 1.0, **train_over},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
+        # WPMAIN/R120+R123: `eval_enabled` and `run_id` are CONFIG facts now — `compose_run`
+        # has no parameter for either, so the drive's posture is declared where the config is.
+        eval_enabled=False, run_id="knob_wiring",
     )
     handles = mantis.run.compose_run(
         config=config, trainer=_Trainer(), pool=_ComposePool(),
@@ -267,7 +270,6 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
         # mutated drive can wedge in warmup against a too-small real buffer.
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=False, run_id="knob_wiring",
     )
     return handles.coordinator.config
 
@@ -469,8 +471,8 @@ def test_min_buf_size_decides_the_warmup_floor() -> None:
 
 def test_replay_capacity_is_the_window_the_run_publishes_and_the_preflight_sizes() -> None:
     """`train.replay_capacity` -> `StepCoordinatorConfig.capacity` -> the `buffer_capacity`
-    the warmup event publishes (and, in the tool, the REAL `ReplayBuffer` the preflight
-    builds)."""
+    the warmup event publishes (and, through `mantis.run.build_run_collaborators`, the size
+    of the REAL engine buffer every boot — launcher and preflight alike — constructs)."""
     h = _coordinator(capacity=31_337, min_buf_size=10**6)
     _drive(h, steps=1)
     stats = h.sink.named("system_stats")

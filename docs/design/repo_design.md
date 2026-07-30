@@ -96,9 +96,14 @@ train                        → all above except eval     # eval reached via in
 eval, arena                  → all above except train's internals; checkpoint IO via the
                                ONE loader exposed from train.checkpoints
 run                          → train, eval, monitor, config, selfplay   # the composition
-                               root (WP11-A §a.4/§c.6); a top-level module ABOVE both
-                               train and eval; NOTHING imports `mantis.run` — it is a
-                               source-only DAG node. ADDITIVE: this row registers the new
+                               root AND the launcher (WP11-A §a.4/§c.6; WPMAIN); a
+                               top-level module ABOVE both train and eval; NOTHING imports
+                               `mantis.run` — it is a source-only DAG node. WPMAIN added
+                               NO new edge class: `build_run_collaborators` calls
+                               `mantis.train.orchestrator.init_trainer` and
+                               `mantis.selfplay.pool.WorkerPool`, both already inside this
+                               row, and the ONE lazy import (`mantis._engine`, in
+                               `_select_buffer`) keeps its stated DAG reason. ADDITIVE: this row registers the new
                                node; it does not weaken the train↛eval ban above, which
                                stays verbatim (census-tested,
                                tests/test_run_composition.py::
@@ -577,10 +582,20 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
   is invented for it. The number is written in exactly one place per authority: the constant,
   and the manifest row that imports it.
 
-  OWED: `run_until_stopped` has no caller in `src/` and `mantis.run.main()` is smoke-grade, so
-  the only production-posture process boundary that reads the resolver today is the mint
-  preflight's boot child (`tools/ci_gates/preflight_mint.py`). When a production launcher
-  lands it must read the SAME resolver rather than re-deriving the mapping.
+  DISCHARGED (WPMAIN, CARD-RUN-MAIN). The OWED clause used to read: "`run_until_stopped` has
+  no caller in `src/` and `mantis.run.main()` is smoke-grade, so the only production-posture
+  process boundary that reads the resolver today is the mint preflight's boot child; when a
+  production launcher lands it must read the SAME resolver rather than re-deriving the
+  mapping." The launcher landed. `mantis.run.main` — `--config PATH --out-dir PATH`, both
+  required, no code-side default anywhere on the surface — builds the collaborators, composes
+  the run, drives the live loop and reads THIS resolver: `abort_rule is None` -> 0, a rule
+  with an authored code -> that code, a rule with none -> `UnregisteredAbortExitError` naming
+  the rule. Two process boundaries now, one resolver, and no number written at either.
+  `StepCoordinator.run_until_stopped` is DELETED (R121(c)): a bare
+  `while self.shutdown.running: self.step()` with no final save and no bound, zero callers
+  and zero test references — wiring it would have forked LAW-16's save-then-exit into a
+  second driver, and a differently-named "production entry" that nothing enters is a false
+  affordance (R73/R116). `mantis.train.loop.run_training_loop` is THE loop.
 
 ## 12. Strength-claim + eval discipline
 

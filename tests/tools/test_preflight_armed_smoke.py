@@ -45,7 +45,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     proc = subprocess.run(
         [sys.executable, str(TOOL), "--config", str(CONFIG),
          "--burst-steps", str(BURST_STEPS), "--out-dir", str(tmp_path),
-         "--timeout-sec", "400", "--device", "cpu"],
+         "--timeout-sec", "400"],
         cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=500,
     )
     tail = (proc.stdout + proc.stderr)[-3000:]

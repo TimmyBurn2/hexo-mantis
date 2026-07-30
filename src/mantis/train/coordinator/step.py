@@ -1,6 +1,6 @@
 """StepCoordinator.step() — the per-step outer-loop core (WP10 §a.4 split — `step` slice).
 
->300 justify: `step()` + `run_until_stopped()` reproduce one outer iteration of the old
+>300 justify: `step()` reproduces one outer iteration of the old
 `loop.py::_run_loop` closure (warmup tick / waiting-for-games tick / training burst) — one
 cohesive control-flow unit, kept together. Behaviour-exact on the reachable seams, routed
 through the injected collaborators (`config.py` Protocols); the stall watchdog is driven via
@@ -208,12 +208,6 @@ class StepCoordinator:
     def stop(self, reason: str) -> None:
         _LOG.info("stop_requested reason=%s", reason)
         self.shutdown.running = False
-
-    def run_until_stopped(self) -> None:
-        """Production entry — drive ``step()`` until shutdown (mirrors the old
-        ``while _shutdown.running`` loop)."""
-        while self.shutdown.running:
-            self.step()
 
     # ── one outer iteration ─────────────────────────────────────────────────────────────
     def step(self) -> StepOutcome:

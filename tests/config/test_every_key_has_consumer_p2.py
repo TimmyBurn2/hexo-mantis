@@ -47,6 +47,11 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
     "seed": "emit source-tag (acting RNG consumer: mantis.train.determinism.seed_everything, SC-A6)",
+    "eval_enabled": (
+        "mantis.run.compose_run -> the `wired_sources` eval_round declaration AND the"
+        " build_eval_pipeline branch (R120; the deleted `compose_run(eval_enabled=…)`"
+        " parameter's code-side default True died with it)"
+    ),
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
@@ -84,6 +89,10 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.weight_decay": "TrainHParams.weight_decay -> core.py:189 AdamW ctor",
     "train.grad_clip": "TrainHParams.grad_clip -> core.py:409,476 fp16_backward_step max_grad_norm",
     "train.fp16": "TrainHParams.fp16 -> core.py:176-183 CUDA-only scaler/autocast gate",
+    "train.device":
+        "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
+        " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
+        " on both callers)",
     "train.amp_dtype": "TrainConfig.amp_dtype -> grid-path AMP dtype (schema now, model/amp.py wiring SC-B3, R30b)",
     "train.lr_schedule": "TrainHParams.lr_schedule -> core.py:222-235 _build_scheduler",
     "train.total_steps": "TrainHParams.total_steps -> core.py:227 _build_scheduler T_max fallback",
@@ -129,7 +138,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.replay_capacity":
         "resolve_coordinator_knobs -> _step_coordinator_config ->"
         " StepCoordinatorConfig.capacity -> step.py buffer_capacity (warmup event + axis"
-        " payload) and preflight_mint.py _build_buffer sizing",
+        " payload) and mantis.run.build_run_collaborators buffer sizing",
     "train.replay_capacity_schedule":
         "resolve_coordinator_knobs -> _step_coordinator_config ->"
         " StepCoordinatorConfig.buffer_schedule -> step.py D1 buffer.resize ramp",
@@ -278,6 +287,13 @@ CONSUMER_REGISTRY: dict[str, str] = {
     # was popped by resolve_monitor_config and never reached the functions named below, which
     # a grep could not tell from a read (DR-11). The path is now named end to end and is
     # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    "monitor.disk_guard.interval_sec":
+        "resolve_disk_guard -> DiskGuard(interval_sec=…) -> the guard thread's poll cadence"
+        " (mantis.run.compose_run, LAW-16 leg 3)",
+    "monitor.disk_guard.warn_gb":
+        "resolve_disk_guard -> DiskGuard(warn_gb=…) -> disk_alert level=warn threshold",
+    "monitor.disk_guard.fail_gb":
+        "resolve_disk_guard -> DiskGuard(fail_gb=…) -> disk_alert level=critical + SIGTERM",
     "monitor.drain.final_eval_drain_timeout_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
     "monitor.drain.eval_final_drain_safety_factor": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
     "monitor.drain.eval_final_drain_hard_cap_sec": "resolve_drain_caps -> _step_coordinator_config -> DrainCaps -> drain_budget_sec (eval/pipeline.py)",
@@ -320,7 +336,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_170_entries():
+def test_registry_has_exactly_175_entries():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
     # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
@@ -328,8 +344,15 @@ def test_registry_has_exactly_170_entries():
     # keys: 148 - 1 + 3 = 150. `train.draw_rate_abort` is the ONLY `Block | None` field in
     # `RunConfig`, so those three are the whole blast radius. This count and the sibling
     # copy's must stay equal.
-    assert len(CONSUMER_REGISTRY) == 170
-    assert len(_leaf_paths(RunConfig)) == 170
+    # WPMAIN (CARD-RUN-MAIN) adds 5 and the count becomes 175: `eval_enabled` (R120, the
+    # code-side `compose_run` default promoted to a typed top-level key), the three
+    # `monitor.disk_guard.*` leaves (R122's granted FAMILY — one block, one resolver, three
+    # typed leaves, replacing four dead `dict.get` literals in a function with zero callers)
+    # and `train.device` (R126, the CLI-only run input on both callers promoted to a typed
+    # `train.*` key). 170 + 1 + 3 + 1 = 175. The nested `monitor.disk_guard` block itself is
+    # DESCENDED by `_leaf_paths`, so it contributes three leaves and not four.
+    assert len(CONSUMER_REGISTRY) == 175
+    assert len(_leaf_paths(RunConfig)) == 175
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

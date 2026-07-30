@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — re-measured at WPBOX Phase Q, the pass that EXECUTED
-# CARD-PREFLIGHT-SPLIT-PARENT-HALF (R110-approved plan, GROUND_PFC.md): 1162 lines total,
-# 198 in the child closure, 581 in parent-only function bodies. The old clause (2) — "when
+# this file's own top-level functions — re-measured at WPMAIN IMPL (CARD-RUN-MAIN, R121(a)),
+# the pass that lifted the boot out of this tool: **1131 lines total, 147 in the child
+# closure, 585 in parent-only function bodies**. The child closure shrank 198 -> 147 because
+# `_build_buffer` left with the boot (now `mantis.run._select_buffer`) and `_boot_main` is a
+# call-through; parent-only moved 581 -> 585 with the `--device` deletion's surrounding
+# prose. Prior reading, WPBOX Phase Q, the pass that EXECUTED
+# CARD-PREFLIGHT-SPLIT-PARENT-HALF (R110-approved plan, GROUND_PFC.md): 1162/198/581.
+# Figures are re-derived by running the producer above, never transcribed (SF-7). The old
+# clause (2) — "when
 # the freeze lifts, the parent half should be split out and this clause deleted" — is
 # DISCHARGED: the leaf parent layers (~794 lines: shared vocabulary, exit taxonomy, the two
 # predicate evaluators, report helpers, the classifier, the segment/verdict/identity
@@ -15,9 +21,13 @@
 # (1877→1793→1672→1452) is preserved in git history rather than restated here.
 # Two reasons the file is still >300, and saying exactly what stays is the point:
 #
-#  (1) CHILD SIDE (198 lines, unchanged by the split: _boot_main, _abort_rc, _build_buffer,
-#      _load, _apply_burst_override, _minimum_legal_burst, _burst_floors,
-#      _resolve_config_path). `_abort_rc` belongs on this side by the same rule as the rest:
+#  (1) CHILD SIDE (_boot_main, _abort_rc, _load, _apply_burst_override,
+#      _minimum_legal_burst, _burst_floors, _resolve_config_path) — SHRUNK by WPMAIN
+#      (CARD-RUN-MAIN, R121(a)): the boot itself now lives at `mantis.run`
+#      (`build_run_collaborators` + `compose_run`), and `_build_buffer` moved with it as
+#      `mantis.run._select_buffer`. What is left on this side is config surgery and the rc
+#      instrument — the two things that are the TOOL's and not the run's.
+#      `_abort_rc` belongs on this side by the same rule as the rest:
 #      it runs IN the child, after `compose_run` returns, and it is what turns the run's own
 #      `abort_rule` into the process rc a supervisor reads. The parent re-execs ITSELF as
 #      the boot child by os.path.abspath(__file__) (DESIGN_P §6.2) — one file IS the
@@ -25,7 +35,7 @@
 #      census and the O-1 parser census sweep THIS file, so the boot and the parser cannot
 #      leave it without an R43 event.
 #
-#  (2) PARENT SIDE THAT STAYS (581 lines of function bodies), each piece pinned by a NAMED
+#  (2) PARENT SIDE THAT STAYS (585 lines of function bodies), each piece pinned by a NAMED
 #      seam rather than by inertia: `verify_source_pins` (SF-4 — the tamper scan lives in
 #      the TOOL, recorded at tests/config/test_armed_abort_manifest.py:5) and the whole
 #      audit half beside it, because the frozen ring-2 monkeypatch seam
@@ -50,18 +60,20 @@ source-pin tamper scan. This is the per-commit CI gate. **rc 0 in this mode cove
 assertion (c) ONLY**; assertions (a) and (b) are reported `not_run`, in the report and on
 stdout, on every run including a green one.
 
-Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec --device`): everything
+Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec`): everything
 AUDIT does, then the REAL `compose_run` boot in production posture, a bounded burst, a
 timeout-bounded join, and assertions (a) sync-cadence and (b) lag-transport over the run's
 own JSONL segment. **This is the MANUAL mint gate — no CI step invokes it.**
 
 R64 posture, which is the whole point: this tool contains NO stand-in for a production
-object. It constructs the real `Trainer` through the real `init_trainer`, the real
-`WorkerPool`, the real buffer selected off `config.identity.representation` (never sniffed,
-never defaulted — LAW-11), and hands them to the real `compose_run`, which builds
-`build_run_safety`, `StepCoordinatorConfig` and `ActorSync` for itself. When a collaborator
-is missing a method the tool does NOT supply one: the failure reaches the process boundary
-uncaught. Classification honesty (CARD-PREFLIGHT-WALL-CLASSIFIER, resolved at WPCLEAN Phase
+object — and since WPMAIN it constructs no production object at all. The child calls
+`mantis.run.build_run_collaborators` and `mantis.run.compose_run`, the SAME pair
+`mantis.run.launch_run` calls, so the real trainer, the real self-play pool, the real buffer
+(selected off `config.identity.representation` — never sniffed, never defaulted, LAW-11),
+the run-safety triple, the step-coordinator config and the sync engine are all built by the
+composition root and by nothing here. A CI gate that builds its own collaborators is the
+one-authority violation CARD-RUN-MAIN ended. When a collaborator is missing a method the
+tool does NOT supply one: the failure reaches the process boundary uncaught. Classification honesty (CARD-PREFLIGHT-WALL-CLASSIFIER, resolved at WPCLEAN Phase
 PFC to this WORDING rather than to a wall table): rc 32 is a FALLBACK SNIFF — the literal
 `"object has no attribute"` in the child's stderr tail — not a wall registry. A wall that
 surfaces any other way lands rc 33 with its traceback in the tail, and the register of
@@ -84,6 +96,20 @@ running healthily when `--timeout-sec` kills it: parent rc **40** `PreflightTime
 child rc -15, EMPTY stderr. `buffer_size` is **0** for the whole window — one CPU self-play
 worker at run5's settings finishes no games, so the coordinator never leaves its warmup arm
 (`_run_loop` O4, `buffer.size < cfg.min_buf_size`) and never takes a training step.
+
+CORRECTION, measured 2026-07-30 (WPMAIN / R126 + R130). The paragraph above is preserved as
+the WPBRIDGE record; two of its facts have EXPIRED and a reader must not take them for the
+current tree. (i) `configs/run5.yaml` no longer boots on a CPU box AT ALL: the device is a
+CONFIG FACT now (`train.device`, R126 — the `--device` flag is DELETED from this tool), run5
+mints `cuda`, and the child dies in `init_trainer` with torch's own "Torch not compiled with
+CUDA enabled" -> parent rc **33**. That refusal is the POINT (it is what stops a cpu preflight
+false-clearing a cuda run's GPU wall) and is pinned by
+`tests/tools/test_preflight_mint_process.py::test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer`.
+(ii) On the minted CPU twin the rest of the paragraph still holds — clean boot, both watchdogs
+armed, `buffer_size` 0, killed at the timeout, parent rc **40** — but the CHILD rc is now
+**0, not -15**, with non-empty stderr: the timeout SIGTERMs the child's process group, and
+WPMAIN installed LAW-16's handlers (dead in every composed run before it), so the child
+save-then-exits instead of dying on the signal.
 
 **CARD-TRAINSTEP-ADAPTER (TD-1) IS DEAD (WPTS, R102).** The straight self-play arm no longer
 calls a `train_step` that does not exist: `step.py::_run_training_step` routes through the
@@ -758,7 +784,6 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="the burst length; overrides train.max_train_steps ONLY")
     parser.add_argument("--out-dir", help="evidence + run artifacts; must be OUTSIDE the repo")
     parser.add_argument("--timeout-sec", type=float, help="hard bound on the child boot")
-    parser.add_argument("--device", help="torch device string for the trainer")
     parser.add_argument("--_boot", action="store_true", help=argparse.SUPPRESS)
     return parser
 
@@ -767,8 +792,7 @@ def _require_preflight_args(parser: argparse.ArgumentParser, args) -> None:
     missing = [name for name, value in (("--config", args.config),
                                         ("--burst-steps", args.burst_steps),
                                         ("--out-dir", args.out_dir),
-                                        ("--timeout-sec", args.timeout_sec),
-                                        ("--device", args.device)) if value is None]
+                                        ("--timeout-sec", args.timeout_sec)) if value is None]
     if missing:
         parser.error(
             "mode PREFLIGHT requires " + ", ".join(missing) +
@@ -820,118 +844,63 @@ def _checked_out_dir(raw: str) -> Path:
 
 
 # ── mode PREFLIGHT: the child (§4) ────────────────────────────────────────────────────
-def _build_buffer(config: RunConfig, capacity: int):
-    """Selected off `config.identity.representation` — never sniffed off a live module,
-    never defaulted (LAW-11). An unknown representation RAISES.
-
-    MF-I4: this raise had NO producer. O-9 asserts only that the TOKENS `HexgBuffer`,
-    `ReplayBuffer`, `identity`, `representation` appear in the source, and all four survive
-    replacing the raise with a silent `ReplayBuffer` default — measured green at full tier
-    (RR-12). Gate 11 cannot catch it either: `silent_encoding_gate.py:63` is
-    `SCAN_ROOTS = ("src", "crates")`, so `tools/` is outside the scan.
-
-    **Ruling on widening gate 11's SCAN_ROOTS to cover `tools/`: NOT taken here, and the
-    reason is measured rather than argued.** Driving `scan()` with
-    `SCAN_ROOTS = ("src","crates","tools")` scans 231 files and returns **2 violations**:
-    `tools/ci_gates/silent_encoding_gate.py:126` (the gate's own `KNOWN_DEBT` table, a
-    self-flag) and `tools/mint_opening_book.py:23` (`_MINT_ENCODING = "gnn_axis_v1"`). So the
-    widening is not a one-line scope change — it needs a self-exemption and an adjudication of
-    `mint_opening_book`, both of which are gate 11's owner's (WP12-R per its own KNOWN_DEBT
-    row), not this phase's. Filed as CARD-GATE11-SCAN-TOOLS. The defect itself is closed the
-    stronger way instead: `tests/tools/test_preflight_mint_process.py` drives all three arms
-    of this function, so the raise has a real producer rather than a token census.
-    """
-    representation = config.identity.representation
-    if representation == "graph":
-        from mantis._engine import HexgBuffer
-
-        return HexgBuffer(capacity, config.identity.encoding)
-    if representation == "grid":
-        from mantis._engine import ReplayBuffer
-
-        return ReplayBuffer(capacity, config.identity.encoding)
-    raise PreflightConfigError(
-        f"identity.representation {representation!r} selects no buffer — an absent or "
-        "unknown representation is an ERROR, never a dense default (LAW-11)"
-    )
-
-
 def _boot_main(args) -> int:
-    """The `--_boot` child: the REAL production posture, with nothing routed around.
+    """The `--_boot` child: the REAL production posture, through the ONE composition
+    authority, with nothing routed around.
 
-    Every collaborator here is the production object. `compose_run` builds `build_run_safety`,
-    `StepCoordinatorConfig`, `ActorSync` and the eval pipeline for itself — this function
-    passes none of them and patches none of them (R64 / O-9).
+    WPMAIN (CARD-RUN-MAIN, R121(a)) inverted this function. It used to BUILD the run for
+    itself — seed, out-dirs, trainer, buffer, pool — which made a CI gate the owner of the
+    only real collaborator build in the tree, and made "the preflight boots what run5 boots"
+    a claim with no producer on either side. Every one of those steps now lives at
+    `mantis.run.build_run_collaborators`, and `mantis.run.launch_run` calls the same pair.
+    What survives here is the CONTAINMENT mechanism (the parent re-execs this file with
+    `--_boot`, §6.2) and the tool's own two sanctioned instruments, which wrap AROUND the
+    composer rather than reaching inside it:
+
+      1. `_apply_burst_override` — a CONFIG-level transform, BEFORE the boot;
+      2. the §4.2 resumed-trainer refusal — a READ-ONLY check, BETWEEN the builder and the
+         composer, which is why the authority is a PAIR of functions and not one opaque
+         `boot()`: a single call would have needed a preflight hook smuggled inside it,
+         which is the divergence seam the card exists to close.
+
+    Nothing else may sit between the two calls, and nothing may be assigned onto `collab` —
+    a collaborator swapped after the build is a boot the composer never agreed to
+    (`tests/test_run_one_authority.py::test_the_preflight_child_boots_through_one_builder_and_one_composer_only`).
+
+    The DEVICE is the config's own (`train.device`, R126): there is no `--device` flag on
+    this tool any more, so preflighting run5 boots run5's minted device and a `--device cpu`
+    invocation can no longer false-clear a cuda-minted run's memory wall (the WPBOX 16 GiB
+    OOM; LAW-03's instrument-that-cannot-false-clear corollary). The EVAL posture is the
+    config's own too (`eval_enabled`, R120): the child passes nothing and CAN pass nothing.
     """
-    import torch
-
-    from mantis.config.resolve.coordinator import resolve_coordinator_knobs
-    from mantis.config.resolve.drain import resolve_drain_caps
-    from mantis.config.resolve.draw_rate import resolve_draw_rate_abort
-    from mantis.config.resolve.run_length import resolve_max_train_steps
-    from mantis.run import _step_coordinator_config, compose_run
-    from mantis.selfplay.pool import WorkerPool
-    from mantis.train.determinism import seed_everything
-    from mantis.train.orchestrator import init_trainer
-
     config = _load(_resolve_config_path(args.config))
     booted = _apply_burst_override(config, args.burst_steps)
-    seed_everything(booted.seed)
+    from mantis.run import build_run_collaborators, compose_run
 
-    out_dir = Path(args.out_dir)
-    log_dir = out_dir / "logs"
-    checkpoint_dir = out_dir / "checkpoints"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-    trainer = init_trainer(config=booted.model_dump(), checkpoint_dir=str(checkpoint_dir),
-                           device=torch.device(args.device), sink=None)
+    collab = build_run_collaborators(config=booted, out_dir=args.out_dir)
     # §4.2: a run RESUMED past its ceiling terminates having performed zero syncs, which
-    # looks EXACTLY like the frozen actor this preflight exists to find. The tool never
+    # looks EXACTLY like the frozen actor this preflight exists to find. The builder never
     # passes `checkpoint_path`, and a nonzero step here is a named refusal, not a warning.
-    if int(trainer.step) != 0:
+    if int(collab.trainer.step) != 0:
         raise PreflightResumedTrainerError(
-            f"the freshly-built trainer reports step {int(trainer.step)}, not 0: a preflight "
-            "over a resumed trainer measures nothing while looking like the defect it exists "
-            "to find (§4.2)"
+            f"the freshly-built trainer reports step {int(collab.trainer.step)}, not 0: a "
+            "preflight over a resumed trainer measures nothing while looking like the defect "
+            "it exists to find (§4.2)"
         )
-    # The coordinator config built HERE is CAPACITY-ONLY and is out of the arming class:
-    # `compose_run` builds the real one for itself (R64/O-9), and the test that bans the
-    # token `StepCoordinatorConfig(` from this file is what keeps it going through the
-    # builder. It passes the REAL resolved values rather than a sentinel — the tool has
-    # `booted` in hand, so threading them costs nothing and means no call site anywhere
-    # constructs a coordinator config without going through the resolvers. A default
-    # parameter on the builder is the alternative, and that is exactly the authority
-    # MIGRATION `tests/config/test_drawrate_arming_authority.py` forbids (MF-2 Attack B).
-    buffer = _build_buffer(booted, int(_step_coordinator_config(
-        stop_step=resolve_max_train_steps(booted.train),
-        draw_rate_abort=resolve_draw_rate_abort(booted.train),
-        drain_caps=resolve_drain_caps(booted.monitor),
-        knobs=resolve_coordinator_knobs(booted.train),
-    ).capacity))
-    pool = WorkerPool(model=trainer.model, config=booted.model_dump(),
-                      device=torch.device(args.device), replay_buffer=buffer,
-                      arch=trainer.arch, sink=None, heartbeat=None)
-    handles = compose_run(config=booted, trainer=trainer, pool=pool, buffer=buffer,
-                          log_dir=log_dir, checkpoint_dir=checkpoint_dir,
-                          # ADJ-11: there is no `eval_enabled` config key — it is a
-                          # `compose_run` parameter with a code-side default True
-                          # (`run.py:107`), filed as CARD-EVAL-ENABLED-KEY. R64 BANS False as
-                          # an escape, so the literal is unconditional: not a flag, not a
-                          # config read, not an expression.
-                          eval_enabled=True, run_id=booted.run_id)
+    handles = compose_run(config=booted, trainer=collab.trainer, pool=collab.pool,
+                          buffer=collab.buffer, log_dir=collab.log_dir,
+                          checkpoint_dir=collab.checkpoint_dir)
     return _abort_rc(handles.shutdown.abort_rule)
 
 
 def _abort_rc(rule: str | None) -> int:
     """The child's rc, decided by WHETHER AN ABORT FIRED and by nothing else (R84).
 
-    This is the card's process boundary, and it is the only one in the repo: `run_until_stopped`
-    has zero callers in `src/`, `mantis.run.main()` is smoke-grade, and `compose_run` is a
-    library function returning `RunHandles`. Authoring a production launcher so the card had
-    somewhere else to exit from is scope widening (R90 hard stop), so the card is satisfied
-    where a boundary EXISTS — here, and in-process on `RunHandles.shutdown.abort_rule`, which
-    any caller can read the moment this lands.
+    This is the CHILD's process boundary. It is no longer the only one in the repo: WPMAIN
+    landed `mantis.run.main()` as a real launcher, and it reads THIS SAME resolver rather
+    than re-deriving the mapping — which is exactly what the OWED paragraph below asked for,
+    and what `repo_design.md`'s own OWED clause is discharged by. Two boundaries, one
+    resolver, and the numbers still come from the manifest row and from nowhere else.
 
     Three outcomes, and the middle one is the one that must not be quietly rounded off:
 
@@ -943,8 +912,10 @@ def _abort_rc(rule: str | None) -> int:
       not pre-registered; R84 refused to invent codes for them and this refuses again rather
       than reporting an aborted run as a clean boot.
 
-    OWED, and recorded rather than absorbed: when a production launcher lands it must read
-    this same resolver. The card cannot make it, because it does not exist yet.
+    DISCHARGED (WPMAIN): the production launcher landed and reads this same resolver —
+    `mantis.run.main`, whose unregistered-rule arm raises `UnregisteredAbortExitError` with
+    this function's own three-outcome doctrine. The clause is kept as the record of what the
+    obligation was, not as an open one.
     """
     if rule is None:
         return 0
@@ -963,8 +934,7 @@ def _abort_rc(rule: str | None) -> int:
 def _child_argv(args) -> list[str]:
     return [sys.executable, os.path.abspath(__file__), "--_boot",
             "--config", str(args.config), "--burst-steps", str(int(args.burst_steps)),
-            "--out-dir", str(args.out_dir), "--timeout-sec", str(float(args.timeout_sec)),
-            "--device", str(args.device)]
+            "--out-dir", str(args.out_dir), "--timeout-sec", str(float(args.timeout_sec))]
 
 
 def _run_child(args, report: dict) -> dict:

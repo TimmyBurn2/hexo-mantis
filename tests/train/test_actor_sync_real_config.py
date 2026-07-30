@@ -151,11 +151,18 @@ def _real_run_config() -> RunConfig:
         train_over={"actor_sync_cadence_steps": _CADENCE, "max_train_steps": _STOP_STEP},
         monitor_over={"actor_lag_threshold_steps": _CADENCE + 2},
     )
+    # WPMAIN/R120: the frozen payload mints `eval_enabled: True`, which IS this file's
+    # production posture — stated rather than left implicit now that it is a config fact.
+    assert payload["eval_enabled"] is True
     return RunConfig(**payload)
 
 
 def _drive(monkeypatch, *, eval_enabled: bool = True):
-    """Compose with a REAL RunConfig; return (captured build_run_safety kwargs, pool, trainer)."""
+    """Compose with a REAL RunConfig; return (captured build_run_safety kwargs, pool, trainer).
+
+    WPMAIN/R120: `eval_enabled` is the CONFIG's fact — `compose_run` has no such parameter —
+    so the posture travels on the payload `_real_run_config` builds (True, this drive's own
+    production posture) rather than on the compose call."""
     import mantis.train.anchor as _anchor
 
     captured: dict = {}
@@ -203,7 +210,7 @@ def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monke
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     assert trainer.step >= _STOP_STEP - 1, "harness precondition: the run actually stepped"
@@ -229,7 +236,7 @@ def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypat
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
-        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"), eval_enabled=True,
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
     actor_fn, learner_fn = captured["actor_ckpt_step_fn"], captured["learner_step_fn"]

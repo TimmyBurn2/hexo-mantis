@@ -16,7 +16,11 @@ from mantis.config.schema.core import (
     RunConfig,
     StrictModel,
 )
-from mantis.config.schema.monitor import DrainCapsConfig, MonitorSchemaConfig
+from mantis.config.schema.monitor import (
+    DiskGuardConfig,
+    DrainCapsConfig,
+    MonitorSchemaConfig,
+)
 from mantis.config.schema.selfplay import (
     InferenceConfig,
     MctsConfig,
@@ -27,6 +31,7 @@ from mantis.config.schema.train import TrainConfig
 
 __all__ = [
     "SCHEMA_VERSION",
+    "DiskGuardConfig",
     "DrainCapsConfig",
     "EvalConfig",
     "GateConfig",

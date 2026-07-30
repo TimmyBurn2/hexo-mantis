@@ -175,11 +175,13 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
                # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
                "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, "drain": drain_over},
+        # WPMAIN/R120+R123: both are CONFIG facts now; `compose_run` has no parameter for
+        # either, so the drive declares its posture where the config is built.
+        eval_enabled=True, run_id="drain_wiring",
     )
     mantis.run.compose_run(
         config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
-        eval_enabled=True, run_id="drain_wiring",
     )
     assert "coordinator_cfg_caps" in captured, "the drive never reached build_eval_pipeline"
     return captured["coordinator_cfg_caps"]

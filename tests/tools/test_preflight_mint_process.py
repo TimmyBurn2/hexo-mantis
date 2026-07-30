@@ -66,8 +66,10 @@ import io
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -82,7 +84,7 @@ from mantis.config.armed_aborts import (
     Status,
     audit_arming,
 )
-from mantis.config.loader import discover_configs, load_config
+from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
@@ -121,6 +123,153 @@ TOOL = _load_tool()
 def _run_tool(*args, cwd: Path = REPO_ROOT, tool: Path = TOOL_PATH, timeout: int = 300):
     return subprocess.run([sys.executable, str(tool), *args], cwd=str(cwd),
                           capture_output=True, text=True, timeout=timeout)
+
+
+def _cuda_is_available() -> bool:
+    """Is THIS box a CUDA box? Asked once, at import, so the host-dependence of the two
+    device-sensitive rows below is DECLARED in a skip marker instead of being discovered as
+    a mystery failure. torch is already a module-level transitive import here (`ActorSync`)."""
+    import torch
+
+    return bool(torch.cuda.is_available())
+
+
+#: Declared once. `configs/run5.yaml` mints `train.device: cuda` (R126: the device is a CONFIG
+#: FACT and the `--device` flag is DEAD), so what a real run5 boot DOES is a property of the
+#: host, not of the tool. Both halves are pinned rather than one being left to chance: on a
+#: non-CUDA box `test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer` is the
+#: producer; on a CUDA box that row skips WITH ITS REASON and the binding measurement is the
+#: box preflight (CARD-RUN5-GPU-OOM), which is where run5's local boot evidence moved (R130).
+_CUDA_BOX = _cuda_is_available()
+
+
+def _flat_leaves(config) -> dict[str, object]:
+    """A validated config's leaves as dotted paths — the same shape gate 13's walker uses."""
+    def walk(node, prefix: str) -> dict[str, object]:
+        out: dict[str, object] = {}
+        for key, value in node.items():
+            path = f"{prefix}{key}"
+            if isinstance(value, dict):
+                out.update(walk(value, f"{path}."))
+            else:
+                out[path] = value
+        return out
+    return walk(config.model_dump(), "")
+
+
+def _mint_run5_cpu_twin(out_dir: Path) -> Path:
+    """MINT (never hand-vary) run5's CPU twin — R130's re-point target, the R103 pattern.
+
+    The three real-boot drives below exist to measure the TOOL's boot mechanics — where the
+    child terminates, what the report then claims, and that a spawned boot is reported as a
+    boot. Until R126 they got there by passing the tool `--device cpu` against
+    `configs/run5.yaml`. That flag is dead by ruling, precisely because a cpu preflight
+    against a cuda-minted run5 false-cleared the GPU memory wall (CARD-RUN5-GPU-OOM), so the
+    drives re-point onto a config that says cpu ITSELF.
+
+    Minted by `tools/mint_config.py` from the same `dev` template run5 is minted from,
+    replaying run5's own header deltas — READ OFF THE LOADED `configs/run5.yaml`, never
+    restated here (the file's §14-item-17 discipline; run5's armed values 0.25 / 25000 / 50
+    are carried, not copied) — plus exactly one more: `train.device: cuda -> cpu`.
+
+    Not a committed `configs/` resident, deliberately: a near-clone of run5 sitting in the
+    audit root is the exact artefact an operator could preflight BELIEVING it was run5, which
+    is the false-clear R126 exists to kill. It is minted per-drive into `tmp_path`, and
+    `--config <path>` audits it shape-agnostically wherever it lives (R75).
+
+    The two-leaf assertion below is the provenance guarantee: this file cannot silently drift
+    onto some other config and keep calling its result run5's boot.
+    """
+    run5 = load_config(RUN5)
+    draw = run5.train.draw_rate_abort
+    assert draw is not None, "premise: run5 arms the draw-rate abort (the tier-full floor row)"
+    dest = out_dir / "run5_cpu_boot.yaml"
+    deltas = [
+        "run_id=run5_cpu_boot",
+        f"seed={run5.seed}",
+        f"eval.random_floor_games={run5.eval.random_floor_games}",
+        f"monitor.actor_lag_abort_enabled={str(bool(run5.monitor.actor_lag_abort_enabled)).lower()}",
+        (f"train.draw_rate_abort={{threshold: {draw.threshold}, min_step: {draw.min_step}, "
+         f"N_pool_min: {draw.N_pool_min}, consec: {draw.consec}}}"),
+        "train.device=cpu",
+    ]
+    argv = [sys.executable, str(REPO_ROOT / "tools" / "mint_config.py"),
+            "--template", "dev", "--out", str(dest)]
+    for delta in deltas:
+        argv += ["--set", delta]
+    minted = subprocess.run(argv, cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
+    assert minted.returncode == 0, (
+        "the twin must be MINTED, not hand-varied (R130/R103); mint_config exited "
+        f"{minted.returncode}\n{(minted.stdout + minted.stderr)[-2000:]}"
+    )
+    twin = load_config(dest)
+    base, other = _flat_leaves(run5), _flat_leaves(twin)
+    assert base.keys() == other.keys(), "same template, same key set"
+    differing = {key for key in base if base[key] != other[key]}
+    assert differing == {"run_id", "train.device"}, (
+        "the twin must be run5 WITH THE DEVICE THIS BOX HAS and nothing else — anything more "
+        "and these drives stop being evidence about run5's own boot. Differing leaves: "
+        f"{sorted(differing)}"
+    )
+    assert twin.train.device == "cpu" and run5.train.device == "cuda", (
+        f"got twin device {twin.train.device!r} against run5 {run5.train.device!r}"
+    )
+    return dest
+
+
+def _launch_until_boot_identity(config_path: Path, out_dir: Path, *, deadline_sec: float = 180.0):
+    """Drive the PRODUCTION launcher — `python -m mantis.run --config … --out-dir …` — and
+    stop it the moment the run publishes its own `run_boot_identity`.
+
+    This is the shape a launch drive has to take now that the entry point is a real launcher
+    (R128): there is no rc to wait for on a bounded-by-nothing config, and waiting for one
+    would mean either running 25 000 steps or asserting a timeout, neither of which is the
+    subject. The witness IS the acceptance proof — it is emitted immediately after the sink
+    exists, i.e. strictly past `load_config`, past schema validation, past
+    `build_run_collaborators` and inside `compose_run`.
+
+    Teardown is SIGTERM to the child's own process group (`start_new_session=True`), which
+    on the post-WPMAIN tree lands on LAW-16's handlers and lets the run save-then-exit rather
+    than leaving worker processes behind; SIGKILL is the backstop if it does not.
+    """
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mantis.run", "--config", str(config_path),
+         "--out-dir", str(out_dir)],
+        cwd=str(REPO_ROOT), start_new_session=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    witness = None
+    started = time.monotonic()
+    try:
+        while witness is None and time.monotonic() - started < deadline_sec:
+            for segment in sorted((out_dir / "logs").glob("events_*.jsonl")):
+                for line in segment.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        # A tailing reader can catch a half-flushed final line; the next
+                        # poll re-reads the file whole. Never swallowed for any other line.
+                        continue
+                    if row.get("event") == "run_boot_identity":
+                        witness = row
+                        break
+                if witness is not None:
+                    break
+            if witness is None and proc.poll() is not None:
+                break  # the launcher exited without ever publishing — the caller reports it
+            if witness is None:
+                time.sleep(0.25)
+    finally:
+        if proc.poll() is None:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        try:
+            stdout, stderr = proc.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            stdout, stderr = proc.communicate()
+    return SimpleNamespace(witness=witness, rc=proc.returncode, stdout=stdout, stderr=stderr)
 
 
 # ══ MF-1 — the §6.3a classification order ══════════════════════════════════════════════
@@ -334,7 +483,22 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     docstring's HEAD claim has expired". That card has now landed, so the assertion is
     re-pointed at the wall the boot actually reaches, MEASURED (2026-07-29, this box, CPU):
     it reaches NO wall inside the window. The child boots clean and is still running when
-    `--timeout-sec` kills it — rc 40, child rc -15, EMPTY stderr.
+    `--timeout-sec` kills it — rc 40.
+
+    RE-POINTED AGAIN by R130 (WPMAIN), on the CONFIG rather than on the assertion. The drive
+    used to reach a cpu boot by passing the tool `--device cpu`; R126 killed that flag
+    because a cpu preflight against a cuda-minted run5 false-cleared the GPU wall, so the
+    config now carries the device and the target is the MINTED CPU TWIN of run5
+    (`_mint_run5_cpu_twin`, two leaves from run5). run5's OWN local boot evidence moved to
+    where it belongs: the box preflight, plus the permanent regression oracle
+    `test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer` below.
+
+    MEASURED THIS PASS, and it is a WPMAIN behaviour change worth reading: the child's rc at
+    the kill is now **0, not -15**. `--timeout-sec` expiring sends the child's process group
+    SIGTERM, and LAW-16's handlers — dead in every composed run at HEAD (F-1, 19/19 probes),
+    installed by the composition root now — turn that into save-then-exit. `timed_out` stays
+    True, so §6.3a arm 1 still classifies it rc 40; the rc is asserted through the report's
+    own `child` block rather than restated, which is why this row survived the change.
 
     What that does and does not prove is the whole point of the re-point. It PROVES TD-4 is
     gone (the old wall fired in ~1.4 s; nothing fires now). It does NOT prove the burst can
@@ -348,8 +512,9 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     but integration-tier wall-clock once the outcome stopped being a fast failure.
     """
     out_dir = tmp_path / "boot"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--device", "cpu")
+    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
+                       "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45")
     assert result.returncode == 40, (
         "post-TD-4 the boot runs until the timeout kills it: rc 40 PreflightTimeoutError. "
         f"got {result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
@@ -377,6 +542,73 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     assert {"run_segment_started", "heartbeat_watchdog_armed",
             "selfplay_stall_watchdog_armed"} <= events, (
         f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    _CUDA_BOX,
+    reason="asserts what a CUDA-MINTED run5 does on a NON-CUDA host; this box has CUDA, so "
+           "the boot legitimately proceeds instead of refusing. The binding measurement for "
+           "run5 on a CUDA box is the box preflight (CARD-RUN5-GPU-OOM, R130) — not this row, "
+           "which exists to keep the device false-clear dead on every CPU box in the fleet.",
+)
+def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> None:
+    """R130's NEW positive oracle: R126 grounds (a), pinned as a permanent regression oracle.
+
+    THE DEFECT THIS IS THE ONLY WITNESS TO. Until R126 the device was a CLI flag, so every
+    in-repo drive of the mint preflight passed `--device cpu` against a run5 that a real
+    operator boots on cuda. The preflight therefore cleared a boot the run itself had never
+    attempted — and the wall it stepped over is not hypothetical: it is CARD-RUN5-GPU-OOM,
+    16 GiB of GPU OOM inside GNN inference, reproduced and curved on the box (WPBOX). An
+    instrument that CANNOT false-clear is LAW-03's corollary, and this row is what makes
+    "cannot" structural rather than remembered: with the device a CONFIG FACT, preflighting
+    run5 on a box without CUDA does not quietly rehearse something else — it REFUSES.
+
+    MUTATION THAT REDS IT: re-add a `--device` flag (or any parameter/env read that lets a
+    caller point the boot somewhere the config does not), and this drive silently starts
+    passing on a CPU box, which is the whole defect coming back.
+
+    WHAT "LOUD" MEANS HERE, measured (this box, CPU-only torch, ~1 s): the child dies inside
+    `init_trainer` with a full named traceback ending in torch's own
+    `AssertionError: Torch not compiled with CUDA enabled`, carrying the PEP-678 note
+    `composition seam: init_trainer` that `mantis.run._seam` attaches without catching
+    anything. The parent classifies a nonzero child with no missing-attribute signature as
+    §6.3a arm 5 -> **rc 33** `PreflightBootFailedError`, and writes its evidence report.
+    R130 rules the raw-torch raise ACCEPTABLE-LOUD: recorded here, deliberately NOT re-wrapped
+    in a mantis exception in this WP's scope — wrapping it would move the failure's authority
+    away from the layer that actually knows the device is unavailable.
+
+    HOST DEPENDENCE IS DECLARED, NOT SILENT: the `skipif` above states in words which host
+    this row asserts about and where the other host's evidence lives. A skip is the honest
+    outcome on a CUDA box — the alternative (asserting rc 40 there instead) would be two
+    different subjects wearing one name.
+    """
+    out_dir = tmp_path / "run5_on_cpu"
+    result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+    assert load_config(RUN5).train.device == "cuda", (
+        "PREMISE: run5 mints `train.device: cuda`. If run5 is ever re-minted to cpu this row "
+        "is testing nothing and must be re-adjudicated, not adjusted"
+    )
+    assert result.returncode == 33, (
+        "run5 on a non-CUDA box must FAIL, not rehearse something else: rc 33 "
+        f"PreflightBootFailedError. got {result.returncode}\n"
+        f"{(result.stdout + result.stderr)[-3000:]}"
+    )
+    report = json.loads(sorted(out_dir.glob("preflight_*.json"))[0].read_text())
+    assert report["failure"] == "PreflightBootFailedError" and report["verdict"] == "fail"
+    assert report["child"]["timed_out"] is False, (
+        "the refusal is IMMEDIATE — a timeout here would mean the boot got past the device"
+    )
+    tail = report["child"]["stderr_tail"]
+    assert "composition seam: init_trainer" in tail, (
+        "rc 33 must trace to a NAMED failure, not a swallowed one (R130): `_seam` annotates "
+        f"the in-flight exception with WHERE it happened and re-raises it. got tail {tail[-800:]!r}"
+    )
+    assert "Torch not compiled with CUDA enabled" in tail, (
+        "…and the raise itself is torch's own, verbatim in the evidence — acceptable-loud per "
+        f"R130, recorded rather than re-wrapped in scope. got tail {tail[-800:]!r}"
     )
 
 
@@ -880,9 +1112,21 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     )
 
 
-# ══ MF-4 — LAW-11 in the buffer selector ═══════════════════════════════════════════════
+# ══ MF-4 — LAW-11 in the buffer selector, AT ITS NEW HOME ══════════════════════════════
+# WPMAIN (D-1/D-2, R121(a)): `_build_buffer` LIFTED out of this CI gate into the composition
+# root as `mantis.run._select_buffer`. The drives below re-point onto it; the LAW-11 message
+# assertions and the two real-buffer arms are unchanged. Two deltas, both ruled:
+#   * the raise class is `RepresentationRouteError` (reused from the train-step route on the
+#     SAME axis) rather than the tool's own config error — the lift is out of `tools/`, not a
+#     copy of it;
+#   * `assert caught.value.rc == 10` is DELETED (R125, the one pre-queued weaken hunk):
+#     `RepresentationRouteError` is a `TypeError` subclass carrying no `rc`, and correctly so
+#     — a `src/` exception carrying a CI tool's exit code is the layering defect this WP
+#     ends. The rc-10 arm was unreachable through the child CLI anyway, and the taxonomy the
+#     predicate protected is re-stated in the CLASS by
+#     `tests/test_run_buffer_route.py::test_the_route_error_carries_no_tool_exit_code`.
 def _identity(representation: str, encoding: str = "gnn_axis_v1"):
-    """The two leaves `_build_buffer` reads. Not a stand-in for a production object the tool
+    """The two leaves `_select_buffer` reads. Not a stand-in for a production object the tool
     constructs (O-2's subject) — it is the argument, and building a `RunConfig` whose
     `identity.representation` is unknown is impossible by construction, which is the point."""
     return SimpleNamespace(identity=SimpleNamespace(representation=representation,
@@ -891,19 +1135,22 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
 
 def test_an_unknown_representation_raises_and_is_never_a_dense_default() -> None:
     """MF-4 / RR-12 / LAW-11. Replacing this raise with a silent `ReplayBuffer` default left
-    the whole default tier green (1773 passed): O-9 asserts only that the TOKENS `HexgBuffer`,
-    `ReplayBuffer`, `identity` and `representation` appear in the source, and all four survive
-    the mutation. Gate 11 cannot see it either — `SCAN_ROOTS = ("src", "crates")` excludes
-    `tools/` (ruling and measurement recorded at `preflight_mint.py:_build_buffer`).
+    the whole default tier green (1773 passed): O-9 asserted only that the TOKENS
+    `HexgBuffer`, `ReplayBuffer`, `identity` and `representation` appear in a source file,
+    and all four survive the mutation. Gate 11 could not see it either while the raise lived
+    in `tools/` — `SCAN_ROOTS = ("src", "crates")`. The lift brings it under the gate, and
+    this drive is its behavioural producer.
 
-    So the raise gets a behavioural producer. Both the absent case and the unknown case are
-    driven, because LAW-11's rule is that ABSENT and UNKNOWN are the same error, never a
-    default: `"an absent or unknown representation is an ERROR, never a dense default"`.
+    Both the absent case and the unknown case are driven, because LAW-11's rule is that
+    ABSENT and UNKNOWN are the same error, never a default: `"an absent or unknown
+    representation is an ERROR, never a dense default"`.
     """
+    from mantis.run import _select_buffer
+    from mantis.train.coordinator.dispatch import RepresentationRouteError
+
     for representation in ("hexagonal", "", "dense", "GRAPH", "none"):
-        with pytest.raises(TOOL.PreflightConfigError) as caught:
-            TOOL._build_buffer(_identity(representation), 8)
-        assert caught.value.rc == 10
+        with pytest.raises(RepresentationRouteError) as caught:
+            _select_buffer(_identity(representation), 8)
         assert "LAW-11" in str(caught.value) and repr(representation) in str(caught.value), (
             "the refusal must name the law and the value it refused; got "
             f"{caught.value!s}"
@@ -915,9 +1162,10 @@ def test_the_two_declared_representations_select_their_own_real_buffer() -> None
     does. These are the REAL `mantis._engine` buffers, selected off the declared
     representation and never sniffed off a live module."""
     from mantis._engine import HexgBuffer, ReplayBuffer
+    from mantis.run import _select_buffer
 
-    graph = TOOL._build_buffer(_identity("graph"), 8)
-    grid = TOOL._build_buffer(_identity("grid", encoding="v6"), 8)
+    graph = _select_buffer(_identity("graph"), 8)
+    grid = _select_buffer(_identity("grid", encoding="v6"), 8)
     assert isinstance(graph, HexgBuffer) and isinstance(grid, ReplayBuffer), (
         f"graph -> HexgBuffer, grid -> ReplayBuffer; got {type(graph)} / {type(grid)}"
     )
@@ -1552,36 +1800,70 @@ def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITE
 
 
 def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> None:
-    """`src/mantis/run.py:252` calls `load_config(argv[0])` on a FREE path. That was one of the
-    three facts that made `configs/run6.txt` a real hazard; R75 rules it is **not** the fact to
-    change — the operator keeps a free launch path, and the audit is what must not have a blind
-    spot.
+    """`mantis.run`'s launcher calls `load_config` on a FREE path. That was one of the three
+    facts that made `configs/run6.txt` a real hazard; R75 rules it is **not** the fact to
+    change — the operator keeps a free launch path, and the audit is what must not have a
+    blind spot.
 
     So this row measures both halves at once: the entry point ACCEPTS the odd shape (the
     backout of `4d11147` at the surface an operator actually types), and the same file under
-    `configs/` is red at gate 12 (the protection that replaced the refusal). The control arm is
-    the same drive on a real config, so a row that passed by breaking `mantis.run` outright
-    would be red.
+    `configs/` is red at gate 12 (the protection that replaced the refusal, driven by the
+    parametrized `_plant_disarmed` rows above). The control arm is the same drive on the same
+    bytes at a canonical shape, so a row that passed by breaking `mantis.run` outright would
+    be red.
+
+    REWRITTEN BY R128 to pin the NEW BOOT LAW, with the R75 subject preserved. It used to
+    spawn `python -m mantis.run <positional>` and assert rc 0 + `run_id=run5` on stdout —
+    a live behavioural consumer of the validate-and-exit surface WPMAIN retired (`run.py`
+    printed `config OK: run_id=…` and returned 0 without booting anything). Two things
+    changed and both are pinned here: the entry surface is `--config --out-dir`, and the
+    entry point BOOTS. R128 also records why this row was off DESIGN's R50 list at all —
+    a `-m mantis.run` subprocess matches no import-shaped grep, and the standing law it laid
+    down is that an entry point's consumers are by nature invisible to import censuses.
+
+    THE ACCEPTANCE PROOF IS NOW STRONGER, not merely re-pointed. `rc 0 + "run_id=run5" in
+    stdout` was satisfiable by a process that only parsed the file; the witness now is the
+    RUN'S OWN `run_boot_identity` event, whose `config_sha256` is the booted process's
+    post-revalidation identity hash (the F-B1 closure). Asserting it equals
+    `config_identity_sha256` of the file AT THE ODD PATH says the odd-shaped file was loaded,
+    schema-validated, composed and booted — no suffix guard anywhere on that route.
+
+    BOUNDED, and that is what keeps it in the default tier (measured ~3 s per arm on this
+    box): the drive stops the run the moment the identity witness lands, which is before the
+    burst matters. The target is the MINTED CPU TWIN of run5 (`_mint_run5_cpu_twin`) so the
+    row asserts the same thing on a CUDA box and on a CPU box — R126 made the device a config
+    fact, so a launch drive that wants to be host-independent must say cpu in the config.
     """
-    disarmed_body = RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                             "actor_lag_abort_enabled: false")
+    canonical = _mint_run5_cpu_twin(tmp_path)
     odd = tmp_path / "run6.txt"
-    odd.write_text(disarmed_body)
-    launched = subprocess.run([sys.executable, "-m", "mantis.run", str(odd)],
-                              cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
-    assert launched.returncode == 0, (
-        "R75: a run may be launched from a path of any shape; the loader accept-set narrowing "
-        f"is out. got rc {launched.returncode}\n{(launched.stdout + launched.stderr)[-2000:]}"
-    )
-    assert "run_id=run5" in launched.stdout, launched.stdout[-2000:]
+    odd.write_bytes(canonical.read_bytes())
+    identity = config_identity_sha256(load_config(odd))
+
+    launched = _launch_until_boot_identity(odd, tmp_path / "odd_shape")
     assert "ConfigSuffixError" not in launched.stderr, (
-        "the refusal must be gone from the launch path entirely, not merely downgraded"
+        "the refusal must be gone from the launch path entirely, not merely downgraded\n"
+        f"{launched.stderr[-2000:]}"
     )
-    allowed = subprocess.run([sys.executable, "-m", "mantis.run", str(RUN5)],
-                             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
-    assert allowed.returncode == 0, (
-        "the control arm: a real config must still launch, or this row passes by breaking the "
-        f"entry point. got {allowed.returncode}\n{(allowed.stdout + allowed.stderr)[-2000:]}"
+    assert launched.witness is not None, (
+        "R75: a run may be launched from a path of any shape; the loader accept-set narrowing "
+        f"is out. The launcher published no `run_boot_identity`, so it never booted this file. "
+        f"rc {launched.rc}\n{(launched.stdout + launched.stderr)[-2000:]}"
+    )
+    assert launched.witness["config_sha256"] == identity, (
+        "the booted process must have loaded THE FILE AT THE ODD PATH — a matching run_id "
+        "alone would also be produced by a launcher that read some other copy. got "
+        f"{launched.witness['config_sha256']!r} against {identity!r}"
+    )
+
+    control = _launch_until_boot_identity(canonical, tmp_path / "canonical_shape")
+    assert control.witness is not None, (
+        "the control arm: the same bytes at a canonical `.yaml` shape must still launch, or "
+        f"this row passes by breaking the entry point. rc {control.rc}\n"
+        f"{(control.stdout + control.stderr)[-2000:]}"
+    )
+    assert control.witness["config_sha256"] == identity, (
+        "…and the two shapes are the same config, so they boot the same identity: "
+        f"{control.witness['config_sha256']!r} vs {identity!r}"
     )
 
 
@@ -2103,7 +2385,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
     """
     out = tmp_path / "out"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
-                       "--out-dir", str(out), "--timeout-sec", "60", "--device", "cpu")
+                       "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS; found {reports}"
@@ -2132,14 +2414,21 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     `Trainer` and imports torch. The default tier covers this arm through
     `test_the_not_run_reason_is_DERIVED_from_the_reports_own_child_block[child]`; this row is
     what proves the derived sentence survives the real process, on a real artefact.
+
+    RE-POINTED by R130 onto the minted CPU twin of run5, for the reason recorded on
+    `_mint_run5_cpu_twin`: `--device cpu` is dead (R126) and run5 itself mints cuda, so a
+    drive whose subject is the BOOTED/NOT-BOOTED disclaimer must reach a boot through a
+    config that says cpu. Nothing about the subject moves with it.
     """
     out = tmp_path / "boot"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out), "--timeout-sec", "45", "--device", "cpu")
+    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
+                       "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out), "--timeout-sec", "45")
     # RE-POINTED by WPBRIDGE Phase T (R90(a)): rc 33/child rc 1 was TD-4. That card landed,
-    # so the boot now runs to the timeout — rc 40, child rc -15. The SUBJECT is unchanged and
-    # is the reason this row exists: a run that spawned a child must not carry the
-    # NOT_BOOTED disclaimer, whatever the child then did.
+    # so the boot now runs to the timeout — rc 40. The SUBJECT is unchanged and is the reason
+    # this row exists: a run that spawned a child must not carry the NOT_BOOTED disclaimer,
+    # whatever the child then did — which is why the child's rc is read off the report and
+    # never restated (WPMAIN moved it from -15 to 0 by installing LAW-16's handlers).
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
     assert report["child"] is not None and report["child"]["timed_out"] is True
@@ -2176,7 +2465,7 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
     )
     out = tmp_path / "out"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
-                       "--out-dir", str(out), "--timeout-sec", "60", "--device", "cpu")
+                       "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
         "preflight_run5_"), (
@@ -3199,7 +3488,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
     """
     out_dir = tmp_path / "refused"
     result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST - 1),
-                       "--out-dir", str(out_dir), "--timeout-sec", "60", "--device", "cpu")
+                       "--out-dir", str(out_dir), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     assert report["child"] is None and report["override"] is None
@@ -3229,10 +3518,17 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     assertion that matters: clearing TD-4 moved the boot forward without buying one unit of
     tier coverage, and an artifact that started claiming coverage here would be overclaiming
     on the strength of a run that did nothing but warm up.
+
+    RE-POINTED by R130 onto the minted CPU twin of run5. The tier arithmetic is UNCHANGED by
+    the move and that is checkable rather than asserted: the twin differs from
+    `configs/run5.yaml` in exactly `run_id` and `train.device` (`_mint_run5_cpu_twin`), and
+    none of the three floor rows below is either of those — `_RUN5_BURST` is still run5's own
+    floor, carried through the twin's identical `train.draw_rate_abort` block.
     """
     out_dir = tmp_path / "tiered"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--device", "cpu")
+    result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
+                       "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45")
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     block = report["tier"]

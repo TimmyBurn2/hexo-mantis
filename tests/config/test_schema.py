@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import (
     SCHEMA_VERSION,
+    DiskGuardConfig,
     DrainCapsConfig,
     EvalConfig,
     IdentityConfig,
@@ -114,12 +115,14 @@ def _valid_monitor_block() -> dict:
             "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
             "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
         },
+        "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
     }
 
 
 def _valid_payload() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
+        "eval_enabled": True,
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
@@ -243,7 +246,14 @@ def test_o16_schema_round_trip():
 
 
 def test_o16_all_fields_required_no_code_side_defaults():
+    # WPMAIN / §3.1 MISS-9: `DiskGuardConfig` joins the tuple. Without it R122's granted
+    # family would be the one schema block in the tree with no no-pydantic-default census,
+    # and a re-added `interval_sec: float = 60.0` is invisible to every liveness drive (they
+    # supply a value on each path). This test is ALSO the structural holder of R120's "the
+    # code-side default True dies" and R123(c): a re-added SCHEMA default on `eval_enabled`
+    # or `run_id` reds it, which a signature census cannot see (wrong instrument).
+    # `TrainConfig` was already in the tuple, so `train.device` is covered with zero edits.
     for model in (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, TrainConfig,
-                  MonitorSchemaConfig, DrainCapsConfig):
+                  MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig):
         for name, field in model.model_fields.items():
             assert field.is_required(), f"{model.__name__}.{name} has a code-side default"

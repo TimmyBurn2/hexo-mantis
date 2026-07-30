@@ -88,9 +88,10 @@ def test_no_anchor_passed_still_binds_the_resolved_one():
 def test_composition_root_actually_threads_the_anchor_into_the_loop():
     """`run.py` must PASS it — publication is useless if the loop never receives it.
 
-    Asserted structurally rather than by booting a real run, because the composition root
-    has no in-repo driver (`mantis.run.main` only validates a config), so there is no live
-    path to observe end to end.
+    Asserted structurally rather than by booting a real run: `mantis.run.main` IS a real
+    launcher since WPMAIN, but a full boot is an integration-tier cost this assertion does
+    not need — the AST census below reads exactly the keyword this test is about, and the
+    live end-to-end path is covered by the launcher's own boot oracle.
     """
     tree = ast.parse((REPO_ROOT / "src" / "mantis" / "run.py").read_text())
     calls = [

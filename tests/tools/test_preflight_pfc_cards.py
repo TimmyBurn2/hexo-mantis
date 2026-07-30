@@ -54,7 +54,7 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     (out / "logs").mkdir(parents=True)
     (out / "logs" / f"events_{SMOKE_RUN_ID}_seg0000.jsonl").write_text('{"event":"x"}\n')
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", "60", "--device", "cpu")
+                    "--out-dir", str(out), "--timeout-sec", "60")
     assert res.returncode == 15, res.stdout + res.stderr
     assert SMOKE_RUN_ID in res.stdout + res.stderr
     assert "seg0000" in res.stdout + res.stderr
@@ -69,7 +69,7 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path):
     (out / "logs").mkdir(parents=True)
     (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n')
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", "300", "--device", "cpu")
+                    "--out-dir", str(out), "--timeout-sec", "300")
     assert res.returncode == 0, res.stdout + res.stderr
 
 
