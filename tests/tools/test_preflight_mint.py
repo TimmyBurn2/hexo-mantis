@@ -834,7 +834,9 @@ def _code_text(path: Path) -> str:
     """Source with COMMENT / STRING / f-string-literal tokens removed. A raw-text census
     would flag the tool's own prose ('zero monkeypatch, by design'), which is the false
     positive that teaches people to word comments around a gate."""
-    skip = {tokenize.COMMENT, tokenize.STRING, tokenize.FSTRING_MIDDLE}
+    # FSTRING_MIDDLE is 3.12+ (PEP 701); on the 3.11 floor f-strings lex as STRING —
+    # same guard idiom as test_armed_abort_manifest.py / test_drawrate_arming_authority.py.
+    skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         return "\n".join(
             tok.string for tok in tokenize.tokenize(handle.readline) if tok.type not in skip
