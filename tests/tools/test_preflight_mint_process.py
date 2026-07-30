@@ -1833,6 +1833,15 @@ def test_the_probe_sweep_survives_a_SYMLINK_and_never_takes_the_suite_with_it(tm
     unremovable = tmp_path / "unremovable"
     (unremovable / "child").mkdir(parents=True)
     unremovable.chmod(0o500)  # r-x: rmtree cannot unlink the child it contains
+    if os.access(unremovable, os.W_OK):
+        # WPBOX Phase V, measured on the box (runs as root): permission bits do not bind a
+        # user with CAP_DAC_OVERRIDE, rmtree succeeds, and "DID NOT RAISE" is this arm's
+        # only possible outcome. The capability is probed, not the uid, so an unprivileged
+        # runner in a permissive sandbox is classified the same way. The arms above ran.
+        unremovable.chmod(0o700)
+        pytest.skip("permission bits do not bind this user (root / CAP_DAC_OVERRIDE): the "
+                    "loudness arm is unobservable here and runs wherever the suite runs "
+                    "unprivileged")
     conftest.PROBES = (unremovable,)
     try:
         with pytest.raises(RuntimeError, match="by hand"):
