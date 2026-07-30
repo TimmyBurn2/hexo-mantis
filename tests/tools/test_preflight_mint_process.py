@@ -89,6 +89,9 @@ from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWat
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
+#: WPBOX Phase Q (CARD-PREFLIGHT-SPLIT-PARENT-HALF): the tool loads its parent half off its
+#: own directory, so every rig that relocates the tool must carry the sibling with it.
+PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 
 #: run5's own constants, read from the file rather than restated (§14 item 17 / ADJ-12).
 RUN5 = REPO_ROOT / "configs" / "run5.yaml"
@@ -396,6 +399,9 @@ def _mini_tree(tmp_path: Path) -> Path:
     root = tmp_path / "tree"
     (root / "tools" / "ci_gates").mkdir(parents=True)
     shutil.copy2(TOOL_PATH, root / "tools" / "ci_gates" / "preflight_mint.py")
+    # The sibling set travels byte-for-byte with the tool (split, WPBOX Phase Q): the tool's
+    # loader keys the sibling off `__file__`, so the copied tool loads the COPIED parent half.
+    shutil.copy2(PARENT_PATH, root / "tools" / "ci_gates" / "preflight_mint_parent.py")
     (root / "configs").mkdir()
     # ADJ-13 F-1: the rig copies what the ONE discovery authority finds, not a third glob of
     # its own. A rig that enumerated configs differently from the gate it drives would go on
@@ -425,6 +431,11 @@ def test_the_mini_tree_rig_is_green_before_it_is_perturbed(tmp_path) -> None:
     root = _mini_tree(tmp_path)
     copied = (root / "tools" / "ci_gates" / "preflight_mint.py").read_bytes()
     assert copied == TOOL_PATH.read_bytes(), "the rig must run the SHIPPED tool, unmodified"
+    copied_parent = (root / "tools" / "ci_gates" / "preflight_mint_parent.py").read_bytes()
+    assert copied_parent == PARENT_PATH.read_bytes(), (
+        "the rig must carry the SHIPPED parent half, unmodified — a diverged sibling would "
+        "make the copied tool a different tool"
+    )
     result = _mini_audit(root)
     assert result.returncode == 0, (
         "an unperturbed mini tree must be as green as the real one; got "

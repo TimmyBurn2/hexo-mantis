@@ -68,6 +68,23 @@ def _ci_run_commands() -> list[str]:
     ]
 
 
+def _is_invocable(path: Path) -> bool:
+    """A file CI can INVOKE: every .sh, and any .py with a `__main__` guard or a shebang.
+
+    WPBOX Phase Q: the preflight split leaves a LIBRARY module beside its gate
+    (`preflight_mint_parent.py`, loaded by `preflight_mint.py` off its own directory).
+    A library has no meaningful "invoked by ci.yml" obligation — its executable half is
+    the gate that loads it, and THAT file stays censused. The discrimination is derived
+    from file content, never a hand list (this test's own R44 lesson), so a real gate
+    script written tomorrow — which needs a `__main__` guard or shebang to be a gate at
+    all — cannot use this arm to hide.
+    """
+    if path.suffix == ".sh":
+        return True
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return "__main__" in text or text.startswith("#!")
+
+
 def _gate_scripts() -> list[str]:
     """Repo-relative paths of every gate script whose logic CI must invoke.
 
@@ -78,7 +95,7 @@ def _gate_scripts() -> list[str]:
     found = {
         str(p.relative_to(REPO_ROOT))
         for p in gate_dir.rglob("*")
-        if p.is_file() and p.suffix in {".sh", ".py"}
+        if p.is_file() and p.suffix in {".sh", ".py"} and _is_invocable(p)
     }
     found.add("tools/check_import_dag.py")
     return sorted(found)
