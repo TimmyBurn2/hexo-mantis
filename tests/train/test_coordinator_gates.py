@@ -379,6 +379,40 @@ def test_log_interval_emits_training_step() -> None:
     )
 
 
+def test_iteration_complete_carries_both_rate_gap_metrics() -> None:
+    """R29 gap metrics (a) games/hr + (b) steps/hr share ONE hook — `iteration_complete` —
+    and both come from the coordinator's OWN counters over the same run clock (WPBOX CB-3
+    wiring). Producer-tested so the cutover floors have a live emitter, and the two rates
+    are cross-pinned: sph/gph must equal steps/games (same elapsed, tolerance for the two
+    now() reads) — which bites a hardcoded value, a wrong counter, and a dropped injection
+    (None = NOT MEASURED would fail the float assert here, where the producer IS injected).
+    """
+    h = _make_coordinator()
+    # Pin the run clock 60 s after start: real elapsed in this rig is MICROSECONDS, so the
+    # two now() reads inside one emission would dominate the rates; a frozen clock makes
+    # the cross-identity exact (modulo the emitter's 1-decimal rounding).
+    started = h.coord._run_started
+    h.coord._clock = SimpleNamespace(now=lambda: started + 60.0,
+                                     sleep=lambda _s: None)
+    h.pool.games_completed = 5
+    h.coord.step()
+    event = h.sink.named("iteration_complete")[-1]
+    sph = event["steps_per_hour"]
+    gph = event["games_per_hour"]
+    assert isinstance(sph, float) and sph > 0.0, (
+        f"steps_per_hour must be a LIVE measurement on this drive, got {sph!r}"
+    )
+    steps, games = h.trainer.step, h.pool.games_completed
+    assert steps > 0 and games > 0 and gph > 0
+    assert sph == round(steps / 60.0 * 3600.0, 1), (
+        f"steps_per_hour must be the coordinator's own step counter over the run clock: "
+        f"sph={sph} steps={steps}"
+    )
+    assert gph == round(games / 60.0 * 3600.0, 1), (
+        f"games_per_hour must share the same clock: gph={gph} games={games}"
+    )
+
+
 def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
     """O-22 (F-3 regression) — with `log_interval=5` and a burst of 4 TRAINING steps per
     outer iteration, 20 training steps must produce EXACTLY 4 emissions, at steps 5/10/15/20.

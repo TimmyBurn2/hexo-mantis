@@ -408,6 +408,7 @@ class StepCoordinator:
             # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
             # as a real measurement ("quiescence never fires") — a miniature F-10.
             self._games_per_hour, None, sink,
+            steps_per_hour_fn=self._steps_per_hour,
         )
         self._last_iter_games = self._games_played
         return payload
@@ -415,6 +416,13 @@ class StepCoordinator:
     def _games_per_hour(self) -> float:
         elapsed = self._clock.now() - self._run_started
         return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else 0.0
+
+    def _steps_per_hour(self) -> float:
+        """R29 gap metric (b), the twin of `_games_per_hour` over the SAME clock: train
+        steps per hour from the coordinator's own step counter. Published beside (a) in
+        `iteration_complete` — the cutover floor's live emitter (WPBOX CB-3)."""
+        elapsed = self._clock.now() - self._run_started
+        return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else 0.0
 
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.

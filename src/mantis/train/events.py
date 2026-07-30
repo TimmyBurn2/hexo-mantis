@@ -200,6 +200,7 @@ def emit_training_events(
     early_game_probe: Any | None = None,
     trainer_model: Any | None = None,
     solver_deltas: dict[str, Any] | None = None,
+    steps_per_hour_fn: Any | None = None,
 ) -> dict[str, Any]:
     """Emit `training_step` + `iteration_complete` events through the injected sink and
     RETURN the `training_step` payload.
@@ -270,6 +271,11 @@ def emit_training_events(
         "games_total": games_played,
         "games_this_iter": games_played - last_iter_games,
         "games_per_hour": round(gph, 1),
+        # R29 gap metric (b): the coordinator's own step rate over the same clock as (a).
+        # None = NOT MEASURED (no producer injected), never a fabricated 0 — the same
+        # doctrine as `quiescence_fires_per_step`.
+        "steps_per_hour": (round(float(steps_per_hour_fn()), 1)
+                           if steps_per_hour_fn is not None else None),
         "positions_per_hour": round(pph, 1),
         "avg_game_length": round(avg_gl, 1),
         "win_rate_p0": round(float(pool.x_winrate), 4),
