@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 734 lines. WPMAIN made this
+# >300 justify (R8), stated at this file's MEASURED size of 806 lines. WPMAIN made this
 # module the ONE composition authority in fact and not only in name: the collaborator
 # builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
 # `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
@@ -17,7 +17,11 @@
 # the file; the rest is the per-decision rationale R8's clause protects (R64, MF-1/MF-2,
 # S-4/Phase D/K-A/K-B, R120/R121/R122/R125/R126). The previous header claimed 335 lines
 # against a 349-line file; SF-7 — a justification that is not true is worse than none — so
-# the number above is re-measured by `wc -l`, never transcribed.
+# the number above is re-measured by `wc -l`, never transcribed. Re-measured AGAIN at the
+# RED-TEAM close (734 -> 806): the teardown ladder now opens at the sink instead of at
+# `pool.start()` and eleven composition steps carry a seam name (RT-3/RT-4). That adds no
+# executable branch — `with` lines and the rationale for them — so the argument above is
+# unchanged in kind.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
 TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that
@@ -168,6 +172,25 @@ def _seam(name: str) -> Iterator[None]:
     note and re-raises it unchanged — same type, same traceback, nothing swallowed. The
     preflight's rc-32 sniff is unaffected: notes append BELOW the traceback whose final
     exception line still carries the `object has no attribute` text the classifier reads.
+
+    COVERAGE, STATED EXACTLY (RED-TEAM RT-4; SF-7 — a coverage claim that is not true is
+    worse than none). DESIGN §8 claimed "every builder call in `build_run_collaborators` and
+    every construction step in `compose_run`" and RED-TEAM measured 5 of ~10 seam sites, with
+    the eval-pipeline wall reaching the process boundary unnamed. Seamed now, and this list
+    is the claim:
+
+    - builder: `init_trainer`, `_select_buffer`, `WorkerPool` (3);
+    - composer: `_resolve_monitor_cfg`, `build_run_safety`, `run_boot_identity emit`,
+      `resolved_config emit`, `ActorSync`, `_step_coordinator_config`, `build_eval_pipeline`,
+      `pool.start`, `watchdog.start`, `DiskGuard`, `StepCoordinator` (11).
+
+    DELIBERATELY NOT SEAMED, and why each: `require_run_config` / `revalidate_run_config`
+    (their own named refusals, and the seam name would add nothing to a message that already
+    names the caller); the `Path(...)` / `mkdir` lines and the `wired_sources` list (no
+    collaborator, no resolver — a failure there is an OS error naming its own path);
+    `run_training_loop` and `close_out` (the DRIVE and its epilogue, not composition — a
+    seam note on a training-step failure would mislabel it as a boot wall). A seam added to
+    any of those is fine; a construction step added WITHOUT one contradicts this list.
     """
     try:
         yield
@@ -176,13 +199,27 @@ def _seam(name: str) -> Iterator[None]:
         raise
 
 
-def _stop_pool_if_started(pool: Any, *, pool_started: bool) -> Callable[[], None]:
-    """The item-11 closure (§c.7): `pool.stop()` only if THIS run's own `pool.start()`
-    actually fired. An unstarted pool's `InferenceServer.join(timeout=5.0)` raises on a
-    never-started thread (pool.py:335) — calling `.stop()` unconditionally on a
-    never-started pool is the real hazard this guard exists to close."""
+def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callable[[], None]:
+    """The item-11 closure (§c.7), at the predicate RED-TEAM RT-3 measured it needs.
+
+    The ORIGINAL hazard is unchanged and still closed: an unstarted pool's
+    `InferenceServer.join(timeout=5.0)` raises on a never-started thread (pool.py:335), so
+    `.stop()` must not be called on a pool this run never touched — which is the state on
+    every raise BEFORE the start call (an `ActorSync` wall, an eval-pipeline wall).
+
+    What changed is the predicate's meaning, from "start RETURNED" to "start was CALLED".
+    `WorkerPool.start()` (pool.py:308-329) is three sub-starts — the inference server, the
+    Rust runner, then the stats thread — and RT-3 drove the middle case: a raise in #2 or #3
+    leaves #1 alive while a `pool_started` set AFTER the call is still `False`, so the
+    teardown ladder was a NO-OP over a half-started pool and the workers leaked. A leaked
+    worker set is silent and unbounded; that is strictly worse than the one case this
+    widening admits — a `start()` that raises before bringing ANYTHING up, whose `stop()` may
+    then raise the never-started `join` error out of the `finally` with the original wall
+    chained as its `__context__` (DESIGN §8 already states teardown failures chain). Loud and
+    chained beats silent and leaked, and R64 forbids designing around the wall instead.
+    """
     def _stop() -> None:
-        if pool_started:
+        if start_attempted:
             pool.stop()
     return _stop
 
@@ -437,7 +474,8 @@ def compose_run(
     # NOTHING — armed in the composition, absent in effect. `build_run_safety` already
     # creates `log_dir` for the same reason; this is its twin.
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    monitor_cfg = _resolve_monitor_cfg(config)
+    with _seam("_resolve_monitor_cfg"):
+        monitor_cfg = _resolve_monitor_cfg(config)
     run_id = config.run_id
 
     wired_sources: list[str] = list(_BASE_WIRED_SOURCES)
@@ -458,84 +496,11 @@ def compose_run(
             learner_step_fn=lambda: int(trainer.step),
         )
 
-    # F-B1 closure (WPCLEAN Phase RES): the booted process publishes ITS OWN post-revalidation
-    # config identity into the run's event stream, first thing after the sink exists — before
-    # anything can wedge. One authority (`config_identity_sha256`) on both sides: the mint
-    # preflight's parent hashes the config IT loaded with the same function and compares, so
-    # a child that read a different file is a NAMED preflight failure instead of invisible.
-    emit_via(run_safety.sink, {
-        "event": "run_boot_identity",
-        "run_id": run_id,
-        "config_sha256": config_identity_sha256(config),
-    })
-    # §5.4 (LAW-08): `resolve_config` / `to_event_payload` had ZERO production call sites —
-    # a resolved-config surface with no emitter, i.e. a payload nobody had ever published.
-    # The run now publishes its own resolved posture into its own stream, immediately after
-    # the identity witness (which must land FIRST: it is the F-B1 closure and has to exist
-    # even if the boot later wedges). Exactly once per segment, and the payload IS
-    # `to_event_payload(resolve_config(config))` — a hand-assembled copy would be a second
-    # authority for the run's resolved posture. Producer-manifest row: `resolved_config`.
-    emit_via(run_safety.sink, resolve_config(config).to_event_payload())
-
-    # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
-    # or eval state may make actor sync conditional (pinned by
-    # tests/train/test_actor_sync_isolation.py). The actor's weights come from the
-    # learner on a cadence and NEVER from a gate decision.
-    actor_sync = ActorSync(
-        target=pool,
-        state_dict_fn=trainer.inference_state_dict,
-        step_fn=lambda: int(trainer.step),
-        cadence_steps=_resolve_actor_sync_cadence_steps(config),
-        sink=run_safety.sink,
-        run_id=run_id,
-    )
-
-    # M-4: the StepCoordinatorConfig instance is built FIRST — DrainCaps is LIFTED from
-    # its own 4 fields, never a second, independently-hardcoded set of literals. The two
-    # used to duplicate config.py's own defaults (900.0/3.0/14400.0/14400.0) by
-    # coincidence; a future default change there would have silently diverged the two
-    # (R1: duplicated default authority).
-    # WPAX S-4 + Phase D + WPMINT Phase K-A/K-B: `stop_step` (train.max_train_steps),
-    # `draw_rate_abort` (train.draw_rate_abort), `drain_caps` (monitor.drain) and `knobs`
-    # (the 19 `train.*` step-coordinator keys) are the facts the CONFIG authors, and they are
-    # PASSED IN through their own resolvers rather than replaced afterwards — a
-    # `dataclass_replace` over a defaulted object requires a complete object first, i.e. a
-    # literal, and a literal that is always overwritten is still a second default authority
-    # (R1). With `knobs` there are no unauthored knobs left: `_step_coordinator_config` holds
-    # zero literals and R78's card is closed.
-    step_coordinator_cfg = _step_coordinator_config(
-        stop_step=resolve_max_train_steps(config.train),
-        draw_rate_abort=resolve_draw_rate_abort(config.train),
-        drain_caps=resolve_drain_caps(config.monitor),
-        knobs=resolve_coordinator_knobs(config.train),
-    )
-
-    resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
-    eval_pipeline = None
-    if config.eval_enabled:
-        eval_pipeline = build_eval_pipeline(
-            eval_cfg=config.eval,
-            coordinator_cfg_caps=DrainCaps(
-                final_eval_drain_timeout_sec=step_coordinator_cfg.final_eval_drain_timeout_sec,
-                eval_final_drain_safety_factor=step_coordinator_cfg.eval_final_drain_safety_factor,
-                eval_final_drain_hard_cap_sec=step_coordinator_cfg.eval_final_drain_hard_cap_sec,
-                terminal_eval_hard_cap_sec=step_coordinator_cfg.terminal_eval_hard_cap_sec,
-            ),
-            encoding=config.identity.encoding,
-            run_id=run_id, spool_dir=log_dir / "eval_spool",
-            ladder_state_path=log_dir / "eval_ladder_state.json",
-            promotion=DeployTagHooks(
-                anchor_state=resolved_anchor,
-                best_model_path=checkpoint_dir / "best_model.pt", run_id=run_id,
-                encoding=config.identity.encoding,
-                save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
-            ),
-            sink=run_safety.sink, heartbeat=run_safety.heartbeat,
-        )
-
-    pool_started = False
+    pool_start_attempted = False
     coordinator = None
     disk_guard = None
+    eval_pipeline = None
+    resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
     # TEARDOWN LADDER (§8, the pre-registered RED-TEAM lens: builder N succeeds, builder N+1
     # raises). By the time `StepCoordinator` is constructed the pool is started, the watchdog
     # thread is polling and the disk-guard thread is running; if a raise merely propagated,
@@ -546,16 +511,111 @@ def compose_run(
     # (nothing here catches anything — the `finally` runs and the exception continues; a
     # teardown failure would chain as its `__context__`).
     #
+    # THE LADDER OPENS AT THE SINK, not at `pool.start()` (RED-TEAM RT-4). `build_run_safety`
+    # OPENS the run's JSONL segment file; the five construction steps that used to sit
+    # between that call and the old `try:` — the two boot emits, `ActorSync`,
+    # `_step_coordinator_config` and `build_eval_pipeline` — were outside BOTH the ladder and
+    # (bar the first two) any seam, so an eval-pipeline wall on an `eval_enabled: true`
+    # config reached the process boundary with the segment file still open and with no seam
+    # name for the preflight's rc-32/33 classifier to read. Driven and measured by RED-TEAM
+    # probe B2. Everything after the sink exists is now inside the ladder, and the
+    # `coordinator is None` arm — which already closes the sink — is what makes that true.
+    #
     # `coordinator is None` is the discriminator, not a second flag: once the coordinator
     # exists, `close_out` is the epilogue that owns the drain, the buffer save and the
     # guarded pool stop, and re-stopping the pool after it would be a second authority for
     # the same teardown. Before it exists, nothing else will ever stop what this root
     # started, so this ladder does.
     try:
+        with _seam("run_boot_identity emit"):
+            # F-B1 closure (WPCLEAN Phase RES): the booted process publishes ITS OWN
+            # post-revalidation config identity into the run's event stream, first thing
+            # after the sink exists — before anything can wedge. One authority
+            # (`config_identity_sha256`) on both sides: the mint preflight's parent hashes
+            # the config IT loaded with the same function and compares, so a child that read
+            # a different file is a NAMED preflight failure instead of invisible.
+            emit_via(run_safety.sink, {
+                "event": "run_boot_identity",
+                "run_id": run_id,
+                "config_sha256": config_identity_sha256(config),
+            })
+        with _seam("resolved_config emit"):
+            # §5.4 (LAW-08): `resolve_config` / `to_event_payload` had ZERO production call
+            # sites — a resolved-config surface with no emitter, i.e. a payload nobody had
+            # ever published. The run now publishes its own resolved posture into its own
+            # stream, immediately after the identity witness (which must land FIRST: it is
+            # the F-B1 closure and has to exist even if the boot later wedges). Exactly once
+            # per segment, and the payload IS `to_event_payload(resolve_config(config))` — a
+            # hand-assembled copy would be a second authority for the run's resolved
+            # posture. Producer-manifest row: `resolved_config`.
+            emit_via(run_safety.sink, resolve_config(config).to_event_payload())
+
+        # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
+        # or eval state may make actor sync conditional (pinned by
+        # tests/train/test_actor_sync_isolation.py). The actor's weights come from the
+        # learner on a cadence and NEVER from a gate decision.
+        with _seam("ActorSync"):
+            actor_sync = ActorSync(
+                target=pool,
+                state_dict_fn=trainer.inference_state_dict,
+                step_fn=lambda: int(trainer.step),
+                cadence_steps=_resolve_actor_sync_cadence_steps(config),
+                sink=run_safety.sink,
+                run_id=run_id,
+            )
+
+        # M-4: the StepCoordinatorConfig instance is built FIRST — DrainCaps is LIFTED from
+        # its own 4 fields, never a second, independently-hardcoded set of literals. The two
+        # used to duplicate config.py's own defaults (900.0/3.0/14400.0/14400.0) by
+        # coincidence; a future default change there would have silently diverged the two
+        # (R1: duplicated default authority).
+        # WPAX S-4 + Phase D + WPMINT Phase K-A/K-B: `stop_step` (train.max_train_steps),
+        # `draw_rate_abort` (train.draw_rate_abort), `drain_caps` (monitor.drain) and `knobs`
+        # (the 19 `train.*` step-coordinator keys) are the facts the CONFIG authors, and they
+        # are PASSED IN through their own resolvers rather than replaced afterwards — a
+        # `dataclass_replace` over a defaulted object requires a complete object first, i.e. a
+        # literal, and a literal that is always overwritten is still a second default
+        # authority (R1). With `knobs` there are no unauthored knobs left:
+        # `_step_coordinator_config` holds zero literals and R78's card is closed.
+        with _seam("_step_coordinator_config"):
+            step_coordinator_cfg = _step_coordinator_config(
+                stop_step=resolve_max_train_steps(config.train),
+                draw_rate_abort=resolve_draw_rate_abort(config.train),
+                drain_caps=resolve_drain_caps(config.monitor),
+                knobs=resolve_coordinator_knobs(config.train),
+            )
+
+        if config.eval_enabled:
+            with _seam("build_eval_pipeline"):
+                eval_pipeline = build_eval_pipeline(
+                    eval_cfg=config.eval,
+                    coordinator_cfg_caps=DrainCaps(
+                        final_eval_drain_timeout_sec=step_coordinator_cfg.final_eval_drain_timeout_sec,
+                        eval_final_drain_safety_factor=step_coordinator_cfg.eval_final_drain_safety_factor,
+                        eval_final_drain_hard_cap_sec=step_coordinator_cfg.eval_final_drain_hard_cap_sec,
+                        terminal_eval_hard_cap_sec=step_coordinator_cfg.terminal_eval_hard_cap_sec,
+                    ),
+                    encoding=config.identity.encoding,
+                    run_id=run_id, spool_dir=log_dir / "eval_spool",
+                    ladder_state_path=log_dir / "eval_ladder_state.json",
+                    promotion=DeployTagHooks(
+                        anchor_state=resolved_anchor,
+                        best_model_path=checkpoint_dir / "best_model.pt", run_id=run_id,
+                        encoding=config.identity.encoding,
+                        save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
+                    ),
+                    sink=run_safety.sink, heartbeat=run_safety.heartbeat,
+                )
+
         # ORDER PINNED (subsystems.py:213-215 contract): pool starts, THEN the watchdog.
-        pool.start()
-        pool_started = True
-        run_safety.watchdog.start()
+        # The flag is set BEFORE the call and not after (RED-TEAM RT-3): `WorkerPool.start()`
+        # is three sub-starts, so a raise inside it leaves a HALF-started pool that a
+        # set-after flag reports as never started — see `_stop_pool_if_start_attempted`.
+        with _seam("pool.start"):
+            pool_start_attempted = True
+            pool.start()
+        with _seam("watchdog.start"):
+            run_safety.watchdog.start()
 
         # LAW-16 leg 3 (F-2-DISKGUARD). At HEAD the guard was constructed at exactly one
         # site — `build_subsystems`, which had ZERO callers — from `dict.get` defaults over
@@ -564,13 +624,14 @@ def compose_run(
         # root reads no `config.monitor.disk_guard` attribute of its own. Its critical arm
         # SIGTERMs the process, which now lands on the handlers installed above — F-1 and
         # F-2 were coupled defects and they close together.
-        guard_spec = resolve_disk_guard(config.monitor)
-        disk_guard = DiskGuard(
-            watch_path=checkpoint_dir, interval_sec=guard_spec.interval_sec,
-            warn_gb=guard_spec.warn_gb, fail_gb=guard_spec.fail_gb,
-            keep_all=_DISK_GUARD_KEEP_ALL, sink=run_safety.sink,
-        )
-        disk_guard.start()
+        with _seam("DiskGuard"):
+            guard_spec = resolve_disk_guard(config.monitor)
+            disk_guard = DiskGuard(
+                watch_path=checkpoint_dir, interval_sec=guard_spec.interval_sec,
+                warn_gb=guard_spec.warn_gb, fail_gb=guard_spec.fail_gb,
+                keep_all=_DISK_GUARD_KEEP_ALL, sink=run_safety.sink,
+            )
+            disk_guard.start()
 
         with _seam("StepCoordinator"):
             coordinator = StepCoordinator(
@@ -599,7 +660,8 @@ def compose_run(
                               anchor_state=resolved_anchor, sink=run_safety.sink)
         finally:
             coordinator.close_out(
-                on_drained=_stop_pool_if_started(pool, pool_started=pool_started))
+                on_drained=_stop_pool_if_start_attempted(
+                    pool, start_attempted=pool_start_attempted))
     finally:
         if coordinator is None:
             # PARTIAL COMPOSITION. `close_out` — the epilogue that owns the drain, the
@@ -631,7 +693,7 @@ def compose_run(
             # (`monitor/sink.py:120`), the watchdog thread is a daemon
             # (`train/lifecycle/heartbeat_watchdog.py:234-239`), and both production callers
             # exit the process immediately after this returns.
-            _stop_pool_if_started(pool, pool_started=pool_started)()
+            _stop_pool_if_start_attempted(pool, start_attempted=pool_start_attempted)()
             run_safety.watchdog.stop()
             run_safety.sink.close()
         # The disk guard is this root's on BOTH paths — `close_out` has never heard of it
@@ -693,6 +755,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     rc policy, through THE resolver (D-6 — the `repo_design.md` OWED paragraph, discharged):
     the launcher reads the SAME `exit_code_for_abort` the preflight child's `_abort_rc`
     reads, so the abort-to-rc mapping has one authority and is never re-derived.
+
+    WHAT rc 1 MEANS HERE, disclosed rather than implied (RED-TEAM RT-8, SF-7). rc 1 is not an
+    AUTHORED code: it is CPython's rc for any exception that leaves `main`, so at least two
+    distinct outcomes share it — `UnregisteredAbortExitError` (a rule fired, the manifest
+    authors no code) and any composition wall (a collaborator raised; the seam name is in the
+    stderr tail, not in the rc). A supervisor reads the rc, so those two are indistinguishable
+    to it. No code is invented for either here: R84 declined to author one for a rule nobody
+    pre-registered, and minting an "aborted, no code" number at the launcher would be that
+    same class one layer up — so this paragraph is the disclosure, and the decision is queued
+    (`Q-RT-RC1-COLLISION`), not taken.
     """
     parser = argparse.ArgumentParser(
         prog="python -m mantis.run",

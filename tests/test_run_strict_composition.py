@@ -70,6 +70,7 @@ from mantis.config.resolve.composition import (  # RED-at-import anchor: module 
     UnvalidatedConfigError,
     require_run_config,
 )
+from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.run_length import (  # RED-at-import anchor: module absent at HEAD
     resolve_max_train_steps,
 )
@@ -646,11 +647,17 @@ def test_the_axis_is_the_whole_minted_set_and_is_not_empty():
 
 @pytest.mark.parametrize("name", _MINTED)
 def test_every_minted_config_resolves_through_every_composition_seam(name: str):
-    """Point 1 — the five-way resolver census. This is the cheap way to put five REAL
-    production values on the axis that carried one test-only value (`SimpleNamespace()`) for
-    the whole of this lineage. Two templates, two representations, five run_ids, every
-    composition seam, through the ONE loader. NO drive, so run5's real 1 000 000-step run
-    length is never executed."""
+    """Point 1 — the resolver census. This is the cheap way to put five REAL production
+    values on the axis that carried one test-only value (`SimpleNamespace()`) for the whole
+    of this lineage. Two templates, two representations, five run_ids, every composition
+    seam, through the ONE loader. NO drive, so run5's real 1 000 000-step run length is never
+    executed.
+
+    NAME-TRUTH MAINTENANCE (RED-TEAM RT-10, SF-7 — the class C-4's eight header corrections
+    belong to). The name says EVERY composition seam. It covered four while WPMAIN added two
+    more — `resolve_disk_guard` (R122's family) and `train.device` (R126) — so the name was
+    getting more false with every seam the WP landed. Both are on the axis now. A seam added
+    without a line here makes the name false again, and the fix is one line, not a rename."""
     cfg = load_config(_CONFIGS_DIR / name)
 
     assert mantis.run._resolve_actor_sync_cadence_steps(cfg) == cfg.train.actor_sync_cadence_steps
@@ -658,6 +665,15 @@ def test_every_minted_config_resolves_through_every_composition_seam(name: str):
     assert resolved.actor_lag_threshold_steps == cfg.monitor.actor_lag_threshold_steps
     assert resolved.actor_lag_abort_enabled is cfg.monitor.actor_lag_abort_enabled
     assert resolve_max_train_steps(cfg.train) == cfg.train.max_train_steps
+    guard = resolve_disk_guard(cfg.monitor)
+    assert (guard.interval_sec, guard.warn_gb, guard.fail_gb) == (
+        cfg.monitor.disk_guard.interval_sec, cfg.monitor.disk_guard.warn_gb,
+        cfg.monitor.disk_guard.fail_gb,
+    ), f"configs/{name} does not resolve through the disk-guard seam (LAW-16 leg 3, R122)"
+    assert cfg.train.device in ("cpu", "cuda"), (
+        f"configs/{name} declares train.device {cfg.train.device!r}: the device is a CONFIG "
+        "FACT read by the composition root (R126), and every minted config must author it"
+    )
     assert lookup(cfg.identity.encoding) is not None, (
         f"configs/{name} declares encoding {cfg.identity.encoding!r}, which is not registered"
     )

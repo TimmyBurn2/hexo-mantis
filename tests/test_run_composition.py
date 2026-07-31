@@ -11,7 +11,7 @@ Sits at the tests/ TOP LEVEL (mirrors `src/mantis/run.py`, which is deliberately
 `mantis.train` and `mantis.eval` — DESIGN §a.4/§c.6, MUST-FIX 4). Covers: the pool-then-
 watchdog start order (subsystems.py contract), the `wired_sources` declaration, the item-11
 `on_drained` never-started-pool closure (WP-SP DISPATCH_LOG.md:65-66 — open-by-vacancy at
-HEAD, closed here by `_stop_pool_if_started`), the train->eval lazy-import ban (repo_design
+HEAD, closed here by `_stop_pool_if_start_attempted`), the train->eval lazy-import ban (repo_design
 §2, un-weakened by the new `run` node). The old actor-lag ABSENCE census (E10) is
 discharged by WP-UNFREEZE: the run.py half is deleted (the mechanism lawfully lives
 there now) and the eval half survives as the frozen S5 census in
@@ -174,7 +174,7 @@ class FakePoolNeverStarted:
     raises RuntimeError when the underlying thread was never started (pool.py:335;
     `threading.Thread.join` on a never-started thread raises `RuntimeError: cannot join
     thread before it is started`). Only a caller that GUARDS on "was start() ever called"
-    (compose_run's `_stop_pool_if_started`) may call `.stop()` safely.
+    (compose_run's `_stop_pool_if_start_attempted`) may call `.stop()` safely.
 
     WPAX Phase S: also DRIVABLE. `stop_step` is config-authored now, so every compose_run
     call in this file runs a real burst and the pool must carry the coordinator's read
@@ -394,16 +394,24 @@ def test_close_out_with_never_started_pool_does_not_raise() -> None:
     """The item-11 closure test. Verdict at HEAD (verified against drain.py, already shipped):
     the risk is OPEN-BY-VACANCY — no in-repo caller passes `on_drained=pool.stop` today, so
     nothing ever hits the real hazard (`InferenceServer.join(timeout=5.0)` raising on a
-    never-started thread, pool.py:335). `mantis.run`'s `_stop_pool_if_started` must be the
-    first real caller AND ship the guard: it calls `pool.stop()` only if `compose_run`'s own
-    `pool_started` flag was set. Never-started here + the guard => no raise.
+    never-started thread, pool.py:335). `mantis.run`'s `_stop_pool_if_start_attempted` must be
+    the first real caller AND ship the guard: it calls `pool.stop()` only if `compose_run`
+    actually reached the start. Never-started here + the guard => no raise.
+
+    RE-POINTED at the RED-TEAM close (RT-3), not weakened: the closure's predicate widened
+    from "start RETURNED" to "start was CALLED", because a `WorkerPool.start()` that raises in
+    sub-start #2 or #3 leaves #1 alive and a set-after flag reported it as never started (a
+    silent worker leak, driven). THIS row's subject is the OTHER boundary — a pool the run
+    never touched at all — and it is unchanged: `start_attempted=False` is exactly the state
+    every wall ABOVE `pool.start()` leaves behind, so the hazard below is still guarded.
+    `tests/test_run_partial_composition.py` is the twin that pins the widened half.
 
     Mutation arm: an UNGUARDED closure (calls `pool.stop()` unconditionally on a never-started
     pool) DOES raise — proving the fake pool models the real hazard, not a tautology."""
     mantis_run = mantis.run
     pool = FakePoolNeverStarted()  # never call .start()
 
-    guarded = mantis_run._stop_pool_if_started(pool, pool_started=False)
+    guarded = mantis_run._stop_pool_if_start_attempted(pool, start_attempted=False)
     guarded()  # must NOT raise
 
     with pytest.raises(RuntimeError):

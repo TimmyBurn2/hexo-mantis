@@ -1,3 +1,12 @@
+# >300 justify (R8), stated at this file's MEASURED size of 327 lines (239 at `aa8e7b2`; the
+# RED-TEAM RT-5 row and its two helpers are the delta). The four rows are ONE census family
+# making ONE claim — that `main` loads what the operator typed and launches it unchanged —
+# over ONE parse of `src/mantis/run.py`, sharing the AST instrument that makes the claim
+# checkable (`_binding_targets` / `_config_binding` / `_launch_call` / `_parsed_args_name`,
+# ~70 lines). R5 bars cross-test imports, so a split forks that instrument into two copies,
+# and the helpers ARE the instrument: two copies is two instruments that drift apart while
+# both stay green. Executable content is a minority of the file; the rest is the mutation
+# each row reds against, which is what makes a census auditable at all.
 """⊕ WPMAIN — `main()`'s body census: the O-A2 twin the ORACLE-WRITE set left open.
 
 REVIEW-impl condition C-5 / finding F-5. `tests/test_run_one_authority.py` applies its
@@ -31,6 +40,13 @@ instrument re-derived below (R5 bars cross-test imports); it is disclosed here r
 hidden, and the duplication is self-checking in the one way that matters — both copies parse
 the SAME `src/mantis/run.py`, so a divergence between them shows up as one file red and the
 other green on the same tree.
+
+RED-TEAM RT-5 extended this file by one row rather than opening a new one — it is THIS run's
+own working oracle, not a `7c28536` frozen surface, so R43 does not bite. The finding: the
+three rows below close the config OBJECT and every write to `args`, and leave the loader's own
+ARGUMENT and `out_dir=` unread, so an env-driven config PATH is a boot nobody typed that
+passes 35/35 across this file and its three siblings. See
+`test_main_reads_both_run_inputs_off_the_arguments_it_parsed`.
 
 Fakes: NONE. Every assertion is a static census over the shipped `src/mantis/run.py`.
 """
@@ -211,6 +227,85 @@ def test_nothing_in_main_assigns_onto_the_config_it_launches_with() -> None:
 
 
 # ══ …nor re-points the parsed CLI inputs ══════════════════════════════════════════════
+def _parsed_args_name(fn: ast.FunctionDef) -> tuple[str, ast.stmt]:
+    """The local `main` binds `parse_args(...)` to, and the statement that binds it."""
+    parsed = [(target, stmt) for target, stmt in _binding_targets(fn)
+              if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call)
+              and _called_name(stmt.value) == "parse_args"]
+    assert len(parsed) == 1 and isinstance(parsed[0][0], ast.Name), (
+        "`main` must bind `parse_args(...)` exactly once, to a plain name; found "
+        f"{len(parsed)} bindings"
+    )
+    return parsed[0][0].id, parsed[0][1]
+
+
+def _sole_argument(call: ast.Call, *, label: str) -> ast.expr:
+    """The ONE value a single-input call was handed, positional or keyword."""
+    values = [*call.args, *[kw.value for kw in call.keywords]]
+    assert len(values) == 1, (
+        f"{label} must be called with exactly one argument at the seam this census reads; "
+        f"got {len(values)}"
+    )
+    return values[0]
+
+
+# ══ …and both run inputs come off the parsed CLI, not from anywhere else ══════════════
+def test_main_reads_both_run_inputs_off_the_arguments_it_parsed() -> None:
+    """The C-5 census one ARGUMENT deeper (RED-TEAM RT-5, driven mutation M9).
+
+    The three rows above close the config OBJECT (what reaches `config=` must be the loader's
+    own direct result) and every WRITE to `args`. They leave the loader's own ARGUMENT
+    unconstrained and never read `out_dir=` at all, so this was **35/35 green** across
+    `test_run_main_authority.py`, `test_run_one_authority.py`, `test_run_launcher.py` and
+    `test_train_device_authority.py`:
+
+        handles = launch_run(
+            config=load_config(os.environ.get("MANTIS_CONFIG", args.config)),
+            out_dir=os.environ.get("MANTIS_OUT_DIR", args.out_dir),
+        )
+
+    `MANTIS_CONFIG=/tmp/other.yaml python -m mantis.run --config configs/run5.yaml …` then
+    boots a config nobody typed — and `run.py`'s own claim that "no invocation can point
+    either caller somewhere else" is false one layer below the layer C-5 just closed. The
+    preflight CHILD is defended against exactly this (`PreflightConfigIdentityError`, the F-B1
+    handshake); `main` publishes the same `run_boot_identity` and nothing compares it.
+
+    MUTATION THAT REDS IT: either half of M9 — an `os.environ.get(..., args.config)` inside
+    `load_config(...)`, or an env-defaulted `out_dir=`. The instrument is SHAPE, not spelling:
+    the argument must be an attribute read rooted at the `parse_args` binding, so any wrapper
+    — `os.environ.get`, `pathlib.Path`, a `_resolve()` helper, a conditional expression —
+    fails it whatever it is named."""
+    fn = _func(_tree(), "main")
+    args_name, _ = _parsed_args_name(fn)
+
+    loads = [node for node in ast.walk(fn)
+             if isinstance(node, ast.Call) and _called_name(node) == _LOADER]
+    assert len(loads) == 1, (
+        f"`main` must call {_LOADER}() exactly once; found {len(loads)} — two loads is two "
+        "configs and the launcher only ever sees one of them"
+    )
+    loaded_path = _sole_argument(loads[0], label=f"{_LOADER}()")
+    assert (isinstance(loaded_path, ast.Attribute)
+            and isinstance(loaded_path.value, ast.Name)
+            and loaded_path.value.id == args_name), (
+        f"the path handed to {_LOADER}() must be `{args_name}.<flag>` — the value argparse "
+        "produced, read directly. Anything wrapped around it is a route to a file the "
+        f"operator did not type; got {ast.dump(loaded_path)[:160]}"
+    )
+
+    out_dir = {kw.arg: kw.value for kw in _launch_call(fn).keywords}.get("out_dir")
+    assert out_dir is not None, (
+        "`launch_run(out_dir=...)` must be passed by KEYWORD at the seam this census reads"
+    )
+    assert (isinstance(out_dir, ast.Attribute)
+            and isinstance(out_dir.value, ast.Name)
+            and out_dir.value.id == args_name), (
+        f"`out_dir=` must be `{args_name}.<flag>` too — a run that writes its logs and "
+        "checkpoints somewhere other than the directory named on the command line is the "
+        f"same false-clear class as loading a different config; got {ast.dump(out_dir)[:160]}"
+    )
+
+
 def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
     """The same class one step earlier: mutating `args.config` chooses a DIFFERENT config file
     rather than adjusting the loaded one, and `run.py:641-644` claims neither is possible ("no
@@ -220,19 +315,12 @@ def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
     `parse_args`. argparse's own required-flag census (`test_run_launcher.py:100-133`) reads
     the PARSER, so it sees nothing at all."""
     fn = _func(_tree(), "main")
-    parsed = [(target, stmt) for target, stmt in _binding_targets(fn)
-              if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call)
-              and _called_name(stmt.value) == "parse_args"]
-    assert len(parsed) == 1 and isinstance(parsed[0][0], ast.Name), (
-        "`main` must bind `parse_args(...)` exactly once, to a plain name; found "
-        f"{len(parsed)} bindings"
-    )
-    args_name = parsed[0][0].id
+    args_name, parse_stmt = _parsed_args_name(fn)
 
     for target, stmt in _binding_targets(fn):
         if _root_name(target) != args_name:
             continue
-        assert stmt is parsed[0][1], (
+        assert stmt is parse_stmt, (
             f"nothing may write to `{args_name}` after argparse produced it: re-pointing "
             "`--config` or `--out-dir` inside the launcher is the same false-clear class as "
             "adjusting the loaded config, one step earlier in the same function"

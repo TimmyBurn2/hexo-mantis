@@ -94,9 +94,9 @@ def build_resume_config_overrides(
 def init_trainer(
     *,
     config: Mapping[str, Any],
+    device: Any,
     checkpoint_path: str | None = None,
     checkpoint_dir: Any = None,
-    device: Any = None,
     override_scheduler_horizon: bool = False,
     allow_fresh_scheduler: bool = False,
     declared_keys: frozenset | set | None = None,
@@ -107,6 +107,18 @@ def init_trainer(
     Lazily imports `Trainer` (Slice 2) inside the body so there is no top-level
     `orchestrator → trainer` import edge (the module imports clean at Slice 1; this function
     is exercised only at Slice 2 / O-SMOKE).
+
+    `device` is REQUIRED and keyword-only, with NO default (RED-TEAM RT-7b, MF-2 Attack B).
+    It carried `= None` until then, and `Trainer.__init__` turns a `None` into
+    `torch.device("cpu")` — so a caller that simply omitted the argument trained on CPU
+    silently, with no exception and no event. R126 made the device a CONFIG FACT
+    (`train.device`, closed Literal, no schema default) precisely because a cpu/cuda
+    posture divergence false-clears the GPU-memory wall that killed the WPBOX burst
+    (CARD-RUN5-GPU-OOM); a parameter default here is that authority MIGRATED, not absent —
+    the identical edit this WP already made to `DiskGuard.__init__`'s five defaults.
+    Removing it is behaviour-preserving on the one production caller
+    (`mantis.run.build_run_collaborators`, which passes `torch.device(config.train.device)`)
+    and makes the omission a `TypeError` at the call, not a wrong device at step 1.
     """
     from mantis.train.trainer.core import Trainer  # lazy (Slice 2) — no top-level edge.
 
