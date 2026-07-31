@@ -1,21 +1,23 @@
 """Local inference engine — the synchronous face over the batched seam.
 
->300 justify: one class, three decode contracts that must be read together — the dense
+>300 justify: one class, FOUR decode contracts that must be read together — the dense
 `infer_batch` scatter-max/min-pool decode, the graph leg riding the ONE `InferenceServer`,
-and the RAW per-cluster decode (`infer_batch_per_cluster`) — splitting them would separate
-each decode from the docstring stating what it drops. WPSC Phase 2 SC-A2's explicit
-8-field `InferenceHParams`-default dict literal (replacing the old `{"selfplay": {}}`
-fallback) is what pushed this file from 292 to 303 lines; WPCLEAN Phase LT's
-type-visibility guards (batcher None-guard, canonical autocast import) took it to 323.
-MEASURED size now 330 lines (`wc -l`): WP12-R Phase C deleted the `lookup("v6")` ternary
-(gate 11's arm 8) and re-pointed the class docstring, which had asserted a dense default
-that no longer exists.
+the RAW per-cluster grid decode (`infer_batch_per_cluster`), and the no-drop GRAPH decode
+(`infer_batch_ls`) — splitting them would separate each decode from the docstring stating
+what it drops, and the only way to read "which decode drops what" is to read them side by
+side. WPSC Phase 2 SC-A2's explicit 8-field `InferenceHParams`-default dict literal
+(replacing the old `{"selfplay": {}}` fallback) is what pushed this file from 292 to 303
+lines; WPCLEAN Phase LT's type-visibility guards (batcher None-guard, canonical autocast
+import) took it to 323; WP12-R Phase C's deletion of the `lookup("v6")` ternary (gate 11's
+arm 8) took it to 330. MEASURED size now 412 lines (`wc -l`): WP12-R Phase EVALDECODE
+(operator ruling R138) added the fourth decode, `infer_batch_ls`/`infer_ls`, which keeps
+BOTH halves of the shared producer's legal-set policy plus the builder's window centre.
 
-One class, three decode contracts that must be read together: the dense `infer_batch`
-scatter-max/min-pool decode, the graph leg that rides the ONE server, and the RAW
+One class, four decode contracts that must be read together: the dense `infer_batch`
+scatter-max/min-pool decode, the graph leg that rides the ONE server, the RAW
 per-cluster decode (`infer_batch_per_cluster` — deliberately NO scatter-max, NO
-off-window drop, NO min-pool). Each decode lives next to the docstring stating what it
-drops.
+off-window drop, NO min-pool), and `infer_batch_ls` (the graph no-drop decode). Each
+decode lives next to the docstring stating what it drops.
 
 `LocalInferenceEngine` batches boards through the network and returns global policy
 vectors + min-pooled scalar values. It is the Python-side path used by bot/eval callers
@@ -262,6 +264,85 @@ class LocalInferenceEngine:
         return policies, values
 
     @torch.inference_mode()
+    def infer_ls(self, board: Board) -> tuple[
+        list[float], list[tuple[tuple[int, int], float]], float, tuple[int, int]
+    ]:
+        """Single-board door onto `infer_batch_ls` — a ONE-LINE DELEGATION.
+
+        Deliberately not a second guarded entry point: one refusal predicate with two
+        doors cannot drift, whereas a duplicated guard can (and the duplicate is what
+        goes stale). Test-pinned as a delegation, not as a repeated message.
+        """
+        dense, overflow, values, centers = self.infer_batch_ls([board])
+        return dense[0], overflow[0], values[0], centers[0]
+
+    @torch.inference_mode()
+    def infer_batch_ls(self, boards: list[Board]) -> tuple[
+        list[list[float]],
+        list[list[tuple[tuple[int, int], float]]],
+        list[float],
+        list[tuple[int, int]],
+    ]:
+        """The NO-DROP graph decode: BOTH halves of what the shared producer returns.
+
+        `infer_batch`'s graph leg (`_infer_batch_graph`) keeps the dense half of the
+        producer's `LegalSetPolicy` and throws the coord-keyed `overflow` away, which is
+        the DENSE drop contract applied to a whole-board graph — measured at 53.2% of
+        legal moves at run5's geometry. This method keeps both halves and additionally
+        returns the BUILDER's window centre, because the consumer
+        (`MCTSTree.expand_and_backup_ls_graph` -> `expand_and_backup_ls_at`) must read
+        the priors in the frame their slots were baked in, and `Board` does not expose
+        that centre to Python (WP12-R DESIGN §c.2).
+
+        Carrying the overflow is only half a fix and, alone, no fix at all: the dense
+        expand ignores it. Both halves land together — the ls expand is what consumes
+        it (DESIGN §0.3).
+
+        Returns:
+            dense:    the in-window half per board (length `spec.policy_logit_count`).
+            overflow: the off-window half per board, `((q, r), prob)` entries. The wire
+                      ORDER is an artifact of map iteration and carries no meaning; the
+                      Rust consumer rebuilds a map.
+            values:   scalar value per board.
+            centers:  the builder's `(cq, cr)` window centre per board.
+
+        Raises:
+            NotImplementedError: the bound spec is grid-representation. There is no grid
+                analogue of this decode — the grid no-drop decode is
+                `infer_batch_per_cluster`, whose per-cluster overflow the Rust
+                `expand_and_backup_ls` aggregates instead. Die loud here rather than an
+                `AttributeError` two lines down.
+        """
+        if not self._is_graph:
+            raise NotImplementedError(
+                "infer_batch_ls: the graph legal-set/no-drop decode has no grid analogue "
+                f"— encoding {self.encoding_spec.name!r} declares "
+                f"representation={self.encoding_spec.representation!r}. The grid no-drop "
+                "decode is infer_batch_per_cluster (aggregated by the Rust "
+                "expand_and_backup_ls); the dropping grid decode is infer_batch."
+            )
+        if not boards:
+            return [], [], [], []
+
+        positions = [
+            (list(board.get_stones()), int(board.current_player), int(board.moves_remaining))
+            for board in boards
+        ]
+        batcher = self._graph_batcher
+        if batcher is None:
+            # Set on every graph __init__; None only after close().
+            raise RuntimeError(
+                "LocalInferenceEngine.infer_batch_ls: graph batcher is gone — the engine "
+                "was closed before this inference call."
+            )
+        results = batcher.submit_graphs_and_wait_ls(positions)
+        dense = [d for d, _overflow, _value, _center in results]
+        overflow = [list(o) for _dense, o, _value, _center in results]
+        values = [float(v) for _dense, _overflow, v, _center in results]
+        centers = [(int(c[0]), int(c[1])) for _dense, _overflow, _value, c in results]
+        return dense, overflow, values, centers
+
+    @torch.inference_mode()
     def infer_batch_per_cluster(
         self, boards: list[Board]
     ) -> tuple[list[list[float]], list[float], list[int]]:
@@ -285,17 +366,18 @@ class LocalInferenceEngine:
             leaf_k:   K (cluster count) per board, aligned with `boards`.
 
         Raises:
-            NotImplementedError: the model is graph-representation. The no-drop legal-set
-                decode has no graph analogue (the graph net is whole-board, no K-cluster);
-                die loud here instead of an `AttributeError` two lines down.
+            NotImplementedError: the model is graph-representation. THIS per-cluster decode
+                has no graph analogue (the graph net is whole-board, no K-cluster); the
+                graph no-drop decode is `infer_batch_ls`. Die loud here instead of an
+                `AttributeError` two lines down.
         """
         if not boards:
             return [], [], []
         if self._is_graph:
             raise NotImplementedError(
-                "infer_batch_per_cluster: no legal-set/no-drop decode exists for a graph "
-                "model — the graph net is whole-board (no K-cluster). Use infer_batch "
-                "instead."
+                "infer_batch_per_cluster: this RAW per-cluster decode has no graph "
+                "analogue — the graph net is whole-board (no K-cluster). The graph "
+                "legal-set/no-drop decode is infer_batch_ls."
             )
 
         spec = self.encoding_spec

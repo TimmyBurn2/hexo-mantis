@@ -8,14 +8,17 @@ the random floor. Writes the sidecar result JSON ATOMICALLY (tmp + os.replace). 
 `mantis.selfplay.inference_local` for leaf inference — the ONE parent-side-excepted
 inference surface (isolation law 1: this module is the out-of-process leg).
 
->300 justify, stated at this file's MEASURED size of 328 lines (`wc -l`, re-measured after
-WP12-R Phase B and its RED-TEAM close; 284 before it): one child-process entry point owning
-the gate block, ladder-rung blocks, and the random floor — each phase shares the candidate
-DeployHeadPlayer/inference engine/book-loading machinery; splitting them would duplicate
-that setup three times and let the phases drift out of the SAME-process-covers-the-round
-contract this module exists to keep (isolation law: exactly one worker process per round).
-WP12-R added the ONE encoding resolution and the decode-capability guard that the same
-one-process contract requires be made once, here, for every block below.
+>300 justify, stated at this file's MEASURED size of 385 lines (`wc -l`, re-measured after
+WP12-R Phase EVALDECODE; 284 before Phase B, 328 after it): one child-process entry point
+owning the gate block, ladder-rung blocks, and the random floor — each phase shares the
+candidate DeployHeadPlayer/inference engine/book-loading machinery; splitting them would
+duplicate that setup three times and let the phases drift out of the
+SAME-process-covers-the-round contract this module exists to keep (isolation law: exactly
+one worker process per round). WP12-R added the ONE encoding resolution and the
+decode-capability guard that the same one-process contract requires be made once, here,
+for every block below; Phase EVALDECODE (R138) added the CLOSED representation match and
+the graph decode+expand collaborator, which all four blocks must reach through the same
+single resolution — that is precisely why they cannot be split apart.
 """
 from __future__ import annotations
 
@@ -42,13 +45,17 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 #: block draws a DIFFERENT slice of the book than the screen block.
 _CONFIRM_SEED_OFFSET = 7919
 
-#: Policy-pool values the eval decode ENTRANCE actually implements. Every block routes
-#: through `_build_candidate_player` -> `DeployHeadPlayer(infer_fn=engine.infer)` ->
-#: `LocalInferenceEngine.infer_batch`, whose dense arm scatter-MAXes over cluster windows
-#: and DROPS off-window cells (`if mcts_idx >= n_actions - 1: continue`,
-#: inference_local.py:207-208). "none" is the single-window / graph case, no pooling.
-#: A CLOSED SET, not a blocklist: a registry row that later declares `scatter_mean` fails
-#: here until this seam implements it, rather than being silently max-pooled.
+#: Policy-pool values the eval decode ENTRANCE actually implements. `_build_candidate_player`
+#: matches CLOSED on `spec.representation` and the two arms drop DIFFERENTLY, which is why
+#: this guard names the grid one:
+#:   - GRID  -> `DeployHeadPlayer(infer_fn=engine.infer)` -> `LocalInferenceEngine.infer_batch`,
+#:     whose dense arm scatter-MAXes over cluster windows and DROPS off-window cells
+#:     (`if mcts_idx >= n_actions - 1: continue`, inference_local.py:207-208).
+#:   - GRAPH -> `DeployHeadPlayer(expand_fn=...)` -> `infer_batch_ls` ->
+#:     `expand_and_backup_ls_graph`, which drops NOTHING (WP12-R Phase EVALDECODE, R138).
+#: "none" is the single-window / graph case, no pooling. A CLOSED SET, not a blocklist: a
+#: registry row that later declares `scatter_mean` fails here until this seam implements it,
+#: rather than being silently max-pooled.
 _DECODE_IMPLEMENTED_POLICY_POOLS = frozenset({"none", "scatter_max"})
 
 
@@ -58,10 +65,11 @@ def _assert_decode_implements_declared_pooling(spec: EncodingSpec) -> None:
         return
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares policy_pool={spec.policy_pool!r}, which this eval "
-        f"worker's decode entrance does not implement: DeployHeadPlayer reaches the net "
-        f"through LocalInferenceEngine.infer_batch, whose dense arm scatter-maxes and DROPS "
-        f"off-window cells. The no-drop decode (infer_batch_per_cluster) exists but is not "
-        f"wired to the deploy head (ADJ-WP12R-4). Refusing to report an eval result pooled "
+        f"worker's decode entrance does not implement: on the GRID arm DeployHeadPlayer "
+        f"reaches the net through LocalInferenceEngine.infer_batch, whose dense arm "
+        f"scatter-maxes and DROPS off-window cells. The grid no-drop decode "
+        f"(infer_batch_per_cluster + the Rust expand_and_backup_ls) exists but is not wired "
+        f"to the deploy head (ADJ-WP12R-4). Refusing to report an eval result pooled "
         f"differently from the encoding's own declaration."
     )
 
@@ -87,8 +95,41 @@ def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
     }[kind]
 
 
-def _build_candidate_player(engine: LocalInferenceEngine, n_sims: int) -> DeployHeadPlayer:
-    return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims)
+def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
+    """The graph arm's decode+expand collaborator (WP12-R Phase EVALDECODE, R138).
+
+    Consumes BOTH halves the shared producer returns and expands through
+    `expand_and_backup_ls_at` — the same producer, the same expand and the same frame
+    self-play uses (`search_drive.rs:373 -> :397 -> :421`). Nothing is reimplemented here;
+    the builder's window centre is threaded from the producer rather than re-derived,
+    which is what makes the bridge's leaf/policy alignment cross-check possible.
+    """
+    def _expand(tree, leaves) -> None:
+        dense, overflow, values, centers = engine.infer_batch_ls(leaves)
+        tree.expand_and_backup_ls_graph(
+            dense, overflow, values, centers, spec.policy_logit_count, spec.trunk_size,
+        )
+
+    return _expand
+
+
+def _build_candidate_player(
+    engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec
+) -> DeployHeadPlayer:
+    """CLOSED match on the DECLARED representation — never on a model attribute, and
+    never with a dense arm as the fallthrough. An unregistered representation is the
+    exact input that must not silently become a dropping decode (R138's class)."""
+    if spec.representation == "graph":
+        return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims)
+    if spec.representation == "grid":
+        return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims)
+    raise EvalDecodeUnsupportedError(
+        f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
+        f"this eval worker's decode entrance does not implement. The implemented arms are "
+        f"'grid' (infer_batch) and 'graph' (infer_batch_ls). Refusing to fall through to "
+        f"either arm — a decode chosen by fallthrough is the defect this match exists to "
+        f"prevent."
+    )
 
 
 def _play_gate_block(
@@ -110,8 +151,12 @@ def _play_gate_block(
         best_model, _device(spec.worker_device), encoding_spec=encoding_spec
     )
     try:
-        candidate = _build_candidate_player(candidate_engine, spec.gate.deploy_sims)
-        opponent = _build_candidate_player(best_engine, spec.gate.deploy_sims)
+        candidate = _build_candidate_player(
+            candidate_engine, spec.gate.deploy_sims, spec=encoding_spec
+        )
+        opponent = _build_candidate_player(
+            best_engine, spec.gate.deploy_sims, spec=encoding_spec
+        )
 
         regime_key = RegimeKey(
             bot="best_anchor", variant="deploy", model_sims=spec.gate.deploy_sims,
@@ -155,7 +200,8 @@ def _draw_aware_wr(records: list[dict[str, Any]]) -> float | None:
 
 
 def _play_rung_block(
-    spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory
+    spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory,
+    *, encoding_spec: EncodingSpec,
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
@@ -167,7 +213,9 @@ def _play_rung_block(
     # for the deploy-matched GATE block, LAW-15). Playing deploy_sims here while stamping a
     # different regime value was an A3 mislabel (the record must describe the regime it
     # actually played).
-    candidate = _build_candidate_player(candidate_engine, _model_sims_for_kind(spec, rung_job.bot))
+    candidate = _build_candidate_player(
+        candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec
+    )
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
         opponent_spec=f"{rung_job.bot}:{rung_job.variant}", opening_book=rung_job.opening_book,
@@ -183,14 +231,19 @@ def _play_rung_block(
     return [_agg_record(r) for r in records[: rung_job.games]]
 
 
-def _play_random_floor(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> list[dict[str, Any]]:
+def _play_random_floor(
+    spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory,
+    *, encoding_spec: EncodingSpec,
+) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
     bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
     opponent = bot_factory(seed=spec.seed_base)
     # M-3: same fix as the rung block — the random floor plays at the resolved
     # random_model_sims, not gate.deploy_sims.
-    candidate = _build_candidate_player(candidate_engine, spec.random_model_sims)
+    candidate = _build_candidate_player(
+        candidate_engine, spec.random_model_sims, spec=encoding_spec
+    )
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,
         opponent_spec="random:uniform", opening_book=spec.gate.opening_book,
@@ -256,7 +309,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             if rung_job.games <= 0:
                 continue
             try:
-                records = _play_rung_block(spec, rung_job, candidate_engine, board_factory)
+                records = _play_rung_block(
+                    spec, rung_job, candidate_engine, board_factory, encoding_spec=enc_spec
+                )
             except RungUnresolvable as exc:
                 skipped_rungs.append({"rung": rung_job.name, "reason": exc.reason})
                 continue
@@ -275,7 +330,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "eff_n": agg.eff_n, "regime_key": agg.regime_key, "status": "active",
             }
 
-        random_records = _play_random_floor(spec, candidate_engine, board_factory)
+        random_records = _play_random_floor(
+            spec, candidate_engine, board_factory, encoding_spec=enc_spec
+        )
         random_agg = (
             aggregate_rung(
                 random_records,

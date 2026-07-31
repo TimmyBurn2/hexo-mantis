@@ -1,4 +1,4 @@
-// Exceeds the 300-line soft cap (R8): the full 21-method `InferenceBatcher`
+// Exceeds the 300-line soft cap (R8): the full 22-method `InferenceBatcher`
 // Python surface (dense + graph paths + mock harness + model-version) REMAPPED
 // over the WP6 `DenseQueue`/`GraphQueue`, plus the `GraphWire` pyclass (3 scalar
 // + 13 numpy COPY getters + single-read `take()`) port as one line-auditable
@@ -667,12 +667,42 @@ impl PyInferenceBatcher {
     /// build one axis graph per position, submit them, release the GIL, and block
     /// until each leaf's `LegalSetPolicy` is assembled. Returns per-position
     /// `(dense, overflow[(q,r)->prob], value)`.
+    ///
+    /// This is `submit_graphs_and_wait_ls` with the builder's window centre
+    /// PROJECTED AWAY — ONE authority for the graph build + submit sequence, so
+    /// the frame-carrying driver and this one cannot drift (WP12-R D-22). The
+    /// 3-tuple output is byte-identical to the pre-WP12-R implementation.
     #[allow(clippy::type_complexity)]
     pub fn submit_graphs_and_wait(
         &self,
         py: Python<'_>,
         positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32)>> {
+        Ok(self
+            .submit_graphs_and_wait_ls(py, positions)?
+            .into_iter()
+            .map(|(dense, overflow, value, _center)| (dense, overflow, value))
+            .collect())
+    }
+
+    /// Graph submit-and-wait carrying the BUILDER's frame (WP12-R Phase
+    /// EVALDECODE, operator ruling R138). Returns per-position
+    /// `(dense, overflow[(q,r)->prob], value, window_center)`.
+    ///
+    /// Why the centre must come from HERE (DESIGN §c.2): self-play frames its
+    /// expand on the builder's `g.window_center` (`search_drive.rs:373 -> :421`),
+    /// `Board` does NOT expose `window_center` to Python, and a bridge method that
+    /// silently recomputed one from the pending board would erase the only
+    /// leaf/policy alignment cross-check there is — the hazard the CNN sibling
+    /// guards against ("never trust a Python-supplied order", `mcts.rs:152-153`).
+    /// `MCTSTree.expand_and_backup_ls_graph` cross-checks what this returns
+    /// against the pending board with an always-on `PyValueError`.
+    #[allow(clippy::type_complexity)]
+    pub fn submit_graphs_and_wait_ls(
+        &self,
+        py: Python<'_>,
+        positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
+    ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
         self.require_graph()?;
         let mut graphs = Vec::with_capacity(positions.len());
         for (stones, current_player, moves_remaining) in &positions {
@@ -687,6 +717,10 @@ impl PyInferenceBatcher {
             .map_err(PyValueError::new_err)?;
             graphs.push(g);
         }
+        // The builder's own centre, captured BEFORE the graphs are moved into the
+        // detached submit loop; index-aligned with `positions` and therefore with
+        // the results below.
+        let centers: Vec<(i32, i32)> = graphs.iter().map(|g| g.window_center).collect();
         let graph_q = self.graph.clone();
         let results: Result<Vec<(LegalSetPolicy, f32)>, String> = py.detach(|| {
             let mut out = Vec::with_capacity(graphs.len());
@@ -698,10 +732,11 @@ impl PyInferenceBatcher {
         let results = results.map_err(PyValueError::new_err)?;
         let out = results
             .into_iter()
-            .map(|(ls, v)| {
+            .zip(centers)
+            .map(|((ls, v), center)| {
                 let overflow: Vec<((i32, i32), f32)> =
                     ls.overflow.iter().map(|(&k, &p)| (k, p)).collect();
-                (ls.dense, overflow, v)
+                (ls.dense, overflow, v, center)
             })
             .collect();
         Ok(out)

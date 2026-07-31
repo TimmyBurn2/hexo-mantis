@@ -173,6 +173,15 @@ class MCTSTree:
         has_pass_slot: bool,
         trunk_sz: int,
     ) -> None: ...
+    def expand_and_backup_ls_graph(
+        self,
+        policies: list[list[float]],
+        overflows: list[list[tuple[tuple[int, int], float]]],
+        values: list[float],
+        centers: list[tuple[int, int]],
+        policy_stride: int,
+        trunk_sz: int,
+    ) -> None: ...
     def get_policy(
         self, temperature: float = 1.0, board_size: int | None = None
     ) -> numpy.ndarray: ...
@@ -216,7 +225,7 @@ class TacticalSolver:
     ) -> tuple[int, list[tuple[int, int]], int]: ...
 
 # --------------------------------------------------------------------------- #
-# InferenceBatcher (21-method fused-model NN face over the dense+graph queues)
+# InferenceBatcher (22-method fused-model NN face over the dense+graph queues)
 # --------------------------------------------------------------------------- #
 class InferenceBatcher:
     def __init__(
@@ -276,6 +285,11 @@ class InferenceBatcher:
     def submit_graphs_and_wait(
         self, positions: list[tuple[list[tuple[int, int, int]], int, int]]
     ) -> list[tuple[list[float], list[tuple[tuple[int, int], float]], float]]: ...
+    def submit_graphs_and_wait_ls(
+        self, positions: list[tuple[list[tuple[int, int, int]], int, int]]
+    ) -> list[
+        tuple[list[float], list[tuple[tuple[int, int], float]], float, tuple[int, int]]
+    ]: ...
 
 # --------------------------------------------------------------------------- #
 # GraphWire (block-diagonal fused graph batch; per-array COPY getters + take())

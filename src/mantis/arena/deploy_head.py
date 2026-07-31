@@ -25,6 +25,13 @@ ChildInfo = tuple[tuple[int, int], int, float, int, float]
 
 InferFn = Callable[[Any], tuple[list[float], float]]
 
+#: The graph collaborator (WP12-R Phase EVALDECODE): given the live tree and the leaves
+#: `select_leaves` just returned, run the whole decode+expand itself. It exists because
+#: the graph seam's no-drop expand needs FOUR producer outputs (dense, overflow, value,
+#: builder centre) plus two spec constants — a shape `InferFn`'s `(policy, value)` return
+#: cannot carry without dropping exactly the half this card exists to stop dropping.
+ExpandFn = Callable[[MCTSTree, list[Any]], None]
+
 
 def select_argmax_child(
     children_info: list[ChildInfo], *, c_visit: float, c_scale: float
@@ -54,18 +61,36 @@ def select_argmax_child(
 
 class DeployHeadPlayer:
     """The deploy-matched candidate head: g=0 completed-Q argmax over an injected
-    `infer_fn`-driven `MCTSTree` search. NO dirichlet/epsilon/gumbel_scale (or any
-    softmax-knob) constructor parameters exist — g=0 is structural, not a knob."""
+    `infer_fn`- or `expand_fn`-driven `MCTSTree` search. NO dirichlet/epsilon/
+    gumbel_scale (or any softmax-knob) constructor parameters exist — g=0 is structural,
+    not a knob.
+
+    EXACTLY ONE of `infer_fn=` (the grid arm: leaf -> `(policy, value)`, then the dense
+    `expand_and_backup`) or `expand_fn=` (the graph arm: the collaborator owns the decode
+    and the no-drop `expand_and_backup_ls_graph`) is supplied. Neither and both are named
+    `ValueError`s: a defaulted arm or a polymorphic `infer_fn` would reintroduce the
+    silent pick this card exists to remove, and a second player class would fork the g=0
+    argmax authority below.
+    """
 
     def __init__(
         self,
         *,
-        infer_fn: InferFn,
+        infer_fn: InferFn | None = None,
+        expand_fn: ExpandFn | None = None,
         n_sims: int,
         c_visit: float = 50.0,
         c_scale: float = 1.0,
     ) -> None:
+        if (infer_fn is None) == (expand_fn is None):
+            supplied = "both" if infer_fn is not None else "neither"
+            raise ValueError(
+                f"DeployHeadPlayer takes EXACTLY ONE of infer_fn= (grid) or expand_fn= "
+                f"(graph); {supplied} was supplied. There is no default arm — picking one "
+                f"here would decide the decode contract silently."
+            )
         self._infer_fn = infer_fn
+        self._expand_fn = expand_fn
         self._n_sims = int(n_sims)
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
@@ -85,6 +110,10 @@ class DeployHeadPlayer:
             leaves = tree.select_leaves(1)
             if not leaves:
                 break
+            if self._expand_fn is not None:
+                self._expand_fn(tree, leaves)
+                continue
+            assert self._infer_fn is not None  # ctor guarantees exactly one arm
             policies: list[list[float]] = []
             values: list[float] = []
             for leaf in leaves:
@@ -96,4 +125,4 @@ class DeployHeadPlayer:
         return select_argmax_child(children_info, c_visit=self._c_visit, c_scale=self._c_scale)
 
 
-__all__ = ["ChildInfo", "DeployHeadPlayer", "InferFn", "select_argmax_child"]
+__all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn", "InferFn", "select_argmax_child"]

@@ -25,6 +25,7 @@ import torch
 from mantis._engine import Board, MCTSTree
 from mantis.encoding import EncodingSpec as RegistrySpec
 from mantis.encoding import lookup, resolve_from_config
+from mantis.selfplay.hparams import is_graph_representation
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.selfplay.utils import get_temperature
 
@@ -76,6 +77,23 @@ class SelfPlayWorker:
             self.encoding_spec: RegistrySpec = resolve_from_config(config)
         else:
             self.encoding_spec = _to_registry_spec(encoding_spec)
+        if is_graph_representation(self.encoding_spec):
+            # D-18 of R138's census. This worker is the THIRD consumer of the graph
+            # producer and it drops the same half the eval seam did: `_infer_batch` ->
+            # `infer_batch` (dense half only) -> the dense `expand_and_backup`. Because
+            # it is NOT on the training data path (module docstring), nothing downstream
+            # would ever notice — which is exactly why it must not be a silent arm.
+            # Refuse by name rather than wire a brand-new seam into a non-data-path
+            # consumer for zero mint value (DESIGN §g.3 Option A).
+            raise NotImplementedError(
+                f"SelfPlayWorker does not implement the graph decode: encoding "
+                f"{self.encoding_spec.name!r} declares "
+                f"representation={self.encoding_spec.representation!r}. This worker "
+                f"expands through LocalInferenceEngine.infer_batch, whose graph leg keeps "
+                f"only the dense half of the producer's legal-set policy. The no-drop "
+                f"graph path is DeployHeadPlayer(expand_fn=...) over infer_batch_ls "
+                f"(mantis.eval.worker), or the Rust self-play runner."
+            )
         self._board_size: int = self.encoding_spec.board_size
         self._n_actions: int = self.encoding_spec.policy_logit_count
 

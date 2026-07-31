@@ -1,6 +1,7 @@
 // Exceeds the 300-line soft cap (R8): the full PyMCTSTree pymethod surface
-// (ctor-compose, the GIL-release select/expand/expand_and_backup_ls, policy
-// getters, viewer accessors) ports as one line-auditable unit with its tests.
+// (ctor-compose, the GIL-release select/expand/expand_and_backup_ls +
+// expand_and_backup_ls_graph, policy getters, viewer accessors) ports as one
+// line-auditable unit with its tests.
 //! Python-visible PUCT `MCTSTree` wrapper over `mantis_search::MCTSTree`.
 //!
 //! `unsendable` (LOCKED #3): the tree embeds a `Board` (Send + !Sync), so
@@ -243,6 +244,118 @@ impl PyMCTSTree {
         }
 
         py.detach(|| self.inner.expand_and_backup_ls(&ls_vec, &min_vals));
+        Ok(())
+    }
+
+    /// GRAPH legal-set counterpart of `expand_and_backup` (WP12-R Phase
+    /// EVALDECODE, operator ruling R138: eval consumes what the shared producer
+    /// already returns, and SELF-PLAY SEMANTICS IS THE AUTHORITY).
+    ///
+    /// This adds NO search logic. It rebuilds the `LegalSetPolicy` the producer
+    /// (`assemble_ls_from_gnn_probs`, via `submit_graphs_and_wait_ls`) already
+    /// assembled — dense half plus the ragged off-window overflow — and calls the
+    /// SAME `expand_and_backup_ls_at` self-play calls (`search_drive.rs:421`). At
+    /// HEAD the eval leg kept only the dense half and expanded through the dense
+    /// rule, so 53.2% of legal moves could not become children at all; the two
+    /// halves of that fix are inseparable, because the ls path floors an
+    /// uncovered coord at `1/min(n_legal,192)` where the dense path scores it 0.
+    ///
+    /// The overflow half is rebuilt into a MAP, never scanned in wire order: it
+    /// crosses the FFI as a `Vec` materialised from `FxHashMap` iteration, so its
+    /// order is an artifact (D-22, pinned by the P-1d oracle).
+    ///
+    /// Args:
+    ///     policies:  dense half per pending leaf, each of length `policy_stride`.
+    ///     overflows: ragged off-window half per pending leaf, `((q,r), prob)`.
+    ///     values:    scalar value per pending leaf.
+    ///     centers:   the BUILDER's window centre per pending leaf, as returned by
+    ///                `InferenceBatcher.submit_graphs_and_wait_ls`. Cross-checked
+    ///                against each pending board's own `window_center()`.
+    ///     policy_stride: action-space size (= encoding `policy_logit_count`).
+    ///     trunk_sz:      window side length; cross-checked against each leaf
+    ///                    board's `cluster_window_size()`.
+    ///
+    /// Every guard below is ALWAYS-ON, not a `debug_assert`: the inner
+    /// `expand_and_backup_ls_at` takes the MIN of every input length and silently
+    /// expands fewer leaves, and the frame invariant it carries is a stripped
+    /// `debug_assert_eq!` inert in the release `.so` production actually runs.
+    #[pyo3(signature = (policies, overflows, values, centers, policy_stride, trunk_sz))]
+    #[allow(clippy::too_many_arguments)] // Python-facing signature (7 params incl. py)
+    #[allow(clippy::type_complexity)]
+    pub fn expand_and_backup_ls_graph(
+        &mut self,
+        py: Python<'_>,
+        policies: Vec<Vec<f32>>,
+        overflows: Vec<Vec<((i32, i32), f32)>>,
+        values: Vec<f32>,
+        centers: Vec<(i32, i32)>,
+        policy_stride: usize,
+        trunk_sz: i32,
+    ) -> PyResult<()> {
+        // C-1a-d: the four arity conjuncts, each checked separately so a flip of
+        // one names the one that failed.
+        let n_pending = self.pending_boards.len();
+        for (label, len) in [
+            ("policies", policies.len()),
+            ("overflows", overflows.len()),
+            ("values", values.len()),
+            ("centers", centers.len()),
+        ] {
+            if len != n_pending {
+                return Err(PyValueError::new_err(format!(
+                    "expand_and_backup_ls_graph: {label} has {len} entries but there are \
+                     {n_pending} pending leaves (the inner expand takes the MIN and would \
+                     silently expand fewer)"
+                )));
+            }
+        }
+
+        let mut ls_vec: Vec<LegalSetPolicy> = Vec::with_capacity(n_pending);
+        for (i, board) in self.pending_boards.iter().enumerate() {
+            // C-4: a dense half of the wrong width is the v6w25 class of silent
+            // wrong-width decode, and it must be loud on the graph seam too.
+            if policies[i].len() != policy_stride {
+                return Err(PyValueError::new_err(format!(
+                    "expand_and_backup_ls_graph leaf {i}: dense half has {} slots != \
+                     policy_stride={policy_stride}",
+                    policies[i].len()
+                )));
+            }
+            // C-2 (D-7): the producer's builder centre against the leaf board's own.
+            // Expected always-equal — both are the bbox midpoint over the same stones
+            // — so this is a pairing/drift tripwire, not a correction.
+            let board_center = board.window_center();
+            if board_center != centers[i] {
+                return Err(PyValueError::new_err(format!(
+                    "expand_and_backup_ls_graph leaf {i}: builder window_center {:?} != \
+                     board.window_center() {board_center:?} (coord/slot drift — the priors \
+                     would be read in a different frame from the one they were baked in)",
+                    centers[i]
+                )));
+            }
+            // C-3 (D-8): mirrors the self-play always-on assert at
+            // `search_drive.rs:415-419` and the CNN sibling at `mcts.rs:216-222`.
+            if board.cluster_window_size() as i32 != trunk_sz {
+                return Err(PyValueError::new_err(format!(
+                    "expand_and_backup_ls_graph leaf {i}: trunk_sz={trunk_sz} != \
+                     board.cluster_window_size()={}",
+                    board.cluster_window_size()
+                )));
+            }
+            let mut ls = LegalSetPolicy {
+                dense: policies[i].clone(),
+                ..LegalSetPolicy::default()
+            };
+            for &(coord, prob) in &overflows[i] {
+                ls.overflow.insert(coord, prob);
+            }
+            ls_vec.push(ls);
+        }
+
+        py.detach(|| {
+            self.inner
+                .expand_and_backup_ls_at(&ls_vec, &values, &centers, trunk_sz)
+        });
         Ok(())
     }
 

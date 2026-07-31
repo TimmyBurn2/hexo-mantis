@@ -346,3 +346,21 @@ added_by = "WPMAIN"
 path = "wpmain/config_baseline_b482243/sustained_kcluster.yaml"
 sha256 = "2b526558e3020b190d07b49ba362c0887e47e68baedd2625d1d791cbd4e03bed"
 added_by = "WPMAIN"
+
+# WP12-R Phase EVALDECODE (operator ruling R138) — the ONE pair of files both sides of the
+# FFI bind to. `child_parity_v1.json` is P-1's cross-FFI child-set golden (2 positions, with
+# priors); `dispersed_r6_v1.json` is P-2's radius-6 >361-legal regression bank (4 positions).
+# Both are minted from the SELF-PLAY leg — R138: "self-play semantics is THE authority" —
+# by `crates/mantis-selfplay/tests/graph_child_parity.rs`'s own call sequence, and both are
+# read by that test AND by `tests/eval/test_eval_selfplay_child_parity.py`. Flat-keyed on
+# purpose so the Rust leg needs no JSON dependency. 9 494 B + 8 675 B = 18 169 B, inside the
+# 64 KB budget the P-2a oracle asserts in-test.
+[[required]]
+path = "eval_selfplay_parity/child_parity_v1.json"
+sha256 = "22ba114f81d2a3aaf889309221de983d25107435ec973e7a51cabe4cf783dd04"
+added_by = "WP12-R"
+
+[[required]]
+path = "eval_selfplay_parity/dispersed_r6_v1.json"
+sha256 = "a0d4ff0f1bc88a3242b9381ccff5c9356333559dcb8a4f681f93dc3d50653b58"
+added_by = "WP12-R"
