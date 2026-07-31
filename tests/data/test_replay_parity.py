@@ -44,6 +44,16 @@ def test_replay_byte_parity_v6_family(encoding: str) -> None:
         assert arr.dtype == ref[name].dtype
 
 
+# VOID-AS-ANCHOR (WP12-R Phase T-4 census, R157): v6_live2_ls.npz is the O4b
+# byte-parity pin of the legacy move-list replayer ONLY (a stage-3 data path,
+# untouched by the Phase-T no-drop fix; its parity subject is "new replayer ==
+# old replayer", never "targets are correct"). Its policy rows embed the
+# replayer's off-window SKIP — a ply whose move lies outside all cluster
+# windows emits no row (mantis/data/replay.py Ls-arm docstring) — which is the
+# drop-family target semantics the export side now refuses at every
+# constructor. This fixture may NOT be cited as a behavioral anchor for Ls
+# TARGET semantics; the post-fix target anchors are
+# tests/fixtures/eval_selfplay_parity/target_parity*.json.
 def test_replay_byte_parity_v6_live2_ls() -> None:
     ref = np.load(_REPLAY_DIR / "v6_live2_ls.npz")
     out = _replay("v6_live2_ls")

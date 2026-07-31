@@ -273,27 +273,38 @@ fn produce_g5(mutate: bool) -> Vec<u8> {
     ser_ls(&ls)
 }
 
-/// g6 `record_position_graph`: compact board; ls.dense planted with
-/// fill_stream(SEED^0x30, legal.len()) at each legal cell's window_flat_idx;
-/// args (trunk 19, cur, mv_rem, ply, is_full_search=true, max_visits=128).
-fn produce_g6(mutate: bool) -> Vec<u8> {
+/// g6 `record_position_graph` — WP12-R Phase T RE-POINT (recorded in
+/// IMPL_NOTES_T.md as a §2-census miss: the original pin planted the RAW
+/// fill_stream (Σ ≈ n/2 — not a distribution), which the §3.3 typed tripwire
+/// now refuses; the byte pin for VALID targets lives in the byte-frozen
+/// `target_export_parity.rs` record chain against committed fixture pairs).
+/// Re-pointed legs over the SAME pinned stream (seed ^ 0x30 unchanged):
+///   (a) the raw planting refuses with `MassNotUnity` carrying the exact
+///       pre-filter legal-scan sum (pins the read-by-coord scan — every
+///       planted cell contributes);
+///   (b) the NORMALIZED planting records, and the serialized record equals a
+///       re-derived record over the same coords/masses (layout + coord-read
+///       parity via `ser_graph_record`).
+/// Returns (refusal_sum, ok_record_bytes) for the pin + mutation arms.
+fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
     let board = compact_board();
     let legal = board.legal_moves();
     let (bcq, bcr) = board.window_center();
     let mut stream = fill_stream(WORKER_GOLDEN_SEED ^ 0x30, legal.len());
     if mutate {
-        // Flip the planted mass for legal[0] → that visit's prob diverges.
+        // Flip the planted mass for legal[0] → the refusal sum diverges.
         stream[0] = if stream[0] > 0.5 { 0.125 } else { 0.875 };
     }
     let mut dense = vec![0.0f32; N_ACTIONS];
+    let mut raw_sum = 0.0f64;
     for (i, &(q, r)) in legal.iter().enumerate() {
         let idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, TRUNK, HALF);
-        if idx < N_ACTIONS {
-            dense[idx] = stream[i];
-        }
+        assert!(idx < N_ACTIONS, "compact board must be fully in-window");
+        dense[idx] = stream[i];
+        raw_sum += f64::from(stream[i]);
     }
-    let ls = LegalSetPolicy { dense, overflow: FxHashMap::default() };
-    let rec = record_position_graph(
+    let ls = LegalSetPolicy { dense: dense.clone(), overflow: FxHashMap::default() };
+    let refusal_sum = match record_position_graph(
         &board,
         &ls,
         TRUNK,
@@ -302,8 +313,58 @@ fn produce_g6(mutate: bool) -> Vec<u8> {
         board.ply.index() as u16,
         true,
         128,
+    ) {
+        Err(mantis_selfplay::records::TargetIntegrityError::MassNotUnity { sum, .. }) => {
+            assert!(
+                (sum - raw_sum).abs() < 1e-9,
+                "MassNotUnity must carry the pre-filter legal-scan sum: {sum} vs {raw_sum}"
+            );
+            sum
+        }
+        other => panic!("a non-distribution target must refuse with MassNotUnity, got {other:?}"),
+    };
+
+    // (b) normalized planting → records; equality vs a re-derived record.
+    let total = raw_sum as f32;
+    let mut norm_dense = vec![0.0f32; N_ACTIONS];
+    let mut expected_visits: Vec<(i16, i16, f32)> = Vec::new();
+    for (i, &(q, r)) in legal.iter().enumerate() {
+        let idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, TRUNK, HALF);
+        let p = stream[i] / total;
+        norm_dense[idx] = p;
+        if p > 0.0 {
+            expected_visits.push((q as i16, r as i16, p));
+        }
+    }
+    let norm_ls = LegalSetPolicy { dense: norm_dense, overflow: FxHashMap::default() };
+    let rec = record_position_graph(
+        &board,
+        &norm_ls,
+        TRUNK,
+        board.current_player as i8,
+        board.moves_remaining,
+        board.ply.index() as u16,
+        true,
+        128,
+    )
+    .expect("a normalized target must record");
+    let expected = mantis_selfplay::replay::hexg::GraphRecord {
+        stones: rec.stones.clone(), // stones come from the board either way
+        visits: expected_visits,
+        current_player: board.current_player as i8,
+        moves_remaining: board.moves_remaining,
+        ply_index: board.ply.index() as u16,
+        is_full_search: true,
+        outcome: 0.0,
+        value_valid: true,
+        game_length: 0,
+    };
+    assert_eq!(
+        ser_graph_record(&rec),
+        ser_graph_record(&expected),
+        "normalized record must carry every planted coord's mass (layout parity)"
     );
-    ser_graph_record(&rec)
+    (refusal_sum, ser_graph_record(&rec))
 }
 
 /// g7 `finalize_graph_outcome`: 6 enumerated rows (ply_cap_value=-0.5,
@@ -354,7 +415,18 @@ fn pin_g5_assemble_ls_from_gnn_probs() {
 }
 #[test]
 fn pin_g6_record_position_graph() {
-    assert_eq!(produce_g6(false), read_golden("record_position_graph.bin"));
+    // Phase-T re-point: the in-fn asserts (typed refusal carrying the exact
+    // legal-scan sum + normalized-record layout parity) are the pin; the
+    // dispatcher-frozen `record_position_graph.bin` encoded the pre-fix
+    // arbitrary-mass acceptance and is retired from this consumer.
+    // VOID-AS-ANCHOR (T-4 census, R157): the bin may no longer serve as a
+    // behavioral anchor for target semantics — it embeds the arbitrary-mass
+    // acceptance §3.3 deleted. Bytes + manifest row kept: deletion is
+    // OPERATOR-ROUTED (ADJ-19 precedent); queue row filed for the operator to
+    // retire bin + manifest row (the manifest is byte-frozen this phase).
+    let (refusal_sum, ok_bytes) = produce_g6(false);
+    assert!(refusal_sum > 1.0, "the raw stream planting must overshoot unity");
+    assert!(!ok_bytes.is_empty());
 }
 #[test]
 fn pin_g7_finalize_graph_outcome() {
@@ -384,7 +456,12 @@ fn mut_g5_diverges() {
 }
 #[test]
 fn mut_g6_diverges() {
-    assert_ne!(produce_g6(true), read_golden("record_position_graph.bin"));
+    // LAW-07 bite, re-pointed: flipping ONE planted mass must diverge BOTH the
+    // refusal sum and the normalized record bytes.
+    let (sum_a, bytes_a) = produce_g6(false);
+    let (sum_b, bytes_b) = produce_g6(true);
+    assert_ne!(sum_a.to_bits(), sum_b.to_bits(), "refusal sum must feel the flip");
+    assert_ne!(bytes_a, bytes_b, "normalized record bytes must feel the flip");
 }
 #[test]
 fn mut_g7_diverges() {

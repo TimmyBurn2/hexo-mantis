@@ -52,7 +52,7 @@ pub type WorkerResultRow = (Vec<f32>, Vec<f32>, Vec<f32>, f32, usize, Vec<u8>, b
 /// model_version_distinct, seeded, solver_fires)`.
 pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32, u8, u32);
 
-/// Flat snapshot of the runner's 21 LAW-18 in-run counter atomics, each read once
+/// Flat snapshot of the runner's 24 LAW-18 in-run counter atomics, each read once
 /// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
 /// counters — see the module doc). RAW cumulative counts ONLY: the fixed-point
 /// ×1_000_000 accumulators (`*_accum`) are handed back UNDIVIDED so the WP7 bridge
@@ -88,6 +88,13 @@ pub struct RunnerStatsSnapshot {
     pub solver_moves_eligible_seeded: u64,
     pub solver_injected_seeded: u64,
     pub seeded_games_started: u64,
+    // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ──
+    /// Moves whose exported policy target carried off-window (overflow) mass.
+    pub export_offwindow_mass_moves: u64,
+    /// §3.5 zero-row fills, counted per recorded grid-ls cluster row.
+    pub gridls_zero_policy_rows: u64,
+    /// Fatal-defect latch fire count (must read 0 in a healthy run).
+    pub target_integrity_defects: u64,
 }
 
 /// Pure-Rust self-play runner core. Spawns worker threads (`spawn.rs`) that run
@@ -149,6 +156,16 @@ pub struct SelfPlayRunner {
     solver_moves_eligible_seeded: Arc<AtomicU64>,
     solver_injected_seeded: Arc<AtomicU64>,
     seeded_games_started: Arc<AtomicU64>,
+
+    // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
+    export_offwindow_mass_moves: Arc<AtomicU64>,
+    gridls_zero_policy_rows: Arc<AtomicU64>,
+    target_integrity_defects: Arc<AtomicU64>,
+    /// The fatal-defect latch (DESIGN_T §3.4): a worker panic is NOT loud —
+    /// `stop()` swallows join results — so a `TargetIntegrityError` at the
+    /// record dispatch stores its message here (store-then-`running=false`)
+    /// and the bridge drain face raises it as a typed Python exception.
+    fatal_defect: Arc<Mutex<Option<String>>>,
 }
 
 impl SelfPlayRunner {
@@ -210,6 +227,59 @@ impl SelfPlayRunner {
             ));
         }
 
+        // ── WP12-R Phase T boot guards (DESIGN_T §3.4; read EXISTING keys only,
+        // R120; armed VALUES are never set, R119). Scoped to GRAPH encodings:
+        // the bound being enforced is the graph record's fixed MAX_VISITS slot
+        // (`replay/hexg`); dense-362 records carry no such slot, and refusing a
+        // grid config would be a behavior change no ruling ordered (PREREG_T
+        // A-6 — grid exemption resolved HERE, grounds recorded in IMPL notes).
+        if spec.is_graph() {
+            use crate::replay::hexg::MAX_VISITS;
+            // Guard 1 (overshoot-aware temperature-arm bound): the production
+            // sim loops overshoot by up to leaf_batch_size - 1 (the uncapped
+            // final batch), so refuse when
+            // max(ARMED effective sim counts) + leaf_batch_size - 1 > MAX_VISITS.
+            // Armed arms: standard (always), fast iff fast_prob > 0,
+            // quick/full iff full_search_prob > 0.
+            let mut max_armed = effective_standard;
+            if config.fast_prob > 0.0 {
+                max_armed = max_armed.max(config.fast_sims);
+            }
+            if config.full_search_prob > 0.0 {
+                max_armed = max_armed.max(config.n_sims_quick).max(config.n_sims_full);
+            }
+            let worst_case = max_armed + config.leaf_batch_size.saturating_sub(1);
+            if worst_case > MAX_VISITS {
+                let lb = config.leaf_batch_size;
+                return Err(format!(
+                    "SelfPlayRunner: max armed sim budget {max_armed} + leaf_batch_size {lb} \
+                     - 1 = {worst_case} exceeds MAX_VISITS ({MAX_VISITS}) — a graph record's \
+                     visit target could carry more cells than the fixed HEXG slot holds and \
+                     silent truncation is deleted (WP12-R Phase T); lower the armed sim \
+                     budgets / leaf batch, or raise MAX_VISITS"
+                ));
+            }
+            // Guard 2 (completed-Q ls/graph arm, F-1(b)): the post-fix improved
+            // exporter places positive mass on ALL children, so its graph-record
+            // support is child-count-wide — no sims bound exists. Honest
+            // retirement-until-raised: delete this guard when MAX_VISITS is
+            // raised to MAX_CHILDREN_PER_NODE.
+            if config.completed_q_values
+                && mantis_search::MAX_CHILDREN_PER_NODE > MAX_VISITS
+            {
+                return Err(format!(
+                    "SelfPlayRunner: representation==graph with completed_q_values=true is \
+                     refused while MAX_CHILDREN_PER_NODE ({}) > MAX_VISITS ({MAX_VISITS}): \
+                     the completed-Q exporter places positive mass on every root child, so \
+                     a record's support is child-count-wide and cannot fit the HEXG visit \
+                     slot (WP12-R Phase T, DESIGN_T §3.4); set completed_q_values=false for \
+                     graph runs, or raise MAX_VISITS to {} and retire this guard",
+                    mantis_search::MAX_CHILDREN_PER_NODE,
+                    mantis_search::MAX_CHILDREN_PER_NODE,
+                ));
+            }
+        }
+
         // Move the seed corpus into the shared `Arc`. STAGE R2 dry-replay
         // validates every prefix ONCE here (needs the R2 spec→Board resolution in
         // `game::init_per_game_board`); the ctor-validated corpus lets the R2
@@ -261,7 +331,38 @@ impl SelfPlayRunner {
             solver_moves_eligible_seeded: Arc::new(AtomicU64::new(0)),
             solver_injected_seeded: Arc::new(AtomicU64::new(0)),
             seeded_games_started: Arc::new(AtomicU64::new(0)),
+            export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
+            gridls_zero_policy_rows: Arc::new(AtomicU64::new(0)),
+            target_integrity_defects: Arc::new(AtomicU64::new(0)),
+            fatal_defect: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14): store the
+    /// typed defect message (first defect wins — the latch is write-once),
+    /// count the fire, THEN flip `running=false` (store-then-halt) so the
+    /// supervisor-facing drain can always read the reason for the halt. A
+    /// worker panic is NOT sufficient — `stop()` swallows join results.
+    pub fn store_fatal_defect(&self, msg: String) {
+        {
+            let mut slot = self.fatal_defect.lock().expect("fatal_defect lock poisoned");
+            if slot.is_none() {
+                *slot = Some(msg);
+            }
+        }
+        self.target_integrity_defects.fetch_add(1, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
+    }
+
+    /// Read the stored fatal defect, if any — the bridge drain face
+    /// (`collect_graph_data`) raises this as a typed Python exception so the
+    /// pool drain loop dies with the variant name (LAW-14, R152 posture).
+    #[must_use]
+    pub fn fatal_defect(&self) -> Option<String> {
+        self.fatal_defect
+            .lock()
+            .expect("fatal_defect lock poisoned")
+            .clone()
     }
 
     /// Spawn `n_workers` self-play threads (idempotent). See [`spawn`].
@@ -334,7 +435,7 @@ impl SelfPlayRunner {
         self.model_version.load(Ordering::SeqCst)
     }
 
-    /// Snapshot the 21 LAW-18 in-run counter atomics with one `Relaxed` load each.
+    /// Snapshot the 24 LAW-18 in-run counter atomics with one `Relaxed` load each.
     /// Returns RAW cumulative counts (the `*_accum` fixed-point ×1e6 sums are NOT
     /// divided here — the WP7 bridge derives the 4 means, DESIGN §c.6). See
     /// [`RunnerStatsSnapshot`].
@@ -364,6 +465,9 @@ impl SelfPlayRunner {
             solver_moves_eligible_seeded: self.solver_moves_eligible_seeded.load(Ordering::Relaxed),
             solver_injected_seeded: self.solver_injected_seeded.load(Ordering::Relaxed),
             seeded_games_started: self.seeded_games_started.load(Ordering::Relaxed),
+            export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
+            gridls_zero_policy_rows: self.gridls_zero_policy_rows.load(Ordering::Relaxed),
+            target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
         }
     }
 
@@ -498,7 +602,7 @@ mod seam_roundtrip {
             "a fresh runner reports all-zero counters"
         );
 
-        // Distinct values 1..=21, one per atomic, in struct-field order — a getter
+        // Distinct values 1..=24, one per atomic, in struct-field order — a getter
         // wired to the wrong atomic would read the wrong number and fail.
         r.games_completed.store(1, Ordering::Relaxed);
         r.positions_generated.store(2, Ordering::Relaxed);
@@ -521,6 +625,9 @@ mod seam_roundtrip {
         r.solver_moves_eligible_seeded.store(19, Ordering::Relaxed);
         r.solver_injected_seeded.store(20, Ordering::Relaxed);
         r.seeded_games_started.store(21, Ordering::Relaxed);
+        r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
+        r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
+        r.target_integrity_defects.store(24, Ordering::Relaxed);
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -544,6 +651,9 @@ mod seam_roundtrip {
             solver_moves_eligible_seeded: 19,
             solver_injected_seeded: 20,
             seeded_games_started: 21,
+            export_offwindow_mass_moves: 22,
+            gridls_zero_policy_rows: 23,
+            target_integrity_defects: 24,
         };
         assert_eq!(
             r.stats_snapshot(),

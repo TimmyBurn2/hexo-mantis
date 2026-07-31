@@ -1,7 +1,7 @@
 //! `WorkerStats` — per-worker accumulator bundle (WP6 D1/D13, LAW-18), ported
 //! verbatim from the frozen `worker_loop/stats.rs`.
 //!
-//! 21 `Arc<AtomicU*>` fire-rate / health accumulators cloned once per worker
+//! 23 `Arc<AtomicU*>` fire-rate / health accumulators cloned once per worker
 //! spawn (cheap `Arc::clone`-per-field) and destructured at
 //! `game::run_worker_thread` entry. The solver counters are incremented ONLY
 //! under the `solver_enabled` / seeded branches, so an OFF (default) run leaves
@@ -34,4 +34,7 @@ pub(crate) struct WorkerStats {
     pub(crate) solver_moves_eligible_seeded: Arc<AtomicU64>,
     pub(crate) solver_injected_seeded: Arc<AtomicU64>,
     pub(crate) seeded_games_started: Arc<AtomicU64>,
+    // WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6).
+    pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
+    pub(crate) gridls_zero_policy_rows: Arc<AtomicU64>,
 }

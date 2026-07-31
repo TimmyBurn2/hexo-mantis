@@ -415,8 +415,22 @@ impl PySelfPlayRunner {
     /// Drain all buffered graph-position records as a list of 9-tuples (field
     /// order = `HexgBuffer.push_graph_position`; no numpy — the records are
     /// variable-length). Grid runners return an empty list.
-    pub fn collect_graph_data(&self) -> Vec<GraphRecordRow> {
-        self.inner
+    ///
+    /// WP12-R Phase T (DESIGN_T §3.4; LAW-14): raises the runner's stored
+    /// fatal-defect message (a typed `TargetIntegrityError`, variant name in
+    /// the text) so the Python pool drain loop dies loud — run-fatal, no
+    /// silent except.
+    ///
+    /// # Errors
+    /// `RuntimeError` when the runner's fatal-defect latch is set.
+    pub fn collect_graph_data(&self) -> PyResult<Vec<GraphRecordRow>> {
+        if let Some(msg) = self.inner.fatal_defect() {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "self-play target-integrity defect (run-fatal, LAW-14): {msg}"
+            )));
+        }
+        Ok(self
+            .inner
             .drain_graph_records()
             .into_iter()
             .map(|r| {
@@ -432,7 +446,7 @@ impl PySelfPlayRunner {
                     r.game_length,
                 )
             })
-            .collect()
+            .collect())
     }
 
     /// The runner-linked inference batcher (shares the runner's live queues +
@@ -545,6 +559,22 @@ impl PySelfPlayRunner {
     #[getter]
     pub fn seeded_games_started(&self) -> u64 {
         self.snapshot().seeded_games_started
+    }
+
+    // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ────────
+    #[getter]
+    pub fn export_offwindow_mass_moves(&self) -> u64 {
+        self.snapshot().export_offwindow_mass_moves
+    }
+    #[getter]
+    pub fn gridls_zero_policy_rows(&self) -> u64 {
+        self.snapshot().gridls_zero_policy_rows
+    }
+    /// Fatal-defect latch fire count — must read 0 in a healthy run (the latch
+    /// message itself surfaces through `collect_graph_data`'s typed raise).
+    #[getter]
+    pub fn target_integrity_defects(&self) -> u64 {
+        self.snapshot().target_integrity_defects
     }
 
     /// Drain and return all buffered game results since the last call.
@@ -687,6 +717,9 @@ mod tests {
     #[test]
     fn collect_graph_data_empty_on_fresh_runner() {
         let r = PySelfPlayRunner::new(&v6_config()).unwrap();
-        assert!(r.collect_graph_data().is_empty());
+        assert!(r
+            .collect_graph_data()
+            .expect("no fatal defect on a fresh runner")
+            .is_empty());
     }
 }

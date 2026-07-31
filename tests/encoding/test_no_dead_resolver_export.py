@@ -19,14 +19,36 @@ import mantis.encoding as enc
 _REPO = Path(__file__).resolve().parents[2]
 
 #: NOT an exemption — a NAMED, QUEUED exclusion (R7's no-silent-caps discipline applied to
-#: an oracle's own coverage). Closing ADJ-WP12R-2 armed the general law below, and the law
-#: immediately found two MORE dead exports of the identical class: zero references across
-#: `src tests tools crates` outside their own definition module and `__init__`'s re-export
-#: (measured, Phase Q). They are NOT deleted here — they were not carded, and R119's hard
-#: stop forbids widening scope beyond carded scope, so they are queued as ADJ-WP12R-19
-#: with a delete recommendation. This list must SHRINK to empty when that row is ruled; it
-#: must never grow silently.
-_QUEUED_DEAD_EXPORTS = frozenset({"resolve_anchor_path", "resolve_arch"})
+#: an oracle's own coverage). ONE entry, and its grounds are R154's condition (b), not
+#: deadness: `resolve_arch` has zero call sites anywhere (re-verified by call-site search,
+#: below) but IS a dense plane-geometry surface — it derives `kept_indices`, history and
+#: turn-phase plane slots, i.e. the 18-plane / lean-4 machinery whose deletion list is
+#: WP-LEAN-RENAME's and is operator-sign-off-locked (R117/R140). R154 conditioned the
+#: deletion on it NOT being an R20-protected dense surface; it is one, so the row goes back
+#: as queue-with-recommendation (R108) and this exclusion stands meanwhile.
+#:
+#: `resolve_anchor_path` was on this list in Phase Q and has been REMOVED — not deleted,
+#: CORRECTED: it has two live call sites (`expand_auto_paths`, resolvers.py:388,403). The
+#: Phase-Q evidence was defective because the check below excluded the whole defining
+#: MODULE, which hid a sibling consumer. That is fixed here: reachability is now measured by
+#: CALL SITE, never by file exclusion.
+_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch"})
+
+
+def _call_sites(name: str) -> list[str]:
+    """Every line that CALLS `name`, anywhere in the shipped tree.
+
+    Reachability is measured by call site, never by excluding the defining file. Phase Q's
+    version excluded `resolvers.py` wholesale to skip the `def` line, and that hid a sibling
+    consumer in the SAME module (`expand_auto_paths` calls `resolve_anchor_path` twice) —
+    reporting a live function as dead. Matching `name(` and dropping only the `def` line
+    keeps the def out without blinding the search to real callers.
+    """
+    proc = subprocess.run(
+        ["git", "grep", "-n", f"{name}(", "--", "src", "tools", "crates"],
+        cwd=_REPO, capture_output=True, text=True, check=False,
+    )
+    return [ln for ln in proc.stdout.splitlines() if f"def {name}(" not in ln]
 
 
 def test_the_deleted_resolver_is_gone_from_the_module_and_its_exports() -> None:
@@ -56,20 +78,10 @@ def test_every_exported_resolver_has_a_call_site() -> None:
     module and outside `__init__`'s re-export. This is what would have caught ADJ-WP12R-2
     before it shipped, and what catches the next one.
     """
-    dead: list[str] = []
-    for name in sorted(n for n in enc.__all__ if n.startswith("resolve_")):
-        if name in _QUEUED_DEAD_EXPORTS:
-            continue
-        proc = subprocess.run(
-            ["git", "grep", "-l", name, "--", "src", "tools", "crates"],
-            cwd=_REPO, capture_output=True, text=True, check=False,
-        )
-        files = {
-            f for f in proc.stdout.split()
-            if f not in ("src/mantis/encoding/__init__.py", "src/mantis/encoding/resolvers.py")
-        }
-        if not files:
-            dead.append(name)
+    dead = [
+        name for name in sorted(n for n in enc.__all__ if n.startswith("resolve_"))
+        if name not in _QUEUED_DEAD_EXPORTS and not _call_sites(name)
+    ]
     assert dead == [], (
         f"exported resolvers with zero call sites outside their own module: {dead} "
         "— dead weight (R116); delete or wire before exporting"
@@ -77,19 +89,37 @@ def test_every_exported_resolver_has_a_call_site() -> None:
 
 
 def test_the_queued_dead_exports_are_still_dead() -> None:
-    """ANTI-ROT on the exclusion above. If ADJ-WP12R-19 is ruled 'wire it' and a call site
-    appears, this reds and forces the allowlist to shrink — so the exclusion cannot quietly
-    outlive its grounds, which is how allowlists rot into permanent exemptions."""
+    """ANTI-ROT on the exclusion above — it SURVIVES the R154 dispositions by design (R154:
+    the anti-rot test is the law's enforcement, not the exclusions' registry). If the
+    excluded row is ever wired, this reds and forces the list to shrink, so the exclusion
+    cannot outlive its grounds."""
     for name in sorted(_QUEUED_DEAD_EXPORTS):
-        proc = subprocess.run(
-            ["git", "grep", "-l", name, "--", "src", "tools", "crates"],
-            cwd=_REPO, capture_output=True, text=True, check=False,
+        sites = _call_sites(name)
+        assert not sites, (
+            f"{name} now HAS call sites — it is no longer dead, so remove it from "
+            f"_QUEUED_DEAD_EXPORTS and re-rule its queue row:\n  " + "\n  ".join(sites)
         )
-        files = {
-            f for f in proc.stdout.split()
-            if f not in ("src/mantis/encoding/__init__.py", "src/mantis/encoding/resolvers.py")
-        }
-        assert not files, (
-            f"{name} now HAS a call site ({sorted(files)}) — it is no longer dead, so "
-            f"remove it from _QUEUED_DEAD_EXPORTS and close ADJ-WP12R-19 accordingly"
-        )
+
+
+def test_transitively_dead_cluster_is_recorded_not_silently_deleted() -> None:
+    """R154 condition (a) as an ASSERTION, not a claim in a document.
+
+    `resolve_anchor_path`'s zero-ref evidence FAILED re-verification: it has live callers.
+    It is dead only TRANSITIVELY — its callers sit inside `expand_auto_paths`, which is
+    itself unreferenced. Deleting the leaf alone would break the caller; discharging it
+    means taking the whole cluster, which R154 did not authorize.
+
+    This pins the shape so the next reader cannot mistake "has callers" for "is reachable",
+    and reds the moment the cluster's root gains a consumer (making the leaf genuinely live)
+    or loses its body (making the leaf genuinely deletable).
+    """
+    leaf = _call_sites("resolve_anchor_path")
+    assert leaf, "resolve_anchor_path lost its callers — re-rule ADJ-WP12R-19's leaf half"
+    assert all("resolvers.py" in ln for ln in leaf), (
+        "resolve_anchor_path gained a caller OUTSIDE resolvers.py — it is now genuinely "
+        "live, not transitively dead:\n  " + "\n  ".join(leaf)
+    )
+    assert not _call_sites("expand_auto_paths"), (
+        "expand_auto_paths — the dead cluster's ROOT — gained a caller, which makes "
+        "resolve_anchor_path genuinely reachable. Re-rule ADJ-WP12R-19 accordingly."
+    )

@@ -96,6 +96,10 @@ pub(crate) struct ClusterVarianceAtomics<'a> {
 }
 
 /// Per-move MCTS accumulators + `positions_generated` (frozen `:94`).
+/// WP12-R Phase T adds the two LAW-18 target-integrity counters (DESIGN_T §3.6,
+/// the solver_counters pattern): `export_offwindow_mass_moves` fires once per
+/// move whose exported target carries overflow mass; `gridls_zero_policy_rows`
+/// fires per recorded grid-ls cluster row filled with the §3.5 zero-row sentinel.
 #[derive(Clone, Copy)]
 pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_depth_accum: &'a AtomicU64,
@@ -103,6 +107,32 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_stat_count: &'a AtomicU64,
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
+    pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
+    pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
+}
+
+/// WP12-R Phase T fatal-defect latch handle (DESIGN_T §3.4; LAW-14). Store the
+/// typed message (first defect wins), count the fire, THEN flip `running=false`
+/// (store-then-halt) — a worker panic is NOT loud (`stop()` swallows joins), so
+/// this is what makes the typed raise reach the supervisor via the drain face.
+#[derive(Clone, Copy)]
+pub(crate) struct FatalDefectLatch<'a> {
+    pub(crate) slot: &'a std::sync::Mutex<Option<String>>,
+    pub(crate) fires: &'a AtomicU64,
+    pub(crate) running: &'a AtomicBool,
+}
+
+impl FatalDefectLatch<'_> {
+    pub(crate) fn store(&self, msg: String) {
+        {
+            let mut slot = self.slot.lock().expect("fatal_defect lock poisoned");
+            if slot.is_none() {
+                *slot = Some(msg);
+            }
+        }
+        self.fires.fetch_add(1, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
+    }
 }
 
 /// D-WS3V3 in-run solver fire-rate counter refs (frozen `:110`). Incremented ONLY
@@ -600,6 +630,7 @@ pub(crate) fn play_one_move(
     accumulators: MoveAccumulators,
     solver_counters: SolverCounters,
     solver_fires: &mut u32,
+    fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
     // Move-level playout cap (orthogonal to game-level fast_prob).
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
@@ -708,6 +739,15 @@ pub(crate) fn play_one_move(
 
     let record_full_search = move_is_full_search || forced_win_fired || solver_fired;
 
+    // LAW-18 (DESIGN_T §3.6): count a move whose exported target carries
+    // off-window (overflow) mass — the restored-mass fire-rate; pre-Phase-T
+    // this population was being truncated by the coverage gate.
+    if let MovePolicy::Ls(ls) = &target_policy {
+        if ls.overflow.values().any(|&p| p > 0.0) {
+            accumulators.export_offwindow_mass_moves.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     // ── Sample and apply move (ZOI-filtered legal set) ──
     let Some(move_idx) = select_move(board, move_history, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng) else {
         return MoveOutcome::Break;
@@ -715,11 +755,20 @@ pub(crate) fn play_one_move(
 
     // ── Record position (BEFORE apply_move; hoisted is_graph branch) ──
     if is_graph {
-        record_position_graph_dispatch(board, &target_policy, agg_trunk_sz, record_full_search, graph_records_vec);
+        if let Err(err) = record_position_graph_dispatch(
+            board, &target_policy, agg_trunk_sz, record_full_search, graph_records_vec,
+        ) {
+            // LAW-14: a target-integrity defect is RUN-FATAL — latch the typed
+            // message (variant name in Display) and halt; the bridge drain face
+            // raises it to the supervisor (DESIGN_T §3.4).
+            fatal_latch.store(err.to_string());
+            return MoveOutcome::Break;
+        }
     } else {
         record_position(
             board, kept_planes, n_cells, agg_trunk_sz, ctx.is_fast_game, ctx.completed_q_values,
             policy_stride, has_pass_slot, &target_policy, ctx.sym_idx, infer.sym_tables, record_full_search, records_vec,
+            accumulators.gridls_zero_policy_rows,
         );
     }
 

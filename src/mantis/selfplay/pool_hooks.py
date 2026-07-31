@@ -134,6 +134,11 @@ class RunnerStats:
     solver_moves_eligible_seeded: int = 0
     solver_injected_seeded: int = 0
     seeded_games_started: int = 0
+    # WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6): an idle
+    # lever stays VISIBLE at 0 (the chain_loss_with_fire_rate posture).
+    export_offwindow_mass_moves: int = 0
+    gridls_zero_policy_rows: int = 0
+    target_integrity_defects: int = 0
     # Vestigial `None`-valued slot: the legacy 4-field encoding-spec getter retired with
     # the runner field it mirrored. Kept so external callers that construct `RunnerStats`
     # by kwarg do not break; the live spec cross-check reads `pool.encoding_spec`.
@@ -186,6 +191,9 @@ def runner_stats(pool: Any) -> RunnerStats:
         ),
         solver_injected_seeded=int(getattr(r, "solver_injected_seeded", 0)),
         seeded_games_started=int(getattr(r, "seeded_games_started", 0)),
+        export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
+        gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
+        target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
     )
 
 

@@ -25,7 +25,10 @@ added_by = "WP3"
 
 [[required]]
 path = "search_golden/completed_q/golden_bits.txt"
-sha256 = "b4f0bdcc07dc87c509c76efa37cd8d83d28a6007aa8a5fe5b78338265967152e"
+# Re-minted WP12-R Phase T (R159 grant, DESIGN_T §2): S2_OFFWINDOW row now carries the
+# previously-dropped uncovered cell under the no-drop law — one line moved, capture-diff
+# verified. Freeze amendment FA-1 (dispatcher): the T-2 freeze pinned the pre-re-mint sha.
+sha256 = "a5ad00c47b47d4f7e0726754d9e71b9b6c88825ed5f802aff4867fa7126db3e5"
 added_by = "WP4"
 
 [[required]]
@@ -363,4 +366,23 @@ added_by = "WP12-R"
 [[required]]
 path = "eval_selfplay_parity/dispersed_r6_v1.json"
 sha256 = "a0d4ff0f1bc88a3242b9381ccff5c9356333559dcb8a4f681f93dc3d50653b58"
+added_by = "WP12-R"
+
+# ── WP12-R Phase T (TARGET INTEGRITY, T-2 ORACLE-WRITE) ────────────────────────────────
+# Exported-target parity fixtures (O-1, R138 pattern: ONE fixture, both FFI sides): the
+# POST-FIX (coord, mass) export pairs at T=1.0, minted from the RAW root-child visits of
+# the production sequence (no_drop_uniform prior → expand_and_backup_ls_at @ 50 sims /
+# batch 8) — derivable at HEAD because `total` already sums ALL children (DESIGN_T §1.1).
+# Read by crates/mantis-selfplay/tests/target_export_parity.rs (Rust leg) AND
+# tests/selfplay/test_target_export_parity.py (Python leg). Flat-keyed on purpose (no
+# JSON dependency in the Rust leg). 4 261 B + 5 836 B = 10 097 B, inside the same 64 KB
+# family budget, asserted in-test.
+[[required]]
+path = "eval_selfplay_parity/target_parity_v1.json"
+sha256 = "33bf26fc0e7332c5c07c173b47c38c0fd833b8634fa3953cf7cd751cbbe69ef0"
+added_by = "WP12-R"
+
+[[required]]
+path = "eval_selfplay_parity/target_parity_dispersed_v1.json"
+sha256 = "cd8bdf6b846213fd9b7c60e9b23178e767f7513b1e6f3774bebec7649a8a980b"
 added_by = "WP12-R"

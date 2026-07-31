@@ -73,8 +73,8 @@ fn build_tree(board: Board, mr: u8, children: &[(i32, i32, u32, f32, f32)]) -> M
 
 /// Two-cluster board: stones near (0,0) and near (20,0) yield cluster centers
 /// `[(0,0),(20,0)]` and bbox-centroid window center (10,0). Used by the S2
-/// off-window fixture so one off-window child is COVERED (→overflow) and another
-/// off-window child is UNCOVERED (→dropped).
+/// off-window fixture; both off-window children (covered AND uncovered) route
+/// into `overflow` under the no-drop law (WP12-R Phase T).
 fn two_cluster_board() -> Board {
     let mut b = Board::new();
     b.set_legal_move_radius(40);
@@ -141,16 +141,19 @@ fn s1s2_fixtures() -> Vec<(&'static str, MCTSTree)> {
     ]
 }
 
-/// S2-only off-window fixture: requires the 2-cluster board so coverage geometry
-/// splits children into dense / overflow / dropped.
+/// S2-only off-window fixture: the 2-cluster board splits children into dense /
+/// overflow slots. Under the no-drop law (WP12-R Phase T; authority
+/// records.rs:468-479) EVERY off-window child exports into `overflow` —
+/// coverage no longer gates the export, so the masses sum to 1 over the FULL
+/// child set (the pre-fix line subset-renormalized without q=30).
 ///   - in-window child  q=10 (dense)
-///   - off-window COVERED child q=25 (covered by center (20,0) → overflow)
-///   - off-window UNCOVERED child q=30 (dropped)
+///   - off-window COVERED child q=25 (→ overflow)
+///   - off-window UNCOVERED child q=30 (→ overflow; formerly dropped)
 fn s2_offwindow_fixture() -> MCTSTree {
     build_tree(two_cluster_board(), 2, &[
         (10, 0, 10, 5.0, 0.4),  // in-window
         (25, 0, 8, -3.0, 0.35), // off-window covered
-        (30, 0, 6, 1.0, 0.25),  // off-window uncovered → dropped
+        (30, 0, 6, 1.0, 0.25),  // off-window uncovered → carried (no-drop)
     ])
 }
 

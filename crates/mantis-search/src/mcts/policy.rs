@@ -5,7 +5,7 @@
 //! Dirichlet noise application at root, top-visits selection.
 
 use super::{completed_q, MCTSTree};
-use crate::legal_set::{self, LegalSetPolicy};
+use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashMap;
 
 impl MCTSTree {
@@ -163,9 +163,14 @@ impl MCTSTree {
     }
 
     /// Legal-set counterpart of `get_policy`. Keys each root child by board
-    /// coord into a ragged `LegalSetPolicy` (in-window → `dense`, covered
-    /// off-window → `overflow`). Off-window children with NO cluster coverage
-    /// are dropped (today's `get_policy` behaviour).
+    /// coord into a ragged `LegalSetPolicy` (in-window → `dense`, off-window →
+    /// `overflow`). NO-DROP law (authority records.rs:468-479; R34/R153/R156,
+    /// WP12-R Phase T): EVERY root child is routed — in- AND off-window,
+    /// covered or not — so `Σdense + Σoverflow == 1` by construction whenever
+    /// any child was visited. A zero-visit root returns the prior-fallback
+    /// distribution over the FULL child set — the improved exporters' exact
+    /// semantics (`prior_fallback_masses`), so the ls seam has ONE fallback
+    /// authority. The export never reads cluster-coverage geometry.
     pub fn get_policy_ls(&self, temperature: f32, n_actions: usize) -> LegalSetPolicy {
         let mut dense = vec![0.0f32; n_actions];
         let mut overflow: FxHashMap<(i32, i32), f32> = FxHashMap::default();
@@ -177,11 +182,6 @@ impl MCTSTree {
         let first = root.first_child as usize;
         let n_ch = root.n_children as usize;
 
-        // Coverage geometry (once per move — export is not the per-sim hot path).
-        let (_, centers) = self.root_board.get_cluster_views();
-        let trunk_sz = self.root_board.cluster_window_size() as i32;
-        let half = (trunk_sz - 1) / 2;
-
         if temperature == 0.0 {
             if let Some(best) = (first..first + n_ch).max_by_key(|&i| self.pool[i].n_visits) {
                 let val = self.pool[best].action_idx;
@@ -190,37 +190,71 @@ impl MCTSTree {
                 let flat = self.root_board.window_flat_idx(q, r);
                 if flat < n_actions {
                     dense[flat] = 1.0;
-                } else if legal_set::is_covered(q, r, &centers, trunk_sz, half) {
+                } else {
                     overflow.insert((q, r), 1.0);
                 }
             }
-        } else {
-            let visits: Vec<f32> = (first..first + n_ch)
-                .map(|i| (self.pool[i].n_visits as f32).powf(1.0 / temperature))
-                .collect();
-            let total: f32 = visits.iter().sum();
-            if total > 0.0 {
-                for (j, &v) in visits.iter().enumerate() {
-                    let val = self.pool[first + j].action_idx;
-                    let q = (val >> 16) as i32 - 32768;
-                    let r = (val & 0xFFFF) as i32 - 32768;
-                    let flat = self.root_board.window_flat_idx(q, r);
-                    if flat < n_actions {
-                        dense[flat] = v / total;
-                    } else if legal_set::is_covered(q, r, &centers, trunk_sz, half) {
-                        overflow.insert((q, r), v / total);
-                    }
+            return LegalSetPolicy { dense, overflow };
+        }
+
+        let visits: Vec<f32> = (first..first + n_ch)
+            .map(|i| (self.pool[i].n_visits as f32).powf(1.0 / temperature))
+            .collect();
+        let total: f32 = visits.iter().sum();
+        if total > 0.0 {
+            for (j, &v) in visits.iter().enumerate() {
+                let val = self.pool[first + j].action_idx;
+                let q = (val >> 16) as i32 - 32768;
+                let r = (val & 0xFFFF) as i32 - 32768;
+                let flat = self.root_board.window_flat_idx(q, r);
+                if flat < n_actions {
+                    dense[flat] = v / total;
+                } else {
+                    overflow.insert((q, r), v / total);
                 }
+            }
+            return LegalSetPolicy { dense, overflow };
+        }
+
+        // total == 0 (zero-visit root, sims = 1 / inference-failure regime):
+        // the prior-fallback distribution over the FULL child set — byte-equal
+        // to the improved exporters' `sum_n == 0` arm (ONE fallback semantics;
+        // DESIGN_T §3.1 closes the silent all-zero arm).
+        let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
+        let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
+        for j in 0..n_ch {
+            let child = &self.pool[first + j];
+            let val = child.action_idx;
+            let q = (val >> 16) as i32 - 32768;
+            let r = (val & 0xFFFF) as i32 - 32768;
+            let flat = self.root_board.window_flat_idx(q, r);
+            children.push(completed_q::CqChild {
+                visits: child.n_visits,
+                prior: child.prior,
+                q_val: 0.0,
+            });
+            coords.push((q, r, flat));
+        }
+        for (&(q, r, flat), mass) in coords
+            .iter()
+            .zip(completed_q::prior_fallback_masses(&children))
+        {
+            if flat < n_actions {
+                dense[flat] = mass;
+            } else {
+                overflow.insert((q, r), mass);
             }
         }
         LegalSetPolicy { dense, overflow }
     }
 
     /// Legal-set counterpart of `get_improved_policy`. The completed-Q softmax
-    /// math is FROZEN; the differences are (1) off-window COVERED children are
-    /// retained (keyed into `overflow`) instead of dropped, (2) off-window
-    /// NO-COVERAGE children are dropped (today's `if action >= n_actions
-    /// continue`), and (3) the output is the ragged `LegalSetPolicy`.
+    /// math is FROZEN; the differences are (1) EVERY off-window child is
+    /// retained (keyed into `overflow`) — the NO-DROP law (records.rs:468-479
+    /// authority; the pre-Phase-T uncovered drop subset-renormalized the
+    /// remaining masses, the authority's second forbidden mode) — and (2) the
+    /// output is the ragged `LegalSetPolicy`. The child SET the frozen math
+    /// runs over is the full root-child set; the formulas are untouched.
     pub fn get_improved_policy_ls(
         &self,
         n_actions: usize,
@@ -238,13 +272,9 @@ impl MCTSTree {
         let n_ch = root.n_children as usize;
         let q_sign: f32 = if self.pool[0].moves_remaining == 1 { -1.0 } else { 1.0 };
 
-        let (_, centers) = self.root_board.get_cluster_views();
-        let trunk_sz = self.root_board.cluster_window_size() as i32;
-        let half = (trunk_sz - 1) / 2;
-
         // The completed-Q math is shared with S1 via `super::completed_q`. The
-        // ONE S1↔S2 divergence stays here: the off-window keep/drop decision +
-        // ragged scatter. `coords[i] = (q, r, flat)` for `children[i]`;
+        // ONE S1↔S2 divergence stays here: the ragged scatter (every child kept;
+        // no coverage read). `coords[i] = (q, r, flat)` for `children[i]`;
         // flat >= n_actions ⇒ off-window (→ overflow).
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
@@ -258,10 +288,6 @@ impl MCTSTree {
             let q = (val >> 16) as i32 - 32768;
             let r = (val & 0xFFFF) as i32 - 32768;
             let flat = self.root_board.window_flat_idx(q, r);
-            // Drop an off-window child only when NO cluster covers it.
-            if flat >= n_actions && !legal_set::is_covered(q, r, &centers, trunk_sz, half) {
-                continue;
-            }
 
             let visits = child.n_visits;
             let prior = child.prior;
@@ -284,7 +310,7 @@ impl MCTSTree {
             coords.push((q, r, flat));
         }
 
-        // Edge case: no visits — return prior distribution (covered cells included).
+        // Edge case: no visits — return prior distribution (all children included).
         if agg.sum_n == 0 {
             for (&(q, r, flat), mass) in coords
                 .iter()

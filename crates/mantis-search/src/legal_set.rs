@@ -21,10 +21,13 @@ pub struct LegalSetPolicy {
 
 impl LegalSetPolicy {
     /// Read the prior/target mass for board coord `(q, r)`. In-global-window
-    /// cells read `dense` (identical to the dense path); a covered off-window
-    /// cell reads `overflow`; a cell outside ALL coverage (absent, off-window)
-    /// reads `floor` (the no-coverage prior). `(bcq, bcr)` is the global window
-    /// centre, `trunk_sz`/`half` the spec-derived geometry.
+    /// cells read `dense` (identical to the dense path); any off-window cell
+    /// present in `overflow` reads its entry — on the EXPORT path (WP12-R
+    /// Phase T no-drop law) uncovered off-window cells carry overflow entries
+    /// too, so coverage no longer bounds the overflow key set; an off-window
+    /// cell ABSENT from `overflow` reads `floor` (the no-coverage prior, a
+    /// prior-producer convention). `(bcq, bcr)` is the global window centre,
+    /// `trunk_sz`/`half` the spec-derived geometry.
     #[inline]
     #[allow(clippy::too_many_arguments)] // VERBATIM signature (scalar coord + geometry + floor)
     pub fn get(&self, q: i32, r: i32, bcq: i32, bcr: i32, trunk_sz: i32, half: i32, floor: f32) -> f32 {
@@ -39,8 +42,11 @@ impl LegalSetPolicy {
 
 /// Coverage predicate: is `(q, r)` inside >=1 cluster window? Byte-identical to
 /// the aggregation bound test (same `wq = q - cq + half in [0, trunk_sz)`). The
-/// target producers use this to scope the ragged set to the union-of-cluster-
-/// windows ∩ legal, so no uncovered key leaks into `overflow`. Widened to `pub`
+/// PRIOR producers (`aggregate_policy_ls` — a grid-ls prior structurally has no
+/// mass outside cluster windows) use this to scope their ragged set, so no
+/// uncovered key leaks into a PRIOR's `overflow`; the EXPORT path (WP12-R
+/// Phase T) is coverage-free — an exported target's `overflow` may carry
+/// uncovered keys. The O1/solver injection gates also read it. Widened to `pub`
 /// so the selfplay record producers can import it alongside `LegalSetPolicy`.
 #[inline]
 pub fn is_covered(q: i32, r: i32, centers: &[(i32, i32)], trunk_sz: i32, half: i32) -> bool {

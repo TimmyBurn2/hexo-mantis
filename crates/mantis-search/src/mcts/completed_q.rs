@@ -141,7 +141,13 @@ pub(super) fn improved_policy_masses(
 #[inline]
 pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
     let mut masses: Vec<f32> = children.iter().map(|ch| ch.prior).collect();
-    let total_prior: f32 = masses.iter().sum();
+    // WP12-R Phase T: the normalizer accumulates in f64 (cast once to f32).
+    // A sequential f32 sum drifts ~2e-6 relative at the 192-child cap, so the
+    // zero-visit fallback shipped a "distribution" missing unity by more than
+    // the target-integrity oracles tolerate. Bit-identical on every committed
+    // golden fixture (S1/S2_RED3 all-unvisited verified byte-equal); the
+    // divisions below stay f32 — no formula change, accumulation only.
+    let total_prior = masses.iter().map(|&m| f64::from(m)).sum::<f64>() as f32;
     if total_prior > 0.0 {
         for m in &mut masses {
             *m /= total_prior;

@@ -465,6 +465,68 @@ pub fn assemble_ls_from_gnn_probs(
     Ok(LegalSetPolicy { dense, overflow })
 }
 
+/// Typed target-integrity refusal (WP12-R Phase T, DESIGN_T §3.3/§3.4; LAW-14).
+///
+/// Scope: the GRAPH record constructor only — [`record_position_graph`] is the
+/// single graph-record constructor, and these tripwires make the degenerate
+/// target class UNCONSTRUCTIBLE there. The dense fast-game zero-policy arm
+/// (`runner/record.rs:67-78`) is a deliberate value-only sentinel on the DENSE
+/// recorder and never reaches this constructor.
+///
+/// `Display` carries every field and leads with the variant name so the name
+/// survives verbatim through the runner fatal-defect latch to the supervisor.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TargetIntegrityError {
+    /// The pre-filter legal-scan mass is non-finite or off unity (order-arms 1
+    /// and 3 — a NaN/inf anywhere in the ls poisons the f64 sum and lands here
+    /// with a non-finite `sum`).
+    MassNotUnity { sum: f64, ply_index: u16, n_cells: usize },
+    /// ~Zero mass over a NON-empty legal set (order-arm 2; the R157 named
+    /// degenerate class keeps its own variant — checked BEFORE unity).
+    EmptyTarget { ply_index: u16, n_legal: usize },
+    /// More positive-mass cells than the fixed HEXG visit slot holds — the
+    /// silent top-k truncation's typed replacement.
+    VisitSlotsExceeded { n: usize, max: usize, ply_index: u16 },
+}
+
+impl std::fmt::Display for TargetIntegrityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells } => write!(
+                f,
+                "MassNotUnity: policy-target mass sum={sum} != 1 at ply_index={ply_index} \
+                 ({n_cells} positive-mass cells) — the exporter/injector upstream shipped an \
+                 invalid distribution (LAW-14: run-fatal, never recorded)"
+            ),
+            TargetIntegrityError::EmptyTarget { ply_index, n_legal } => write!(
+                f,
+                "EmptyTarget: policy target carries ~zero mass over a non-empty legal set \
+                 (ply_index={ply_index}, n_legal={n_legal}) — the degenerate all-zero class \
+                 is unconstructible (LAW-14: run-fatal, never recorded)"
+            ),
+            TargetIntegrityError::VisitSlotsExceeded { n, max, ply_index } => write!(
+                f,
+                "VisitSlotsExceeded: {n} positive-mass cells exceed MAX_VISITS={max} at \
+                 ply_index={ply_index}; the effective sim budget + leaf batch must fit \
+                 MAX_VISITS, or MAX_VISITS must be raised — silent truncation is deleted \
+                 (LAW-14: run-fatal, never recorded)"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TargetIntegrityError {}
+
+/// Tolerance for the §3.3 unity tripwire. NOTE (F-RT-3 correction): this is an
+/// ABSOLUTE tolerance on comparisons anchored at 1.0 (`|sum − 1| > TOL`,
+/// `|sum − stored| > TOL`), NOT the relative form `mass_drop_check` uses — the
+/// two share only the numeric width 1e-4 (at the unity anchor absolute ==
+/// relative, which is why the width was borrowed from sample.rs:29). The
+/// within-TOL admit side is pinned by the loop-2 sign-integrity oracles.
+/// `pub` so the bridge push face (the second public constructor, F-RT-2)
+/// refuses with the SAME window.
+pub const TARGET_MASS_TOL: f64 = 1e-4;
+
 /// GNN-integration WP-5a (§1.2) — build the ONE compact graph-position record
 /// from the search-root board + the assembled ragged `LegalSetPolicy`.
 ///
@@ -472,11 +534,24 @@ pub fn assemble_ls_from_gnn_probs(
 /// board natively; design §1.3 DROPs ownership/winning_line/chain/ply). The
 /// visit target is the coord→prob map over the FULL legal set — in- AND
 /// off-window — read from `ls` BY COORD, so the `records.rs:62` off-window skip
-/// is NOT inherited (design §6.1; that skip is the pre-R1 decode handicap the
-/// +414 evidence removed). `outcome`/`value_valid` are placeholders → stamped at
-/// game end by `finalize_graph_outcome`. Truncates to the top-`max_visits` cells
-/// by mass so the fixed HEXG slot never over-caps (visits are sparse in the
-/// deploy Gumbel regime; a denser target keeps its highest-mass moves).
+/// is NOT inherited (design §6.1). `outcome`/`value_valid` are placeholders →
+/// stamped at game end by `finalize_graph_outcome`.
+///
+/// WP12-R Phase T (DESIGN_T §3.3/§3.4): the target's f64 mass is accumulated on
+/// the RAW `ls.get` read INSIDE the legal scan, BEFORE the `p > 0.0` keep-test,
+/// so a NaN/inf anywhere in the ls poisons the sum and is seen. T-3 loop 2
+/// (F-RT-1) adds the guarded-equals-shipped conjunct FIRST: the stored
+/// (post-filter) mass must equal the scanned mass within TOL, so a
+/// sign-cancelling ls cannot ship a non-distribution record. Check order is
+/// then PINNED (each variant has a reachable arm): non-finite → `MassNotUnity`;
+/// ~0-with-legal → `EmptyTarget`; off-unity → `MassNotUnity`; then
+/// `len > max_visits` → `VisitSlotsExceeded` (the silent top-k truncation is
+/// DELETED — a target that cannot be stored whole cannot be built).
+///
+/// # Errors
+/// Returns [`TargetIntegrityError`] per the pinned order above — LAW-14: the
+/// caller latches it run-fatal (`runner/record.rs` dispatch → fatal-defect
+/// latch), never a silent skip.
 #[allow(clippy::too_many_arguments)] // mirrors the dense record fns' spec-derived scalar surface
 pub fn record_position_graph(
     board: &Board,
@@ -487,28 +562,58 @@ pub fn record_position_graph(
     ply_index: u16,
     is_full_search: bool,
     max_visits: usize,
-) -> crate::replay::hexg::GraphRecord {
+) -> Result<crate::replay::hexg::GraphRecord, TargetIntegrityError> {
     let (bcq, bcr) = board.window_center();
     let half = (trunk_sz - 1) / 2;
 
     // Visit target: read the ragged mass at each legal coord (no floor — a cell
     // absent from `ls` is truly 0-visit, and unstored cells read 0 at sample).
+    // The f64 mass accumulates on the RAW read, PRE-filter (§3.3 rev-3 N-1).
     let legal = board.legal_moves();
     let mut visits: Vec<(i16, i16, f32)> = Vec::with_capacity(legal.len());
+    let mut sum: f64 = 0.0;
+    let mut stored: f64 = 0.0;
     for &(q, r) in &legal {
         let p = ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0);
+        sum += f64::from(p);
         if p > 0.0 {
             visits.push((q as i16, r as i16, p));
+            stored += f64::from(p);
         }
     }
-    // Top-`max_visits` by mass — keep the highest-visit moves if the target is
-    // denser than the fixed slot (bounded fallback; renorm is unnecessary — the
-    // ragged CE tolerates a tiny truncated tail).
-    if visits.len() > max_visits {
-        visits.sort_unstable_by(|a, b| {
-            b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal)
+
+    // T-3 loop 2 (F-RT-1): the guarded quantity must equal the SHIPPED quantity.
+    // `sum` is the PRE-filter scan (N-1, NaN-visible); `stored` accumulates the
+    // post-`p > 0.0` shipped mass in the SAME scan (bit-identical to a second
+    // pass — same f64 additions in push order; fused per the LAW-09 bracket) —
+    // a sign-cancelling ls (e.g. {+1.5, −0.5}: scan sum 1, stored 1.5) would
+    // otherwise construct a non-distribution record. A NaN `sum` makes this
+    // comparison FALSE and falls through to the finiteness arm, so the pinned
+    // §3.3 check order below is preserved verbatim.
+    if (sum - stored).abs() > TARGET_MASS_TOL {
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum: stored,
+            ply_index,
+            n_cells: visits.len(),
         });
-        visits.truncate(max_visits);
+    }
+
+    // §3.3 pinned order-arms 1..3 + the §3.4 slot guard.
+    if !sum.is_finite() {
+        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+    }
+    if sum.abs() <= TARGET_MASS_TOL && !legal.is_empty() {
+        return Err(TargetIntegrityError::EmptyTarget { ply_index, n_legal: legal.len() });
+    }
+    if (sum - 1.0).abs() > TARGET_MASS_TOL {
+        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+    }
+    if visits.len() > max_visits {
+        return Err(TargetIntegrityError::VisitSlotsExceeded {
+            n: visits.len(),
+            max: max_visits,
+            ply_index,
+        });
     }
 
     // Stones from the board's sparse occupied-cell map (order irrelevant — the
@@ -518,7 +623,7 @@ pub fn record_position_graph(
         stones.push((q as i16, r as i16, cell as i8));
     }
 
-    crate::replay::hexg::GraphRecord {
+    Ok(crate::replay::hexg::GraphRecord {
         stones,
         visits,
         current_player,
@@ -528,7 +633,7 @@ pub fn record_position_graph(
         outcome: 0.0,      // placeholder → finalize_graph_outcome
         value_valid: true, // placeholder → finalize_graph_outcome
         game_length: 0,    // placeholder → finalize_graph_outcome
-    }
+    })
 }
 
 /// GNN-integration WP-5a (§1.3) — stamp the §178 per-row outcome + draw-mask onto
@@ -571,6 +676,17 @@ pub fn finalize_graph_outcome(
 /// window cells from `ls.dense`, covered off-window cells from `ls.overflow` —
 /// so an off-GLOBAL-window cell covered by THIS cluster lands at its `local_idx`
 /// (the whole fix). Each recorded row stays dense-362 (buffer UNCHANGED).
+///
+/// Window-renorm semantics (K-cluster encode contract, PINNED): each returned
+/// row is the visit distribution CONDITIONED on this cluster's window.
+///
+/// WP12-R Phase T (DESIGN_T §3.5): a window with ZERO visible visit mass
+/// returns the ALL-ZERO row — the pipeline's pre-existing value-only sentinel
+/// (the dense fast-game arm produces it deliberately at `runner/record.rs:67-78`;
+/// the trainer masks it via `policy_valid = policies_t.sum(dim=1) > 1e-6`,
+/// `trainer/core.py:397`, excluding the row from the policy-loss numerator AND
+/// denominator). The pre-fix UNIFORM fill fabricated a distribution from zero
+/// signal and trained it at full weight — that object is now unconstructible.
 #[inline]
 pub fn aggregate_policy_to_local_ls(
     n_actions: usize,
@@ -613,10 +729,9 @@ pub fn aggregate_policy_to_local_ls(
         for p in &mut local_policy {
             *p /= sum;
         }
-    } else {
-        let uniform = 1.0 / n_actions as f32;
-        local_policy.fill(uniform);
     }
+    // else: zero visible mass in this window → the ALL-ZERO row (the value-only
+    // sentinel; see the doc above — NEVER a fabricated uniform, DESIGN_T §3.5).
     local_policy
 }
 
@@ -1211,7 +1326,8 @@ mod gnn_assemble_tests {
 
         let rec = super::record_position_graph(
             &b, &ls, trunk, b.current_player as i8, b.moves_remaining, b.ply.index() as u16, true, 128,
-        );
+        )
+        .expect("a full-mass target must record");
 
         // 3 stones, matching the board's occupied cells.
         assert_eq!(rec.stones.len(), 3);
@@ -1230,25 +1346,32 @@ mod gnn_assemble_tests {
     }
 
     #[test]
-    fn record_position_graph_truncates_to_top_k() {
+    fn record_position_graph_refuses_over_cap_with_the_typed_error() {
+        // WP12-R Phase T re-point (R159 grant, DESIGN_T §2.1): this test formerly
+        // pinned the SILENT top-k truncation (including shipping a non-unit kept
+        // mass without complaint). Post-§3.4 the truncation is DELETED — an
+        // over-cap target is a typed `VisitSlotsExceeded` refusal.
         let b = small_board();
         let (bcq, bcr) = b.window_center();
         let (trunk, half) = (19i32, 9i32);
         let legal = b.legal_moves();
         assert!(legal.len() >= 5);
-        // Ascending mass on 5 legal cells; top-2 truncation must keep the two highest.
+        // A VALID distribution over 5 legal cells (Σ == 1) against max_visits=2.
         let mut dense = vec![0.0f32; 362];
-        for (k, &(q, r)) in legal.iter().take(5).enumerate() {
+        for &(q, r) in legal.iter().take(5) {
             let idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, trunk, half);
-            if idx < 362 {
-                dense[idx] = 0.1 * (k as f32 + 1.0); // 0.1..0.5
-            }
+            assert!(idx < 362, "chosen legal cells must be in-window");
+            dense[idx] = 0.2;
         }
         let ls = LegalSetPolicy { dense, overflow: FxHashMap::default() };
-        let rec = super::record_position_graph(&b, &ls, trunk, 1, 2, 0, true, 2);
-        assert_eq!(rec.visits.len(), 2, "top-k truncation to max_visits=2");
-        let kept: Vec<f32> = rec.visits.iter().map(|&(_, _, p)| p).collect();
-        assert!(kept.iter().all(|&p| p >= 0.399), "kept the two highest-mass cells, got {kept:?}");
+        let err = super::record_position_graph(&b, &ls, trunk, 1, 2, 0, true, 2)
+            .expect_err("5 cells against max_visits=2 must raise, never silently truncate");
+        match err {
+            super::TargetIntegrityError::VisitSlotsExceeded { n, max, .. } => {
+                assert_eq!((n, max), (5, 2), "error carries the offending count + the cap");
+            }
+            other => panic!("expected VisitSlotsExceeded, got {other}"),
+        }
     }
 
     #[test]

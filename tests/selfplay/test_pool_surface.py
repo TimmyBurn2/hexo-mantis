@@ -80,6 +80,10 @@ RUNNER_STATS_FIELDS = {
     "solver_moves_eligible", "solver_win_proven", "solver_injected",
     "solver_injected_offwindow", "solver_budget_exhausted",
     "solver_moves_eligible_seeded", "solver_injected_seeded", "seeded_games_started",
+    # WP12-R Phase T target-integrity counters (LAW-18; the byte-frozen oracle
+    # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
+    "export_offwindow_mass_moves", "gridls_zero_policy_rows",
+    "target_integrity_defects",
     "runner_encoding",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}

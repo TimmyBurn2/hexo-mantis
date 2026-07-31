@@ -1,3 +1,5 @@
+// Exceeds the 300-line soft cap (R8): the HexgBuffer pyclass + its F-RT-2 typed
+// push-refusal face + the in-src refusal oracle bank are one line-auditable unit.
 //! `HexgBuffer` + `GraphTargets` pyclasses over `mantis_selfplay::replay::hexg`
 //! (HEXG, WP5). The WP5 buffer is pyo3-STRIPPED: `push_record_impl` takes a plain
 //! `GraphRecord`, and `sample_graph_batch_impl` returns the buffer-owned
@@ -11,9 +13,42 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_selfplay::queues::GraphWire;
+use mantis_selfplay::records::{TargetIntegrityError, TARGET_MASS_TOL};
 use mantis_selfplay::replay::hexg::{GraphRecord, GraphTargets, HexgBuffer};
 
 use crate::inference::PyGraphWire;
+
+/// WP12-R Phase T loop 2 (F-RT-2): `push_graph_position` is the SECOND public
+/// graph-record constructor (the Python production route,
+/// `pool_drain.py → pool_push.py`), and R161 unconstructibility is
+/// constructor-quantified — so the FFI face refuses non-distribution rows with
+/// the SAME typed semantics as `record_position_graph` (the
+/// `TargetIntegrityError` Display, variant name first, mapped to `ValueError`;
+/// `panic = "unwind"` untouched). Census grounds for refusing ALL
+/// non-distribution rows here: the graph push face has NO legitimate
+/// zero/value-only form — the fast-game zero-policy sentinel is the DENSE
+/// recorder's (`runner/record.rs:67-78`; the graph dispatch takes no
+/// `is_fast_game`), and graph quick-arm rows carry FULL mass (the frozen QA
+/// oracle pins it). Duplicate-coord rows stay admitted (caught LOUD at
+/// sample-align by `mass_drop_check`); per-entry NaN/negative/over-cap
+/// refusals stay in `push_record_impl` (the independent second line).
+/// `EmptyTarget.n_legal` carries the ROW length on this face (no board here).
+fn refuse_non_distribution_row(
+    visits: &[(i16, i16, f32)],
+    ply_index: u16,
+) -> Result<(), TargetIntegrityError> {
+    let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum();
+    if !sum.is_finite() {
+        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+    }
+    if visits.is_empty() || sum.abs() <= TARGET_MASS_TOL {
+        return Err(TargetIntegrityError::EmptyTarget { ply_index, n_legal: visits.len() });
+    }
+    if (sum - 1.0).abs() > TARGET_MASS_TOL {
+        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+    }
+    Ok(())
+}
 
 /// Graph-position replay ring (parallel to `ReplayBuffer`), exposed to Python.
 #[pyclass(name = "HexgBuffer", module = "mantis._engine")]
@@ -37,7 +72,15 @@ impl PyHexgBuffer {
     }
 
     /// Store one compact graph-position record. LOUD error if it exceeds
-    /// `MAX_STONES` / `MAX_VISITS`.
+    /// `MAX_STONES` / `MAX_VISITS`, and (F-RT-2) a typed refusal — the
+    /// `TargetIntegrityError` Display as `ValueError` — when the visit row is
+    /// not a distribution (empty / ~zero / off-unity mass): this ctor is the
+    /// second public graph-record constructor and carries the same
+    /// unconstructibility contract as `record_position_graph`.
+    ///
+    /// # Errors
+    /// `ValueError` per the above; per-entry NaN/negative/over-cap refusals
+    /// surface from `push_record_impl` unchanged.
     #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1))]
     pub fn push_graph_position(
@@ -53,6 +96,8 @@ impl PyHexgBuffer {
         game_length: u16,
         game_id: i64,
     ) -> PyResult<()> {
+        refuse_non_distribution_row(&visits, ply_index)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let rec = GraphRecord {
             stones,
             visits,
@@ -219,5 +264,53 @@ mod tests {
         let (_wire, targets) = b.sample_graph_batch(1, false, 0.0).expect("sample ok");
         // One sampled record → one per-graph argmax cell decoded.
         assert_eq!(targets.target_argmax_cells().len(), 1);
+    }
+
+    // ── WP12-R Phase T loop 2 (F-RT-2): the FFI ctor's non-distribution refusal,
+    // Rust leg (the Python leg is tests/bridge/test_target_push_refusal.py).
+    // Killer: M-Q (refusal removed → these red). ──────────────────────────────
+
+    fn push_row(b: &mut PyHexgBuffer, visits: Vec<(i16, i16, f32)>) -> PyResult<()> {
+        let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
+        b.push_graph_position(stones, visits, 1, 2, 3, true, 0.0, true, 4, -1)
+    }
+
+    #[test]
+    fn push_refuses_non_distribution_rows_with_the_typed_message() {
+        // Rendering a PyErr message needs the embedded interpreter (the
+        // buffer.rs/mcts.rs in-src precedent).
+        Python::initialize();
+        Python::attach(|py| {
+            let text = |e: PyErr| e.value(py).to_string();
+            let mut b = PyHexgBuffer::new(8, "gnn_axis_v1").unwrap();
+            // Σ = 0.5 → MassNotUnity (variant name must lead the message).
+            let e = text(push_row(&mut b, vec![(2, 0, 0.5)]).unwrap_err());
+            assert!(e.contains("MassNotUnity") && e.contains("0.5"), "{e}");
+            // Σ = 2.0 (over-unity) → MassNotUnity.
+            let e = text(push_row(&mut b, vec![(2, 0, 1.5), (3, 0, 0.5)]).unwrap_err());
+            assert!(e.contains("MassNotUnity"), "{e}");
+            // Σ = 1.5 single positive entry (the F-RT-1 shipped quantity, at the
+            // second constructor) → MassNotUnity.
+            let e = text(push_row(&mut b, vec![(2, 0, 1.5)]).unwrap_err());
+            assert!(e.contains("MassNotUnity") && e.contains("1.5"), "{e}");
+            // all-zero row → EmptyTarget (no value-only form on the graph face).
+            let e = text(push_row(&mut b, vec![(2, 0, 0.0), (3, 0, 0.0)]).unwrap_err());
+            assert!(e.contains("EmptyTarget"), "{e}");
+            // EMPTY visit list → EmptyTarget.
+            let e = text(push_row(&mut b, vec![]).unwrap_err());
+            assert!(e.contains("EmptyTarget"), "{e}");
+            assert_eq!(b.size(), 0, "no refused row may reach the ring");
+        });
+    }
+
+    #[test]
+    fn push_admits_within_tol_and_exact_unity() {
+        // F-RT-3 admit-side pin: the TOL window is the intended width — a
+        // within-TOL row is ADMITTED (contract-conformant), unity likewise.
+        let mut b = PyHexgBuffer::new(8, "gnn_axis_v1").unwrap();
+        push_row(&mut b, vec![(2, 0, 1.0)]).expect("exact unity admitted");
+        push_row(&mut b, vec![(2, 0, 0.6), (3, 0, 0.4 + 5.0e-5)])
+            .expect("a within-TOL (1 + 5e-5) row is ADMITTED — the documented window");
+        assert_eq!(b.size(), 2);
     }
 }

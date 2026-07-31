@@ -46,8 +46,8 @@ use super::params::{
 use super::record::RecordTuple;
 use super::rotate::inv_sym_idx;
 use super::search_drive::{
-    play_one_move, ClusterVarianceAtomics, InferContext, MoveAccumulators, MoveOutcome,
-    MovePlayContext, SolverCounters,
+    play_one_move, ClusterVarianceAtomics, FatalDefectLatch, InferContext, MoveAccumulators,
+    MoveOutcome, MovePlayContext, SolverCounters,
 };
 use super::stats::WorkerStats;
 use super::{GameResultRow, WorkerResultRow};
@@ -166,8 +166,10 @@ pub(crate) fn run_worker_thread(
         solver_moves_eligible_seeded,
         solver_injected_seeded,
         seeded_games_started,
+        export_offwindow_mass_moves,
+        gridls_zero_policy_rows,
     } = stats;
-    let WorkerAtomics { running, model_version } = atomics;
+    let WorkerAtomics { running, model_version, fatal_defect, target_integrity_defects } = atomics;
     let WorkerChannels {
         dense_queue,
         graph_queue,
@@ -256,6 +258,14 @@ pub(crate) fn run_worker_thread(
         mcts_stat_count: &mcts_stat_count,
         mcts_quiescence_fires: &mcts_quiescence_fires,
         positions_generated: &positions_generated,
+        export_offwindow_mass_moves: &export_offwindow_mass_moves,
+        gridls_zero_policy_rows: &gridls_zero_policy_rows,
+    };
+    // WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14).
+    let fatal_latch = FatalDefectLatch {
+        slot: &fatal_defect,
+        fires: &target_integrity_defects,
+        running: &running,
     };
     let solver_counters = SolverCounters {
         moves_eligible: &solver_moves_eligible,
@@ -334,6 +344,7 @@ pub(crate) fn run_worker_thread(
             variance_atomics,
             move_accumulators,
             solver_counters,
+            fatal_latch,
             &seed_corpus,
             &results_queue,
             &graph_results_queue,
@@ -369,6 +380,7 @@ fn run_one_game(
     variance_atomics: ClusterVarianceAtomics,
     move_accumulators: MoveAccumulators,
     solver_counters: SolverCounters,
+    fatal_latch: FatalDefectLatch,
     seed: &SeedCorpus,
     results_queue: &Mutex<VecDeque<WorkerResultRow>>,
     graph_results_queue: &Mutex<VecDeque<GraphRecord>>,
@@ -515,6 +527,7 @@ fn run_one_game(
             move_accumulators,
             solver_counters,
             &mut solver_fires,
+            fatal_latch,
         ) {
             MoveOutcome::Played | MoveOutcome::Continue => {}
             MoveOutcome::Break => break,

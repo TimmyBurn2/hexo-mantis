@@ -105,10 +105,14 @@ impl SelfPlayRunner {
             solver_moves_eligible_seeded: self.solver_moves_eligible_seeded.clone(),
             solver_injected_seeded: self.solver_injected_seeded.clone(),
             seeded_games_started: self.seeded_games_started.clone(),
+            export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
+            gridls_zero_policy_rows: self.gridls_zero_policy_rows.clone(),
         };
         let atomics_proto = WorkerAtomics {
             running: self.running.clone(),
             model_version: self.model_version.clone(),
+            fatal_defect: self.fatal_defect.clone(),
+            target_integrity_defects: self.target_integrity_defects.clone(),
         };
         let channels_proto = WorkerChannels {
             dense_queue: self.dense_queue.clone(),

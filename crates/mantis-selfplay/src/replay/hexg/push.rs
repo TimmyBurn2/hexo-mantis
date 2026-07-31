@@ -65,7 +65,8 @@ impl HexgBuffer {
         if rec.visits.len() > MAX_VISITS {
             return Err(format!(
                 "push_graph_position: {} visit cells exceeds MAX_VISITS {} \
-                 (record_position_graph must top-k-truncate before push)",
+                 (record_position_graph refuses over-cap targets with a typed \
+                 VisitSlotsExceeded — this push guard is the independent second line)",
                 rec.visits.len(),
                 MAX_VISITS
             ));

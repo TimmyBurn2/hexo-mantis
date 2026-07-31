@@ -7,6 +7,15 @@ license.workspace = true
 [lints]
 workspace = true
 
+[features]
+# WP12-R Phase T: the byte-frozen post-fix oracle bank
+# (tests/target_integrity_postfix.rs + the gated legs in target_export_parity.rs
+# / target_wire_carry.rs) compiles only under this feature; DEFAULT so plain
+# `cargo test --workspace --locked` runs it (ORACLE_NOTES_T.md gating contract —
+# never a silent skip).
+default = ["phase_t_postfix"]
+phase_t_postfix = []
+
 [dependencies]
 mantis-core = { path = "../mantis-core" }
 mantis-encoding = { path = "../mantis-encoding" }

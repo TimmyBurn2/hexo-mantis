@@ -10,10 +10,12 @@
 //! (WP3 relocated them off `Board`): `encode_state_to_buffer_channels` +
 //! `encode_chain_planes` are free functions taking the board.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use mantis_core::{Board, Player};
 use mantis_encoding::{encode_chain_planes, encode_state_to_buffer_channels};
 
-use crate::records;
+use crate::records::{self, TargetIntegrityError};
 use crate::replay::hexg::{GraphRecord, MAX_VISITS};
 use crate::replay::sym::SymTables;
 
@@ -46,6 +48,7 @@ pub(crate) fn record_position(
     sym_tables: &'static SymTables,
     move_is_full_search: bool,
     records_vec: &mut Vec<RecordTuple>,
+    gridls_zero_policy_rows: &AtomicU64,
 ) {
     let (views, centers) = board.get_cluster_views();
     // §P11: hoist legal_moves once across the K cluster scatters.
@@ -71,9 +74,18 @@ pub(crate) fn record_position(
                 MovePolicy::Dense(t) => records::aggregate_policy_to_local(
                     policy_stride, has_pass_slot, agg_trunk_sz, board, center, t, &record_legal_moves,
                 ),
-                MovePolicy::Ls(ls) => records::aggregate_policy_to_local_ls(
-                    policy_stride, has_pass_slot, agg_trunk_sz, board, center, ls, &record_legal_moves,
-                ),
+                MovePolicy::Ls(ls) => {
+                    let row = records::aggregate_policy_to_local_ls(
+                        policy_stride, has_pass_slot, agg_trunk_sz, board, center, ls, &record_legal_moves,
+                    );
+                    // LAW-18 (DESIGN_T §3.6): count each §3.5 zero-row fill —
+                    // a cluster window that saw zero visit mass records the
+                    // value-only sentinel row instead of a fabricated uniform.
+                    if row.iter().all(|&p| p == 0.0) {
+                        gridls_zero_policy_rows.fetch_add(1, Ordering::Relaxed);
+                    }
+                    row
+                }
             }
         };
         // §130: forward-scatter the recorded state, chain, and policy into the
@@ -106,6 +118,11 @@ pub(crate) fn record_position(
 /// `MovePolicy::Dense` when `legal_set == false`. The `Dense` arm is therefore
 /// structurally unreachable — an always-on `unreachable!()` is the correct
 /// die-loud response.
+///
+/// # Errors
+/// WP12-R Phase T (DESIGN_T §3.3/§3.4): forwards `record_position_graph`'s
+/// typed [`TargetIntegrityError`] to the caller, which latches it run-fatal
+/// (LAW-14) — the record that would carry a degenerate target cannot be built.
 #[cold]
 #[inline(never)]
 pub(crate) fn record_position_graph_dispatch(
@@ -114,7 +131,7 @@ pub(crate) fn record_position_graph_dispatch(
     trunk_sz: i32,
     move_is_full_search: bool,
     graph_records_vec: &mut Vec<GraphRecord>,
-) {
+) -> Result<(), TargetIntegrityError> {
     let ls = match target_policy {
         MovePolicy::Ls(ls) => ls,
         MovePolicy::Dense(_) => unreachable!(
@@ -134,6 +151,7 @@ pub(crate) fn record_position_graph_dispatch(
         ply_index,
         move_is_full_search,
         MAX_VISITS,
-    );
+    )?;
     graph_records_vec.push(rec);
+    Ok(())
 }
