@@ -9,9 +9,13 @@ side. WPSC Phase 2 SC-A2's explicit 8-field `InferenceHParams`-default dict lite
 (replacing the old `{"selfplay": {}}` fallback) is what pushed this file from 292 to 303
 lines; WPCLEAN Phase LT's type-visibility guards (batcher None-guard, canonical autocast
 import) took it to 323; WP12-R Phase C's deletion of the `lookup("v6")` ternary (gate 11's
-arm 8) took it to 330. MEASURED size now 412 lines (`wc -l`): WP12-R Phase EVALDECODE
-(operator ruling R138) added the fourth decode, `infer_batch_ls`/`infer_ls`, which keeps
-BOTH halves of the shared producer's legal-set policy plus the builder's window centre.
+arm 8) took it to 330; WP12-R Phase EVALDECODE (operator ruling R138) added the fourth
+decode, `infer_batch_ls`/`infer_ls`, which keeps BOTH halves of the shared producer's
+legal-set policy plus the builder's window centre, taking it to 412. MEASURED size now 425
+lines (`wc -l`, re-measured after WP12-R Phase Q): ADJ-WP12R-12's R73 name-truth correction
+to `_infer_batch_graph`'s docstring, which also records that no production consumer reaches
+that method — prose only, no assertion and no behaviour moved (the `v6` R20 control-round
+sha is byte-identical at `4d8d6321aae18d7a` across the edit).
 
 One class, four decode contracts that must be read together: the dense `infer_batch`
 scatter-max/min-pool decode, the graph leg that rides the ONE server, the RAW
@@ -244,8 +248,21 @@ class LocalInferenceEngine:
         vector; the coord-keyed overflow (off-window legal moves the whole-board graph's
         single window does not cover) is DROPPED here — exactly the drop contract the
         dense single-window branch above already applies (`mcts_idx >= n_actions - 1:
-        continue`). This is the existing `infer_batch` contract, not a new approximation;
-        the no-drop decode is `infer_batch_per_cluster`, which has no graph analogue.
+        continue`). This is the existing `infer_batch` contract, not a new approximation.
+
+        NO PRODUCTION CONSUMER REACHES THIS METHOD (ADJ-WP12R-12, RED-TEAM F-RT-7).
+        Every production caller of `infer_batch`/`infer` is `SelfPlayWorker`, which refuses
+        a graph encoding outright (`selfplay/worker.py:80-95`), and the eval worker's graph
+        arm goes through `infer_batch_ls` instead. The method is retained, not deleted,
+        because `tests/selfplay/test_selfplay_census.py:114` pins it as a censused site and
+        the dense drop contract it documents is the thing `infer_batch_ls` is defined
+        against. Retained-and-unreached is a deliberate state, recorded here so the next
+        reader does not mistake it for a live decode.
+
+        Superseded sentence, corrected under R73 name-truth: this docstring previously
+        ended "the no-drop decode is `infer_batch_per_cluster`, which has no graph
+        analogue." R138 built exactly that analogue. The graph no-drop decode is
+        `infer_batch_ls` (below); `infer_batch_per_cluster` remains the GRID one.
         """
         positions = [
             (list(board.get_stones()), int(board.current_player), int(board.moves_remaining))

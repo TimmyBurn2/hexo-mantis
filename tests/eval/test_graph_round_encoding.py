@@ -15,7 +15,7 @@ module they import exists at HEAD — this is a behaviour defect, not a missing 
 
     RED   test_graph_eval_round_runs_end_to_end             NotImplementedError ... forward
     RED   test_both_engines_bind_the_declared_graph_spec    same raise; bindings are "v6"
-    GREEN test_dense_v6_round_is_byte_stable_and_deterministic     R20 dense control arm
+    GREEN test_dense_v6_round_is_byte_stable_and_deterministic     R20-protected grid arm
     GREEN test_declared_grid_encoding_is_bound_and_decodes[v6]     fix is a no-op here
     RED   test_declared_grid_encoding_is_bound_and_decodes[v6w25]  completes, binds "v6"
     RED   test_no_drop_pooling_encoding_is_refused_with_a_named_error   conv 4-vs-8 channels
@@ -158,11 +158,20 @@ def test_both_engines_bind_the_declared_graph_spec(
     assert all(is_graph for _name, is_graph in bound), f"graph dispatch not taken: {bound}"
 
 
-# ── ⊕ᶜ O-3 (R20 dense control arm) ────────────────────────────────────────────────────
+# ── ⊕ᶜ O-3 (R20-protected grid arm) ───────────────────────────────────────────────────
 def test_dense_v6_round_is_byte_stable_and_deterministic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`v6` is the operator-locked dense control arm: this card must not move it.
+    """`v6` is an R20-protected grid encoding: this card must not move it.
+
+    NAMING CORRECTED (ADJ-WP12R-18, under R148). This docstring previously called `v6`
+    "the operator-locked dense control arm". R148 rules that the dense control arm IS
+    `v6_live2_ls`, consistent with R117 — so the TITLE was wrong here, at four sites in
+    this file, which were the only four occurrences of the phrase in the repo. What the
+    test actually pins is unchanged and remains correct: `v6` round determinism and
+    byte-stability under R20, which protects `representation="grid"` as a CLASS and names
+    no encoding. A naming defect (R73 name-truth), never a behaviour defect — the
+    assertions below are byte-identical to the shipped ones.
 
     The committed assertion is the platform-independent property — two runs of the SAME
     spec in the same process return equal result dicts, and both rounds bind `v6` down the
@@ -179,7 +188,7 @@ def test_dense_v6_round_is_byte_stable_and_deterministic(
     # KeyError, not a defaulted pop: the worker's own contract says the key is always there.
     first.pop("worker_pid")
     second.pop("worker_pid")
-    assert first == second, "the dense control arm is not deterministic in-process"
+    assert first == second, "the R20-protected v6 grid round is not deterministic in-process"
     assert bound == [("v6", False)] * 4, f"the dense round did not bind v6 dense: {bound}"
 
 

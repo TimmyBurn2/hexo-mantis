@@ -622,32 +622,6 @@ def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
     return lookup(name)
 
 
-def resolve_encoding_for_eval(
-    checkpoint_path: str | Path,
-    encoding_override: str | None = None,
-) -> EncodingSpec:
-    """Resolve an EncodingSpec for an eval/smoke/probe consumer.
-
-    Priority:
-      1. ``encoding_override`` (CLI flag) — direct lookup.
-      2. ``resolve_from_checkpoint(checkpoint_path)`` — metadata, then
-         shape-inference fallback (DeprecationWarning).
-      3. Re-raise with a clearer "pass --encoding explicitly" message.
-    """
-    if isinstance(encoding_override, str) and encoding_override:
-        return lookup(encoding_override)
-
-    try:
-        return resolve_from_checkpoint(checkpoint_path)
-    except EncodingRegistryError as e:
-        registered = sorted(_load_registry())
-        raise EncodingRegistryError(
-            f"could not auto-detect encoding for checkpoint {checkpoint_path!s}; "
-            f"pass --encoding explicitly. Registered encodings: {registered}. "
-            f"Underlying error: {e}"
-        ) from e
-
-
 def validate_against_state_dict(
     spec: EncodingSpec, state_dict: Mapping[str, Any]
 ) -> None:

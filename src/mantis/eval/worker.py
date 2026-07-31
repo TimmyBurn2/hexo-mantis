@@ -8,8 +8,8 @@ the random floor. Writes the sidecar result JSON ATOMICALLY (tmp + os.replace). 
 `mantis.selfplay.inference_local` for leaf inference — the ONE parent-side-excepted
 inference surface (isolation law 1: this module is the out-of-process leg).
 
->300 justify, stated at this file's MEASURED size of 385 lines (`wc -l`, re-measured after
-WP12-R Phase EVALDECODE; 284 before Phase B, 328 after it): one child-process entry point
+>300 justify, stated at this file's MEASURED size of 424 lines (`wc -l`, re-measured after
+WP12-R Phase Q; 284 before Phase B, 328 after it, 385 after Phase EVALDECODE): one entry point
 owning the gate block, ladder-rung blocks, and the random floor — each phase shares the
 candidate DeployHeadPlayer/inference engine/book-loading machinery; splitting them would
 duplicate that setup three times and let the phases drift out of the
@@ -58,9 +58,33 @@ _CONFIRM_SEED_OFFSET = 7919
 #: rather than being silently max-pooled.
 _DECODE_IMPLEMENTED_POLICY_POOLS = frozenset({"none", "scatter_max"})
 
+#: Value-pool values the eval decode ENTRANCE actually implements (ADJ-WP12R-6). Same
+#: CLOSED-SET discipline as the policy pools above, and for the same reason: `value_pool`
+#: has no Python consumer that reads it: `LocalInferenceEngine.infer_batch` HARDCODES the
+#: cluster reduction (`v = float(board_values.min())`, inference_local.py:203) and the graph
+#: arm does no pooling at all (one whole-board window; the dist65 head's value is returned
+#: as-is). So the two implemented values are exactly:
+#:   - "min"  -> the grid arm's hardcoded `.min()` over cluster windows.
+#:   - "none" -> single-window grid, or graph: no reduction to perform.
+#: A registry row later declaring `value_pool="mean"` or `"max"` would pass every existing
+#: check and then be SILENTLY min-pooled, because nothing reads the field. This guard is
+#: what converts that silent wrong answer into a refused round. It is the value-channel
+#: half of the same defect class R138 named on the policy channel.
+_DECODE_IMPLEMENTED_VALUE_POOLS = frozenset({"none", "min"})
+
 
 def _assert_decode_implements_declared_pooling(spec: EncodingSpec) -> None:
-    """Refuse a round whose DECLARED policy pooling this worker's decode cannot honour."""
+    """Refuse a round whose DECLARED pooling this worker's decode cannot honour.
+
+    Checks BOTH channels, policy first — that ordering is the SHIPPED one and is preserved
+    deliberately, so no already-refused encoding changes which message it fails with. Each
+    raise names its own channel, so the two are never confusable.
+    """
+    _assert_policy_pool_implemented(spec)
+    _assert_value_pool_implemented(spec)
+
+
+def _assert_policy_pool_implemented(spec: EncodingSpec) -> None:
     if spec.policy_pool in _DECODE_IMPLEMENTED_POLICY_POOLS:
         return
     raise EvalDecodeUnsupportedError(
@@ -71,6 +95,21 @@ def _assert_decode_implements_declared_pooling(spec: EncodingSpec) -> None:
         f"(infer_batch_per_cluster + the Rust expand_and_backup_ls) exists but is not wired "
         f"to the deploy head (ADJ-WP12R-4). Refusing to report an eval result pooled "
         f"differently from the encoding's own declaration."
+    )
+
+
+def _assert_value_pool_implemented(spec: EncodingSpec) -> None:
+    if spec.value_pool in _DECODE_IMPLEMENTED_VALUE_POOLS:
+        return
+    raise EvalDecodeUnsupportedError(
+        f"encoding {spec.name!r} declares value_pool={spec.value_pool!r}, which this eval "
+        f"worker's decode entrance does not implement: nothing in the Python decode READS "
+        f"the field. The grid arm hardcodes a min-reduction over cluster windows "
+        f"(LocalInferenceEngine.infer_batch: 'v = float(board_values.min())') and the graph "
+        f"arm performs no reduction at all. Implemented: "
+        f"{sorted(_DECODE_IMPLEMENTED_VALUE_POOLS)}. Refusing to report an eval result whose "
+        f"value channel was pooled differently from the encoding's own declaration "
+        f"(ADJ-WP12R-6)."
     )
 
 

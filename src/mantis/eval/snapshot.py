@@ -53,11 +53,19 @@ def write_model_snapshot(model: torch.nn.Module, path: str | Path) -> str:
         )
     base = getattr(model, "_orig_mod", model)
     state_dict = {key: value.detach().cpu() for key, value in base.state_dict().items()}
+    # EXACTLY the two keys `load_model_snapshot` reads. ADJ-WP12R-6's sibling defect
+    # (ADJ-WP12R-1) lived here: this dict also wrote "encoding" and "representation" via
+    # `getattr(..., None)`, and the loader read NEITHER — two written fields, zero
+    # consumers (LAW-08), recorded through the exact silent-fallback shape the red-team
+    # greps for (a model with no `.encoding` recorded `None` instead of failing). Deleted
+    # under the dead-weight law (R116) rather than wired: giving them a consumer means
+    # deciding what a loader does when the snapshot's encoding disagrees with the round's
+    # DECLARED one, and that is a design decision on the arm-8 seam, not a patch. The hole
+    # they might have covered is already closed upstream by ONE resolution of the declared
+    # encoding in `eval/worker.py` (the round's spec sizes board geometry AND the decode).
     payload = {
         "state_dict": state_dict,
         "arch": _arch_to_plain_dict(arch),
-        "encoding": getattr(model, "encoding", None),
-        "representation": getattr(arch, "representation", None),
     }
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
