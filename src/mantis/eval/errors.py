@@ -18,6 +18,16 @@ class LadderStateError(RuntimeError):
     """`LadderState` persistence (save/load) failed — LAW-14, never a silent except."""
 
 
+class EvalDecodeUnsupportedError(RuntimeError):
+    """The round's declared encoding requires a decode this eval path does not implement.
+
+    Raised once per round, at spec-resolution time, before any model is loaded — the
+    alternative is reporting an eval result pooled differently from the encoding's own
+    declaration, which is a plausible-looking number nobody can attribute (LAW-11's shape:
+    the unimplemented case is an ERROR, never a silent approximation).
+    """
+
+
 class ResultContractError(RuntimeError):
     """The worker's sidecar result JSON does not satisfy the result-contract shape."""
 
@@ -25,6 +35,7 @@ class ResultContractError(RuntimeError):
 __all__ = [
     "BookError",
     "EvalBrokenError",
+    "EvalDecodeUnsupportedError",
     "LadderStateError",
     "MixedRegimeError",
     "ResultContractError",

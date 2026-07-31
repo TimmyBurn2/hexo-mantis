@@ -7,6 +7,9 @@ each decode from the docstring stating what it drops. WPSC Phase 2 SC-A2's expli
 8-field `InferenceHParams`-default dict literal (replacing the old `{"selfplay": {}}`
 fallback) is what pushed this file from 292 to 303 lines; WPCLEAN Phase LT's
 type-visibility guards (batcher None-guard, canonical autocast import) took it to 323.
+MEASURED size now 330 lines (`wc -l`): WP12-R Phase C deleted the `lookup("v6")` ternary
+(gate 11's arm 8) and re-pointed the class docstring, which had asserted a dense default
+that no longer exists.
 
 One class, three decode contracts that must be read together: the dense `infer_batch`
 scatter-max/min-pool decode, the graph leg that rides the ONE server, and the RAW
@@ -34,7 +37,7 @@ import torch
 from torch.amp.autocast_mode import autocast
 
 from mantis._engine import Board
-from mantis.encoding import EncodingSpec, lookup
+from mantis.encoding import EncodingSpec
 from mantis.env.game_state import GameState
 from mantis.selfplay.hparams import is_graph_representation
 
@@ -54,22 +57,25 @@ class LocalInferenceEngine:
     assemble). Single-source reuse, not a reimplementation of the graph encoding.
 
     The caller passes `encoding_spec`; it is the AUTHORITY for the representation
-    dispatch. A graph caller MUST pass the graph spec — the default spec is a dense one
-    and would misconfigure the graph batcher. Handing a graph-built model a dense spec
-    (or the inverse) is a wiring error and fails loudly rather than decoding garbage.
+    dispatch, and it is REQUIRED and keyword-only — there is no default to inherit
+    (WP12-R Phase C closed gate 11's arm 8: the old `else lookup("v6")` ternary bound a
+    dense spec for every caller who said nothing, so a graph caller silently
+    misconfigured the graph batcher). LAW-11 says an absent encoding is an error; a
+    required parameter makes absent UNCONSTRUCTIBLE, which pyright catches before a
+    worker ever spawns. Handing a graph-built model a dense spec (or the inverse) is a
+    wiring error and fails loudly rather than decoding garbage.
     """
 
     def __init__(
         self,
         model: torch.nn.Module,
         device: torch.device,
-        encoding_spec: EncodingSpec | None = None,
+        *,
+        encoding_spec: EncodingSpec,
     ) -> None:
         self.model = model
         self.device = device
-        self.encoding_spec: EncodingSpec = (
-            encoding_spec if encoding_spec is not None else lookup("v6")
-        )
+        self.encoding_spec: EncodingSpec = encoding_spec
         # Representation comes from the BOUND SPEC. The frozen original sniffed the live
         # model object here and preferred it over the spec when the two disagreed; that
         # sniff is deleted repo-wide (arch travels on declared metadata, never on an

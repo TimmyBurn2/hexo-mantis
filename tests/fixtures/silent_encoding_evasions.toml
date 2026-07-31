@@ -26,7 +26,7 @@ id = "A1"
 lang = "py"
 code = 'self.encoding_spec = encoding_spec if encoding_spec is not None else lookup("v6")'
 expect = "fires"
-note = "arm 8, inference path. Ternary + call-wrapped literal. Still REGISTERED-OPEN under WP12-R."
+note = "arm 8, inference path. Ternary + call-wrapped literal. CLOSED by WP12-R Phase C; the SHAPE is still corpus-pinned."
 
 [[case]]
 id = "A2"

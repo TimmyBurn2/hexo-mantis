@@ -1,3 +1,9 @@
+# >300 justify (R8), stated at this file's MEASURED size of 345 lines (249 before WP12-R;
+# the delta is the KNOWN_DEBT register's three-way split, O-7a/b/c, which gave the gate's
+# stale and reporting branches the producers they never had). It is ONE gate's producer
+# suite over ONE loaded module object (`GATE`) plus ONE corpus fixture, and R5 bars
+# cross-test imports — a split forks the loader and the `_fires` helper into two copies that
+# drift apart while both stay green, which is this gate's own defect class.
 """Producer test + mutation self-test for CI gate 11 (LAW-07, R4, R45).
 
 R4: no gate input without a producer test. A grep gate that cannot be shown to BITE is
@@ -60,18 +66,108 @@ def test_gate_actually_scanned_something():
     assert files_scanned >= GATE.MIN_SCANNED_FILES
 
 
-def test_known_debt_register_is_tamper_evident():
-    """Every KNOWN_DEBT entry must still match real source.
+_SYNTHETIC_FALLBACK = 'spec = declared if declared is not None else lookup("v6")'
 
-    The register is not an escape hatch: it asserts "this IS an arm, tracked and owned".
-    If the code moves out from under an entry, the gate must FAIL so the exemption is
-    re-adjudicated rather than silently inherited by whatever replaced it.
+
+def _synthetic_tree(tmp_path: Path, *, body: str) -> Path:
+    """A one-file `src/` tree for the register tests to scan instead of the real repo.
+
+    The gate's own `test_skip_dirs_are_matched_on_the_relative_path_only` already relies on
+    `REPO_ROOT` being redirectable. Redirecting it here is what makes these two oracles
+    INDEPENDENT of the real tree: the whole repo contains exactly one line that is both
+    pattern-hit and unjustified (arm 8's ternary), and WP12-R Phase C deletes it, so a
+    register test written against real source could not be green both before and after.
     """
-    _v, debt_hits, _f, matched = GATE.scan()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "probe_module.py").write_text(
+        f"def f(declared):\n    {body}\n    return spec\n"
+    )
+    return tmp_path
+
+
+def test_known_debt_register_is_empty():
+    """⊕ O-7a. Arm 8 was the last registered-open arm, and it is CLOSED.
+
+    HEAD: RED — one entry (`inference_local.py`'s ternary), which WP12-R Phase C deletes.
+
+    The two assertions carried over from the tamper-evidence test this replaces are VACUOUS
+    against an empty register (`0 == 0`; a loop over nothing) and are NOT counted as
+    coverage — they are future-proofing for the next owned arm. The gate's two debt
+    branches are held by O-7b and O-7c below, which is where `assert debt_hits`'s real
+    coverage went rather than being dropped.
+    """
+    _v, _debt_hits, _f, matched = GATE.scan()
+    assert GATE.KNOWN_DEBT == (), (
+        f"KNOWN_DEBT is not empty: {[entry[0] for entry in GATE.KNOWN_DEBT]}. A registered-"
+        f"open arm is owned debt, not an exemption — re-adjudicate it, do not inherit it."
+    )
     assert len(matched) == len(GATE.KNOWN_DEBT), "a KNOWN_DEBT entry matched nothing"
-    assert debt_hits, "registered-open arms must be reported on every run, not silently"
     for _path, _text, reason in GATE.KNOWN_DEBT:
         assert "owner" in reason.lower() or "WP" in reason, "debt needs a named owner"
+
+
+def test_a_stale_debt_entry_fails_the_gate(tmp_path, monkeypatch, capsys):
+    """⊕ O-7b. An entry that matches nothing must FAIL the gate.
+
+    Producer for `silent_encoding_gate.py:338-344`, which had NO producer test at HEAD. The
+    register asserts "this IS a real arm, here, now"; if the code moves out from under an
+    entry the gate must fail so the exemption is re-adjudicated rather than silently
+    inherited by whatever replaced that line.
+
+    The synthetic tree is CLEAN (no fallback shape at all), so rc 1 is attributable to the
+    stale branch alone. Over the real tree the same rc is produced by any unrelated
+    violation, and the assertion would not be an oracle for this branch.
+    """
+    monkeypatch.setattr(
+        GATE, "REPO_ROOT", _synthetic_tree(tmp_path, body="spec = lookup(declared)")
+    )
+    monkeypatch.setattr(GATE, "MIN_SCANNED_FILES", 1)
+    monkeypatch.setattr(
+        GATE,
+        "KNOWN_DEBT",
+        (("src/probe_module.py", 'else lookup("v6w25")', "OWNER: WP-ORACLE. ADJ-TEST."),),
+    )
+
+    assert GATE.main() == 1
+    assert "matched nothing" in capsys.readouterr().out
+
+
+def test_a_matching_debt_entry_is_reported_and_passes(tmp_path, monkeypatch, capsys):
+    """⊕ O-7c. A matching entry is REPORTED on every run, and does not fail the gate.
+
+    Producer for BOTH halves of what `assert debt_hits` used to hold: `scan()`'s debt
+    matching (`:304-314`) and `main()`'s reporting branch (`:346-351`). Deleting the
+    reporting branch loses `REGISTERED-OPEN`; deleting the matching turns the line into a
+    hard violation and rc 1. Registered debt that stops being visible stops being debt and
+    starts being the status quo.
+
+    `files_scanned == 1` is the load-bearing number: the real `src/`/`crates/` trees are
+    never walked, so this oracle's verdict cannot depend on the arm-8 line Phase C deletes.
+    """
+    monkeypatch.setattr(
+        GATE, "REPO_ROOT", _synthetic_tree(tmp_path, body=_SYNTHETIC_FALLBACK)
+    )
+    monkeypatch.setattr(GATE, "MIN_SCANNED_FILES", 1)
+    monkeypatch.setattr(
+        GATE,
+        "KNOWN_DEBT",
+        (
+            (
+                "src/probe_module.py",
+                'declared if declared is not None else lookup("v6")',
+                "OWNER: WP-ORACLE. ADJ-TEST.",
+            ),
+        ),
+    )
+
+    violations, debt_hits, files_scanned, matched = GATE.scan()
+    assert files_scanned == 1
+    assert len(debt_hits) == 1
+    assert matched == {0}
+    assert violations == []
+
+    assert GATE.main() == 0
+    assert "REGISTERED-OPEN" in capsys.readouterr().out
 
 
 def test_main_returns_nonzero_when_an_arm_is_present(monkeypatch, capsys):

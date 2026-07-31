@@ -10,8 +10,10 @@ actually runs a real headless round on CPU: no `multiprocessing.get_context` pat
 FIX-PASS amendment (design-gap G-1..G-3, dispatcher ruling option (b)): the original tiny
 `CnnArch(board_size=5, in_channels=4)` net was NOT a registered encoding and its tensors
 never matched what the engine actually feeds a net through this path — `mantis.eval.worker`
-runs inference via `LocalInferenceEngine` with NO `encoding_spec` override, so the wire
-tensor it decodes is always the registered `"v6"` encoding's shape (`board_size=19,
+runs inference via `LocalInferenceEngine` bound to the encoding the ROUND DECLARED (WP12-R
+Phase B threads `RoundSpec.encoding`; before it, the engine bound `"v6"` unconditionally),
+and this fixture declares `encoding="v6"`, so the wire tensor it decodes is the registered
+`"v6"` encoding's shape either way (`board_size=19,
 n_planes=8` — verified directly against `crates/mantis-encoding/src/registry.toml`, and
 empirically: a `board_size=5, in_channels=4` net dies with `RuntimeError: ... expected
 input[2, 8, 19, 19] to have 4 channels`). This fixture now builds `encoding="v6"`

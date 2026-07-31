@@ -26,8 +26,12 @@ KNOWN ARMS OF THIS CLASS (R45 asks that they be enumerated here):
      signature default  (R45 / ADJ-05). Found by REVIEW-impl, not by this gate's first
      draft, which had no signature-default pattern.
   8. src/mantis/selfplay/inference_local.py -- `LocalInferenceEngine` ternary fallback
-     `encoding_spec if ... else lookup("v6")`  (R45 / ADJ-05). **STILL OPEN** -- see
-     KNOWN_DEBT below. Owned by WP12-R.
+     `encoding_spec if ... else lookup("v6")`  (R45 / ADJ-05). **CLOSED** by WP12-R:
+     Phase B threaded the round's declared encoding through `mantis.eval.worker` (the
+     last production site that relied on the default) and Phase C deleted the ternary,
+     making `encoding_spec` a REQUIRED keyword-only parameter -- absent is now
+     UNCONSTRUCTIBLE rather than defaulted. Reopen guard:
+     tests/selfplay/test_arm8_reachable_paths.py.
   9. crates/mantis-bridge/src/buffer.rs -- `#[pyo3(signature = (capacity, encoding =
      "v6"))]` on `ReplayBuffer.__new__`, plus both `_engine.pyi` twins  (R45 / ADJ-05).
  10. crates/mantis-bridge/src/hexg.rs -- the same on `HexgBuffer.__new__`, defaulting to
@@ -37,7 +41,9 @@ KNOWN ARMS OF THIS CLASS (R45 asks that they be enumerated here):
 9 and 10 were invisible to this gate until its Rust comment handling was fixed -- an
 earlier draft treated `#[pyo3(...)]` attributes as comments and blanked them.
 
-1-7, 9 and 10 are CLOSED. 8 is open, registered, and reported on every run.
+1-10 are CLOSED; `KNOWN_DEBT` is empty. The register machinery is retained for the next
+owned arm -- an entry that stops matching FAILS the gate, so an exemption can never be
+silently inherited by whatever replaced the line it named.
 
 SCOPE: production code only -- `src/` and `crates/`. Tests, benches and fixtures may
 legitimately name an encoding as data.
@@ -123,22 +129,10 @@ PATTERNS: tuple[tuple[str, str], ...] = (
 # NOT an escape hatch. Each entry asserts "this IS a real arm, it is tracked, and it has an
 # owner". Matched on the exact source text, so editing the line invalidates the entry and
 # fails the gate -- a silent rewrite cannot inherit the exemption.
-KNOWN_DEBT: tuple[tuple[str, str, str], ...] = (
-    (
-        "src/mantis/selfplay/inference_local.py",
-        'encoding_spec if encoding_spec is not None else lookup("v6")',
-        "ADJ-05 / R56. OWNER: WP12-R. Handoff row, verbatim from "
-        "plan/STATE_2026-07-24_ADDENDUM_A.md §3: 'eval worker does not thread "
-        "encoding_spec -> graph eval rounds fail loud (eval_broken) every round | "
-        "WP12-R TOP ROW (threading) | decision required at run5 mint (§5)'. "
-        "src/mantis/eval/worker.py:78,193 construct LocalInferenceEngine positionally "
-        "with no spec and depend on this default; closing it here would change "
-        "eval-worker behaviour that is WP12-R's decision. Bounded meanwhile by "
-        "tests/selfplay/test_arm8_reachable_paths.py, which pins that every reachable "
-        "path either threads the spec or fails loud (R56; if that test cannot hold, "
-        "arm 8 escalates to a hard run5-mint blocker).",
-    ),
-)
+# EMPTY as of WP12-R: arm 8 was the last registered-open arm and it is closed. An empty
+# register is a strictly stronger statement than an allowlisted one -- a returning ternary
+# is now a hard VIOLATION (rc 1) rather than a printed debt row.
+KNOWN_DEBT: tuple[tuple[str, str, str], ...] = ()
 
 ESCAPE = re.compile(r"silent-encoding-gate:\s*ok\s*--\s*\S")
 _COMPILED = tuple((re.compile(p), why) for p, why in PATTERNS)

@@ -8,16 +8,18 @@ the random floor. Writes the sidecar result JSON ATOMICALLY (tmp + os.replace). 
 `mantis.selfplay.inference_local` for leaf inference — the ONE parent-side-excepted
 inference surface (isolation law 1: this module is the out-of-process leg).
 
->300 justify: one child-process entry point owning the gate block, ladder-rung blocks,
-and the random floor — each phase shares the same candidate DeployHeadPlayer/inference
-engine/book-loading machinery; splitting them would duplicate that setup three times and
-let the phases drift out of the SAME-process-covers-the-round contract this module exists
-to keep (isolation law: exactly one worker process per round).
+>300 justify, stated at this file's MEASURED size of 328 lines (`wc -l`, re-measured after
+WP12-R Phase B and its RED-TEAM close; 284 before it): one child-process entry point owning
+the gate block, ladder-rung blocks, and the random floor — each phase shares the candidate
+DeployHeadPlayer/inference engine/book-loading machinery; splitting them would duplicate
+that setup three times and let the phases drift out of the SAME-process-covers-the-round
+contract this module exists to keep (isolation law: exactly one worker process per round).
+WP12-R added the ONE encoding resolution and the decode-capability guard that the same
+one-process contract requires be made once, here, for every block below.
 """
 from __future__ import annotations
 
 import json
-import logging
 import os
 import sys
 from pathlib import Path
@@ -29,16 +31,39 @@ from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
 from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.resolve import resolve_bot
+from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
 from mantis.eval.aggregate import aggregate_gate, aggregate_rung
+from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.rounds import RoundSpec, RungJob
 from mantis.eval.snapshot import load_model_snapshot
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
-_LOG = logging.getLogger(__name__)
-
 #: confirm-phase opening seed offset (deploy_strength_eval.py:519 parity) — the confirm
 #: block draws a DIFFERENT slice of the book than the screen block.
 _CONFIRM_SEED_OFFSET = 7919
+
+#: Policy-pool values the eval decode ENTRANCE actually implements. Every block routes
+#: through `_build_candidate_player` -> `DeployHeadPlayer(infer_fn=engine.infer)` ->
+#: `LocalInferenceEngine.infer_batch`, whose dense arm scatter-MAXes over cluster windows
+#: and DROPS off-window cells (`if mcts_idx >= n_actions - 1: continue`,
+#: inference_local.py:207-208). "none" is the single-window / graph case, no pooling.
+#: A CLOSED SET, not a blocklist: a registry row that later declares `scatter_mean` fails
+#: here until this seam implements it, rather than being silently max-pooled.
+_DECODE_IMPLEMENTED_POLICY_POOLS = frozenset({"none", "scatter_max"})
+
+
+def _assert_decode_implements_declared_pooling(spec: EncodingSpec) -> None:
+    """Refuse a round whose DECLARED policy pooling this worker's decode cannot honour."""
+    if spec.policy_pool in _DECODE_IMPLEMENTED_POLICY_POOLS:
+        return
+    raise EvalDecodeUnsupportedError(
+        f"encoding {spec.name!r} declares policy_pool={spec.policy_pool!r}, which this eval "
+        f"worker's decode entrance does not implement: DeployHeadPlayer reaches the net "
+        f"through LocalInferenceEngine.infer_batch, whose dense arm scatter-maxes and DROPS "
+        f"off-window cells. The no-drop decode (infer_batch_per_cluster) exists but is not "
+        f"wired to the deploy head (ADJ-WP12R-4). Refusing to report an eval result pooled "
+        f"differently from the encoding's own declaration."
+    )
 
 
 def _agg_record(game_record: Any) -> dict[str, Any]:
@@ -66,7 +91,13 @@ def _build_candidate_player(engine: LocalInferenceEngine, n_sims: int) -> Deploy
     return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims)
 
 
-def _play_gate_block(spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory) -> dict | None:
+def _play_gate_block(
+    spec: RoundSpec,
+    candidate_engine: LocalInferenceEngine,
+    board_factory,
+    *,
+    encoding_spec: EncodingSpec,
+) -> dict | None:
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
     `{"screen": [...], "confirm": [...]}` record lists, or None when there is no best
@@ -75,7 +106,9 @@ def _play_gate_block(spec: RoundSpec, candidate_engine: LocalInferenceEngine, bo
         return None
 
     best_model = load_model_snapshot(spec.best_snapshot, device=spec.worker_device)
-    best_engine = LocalInferenceEngine(best_model, _device(spec.worker_device))
+    best_engine = LocalInferenceEngine(
+        best_model, _device(spec.worker_device), encoding_spec=encoding_spec
+    )
     try:
         candidate = _build_candidate_player(candidate_engine, spec.gate.deploy_sims)
         opponent = _build_candidate_player(best_engine, spec.gate.deploy_sims)
@@ -186,14 +219,25 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     so the parent's join/exit-code path classifies it (isolation law 2)."""
     from mantis._engine import Board
 
+    # ONE resolution of the round's DECLARED encoding. Board geometry and the inference
+    # decode are sized from the SAME resolved value, so they cannot diverge — before this,
+    # `board_factory` read `spec.encoding` while the engine bound a `"v6"` constant.
+    enc_name = normalize_encoding_name(spec.encoding)
+    enc_spec: EncodingSpec = lookup(enc_name)
+    _assert_decode_implements_declared_pooling(enc_spec)
+
     def board_factory():
-        return Board.with_encoding_name(spec.encoding)
+        return Board.with_encoding_name(enc_name)
 
     candidate_model = load_model_snapshot(spec.candidate_snapshot, device=spec.worker_device)
-    candidate_engine = LocalInferenceEngine(candidate_model, _device(spec.worker_device))
+    candidate_engine = LocalInferenceEngine(
+        candidate_model, _device(spec.worker_device), encoding_spec=enc_spec
+    )
 
     try:
-        gate_records = _play_gate_block(spec, candidate_engine, board_factory)
+        gate_records = _play_gate_block(
+            spec, candidate_engine, board_factory, encoding_spec=enc_spec
+        )
         gate_result: dict | None = None
         if gate_records is not None:
             gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
