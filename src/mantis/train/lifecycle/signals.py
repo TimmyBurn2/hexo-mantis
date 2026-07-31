@@ -41,13 +41,37 @@ class ShutdownState:
       have had to answer "which code for grad_norm?" with a number that does not exist.
 
     It is set ONCE, by the fire that stops the run, and never cleared: a stopped run is never
-    re-decided (`_fire_hard_abort`'s `hard_abort_after_stop` arm returns before the write).
+    re-decided. Until WPMAIN's RT-2 pass that invariant was PROSE, held up by a single write
+    site and by `_fire_hard_abort`'s `hard_abort_after_stop` arm returning before it. `record_abort`
+    below is that invariant expressed as the ONE writer, because RT-2 added a second fire path
+    (the disk guard's, recorded by the composition root) and two assignments would have been two
+    authorities for "which rule stopped this run" the first time they disagreed.
     """
 
     running: bool = True
     stop_count: int = 0
     shutdown_save: bool = False
     abort_rule: str | None = None
+
+    def record_abort(self, rule: str) -> bool:
+        """THE writer of ``abort_rule``. Records ``rule`` iff none is recorded yet.
+
+        Returns True iff this call is the one that recorded — FIRST FIRE WINS, and a later
+        fire is a no-op rather than an overwrite. That direction is deliberate: the rule that
+        stopped the run is the one that stopped it, and a second gate resolving afterwards
+        (the teardown-routed eval result, a guard tick racing the handler) must not re-label
+        a stop that already happened. `_fire_hard_abort` already refuses to re-decide a
+        stopped run; this is the same rule where the two fire paths meet.
+
+        It stays a RULE NAME and never a code (the class docstring's three grounds are
+        unchanged), and this method imports nothing: `mantis.train` must not reach
+        `mantis.config.armed_aborts`, and the rule -> code resolution stays at the process
+        boundary where the manifest already lives.
+        """
+        if self.abort_rule is not None:
+            return False
+        self.abort_rule = rule
+        return True
 
 
 def install_signal_handlers(state: ShutdownState) -> None:

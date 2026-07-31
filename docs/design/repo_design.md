@@ -567,6 +567,7 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
   | 44 | `RELAUNCH_BUDGET_EXIT_CODE` | `monitor/supervise.py` | supervisor return — never a child's |
   | 45 | `ACTOR_LAG_EXIT_CODE` | `monitor/heartbeat.py` | `os._exit` from the watchdog thread |
   | 46 | `DRAW_RATE_COLLAPSE_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
+  | 47 | `DISK_SPACE_EXHAUSTED_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
 
   46 (WPMINT Phase X, CARD-ABORT-EXIT / R84) deviates from the family on DELIVERY, and the
   deviation is the point. The draw-rate collapse abort stops the run by
@@ -581,6 +582,42 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
   branches on the rule's identity. A rule with no manifest row resolves to `None` and NO code
   is invented for it. The number is written in exactly one place per authority: the constant,
   and the manifest row that imports it.
+
+  47 (WPMAIN RED-TEAM RT-2 / R132) is the SECOND cooperative member, and it closes the same
+  gap one leg further down LAW-16. `DiskGuard.check_once`'s critical arm SIGTERMs its own pid;
+  with WPMAIN's handlers finally live that is save-then-exit — but `install_signal_handlers`
+  writes `shutdown_save`/`running` and never `abort_rule`, which had exactly ONE writer in all
+  of `src/`, so `mantis.run.main` read `rule is None` and returned **0**. A run the disk guard
+  killed reported success and the supervisor above relaunched into the same full volume. The
+  registration is the R84 shape verbatim: `mantis.config.armed_aborts.MANIFEST` gains a
+  REQUIRED `disk_space_exhausted` row whose arming surface is `monitor.disk_guard.fail_gb`
+  (minted on all six configs, `gt=0` in the schema, so a validated config arms it by
+  construction — the row's job is to go RED the day the block is made nullable and the guard
+  quietly disappears again), and its `exit_code` imports the constant.
+
+  **The seam, because it is the part a reader will otherwise re-derive wrong.** The guard runs
+  on its own thread and may not name the rule: the name is a manifest row's, and `mantis.train`
+  does not import `mantis.config.armed_aborts` (the rule-name carrier's whole point). So the
+  guard publishes a FACT — `DiskGuard.critical_fired`, latched — and `mantis.run.compose_run`'s
+  teardown, which already owns `disk_guard.stop()`, reads that latch AFTER the guard thread is
+  joined and records the rule through `ShutdownState.record_abort`. Consequences: no thread but
+  the main one ever writes the run's stop state; the rule name has one spelling
+  (`armed_aborts.DISK_SPACE_ABORT_RULE`, imported by the root); and `record_abort` is now THE
+  writer of `abort_rule` for BOTH fire paths, set-once, first fire wins — the invariant
+  `ShutdownState`'s docstring always claimed, enforced by the carrier instead of by two call
+  sites agreeing to be careful.
+
+  The LATCH is a second defect closed in the same arm (RT-2b): the guard polls every
+  `interval_sec` (minted 60 s) on a condition that does not clear itself, so it supplied the
+  SECOND press of LAW-16's two-press force-exit ITSELF — `sys.exit(1)` from a signal handler,
+  mid-save, against `close_out`'s 14400 s drain caps. The two-press force-exit is the
+  OPERATOR's affordance and it stays theirs; the `disk_alert` critical event still fires every
+  tick, because the condition persists and an observer must see that.
+
+  NOT covered by 47, stated because a supervisor depends on the difference: a signal the
+  process did not send itself — an operator's SIGTERM, a supervisor's own stop — still resolves
+  to **0**, since nothing records a rule for it. R132's scope is the guard, and whether a
+  deliberate operator stop is a clean stop is a judgement no ruling has taken.
 
   DISCHARGED (WPMAIN, CARD-RUN-MAIN). The OWED clause used to read: "`run_until_stopped` has
   no caller in `src/` and `mantis.run.main()` is smoke-grade, so the only production-posture

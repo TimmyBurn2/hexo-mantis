@@ -409,8 +409,15 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         """The shape Phase D's schema extension DID produce. A stub, not a RunConfig — the
         `RunConfig` drive is `tests/config/test_drawrate_arming_authority.py`'s O-D3, which
         exists because a stub built FROM `config_path` cannot disagree with it."""
+        # WPMAIN RT-2/R132 adds `monitor.disk_guard` to the stub: the manifest gained a third
+        # REQUIRED row whose arming surface is `monitor.disk_guard.fail_gb`, and a stub that
+        # omits a REQUIRED row's surface raises `ArmingSurfaceMissingError` — correctly, that
+        # is the phantom-input guard doing its job. The value is the minted 5.0 and it is
+        # ARMED, so the disk-guard row never enters `disarmed` and this test's subject (the
+        # draw-rate flip) is unchanged.
         return SimpleNamespace(
-            monitor=SimpleNamespace(actor_lag_abort_enabled=True),
+            monitor=SimpleNamespace(actor_lag_abort_enabled=True,
+                                    disk_guard=SimpleNamespace(fail_gb=5.0)),
             train=SimpleNamespace(
                 draw_rate_abort=None if threshold is None
                 else SimpleNamespace(threshold=threshold)),

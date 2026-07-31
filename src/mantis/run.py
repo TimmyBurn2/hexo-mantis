@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 806 lines. WPMAIN made this
+# >300 justify (R8), stated at this file's MEASURED size of 829 lines. WPMAIN made this
 # module the ONE composition authority in fact and not only in name: the collaborator
 # builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
 # `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
@@ -21,7 +21,10 @@
 # RED-TEAM close (734 -> 806): the teardown ladder now opens at the sink instead of at
 # `pool.start()` and eleven composition steps carry a seam name (RT-3/RT-4). That adds no
 # executable branch — `with` lines and the rationale for them — so the argument above is
-# unchanged in kind.
+# unchanged in kind. Re-measured a THIRD time at the R132 fix pass (806 -> 829): the disk-guard
+# abort's rc seam is four lines of code in the teardown plus its rationale, and it belongs at
+# this root for the reason stated there — the rule NAME is a manifest fact, `mantis.train` may
+# not import the manifest, and this module already imports it for the launcher's own rc.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
 TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that
@@ -71,7 +74,7 @@ from typing import Any, NamedTuple
 
 import torch
 
-from mantis.config.armed_aborts import exit_code_for_abort
+from mantis.config.armed_aborts import DISK_SPACE_ABORT_RULE, exit_code_for_abort
 from mantis.config.emit import resolve_config
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
@@ -701,6 +704,21 @@ def compose_run(
         # outlives its run will SIGTERM a process that is no longer running one.
         if disk_guard is not None:
             disk_guard.stop()
+            # RT-2 / R132 — THE SEAM. A guard that fired stopped this run, and until this
+            # line said so the run exited 0: the handler writes `shutdown_save`/`running` and
+            # never `abort_rule`, so `main` below read "clean" off a run the guard killed and
+            # the supervisor relaunched into the same full volume (R44's class). The rule is
+            # named HERE and not in the guard because the name is a `MANIFEST` row's and
+            # `mantis.train` may not import that module — the guard publishes the FACT, this
+            # root (which already imports the manifest for its own rc) does the naming, and
+            # the string is imported rather than typed so one rename moves both readers.
+            # ORDER IS THE ARGUMENT, not a convenience: the read happens AFTER `stop()` has
+            # joined the guard thread, so the latch is final and no thread but this one ever
+            # writes the run's stop state. `record_abort` is set-once, so a coordinator abort
+            # that already fired keeps its rule — first fire wins, and a disk-full event
+            # during a draw-rate collapse does not re-label the collapse.
+            if disk_guard.critical_fired:
+                shutdown.record_abort(DISK_SPACE_ABORT_RULE)
 
     return RunHandles(coordinator=coordinator, run_safety=run_safety, eval_pipeline=eval_pipeline,
                       shutdown=shutdown)
@@ -754,7 +772,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rc policy, through THE resolver (D-6 — the `repo_design.md` OWED paragraph, discharged):
     the launcher reads the SAME `exit_code_for_abort` the preflight child's `_abort_rc`
-    reads, so the abort-to-rc mapping has one authority and is never re-derived.
+    reads, so the abort-to-rc mapping has one authority and is never re-derived. Two rules
+    reach it with an authored code today — `draw_rate_collapse` (46) and, since RT-2/R132,
+    `disk_space_exhausted` (47), recorded by `compose_run`'s teardown off the guard's own
+    latch. NOT covered, and stated because a supervisor depends on the difference: a signal
+    this process did NOT send itself — an operator's SIGTERM, a supervisor's own stop — still
+    resolves to 0, since nothing records a rule for it. R132's scope is the guard.
 
     WHAT rc 1 MEANS HERE, disclosed rather than implied (RED-TEAM RT-8, SF-7). rc 1 is not an
     AUTHORED code: it is CPython's rc for any exception that leaves `main`, so at least two

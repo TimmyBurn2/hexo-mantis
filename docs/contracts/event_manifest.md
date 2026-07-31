@@ -150,6 +150,28 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   shutdown checkpoint — so the abort's own evidence survives the abort.
   A rule with no manifest row (`grad_norm_hard_abort`, `sealbot_wr_abort`) resolves to `None`:
   truthful, and no code is invented for an abort nobody pre-registered.
+- `disk_space_exhausted` is the manifest's THIRD row and its second authored code, **47**
+  (`monitor.heartbeat.DISK_SPACE_EXHAUSTED_EXIT_CODE`), REQUIRED, arming surface
+  `monitor.disk_guard.fail_gb` (WPMAIN RED-TEAM RT-2 / R132). WPMAIN constructed the disk
+  guard for the first time in any run (R121(b)/R122) and thereby armed LAW-16 leg 3; the
+  RED-TEAM then measured what that armed. `DiskGuard.check_once` SIGTERMs its own pid below
+  `fail_gb`, the handler sets `shutdown_save`/`running` and **never** `abort_rule`, and
+  `mantis.run.main` read `abort_rule is None` and returned **0** — a run the disk guard killed
+  reported success, and a supervisor reading only the rc relaunches into the same full volume.
+  The event stream was NOT the gap: `disk_alert {level: "critical"}` was always emitted and is
+  unchanged. The PROCESS was. Two things changed, and neither is an event: the guard latches
+  its critical arm (it re-fired every `interval_sec` and so supplied LAW-16's two-press
+  force-exit itself, `sys.exit(1)` mid-save — the critical `disk_alert` still emits every tick
+  because the condition persists, only the SIGTERM is once-per-run), and `compose_run`'s
+  teardown reads that latch after the guard thread is joined and records the rule through
+  `ShutdownState.record_abort`, which is now THE one writer of that field for both fire paths
+  (set-once, first fire wins). The guard never names the rule itself: the name is a manifest
+  row's, `mantis.train` may not import the manifest, so the composition root — which already
+  reads `exit_code_for_abort` — imports `DISK_SPACE_ABORT_RULE` and does the naming. Delivery
+  stays cooperative for 46's reason exactly: an `os._exit(47)` would discard the save the
+  guard fires to protect. Residual, disclosed: an OPERATOR's SIGTERM still resolves to rc 0 —
+  nothing records a rule for a signal the process did not send itself, and R132's scope is the
+  guard.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

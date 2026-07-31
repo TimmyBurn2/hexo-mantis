@@ -1,4 +1,4 @@
-# R8 >300 justify (527, re-measured at WPMINT Phase K-B; was 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
+# R8 >300 justify (609, re-measured by `wc -l` at WPMAIN RT-2/R132; was 527 at WPMINT Phase K-B, 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
 # Phase D, and the
 # figure is restated at the file's MEASURED size rather than the size it was written for —
 # `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
@@ -13,7 +13,12 @@
 # a second authority for that answer the first time a row's `exit_code` moves. Phase K-B adds
 # a third row (+43 lines, 8 of them fields) and the `ceiling_path` mechanism it needs: the row
 # is where "why is grad-norm deferred, and what closes it" is written, and gate 12 prints that
-# text on every run.
+# text on every run. WPMAIN RT-2/R132 adds a FOURTH row (+51 lines, 10 of them fields) plus the
+# exported `DISK_SPACE_ABORT_RULE` the composition root imports: the disk-guard abort's rule
+# name has two readers — this row and `mantis.run` — because `mantis.train` may not import this
+# module, so a bare literal at each would be the duplicated-authority shape R1 exists to kill.
+# The row's own `note` carries why it is REQUIRED, what drift it exists to catch and the
+# operator-SIGTERM residual R132 did not close, which is data gate 12 prints, not a comment.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -50,7 +55,23 @@ from typing import Any
 # literal here would be the second place "which code does the draw-rate abort use" is
 # written. `mantis.monitor.heartbeat` imports nothing from `mantis` (stdlib only), so this is
 # a leaf edge in the same direction `config/resolve/monitor.py` already takes (gate 9).
-from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
+from mantis.monitor.heartbeat import (
+    DISK_SPACE_EXHAUSTED_EXIT_CODE,
+    DRAW_RATE_COLLAPSE_EXIT_CODE,
+)
+
+#: The disk-guard abort's RULE NAME — one spelling, exported (WPMAIN RT-2 / R132).
+#:
+#: Every other rule name in this file is a string literal typed once, because its producer
+#: (`StepCoordinator._fire_hard_abort`) receives the name from the gate that fires and never
+#: has to agree with a row. The disk-guard rule is different: `mantis.train` may not import
+#: this module (the rule-name carrier's whole point), so the guard publishes only the FACT
+#: that it fired and `mantis.run.compose_run` — which already imports `exit_code_for_abort`
+#: for its own rc resolution — names the rule. That name therefore has TWO readers, the row
+#: below and the root, and a bare literal at each would be exactly the duplicated-authority
+#: shape R1 exists to kill: rename the row and the root goes on recording a rule the resolver
+#: answers `None` for, which is `UnregisteredAbortExitError` at every disk-full event.
+DISK_SPACE_ABORT_RULE: str = "disk_space_exhausted"
 
 
 def _is_real_number(value: Any) -> bool:
@@ -262,6 +283,57 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "_fire_hard_abort sets to the rule NAME beside the stop; a process boundary maps "
             "it here through exit_code_for_abort. The three clean stops (stop(), O2 "
             "iteration limit, O3 shutdown-save) leave the field None."
+        ),
+    ),
+    ArmedAbort(
+        name=DISK_SPACE_ABORT_RULE,
+        config_path="monitor.disk_guard.fail_gb",
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        status=Status.REQUIRED,
+        exit_code=DISK_SPACE_EXHAUSTED_EXIT_CODE,
+        owner=None,
+        source_pin=(
+            "src/mantis/run.py",
+            "shutdown.record_abort(DISK_SPACE_ABORT_RULE)",
+        ),
+        note=(
+            "LAW-16 leg 3, the disk guard (exit 47). WPMAIN constructed the guard for the "
+            "first time in any run (R121(b)/R122) and WPMAIN's RED-TEAM then measured what "
+            "that armed: the critical arm SIGTERMs its own pid, the handler sets "
+            "shutdown_save/running and NEVER abort_rule, and mantis.run.main read "
+            "`abort_rule is None` and returned 0. A run the disk guard killed reported "
+            "SUCCESS — R44's class, on this WP's own new subsystem — and a supervisor reading "
+            "only the rc relaunches into the same full volume. R132 closes it the way R84 "
+            "closed the draw-rate leg: a registered code, resolved through this manifest, "
+            "never a second literal. "
+            "WHY REQUIRED AND NOT DEFERRED, since gate 12 audits every required row against "
+            "every production config: nothing has to be invented for this row and nothing is "
+            "owed, which is the exact test the grad-norm row below FAILS. The arming surface "
+            "monitor.disk_guard.fail_gb is a minted operator value on all six committed "
+            "configs (5.0), its schema carries gt=0, and the block is a REQUIRED field of "
+            "MonitorConfig — so a validated RunConfig arms this row by construction and a "
+            "DEFERRED status would demand an `owner` for debt that does not exist. What the "
+            "row is FOR, then, is the drift it makes loud: `_dotted` short-circuits a "
+            "mid-walk None to DISARMED, so the day someone makes the disk-guard block "
+            "optional or nullable — the posture that let the guard sit unconstructed with "
+            "dead 60/10/5 literals for the whole migration — gate 12 goes RED on run5 "
+            "instead of the guard quietly disappearing again. "
+            "DELIVERY IS COOPERATIVE, like 46 and for the same reason: the SIGTERM is "
+            "save-then-exit, so the run unwinds through close_out, the terminal-eval drain "
+            "and the shutdown checkpoint. An os._exit(47) from the guard thread would discard "
+            "the very save the guard fires to protect. What carries the signal is NOT a "
+            "cross-thread write: the guard latches `critical_fired` (RT-2b — the unlatched "
+            "arm re-fired every interval_sec and supplied LAW-16's second press itself, "
+            "sys.exit(1) mid-save against 14400 s drain caps), and compose_run's teardown "
+            "reads that latch AFTER disk_guard.stop() has joined the thread, then records "
+            "this rule on the ShutdownState it owns. "
+            "The pin binds THAT recording line, which is the whole mechanism: delete it, "
+            "rename the rule constant or drop the transfer past the guard's stop() and the "
+            "R56 scan breaks rather than the rc silently returning to 0. "
+            "RESIDUAL, disclosed (RT-2's wider claim, NOT closed here): an OPERATOR's SIGTERM "
+            "and a supervisor's own stop still resolve to rc 0, because ShutdownState carries "
+            "no rule for them and R132's scope is the guard. A deliberate operator stop is "
+            "arguably a clean stop; that judgement is not taken here."
         ),
     ),
     ArmedAbort(
@@ -523,6 +595,7 @@ def exit_code_for_abort(
 
 
 __all__ = [
+    "DISK_SPACE_ABORT_RULE",
     "EXEMPT_CONFIGS",
     "MANIFEST",
     "PRODUCTION_CONFIGS",

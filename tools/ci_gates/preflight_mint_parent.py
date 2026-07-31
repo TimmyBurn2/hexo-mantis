@@ -30,7 +30,10 @@ import json
 from pathlib import Path
 
 from mantis.config.schema import RunConfig
-from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
+from mantis.monitor.heartbeat import (
+    DISK_SPACE_EXHAUSTED_EXIT_CODE,
+    DRAW_RATE_COLLAPSE_EXIT_CODE,
+)
 
 A_KEYS = ("a1", "a2", "a3", "a4")
 B_KEYS = ("b0", "b1", "b2", "b3", "b4a", "b4b", "b4c", "b5a")
@@ -111,8 +114,10 @@ RELAUNCH_BUDGET_CODE = 44
 #: unwound through its own close-out. Read from the ONE authority rather than re-typed as 46 —
 #: a literal here would be a third place the number is written (the constant, the manifest row,
 #: and this), and the whole point of the rule-name carrier is that there is no such third place.
-ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE,)
-#: The full 42–46 band the docstring declares. Derived, so the docstring's claim and the three
+#: 47 joins it at WPMAIN RT-2/R132 (the disk-guard abort), by the same rule and for the same
+#: reason: read from the ONE authority, never re-typed here.
+ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE, DISK_SPACE_EXHAUSTED_EXIT_CODE)
+#: The full 42–47 band the docstring declares. Derived, so the docstring's claim and the three
 #: tuples above cannot drift apart.
 RESERVED_CODES = tuple(sorted({*WATCHDOG_CODES, RELAUNCH_BUDGET_CODE, *ARMED_ABORT_CODES}))
 

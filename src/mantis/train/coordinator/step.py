@@ -506,8 +506,16 @@ class StepCoordinator:
         `None`. The NAME, not a code: this method must not import `mantis.config.armed_aborts`,
         and it is shared by rules that have no authored exit code, so the rule -> code
         resolution (`armed_aborts.exit_code_for_abort`) belongs at the process boundary, not
-        here. The assignment is deliberately paired with `running = False` — it must be
+        here. The record is deliberately paired with `running = False` — it must be
         impossible to stop the run on a fired rule without recording which rule it was.
+
+        WPMAIN RT-2/R132: the bare assignment became `ShutdownState.record_abort`, which is now
+        the ONE writer of that field. Nothing about this path's behaviour moves — the state is
+        `None` here on every reachable call (the `hard_abort_after_stop` arm above returns
+        before it) so first-fire-wins records exactly what the assignment recorded. What
+        changed is that the disk-guard leg gained a second fire path, and the set-once
+        invariant this method's docstring already claimed is enforced by the carrier rather
+        than by two call sites agreeing to be careful.
         """
         if message is None:
             return False
@@ -521,7 +529,7 @@ class StepCoordinator:
         _LOG.error("hard_abort rule=%s step=%s message=%s", rule, at_step, message)
         emit_via(sink, {"event": "hard_abort", "rule": rule, "message": message, "step": at_step})
         self.shutdown.running = False
-        self.shutdown.abort_rule = rule
+        self.shutdown.record_abort(rule)
         if rule in self._gate_stats:
             self._gate_stats[rule]["fires"] += 1
         return True

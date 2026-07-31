@@ -5,6 +5,14 @@ Emits ``disk_free`` events, WARNs below ``warn_gb``, and SIGTERMs self below ``f
 into the lifecycle subsystem; the ``emit_event`` call is re-pointed at the injected
 ``EventSink`` (repo_design §11 seam). Thresholds are a SAFETY guard, independent of
 ``keep_all`` (a pruning knob) — verbatim invariant.
+
+WPMAIN RED-TEAM RT-2 / R132: that SIGTERM used to leave NO trace a supervisor could read.
+The handler sets ``shutdown_save``/``running`` and never ``abort_rule``, so a run the guard
+killed exited **0** and the supervisor above relaunched into the same full volume. The arm is
+now LATCHED (it fired every ``interval_sec`` and supplied the two-press force-exit itself,
+killing its own save) and it publishes ``critical_fired``, which the composition root turns
+into the registered abort rule -> process rc 47. Delivery is unchanged: still a SIGTERM, still
+save-then-exit, because that is what the guard exists for.
 """
 from __future__ import annotations
 
@@ -58,6 +66,13 @@ class DiskGuard:
         self._sink = sink
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        # RT-2b's latch, and RT-2's carrier. NOT a config proxy (R79): it is a FACT this guard
+        # produced — "my critical arm signalled this process" — with no config value beside it.
+        # Written only in `check_once`, i.e. only on this object's own thread (or on the
+        # caller's, for a direct `check_once()`), and read by the composition root AFTER
+        # `stop()` has joined that thread, so no cross-thread write to the run's stop state
+        # exists anywhere on this path.
+        self._critical_fired = False
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._loop, daemon=True, name="disk-guard")
@@ -68,6 +83,20 @@ class DiskGuard:
         if self._thread is not None:
             self._thread.join(timeout=5.0)
 
+    @property
+    def critical_fired(self) -> bool:
+        """True iff this guard's critical arm has signalled the process (WPMAIN RT-2/R132).
+
+        The guard cannot record WHY the run is stopping — the rule name is a row of
+        `mantis.config.armed_aborts.MANIFEST`, and `mantis.train` must not import that module
+        (the same rule `_fire_hard_abort` obeys; spelling the name here would be a second
+        authority for a manifest row's `name`). So the guard publishes the FACT and the
+        composition root, which already imports the manifest for its own rc resolution, does
+        the naming. `mantis.run.compose_run` reads this after `stop()` and records the rule on
+        the `ShutdownState` it owns; a guard nothing composed reads inert-but-truthful.
+        """
+        return self._critical_fired
+
     def check_once(self) -> float:
         """Check disk free, emit ``disk_free``, handle thresholds. Returns free_gb (decimal
         GB, matching old ``/1e9``)."""
@@ -76,16 +105,30 @@ class DiskGuard:
         self._sink.emit({"event": "disk_free", "disk_free_gb": round(free_gb, 2)})
 
         if free_gb < self._fail_gb:
+            # RT-2b. The SIGTERM is LATCHED; the alert is not. The guard polls every
+            # `interval_sec` (minted 60 s) and the condition it fires on does not clear itself,
+            # so an unlatched arm supplied the SECOND press of LAW-16's two-press force-exit
+            # ITSELF: `_stop` hits `stop_count >= 2` and `sys.exit(1)`s from a signal handler,
+            # at an arbitrary point in the main thread, MID-SAVE. Against `close_out`'s
+            # 14400 s drain caps a save-then-exit that must finish inside 60 s is close to
+            # certain to be killed — the guard destroying the save it asked for. The two-press
+            # force-exit is the OPERATOR's affordance (signals.py:56) and it stays theirs.
+            # The alert keeps firing every tick because the condition persists and an operator
+            # watching the stream must see that; only the escalation is once-per-run.
+            first_fire = not self._critical_fired
+            self._critical_fired = True
             _LOG.error(
-                "disk_critical: free=%.2f GB < fail_threshold=%.2f GB — sending SIGTERM "
-                "to halt training cleanly",
+                "disk_critical: free=%.2f GB < fail_threshold=%.2f GB — %s",
                 free_gb,
                 self._fail_gb,
+                "sending SIGTERM to halt training cleanly" if first_fire else
+                "SIGTERM already sent; NOT re-signalling (a second press force-exits mid-save)",
             )
             self._sink.emit(
                 {"event": "disk_alert", "level": "critical", "disk_free_gb": round(free_gb, 2)}
             )
-            os.kill(os.getpid(), signal.SIGTERM)
+            if first_fire:
+                os.kill(os.getpid(), signal.SIGTERM)
         elif free_gb < self._warn_gb:
             _LOG.warning(
                 "disk_low_warn: free=%.2f GB < warn_threshold=%.2f GB",

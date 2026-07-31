@@ -58,6 +58,22 @@ ACTOR_LAG_EXIT_CODE: int = 45
 # (`ShutdownState.abort_rule` -> `mantis.config.armed_aborts.exit_code_for_abort`), never from
 # a second literal here or in the coordinator.
 DRAW_RATE_COLLAPSE_EXIT_CODE: int = 46
+# 47 is the SECOND cooperative member (WPMAIN, RED-TEAM RT-2 / R132), and it is registered for
+# the same reason 46 was, one leg further down LAW-16. The disk guard's critical arm is
+# `os.kill(os.getpid(), SIGTERM)` — with WPMAIN's handlers finally live that is save-then-exit,
+# so the run unwinds through `close_out`, the terminal-eval drain and the shutdown checkpoint
+# exactly as the draw-rate abort does. What it did NOT do was say so: `install_signal_handlers`
+# writes `shutdown_save`/`running` and never `abort_rule`, `abort_rule` had exactly one writer
+# in all of `src/`, and so `mantis.run.main` read `rule is None` and returned **0**. A run the
+# disk guard killed reported success, and the supervisor above relaunches into the same full
+# volume — the R44 class (a green that lies) on the leg this WP armed for the first time.
+# Delivery is UNCHANGED and stays cooperative: `os._exit(47)` from the guard thread would
+# discard the very save the guard exists to protect, which is the fix being strictly worse than
+# the defect (46's own argument, verbatim). Parity is taken HERE and in the manifest row that
+# imports this constant; what carries the signal out of the loop is the rule NAME the
+# composition root records on `ShutdownState` once the guard thread is joined, resolved to this
+# number at the process boundary by `mantis.config.armed_aborts.exit_code_for_abort`.
+DISK_SPACE_EXHAUSTED_EXIT_CODE: int = 47
 
 
 @dataclass(frozen=True)

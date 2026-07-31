@@ -2,8 +2,11 @@
 # >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
 # written for. Producer for both figures: an AST transitive closure from `_boot_main` over
 # this file's own top-level functions — re-measured at WPMAIN IMPL (CARD-RUN-MAIN, R121(a)),
-# the pass that lifted the boot out of this tool: **1131 lines total, 147 in the child
-# closure, 585 in parent-only function bodies**. The child closure shrank 198 -> 147 because
+# the pass that lifted the boot out of this tool, and re-measured AGAIN at the WPMAIN R132 fix
+# pass, which touched one docstring line (the reserved band 42–46 -> 42–47) and no function
+# body: **1135 lines total, 147 in the child closure, 585 in parent-only function bodies** —
+# the two body figures are unmoved, which is the producer saying so rather than a reader
+# assuming it. The child closure shrank 198 -> 147 at WPMAIN IMPL because
 # `_build_buffer` left with the boot (now `mantis.run._select_buffer`) and `_boot_main` is a
 # call-through; parent-only moved 581 -> 585 with the `--device` deletion's surrounding
 # prose. Prior reading, WPBOX Phase Q, the pass that EXECUTED
@@ -144,11 +147,12 @@ measured that an armed-abort row whose `config_path` does not resolve fell into 
 rc 31 (`ArmingSurfaceMissingError` -> `PreflightManifestError`, WPAX Phase D); rc 1
 remains what it always was — the outcome nobody diagnosed — and a NEW rc-1 is a finding,
 not a routine failure mode. A child rc in [10, 41] PROPAGATES
-UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–46 are
+UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–47 are
 RESERVED by the run's own machinery**: 42 stall/livelock, 43 persist-fatal, 44 the supervisor's
 relaunch budget, 45 actor-lag, 46 the cooperative armed-abort code
-(`monitor/heartbeat.py::DRAW_RATE_COLLAPSE_EXIT_CODE`). None of the five is ever an assertion
-outcome of this tool.
+(`monitor/heartbeat.py::DRAW_RATE_COLLAPSE_EXIT_CODE`), 47 the second cooperative member —
+the disk-guard abort (`monitor/heartbeat.py::DISK_SPACE_EXHAUSTED_EXIT_CODE`, WPMAIN
+RT-2/R132). None of the six is ever an assertion outcome of this tool.
 
 46 joined that band at WPMINT Phase X (CARD-ABORT-EXIT / R84) and the taxonomy had to move with
 it, in the same change: 46 is outside the [10, 41] pass-through and was outside the reserved

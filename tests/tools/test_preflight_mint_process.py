@@ -400,14 +400,20 @@ def test_a_child_rc_46_is_the_runs_own_ARMED_ABORT_and_is_never_collapsed_to_33(
         assert code not in TOOL.PASS_THROUGH, (
             "the premise: 46 cannot ride arm 4, which is why it needed an arm of its own"
         )
-    assert TOOL.ARMED_ABORT_CODES == (46,), (
-        f"the authored code is 46 and it comes from the ONE authority; got "
+    # WPMAIN RT-2/R132 adds the SECOND cooperative member, 47 (the disk-guard abort). The loop
+    # above needed no edit — it iterates `ARMED_ABORT_CODES` and therefore already drove 47
+    # through the same arm and asserted the same three properties for it, which is the derived
+    # tuple earning its keep exactly as its comment at `preflight_mint_parent.py:114` claims.
+    assert TOOL.ARMED_ABORT_CODES == (46, 47), (
+        f"the authored codes are 46 (draw-rate) and 47 (disk guard) and BOTH come from the ONE "
+        f"authority (`monitor/heartbeat.py`), never re-typed here; got "
         f"{TOOL.ARMED_ABORT_CODES!r}"
     )
-    assert TOOL.DRAW_RATE_COLLAPSE_EXIT_CODE == 46 and 46 not in TOOL.WATCHDOG_CODES, (
-        "46 is a reserved code but NOT a watchdog code — it is not delivered by `os._exit` "
-        "and must not be diagnosed as a stall"
+    assert not set(TOOL.ARMED_ABORT_CODES) & set(TOOL.WATCHDOG_CODES), (
+        "both are reserved codes but NEITHER is a watchdog code — they are not delivered by "
+        "`os._exit` and must not be diagnosed as a stall"
     )
+    assert TOOL.DRAW_RATE_COLLAPSE_EXIT_CODE == 46
 
 
 def test_the_boot_childs_rc_is_decided_by_whether_an_abort_fired() -> None:
@@ -1254,11 +1260,14 @@ def test_the_failure_code_table_is_the_designs_table() -> None:
     # and this assertion moved with it. Pinned against `RESERVED_CODES` rather than a re-typed
     # `{42, 43, 44, 45, 46}`: a hand-written set here would go stale exactly as the four-element
     # one just did, silently, because a set literal cannot notice a sixth reserved code.
+    # WPMAIN RT-2/R132 grew it AGAIN, to 42–47 (47 = the disk-guard abort) — which is the
+    # disjointness assertion below earning its keep for the second time: it is derived, so it
+    # covered the new code before this line was re-measured.
     assert set(TOOL.FAILURE_CODES.values()).isdisjoint(set(TOOL.RESERVED_CODES)), (
         "the codes the run's OWN machinery reserves must never be an assertion outcome"
     )
-    assert TOOL.RESERVED_CODES == (42, 43, 44, 45, 46), (
-        "and the band the docstring declares is 42–46; a code that joins the family without "
+    assert TOOL.RESERVED_CODES == (42, 43, 44, 45, 46, 47), (
+        "and the band the docstring declares is 42–47; a code that joins the family without "
         f"joining this tuple is one the parent will collapse. Got {TOOL.RESERVED_CODES!r}"
     )
 
