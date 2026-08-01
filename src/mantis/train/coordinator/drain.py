@@ -131,10 +131,54 @@ def run_terminal_eval(coord: Any) -> Any:
     # Terminal promotion: the pool is already stopped here, and that is FINE — a gate
     # decision is pool-independent on every route (WP-UNFREEZE, R49): it writes the
     # deploy tag only, so the mid-run/terminal asymmetry the old sync flag encoded is gone.
-    return _route_eval_result(coord, pipeline.run_evaluation(
+    result = _route_eval_result(coord, pipeline.run_evaluation(
         coord.eval_model, coord._train_step, best,
         full_config=coord.full_config, best_model_step=best_step, ignore_stride=True,
     ))
+    _record_terminal_outcome(coord, result)
+    return result
+
+
+def _record_terminal_outcome(coord: Any, result: Any) -> None:
+    """Latch the TERMINAL round's own reason on the coordinator (WP12-R Phase O, R152).
+
+    THE one writer, and it is reachable only from `run_terminal_eval` — the one function
+    that passes `ignore_stride=True`. That is what keeps R133's split structural rather
+    than conditional: a mid-run break stays non-fatal (rounds recur; persistent breakage is
+    the watchdog's jurisdiction) because no mid-run route can reach this line, not because
+    somebody remembered to test for it.
+
+    The reason is read in ONE expression off the ROUTED MAPPING itself — no derivation, no
+    recomputation — so the latch cannot disagree with the round it came from. It travels as
+    the reason enum member's own `str` value: the train package may not import the eval
+    package at all (repo_design §2, census-tested — which is why this docstring names no
+    dotted path into it), so this layer TRANSPORTS the fact and never authors it; the
+    composition root re-parses it through the reason enum before naming a rule.
+
+    Both failure arms are LOUD, the `disarm_staleness` posture verbatim (`close_out`
+    below): a coordinator without the set-once writer, and a result shape the seam cannot
+    read, are both wiring bugs, and a wiring bug that degraded to "no terminal outcome"
+    would restore rc 0 on a broken run — the exact defect this phase closes. This is
+    deliberately NOT `_unroutable`'s recorded-drop posture: that exists because a raise
+    there would skip `on_drained`/`pool.stop`, and by the time this runs both have already
+    happened (`close_out`'s order).
+    """
+    if not isinstance(result, Mapping):
+        raise TypeError(
+            f"run_terminal_eval: the terminal round routed a {type(result).__name__}, "
+            "which carries no `eval_broken_reason` — the terminal seam cannot read it, and "
+            "a terminal outcome that goes unrecorded reports a broken run as rc 0"
+        )
+    if getattr(coord, "record_terminal_eval_reason", None) is None:
+        raise TypeError(
+            f"run_terminal_eval: coord ({type(coord).__name__}) has no "
+            "record_terminal_eval_reason(); without it a broken terminal round cannot "
+            "reach the process exit code and the run reports success (R133/LAW-15)"
+        )
+    # Written as the attribute call and not through a local: the census that keeps this the
+    # ONE writer (`tests/train/test_terminal_eval_rc.py`, O-07) walks the AST for a call to
+    # this name, and a bound-local indirection would make a second writer invisible to it.
+    coord.record_terminal_eval_reason(result["eval_broken_reason"])
 
 
 def close_out(coord: Any, on_drained: Callable[[], None] | None = None) -> None:

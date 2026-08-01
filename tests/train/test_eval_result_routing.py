@@ -206,7 +206,7 @@ def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
     """`step()` must poll the injected eval pipeline and route ANY completed round through
     `on_eval_round_complete`, on the MAIN thread that called `step()`."""
     pipe = ThreadIdentSpyEvalPipeline(poll_result={"step": 5, "wr_sealbot": 0.6,
-                                                    "promoted": False, "eval_broken": False})
+                                                    "promoted": False, "eval_broken_reason": None})
     h = _make_coordinator(eval_pipeline=pipe)
     routed: list[dict] = []
     h.coord.on_eval_round_complete = lambda result: routed.append(dict(result))
@@ -263,7 +263,7 @@ def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> N
     pool records ZERO sync-shaped calls in the window. The deploy-tag (anchor) write on
     the REAL applier is pinned in tests/train/test_actor_deploy_independence.py."""
     result = {"step": 7, "promoted": True, "promoted_step": 7, "wr_sealbot": 0.9,
-              "eval_broken": False}
+              "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline(poll_result=result)
     h = _make_coordinator(eval_pipeline=pipe)
     h.coord.on_eval_round_complete = lambda r: None  # the WR consumer is not under test
@@ -286,7 +286,7 @@ def test_terminal_route_applies_identically_to_midrun() -> None:
     the mid-run/terminal asymmetry is gone because a gate decision is pool-independent on
     every route: it applies with the pool stopped and untouched."""
     result = {"step": 9, "promoted": True, "promoted_step": 9, "wr_sealbot": 0.9,
-              "eval_broken": False}
+              "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline()
     pipe.run_evaluation = lambda *a, **k: dict(result)  # terminal eval RETURNS the result
     h = _make_coordinator(eval_pipeline=pipe)
@@ -315,7 +315,12 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
     watchdog = SimpleNamespace(disarm_staleness=lambda: order.append("disarm"))
     pipe = SimpleNamespace(
         drain_pending=lambda: (order.append("flush_pending_eval"), None)[1],
-        run_evaluation=lambda *a, **k: (order.append("run_terminal_eval"), None)[1],
+        # WP12-R Phase O: the terminal call answers a ROUND RESULT whose
+        # `eval_broken_reason` the seam now reads (it used to be discarded), and the
+        # coordinator carries the set-once latch that reads it. The ordering subject
+        # of this test is unchanged.
+        run_evaluation=lambda *a, **k: (order.append("run_terminal_eval"),
+                                        {"eval_broken_reason": None})[1],
     )
     coord = SimpleNamespace(
         heartbeat_watchdog=watchdog, eval_pipeline=pipe,
@@ -323,6 +328,7 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         _train_step=1000, _sink=None, eval_model=object(), full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
         on_eval_round_complete=lambda result: None,
+        record_terminal_eval_reason=lambda reason: None,
     )
     drain.close_out(coord, on_drained=lambda: order.append("on_drained"))
 

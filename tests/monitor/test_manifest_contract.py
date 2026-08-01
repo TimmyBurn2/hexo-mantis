@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from mantis.monitor.manifest import ManifestError, verify_manifest
+from mantis.monitor.manifest import ManifestError, load_manifest, verify_manifest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHIPPED_MANIFEST = _REPO_ROOT / "src" / "mantis" / "monitor" / "producer_manifest.yaml"
@@ -110,3 +110,50 @@ def test_empty_manifest_is_a_failure(tmp_path: Path) -> None:
     path.write_text("version: 1\nchannel: jsonl_event_sink\ngates: []\n")
     with pytest.raises(ManifestError):
         verify_manifest(path, _REPO_ROOT)
+
+
+# ── ⊕ WP12-R Phase O / O-29 (R164/LAW-07) — the two Phase-O rows EXIST ────────────────
+#: The rows Phase O authors, by id. Transcribed rather than derived from the shipped file:
+#: an oracle that read its expectation out of the document under test could not witness a
+#: deletion, which is the entire subject here (R81).
+_PHASE_O_ROW_IDS = ("target_integrity_counters", "terminal_eval_broken")
+
+
+def test_the_shipped_manifest_contains_the_phase_O_rows() -> None:
+    """O-29 — PRESENCE, which is a different mechanism from RESOLUTION and is covered by
+    nothing else in this file.
+
+    `verify_manifest` iterates the rows it is HANDED. Only an EMPTY gate list is a failure
+    (`manifest.py:78-79`, and `docs/contracts/event_manifest.md:65` says so verbatim); every
+    row that is present is then resolved one at a time. So DELETING a row leaves
+    `test_shipped_manifest_every_row_resolves` GREEN — the checker has nothing left to
+    resolve and reports success over the smaller set. That hole is generic to all rows; this
+    oracle closes it for the two Phase O authors, which is the scope Phase O owns.
+
+    Why the two rows matter enough to pin their existence: they are the LAW-07 provenance for
+    the two things Phase O ships. `target_integrity_counters` is the anti-rot leg that
+    `solver_deltas` never had — a defaulted parameter with no row and no producer test, which
+    is exactly why eight solver counters silently never reached the stream and nothing
+    noticed. `terminal_eval_broken` cites the producer for exit code 48.
+
+    Read off the raw document, not through `verify_manifest`: presence must be observable
+    even when resolution would fail, otherwise the two mechanisms collapse into one and
+    M-O29's "O-27 stays green" asymmetry would be unobservable.
+
+    MUTATION THAT REDS IT (M-O29): delete either row from `producer_manifest.yaml`. The
+    resolution oracle above stays GREEN under it — that asymmetry is why this row exists."""
+    document = load_manifest(_SHIPPED_MANIFEST)
+    gates = document["gates"]
+    assert isinstance(gates, list) and gates, (
+        "premise: the shipped manifest declares gate rows at all"
+    )
+    present = [row["id"] for row in gates]
+    missing = [row_id for row_id in _PHASE_O_ROW_IDS if row_id not in present]
+    assert missing == [], (
+        f"the shipped producer manifest is missing {missing}. A gate/monitor input with no "
+        "row cites no producer and no producer test (R4/LAW-07), and nothing else in this "
+        f"file can see its absence. Present rows: {present}"
+    )
+    assert len(present) == len(set(present)), (
+        f"duplicate row ids in the shipped manifest: {present}"
+    )

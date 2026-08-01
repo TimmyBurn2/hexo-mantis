@@ -157,7 +157,10 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
     def _spy_build_eval_pipeline(**kwargs):
         captured.update(kwargs)
         return SimpleNamespace(
-            run_evaluation=lambda *a, **k: {"kicked": False, "reason": None},
+            # WP12-R Phase O: the TERMINAL call returns a ROUND RESULT, and the seam
+            # now READS its `eval_broken_reason` (it used to discard it), so a double
+            # that answers a kick ACK no longer models the contract it stands in for.
+            run_evaluation=lambda *a, **k: {"eval_broken_reason": None},
             poll_completed=lambda: None, drain_pending=lambda: None,
             apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
         )

@@ -89,7 +89,7 @@ producers is a phantom-armed abort chain waiting to happen).
 | `disk_guard` | symbol | `train.lifecycle.disk_guard.DiskGuard.check_once` | `tests/train/test_lifecycle_contract.py::test_disk_guard_emits_free_event` |
 | `warn.training_step_alerts` | event_literal | `train.events` / `training_step` (4 rules: `entropy_collapse`, `selfplay_entropy_collapse`, `grad_norm_spike`, `loss_increase_window`) | `tests/train/test_coordinator_gates.py::test_log_interval_emits_training_step` |
 | `eval_round_wall` | event_literal (+`also`) | `eval.pipeline` / `eval_round_started` + `eval_round_complete` | `tests/eval/test_round_events.py::test_round_emits_start_and_complete_wall_events` |
-| `eval_broken` | event_literal | `eval.pipeline` / `eval_broken` | `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain` (+ reason `round_completion_error` — RED-TEAM-FIX WP11-A F1 layer 2, ANY uncaught exception in round completion/scheduling converts to a delivered `eval_broken` rather than killing the poller thread silently — `tests/eval/test_round_completion_error.py::test_poller_thread_survives_an_uncaught_exception_in_round_completion`) |
+| `eval_broken` | event_literal | `eval.pipeline` / `eval_broken` — payload `reason` is a `mantis.eval.errors.EvalBrokenReason` member, the ONE authority (WP12-R Phase O / R152): `join_timeout`, `killed`, `exit_nonzero`, `result_missing`, `result_invalid`, `ladder_persist_failed`, `round_completion_error` — seven members, seven censused routes, wire spellings byte-identical to the bare literals they replace. `phase` stays on the payload as a FUNCTION of the reason (`drain` / `worker_exit` / `ladder_persist` / `round_completion`). The two exception-bearing routes carry a `detail`, and they carry DIFFERENT ones: `round_completion_error` carries `detail` = `repr(exc)` AND an `exception_class` key; `ladder_persist_failed` carries `detail` ONLY — a persistence message naming the ladder-state path, not `repr(exc)` — and NO `exception_class` key at all (the emitter adds each extra iff it was passed, `pipeline.py:499-501`). The other five routes carry neither. The routed round result carries the same value as `eval_broken_reason` (`None` IS the clean state — the `eval_broken` bool and the `error` key are DELETED, R79) plus `eval_broken_detail`, which is PROSE nobody branches on | `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain` (+ reason `round_completion_error` — RED-TEAM-FIX WP11-A F1 layer 2, ANY uncaught exception in round completion/scheduling converts to a delivered `eval_broken` rather than killing the poller thread silently — `tests/eval/test_round_completion_error.py::test_poller_thread_survives_an_uncaught_exception_in_round_completion`) |
 | `eval_rung_skipped` | event_literal | `eval.pipeline` / `eval_rung_skipped` | `tests/eval/test_rung_loud_skip.py::test_unresolvable_rung_emits_skip_event_and_log` |
 
 ## WP-UNFREEZE rows (actor-sync ⊥ deploy-gate split; LAW-18)
@@ -172,6 +172,46 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   guard fires to protect. Residual, disclosed: an OPERATOR's SIGTERM still resolves to rc 0 —
   nothing records a rule for a signal the process did not send itself, and R132's scope is the
   guard.
+- `terminal_eval_broken` is the manifest's FOURTH REQUIRED row and its third authored code,
+  **48** (`monitor.heartbeat.TERMINAL_EVAL_BROKEN_EXIT_CODE`), arming surface
+  `train.terminal_eval_enabled` (WP12-R Phase O / R152, discharging R133's caveat "rc 0 does
+  not certify eval health"). The event stream was not the gap here either: `eval_broken` was
+  always emitted and is unchanged apart from its reason becoming typed. The PROCESS was.
+  `drain.close_out` computed the terminal round's result, routed it, and DISCARDED the return
+  value one frame below `ShutdownState`, so a terminal battery that was killed, returned
+  garbage or could not persist its ladder state exited **0** and a supervisor recorded a clean
+  finish (LAW-15: no promotion decision = deliverable incomplete). `drain.run_terminal_eval`
+  now latches the routed result's own `eval_broken_reason` on the coordinator — set-once, ONE
+  writer in `src/`, reachable only from the one function that passes `ignore_stride=True`,
+  which is what keeps R133's mid-run/terminal split structural: a MID-RUN broken round still
+  exits 0, because rounds recur and persistent breakage stays the watchdog's jurisdiction. The
+  composition root re-parses the latched string through `EvalBrokenReason` (an unregistered
+  spelling is a loud `ValueError`, never a silent rc 0) and records the rule AFTER the
+  disk-guard read, so first-fire-wins keeps the root cause: 47 beats 48, and a mid-loop 46
+  keeps its name. ONE code for seven reason classes by decision — the family is one number per
+  OUTCOME with the cause in the payload — so the seven stay pairwise-distinguishable in THIS
+  channel and never at the rc. Delivery is cooperative and is the cleanest of the three: the
+  terminal eval is the LAST action of `close_out`, so there is nothing left for an `os._exit`
+  to discard; `main` returns the number. Residual, disclosed: an exception raised BEFORE or
+  DURING the terminal eval leaves the latch unset and exits rc 1 — loud, but indistinguishable
+  from a composition wall (`Q-RT-RC1-COLLISION`).
+- `iteration_complete.target_integrity` carries the three WP12-R Phase-T target-integrity
+  counters IN-RUN (R164 / LAW-18): `export_offwindow_mass_moves`, `gridls_zero_policy_rows`
+  and `target_integrity_defects`, each `{total, delta, per_position}`, beside the
+  `positions_delta` denominator. `PREREG_T §0b` names the first as THE in-run witness
+  attributing the expected game-shape drift, and until Phase O it was readable only by a test
+  calling `runner_stats(pool)` — a witness a live run cannot read is not a witness, and
+  LAW-18's own text is that a post-hoc offline probe cannot distinguish "starved" from
+  "ineffective". LAW-03, stated because the unit is not obvious: `per_position` is fires per
+  RECORDED POSITION — not per game and not per ply — so `gridls_zero_policy_rows` can
+  legitimately exceed 1.0 (one position contributes many cluster rows) and it is a RATE, never
+  a fraction; no per-MOVE denominator is published, so a per-move rate is NOT re-derivable
+  from this payload. `per_position` is `None`, never a fabricated `0.0`, when no position was
+  recorded in the interval (the convention below, applied). An IDLE lever stays VISIBLE at 0:
+  `target_integrity_defects` reads 0 in every run that survives to emit, because its latch is
+  run-fatal — that permanent zero is the posture, not an unproduced field. A DECREASE is
+  emitted as measured and never clamped: the atomics are monotonic, so a negative delta is a
+  wiring bug and a `max(0, …)` would hide it (the `actor_lag_negative` precedent below).
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

@@ -54,7 +54,7 @@ def _base_kwargs(**overrides) -> dict:
     base = dict(
         step=1000, round_id="r000001_1000", rungs_config=_LADDER_ORDER, rung_results={},
         gate_result=None, skipped_rungs=[], bt={"ratings": {}, "p_hat": {}},
-        schedule_next={}, eval_round_wall_sec=1.0, eval_broken=False, error=None,
+        schedule_next={}, eval_round_wall_sec=1.0, reason=None, detail=None,
         random_wr=None,
     )
     base.update(overrides)
@@ -62,12 +62,13 @@ def _base_kwargs(**overrides) -> dict:
 
 
 def test_round_result_always_carries_wr_sealbot() -> None:
+    from mantis.eval.errors import EvalBrokenReason
     from mantis.eval.rounds import build_round_result
 
     success = build_round_result(**_base_kwargs(rung_results={}))
     assert "wr_sealbot" in success and success["wr_sealbot"] is None
 
-    broken = build_round_result(**_base_kwargs(eval_broken=True, error="killed"))
+    broken = build_round_result(**_base_kwargs(reason=EvalBrokenReason.KILLED, detail=None))
     assert "wr_sealbot" in broken and (broken["wr_sealbot"] is None or isinstance(broken["wr_sealbot"], float))
 
     all_skip = build_round_result(**_base_kwargs(

@@ -1,4 +1,4 @@
-# R8 >300 justify (609, re-measured by `wc -l` at WPMAIN RT-2/R132; was 527 at WPMINT Phase K-B, 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
+# R8 >300 justify (697, re-measured by `wc -l` at WP12-R Phase O; was 609 at WPMAIN RT-2/R132, 527 at WPMINT Phase K-B, 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
 # Phase D, and the
 # figure is restated at the file's MEASURED size rather than the size it was written for —
 # `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
@@ -19,6 +19,15 @@
 # module, so a bare literal at each would be the duplicated-authority shape R1 exists to kill.
 # The row's own `note` carries why it is REQUIRED, what drift it exists to catch and the
 # operator-SIGTERM residual R132 did not close, which is data gate 12 prints, not a comment.
+# WP12-R Phase O (R152) adds a FIFTH row (+70 lines, 8 of them fields) plus the exported
+# `TERMINAL_EVAL_BROKEN_ABORT_RULE`, for the reason the disk-guard row above exists in this
+# shape: the broken-terminal-eval rule name has two readers (this row and `mantis.run`), and
+# `mantis.train` may not import this module. Its `note` carries the one-code-for-seven-reasons
+# decision, the two disclosed residuals and the cooperative-delivery argument — gate-12-printed
+# data, not commentary. The same phase deletes the last exit-code LITERAL in the row set
+# (`actor_lag`'s bare 45 became `ACTOR_LAG_EXIT_CODE`): an AST census now forbids an integer
+# literal in any `exit_code=`, because an identity check cannot witness one — CPython interns
+# the small ints, so a typed `48` IS the imported constant under `is`.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -56,8 +65,10 @@ from typing import Any
 # written. `mantis.monitor.heartbeat` imports nothing from `mantis` (stdlib only), so this is
 # a leaf edge in the same direction `config/resolve/monitor.py` already takes (gate 9).
 from mantis.monitor.heartbeat import (
+    ACTOR_LAG_EXIT_CODE,
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
     DRAW_RATE_COLLAPSE_EXIT_CODE,
+    TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
 
 #: The disk-guard abort's RULE NAME — one spelling, exported (WPMAIN RT-2 / R132).
@@ -72,6 +83,17 @@ from mantis.monitor.heartbeat import (
 #: shape R1 exists to kill: rename the row and the root goes on recording a rule the resolver
 #: answers `None` for, which is `UnregisteredAbortExitError` at every disk-full event.
 DISK_SPACE_ABORT_RULE: str = "disk_space_exhausted"
+
+#: The broken-terminal-eval RULE NAME — one spelling, exported (WP12-R Phase O, R152).
+#:
+#: Same shape and same grounds as `DISK_SPACE_ABORT_RULE` one line above: `mantis.train`
+#: may not import this module, so the coordinator's terminal-eval latch carries only the
+#: FACT (the round's own reason string) and `mantis.run.compose_run` — which already
+#: imports `exit_code_for_abort` for its own rc resolution — names the rule. Two readers,
+#: the row below and the root, so a bare literal at each is the duplicated-authority shape
+#: R1 exists to kill: rename the row and the root goes on recording a rule the resolver
+#: answers `None` for, i.e. `UnregisteredAbortExitError` on every broken terminal battery.
+TERMINAL_EVAL_BROKEN_ABORT_RULE: str = "terminal_eval_broken"
 
 
 def _is_real_number(value: Any) -> bool:
@@ -235,7 +257,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="monitor.actor_lag_abort_enabled",
         mechanism=Mechanism.CONFIG_BOOL,
         status=Status.REQUIRED,
-        exit_code=45,
+        exit_code=ACTOR_LAG_EXIT_CODE,
         owner=None,
         source_pin=None,
         note=(
@@ -334,6 +356,71 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "and a supervisor's own stop still resolve to rc 0, because ShutdownState carries "
             "no rule for them and R132's scope is the guard. A deliberate operator stop is "
             "arguably a clean stop; that judgement is not taken here."
+        ),
+    ),
+    ArmedAbort(
+        name=TERMINAL_EVAL_BROKEN_ABORT_RULE,
+        config_path="train.terminal_eval_enabled",
+        mechanism=Mechanism.CONFIG_BOOL,
+        status=Status.REQUIRED,
+        exit_code=TERMINAL_EVAL_BROKEN_EXIT_CODE,
+        owner=None,
+        source_pin=(
+            "src/mantis/run.py",
+            "shutdown.record_abort(TERMINAL_EVAL_BROKEN_ABORT_RULE)",
+        ),
+        note=(
+            "The broken-terminal-eval outcome (exit 48), WP12-R Phase O / R152, closing "
+            "R133's measured caveat 'rc 0 does not certify eval health'. At HEAD the "
+            "terminal round's result — reason included — was computed, emitted, routed and "
+            "then THROWN AWAY one frame below ShutdownState (drain.close_out discarded "
+            "run_terminal_eval's return), and promote.py's refusal to promote a broken "
+            "round was the ONLY production consumer of broken-ness anywhere in src/. So a "
+            "run whose terminal battery was killed, whose worker returned garbage or whose "
+            "ladder state never reached disk exited 0 and the supervisor above recorded a "
+            "clean finish — LAW-15's 'no promotion decision = deliverable incomplete', "
+            "invisible at the process boundary. "
+            "ONE code for SEVEN reason classes, on the record: the family is one number per "
+            "OUTCOME with the CAUSE in the payload (rc 45 covers every actor-lag fire), and "
+            "the seven causes stay pairwise-distinguishable in the ONE channel through "
+            "mantis.eval.errors.EvalBrokenReason — on the eval_broken event's reason and on "
+            "the round result's eval_broken_reason. A supervisor reading only the rc sees "
+            "'terminal eval degraded' and not WHICH break; that is stated, not hidden. "
+            "WHY REQUIRED AND NOT DEFERRED, the exact test the grad-norm row below fails: "
+            "nothing has to be invented and nothing is owed. train.terminal_eval_enabled is "
+            "a REQUIRED typed bool (config/schema/train.py) minted true on all six "
+            "committed configs, so gate 12 is green the moment this row lands and NO armed "
+            "value moves. What the row is FOR is the drift it makes loud: the day someone "
+            "mints a production config with the terminal eval off, gate 12 goes RED instead "
+            "of the run quietly shipping with no terminal promotion decision at all. "
+            "RESIDUAL, disclosed: the rc is reachable only if BOTH eval_enabled and "
+            "train.terminal_eval_enabled are true, and a row carries ONE config_path. The "
+            "nearer condition is armed here (it gates the terminal round specifically, "
+            "where eval_enabled gates all eval); the other half is held by "
+            "tests/config/test_minted_config_remint.py::"
+            "test_a_minted_config_carries_the_identity_and_eval_leaves, which asserts "
+            "leaves['eval_enabled'] is True over all six committed configs — a real "
+            "per-config assertion, not a live-consumer pin, which is why disclosure is "
+            "sufficient rather than merely tolerable. "
+            "SECOND RESIDUAL: target_integrity_defects, the sibling Phase-T counter this "
+            "phase lands in the event stream, reads 0 in EVERY run that survives to emit an "
+            "iteration_complete — its latch is run-fatal — so that permanent zero is the "
+            "LAW-18 'an idle lever stays VISIBLE at 0' posture and must not be misread as "
+            "an unproduced field. "
+            "DELIVERY IS COOPERATIVE, like 46 and 47, and it is the cleanest of the three: "
+            "46/47 stay cooperative because an os._exit would discard a save still in "
+            "flight, while the terminal eval is the LAST action of close_out — the loop is "
+            "over, the buffer is saved, and delivery is main returning the number. "
+            "drain.run_terminal_eval latches the routed result's own eval_broken_reason on "
+            "the coordinator (set-once, one writer, reachable only from the one function "
+            "that passes ignore_stride=True), and compose_run's teardown re-parses that "
+            "string through EvalBrokenReason — an unregistered spelling is a loud "
+            "ValueError, never a silent rc 0 — before recording this rule. The read sits "
+            "AFTER the disk-guard read so first-fire-wins keeps the ROOT CAUSE: a disk-full "
+            "run whose terminal eval then breaks reports 47, not 48. The pin binds that "
+            "recording line, so deleting it, renaming the rule constant or reordering it "
+            "past the disk-guard read all break the R56 scan rather than the rc silently "
+            "returning to 0."
         ),
     ),
     ArmedAbort(
@@ -599,6 +686,7 @@ __all__ = [
     "EXEMPT_CONFIGS",
     "MANIFEST",
     "PRODUCTION_CONFIGS",
+    "TERMINAL_EVAL_BROKEN_ABORT_RULE",
     "ArmedAbort",
     "ArmingSurfaceMissingError",
     "AuditResult",

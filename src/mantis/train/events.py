@@ -1,3 +1,13 @@
+# R8 >300 justify (330, MEASURED by `wc -l` at WP12-R Phase O; 293 before it, and the figure
+# is restated at the file's measured size rather than the size it was written for — SF-7):
+# `emit_training_events` builds and emits BOTH per-boundary payloads (`training_step` and
+# `iteration_complete`) in one pass and returns the first, because the four WARN rules run on
+# the payload that was actually emitted — splitting the two builders would put the rule's
+# input and the rule's producer behind an import and re-open exactly the LAW-07 gap the
+# return exists to close. Phase O adds the `target_integrity` block (+18 lines, 3 of them
+# code) plus the SF-7 correction to `PoolTelemetryLike`'s disjointness sentence; the rest is
+# the rationale that IS the row (R164/LAW-18: the counter attributing a run's own drift was
+# test-visible only).
 """Training-loop event BUILDERS (WP10 §a.3 IMPROVE — route through the injected EventSink).
 
 Ported behaviour-exact from the old `training/events.py`, but every payload is funnelled
@@ -12,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -29,13 +40,21 @@ class PoolTelemetryLike(Protocol):
     Deliberately NOT folded into `coordinator.config.WorkerPoolLike` (the R106 design
     question, decided with grounds): the coordinator's pool reads are load-bearing control
     flow (watchdog arm / health abort / draw-rate gate) while these nine are emission-only,
-    the two member sets are disjoint, and their failure postures differ — an absent
+    and their failure postures differ — an absent
     operational member is an abort-integrity bug, an absent telemetry member breaks a
     payload (`avg_game_length` is even hasattr-guarded to 0.0, ported behaviour). Defined
     HERE rather than in `coordinator/config.py` because the seam layer describes the shape
     it consumes (the `DrawRateAbortLike` precedent) and because `coordinator/__init__`
     imports `step`, which imports this module — the reverse import would cycle. Pinned by
     `tests/train/test_trainer_seam_conformance.py`'s widened matrix.
+
+    WP12-R Phase O correction (SF-7 — the sentence above used to end "the two member sets
+    are disjoint", and R164 made that FALSE rather than leaving it to rot): `runner_stats`
+    is now declared on BOTH protocols, because the coordinator reads the same snapshot to
+    build `iteration_complete`'s `target_integrity` block. The SPLIT still stands on its
+    other two grounds — different failure postures and different holders — and one shared
+    read is not a merge; what would be a merge is folding the other eight emission-only
+    members into the control-flow protocol.
     """
 
     gumbel_mcts: bool
@@ -201,9 +220,21 @@ def emit_training_events(
     trainer_model: Any | None = None,
     solver_deltas: dict[str, Any] | None = None,
     steps_per_hour_fn: Any | None = None,
+    *,
+    target_integrity: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Emit `training_step` + `iteration_complete` events through the injected sink and
     RETURN the `training_step` payload.
+
+    `target_integrity` (WP12-R Phase O, R164) is REQUIRED, keyword-only and carries NO
+    default, and that is the whole difference from `solver_deltas` two lines above — a
+    defaulted parameter with zero callers passing it, whose payload keys therefore silently
+    never appear and whose absence no test can see. A parameter default is a MIGRATED
+    authority, not an absent one (`run.py:366-372`, MF-2 Attack B): with no default, a
+    caller that forgets it is a `TypeError` at the first `log_interval` boundary, loudly.
+    (`solver_deltas` itself is left byte-untouched here — its fix needs a semantics decision
+    about denominators and about the documented-unproduced `quiescence_fires_per_step`, and
+    taking that inside this commit would be the scope widening R119 forbids.)
 
     The return is what the 4 WARN rules read (`monitor.rules.emit_training_step_alerts`):
     the rules run on the payload that was actually emitted, so a rule can never fire on a
@@ -287,6 +318,12 @@ def emit_training_events(
         "corpus_selfplay_frac": round(1.0 - w_pre, 4),
         "batch_fill_pct": pool.batch_fill_pct,
         "mcts_mean_depth": rstats.mcts_mean_depth,
+        # WP12-R Phase O (R164/LAW-18): the three Phase-T target-integrity counters reach
+        # the ONE channel here, each as {total, delta, per_position} beside the
+        # `positions_delta` denominator the rate is taken over. Nested so the three travel
+        # together and cannot crosswire; built by the coordinator, which owns the previous
+        # boundary's readings (`StepCoordinator._target_integrity_report`).
+        "target_integrity": dict(target_integrity),
     }
     iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
     emit_via(sink, iteration_complete_event)

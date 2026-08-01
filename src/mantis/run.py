@@ -1,4 +1,5 @@
-# >300 justify (R8), stated at this file's MEASURED size of 829 lines. WPMAIN made this
+# >300 justify (R8), stated at this file's MEASURED size of 867 lines (re-measured at
+# WP12-R Phase O, which adds the terminal-eval rc seam to the teardown this root owns). WPMAIN made this
 # module the ONE composition authority in fact and not only in name: the collaborator
 # builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
 # `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
@@ -74,7 +75,11 @@ from typing import Any, NamedTuple
 
 import torch
 
-from mantis.config.armed_aborts import DISK_SPACE_ABORT_RULE, exit_code_for_abort
+from mantis.config.armed_aborts import (
+    DISK_SPACE_ABORT_RULE,
+    TERMINAL_EVAL_BROKEN_ABORT_RULE,
+    exit_code_for_abort,
+)
 from mantis.config.emit import resolve_config
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
@@ -86,6 +91,7 @@ from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
+from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
@@ -719,6 +725,35 @@ def compose_run(
             # during a draw-rate collapse does not re-label the collapse.
             if disk_guard.critical_fired:
                 shutdown.record_abort(DISK_SPACE_ABORT_RULE)
+        # WP12-R Phase O / R152 — THE TERMINAL-EVAL SEAM, and it closes R133's measured
+        # caveat "rc 0 does not certify eval health". `close_out` computed the terminal
+        # round's result, routed it, and then DISCARDED it one frame below `ShutdownState`
+        # — the only object that can carry an outcome to `main` — so a run whose terminal
+        # battery was killed, returned garbage or could not persist its ladder state exited
+        # 0 and the supervisor above recorded a clean finish (LAW-15: no promotion decision
+        # = deliverable incomplete). The coordinator now latches the routed round's OWN
+        # reason set-once; this names the rule, exactly as the disk-guard leg above does
+        # and for the same reason (the name is a `MANIFEST` row's and `mantis.train` may
+        # not import that module).
+        #
+        # ORDER IS THE ARGUMENT, not a convenience: this read sits AFTER the disk-guard
+        # read so `record_abort`'s first-fire-wins keeps the ROOT CAUSE — a disk-full run
+        # whose terminal eval then breaks BECAUSE the volume is full reports 47, not 48,
+        # and a draw-rate collapse recorded mid-loop keeps 46. A supervisor told "terminal
+        # eval degraded" would go looking at the eval ladder instead of at the disk.
+        #
+        # The bare `EvalBrokenReason(raw)` is not decoration: it is the RUNTIME half of the
+        # unrepresentability claim. The three typed chokepoints make a bare string a
+        # pyright error and gate 14 is held at ZERO, but a `# type: ignore` slips past a
+        # type checker and the reason crosses a JSON boundary where types do not travel at
+        # all. A spelling no member spells is therefore a loud `ValueError` here rather
+        # than a silent rc 0 — LAW-11's posture (absent/unknown is an error, never a
+        # default) applied to the taxonomy.
+        if coordinator is not None:
+            terminal_reason = coordinator.terminal_eval_reason
+            if terminal_reason is not None:
+                EvalBrokenReason(terminal_reason)
+                shutdown.record_abort(TERMINAL_EVAL_BROKEN_ABORT_RULE)
 
     return RunHandles(coordinator=coordinator, run_safety=run_safety, eval_pipeline=eval_pipeline,
                       shutdown=shutdown)
@@ -772,10 +807,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rc policy, through THE resolver (D-6 — the `repo_design.md` OWED paragraph, discharged):
     the launcher reads the SAME `exit_code_for_abort` the preflight child's `_abort_rc`
-    reads, so the abort-to-rc mapping has one authority and is never re-derived. Two rules
-    reach it with an authored code today — `draw_rate_collapse` (46) and, since RT-2/R132,
+    reads, so the abort-to-rc mapping has one authority and is never re-derived. Three rules
+    reach it with an authored code today — `draw_rate_collapse` (46); since RT-2/R132,
     `disk_space_exhausted` (47), recorded by `compose_run`'s teardown off the guard's own
-    latch. NOT covered, and stated because a supervisor depends on the difference: a signal
+    latch; and since WP12-R Phase O / R152, `terminal_eval_broken` (48), recorded by the
+    same teardown off the coordinator's set-once terminal-eval latch, AFTER the disk-guard
+    read so first-fire-wins keeps the root cause. NOT covered, and stated because a
+    supervisor depends on the difference: a signal
     this process did NOT send itself — an operator's SIGTERM, a supervisor's own stop — still
     resolves to 0, since nothing records a rule for it. R132's scope is the guard.
 

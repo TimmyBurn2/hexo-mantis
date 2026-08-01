@@ -419,6 +419,13 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
             monitor=SimpleNamespace(actor_lag_abort_enabled=True,
                                     disk_guard=SimpleNamespace(fail_gb=5.0)),
             train=SimpleNamespace(
+                # WP12-R Phase O adds a FOURTH REQUIRED row whose arming surface is
+                # `train.terminal_eval_enabled`; a stub that omits a REQUIRED row's surface
+                # raises `ArmingSurfaceMissingError` — correctly, the phantom-input guard
+                # doing its job. Minted `true` on all six committed configs, so the row is
+                # ARMED, never enters `disarmed`, and this test's subject (the draw-rate
+                # flip) is unchanged. Same maintenance RT-2/R132 did one row earlier.
+                terminal_eval_enabled=True,
                 draw_rate_abort=None if threshold is None
                 else SimpleNamespace(threshold=threshold)),
         )
@@ -570,3 +577,109 @@ def test_a_minted_config_survives_a_dump_revalidate_round_trip(name: str) -> Non
         f"{name}: the round trip is not dump-stable, so `override.booted_config_sha256` "
         "would not be reproducible"
     )
+
+
+# ── ⊕ WP12-R Phase O / O-16 (R152/R84) — the terminal-eval-broken row ─────────────────
+def test_the_terminal_eval_broken_row_is_required_and_imports_its_exit_code() -> None:
+    """O-16. The rc R152 authors must be REGISTERED, not merely returned.
+
+    R84's template is a registry entry plus a resolver, and the reason is one-authority: the
+    number an operator reads off the process has to be the number the manifest publishes, or
+    the manifest is documentation. `mantis.run` resolves the rc through
+    `exit_code_for_abort`, which reads whatever `exit_code` the row carries — so a literal
+    typed into the row and a literal typed at the launcher are the SAME defect one layer
+    apart, and only the row's own provenance can stop it.
+
+    `train.terminal_eval_enabled` is the arming surface and the row is REQUIRED, not
+    DEFERRED, because nothing is owed: the field is a REQUIRED typed `bool` in the schema and
+    is minted `true` on every committed config, so gate 12 is green the moment the row lands.
+    What the row is FOR is the drift it makes loud — the day a production config is minted
+    with the terminal eval off, gate 12 goes RED instead of the run quietly shipping with no
+    terminal promotion decision (LAW-15: no promotion decision = deliverable incomplete).
+
+    THE IMPORT-NOT-LITERAL CHECK IS AN AST CHECK, and that is not a style choice: CPython
+    interns the small integers, so `row.exit_code is TERMINAL_EVAL_BROKEN_EXIT_CODE` is True
+    even when the row types a bare `48` — an identity assertion CANNOT witness that mutation
+    for any value in [-5, 256]. The only instrument that can is the source itself.
+
+    MUTATION THAT REDS IT (M-O16): type `exit_code=48` as a literal in the row (the AST arm).
+    MUTATION THAT REDS IT (M-O17): flip the row to `Status.DEFERRED` (the status arm)."""
+    import ast
+
+    from mantis.monitor.heartbeat import TERMINAL_EVAL_BROKEN_EXIT_CODE
+
+    row = next((candidate for candidate in MANIFEST
+                if candidate.name == "terminal_eval_broken"), None)
+    assert row is not None, (
+        "the armed-abort manifest authors no `terminal_eval_broken` row, so "
+        "`exit_code_for_abort` answers None for the rule the composition root records and "
+        "every broken terminal round exits 1 UnregisteredAbortExitError. Rows: "
+        f"{[candidate.name for candidate in MANIFEST]}"
+    )
+    assert row.status is Status.REQUIRED and row.owner is None, (
+        "a REQUIRED row carries no owner (an owner reads as already-excused debt); got "
+        f"{row.status} / {row.owner!r}"
+    )
+    assert row.config_path == "train.terminal_eval_enabled", (
+        "the arming surface is the NEARER condition — it gates the terminal round "
+        f"specifically, where `eval_enabled` gates all eval; got {row.config_path!r}"
+    )
+    assert row.mechanism is Mechanism.CONFIG_BOOL, (
+        f"a bool field is armed by `value is True`; got {row.mechanism}"
+    )
+    assert row.exit_code == TERMINAL_EVAL_BROKEN_EXIT_CODE == 48, (
+        f"the row publishes the registered code; got {row.exit_code!r}"
+    )
+    assert row.source_pin is not None, (
+        "R56 tamper-evidence: the row must pin the site that records its rule, or the row "
+        "can go on claiming a fire path that was deleted"
+    )
+    rel, text = row.source_pin
+    assert text in (REPO_ROOT / rel).read_text(encoding="utf-8"), (
+        f"the pinned text {text!r} is gone from {rel} — the mechanism the rc depends on was "
+        "deleted, renamed or reordered"
+    )
+
+    tree = ast.parse(MANIFEST_MODULE.read_text(encoding="utf-8"), filename=str(MANIFEST_MODULE))
+    rows_in_source = [node for node in ast.walk(tree)
+                      if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                      and node.func.id == "ArmedAbort"]
+    assert len(rows_in_source) == len(MANIFEST), (
+        f"premise: every shipped row is constructed in {MANIFEST_MODULE.name}; the AST found "
+        f"{len(rows_in_source)} constructions against {len(MANIFEST)} rows, so the census "
+        "below would be reading a different set than the one under test"
+    )
+    typed_literals = [
+        ast.unparse(keyword.value)
+        for call in rows_in_source for keyword in call.keywords
+        if keyword.arg == "exit_code" and isinstance(keyword.value, ast.Constant)
+        and isinstance(keyword.value.value, int) and not isinstance(keyword.value.value, bool)
+    ]
+    assert typed_literals == [], (
+        f"an armed-abort row types its exit code as a literal ({typed_literals}) instead of "
+        "importing it from `mantis.monitor.heartbeat`. That is a second place the number is "
+        "written: move the constant and the row goes on publishing the old one, with the "
+        "resolver, the preflight parent and repo_design §11 all disagreeing about it"
+    )
+
+
+def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> None:
+    """O-16, the audit half — the row is not merely well-formed, it is ARMED where it counts.
+
+    `audit_arming` resolves `train.terminal_eval_enabled` on the real production config and
+    reports the row DISARMED if it is not `True`. Asserted here as the positive: gate 12 is
+    green on run5 the day the row lands and NO armed value moves (R119's hard stop is
+    untouched — 0.25 / 25000 / 50 are not on this axis at all)."""
+    for name in PRODUCTION_CONFIGS:
+        config = load_config(REPO_ROOT / name)
+        audit = audit_arming(config)
+        disarmed = [row.name for row in audit.disarmed]
+        assert disarmed == [], (
+            f"{name}: REQUIRED rows are disarmed: {disarmed}. Minting this config re-enables "
+            "the failure each abort exists to catch"
+        )
+        armed = [row.name for row in audit.required]
+        assert "terminal_eval_broken" in armed, (
+            f"{name}: the terminal-eval row must be among the audited REQUIRED rows — a row "
+            f"nobody audits is a registry entry, not a gate. Audited: {armed}"
+        )

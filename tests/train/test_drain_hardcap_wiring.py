@@ -116,12 +116,12 @@ def test_drain_overrun_kills_worker_and_yields_eval_broken() -> None:
         clock.advance(budget + 0.01)
         return clock.t
 
-    broken, reason = drain_or_kill(
+    reason = drain_or_kill(
         proc, budget_sec=budget, worker_kill_grace_sec=0.2,
         clock=_clock_that_overruns_immediately,
     )
 
-    assert broken is True, "an overrun drain must be reported broken, never silently OK"
+    assert reason is not None, "an overrun drain must be reported broken, never silently OK"
     assert reason == "join_timeout", f"drain overrun reason must name join_timeout, got {reason!r}"
     assert proc.terminate_called, "an overrun budget must terminate() the child"
     assert proc.kill_called, "a child that does not die on terminate must be kill()ed"
@@ -141,11 +141,11 @@ def test_drain_within_budget_is_not_broken() -> None:
     proc = FakeHangingProcess()
     proc.exitcode = 0  # already exited cleanly before drain_or_kill is even called
 
-    broken, reason = drain_or_kill(
+    reason = drain_or_kill(
         proc, budget_sec=budget, worker_kill_grace_sec=0.2, clock=clock,
     )
 
-    assert broken is False, "a clean exit within budget must not be reported broken"
+    assert reason is None, "a clean exit within budget must not be reported broken"
     assert not proc.terminate_called and not proc.kill_called, (
         "a clean exit must never be terminated/killed"
     )
@@ -165,12 +165,12 @@ def test_terminal_round_bounded_by_terminal_eval_hard_cap_sec() -> None:
         clock.advance(caps.terminal_eval_hard_cap_sec + 0.01)
         return clock.t
 
-    broken, reason = drain_or_kill(
+    reason = drain_or_kill(
         proc, budget_sec=caps.terminal_eval_hard_cap_sec, worker_kill_grace_sec=0.2,
         clock=_clock_that_overruns_immediately,
     )
 
-    assert broken is True and reason == "join_timeout"
+    assert reason is not None and reason == "join_timeout"
     assert proc.terminate_called and proc.kill_called
 
 
@@ -192,4 +192,81 @@ def test_all_four_drain_cap_fields_have_live_consumers() -> None:
     missing = [name for name in expected if name not in src]
     assert missing == [], (
         f"DrainCaps field(s) with no live read in mantis/eval/pipeline.py source: {missing}"
+    )
+
+
+# ══ ⊕ WP12-R Phase O / O-14 (R152/R79) — `drain_or_kill` returns ONE typed value ═══════
+#
+# The `(bool, str)` tuple three rows above is an R79 shape: a boolean beside a value that can
+# contradict it. `(True, "clean_exit")` and `(False, "join_timeout")` are both constructible
+# today, and the reason half is a bare literal — the same free-form string R152 replaces
+# everywhere else. R152 collapses the pair into `EvalBrokenReason | None`, where `None` IS
+# the clean exit: there is no second field left to disagree, and `"clean_exit"` stops being a
+# spelling anybody can typo because it stops existing.
+#
+# The two rows below are ADDITIONS, not re-points: the three existing rows keep their subject
+# (the join-bound arithmetic and the escalation) and their `broken, reason = …` unpacking is
+# IMPL's own S-3 re-point.
+def test_drain_or_kill_returns_a_typed_reason_or_none() -> None:
+    """O-14, behaviour half. Clean exit → `None`; overrun → `EvalBrokenReason.JOIN_TIMEOUT`.
+
+    The enum is imported INSIDE the body on purpose: this file's other rows have nothing to
+    do with the taxonomy, and a module-level anchor would red all five instead of these two.
+
+    MUTATION THAT REDS IT (M-O14): restore the `(bool, str)` tuple. The unpacking rows above
+    would go green again and nothing else in the suite would notice, which is precisely why
+    this row states the return shape rather than only the reason spelling."""
+    from mantis.eval.errors import EvalBrokenReason
+
+    clean = FakeHangingProcess()
+    clean.exitcode = 0
+    assert drain_or_kill(clean, budget_sec=1.0, worker_kill_grace_sec=0.2,
+                         clock=FakeClock(0.0)) is None, (
+        "a child that exited inside its budget has NO reason — absence is the clean state, "
+        "and a `(False, 'clean_exit')` pair is two authorities for one fact (R79)"
+    )
+    assert not clean.terminate_called and not clean.kill_called, (
+        "premise: the clean arm really was the clean arm"
+    )
+
+    hung = FakeHangingProcess()
+    overrun = drain_or_kill(hung, budget_sec=0.01, worker_kill_grace_sec=0.2,
+                            clock=FakeClock(0.0))
+    assert overrun is EvalBrokenReason.JOIN_TIMEOUT, (
+        f"an overrun drain escalates to the JOIN_TIMEOUT member, not a bare string; got "
+        f"{overrun!r}"
+    )
+    assert hung.terminate_called and hung.kill_called, (
+        "premise: the overrun arm really did escalate"
+    )
+
+
+def test_the_clean_exit_literal_is_gone_from_the_package() -> None:
+    """O-14, census half. `"clean_exit"` must not survive anywhere under `src/mantis`.
+
+    A literal that survives is a reason spelling with no member, which is exactly the state
+    R152 ends: it can be typed, compared against, or accidentally routed as a reason, and
+    nothing types-checks it. The return annotation is asserted alongside because the two can
+    drift apart — a function can be annotated `EvalBrokenReason | None` and still hand back a
+    tuple at one branch.
+
+    MUTATION THAT REDS IT (M-O14): re-add `return False, "clean_exit"`."""
+    from pathlib import Path
+
+    package = Path(__file__).resolve().parents[2] / "src" / "mantis"
+    offenders = [str(path.relative_to(package.parent)) for path in sorted(package.rglob("*.py"))
+                 if "clean_exit" in path.read_text(encoding="utf-8")]
+    assert offenders == [], (
+        f"the `clean_exit` literal survives in {offenders} — a reason spelling with no enum "
+        "member is the free-form string R152 deletes"
+    )
+
+    annotation = inspect.signature(drain_or_kill).return_annotation
+    assert "tuple" not in str(annotation), (
+        f"`drain_or_kill` still declares a tuple return ({annotation!r}) — the bool and the "
+        "string are two authorities for one fact"
+    )
+    assert "EvalBrokenReason" in str(annotation), (
+        f"…and it must declare the typed reason so pyright (gate 14, held at ZERO) refuses a "
+        f"bare string at every call site; got {annotation!r}"
     )

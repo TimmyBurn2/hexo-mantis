@@ -1,4 +1,6 @@
-# >300 justify (R8), stated at this file's MEASURED size of 372 lines. It crossed the cap at
+# >300 justify (R8), stated at this file's MEASURED size of 382 lines (re-measured at
+# WP12-R Phase O, which declares `runner_stats` on `WorkerPoolLike` — the coordinator now
+# reads the runner snapshot itself for `iteration_complete`'s target-integrity block). It crossed the cap at
 # WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
 # onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
 # docstring recording WHY six fields are gone and why no field may carry a default; WPCLEAN
@@ -128,6 +130,14 @@ class WorkerPoolLike(Protocol):
     def current_stride5_p90(self) -> int: ...
     def check_producer_health(self) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
+    # WP12-R Phase O (R164): the coordinator now READS the runner snapshot itself, to build
+    # the `target_integrity` fire-rate block `iteration_complete` carries. It is the one
+    # member this protocol shares with `mantis.train.events.PoolTelemetryLike` — declared
+    # here because the conformance gate (`tests/train/test_trainer_seam_conformance.py`)
+    # measures `step.py`'s pool accesses against THIS protocol, and a called-and-undeclared
+    # member is the TD-1 class R106 exists to kill. `Any` keeps the no-`train → selfplay`
+    # edge, exactly as `PoolTelemetryLike` types it.
+    def runner_stats(self) -> Any: ...
 
 
 @runtime_checkable

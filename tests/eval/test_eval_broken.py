@@ -245,7 +245,7 @@ def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> 
 
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
         assert result is not None
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
         assert result.get("wr_sealbot") is None
         assert result.get("step") == 1000
@@ -276,7 +276,7 @@ def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_pat
 
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
         assert result is not None
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert proc.terminated is True
         assert proc.killed is True   # terminate() alone did not clear it -> escalated to kill()
 
@@ -301,7 +301,7 @@ def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> N
 
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
         assert result is not None
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
 
         broken_events = sink.named("eval_broken")
@@ -321,7 +321,7 @@ def test_missing_result_file_is_eval_broken(fake_mp, tmp_path) -> None:
 
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
         assert result is not None
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
 
         broken_events = sink.named("eval_broken")

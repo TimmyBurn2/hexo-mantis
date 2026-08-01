@@ -633,7 +633,9 @@ def test_terminal_eval_enabled_decides_whether_close_out_runs_a_terminal_round()
 
     calls: list[str] = []
     pipeline = SimpleNamespace(
-        run_evaluation=lambda *a, **k: calls.append("terminal") or {"kicked": True},
+        # WP12-R Phase O: a terminal round returns a ROUND RESULT whose
+        # `eval_broken_reason` the seam now reads (it used to be discarded).
+        run_evaluation=lambda *a, **k: calls.append("terminal") or {"eval_broken_reason": None},
         poll_completed=lambda: None, drain_pending=lambda: None, stop=lambda: None,
     )
     on = _coordinator(eval_pipeline=pipeline, terminal_eval_enabled=True)

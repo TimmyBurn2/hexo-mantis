@@ -404,7 +404,7 @@ def test_a_child_rc_46_is_the_runs_own_ARMED_ABORT_and_is_never_collapsed_to_33(
     # above needed no edit — it iterates `ARMED_ABORT_CODES` and therefore already drove 47
     # through the same arm and asserted the same three properties for it, which is the derived
     # tuple earning its keep exactly as its comment at `preflight_mint_parent.py:114` claims.
-    assert TOOL.ARMED_ABORT_CODES == (46, 47), (
+    assert TOOL.ARMED_ABORT_CODES == (46, 47, 48), (
         f"the authored codes are 46 (draw-rate) and 47 (disk guard) and BOTH come from the ONE "
         f"authority (`monitor/heartbeat.py`), never re-typed here; got "
         f"{TOOL.ARMED_ABORT_CODES!r}"
@@ -1266,7 +1266,7 @@ def test_the_failure_code_table_is_the_designs_table() -> None:
     assert set(TOOL.FAILURE_CODES.values()).isdisjoint(set(TOOL.RESERVED_CODES)), (
         "the codes the run's OWN machinery reserves must never be an assertion outcome"
     )
-    assert TOOL.RESERVED_CODES == (42, 43, 44, 45, 46, 47), (
+    assert TOOL.RESERVED_CODES == (42, 43, 44, 45, 46, 47, 48), (
         "and the band the docstring declares is 42–47; a code that joins the family without "
         f"joining this tuple is one the parent will collapse. Got {TOOL.RESERVED_CODES!r}"
     )
@@ -3552,3 +3552,108 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
         "and nothing more; the artifact has to say so"
     )
     assert "NOTHING in this tier is demonstrated" in block["does_not_prove"]
+
+
+# ══ ⊕ WP12-R Phase O / O-17, O-18 (R152) — gate 12 and the parent both learn code 48 ══
+#
+# PLACEMENT NOTE (recorded rather than silently taken): `DESIGN_O §e.1` assigns O-17 to
+# `tests/tools/test_preflight_mint.py`. It lands HERE instead, beside O-18 and beside the
+# `_mini_tree` rig, because driving gate 12 against a PERTURBED run5 needs that rig — the
+# only way to give the shipped tool a different `REPO_ROOT` without writing configs inside
+# the repo it gates (R7 / gate 6) — and R5 bars cross-test imports, so the alternative was a
+# second copy of the rig in a file that has no other use for one. The subject, the tool and
+# the mutation are unchanged; only the file is.
+def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path) -> None:
+    """O-17. The row's whole job, driven: the day someone mints a production config with the
+    terminal eval switched off, gate 12 must go RED — instead of the run quietly shipping
+    with no terminal promotion decision at all (LAW-15: no promotion decision = deliverable
+    incomplete).
+
+    Two arms, and both are needed. The UNPERTURBED tree must be green, or a red on the
+    perturbed one proves nothing about the flag; the PERTURBED tree must be red by name, or
+    the row is a registry entry nobody audits.
+
+    The perturbation is one key in a copy of run5 inside the mini tree. Nothing inside the
+    repo is touched and the tool is the shipped file, byte-for-byte, run as itself.
+
+    MUTATION THAT REDS IT (M-O17): flip the manifest row to `Status.DEFERRED` (with an owner
+    and a pin so `__post_init__` still passes). The audit stops counting it, the perturbed
+    tree goes green, and the arming surface silently stops being audited."""
+    import yaml
+
+    root = _mini_tree(tmp_path)
+    healthy = _mini_audit(root)
+    assert healthy.returncode == 0, (
+        "premise: an unperturbed mini tree is as green as the real one, so the red below is "
+        f"the flag and not the rig; got {healthy.returncode}\n"
+        f"{(healthy.stdout + healthy.stderr)[-2000:]}"
+    )
+
+    run5_copy = root / "configs" / "run5.yaml"
+    document = yaml.safe_load(run5_copy.read_text(encoding="utf-8"))
+    assert document["train"]["terminal_eval_enabled"] is True, (
+        "premise: run5 mints the terminal eval ON, which is what makes the row REQUIRED "
+        f"rather than DEFERRED; got {document['train']['terminal_eval_enabled']!r}"
+    )
+    document["train"]["terminal_eval_enabled"] = False
+    run5_copy.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+    perturbed = _mini_audit(root)
+    output = perturbed.stdout + perturbed.stderr
+    assert perturbed.returncode == TOOL.PreflightArmingAuditError.rc == 30, (
+        "a REQUIRED armed-abort row disarmed on a production config is gate 12's whole "
+        f"subject and must be rc 30; got {perturbed.returncode}\n{output[-3000:]}"
+    )
+    assert "terminal_eval_broken" in output, (
+        f"…and the failure must NAME the disarmed row so an operator knows which key to "
+        f"restore; got {output[-2000:]}"
+    )
+    assert "train.terminal_eval_enabled" in output, (
+        f"…and the arming surface, which is the thing they actually edit; got {output[-2000:]}"
+    )
+
+
+def test_a_child_rc_48_is_the_runs_own_ARMED_ABORT_and_is_never_collapsed_to_33() -> None:
+    """O-18. The X-6 arm, extended to the third cooperative member.
+
+    Before WPMINT Phase X, 46 sat in a hole: outside `PASS_THROUGH` ([10, 41]) and outside
+    the reserved set, so `_classify_child` fell through every arm to the final
+    `PreflightBootFailedError` and a child that exited with the AUTHORED abort code reported
+    **rc 33** — the tool meant to surface the signal would have destroyed it
+    (`preflight_mint.py:151-161` records that failure verbatim). 48 arrives in exactly that
+    hole unless `ARMED_ABORT_CODES` learns it, and a preflight whose terminal eval broke is
+    precisely the run an operator most needs the number from.
+
+    The constant is IMPORTED from the ONE authority, never re-typed here: a literal in this
+    test would agree with a literal in the tool and both could drift from the manifest.
+
+    MUTATION THAT REDS IT (M-O18): drop `TERMINAL_EVAL_BROKEN_EXIT_CODE` from
+    `ARMED_ABORT_CODES` — the child's rc 48 collapses to `PreflightBootFailedError`'s 33."""
+    from mantis.monitor.heartbeat import TERMINAL_EVAL_BROKEN_EXIT_CODE
+
+    assert TERMINAL_EVAL_BROKEN_EXIT_CODE in TOOL.ARMED_ABORT_CODES, (
+        "48 is a COOPERATIVE armed abort — the run decided, unwound, saved and returned the "
+        "manifest's number — so the parent must classify it with 46 and 47 and not as a boot "
+        f"failure; got {TOOL.ARMED_ABORT_CODES!r}"
+    )
+    with pytest.raises(TOOL.PreflightArmedAbortFiredError) as caught:
+        TOOL._classify_child(_child(TERMINAL_EVAL_BROKEN_EXIT_CODE))
+    assert caught.value.rc == TERMINAL_EVAL_BROKEN_EXIT_CODE, (
+        "an armed abort's authored rc must PROPAGATE unchanged — a supervisor must read the "
+        f"same number on both sides of this tool; got {caught.value.rc}"
+    )
+    assert caught.value.rc != TOOL.PreflightBootFailedError.rc, (
+        "…and it must not be the rc 33 an unregistered code collapses to"
+    )
+    assert TERMINAL_EVAL_BROKEN_EXIT_CODE not in TOOL.PASS_THROUGH, (
+        "the premise: 48 cannot ride the [10, 41] pass-through arm, which is why it needs "
+        f"the armed-abort arm; got PASS_THROUGH={TOOL.PASS_THROUGH!r}"
+    )
+    assert TERMINAL_EVAL_BROKEN_EXIT_CODE not in TOOL.WATCHDOG_CODES, (
+        "…and it is NOT a watchdog code: it is not delivered by `os._exit` from a fire path "
+        "and must not be diagnosed as a stall"
+    )
+    assert TERMINAL_EVAL_BROKEN_EXIT_CODE in TOOL.RESERVED_CODES, (
+        "…while still being inside the reserved 42–47+ band the tool's docstring declares, "
+        f"which is DERIVED from the three tuples; got {TOOL.RESERVED_CODES!r}"
+    )

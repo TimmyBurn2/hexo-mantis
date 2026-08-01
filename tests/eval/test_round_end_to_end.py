@@ -168,7 +168,7 @@ def test_full_headless_round_end_to_end(tmp_path) -> None:
         assert ack["kicked"] is True
 
         result = _poll_until_complete(pipeline, timeout=600.0)
-        assert result["eval_broken"] is False
+        assert result["eval_broken_reason"] is None
         assert "wr_sealbot" in result   # G-2 handshake: always present, even with no sealbot games
         assert "schedule_next" in result and result["schedule_next"]
         assert "bt" in result and result["bt"].get("ratings")

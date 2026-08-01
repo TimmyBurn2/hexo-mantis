@@ -108,7 +108,7 @@ def test_gate_pass_advances_deploy_tag_and_never_touches_actor(tmp_path) -> None
     pipeline = _DeployOnlyPipeline(hooks)
     coord = _routing_coord(pipeline)
 
-    result = {"step": 7, "promoted": True, "eval_broken": False}
+    result = {"step": 7, "promoted": True, "eval_broken_reason": None}
     drain._route_eval_result(coord, result)
 
     assert pipeline.apply_calls == 1, "the routed promotion must reach apply_gate_decision"
@@ -142,7 +142,7 @@ def test_gate_fail_freezes_deploy_tag_while_sync_continues(tmp_path) -> None:
     sync_counts: list[int] = []
     for k in (1, 2, 3):
         drain._route_eval_result(
-            coord, {"step": k, "promoted": False, "eval_broken": False})
+            coord, {"step": k, "promoted": False, "eval_broken_reason": None})
         learner.step = k
         engine.maybe_sync(k)
         sync_counts.append(len(target.sync_payloads))
@@ -153,7 +153,7 @@ def test_gate_fail_freezes_deploy_tag_while_sync_continues(tmp_path) -> None:
     assert anchor.best_model_step is None, "a failing gate must freeze the DeployTag"
     assert save_anchor.calls == [], "a failing gate must never persist an anchor"
     # And the applier's own guard, driven directly, is a no-op on a failed round:
-    assert apply_gate_decision(hooks, {"promoted": False, "eval_broken": False}) is None
+    assert apply_gate_decision(hooks, {"promoted": False, "eval_broken_reason": None}) is None
 
 
 def test_apply_gate_decision_has_no_sync_parameter() -> None:

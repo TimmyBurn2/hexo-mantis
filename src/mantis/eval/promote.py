@@ -39,8 +39,16 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
 
     A gate pass advances the deploy tag and ONLY the deploy tag; the actor's weights
     are none of this function's business (WP-UNFREEZE, R49).
+
+    WP12-R Phase O (R152/LAW-11): the reason is read as a SUBSCRIPT and it is read FIRST.
+    Both halves are load-bearing. A subscript makes an ABSENT `eval_broken_reason` a loud
+    `KeyError` instead of the silent-`None`-is-falsy read that made a stale, hand-built or
+    half-migrated round mapping indistinguishable from a clean one — absent is an ERROR,
+    never "assume clean". And it comes first UNCONDITIONALLY because `or` short-circuits:
+    with the `promoted` test leading, a NON-promoted stale mapping would never have its
+    reason read at all, which is exactly the case the guard claims to close.
     """
-    if not result.get("promoted") or result.get("eval_broken"):
+    if result["eval_broken_reason"] is not None or not result.get("promoted"):
         return None
 
     from mantis.eval.snapshot import load_model_snapshot

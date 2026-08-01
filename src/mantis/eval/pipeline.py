@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 
 from mantis.eval.bt import fit_bt, predict_p
-from mantis.eval.errors import LadderStateError, ResultContractError
+from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import (
@@ -95,18 +95,26 @@ def drain_budget_sec(caps: DrainCaps) -> float:
 
 def drain_or_kill(
     proc: Any, *, budget_sec: float, worker_kill_grace_sec: float, clock: Callable[[], float]
-) -> tuple[bool, str]:
+) -> EvalBrokenReason | None:
     """Bounded join -> (if still alive) terminate -> bounded join -> kill -> bounded join.
-    Returns `(broken, reason)`; every join carries a bound (isolation law 2)."""
+
+    Returns the typed reason the drain escalated with, or `None` when the child exited
+    inside its budget; every join carries a bound (isolation law 2).
+
+    WP12-R Phase O (R152/R79): the old `(bool, str)` return was two authorities for one
+    fact — a `True` beside a healthy-drain spelling, and a `False` beside `join_timeout`,
+    were both constructible — and the healthy half was a reason spelling no member spells.
+    Absence IS the clean state, so there is no second field left to disagree.
+    """
     del clock  # the caller advances/consults its own clock; every join below is bounded
     proc.join(_bounded_join_timeout(budget_sec))
     if not proc.is_alive():
-        return False, "clean_exit"
+        return None
     proc.terminate()
     proc.join(_bounded_join_timeout(worker_kill_grace_sec))
     proc.kill()
     proc.join(_bounded_join_timeout(worker_kill_grace_sec))
-    return True, "join_timeout"
+    return EvalBrokenReason.JOIN_TIMEOUT
 
 
 # ── pure event builders (sink.emit + return the exact emitted payload) ──────────────────
@@ -267,7 +275,7 @@ class EvalPipeline:
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
         proc.kill()
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
-        self._finalize_round(inflight, escalated_reason="join_timeout")
+        self._finalize_round(inflight, escalated_reason=EvalBrokenReason.JOIN_TIMEOUT)
 
     # ── kick / ack ───────────────────────────────────────────────────────────────────
     def run_evaluation(
@@ -389,16 +397,16 @@ class EvalPipeline:
         proc = inflight["proc"]
         if proc.is_alive():
             budget = drain_budget_sec(self._caps)
-            broken, reason = drain_or_kill(
+            reason = drain_or_kill(
                 proc, budget_sec=budget, worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec,
                 clock=self._clock,
             )
-            if broken:
+            if reason is not None:
                 return self._finalize_round(inflight, escalated_reason=reason)
         return self._finalize_round(inflight)
 
     def _finalize_round(
-        self, inflight: dict[str, Any], *, escalated_reason: str | None = None,
+        self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
     ) -> dict[str, Any]:
         proc = inflight["proc"]
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
@@ -419,47 +427,36 @@ class EvalPipeline:
                 result = self._broken_result(inflight, reason=escalated_reason, exit_code=exit_code,
                                              wall_sec=wall_sec, phase="drain")
             elif exit_code is not None and exit_code != 0:
-                reason = "killed" if exit_code < 0 else "exit_nonzero"
+                reason = (EvalBrokenReason.KILLED if exit_code < 0
+                          else EvalBrokenReason.EXIT_NONZERO)
                 result = self._broken_result(inflight, reason=reason, exit_code=exit_code,
                                              wall_sec=wall_sec, phase="worker_exit")
             else:
                 result = self._read_worker_result(inflight, exit_code=exit_code, wall_sec=wall_sec)
         except Exception as exc:  # noqa: BLE001 -- deliberate catch-all, see docstring above
-            result = self._round_completion_error_result(inflight, exc, wall_sec=wall_sec)
+            # The traceback is logged HERE, at the raising site, and not inside the one
+            # emitter: `_LOG.exception` is only correct with a live exception in flight,
+            # and `_broken_result`'s other call sites (the drain and worker-exit arms
+            # above) have none. This is the shape the sibling exception-bearing route
+            # (`ladder_persist_failed`) already uses at `_success_result`'s catch, so both
+            # routes log identically and the emitter stays uniform across all seven
+            # reasons. `repr(exc)` says WHAT was raised; only the traceback says WHERE, and
+            # on a catch-all that is the whole diagnostic value — "never a swallowed
+            # exception, never a bare log line" (isolation law 2).
+            detail = repr(exc)
+            _LOG.exception(
+                "eval_round_completion_failed round_id=%s step=%s detail=%s",
+                inflight["round_id"], inflight["step"], detail,
+            )
+            result = self._broken_result(
+                inflight, reason=EvalBrokenReason.ROUND_COMPLETION_ERROR,
+                exit_code=getattr(inflight["proc"], "exitcode", None), wall_sec=wall_sec,
+                phase="round_completion", detail=detail, exception_class=type(exc).__name__,
+            )
 
         with self._lock:
             self._inflight = None
             self._mailbox.append(result)
-        return result
-
-    def _round_completion_error_result(
-        self, inflight: dict[str, Any], exc: Exception, *, wall_sec: float,
-    ) -> dict[str, Any]:
-        """The F1 layer-2 catch-all result: reason names the exception CLASS
-        (`round_completion_error`, not a bare "something broke"), the event AND the routed
-        `error` string both carry `repr(exc)` — never a swallowed exception, never a bare
-        log line (isolation law 2)."""
-        detail = repr(exc)
-        _emit(self._sink, {
-            "event": "eval_broken", "round_id": inflight["round_id"], "step": inflight["step"],
-            "reason": "round_completion_error", "exit_code": getattr(inflight["proc"], "exitcode", None),
-            "phase": "round_completion", "exception_class": type(exc).__name__, "detail": detail,
-        })
-        _LOG.exception(
-            "eval_broken round_id=%s step=%s reason=round_completion_error detail=%s",
-            inflight["round_id"], inflight["step"], detail,
-        )
-        result = build_round_result(
-            step=inflight["step"], round_id=inflight["round_id"],
-            rungs_config=self._eval_cfg.ladder.rungs, rung_results={}, gate_result=None,
-            skipped_rungs=[], bt={"ratings": {}, "p_hat": {}}, schedule_next={},
-            eval_round_wall_sec=wall_sec, eval_broken=True,
-            error=f"round_completion_error: {detail}", random_wr=None,
-        )
-        emit_round_complete(
-            self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
-            games_total=0, promoted=False, wr_sealbot=result["wr_sealbot"],
-        )
         return result
 
     def _read_worker_result(
@@ -473,28 +470,44 @@ class EvalPipeline:
             raw = json.loads(result_path.read_text())
             validate_worker_result(raw)
         except FileNotFoundError:
-            return self._broken_result(inflight, reason="result_missing", exit_code=exit_code,
-                                       wall_sec=wall_sec, phase="worker_exit")
+            return self._broken_result(inflight, reason=EvalBrokenReason.RESULT_MISSING,
+                                       exit_code=exit_code, wall_sec=wall_sec,
+                                       phase="worker_exit")
         except (ValueError, ResultContractError, OSError):
-            return self._broken_result(inflight, reason="result_invalid", exit_code=exit_code,
-                                       wall_sec=wall_sec, phase="worker_exit")
+            return self._broken_result(inflight, reason=EvalBrokenReason.RESULT_INVALID,
+                                       exit_code=exit_code, wall_sec=wall_sec,
+                                       phase="worker_exit")
         return self._success_result(inflight, raw, wall_sec=wall_sec)
 
     def _broken_result(
-        self, inflight: dict[str, Any], *, reason: str, exit_code: int | None,
-        wall_sec: float, phase: str,
+        self, inflight: dict[str, Any], *, reason: EvalBrokenReason, exit_code: int | None,
+        wall_sec: float, phase: str, detail: str | None = None,
+        exception_class: str | None = None,
     ) -> dict[str, Any]:
-        _emit(self._sink, {
+        """THE broken-round emitter — one event, one payload builder, one
+        `build_round_result` call site for every one of the seven routes (R152).
+
+        `detail`/`exception_class` are the two payload extras the round-completion route
+        carries; they are emitted iff present, so the payload of the other six routes is
+        byte-unchanged. The typed `reason` is written ONCE and read by both the event and
+        the routed mapping, so the stream and `promote.py` cannot disagree.
+        """
+        payload: dict[str, Any] = {
             "event": "eval_broken", "round_id": inflight["round_id"], "step": inflight["step"],
             "reason": reason, "exit_code": exit_code, "phase": phase,
-        })
+        }
+        if exception_class is not None:
+            payload["exception_class"] = exception_class
+        if detail is not None:
+            payload["detail"] = detail
+        _emit(self._sink, payload)
         _LOG.error("eval_broken round_id=%s step=%s reason=%s", inflight["round_id"],
-                  inflight["step"], reason)
+                  inflight["step"], reason.value)
         result = build_round_result(
             step=inflight["step"], round_id=inflight["round_id"],
             rungs_config=self._eval_cfg.ladder.rungs, rung_results={}, gate_result=None,
             skipped_rungs=[], bt={"ratings": {}, "p_hat": {}}, schedule_next={},
-            eval_round_wall_sec=wall_sec, eval_broken=True, error=reason, random_wr=None,
+            eval_round_wall_sec=wall_sec, reason=reason, detail=detail, random_wr=None,
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
@@ -527,8 +540,9 @@ class EvalPipeline:
             # drift the in-memory state ahead of the persisted state.
             _LOG.exception("ladder_state_persist_failed round_id=%s", inflight["round_id"])
             return self._broken_result(
-                inflight, reason="ladder_persist_failed", exit_code=None,
+                inflight, reason=EvalBrokenReason.LADDER_PERSIST_FAILED, exit_code=None,
                 wall_sec=wall_sec, phase="ladder_persist",
+                detail=f"ladder state persist failed: {self._ladder_state_path}",
             )
 
         # M-5: fold the best/gate entity into the SAME global BT fit (design §a.3 bt.py —
@@ -579,8 +593,8 @@ class EvalPipeline:
             rungs_config=self._eval_cfg.ladder.rungs, rung_results=rungs_raw,
             gate_result=gate_raw, skipped_rungs=skipped_rungs,
             bt={"ratings": {name: float(ratings[i]) for i, name in enumerate(entities)}, "p_hat": p_hat},
-            schedule_next=schedule_next, eval_round_wall_sec=wall_sec, eval_broken=False,
-            error=None, random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
+            schedule_next=schedule_next, eval_round_wall_sec=wall_sec, reason=None,
+            detail=None, random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
         )
         emit_round_complete(
@@ -606,11 +620,11 @@ class EvalPipeline:
             "t0": self._clock(), "round_idx": round_idx,
             "candidate_snapshot_path": str(candidate_path),
         }
-        broken, reason = drain_or_kill(
+        reason = drain_or_kill(
             proc, budget_sec=self._caps.terminal_eval_hard_cap_sec,
             worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec, clock=self._clock,
         )
-        if broken:
+        if reason is not None:
             return self._finalize_round(inflight, escalated_reason=reason)
         return self._finalize_round(inflight)
 

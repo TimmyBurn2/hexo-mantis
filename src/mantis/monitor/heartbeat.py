@@ -74,6 +74,27 @@ DRAW_RATE_COLLAPSE_EXIT_CODE: int = 46
 # composition root records on `ShutdownState` once the guard thread is joined, resolved to this
 # number at the process boundary by `mantis.config.armed_aborts.exit_code_for_abort`.
 DISK_SPACE_EXHAUSTED_EXIT_CODE: int = 47
+# 48 is the THIRD cooperative member (WP12-R Phase O, R152/R133), and it is the cleanest of
+# the three: 46 and 47 stay cooperative because an `os._exit` would discard a save still in
+# flight, while 48 has nothing left to discard — the terminal eval is the LAST action of
+# `close_out`, the loop is over and the buffer is saved. Delivery is `main` returning the
+# number. What it registers: R133's measured caveat, "rc 0 does not certify eval health". A
+# terminal eval round that was killed, that returned garbage, or whose ladder state never
+# reached disk produced NO PROMOTION DECISION (LAW-15: no promotion decision = deliverable
+# incomplete) — and at HEAD it exited 0, so a broken terminal battery and a clean run were
+# the same observable at the process boundary.
+# ONE number for SEVEN reason classes, deliberately: the 42–47 family is one number per
+# OUTCOME and puts CAUSES in the payload (rc 45 covers every actor-lag fire; the cause
+# travels as `heartbeat_watchdog_fired {reason: …}`). "The terminal eval produced no
+# promotion decision" is ONE outcome; `killed` vs `result_invalid` are its causes, and they
+# stay pairwise-distinguishable in the ONE channel through
+# `mantis.eval.errors.EvalBrokenReason` — on the `eval_broken` event's `reason` and on the
+# round result's `eval_broken_reason`. Inventing seven codes nobody pre-registered is the
+# class R84 refused. Parity is taken HERE and in the manifest row that imports this
+# constant; the rc is resolved at the process boundary from the rule name the composition
+# root records (`ShutdownState.abort_rule` -> `armed_aborts.exit_code_for_abort`), never
+# from a second literal.
+TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
 
 
 @dataclass(frozen=True)

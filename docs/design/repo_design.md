@@ -568,6 +568,7 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
   | 45 | `ACTOR_LAG_EXIT_CODE` | `monitor/heartbeat.py` | `os._exit` from the watchdog thread |
   | 46 | `DRAW_RATE_COLLAPSE_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 47 | `DISK_SPACE_EXHAUSTED_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
+  | 48 | `TERMINAL_EVAL_BROKEN_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
 
   46 (WPMINT Phase X, CARD-ABORT-EXIT / R84) deviates from the family on DELIVERY, and the
   deviation is the point. The draw-rate collapse abort stops the run by
@@ -618,6 +619,49 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
   process did not send itself — an operator's SIGTERM, a supervisor's own stop — still resolves
   to **0**, since nothing records a rule for it. R132's scope is the guard, and whether a
   deliberate operator stop is a clean stop is a judgement no ruling has taken.
+
+  48 (WP12-R Phase O / R152) is the THIRD cooperative member, and it discharges R133's
+  measured caveat **"rc 0 does not certify eval health"**. `drain.close_out` computed the
+  terminal round's result, routed it, and then DISCARDED the return value one frame below
+  `ShutdownState` — the only object that can carry an outcome to `main` — while `promote.py`'s
+  refusal to promote a broken round was the ONLY production consumer of broken-ness anywhere
+  in `src/`. So a run whose terminal battery was killed, whose worker returned garbage or
+  whose ladder state never reached disk exited **0**, and the supervisor above recorded a
+  clean finish (LAW-15: no promotion decision = deliverable incomplete). The registration is
+  the same R84 shape: a REQUIRED `terminal_eval_broken` manifest row whose arming surface is
+  `train.terminal_eval_enabled` (a REQUIRED typed bool minted `true` on all six committed
+  configs, so gate 12 is green on arrival and the row's job is the drift it makes loud — a
+  production config minted with the terminal eval OFF is a red gate rather than a silent
+  posture), and an `exit_code` that imports the constant.
+
+  **The seam.** `mantis.eval.errors.EvalBrokenReason` is the ONE authority for WHY a round
+  broke — seven `StrEnum` members, one per censused failure route, wire spellings unchanged
+  from the bare literals they replace. The round result carries `eval_broken_reason` (`None`
+  IS the clean state; the old `eval_broken: bool` and `error` fields are DELETED, not
+  defaulted — two fields for one fact were two authorities that could disagree, R79).
+  `drain.run_terminal_eval` latches that value on the coordinator, set-once, through the ONE
+  writer in `src/` — reachable only from the one function that passes `ignore_stride=True`,
+  which is what keeps R133's mid-run/terminal split STRUCTURAL rather than conditional. The
+  latch stores a `str`, never the enum, because `mantis.train` may not import the eval
+  package; the composition root RE-PARSES it through the enum before naming the rule, so an
+  unregistered spelling is a loud `ValueError` at the process boundary rather than a silent
+  rc 0. That read sits AFTER the disk-guard read in the same teardown, so `record_abort`'s
+  first-fire-wins keeps the ROOT CAUSE: a disk-full run whose terminal eval then breaks
+  reports 47, and a draw-rate collapse keeps 46.
+
+  ONE number for SEVEN reason classes, on the record: this family is one number per OUTCOME
+  and puts CAUSES in the payload (rc 45 covers every actor-lag fire), so the seven stay
+  pairwise-distinguishable in the ONE channel — on the `eval_broken` event's `reason` and on
+  the round result's `eval_broken_reason` — and never at the rc. A supervisor reading only the
+  rc sees "terminal eval degraded" and not which break; seven codes nobody pre-registered
+  would be six inventions, the class R84 refused.
+
+  NOT covered by 48, disclosed rather than implied: an exception raised BEFORE or DURING the
+  terminal eval (the staleness disarm, the flush, `on_drained`, or `write_model_snapshot` /
+  `_spawn_worker` inside the round, which sit outside `_finalize_round`'s catch-all) leaves
+  the latch unset and exits **rc 1** — loud, never a silent 0, but indistinguishable from a
+  composition wall. Authoring an "the epilogue raised" code is `Q-RT-RC1-COLLISION`'s subject,
+  not R152's.
 
   DISCHARGED (WPMAIN, CARD-RUN-MAIN). The OWED clause used to read: "`run_until_stopped` has
   no caller in `src/` and `mantis.run.main()` is smoke-grade, so the only production-posture

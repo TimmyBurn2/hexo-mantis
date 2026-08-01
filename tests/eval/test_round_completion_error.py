@@ -226,10 +226,10 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
 
         # 1. a routed result WAS delivered (never a silent hang / dropped round).
         assert result is not None, "poll_completed() must eventually deliver a result, never hang forever"
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] == "round_completion_error"
         assert result.get("promoted") is False
         assert result.get("wr_sealbot") is None
-        assert "round_completion_error" in (result.get("error") or "")
+        assert "_InjectedCompletionError" in (result["eval_broken_detail"] or "")
 
         # 2. a named eval_broken event WAS emitted (never silent).
         broken = sink.named("eval_broken")
@@ -264,7 +264,7 @@ def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_m
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
 
         assert result is not None
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
 
         broken = sink.named("eval_broken")

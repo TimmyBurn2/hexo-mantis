@@ -152,3 +152,55 @@ gates:
       rule names: entropy_collapse, selfplay_entropy_collapse, grad_norm_spike,
       loss_increase_window (mantis.monitor.rules.WARN_RULE_NAMES).
     producer_test: tests/train/test_coordinator_gates.py::test_log_interval_emits_training_step
+
+  # ── WP12-R Phase O: the taxonomy rc and the LAW-18 target-integrity fire rates ─────
+  - id: target_integrity_counters
+    input: WP12-R Phase T LAW-18 target-integrity fire-rates (iteration_complete.target_integrity)
+    producer:
+      kind: symbol
+      module: mantis.train.coordinator.step
+      symbol: StepCoordinator._target_integrity_report
+    also:
+      kind: symbol
+      module: mantis.selfplay.pool_hooks
+      symbol: runner_stats
+    note: >-
+      R164: the three Phase-T counters (export_offwindow_mass_moves,
+      gridls_zero_policy_rows, target_integrity_defects) were readable ONLY by a test
+      calling runner_stats(pool) — PREREG_T §0b names the first as THE in-run witness
+      attributing the expected game-shape drift, and a witness a live run cannot read is
+      not a witness (LAW-18: a post-hoc offline probe cannot distinguish "starved" from
+      "ineffective"). Each now publishes {total, delta, per_position} at every log_interval
+      boundary, beside the positions_delta denominator the rate is taken over. LAW-03: the
+      unit is fires per RECORDED POSITION — not per game, not per ply — so
+      gridls_zero_policy_rows can legitimately exceed 1.0 (one position contributes many
+      cluster rows) and it is a rate, never a fraction. per_position is None, never a
+      fabricated 0.0, when no position was recorded in the interval; an idle lever stays
+      VISIBLE at 0 (target_integrity_defects reads 0 in every run that survives to emit,
+      because its latch is run-fatal — that permanent zero is the posture, not an
+      unproduced field); a decrease is emitted AS MEASURED, never clamped, because the
+      atomics are monotonic and a negative delta is therefore a wiring bug.
+    producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
+
+  - id: terminal_eval_broken
+    input: the terminal round's typed eval_broken reason -> rc 48
+    producer:
+      kind: symbol
+      module: mantis.train.coordinator.drain
+      symbol: run_terminal_eval
+    also:
+      kind: symbol
+      module: mantis.eval.errors
+      symbol: EvalBrokenReason
+    note: >-
+      R152/R133. The terminal round's result was computed, emitted, routed and then
+      DISCARDED one frame below ShutdownState, so a run whose terminal battery was killed,
+      returned garbage or could not persist its ladder state exited 0 (LAW-15: no promotion
+      decision = deliverable incomplete). run_terminal_eval now latches the routed result's
+      own eval_broken_reason on the coordinator (set-once, ONE writer, reachable only from
+      this function), and the composition root re-parses it through EvalBrokenReason before
+      recording the terminal_eval_broken rule — resolved to 48 by the ONE resolver,
+      armed_aborts.exit_code_for_abort. ONE code for seven reason classes by decision: the
+      causes stay pairwise-distinguishable in this channel on the eval_broken event's
+      reason.
+    producer_test: tests/train/test_terminal_eval_rc.py::test_a_broken_terminal_round_exits_48

@@ -287,7 +287,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
             "escalation with a non-finite worker_kill_grace_sec must still deliver a "
             "result via the mailbox, never hang the poller forever"
         )
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
 
         # 2. the escalation actually ran (terminate -> join -> kill -> join), and every
@@ -336,7 +336,7 @@ def test_drain_pending_survives_non_finite_worker_kill_grace_sec(fake_mp, tmp_pa
         result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
 
         assert result is not None, "drain_pending() must never hang on a non-finite grace period"
-        assert result.get("eval_broken") is True
+        assert result["eval_broken_reason"] is not None
         assert proc.terminated is True
         assert proc.killed is True
         for called_timeout in proc.join_calls:

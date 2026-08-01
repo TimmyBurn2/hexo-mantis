@@ -72,10 +72,70 @@ GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
 )
 
+#: The three WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
+#: `IMPL_NOTES_T §3.6` names them, and the RECORDED-POSITION counter their fire rate is
+#: taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
+#: once per `iteration_complete`, so nothing here opens a second reader of the pool.
+_TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
+    "export_offwindow_mass_moves", "gridls_zero_policy_rows", "target_integrity_defects",
+)
+_POSITIONS_COUNTER = "positions_generated"
+
 #: Depth of the sealbot-WR ring (old `step_coordinator.py` parity: `pop(0)` past 5).
 WR_HISTORY_DEPTH = 5
 #: Depth of the pool-signal rings the two live-producer gates slide over.
 _GATE_HISTORY_DEPTH = 32
+
+
+def _snapshot_counter(rstats: Any, name: str) -> int | None:
+    """Read ONE cumulative counter off the runner snapshot, or `None` if the snapshot does
+    not carry it.
+
+    **THE `None` ARM CANNOT FIRE IN PRODUCTION, and saying so is the point** (RED-TEAM F-02
+    — graded instance FOUR of this phase's weak axis, and the first instance in shipped code
+    rather than in an instrument). An earlier version of this docstring spent eleven lines on
+    what `None` MEANS in the event stream without checking what can REACH it. Measured:
+    `pool_hooks.RunnerStats` declares all three counters `int = 0` and `runner_stats()`
+    supplies every field explicitly, so a real snapshot ALWAYS carries the attribute —
+    `getattr(rstats, name, None)` never returns `None` on any production path, and no oracle
+    drives that arm (O-23's `None` is reached through the OTHER condition, a zero
+    `positions_delta`). The precedent the old text cited to justify the arm — `pool_hooks`'s
+    own per-field `getattr` defaults — is the very mechanism that makes it unreachable.
+
+    So the arm's TRUE purpose, stated honestly: it keeps the **17 injected telemetry
+    stand-ins** drivable — one of them a SEALED oracle
+    (`tests/train/test_terminal_eval_rc.py`'s five-attribute `_RunnerStats`, which O-05 node
+    1 drives through `coord.step()` at `log_interval=1`). It is a test-driven branch in
+    production code. It is NOT deleted, because deleting it reds those 17 files and the full
+    mutation battery has already been driven against these bytes; it is recorded as
+    `Q-O-DEAD-NOT-MEASURED-ARM`.
+
+    What the arm does NOT do, so the next reader does not re-derive it wrong: it does not
+    protect against a counter losing its producer. A renamed bridge getter is swallowed one
+    layer BELOW this function by `pool_hooks`'s `getattr(r, name, 0)`, which publishes a
+    fabricated `0` — `Q-O-BRIDGE-GETTER-NAMES`, measured at the Rust level by RED-TEAM §2.
+    If the value ever DOES arrive as `None`, `event_manifest.md`'s convention governs it
+    (NOT MEASURED, never a fabricated value) — that contract is correct; only its
+    reachability was overstated.
+    """
+    value = getattr(rstats, name, None)
+    return None if value is None else int(value)
+
+
+def _fire_rate(delta: int | None, positions_delta: int | None) -> float | None:
+    """Fires per RECORDED POSITION over the interval (LAW-03: the unit is stated, and the
+    denominator is published beside the rate so no consumer has to guess it).
+
+    `None` when there is nothing to divide by. `delta / max(1, positions_delta)` is the
+    tempting divide-by-zero guard and it is exactly what this must not do: with no position
+    recorded there is NO rate, and publishing `0.0` would tell a reader "this lever did not
+    fire per position", which is a claim nobody measured. A NEGATIVE delta is passed through
+    as measured — the atomics are monotonic, so a decrease is a wiring bug and a `max(0, …)`
+    would hide it behind a plausible reading (the `actor_lag_negative` precedent).
+    """
+    if delta is None or positions_delta is None or positions_delta == 0:
+        return None
+    return delta / positions_delta
 
 
 class StepCoordinator:
@@ -169,6 +229,15 @@ class StepCoordinator:
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
         self._last_iter_games = 0
+        # WP12-R Phase O (R164): the previous `iteration_complete` boundary's counter
+        # readings, so the payload can publish an INTERVAL delta beside the cumulative
+        # total. Seeded at 0 (pool start), the same baseline `_last_iter_games` uses.
+        self._last_target_counters: dict[str, int] = dict.fromkeys(
+            (*_TARGET_INTEGRITY_COUNTERS, _POSITIONS_COUNTER), 0,
+        )
+        # WP12-R Phase O (R152/R133): the TERMINAL round's outcome, latched set-once by
+        # `drain._record_terminal_outcome` and read by the composition root.
+        self._terminal_eval_reason: str | None = None
         self._run_started = self._clock.now()
         # `warns` is carried alongside checks/fires/skips so the warn-only sealbot posture
         # (operator G-3) is visible per-gate in every `monitor_gates` event, not silent.
@@ -208,6 +277,56 @@ class StepCoordinator:
     def stop(self, reason: str) -> None:
         _LOG.info("stop_requested reason=%s", reason)
         self.shutdown.running = False
+
+    # ── the terminal-eval outcome latch (WP12-R Phase O, R152/R133) ───────────────────
+    @property
+    def terminal_eval_reason(self) -> str | None:
+        """The TERMINAL eval round's typed reason, or `None` for a clean (or not-yet-run)
+        terminal battery. Read once, by the composition root, after `close_out` returns.
+
+        A `str` and never the reason ENUM: the train package may not import the eval
+        package at all (repo_design §2, census-tested — which is why this docstring names no
+        dotted path into it). The authority is NOT weakened by the crossing: the string is
+        the enum member's own value, produced by the enum on the eval side and re-parsed by
+        the enum at the process boundary, where an unregistered spelling is a loud
+        `ValueError`. This layer transports the fact and never authors it.
+        """
+        return self._terminal_eval_reason
+
+    def record_terminal_eval_reason(self, reason: str | None) -> None:
+        """Record the terminal round's outcome. **FIRST NON-`None` WINS.**
+
+        The semantic is stated as MEASURED, not as intended (RED-TEAM F-04 corrected an
+        earlier version of this docstring, which said "SET-ONCE, first call wins" — that is
+        NOT what the guard below does). The guard is `if self._terminal_eval_reason is not
+        None: return`, so:
+
+        * a first call with a REASON latches it, and every later call is refused —
+          driven: `record("killed")` then `record("exit_nonzero")` → `"killed"`;
+        * a first call with `None` (a CLEAN terminal round) latches nothing, so a later
+          call CAN still write — driven: `record(None)` then `record("killed")` →
+          `"killed"`, where a true set-once would have kept `None`.
+
+        The stated purpose — "a later resolution must not re-label the outcome that stopped
+        the run" — is therefore delivered **only for a non-`None` first call**. That is
+        arguably the right rule here and it is why `ShutdownState.record_abort`'s shape was
+        copied rather than its literal contract: `record_abort`'s value is always non-`None`,
+        so for it the two semantics coincide, while `None` is a LEGAL clean-round value here.
+
+        **The difference is inert today and NOT pinned, which is why it is written down.**
+        There is exactly ONE writer in all of `src/` (`drain._record_terminal_outcome`,
+        reachable only from `drain.run_terminal_eval`) and it is called at most once per run,
+        so no production path calls this twice — but **no test in `tests/` calls it twice
+        either**: O-07 censuses call SITES, not invocations. An inert difference nobody has
+        pinned is how the next phase's regression gets in. `Q-O-LATCH-SET-ONCE-UNPINNED`.
+
+        The one-writer property is what keeps R133's mid-run/terminal split structural — a
+        mid-run broken round cannot reach this method at all, so it stays non-fatal by
+        construction rather than by a conditional somebody can get wrong later.
+        """
+        if self._terminal_eval_reason is not None:
+            return
+        self._terminal_eval_reason = reason
 
     # ── one outer iteration ─────────────────────────────────────────────────────────────
     def step(self) -> StepOutcome:
@@ -403,9 +522,58 @@ class StepCoordinator:
             # as a real measurement ("quiescence never fires") — a miniature F-10.
             self._games_per_hour, None, sink,
             steps_per_hour_fn=self._steps_per_hour,
+            target_integrity=self._target_integrity_report(),
         )
         self._last_iter_games = self._games_played
         return payload
+
+    def _target_integrity_report(self) -> dict[str, Any]:
+        """The three Phase-T target-integrity counters as an `iteration_complete` block
+        (WP12-R Phase O, R164 / LAW-18).
+
+        `PREREG_T §0b` names `export_offwindow_mass_moves` as THE in-run witness attributing
+        the expected game-shape drift — and at HEAD that counter was readable only by a test
+        calling `runner_stats(pool)`. A witness a live run cannot read is not a witness, and
+        LAW-18's text is explicit that a post-hoc offline probe cannot distinguish "starved"
+        from "ineffective". So each counter publishes its cumulative `total`, its INTERVAL
+        `delta` and a `per_position` rate over the `positions_delta` denominator published
+        beside it. An idle lever stays VISIBLE at 0 (the `chain_loss_with_fire_rate`
+        posture): nothing is omitted for being zero, which is what keeps a permanently-0
+        `target_integrity_defects` — its latch is run-fatal, so it reads 0 in every run that
+        survives to emit — distinguishable from a field with no producer.
+
+        COST, stated as MEASURED rather than as assumed (RED-TEAM F-03 corrected an earlier
+        version of this paragraph, which claimed "no new pool read … off a snapshot of the
+        same surface" — that was FALSE): this method takes its OWN snapshot, so an
+        `iteration_complete` boundary now makes **two** `runner_stats()` calls, this one and
+        `mantis.train.events`'s. Measured: 2 calls per emit, at every `log_interval`. That is
+        one extra FFI crossing (~20 atomic loads) per BOUNDARY — not per step: the emit is
+        gated by `_run_log_interval`'s `self._train_step % cfg.log_interval != 0` early
+        return, and run5 mints `log_interval: 1000` (`configs/run5.yaml:117`), so it executes
+        on 1 train step in 1000. Beyond the read: three subtractions and three divisions.
+
+        CONSEQUENCE, disclosed because nothing else states it: `iteration_complete` is
+        therefore NOT a single-instant payload. `target_integrity` comes from THIS snapshot;
+        `mcts_mean_depth` and the regime-gated cluster block come from the later one taken
+        inside `emit_training_events`. The two are taken microseconds apart with workers
+        live, so the counters and the cluster stats can straddle a game boundary. Collapsing
+        the two reads into one is `Q-O-TWO-POOL-READS`, deliberately not taken here.
+        """
+        rstats = self.pool.runner_stats()
+        positions = _snapshot_counter(rstats, _POSITIONS_COUNTER)
+        positions_delta = (None if positions is None
+                           else positions - self._last_target_counters[_POSITIONS_COUNTER])
+        report: dict[str, Any] = {"positions_delta": positions_delta}
+        for name in _TARGET_INTEGRITY_COUNTERS:
+            total = _snapshot_counter(rstats, name)
+            delta = None if total is None else total - self._last_target_counters[name]
+            report[name] = {"total": total, "delta": delta,
+                            "per_position": _fire_rate(delta, positions_delta)}
+            if total is not None:
+                self._last_target_counters[name] = total
+        if positions is not None:
+            self._last_target_counters[_POSITIONS_COUNTER] = positions
+        return report
 
     def _games_per_hour(self) -> float:
         elapsed = self._clock.now() - self._run_started

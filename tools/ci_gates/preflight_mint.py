@@ -147,12 +147,14 @@ measured that an armed-abort row whose `config_path` does not resolve fell into 
 rc 31 (`ArmingSurfaceMissingError` -> `PreflightManifestError`, WPAX Phase D); rc 1
 remains what it always was — the outcome nobody diagnosed — and a NEW rc-1 is a finding,
 not a routine failure mode. A child rc in [10, 41] PROPAGATES
-UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–47 are
+UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–48 are
 RESERVED by the run's own machinery**: 42 stall/livelock, 43 persist-fatal, 44 the supervisor's
 relaunch budget, 45 actor-lag, 46 the cooperative armed-abort code
 (`monitor/heartbeat.py::DRAW_RATE_COLLAPSE_EXIT_CODE`), 47 the second cooperative member —
 the disk-guard abort (`monitor/heartbeat.py::DISK_SPACE_EXHAUSTED_EXIT_CODE`, WPMAIN
-RT-2/R132). None of the six is ever an assertion outcome of this tool.
+RT-2/R132) — and 48 the third, a terminal eval round that produced no promotion decision
+(`monitor/heartbeat.py::TERMINAL_EVAL_BROKEN_EXIT_CODE`, WP12-R Phase O / R152). None of the
+seven is ever an assertion outcome of this tool.
 
 46 joined that band at WPMINT Phase X (CARD-ABORT-EXIT / R84) and the taxonomy had to move with
 it, in the same change: 46 is outside the [10, 41] pass-through and was outside the reserved

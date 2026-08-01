@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis.bots.protocol import RungUnresolvable
-from mantis.eval.errors import ResultContractError
+from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
 __all__ = [
     "RoundSpec",
@@ -184,15 +184,25 @@ def build_round_result(
     bt: Mapping[str, Any],
     schedule_next: Mapping[str, int],
     eval_round_wall_sec: float,
-    eval_broken: bool,
-    error: str | None,
+    reason: EvalBrokenReason | None,
+    detail: str | None,
     random_wr: float | None,
     worker_pid: int | None = None,
     candidate_snapshot_path: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the coordinator-facing round-result mapping (§c.2). `wr_sealbot` is
-    UNCONDITIONALLY present — success, broken, and all-skip rounds alike."""
-    promoted = (not eval_broken) and _gate_result_promoted(gate_result)
+    UNCONDITIONALLY present — success, broken, and all-skip rounds alike.
+
+    WP12-R Phase O (R152/R79): ONE authority for "did this round break" — the typed
+    `reason`, where `None` IS the clean state. The `eval_broken: bool` parameter and the
+    `error: str | None` parameter are DELETED rather than defaulted: a defaulted survivor
+    is a MIGRATED authority, not an absent one (`run.py:366-372`, MF-2 Attack B), and
+    `eval_broken=True, error=None` was constructible while both existed. `detail` is PROSE
+    beside the reason (`repr(exc)`, a persistence message) and never a reason spelling —
+    nothing under `src/` may branch on it
+    (`tests/eval/test_round_result_reason_shape.py::test_no_module_under_src_branches_on_the_eval_broken_detail`).
+    """
+    promoted = (reason is None) and _gate_result_promoted(gate_result)
     result: dict[str, Any] = {
         "step": step,
         "round_id": round_id,
@@ -201,8 +211,8 @@ def build_round_result(
         "wr_sealbot": _first_sealbot_wr(rungs_config, rung_results),
         "wr_random": random_wr,
         "eval_round_wall_sec": eval_round_wall_sec,
-        "eval_broken": eval_broken,
-        "error": error,
+        "eval_broken_reason": reason,
+        "eval_broken_detail": detail,
         "gate": _gate_result_to_mapping(gate_result),
         "rungs": dict(rung_results),
         "skipped_rungs": list(skipped_rungs),

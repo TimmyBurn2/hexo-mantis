@@ -33,6 +33,7 @@ from mantis.config.schema import RunConfig
 from mantis.monitor.heartbeat import (
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
     DRAW_RATE_COLLAPSE_EXIT_CODE,
+    TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
 
 A_KEYS = ("a1", "a2", "a3", "a4")
@@ -115,8 +116,14 @@ RELAUNCH_BUDGET_CODE = 44
 #: a literal here would be a third place the number is written (the constant, the manifest row,
 #: and this), and the whole point of the rule-name carrier is that there is no such third place.
 #: 47 joins it at WPMAIN RT-2/R132 (the disk-guard abort), by the same rule and for the same
-#: reason: read from the ONE authority, never re-typed here.
-ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE, DISK_SPACE_EXHAUSTED_EXIT_CODE)
+#: reason: read from the ONE authority, never re-typed here. 48 joins at WP12-R Phase O
+#: (R152, the broken terminal eval) — and it is exactly the hole 46 sat in before Phase X:
+#: outside `PASS_THROUGH` and outside the reserved set, a child exiting 48 would fall through
+#: every arm to `PreflightBootFailedError` and COLLAPSE TO 33, so the tool meant to surface
+#: the authored signal would destroy it, on the very run an operator most needs the number
+#: from. `RESERVED_CODES` below is derived and moves with this tuple.
+ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE, DISK_SPACE_EXHAUSTED_EXIT_CODE,
+                     TERMINAL_EVAL_BROKEN_EXIT_CODE)
 #: The full 42–47 band the docstring declares. Derived, so the docstring's claim and the three
 #: tuples above cannot drift apart.
 RESERVED_CODES = tuple(sorted({*WATCHDOG_CODES, RELAUNCH_BUDGET_CODE, *ARMED_ABORT_CODES}))

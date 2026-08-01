@@ -295,7 +295,7 @@ def test_gate_pass_sequence_is_anchor_only(tmp_path, monkeypatch) -> None:
     spy = _SpyOrder()
     hooks = _hooks(spy, tmp_path)
     _fake_snapshot(monkeypatch, {"w": 1})
-    result = {"promoted": True, "eval_broken": False, "step": 4200,
+    result = {"promoted": True, "eval_broken_reason": None, "step": 4200,
               "candidate_snapshot_path": str(tmp_path / "cand.pt")}
     apply_gate_decision(hooks, result)
     assert spy.order == ["guarded_load", "save_anchor"], spy.order
@@ -314,7 +314,7 @@ def test_promoted_weights_are_the_evaluated_snapshot_bytes(tmp_path, monkeypatch
     # this would be the wrong value it should NEVER see.
     hooks.anchor_state.best_model.state_dict = lambda: live_module_state_dict  # type: ignore[attr-defined]
 
-    result = {"promoted": True, "eval_broken": False, "step": 4200,
+    result = {"promoted": True, "eval_broken_reason": None, "step": 4200,
               "candidate_snapshot_path": str(tmp_path / "cand.pt")}
     apply_gate_decision(hooks, result)
 

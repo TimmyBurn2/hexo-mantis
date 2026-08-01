@@ -271,3 +271,51 @@ def test_supervisor_loop_survives_a_reader_that_raises(tmp_path: Path) -> None:
     assert rc == 0
     events = [json.loads(ln)["event"] for ln in stream.getvalue().splitlines()]
     assert "heartbeat_read_failed" in events
+
+
+# ── WP12-R Phase O / O-19 (R152) — child rc 48 is a loud stop, never a relaunch ───────
+def test_child_exit_48_stops_loud_and_never_relaunches(tmp_path: Path) -> None:
+    """O-19. Phase O authors exit code 48 (a terminal eval that produced no promotion
+    decision), and the supervisor above the run has to do the right thing with it WITHOUT a
+    supervisor change. This row is the check that the "no change needed" claim is measured
+    rather than assumed — it is the third cooperative member's half of the same
+    already-existing arm that 45, 46 and 47 rely on (`_on_child_exit`'s "any code that is not
+    0/43/42 is propagated with a `supervisor_stop {reason: child_error}` and no respawn").
+
+    NOT a ⊕ row: it pins behaviour the supervisor already has, so it must be GREEN at HEAD
+    and stay green. That is the point — an rc that quietly acquired a relaunch arm would turn
+    a completed-but-degraded run into a crash loop, and relaunching a run that already
+    FINISHED is nonsense: the burst is over, the buffer is saved, and a second launch would
+    repeat the whole training run.
+
+    Driven at 48 as a plain integer rather than through the manifest constant deliberately:
+    the subject is the supervisor's arm for "any other code", and importing the constant
+    would make this row red for the taxonomy's reasons instead of the supervisor's.
+
+    MUTATION THAT REDS IT (M-O19): add 48 to the relaunch arm (`code != WATCHDOG_STALL_EXIT_
+    CODE` becoming `code not in (WATCHDOG_STALL_EXIT_CODE, 48)`) — `spawns` grows to 2."""
+    import io
+    import json as _json
+
+    stream = io.StringIO()
+    sup, spawns, kills, _ = _make_supervisor(
+        [FakeChild(1, [48]), FakeChild(2, [0])], hb_file=tmp_path / "hb.json")
+    sup._stream = stream                          # capture the supervisor's own JSON lines
+
+    assert sup.run() == 48, (
+        "a cooperative armed-abort code PROPAGATES unchanged — rewriting it to a supervisor "
+        "code would destroy the very signal the run went to the trouble of authoring"
+    )
+    assert len(spawns) == 1, (
+        f"…and the run is NOT relaunched: it completed, degraded. Spawns: {len(spawns)}"
+    )
+    assert kills == [], (
+        f"a child that exited on its own is never killed; got {kills}"
+    )
+    stops = [_json.loads(line) for line in stream.getvalue().splitlines()
+             if _json.loads(line)["event"] == "supervisor_stop"]
+    assert stops and stops[-1]["reason"] == "child_error", (
+        "the stop must be NAMED in the supervisor's own stream so an operator can tell it "
+        f"from a budget exhaustion or a persist fault; got {stops}"
+    )
+    assert stops[-1]["code"] == 48, f"…and it must carry the child's code; got {stops}"
