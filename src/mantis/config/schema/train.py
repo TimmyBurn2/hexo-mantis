@@ -1,7 +1,10 @@
-# >300 justify (R8), stated at this file's MEASURED size of 481 lines (was 430 at K-B, 454 at
+# >300 justify (R8), stated at this file's MEASURED size of 491 lines (was 430 at K-B, 454 at
 # DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count; 455 -> 481 at
-# WPMAIN, which promoted `device` to a typed field per R126 with its grounds). The number is
-# `wc -l` at HEAD, re-measured AFTER the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
+# WPMAIN, which promoted `device` to a typed field per R126 with its grounds; 481 -> 491 at
+# WP12-R Phase CS, which replaces `buffer_save_interval`'s grounds sentence — it claimed
+# close-out and the shutdown-signal path still save, and F-CS-2 measured both halves
+# false). The number is `wc -l` at HEAD, re-measured AFTER the edit that moved it (SF-7,
+# REVIEW-impl F-4). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
@@ -300,9 +303,16 @@ class TrainConfig(StrictModel):
     # fact (the trainer's periodic save), and two config keys spelled the same would be the
     # duplicated-authority class R1 exists to kill — the census that found this knob flagged
     # the collision as its headline hazard. `ge=0` because `0` is REAL and is what every
-    # committed config ships: no cadence save, with close-out and the shutdown-signal path
-    # still saving. That is a persistence CADENCE, not a guard, so a zero here disables
-    # nothing LAW-16 requires.
+    # committed config ships. The sentence that stood here — "no cadence save, with close-out
+    # and the shutdown-signal path still saving" — was FALSE on both halves and is corrected
+    # (WP12-R Phase CS, F-CS-2): `close_out` (`train/coordinator/drain.py`) writes no buffer
+    # snapshot at all, and the replay-buffer save is production-dead on EVERY leg, the
+    # signal path included — `buffer_persist.try_save_buffer` returns unless
+    # `mixing_cfg["buffer_persist"]` is truthy and the production root passes `mixing_cfg={}`
+    # with nothing in `src/` setting that key. So a zero here disables something already
+    # disabled, and the CHECKPOINT legs are a different key entirely (`checkpoint_interval`
+    # above) and are unaffected by it. That is a persistence CADENCE, not a guard, so a zero
+    # here still disables nothing LAW-16 requires.
     buffer_save_interval: int = Field(ge=0)
     # `min_buf_size` — the warmup floor: below it `step()` returns `in_warmup` and the learner
     # sees nothing. `ge=1` because a floor of 0 means "train on an empty buffer", which the

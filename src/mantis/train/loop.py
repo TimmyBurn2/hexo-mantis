@@ -5,7 +5,9 @@
 Per §c.8 it takes an INJECTED `trainer` (TrainerLike) + optional `shutdown_state`, drives
 the per-step loop (via an injected `coordinator` or `step_fn`), polls `ShutdownState`
 between steps, and — observing `shutdown_save` even if already set at ENTRY — writes the
-FINAL envelope-v2 checkpoint via `trainer.save_checkpoint` before returning (T-LC-04).
+FINAL envelope-v2 checkpoint via `trainer.save_checkpoint` before returning (T-LC-04),
+unless the coordinator's own clean-completion leg already wrote it (R137, the post-loop
+guard `_clean_stop_already_saved`).
 
 `resolve_anchor` is an INJECTED callable (default None), lazily bound to
 `train.anchor.resolve_anchor` (Slice 3) ONLY inside the anchor seed/persist branch, which
@@ -23,6 +25,37 @@ from mantis.train.emit import emit_via
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 
 _LOG = logging.getLogger(__name__)
+
+
+def _clean_stop_already_saved(coordinator: Any) -> bool:
+    """True iff the coordinator already wrote the run's FINAL checkpoint on its
+    clean-completion leg (R137/CARD-CLEANSTOP-SAVE — the O2 arm of `coordinator/step.py`).
+
+    ``None`` — the ``step_fn`` and bare-loop drives — answers False: there was no leg 3 to
+    have fired, so leg 2 keeps its rescue write exactly as before.
+
+    A coordinator that is PRESENT but publishes no ``clean_stop_saved`` is a WIRING BUG and
+    RAISES, never a silent ``False``. A silent False re-opens the very window this guard
+    exists to close — a signal landing INSIDE leg 3's own multi-second full-envelope
+    ``torch.save`` — and it re-opens it invisibly: the run would write two final artefacts
+    at one step and nothing would say so. They are two DISTINCT files, not one idempotent
+    write, because the filename carries a content hash over a microsecond-resolution
+    ``created_utc``, so there is no filename-idempotence to fall back on. This is
+    ``close_out``'s posture on ``disarm_staleness`` verbatim (`coordinator/drain.py`): a
+    duck-typed object missing the member is a wiring bug, and a wiring bug must not degrade
+    into "no guard" without anybody noticing.
+    """
+    if coordinator is None:
+        return False
+    saved = getattr(coordinator, "clean_stop_saved", None)
+    if saved is None:
+        raise TypeError(
+            f"run_training_loop: coordinator ({type(coordinator).__name__}) publishes no "
+            "`clean_stop_saved` — the loop cannot tell whether the clean-completion leg "
+            "already wrote the FINAL checkpoint, and a second `_final_save()` would write a "
+            "duplicate FINAL artefact at the same step (R137/CARD-CLEANSTOP-SAVE)"
+        )
+    return bool(saved)
 
 
 def run_training_loop(
@@ -47,7 +80,9 @@ def run_training_loop(
     - Between steps the loop polls ``shutdown_state``; on ``shutdown_save`` being set —
       INCLUDING already-set at ENTRY (a 0-step loop over an injected
       ``ShutdownState(running=False, shutdown_save=True)``) — it calls
-      ``trainer.save_checkpoint(...)`` once before returning (the FINAL v2 save; T-LC-04).
+      ``trainer.save_checkpoint(...)`` once before returning (the FINAL v2 save; T-LC-04) —
+      EXCEPT when the injected coordinator's clean-completion leg has already written the
+      run's final checkpoint, which ``_clean_stop_already_saved`` latches out (R137).
     - ``resolve_anchor`` is lazily bound inside the eval_pipeline seed/persist branch only.
     """
     owns_state = shutdown_state is None
@@ -107,6 +142,11 @@ def run_training_loop(
         if shutdown_state.shutdown_save:
             break
 
-    if shutdown_state.shutdown_save:
+    # The POST-LOOP arm only. The ENTRY arm above is deliberately unguarded: at entry the
+    # coordinator has not run, so leg 3 cannot have fired and there is nothing to latch out.
+    # Here it can have: a signal landing inside leg 3's own write leaves `shutdown_save` set
+    # on a run that has ALREADY written its final artefact, and firing `_final_save()` on top
+    # of it would write a duplicate FINAL checkpoint at the same step (R137).
+    if shutdown_state.shutdown_save and not _clean_stop_already_saved(coordinator):
         _final_save()
     return shutdown_state

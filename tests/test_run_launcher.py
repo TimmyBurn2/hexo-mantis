@@ -1,8 +1,11 @@
-# >300 justify (R8), stated at this file's MEASURED size of 333 lines (`wc -l`, never
+# >300 justify (R8), stated at this file's MEASURED size of 400 lines (`wc -l`, never
 # transcribed — SF-7). The file was 248 lines at ORACLE-WRITE and crossed the cap on the R129
 # re-point, which replaced O-B1's one-line checkpoint assertion with the measured truth plus
-# the reasoning a later reader needs to know WHY `checkpoints/` is empty and what would make
-# that expire (CARD-CLEANSTOP-SAVE). A split is argued AGAINST: O-B1, O-B2 and O-B3 are three
+# the reasoning a later reader needs to know WHY `checkpoints/` was empty and what would make
+# that expire (CARD-CLEANSTOP-SAVE). The 333 -> 397 delta is that expiry arriving: WP12-R
+# Phase CS / R137 re-points the same clause to EXACTLY ONE checkpoint and decomposes it by
+# filename and by event, and the two-re-point history is kept because it is the argument the
+# next reader needs. A split is argued AGAINST: O-B1, O-B2 and O-B3 are three
 # instruments on ONE surface — `mantis.run`'s launcher — and O-B2's AST census parses the very
 # `run.py` the other two drive, so splitting would give each half its own answer to "what is
 # the launcher's flag surface". Executable content stays a small minority; the rest is the
@@ -22,9 +25,12 @@ The defect each oracle is the only witness to:
   R121(c): boots through the one composer into the live run loop, bounded, clean stop.
   Real subsystems (R64) — real `init_trainer` -> `build_net`, real `WorkerPool`, real
   `build_run_safety`, real coordinator config. INTEGRATION tier: it is a real CPU burst,
-  the same class as `tests/train/test_launch_path_smoke.py`. **Re-pointed by R129**: its
-  "final checkpoint on disk" clause was written against a premise DESIGN §9 got wrong and
-  IMPL measured false — a clean bounded stop saves nothing. See the row's own docstring.
+  the same class as `tests/train/test_launch_path_smoke.py`. **Re-pointed TWICE.** R129
+  replaced its "final checkpoint on disk" clause with the measured truth — a clean bounded
+  stop saved nothing — and left the notice that said what would make that expire.
+  **WP12-R Phase CS / R137 (CARD-CLEANSTOP-SAVE) is that expiry**: the clean-completion leg
+  now writes the run's FINAL checkpoint, so the clause returns as `EXACTLY ONE`, decomposed
+  by filename and by event. The row got harder to satisfy, not easier — see its docstring.
 - O-B2 — a code-side default sneaking onto a RUN INPUT at the CLI boundary. `--out-dir` with
   a default is a run-input default (R1), and it is the O-1 doctrine
   (`test_preflight_mint.py:866-882`) applied to the launcher, which never had it.
@@ -236,26 +242,38 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     (R103) — bounded to a 16-step burst, exactly as `test_preflight_armed_smoke.py` drives
     it.
 
-    RE-POINTED BY R129 (an R43 grant against a byte-frozen ORACLE-WRITE artefact), because
-    the version written at ORACLE-WRITE asserted a premise that is MEASURED FALSE. It read
-    "the run must leave a stamped checkpoint", on DESIGN §9's reasoning that LAW-16's
-    save-then-exit and LAW-12's stamp land on the same artefact. They do — on the SIGNAL
-    path. A CLEAN bounded stop never takes it: `coordinator/step.py:238-241`'s O2
-    iteration-limit arm sets `shutdown.running = False` and returns WITHOUT saving;
+    RE-POINTED TWICE, and the history is kept because it is the argument.
+
+    (1) **R129** (an R43 grant against a byte-frozen ORACLE-WRITE artefact) deleted the
+    original "the run must leave a stamped checkpoint", because it was MEASURED FALSE.
+    DESIGN §9 had reasoned that LAW-16's save-then-exit and LAW-12's stamp land on the same
+    artefact. They do — on the SIGNAL path. A CLEAN bounded stop never took it: the O2
+    iteration-limit arm set `shutdown.running = False` and returned WITHOUT saving;
     `loop.py`'s `_final_save()` fires only on `shutdown_save`; and the trainer's periodic
     save is guarded by `if interval > 0` (`trainer/core.py:487-489`) against a
-    `checkpoint_interval` this config — and every other minted config — mints at **0**. So
-    `checkpoints/` is legitimately EMPTY here, and the oracle now asserts that, WITH its
-    cause, rather than asserting a checkpoint nothing writes.
+    `checkpoint_interval` this config — and every other minted config — mints at **0**.
 
-    Whether a clean completion SHOULD save is a deliberate lifecycle decision and is
-    explicitly NOT this WP's work: R129 opened CARD-CLEANSTOP-SAVE for it (escalated to
-    mint-blocking, because run5 mints `checkpoint_interval: 0` too). When that card lands,
-    THIS row is what tells the next reader the emptiness expired.
+    (2) **WP12-R Phase CS / R137 (CARD-CLEANSTOP-SAVE)** is the expiry the R129 text told
+    the next reader to watch for, and this is that re-point. The clean-completion leg — the
+    THIRD save leg, beside the periodic cadence and the signal-driven `shutdown_save` — now
+    fires in the O2 arm (`coordinator/step.py`), so a run that reaches its own declared
+    terminus writes EXACTLY ONE stamped checkpoint. The emptiness clause is not silenced: it
+    is replaced by the three-way discrimination below, which distinguishes 0 (the leg absent
+    or unreached), 1 (correct) and 2 (a second write authority, or the W-1 signal-inside-the-
+    write window re-opened).
 
-    THE ORACLE MUST NOT GO VACUOUS, and does not: "no checkpoint" is a state a run that
-    never booted would also produce, so the emptiness is asserted only ALONGSIDE the
-    positive truth, and the positive truth is what carries the row —
+    R129's periodic-save premise is kept AND completed, because it was incomplete: on this
+    config's DECLARED representation (`identity.representation: graph`) the periodic arm does
+    not merely evaluate to False, it **does not exist** — `train_step_from_graph_batch`
+    (`trainer/core.py:493-547`) contains no interval read and no `save_checkpoint` call at
+    all. Both routes to a periodic checkpoint are closed, by two independent facts, which is
+    what makes the ONE checkpoint below provably the clean-completion leg's.
+
+    THE ORACLE MUST NOT GO VACUOUS, and the R137 re-point makes it LESS able to. Under R129
+    the checkpoint arm read `residents == []` — a state a run that never booted also
+    produces — so it could only stand ALONGSIDE the positive truths, which are what carried
+    the row. Under R137 a never-booted run produces `[]`, which now **FAILS**. The false-clear
+    set shrank; nothing became `>= 1` or `in (...)`. The positive truths all stay verbatim —
 
     * `handles.shutdown.running is False`: `ShutdownState()` is born `running=True`, so this
       is the O2 arm having FIRED, i.e. the loop was entered and terminated itself;
@@ -264,10 +282,20 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     * the run's own JSONL segment carries the boot + armed-watchdog witnesses (LAW-18);
     * `abort_rule is None` and the launcher's own rc policy answers **0** for this state.
 
+    THE CHECKPOINT AND rc 0 ARE ASSERTED TOGETHER AND NEITHER IMPLIES THE OTHER. A run whose
+    disk guard trips during the epilogue (rc 47) or whose terminal battery breaks (rc 48) has
+    those rules recorded in `compose_run`'s teardown, strictly AFTER the clean-completion save
+    — so it exits NON-ZERO with its product checkpoint present. "A checkpoint is on disk"
+    was never a proxy for "this run was clean", and after R137 it is visibly not one: the
+    clean-vs-aborted distinction is carried by `ShutdownState.abort_rule` and its rc.
+
     MUTATION THAT REDS IT: a launcher that composes and returns without driving the loop
     (`stop_step=0`, or a `compose_run` whose loop call is removed) — `running` never flips,
-    `trainer.step` stays 0 and the segment carries no armed-watchdog rows. That is precisely
-    the failure this WP exists to end, and no import-level or AST census can see it.
+    `trainer.step` stays 0, the segment carries no armed-watchdog rows and `checkpoints/` is
+    now EMPTY where it must hold exactly one. That is precisely the failure this WP exists to
+    end, and no import-level or AST census can see it. A SECOND mutation reds it now and could
+    not before: calling the clean-completion leg twice, which the old `== []` could not see at
+    all and an assertion written `>= 1` would still pass.
 
     DISCLOSED FAKE, and it is the ONLY one: the rc assertion re-enters `main` with
     `launch_run` monkeypatched to hand back **the handles this real boot just produced** —
@@ -277,11 +305,20 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     what make "rc 0 means the run finished" a claim with a producer at both ends."""
     config = smoke_run_config(_SMOKE_CONFIG, train={"max_train_steps": _BURST_STEPS})
     assert int(config.train.checkpoint_interval) == 0, (
-        "PREMISE CHECK for the emptiness arm below (R129's own instruction, applied to this "
-        "config rather than to run5): the periodic save is guarded by `interval > 0`. If "
-        f"this config ever mints a nonzero interval — got {config.train.checkpoint_interval!r} "
-        "— the checkpoints-empty assertion stops being the truth and this row must be "
-        "RE-POINTED again, never silenced"
+        "PREMISE CHECK, reason 1 of 2, for the EXACTNESS arm below (R129's own instruction, "
+        "applied to this config rather than to run5): the periodic save is guarded by "
+        f"`interval > 0`. If this config ever mints a nonzero interval — got "
+        f"{config.train.checkpoint_interval!r} — a periodic checkpoint could join the "
+        "clean-completion one, the `len(...) == 1` assertion stops being the truth, and this "
+        "row must be RE-POINTED again, never silenced"
+    )
+    assert config.identity.representation == "graph", (
+        "PREMISE CHECK, reason 2 of 2 — INDEPENDENT of the interval, and the half R129's "
+        "text omitted: on a `graph` representation the periodic arm does not merely evaluate "
+        "False, it DOES NOT EXIST (`trainer/core.py:493-547` reads no interval and calls no "
+        f"`save_checkpoint`). Got {config.identity.representation!r}. With both reasons held, "
+        "the single checkpoint asserted below is provably the clean-completion leg's and "
+        "cannot be a periodic save that happened to land once"
     )
     handles = launch_run(config=config, out_dir=tmp_path)
 
@@ -311,23 +348,53 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     )
 
     residents = sorted(p.name for p in (tmp_path / "checkpoints").iterdir())
-    assert residents == [], (
-        "a CLEAN bounded stop writes NOTHING under the derived checkpoint_dir: the O2 arm "
-        "(`step.py:238-241`) returns without saving, `_final_save()` needs `shutdown_save`, "
-        f"and `checkpoint_interval: 0` disables the periodic save. Found {residents}. If a "
-        "checkpoint appears here, CARD-CLEANSTOP-SAVE has landed (or a save path grew a "
-        "second authority) and this row is the notice — re-point it, do not delete it"
+    assert len(residents) == 1, (
+        "a CLEAN bounded stop now writes EXACTLY ONE checkpoint under the derived "
+        "checkpoint_dir — the clean-completion leg (R137/CARD-CLEANSTOP-SAVE, the O2 arm of "
+        "`train/coordinator/step.py`). NOT zero: that was the pre-R137 truth this row "
+        "recorded, and its own notice told the next reader to re-point rather than delete. "
+        "NOT two: leg 2 is latched out by `clean_stop_saved`, and two saves at one step are "
+        f"two DISTINCT files (the filename carries a content hash over a microsecond-"
+        f"resolution `created_utc`, so there is no idempotence to lean on). Found {residents}"
+    )
+    run_id, step_field, _sha8 = Path(residents[0]).stem.rsplit("_", 2)
+    assert run_id == config.run_id and int(step_field) == _BURST_STEPS, (
+        "…and the ONE artefact is stamped with THIS run's lineage at THIS run's terminus. "
+        "The decomposition is production's own (`checkpoints.py`'s `_verify_provenance` "
+        "reads `stem.rsplit('_', 2)`), not a parser re-derived here. A checkpoint written at "
+        "some other step, or under some other run_id, would satisfy a bare count and is "
+        f"exactly what a second write authority looks like; got run_id={run_id!r} "
+        f"step={step_field!r} against {config.run_id!r} / {_BURST_STEPS}"
     )
     segments = sorted((tmp_path / "logs").glob("events_*.jsonl"))
     assert segments, (
         "…while the run's own JSONL event segment IS written under the ONE derived log_dir; "
         f"found {sorted(p.name for p in (tmp_path / 'logs').iterdir())}"
     )
-    events = {json.loads(line)["event"]
-              for segment in segments
-              for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()}
+    rows = [json.loads(line)
+            for segment in segments
+            for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()]
+    events = {row["event"] for row in rows}
     assert {"run_segment_started", "run_boot_identity", "resolved_config",
             "heartbeat_watchdog_armed", "selfplay_stall_watchdog_armed"} <= events, (
         "the boot must reach an ARMED training loop and publish its own identity, not merely "
         f"construct objects (LAW-18); saw {sorted(events)}"
+    )
+
+    # R137's leg is READABLE from the ONE channel, not only from the filesystem (LAW-18).
+    clean_stop = [row for row in rows if row["event"] == "clean_stop_save"]
+    assert len(clean_stop) == 1, (
+        "exactly ONE `clean_stop_save` — the run's own record that it wrote its FINAL "
+        f"checkpoint, and the only in-stream answer to 'did the final save happen'; got "
+        f"{clean_stop}"
+    )
+    assert clean_stop[0]["step"] == _BURST_STEPS, (
+        "…at the terminus the loop actually reached, which is what makes the event about "
+        f"THIS run's product rather than a number the emitter chose; got {clean_stop[0]}"
+    )
+    assert [row for row in rows if row["event"] == "shutdown_save"] == [], (
+        "and ZERO `shutdown_save`: leg 2 means 'we were interrupted', which is FALSE of a run "
+        "that finished. A stream carrying both would mean the two legs fired together, i.e. "
+        f"the duplicate-final-artefact window is open; got "
+        f"{[row for row in rows if row['event'] == 'shutdown_save']}"
     )

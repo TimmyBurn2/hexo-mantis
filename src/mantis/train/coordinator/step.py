@@ -11,7 +11,13 @@ instrumentation half to the SAME control-flow unit (it is one loop, not two): th
 draw-rate hard-abort gate, the LAW-18 `monitor_gates` summary, and the async eval-RESULT
 consumer `on_eval_round_complete` (warn-only sealbot by default, operator G-3) — all in this
 file so the loop's decision trail stays readable end to end. (The stride5-spam gate was
-REMOVED at close-out, operator directive B.)
+REMOVED at close-out, operator directive B.) WP12-R Phase CS adds the THIRD save leg
+(R137/CARD-CLEANSTOP-SAVE) to the SAME unit: the O2 iteration-limit arm is the one
+OUTER-loop site that ACTS on the clean-completion predicate by ending the run — the inner
+burst-break evaluates the character-identical expression but only ends the burst, leaving
+`running` True so the outer arm fires on the next `step()` — so the save that makes a
+finished run's product exist has to sit on this arm; splitting it out would put the write in
+one file and the decision that authorizes it in another.
 
 Severances (must not re-enter): the `bot_refresh` subprocess family (`_tick_bot_refresh`,
 force-refresh sentinel) is a DEFINITE KILL — NOT ported. The `track_b_*` snapshot/attribution
@@ -203,6 +209,14 @@ class StepCoordinator:
         self._heartbeat = heartbeat
         self.monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
         self.heartbeat_watchdog = heartbeat_watchdog
+        # R137/CARD-CLEANSTOP-SAVE: the clean-completion latch. A plain bool, PUBLIC because
+        # `train/loop.py`'s post-loop guard is its one consumer (`_clean_stop_already_saved`)
+        # and a private name would make that read look like an intrusion. Set AFTER the leg-3
+        # write (never before — see `_clean_stop_save`), and carrying NO set-once guard: the
+        # leg has no internal latch because exactly-once is a property of the DRIVER, not of
+        # a branch only a test can reach. Deliberately NOT the first-non-None shape
+        # `record_terminal_eval_reason` uses.
+        self.clean_stop_saved = False
         # WP-UNFREEZE: the continuous actor-sync engine (mantis.train.actor_sync).
         # None is a unit-test affordance ONLY (like `eval_pipeline=None`); production
         # wiring is unconditional at the ONE composition root, pinned by
@@ -354,10 +368,30 @@ class StepCoordinator:
             instrumentation_emitted=[], pool_overflow_delta=0,
         )
 
-        # O2: iteration-limit reached.
+        # O2: iteration-limit reached — CLEAN COMPLETION, and the THIRD save leg
+        # (R137/CARD-CLEANSTOP-SAVE). This is the one OUTER-loop site that ACTS on the
+        # clean-completion predicate — it is not the only site that EVALUATES it: the inner
+        # burst-break runs the character-identical expression once per burst iteration, but
+        # only `break`s the burst and leaves `running` True, so `step()` returns normally and
+        # THIS arm fires on the next call. Acting on it is what makes this the only place the
+        # save can sit, and it is why the leg lives here and not in
+        # `drain.close_out` (it runs from a `finally`, i.e. on aborted exits too, and now
+        # also latches the terminal-eval reason) nor after `loop.py`'s `while` (the loop
+        # cannot tell WHY it exited, and `abort_rule` is still None there for the rc-48
+        # class, which `run.py` records ~80 lines later).
+        #
+        # The save runs BEFORE `running = False` so the run's product is on disk before the
+        # driver is told to stop. It does NOT make the filesystem a cleanliness proxy: the
+        # disk guard (rc 47) and the terminal-eval reason (rc 48) are both recorded in
+        # `run.py`'s teardown, strictly AFTER `close_out`, so a leg-3 artefact legally
+        # coexists with a non-zero rc. Clean-vs-aborted is carried by
+        # `ShutdownState.abort_rule` — which this leg neither reads nor writes — and by the
+        # rc it resolves to, never by a file's presence.
         if cfg.stop_step is not None and self._train_step >= cfg.stop_step:
+            self._clean_stop_save(cfg)
             self.shutdown.running = False
-            return self._build_outcome(in_warmup=False, waiting_for_games=False, **base)
+            return self._build_outcome(in_warmup=False, waiting_for_games=False,
+                                       **{**base, "checkpoint_saved": True})
 
         # O3: shutdown-save (signal-handler flag) — save + buffer save, then stop.
         if self.shutdown.shutdown_save:
@@ -470,6 +504,53 @@ class StepCoordinator:
                "eval_skipped_busy": eval_skipped_busy,
                "hard_abort_fired": hard_abort_fired, "axis_emitted": axis_emitted},
         )
+
+    # ── R137 leg 3: the clean-completion save ─────────────────────────────────────────
+    def _clean_stop_save(self, cfg: StepCoordinatorConfig) -> None:
+        """The CLEAN-COMPLETION save — the THIRD taxonomy leg (R137/CARD-CLEANSTOP-SAVE),
+        beside the trainer's periodic cadence and the signal-driven `shutdown_save`.
+
+        It is its OWN semantic, not a differently-triggered `shutdown_save`: leg 1's artefact
+        means "a resumption point — the run continues past it", leg 2's means "a rescue of
+        interrupted work — the run did not finish", and leg 3's means "the run FINISHED" —
+        the terminal weights the terminal eval and the deploy tag are about. A leg that were
+        merely shutdown_save fired differently would label a completed run as interrupted.
+
+        LAW-12: this is the SAME `trainer.save_checkpoint` entry legs 1 and 2 call, so the
+        run's product rides the ONE stamp path — `checkpoints.save_checkpoint(kind="full")`
+        -> `_write_v2_payload`, config validated before any file exists, stamp built once and
+        immutable, filename carrying run-id + content hash. No second write surface, no
+        re-stamp, no added loader.
+
+        LAW-14: a failure is NOT caught. `_write_v2_payload` counts it on
+        `checkpoints.persist_errors_total` and re-raises; that counter is the persist-fatal
+        watchdog's REGISTERED input (`monitor/producer_manifest.yaml`, id `persist_fatal`),
+        and the watchdog is NOT disarmed during close-out. Catching here would be the
+        silent-except LAW-14 forbids AND a second authority for a storage fault's exit code
+        beside the registered chain that already owns `PERSIST_FATAL_EXIT_CODE`. This card
+        authors no new exit code.
+
+        The latch and the event both land AFTER the write, deliberately UNLIKE `loop.py`'s
+        `_final_save`, which emits `shutdown_save` BEFORE its own: an event named for a save
+        is a CLAIM the save happened, so a pre-emit puts a false record in the stream of
+        every failed final save, and a pre-set latch would suppress leg 2 on a run whose
+        leg-3 write died — turning one lost save into two. `loop.py`'s ordering is a queued
+        row, not something silently mirrored here.
+
+        The event publishes the WRITER'S returned path, never a directory string re-derived
+        here, which could name a file that does not exist. `step` and `stop_step` are carried
+        as two fields because they are two different facts: a resumed run past its cap fires
+        this arm with `_train_step > stop_step` (LAW-18: "did the run's final save happen,
+        and to what file" must be answerable from the ONE channel).
+        """
+        path = self.trainer.save_checkpoint(self._last_loss_info or None)
+        self.clean_stop_saved = True
+        emit_via(self._sink, {
+            "event": "clean_stop_save",
+            "step": self._train_step,
+            "stop_step": cfg.stop_step,
+            "path": None if path is None else str(path),
+        })
 
     # ── L-B heartbeat ─────────────────────────────────────────────────────────────────
     def _beat(self, source: str) -> None:
