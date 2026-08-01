@@ -76,11 +76,6 @@ sha256 = "6a8ce8e7b5e5265f1bfdd88e81c3903a9962c51390001935683cb9298f025147"
 added_by = "WP6"
 
 [[required]]
-path = "worker/record_position_graph.bin"
-sha256 = "235bedb351ea2b4ce03cd53ed434f6aeeb6aa495c93c25b8807a2ccd907907d2"
-added_by = "WP6"
-
-[[required]]
 path = "worker/finalize_graph_outcome.bin"
 sha256 = "bb4b3b9805eebff5a8ca971ace12588020bd0575b928a0b78decfc982a7325b0"
 added_by = "WP6"

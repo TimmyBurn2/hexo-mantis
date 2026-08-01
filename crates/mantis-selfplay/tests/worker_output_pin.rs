@@ -416,14 +416,12 @@ fn pin_g5_assemble_ls_from_gnn_probs() {
 #[test]
 fn pin_g6_record_position_graph() {
     // Phase-T re-point: the in-fn asserts (typed refusal carrying the exact
-    // legal-scan sum + normalized-record layout parity) are the pin; the
-    // dispatcher-frozen `record_position_graph.bin` encoded the pre-fix
-    // arbitrary-mass acceptance and is retired from this consumer.
-    // VOID-AS-ANCHOR (T-4 census, R157): the bin may no longer serve as a
-    // behavioral anchor for target semantics — it embeds the arbitrary-mass
-    // acceptance §3.3 deleted. Bytes + manifest row kept: deletion is
-    // OPERATOR-ROUTED (ADJ-19 precedent); queue row filed for the operator to
-    // retire bin + manifest row (the manifest is byte-frozen this phase).
+    // legal-scan sum + normalized-record layout parity) are the pin. The old
+    // `record_position_graph.bin` golden encoded the pre-fix arbitrary-mass
+    // acceptance; it was labeled VOID-AS-ANCHOR (T-4 census, R157) and then
+    // DELETED with its manifest row under operator ruling R162 (QN-1:
+    // outlawed semantics + zero consumers; non-R20-dense — this is the GRAPH
+    // record producer, no dense planes).
     let (refusal_sum, ok_bytes) = produce_g6(false);
     assert!(refusal_sum > 1.0, "the raw stream planting must overshoot unity");
     assert!(!ok_bytes.is_empty());
