@@ -29,6 +29,7 @@ from typing import Any
 
 import numpy as np
 
+from mantis.bots.resolve import SKIP_REASON_MARKERS
 from mantis.eval.bt import fit_bt, predict_p
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
@@ -154,15 +155,73 @@ def emit_round_skipped_busy(sink: Any, *, step: int, in_flight_round_id: str) ->
     return payload
 
 
+#: The CLOSED skip-reason partition (WP12-R Phase A, DESIGN_A §2.7(4)). Order is the
+#: resolver's own: the R139-ruled skip first, then the three ways a sealbot rung can fail to
+#: resolve. The set is closed on purpose — a reason nothing recognises must be a loud failure,
+#: never a fifth bucket invented at emission time, because the whole value of the partition is
+#: that "4 rungs skipped as ruled" and "6 rungs skipped because the box is misconfigured" stop
+#: looking identical to every consumer.
+SKIP_REASON_CLASSES: tuple[str, ...] = (
+    "operator_authorized", "vendor_absent", "build_absent", "load_failed",
+)
+
+
+def _classify_skip_reason(reason: str) -> str | None:
+    """The reason's class, or None when nothing recognises it.
+
+    Classification is by marker substring against `mantis.bots.resolve.SKIP_REASON_MARKERS` —
+    the SAME literals the refusal strings are built from, imported rather than re-transcribed,
+    so a resolver whose wording drifted out of this classifier's reach cannot do it silently.
+    Exactly one marker must match: zero is an unrecognised reason and two would mean the
+    partition stopped partitioning, and both are reported the same way (loudly, with no
+    counter event) rather than guessed at.
+    """
+    if set(SKIP_REASON_MARKERS) != set(SKIP_REASON_CLASSES):
+        raise ResultContractError(
+            f"the skip-class partition disagrees with its markers: classes "
+            f"{sorted(SKIP_REASON_CLASSES)} vs markers {sorted(SKIP_REASON_MARKERS)}. Two "
+            f"authorities for one closed set is exactly what the marker mapping exists to "
+            f"prevent, so the disagreement is fatal rather than resolved in favour of either."
+        )
+    matched = [name for name, marker in SKIP_REASON_MARKERS.items() if marker in reason]
+    if len(matched) != 1:
+        return None
+    return matched[0]
+
+
 def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink: Any) -> None:
-    """Per skipped rung: ONE `eval_rung_skipped` event AND one ERROR log line — never
-    silent (all three: event + log + the caller's own `skipped_rungs` record)."""
+    """Per skipped rung: an `eval_rung_skipped` event, an ERROR log line, AND — new in WP12-R
+    Phase A — one `eval_rung_skip_class` counter event carrying the running per-class count.
+
+    The fourth channel exists because R164 made LAW-18 mean IN-RUN FIRE-RATE, not "there is a
+    log line somewhere". The first three channels all answer "some rungs skipped"; none of
+    them answers the question R143 says has to be legible WHILE the run is going — whether
+    these are the skips the operator AUTHORISED. Hence one counter event per rung, emitted
+    alongside its skip through the same injected sink: a single aggregate at round end would
+    be precisely the "log line somewhere" R164 ruled out.
+    """
+    counts: dict[str, int] = dict.fromkeys(SKIP_REASON_CLASSES, 0)
     for entry in skipped:
         payload = {"event": "eval_rung_skipped", "round_id": round_id,
                    "rung": entry["rung"], "reason": entry["reason"]}
         _emit(sink, payload)
         _LOG.error("eval_rung_skipped round_id=%s rung=%s reason=%s",
                    round_id, entry["rung"], entry["reason"])
+
+        reason_class = _classify_skip_reason(entry["reason"])
+        if reason_class is None:
+            _LOG.error(
+                "eval_rung_skip_class_unclassified round_id=%s rung=%s reason=%s — no "
+                "SKIP_REASON_MARKERS entry matches this reason, so it is counted in NO class; "
+                "the partition is closed and a fifth bucket is not invented here",
+                round_id, entry["rung"], entry["reason"],
+            )
+            continue
+        counts[reason_class] += 1
+        _emit(sink, {
+            "event": "eval_rung_skip_class", "round_id": round_id, "rung": entry["rung"],
+            "reason_class": reason_class, "class_count": counts[reason_class],
+        })
 
 
 def _worker_entry(spec_path: str, result_path: str) -> None:
@@ -680,4 +739,5 @@ __all__ = [
     "emit_round_skipped_busy",
     "emit_round_started",
     "emit_rung_skip_events",
+    "SKIP_REASON_CLASSES",
 ]

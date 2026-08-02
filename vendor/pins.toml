@@ -8,3 +8,20 @@
 # (gitignored) at its sha and applies the patch. Features that need an unfetched
 # vendor must skip loudly and name `make vendor`.
 [pins]
+
+[pins.sealbot]
+# R139/R145: a pin is a COMMIT SHA, never a branch name. `branch` and `as_of` below are
+# DATA — tools/vendor_fetch.sh reads only `url`, `sha` and `patch` (:17, :24), so the
+# checkout is sha-driven and a branch name can never become the thing that is fetched.
+# That rider is satisfied structurally rather than by convention, and
+# tests/tools/test_vendor_pins_sealbot.py is what makes it falsifiable.
+#
+# Verified upstream at WP12-R Phase A IMPL execution (2026-08-02):
+#   git ls-remote <url>  ->  refs/heads/master = c94749c21c16c3b072fff6da49762dd5f92f3986
+# (raw output in the phase's IMPL notes; a different sha means upstream moved and R145 must
+# be re-ruled, never silently re-pinned.)
+url    = "https://github.com/ramora0/SealBot.git"
+sha    = "c94749c21c16c3b072fff6da49762dd5f92f3986"
+branch = "master"
+as_of  = "2026-03-31"
+patch  = "vendor/patches/sealbot.patch"

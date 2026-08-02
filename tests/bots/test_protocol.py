@@ -23,6 +23,10 @@ from mantis.bots import BotProtocol, RandomBot, RungUnresolvable, resolve_bot
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "bots"
 
 _KNOWN_KINDS = ("random", "sealbot", "kraken", "strix")
+#: ⊕ WP12-R Phase A: these keys are DELETED from `src/` (DESIGN_A §2.2(2)). They survive
+#: HERE, in the oracle, as the names a refusal reason may never speak — which is the only
+#: thing left to say about them. The module docstring above describes the pre-Phase-A
+#: contract and is retained as provenance for what the rewritten row below replaced.
 _ENV_KEYS = {
     "sealbot": "MANTIS_BOT_SEALBOT",
     "kraken": "MANTIS_BOT_KRAKEN",
@@ -71,26 +75,50 @@ def test_resolver_resolves_random_locally():
 
 
 @pytest.mark.parametrize("kind", ["sealbot", "kraken", "strix"])
-def test_external_kinds_unresolvable_at_head_with_reason(kind, monkeypatch):
-    env_key = _ENV_KEYS[kind]
-    monkeypatch.delenv(env_key, raising=False)
-    with pytest.raises(RungUnresolvable) as unset_exc:
-        resolve_bot(kind, depth=5, opponent_sims=128)
-    assert unset_exc.value.rung == kind
-    unset_reason = unset_exc.value.reason
-    assert "env key" in unset_reason and "unset" in unset_reason
+def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
+    """⊕ WP12-R Phase A rewrite (PREREG_A §9, "Modified, not added").
 
-    # Env key SET but no WP12-R adapter package installed at HEAD — a DIFFERENT reason,
-    # never a silent fallback to a default host/path (dispatch law: env keys / vendor
-    # pins only).
+    THE OLD CONTRACT IS DELETED. Until Phase A this row asserted the env-key contract —
+    `MANTIS_BOT_*` unset versus set-but-unadapted as two distinguishable reasons. DESIGN_A
+    §2.2(2) deletes that channel as argued (R125/R79): for `sealbot` the authority for where
+    the engine lives is `vendor/pins.toml` + `make vendor`, and two authorities for one fact
+    is R79's exact prohibition; for `kraken`/`strix` the key was a silent-arming surface with
+    nothing behind it, since R139 rules both out for run5 with named grounds.
+
+    What survives, and what this row now pins, is the invariant BOTH contracts share: an
+    external kind that cannot resolve says so with a `.rung` and a non-empty `.reason`, and
+    the reason names NO environment variable. The parametrization stays at 3 deliberately —
+    a rewrite that quietly dropped one would eat a test from Phase A's pre-registered band
+    and mask an under-delivery.
+
+    Not a duplicate of O-A1/O-A2 (`tests/bots/test_sealbot_resolve.py`): those assert WHICH
+    command each refusal names and that kraken/strix carry R139's grounds per rung. This row
+    asserts only the shape every external kind shares, which is what `protocol.py`'s
+    `RungUnresolvable` contract is about.
+    """
+    env_key = _ENV_KEYS[kind]
     monkeypatch.setenv(env_key, "some_adapter_module:build")
-    with pytest.raises(RungUnresolvable) as set_exc:
-        resolve_bot(kind, depth=5, opponent_sims=128)
-    assert set_exc.value.rung == kind
-    set_reason = set_exc.value.reason
-    assert "no adapter installed" in set_reason or "WP12-R" in set_reason
-    assert set_reason != unset_reason, (
-        "env-key-unset and env-key-set-but-unadapted must be DISTINGUISHABLE reasons"
+
+    if kind == "sealbot":
+        # The one kind that CAN resolve, on a box where `make vendor` plus the build have
+        # run. Both outcomes are legal; neither may consult the deleted channel.
+        try:
+            factory = resolve_bot(kind, depth=5, opponent_sims=128)
+        except RungUnresolvable as exc:
+            assert exc.rung == kind
+            assert "MANTIS_BOT_" not in exc.reason and "env key" not in exc.reason, exc.reason
+            assert exc.reason.strip() != "", "a skip with an empty reason is a silent skip"
+        else:
+            assert callable(factory)
+        return
+
+    with pytest.raises(RungUnresolvable) as exc_info:
+        resolve_bot(kind, depth=None, opponent_sims=128)
+    assert exc_info.value.rung == kind
+    reason = exc_info.value.reason
+    assert reason.strip() != "", "a skip with an empty reason is a silent skip"
+    assert "MANTIS_BOT_" not in reason and "env key" not in reason, (
+        f"{kind}'s refusal still speaks the DELETED env-key contract: {reason}"
     )
 
 
