@@ -102,7 +102,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.scheduler_t_max": "TrainHParams.scheduler_t_max -> core.py:227 _build_scheduler T_max",
     "train.eta_min": "TrainHParams.eta_min -> core.py:230 _build_scheduler eta_min",
     "train.min_lr": "TrainHParams.min_lr -> core.py:230 _build_scheduler eta_min fallback",
-    "train.checkpoint_interval": "TrainHParams.checkpoint_interval -> core.py:432 periodic save trigger",
+    "train.checkpoint_interval": "TrainHParams.checkpoint_interval ->"
+                                " Trainer._maybe_periodic_checkpoint (THE one reader; both the dense"
+                                " and the graph step tail call it — R173/CARD-CS2)",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",

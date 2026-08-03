@@ -250,8 +250,10 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     artefact. They do — on the SIGNAL path. A CLEAN bounded stop never took it: the O2
     iteration-limit arm set `shutdown.running = False` and returned WITHOUT saving;
     `loop.py`'s `_final_save()` fires only on `shutdown_save`; and the trainer's periodic
-    save is guarded by `if interval > 0` (`trainer/core.py:487-489`) against a
-    `checkpoint_interval` this config — and every other minted config — mints at **0**.
+    save is guarded by a positive-interval test (`Trainer._maybe_periodic_checkpoint`,
+    `trainer/core.py:589-590` — WP12-R CARD-CS2 / R173 relocated that read out of the
+    `core.py:487-489` this sentence used to cite) against a `checkpoint_interval` this
+    config — and every other minted config — mints at **0**.
 
     (2) **WP12-R Phase CS / R137 (CARD-CLEANSTOP-SAVE)** is the expiry the R129 text told
     the next reader to watch for, and this is that re-point. The clean-completion leg — the
@@ -262,12 +264,18 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     or unreached), 1 (correct) and 2 (a second write authority, or the W-1 signal-inside-the-
     write window re-opened).
 
-    R129's periodic-save premise is kept AND completed, because it was incomplete: on this
-    config's DECLARED representation (`identity.representation: graph`) the periodic arm does
-    not merely evaluate to False, it **does not exist** — `train_step_from_graph_batch`
-    (`trainer/core.py:493-547`) contains no interval read and no `save_checkpoint` call at
-    all. Both routes to a periodic checkpoint are closed, by two independent facts, which is
-    what makes the ONE checkpoint below provably the clean-completion leg's.
+    R129's periodic-save premise WAS completed by a second independent fact, and WP12-R
+    CARD-CS2 has since falsified that second fact — recorded here rather than dropped. Until
+    CS2, on this config's DECLARED representation (`identity.representation: graph`) the
+    periodic arm did not merely evaluate to False, it **did not exist**:
+    `train_step_from_graph_batch` contained no interval read and no `save_checkpoint` call at
+    all. R173 closed exactly that hole — both step tails now call the ONE resolver
+    `Trainer._maybe_periodic_checkpoint` (`trainer/core.py:562-600`), so the arm EXISTS on
+    graph and evaluates there. **Exactly ONE route to a periodic checkpoint is closed now —
+    the minted `0` of premise 1 — and it is closed alone.** That single route is still what
+    makes the ONE checkpoint below provably the clean-completion leg's; what changed is that
+    premise 1 now carries it without help, which is precisely the case premise 1's own text
+    already told the next reader to re-point for rather than silence.
 
     THE ORACLE MUST NOT GO VACUOUS, and the R137 re-point makes it LESS able to. Under R129
     the checkpoint arm read `residents == []` — a state a run that never booted also
@@ -313,12 +321,14 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         "row must be RE-POINTED again, never silenced"
     )
     assert config.identity.representation == "graph", (
-        "PREMISE CHECK, reason 2 of 2 — INDEPENDENT of the interval, and the half R129's "
-        "text omitted: on a `graph` representation the periodic arm does not merely evaluate "
-        "False, it DOES NOT EXIST (`trainer/core.py:493-547` reads no interval and calls no "
-        f"`save_checkpoint`). Got {config.identity.representation!r}. With both reasons held, "
-        "the single checkpoint asserted below is provably the clean-completion leg's and "
-        "cannot be a periodic save that happened to land once"
+        "PREMISE CHECK, reason 2 of 2 — the ROUTE this config declares. It USED to be a "
+        "second, interval-INDEPENDENT reason no periodic save could fire: on a `graph` "
+        "representation the arm did not exist at all. WP12-R CARD-CS2 (R173) made both step "
+        "tails call the ONE resolver `Trainer._maybe_periodic_checkpoint` "
+        "(`trainer/core.py:562-600`), so the graph arm now EXISTS and evaluates. Got "
+        f"{config.identity.representation!r}. This pin therefore records WHICH route the run "
+        "takes, not a closed route — and reason 1 (the minted `0`) is now the SOLE reason a "
+        "periodic artefact cannot join the clean-completion one asserted below"
     )
     handles = launch_run(config=config, out_dir=tmp_path)
 

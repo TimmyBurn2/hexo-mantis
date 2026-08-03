@@ -1,9 +1,11 @@
 """The Trainer — one gradient step + envelope-v2 checkpoint IO (WP10 §a.4/§c.7 PORT).
 
 >300 justify: the `Trainer` owns the full per-step training surface (optimizer / scaler /
-scheduler / EMA lifecycle, the dense-CNN step, the graph-GNN step, and the checkpoint
-save/load delegates) — ONE cohesive responsibility kept in one file so the training-step
-numeric contract is greppable. Behaviour-exact relocation of `hexo_rl/training/trainer.py`,
+scheduler / EMA lifecycle, the dense-CNN step, the graph-GNN step, the periodic-checkpoint
+seam `_maybe_periodic_checkpoint` — THE one reader of `train.checkpoint_interval`, which
+both step tails call (R173) — and the checkpoint save/load delegates) — ONE cohesive
+responsibility kept in one file so the training-step numeric contract is greppable.
+Behaviour-exact relocation of `hexo_rl/training/trainer.py`,
 routed through the new-repo seams, with the ratified WP10 amendments + KILL severances:
 
   * `save_checkpoint` writes envelope v2 via `checkpoints.save_checkpoint(kind="full", ...)`
@@ -484,9 +486,7 @@ class Trainer:
         emit_via(self._sink, {"event": "training_step", "step": self.step,
                               "representation": "grid", **result})
 
-        interval = int(hp.checkpoint_interval)
-        if interval > 0 and self.step % interval == 0:
-            self.save_checkpoint(result)
+        self._maybe_periodic_checkpoint(result)
         return result
 
     # ── graph (GNN) training step — the numeric core, bench + injected-buffer driver ──────
@@ -542,6 +542,7 @@ class Trainer:
                   "value_loss": value_loss.item(), "grad_norm": grad_norm, "lr": lr}
         emit_via(self._sink, {"event": "training_step", "step": self.step,
                               "representation": "graph", **result})
+        self._maybe_periodic_checkpoint(result)
         return result
 
     # ── checkpoint IO ─────────────────────────────────────────────────────────────────────
@@ -557,6 +558,46 @@ class Trainer:
         except Exception as exc:  # noqa: BLE001 — surfaced, but a resolvable config is required
             _LOG.error("checkpoint_encoding_resolve_failed error=%s", exc)
             return None
+
+    def _maybe_periodic_checkpoint(self, loss_info: dict[str, float] | None) -> Path | None:
+        """THE periodic-checkpoint seam — the ONE reader of `train.checkpoint_interval`.
+
+        R173: the interval read and the periodic write live here and nowhere else, so the
+        dense step and the graph step share ONE authority for the cadence rather than each
+        carrying its own (`R1`: two independently-editable readers of one key is the
+        duplicated-authority class). `0` disables — the value every config mints today
+        (`config/schema/train.py:231`, `ge=0`); a positive `N` fires at `N, 2N, 3N, …`
+        against `self.step`, which is the POST-increment step number in both callers
+        (the dense tail and the graph tail), so the boundary is the step whose gradient
+        update the artefact contains.
+
+        rule 3 / LAW-12: the write is `self.save_checkpoint`, the SAME entry legs 2 and 3
+        call, so the artefact rides the one stamp path — validated config, stamp built once,
+        `{run_id}_{step:08d}_{sha8}.ckpt`. This method authors no second write surface.
+
+        LAW-14: a failure is NOT caught. `_write_v2_payload` counts it on
+        `checkpoints.persist_errors_total` and re-raises; that counter is the persist-fatal
+        watchdog's registered input. A swallow here would be the silent-except LAW-14 bans,
+        and would let a run report a cadence it never wrote.
+
+        LAW-18: the event lands AFTER the write and carries the WRITER's returned path —
+        `loop.py`'s pre-emit ordering is deliberately NOT mirrored (the argument is
+        `coordinator/step.py::_clean_stop_save`'s, and it applies unchanged to a leg that
+        fires N times instead of once: a pre-emit puts a false record in the stream on every
+        failed write).
+        """
+        interval = int(self.hp.checkpoint_interval)
+        if interval <= 0 or self.step % interval != 0:
+            return None
+        path = self.save_checkpoint(loss_info)
+        emit_via(self._sink, {
+            "event": "periodic_checkpoint_save",
+            "step": self.step,
+            "interval": interval,
+            "representation": self.arch.representation,
+            "path": None if path is None else str(path),
+        })
+        return path
 
     def save_checkpoint(self, loss_info: dict[str, float] | None = None) -> Path:
         """Write an envelope-v2 FULL checkpoint via the ONE writer (§c.7): filename

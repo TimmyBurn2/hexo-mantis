@@ -103,7 +103,9 @@ CONSUMER_REGISTRY = {
     "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",
     "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
     "train.min_lr": "TrainHParams.from_config -> Trainer._build_scheduler eta_min fallback",
-    "train.checkpoint_interval": "TrainHParams.from_config -> Trainer periodic-save gate",
+    "train.checkpoint_interval": "TrainHParams.from_config ->"
+                                " Trainer._maybe_periodic_checkpoint, the ONE periodic-save gate,"
+                                " called by BOTH the dense and the graph step tail (R173)",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",

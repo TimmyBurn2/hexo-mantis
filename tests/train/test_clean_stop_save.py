@@ -17,9 +17,13 @@ R129 measured the hole and R137 carded it: at HEAD a run that reaches `stop_step
 with `checkpoints/` **EMPTY**. `coordinator/step.py`'s O2 arm sets `shutdown.running = False`
 and returns without saving; `loop.py`'s `_final_save()` fires only on `shutdown_save`, which
 only a SIGNAL sets; and the trainer's periodic arm is guarded by `interval > 0` against a
-`checkpoint_interval` every minted config mints at 0 — and does not exist at all on the graph
-representation run5 declares (DESIGN_CS §1.5, F-CS-1). So the 1e6-step run's PRODUCT — the
-terminal weights the terminal eval and the deploy tag are about — is never written.
+`checkpoint_interval` every minted config mints at 0 — and, at the commit this file was
+written, did not exist at all on the graph representation run5 declares (DESIGN_CS §1.5,
+F-CS-1). **WP12-R CARD-CS2 (R173) has since falsified that second clause**: both step tails
+now call the ONE resolver `Trainer._maybe_periodic_checkpoint`, so the graph arm exists and
+evaluates, and the minted `0` is the sole reason it stays silent. So the 1e6-step run's
+PRODUCT — the terminal weights the terminal eval and the deploy tag are about — is never
+written.
 
 Leg 3 is its OWN semantic, not a differently-triggered `shutdown_save` (DESIGN_CS §2.3): leg 1
 means "a resumption point", leg 2 means "we were interrupted", leg 3 means "the run finished".
