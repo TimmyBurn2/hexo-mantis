@@ -94,7 +94,7 @@ _MINTED_DRAIN_CAPS = resolve_drain_caps(load_config(CONFIGS_DIR / "dev_example.y
 
 #: WPMINT Phase K-B (R78/R80): the builder's FOURTH config-authored parameter, from the same
 #: minted config, for the same reason — this file is about THRESHOLD authority, so the 19
-#: coordinator knobs arrive derived rather than as nineteen more literals to keep in step.
+#: coordinator knobs arrive derived rather than as eighteen more literals to keep in step.
 _MINTED_KNOBS = resolve_coordinator_knobs(load_config(CONFIGS_DIR / "dev_example.yaml").train)
 
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place

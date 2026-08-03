@@ -1,7 +1,8 @@
-""">300 justify (R8), stated at this file's MEASURED size of 766 lines (762 before WPMAIN's
-two-line payload completion; `wc -l` at HEAD, re-measured after the edit — SF-7,
-REVIEW-impl F-4): it is R93's evidence
-for NINETEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
+""">300 justify (R8), stated at this file's MEASURED size of 744 lines (762 at WPMAIN's
+two-line payload completion; 762 -> 744 at WP12-R R178(a), which deleted
+`buffer_save_interval`'s row and its behavioural drive; `wc -l` at HEAD, re-measured after
+the edit — SF-7, REVIEW-impl F-4): it is R93's evidence
+for EIGHTEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
 knob, observe the consumer", never a shared arm a sibling could ride. Roughly half the length
 is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the ~120-line
 fakes harness that BOTH halves use (a real `compose_run` drive and a real `StepCoordinator`
@@ -9,8 +10,10 @@ drive). Splitting it would fork that harness into two copies free to drift apart
 exact failure `tests/config/test_drain_caps_wiring.py`'s own justify names, and R5 bars the
 cross-test import that would prevent it.
 
-The 19 `train.*` step-coordinator knobs reach the consumers their registry entries NAME —
-proved by MUTATION.
+The 18 `train.*` step-coordinator knobs reach the consumers their registry entries NAME —
+proved by MUTATION. (19 at Phase K-B; `buffer_save_interval` was deleted by R178(a) under
+R116/LAW-08 — F-CS-2 measured its `_try_save_buffer` consumer production-dead on every leg,
+so the one demonstration this file could not honestly give is the one it no longer owes.)
 
 WPMINT Phase K-B, `CARD-COORD-KNOBS` (R78 as clarified by R80), method bound by R93.
 
@@ -79,7 +82,6 @@ _DRIVE_STEPS = 4
 _DISTINGUISHABLE: dict[str, Any] = {
     "eval_interval": 37,
     "log_interval": 17,
-    "buffer_save_interval": 23,
     "min_buf_size": 29,
     "replay_capacity": 31_337,
     "replay_capacity_schedule": [{"step": 11, "capacity": 222_222}],
@@ -98,12 +100,13 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "selfplay_stall_timeout_sec": 67.0,
 }
 
-#: schema leaf -> `StepCoordinatorConfig` field. Three names differ, and the rename is the
-#: point: `train.checkpoint_interval` (the TRAINER's periodic save) is a DIFFERENT authored
-#: key, so the coordinator's buffer-save cadence could not keep that spelling, and a bare
-#: `train.capacity` names nothing on its own.
+#: schema leaf -> `StepCoordinatorConfig` field. Two names differ, and the rename is the
+#: point: a bare `train.capacity` names nothing on its own. A THIRD row stood here,
+#: `buffer_save_interval` -> `checkpoint_interval`, and R178(a) deleted both sides of it —
+#: the coordinator's buffer-save cadence had no reachable consumer (F-CS-2), so the key that
+#: had to be renamed away from `train.checkpoint_interval` (the TRAINER's periodic save, a
+#: different authored key that is untouched) no longer exists to collide.
 _SCHEMA_TO_FIELD = {
-    "buffer_save_interval": "checkpoint_interval",
     "replay_capacity": "capacity",
     "replay_capacity_schedule": "buffer_schedule",
 }
@@ -283,7 +286,7 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
     """Set ONE `train.*` knob to a distinguishable value; the coordinator the run holds must
     carry it, and NO sibling may move with it.
 
-    Parametrized per key on purpose: with the nineteen folded into one drive they would share
+    Parametrized per key on purpose: with the eighteen folded into one drive they would share
     one failure signature, and a knob that reached nothing would be masked by the eighteen
     that did. The independence arm is the other half — before this phase every one of these
     was a literal in `_step_coordinator_config`, so a wire that fed the whole spec from one
@@ -313,7 +316,7 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
              and getattr(mutated, _SCHEMA_TO_FIELD.get(other, other))
              != getattr(baseline, _SCHEMA_TO_FIELD.get(other, other))]
     assert not moved, (
-        f"setting {key} moved {moved} too — the nineteen must arrive independently, or one "
+        f"setting {key} moved {moved} too — the eighteen must arrive independently, or one "
         "key's citation is really another key's"
     )
 
@@ -431,33 +434,6 @@ def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> Non
     assert len(rare.sink.named("monitor_gates")) == 1, (
         "the LAW-18 gate summary rides the same boundary — DR-7's finding is that these two "
         "cannot be separated, so they are asserted together"
-    )
-
-
-def test_buffer_save_interval_decides_the_replay_buffer_save_cadence(tmp_path, monkeypatch) -> None:
-    """`train.buffer_save_interval` -> `step.py` D4 `_try_save_buffer`. NOT the trainer
-    checkpoint cadence (`train.checkpoint_interval`, a different authored key) — the rename
-    exists because two config keys with one spelling is R1's duplicated-authority class."""
-    monkeypatch.chdir(tmp_path)
-    #: `try_save_buffer` is a no-op unless the legacy mixing dict enables persistence, so the
-    #: drive enables it — otherwise "no save happened" would be true for a reason that has
-    #: nothing to do with the knob, and the `0` arm below would pass vacuously.
-    persist = {"buffer_persist": True, "buffer_persist_path": str(tmp_path / "replay.bin")}
-
-    off = _coordinator(checkpoint_interval=0, mixing_cfg=persist)
-    outcomes = _drive(off, steps=4, games=1)
-    assert off.buffer.saves == [] and not any(o.checkpoint_saved for o in outcomes), (
-        "0 is the shipped posture: no cadence save at all (close-out and the shutdown signal "
-        "still save, which is why a zero here disables nothing LAW-16 requires)"
-    )
-
-    on = _coordinator(checkpoint_interval=2, mixing_cfg=persist)
-    outcomes = _drive(on, steps=4, games=1)
-    assert len(on.buffer.saves) == 2, (
-        f"at cadence 2 the buffer must be saved on steps 2 and 4; got {on.buffer.saves}"
-    )
-    assert [o.checkpoint_saved for o in outcomes] == [False, True, False, True], (
-        f"…and the outcome record must say which steps saved; got {outcomes}"
     )
 
 
@@ -671,10 +647,10 @@ def test_the_builder_takes_knobs_as_a_required_keyword_only_parameter() -> None:
     """MF-2 Attack B on the fourth config-authored fact: a parameter DEFAULT would move the
     authority from the builder BODY to the builder SIGNATURE, leaving every
     `dataclasses.fields()` assertion green while a caller that omitted the argument silently
-    inherited nineteen postures."""
+    inherited eighteen postures."""
     param = inspect.signature(_step_coordinator_config).parameters.get("knobs")
     assert param is not None, (
-        "`_step_coordinator_config` must take `knobs`: the nineteen are `train.*` keys and "
+        "`_step_coordinator_config` must take `knobs`: the eighteen are `train.*` keys and "
         "arrive from `resolve_coordinator_knobs`, never from a literal here"
     )
     assert param.default is inspect.Parameter.empty, (
@@ -710,7 +686,7 @@ def test_no_coordinator_field_carries_a_code_side_default_and_the_dead_six_are_g
     )
 
 
-def test_the_resolver_is_the_only_read_of_the_nineteen_keys(smoke_run_config) -> None:
+def test_the_resolver_is_the_only_read_of_the_eighteen_keys(smoke_run_config) -> None:
     """`resolve_coordinator_knobs` returns exactly what the loaded config holds, key for key —
     the transport arm at the resolver. A resolver that dropped, defaulted or CROSSED two
     fields would still satisfy the per-key mutations above for whichever key it happened to
@@ -729,7 +705,7 @@ def test_the_resolver_is_the_only_read_of_the_nineteen_keys(smoke_run_config) ->
         )
     assert {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)} == {
         _SCHEMA_TO_FIELD.get(key, key) for key in _DISTINGUISHABLE
-    }, "the spec must carry exactly the nineteen authored knobs and nothing else"
+    }, "the spec must carry exactly the eighteen authored knobs and nothing else"
     for field in dataclasses.fields(CoordinatorKnobsSpec):
         assert (field.default is dataclasses.MISSING
                 and field.default_factory is dataclasses.MISSING), (

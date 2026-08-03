@@ -48,14 +48,14 @@ VALID_TRAIN_PAYLOAD: dict = {
     # WPAX Phase D (R65/R80): REQUIRED key, no code-side default; `None` is the
     # EXPLICIT disarmed posture (R79(1)).
     "draw_rate_abort": None,
-    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78 as clarified by R80): the 19 step-coordinator
-    # knobs. Every value is the one `mantis.run._step_coordinator_config` already used, so
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78 as clarified by R80): the step-coordinator
+    # knobs — 19 at K-B, 18 since R178(a) deleted `buffer_save_interval` as a dead knob
+    # (R116/LAW-08). Every value is the one `mantis.run._step_coordinator_config` used, so
     # this census records a change of AUTHOR and not of behaviour — except `batch_size`,
     # which is 256 because K-A MEASURED that the production path's dict lookups both missed
     # and the run really used the literal 256, never the dead field's 8.
     "eval_interval": 1000,
     "log_interval": 1000,
-    "buffer_save_interval": 0,
     "min_buf_size": 1,
     "replay_capacity": 100_000,
     "replay_capacity_schedule": [],
@@ -116,7 +116,6 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     # inexpressible, named at the value that defect is actually written as.
     ("eval_interval", 0),               # the entire eval/promotion pipeline, silently off
     ("log_interval", 0),                # DR-7: the whole hard-abort family AND monitor_gates
-    ("buffer_save_interval", -1),
     ("min_buf_size", 0),                # "train on an empty buffer"
     ("replay_capacity", 0),
     ("training_steps_per_game", 0.0),   # reads as off; `_steps_budget`'s max(1, ...) is not

@@ -1,10 +1,11 @@
 # Contract: run config schema
 
-- version: v5
+- version: v6
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Four growth steps since (v1 -> v4), each recorded as a
-  named amendment in docs/design/repo_design.md §4; the last three are *incompatible* — a
-  config lacking any of the added keys fails to load. The config files' own `schema_version:`
+- status: LIVE since scaffold (WP0). Five growth steps since (v1 -> v6), each recorded as a
+  named amendment in docs/design/repo_design.md §4; v2 through v5 are *incompatible* — a
+  config lacking any of the added keys fails to load — and v6 is incompatible in the other
+  direction: a config still CARRYING the deleted key fails `extra="forbid"`. The config files' own `schema_version:`
   key is a FILE-FORMAT pin and is unchanged at `1`; it is not this contract's version.
 
 ## Summary
@@ -21,11 +22,12 @@ YAML keys and enumerates the audit root name-agnostically.
 | v2 | `train.max_train_steps` becomes a required leaf: the RUN-LENGTH authority, distinct from `train.total_steps`, which is only the LR-scheduler horizon | WPAX Phase S (ADJ-09 Option B) |
 | v3 | `train.draw_rate_abort` becomes a required leaf — a block or `null`, where `null` is the EXPLICIT disarmed posture. Its third key was `min_samples` (`ge=1, le=DRAW_RATE_WINDOW`) and is now `N_pool_min` (`ge=1`), because the gated statistic changed to the pooled count-weighted rate | WPAX Phase D; third-key swap WPMINT Phase DS (R92) |
 | v4 | twenty new required leaves: nineteen flat `train.*` step-coordinator knobs plus `train.draw_rate_abort.consec`. Six sibling coordinator fields were DELETED rather than authored (no reader in `src/`), and `train.batch_size` is minted at the value the code actually used | WPMINT Phase K-B |
+| v6 | one required leaf REMOVED — the `train` section's `buffer_save_interval`, the first leaf this contract has ever dropped. Its only consumer chain ended in `coordinator/step.py`'s D4 `_try_save_buffer` arm, which WP12-R Phase CS MEASURED (F-CS-2) production-dead on every leg, so a key minted into `run5.yaml` had zero reachable effect (R116/LAW-08/R1). The `buffer_save_interval` -> `checkpoint_interval` rename seam and both no-op `_try_save_buffer` arms go with it. `extra="forbid"` makes this incompatible in reverse: a config still carrying the key fails to load | WP12-R (R178(a), assigned by R183(a)) |
 | v5 | five new required leaves, all promotions of authority OUT of code: `eval_enabled` (top-level bool — was a `compose_run` parameter with a code-side default `True`, R120), the `monitor.disk_guard` family `{interval_sec, warn_gb, fail_gb}` (was four dead `dict.get` literals in a function with zero callers, R122) and `train.device` (`Literal["cpu","cuda"]` — was a `--device` CLI flag on BOTH callers, which let a cpu-flagged preflight false-clear a cuda-minted run, R126) | WPMAIN (CARD-RUN-MAIN) |
 
 ## Shape
 
-Ten top-level fields; **175 leaf key-paths** under the walker that descends nested blocks
+Ten top-level fields; **174 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -66,7 +68,7 @@ what keeps the package's internal import graph a DAG (CI gate 9) — `core` impo
 | two configs differ exactly where claimed | tools/config_diff.py `--expect` |
 | a committed config's stamped header cannot lie about its delta | tools/config_diff.py `--from-header` |
 | every committed config schema-validates (empty set = gate failure) | CI gate 7 (tools/ci_gates/validate_configs.py) |
-| every schema leaf key has a live consumer (175-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
+| every schema leaf key has a live consumer (174-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
 | every `required` armed-abort row is armed in every production config | CI gate 12 (tools/ci_gates/preflight_mint.py `--audit-only`) |
 
 ## Cross-field rules (the invariants no single field can carry)
@@ -88,13 +90,14 @@ name at the moment it fires.
 | `_validate_ladder` | `LadderConfig` | non-empty rungs, unique rung names, `0 < activation_wr_lower_ci <= graduation_wr_lower_ci < 1`, and two `>= 1` cadence floors |
 | `_mutual_exclusion` | `PlayoutCapConfig` | `fast_prob` and `full_search_prob` are mutually exclusive; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
 
-Three v4 keys are spelled differently in the schema and in the runtime object they reach, each
-for a measured reason: `train.buffer_save_interval` -> `checkpoint_interval` (the coordinator's
-is the REPLAY-BUFFER save cadence, while `train.checkpoint_interval` is the already-authored
-TRAINER cadence, and two config keys with one spelling is the duplicated-authority class R1
-kills), `train.replay_capacity` -> `capacity` and `train.replay_capacity_schedule` ->
-`buffer_schedule` (a config key spelled only `capacity` names nothing on its own). The rename
-happens at the schema and does not propagate into the runtime object.
+TWO v4 keys are spelled differently in the schema and in the runtime object they reach, each
+for a measured reason: `train.replay_capacity` -> `capacity` and
+`train.replay_capacity_schedule` -> `buffer_schedule` (a config key spelled only `capacity`
+names nothing on its own). The rename happens at the schema and does not propagate into the
+runtime object. A THIRD rename stood here until v6 and is listed under *Deliberately absent*
+below: it existed only because `train.checkpoint_interval` (the TRAINER's periodic save, which
+is untouched and still live) would otherwise have collided with a same-named coordinator key,
+and with the coordinator field deleted there is no collision left to disambiguate.
 
 ## Pinning tests
 
@@ -114,11 +117,11 @@ happens at the schema and does not propagate into the runtime object.
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
 | regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py, tests/config/test_regime_parity_p2.py |
-| every-key-has-consumer bijection, the 175 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
+| every-key-has-consumer bijection, the 174 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
 | `train.entropy_reg_weight` sign law; `policy_target`/`completed_q_values` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |
-| the nineteen coordinator knobs are read by ONE resolver and each moves the behaviour it names | tests/config/test_coordinator_knobs_wiring.py |
+| the eighteen coordinator knobs are read by ONE resolver and each moves the behaviour it names | tests/config/test_coordinator_knobs_wiring.py |
 | the four `monitor.drain.*` keys each move the join bound the eval pipeline uses; the builder takes them as a required keyword-only parameter | tests/config/test_drain_caps_wiring.py |
 | `train.draw_rate_abort` bounds, the evidence-bar CAPACITY rule, the one-drawn-game rule, and every config stating its posture explicitly | tests/config/test_drawrate_schema_range.py |
 | the arming authority is the block and only the block — no second enable flag | tests/config/test_drawrate_arming_authority.py |
@@ -143,6 +146,19 @@ happens at the schema and does not propagate into the runtime object.
   in would have CREATED the R1/LAW-08 violation the section exists to prevent.
 - **A boolean enable beside the draw-rate abort block.** The block's value already gates its
   own check; a flag would be a second authority over one fact.
+- **The `train` section's `buffer_save_interval`** and, with it,
+  `StepCoordinatorConfig.checkpoint_interval` and both no-op `_try_save_buffer` arms. v6 DELETED the key under R178(a): the replay-buffer
+  save it paced is production-dead on every leg (WP12-R Phase CS, F-CS-2 — the helper returns
+  unless `mixing_cfg["buffer_persist"]` is truthy and the composition root passes
+  `mixing_cfg={}`), so the key had zero reachable effect while shipping into the run5 mint
+  record. The helper module `train/buffer_persist.py` itself SURVIVES: persistence returns,
+  if at all, as ONE design under CARD-RESUME (R178(c), post-mint) covering weights,
+  optimizer/scheduler, buffer and launcher together. Do not read this row as "buffer
+  persistence is banned" — it says the dead CONFIG KEY is, and that no piece of resume is
+  built separately. The TRAINER's own periodic save, spelled `checkpoint_interval` in the same
+  `train` section, is a DIFFERENT key and is LIVE — it is deliberately not named in dotted
+  form here, because everything under this heading is checked in reverse and that key must
+  resolve.
 
 Everything named under this heading is checked in REVERSE by CI gate 13: a key or module listed
 here that comes BACK reds the gate, which is the direction that matters.

@@ -52,7 +52,11 @@ _DSPEC = lookup(GRID_ENCODING)
 # ── builders ─────────────────────────────────────────────────────────────────────────────
 def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
     base: dict[str, Any] = dict(
-        eval_interval=0, log_interval=0, checkpoint_interval=0, min_buf_size=1,
+        # `checkpoint_interval` is GONE from `StepCoordinatorConfig` (R178(a) deleted the
+        # replay-BUFFER save cadence and its dead `train.buffer_save_interval` key); the
+        # trainer's own periodic save is `TrainHParams.checkpoint_interval` and is
+        # unaffected, and this drive never sets it.
+        eval_interval=0, log_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=1.0, max_train_burst=1,
         batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
         mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,

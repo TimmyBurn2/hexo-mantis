@@ -1,10 +1,17 @@
-"""`resolve_coordinator_knobs` — the ONE read path for the 19 step-coordinator knobs
+"""`resolve_coordinator_knobs` — the ONE read path for the 18 step-coordinator knobs
 (WPMINT Phase K-B, `CARD-COORD-KNOBS` / R78 as clarified by R80).
 
-The nineteen `train.*` keys this file names are read HERE and nowhere else. The composition
+WAS NINETEEN. `buffer_save_interval` -> `checkpoint_interval` is DELETED by R178(a) under
+R116/LAW-08: WP12-R Phase CS (F-CS-2) measured the replay-buffer save production-dead on
+every leg, so the key had no reachable effect and does not ship into the run5 mint record.
+The rename seam it justified retires with it, and `StepCoordinatorConfig.checkpoint_interval`
+— which existed only to receive it — is deleted at the same time. Buffer persistence returns
+only as ONE design under CARD-RESUME (R178(c), post-mint).
+
+The eighteen `train.*` keys this file names are read HERE and nowhere else. The composition
 root (`mantis.run.compose_run`) threads the resolved spec into `_step_coordinator_config`,
 which is now a pure transport: with `stop_step` (S-4), `draw_rate_abort` (Phase D),
-`drain_caps` (Phase K-A) and these nineteen all arriving as parameters, that builder holds
+`drain_caps` (Phase K-A) and these eighteen all arriving as parameters, that builder holds
 **zero literals** and the run's shape is stated entirely by its minted config.
 
 WHAT THIS CLOSES. `_step_coordinator_config` used to open with the sentence "Smoke-grade
@@ -55,18 +62,18 @@ class CoordinatorKnobsSpec:
     `DrawRateAbortSpec`/`DrainCapsSpec`'s reason: `train/coordinator/config.py` is the
     DAG-clean seam layer, so nothing in `mantis.train` imports a schema class to consume this.
 
-    The field NAMES are `StepCoordinatorConfig`'s, not the schema's, in the three places the
-    two differ — `buffer_save_interval` -> `checkpoint_interval`, `replay_capacity` ->
-    `capacity`, `replay_capacity_schedule` -> `buffer_schedule`. The rename happens at the
-    schema, where `train.checkpoint_interval` (the TRAINER's periodic save, a different
-    already-authored fact) makes a same-named coordinator key the duplicated-authority class
-    R1 kills; it does not propagate into the runtime object, whose field names are read by
-    `coordinator/step.py` and are not this phase's subject.
+    The field NAMES are `StepCoordinatorConfig`'s, not the schema's, in the two places the
+    two differ — `replay_capacity` -> `capacity`, `replay_capacity_schedule` ->
+    `buffer_schedule`. A THIRD rename stood here, `buffer_save_interval` ->
+    `checkpoint_interval`, and it is gone with the key R178(a) deletes: it existed because
+    `train.checkpoint_interval` (the TRAINER's periodic save) would otherwise have collided
+    with a same-named coordinator key, and with the coordinator field deleted there is no
+    collision left to disambiguate. The two surviving renames do not propagate into the
+    runtime object, whose field names are read by `coordinator/step.py`.
     """
 
     eval_interval: int
     log_interval: int
-    checkpoint_interval: int
     min_buf_size: int
     capacity: int
     buffer_schedule: tuple[dict[str, Any], ...]
@@ -90,7 +97,6 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
     return CoordinatorKnobsSpec(
         eval_interval=int(train_section.eval_interval),
         log_interval=int(train_section.log_interval),
-        checkpoint_interval=int(train_section.buffer_save_interval),
         min_buf_size=int(train_section.min_buf_size),
         capacity=int(train_section.replay_capacity),
         # The consumer (`coordinator/step.py` D1) indexes each stage as a MAPPING

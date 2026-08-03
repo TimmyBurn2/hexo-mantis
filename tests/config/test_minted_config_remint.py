@@ -15,11 +15,36 @@ is a golden no test can read.
 Two independent instruments, because they see different mutations:
 
 - **structural** — the parsed leaf key-path -> value map. Every pre-existing leaf keeps its
-  value byte-for-byte, and exactly the new leaves appear. This sees a moved VALUE regardless
-  of formatting.
-- **textual** — the line-level diff must be INSERT-ONLY. This sees a dropped minted-header
-  line, a reordered block, a rewritten comment: things a value map is blind to, and things a
-  regenerating minter does easily.
+  value byte-for-byte, exactly the new leaves appear, and exactly the RULED-DELETED leaf
+  disappears. This sees a moved VALUE regardless of formatting.
+- **textual** — the line-level diff must be INSERT-ONLY apart from that one ruled deletion.
+  This sees a dropped minted-header line, a reordered block, a rewritten comment: things a
+  value map is blind to, and things a regenerating minter does easily.
+
+WHY THERE IS A DELETION AT ALL, AND WHY THE BASELINE WAS NOT RE-CUT (WP12-R, R178(a) as
+assigned by R183(a)). R178(a) DELETES `train.buffer_save_interval` — a key minted into
+`run5.yaml` whose only consumer chain ended in `_try_save_buffer`, which WP12-R Phase CS
+(F-CS-2) measured production-dead on every leg. The re-mint that rides that deletion is the
+first NON-insertion this file has ever seen, and closing it had exactly two shapes:
+
+1. **Re-cut the baseline.** REJECTED, on three grounds and one of them is dispositive.
+   (a) `tests/fixtures/manifest.toml` — which carries each baseline file's sha256 and is what
+   `test_fixtures_manifest.py` checks — is a FROZEN oracle in this WP; re-cutting the baseline
+   means editing it, and no grant exists. (b) The directory name `config_baseline_b482243` IS
+   a commit pin; a baseline re-cut against a later tree makes its own name false. (c) A re-cut
+   baseline equals the live configs, so `_ADDED_LEAVES` becomes empty and every assertion in
+   this file goes vacuous — that is destroying the instrument, not maintaining it.
+2. **Teach the instrument that ONE ruled deletion is legal, by name.** ADOPTED. `_REMOVED_
+   LEAVES` is a closed, one-element set carrying its R-number, and both halves assert set
+   EQUALITY against it rather than relaxing to "deletions are fine": a second dropped leaf, a
+   dropped header line, a reformat, a reorder and a rewritten comment all still red. The
+   textual half additionally pins the exact deleted TEXT and forbids `replace` outright, so a
+   deletion cannot smuggle a substitution in beside it.
+
+The instrument's reach is therefore unchanged except on one named line. Anything the
+pre-R178 version caught, this version still catches — asserted directly by
+`test_the_permitted_deletion_is_exactly_one_named_line`, which fails if the allowance ever
+widens beyond that one leaf.
 
 Device VALUES are deliberately NOT pinned per config. R126 routes them to mint prereg
 (DEP-DEVICE-MINT-VALUES): `smoke_preflight_armed` is the one unambiguous case — its own
@@ -55,6 +80,18 @@ _ADDED_LEAVES = {
     "monitor.disk_guard.fail_gb",
     "train.device",
 }
+
+#: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted
+#: (WP12-R, assigned to its dispatcher by R183(a); grounds R116/LAW-08 + the F-CS-2
+#: measurement that the replay-buffer save is production-dead on every leg). A closed set of
+#: one. Widening it is a ruling, not an edit.
+_REMOVED_LEAVES = {"train.buffer_save_interval"}
+
+#: The one deleted LINE, byte-exact, that the textual half will tolerate. Every minted config
+#: writes this leaf identically (`yaml.safe_dump`, two-space indent, value `0`), so pinning
+#: the text costs nothing and buys the guarantee that the tolerated deletion is the ruled one
+#: and not merely a deletion of the same SIZE somewhere else in the file.
+_REMOVED_LINES = ["  buffer_save_interval: 0"]
 
 #: R122's minted family (revisable at mint prereg per the R85 pattern — the literals were
 #: dead, so nothing has ever measured them; a revision is a prereg row, not an IMPL edit).
@@ -109,15 +146,19 @@ def test_the_remint_adds_the_new_keys_and_moves_nothing_else(name: str) -> None:
     "just a re-mint") and it silently re-postures every run. Value equality over ~170 leaves
     is the only instrument that sees it."""
     baseline, live = _baseline_leaves(name), _live_leaves(name)
-    removed = sorted(set(baseline) - set(live))
-    assert not removed, f"{name}: the re-mint DROPPED {removed} — a re-mint only adds"
+    removed = set(baseline) - set(live)
+    assert removed == _REMOVED_LEAVES, (
+        f"{name}: a re-mint may drop exactly {sorted(_REMOVED_LEAVES)} (R178(a), the one "
+        f"ruled dead-knob deletion); got {sorted(removed)}"
+    )
     added = set(live) - set(baseline)
     assert added == _ADDED_LEAVES, (
         f"{name}: the re-mint may add exactly {sorted(_ADDED_LEAVES)} (R120 + R122 + R126); "
         f"got {sorted(added)}"
     )
     moved = {path: (baseline[path], live[path])
-             for path in baseline if live[path] != baseline[path]}
+             for path in baseline
+             if path not in _REMOVED_LEAVES and live[path] != baseline[path]}
     assert not moved, (
         f"{name}: the re-mint MOVED existing values {moved} — the three schema items are "
         "additive by construction (§6), so any other delta is template drift"
@@ -125,23 +166,59 @@ def test_the_remint_adds_the_new_keys_and_moves_nothing_else(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", _CONFIGS)
-def test_the_remint_diff_is_insert_only_at_the_line_level(name: str) -> None:
-    """O-E2, textual half — nothing is deleted or rewritten, including the minted header.
+def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: str) -> None:
+    """O-E2, textual half — nothing is rewritten, including the minted header, and the ONLY
+    thing deleted is R178(a)'s named line.
 
     The header records `minted-by`, `template` and every delta (`configs/run5.yaml:1-7`); it
     is the provenance a mint record is reconstructed from. A value map cannot see a lost
     header line, a reordered section, or a rewritten comment.
 
+    `replace` stays forbidden outright, and that is what keeps the allowance narrow: a
+    reformat presents as `replace`, so tolerating `delete` does not tolerate a rewrite. A
+    `delete` is tolerated only when its removed lines are EXACTLY `_REMOVED_LINES` — same
+    text, same count — so a second dropped line, a dropped header line, or a different line
+    of the same length all still red.
+
     MUTATION THAT REDS IT: a minter that reformats (re-wraps a long ladder line, re-orders
     keys, normalises quoting). The diff stops being insert-only, and the re-mint stops being
-    reviewable as "the new keys, and nothing else"."""
+    reviewable as "the new keys, minus the one ruled deletion, and nothing else"."""
     baseline = (_BASELINE / name).read_text(encoding="utf-8").splitlines()
     live = (_LIVE / name).read_text(encoding="utf-8").splitlines()
     ops = difflib.SequenceMatcher(a=baseline, b=live, autojunk=False).get_opcodes()
-    offending = [(tag, baseline[i1:i2], live[j1:j2])
-                 for tag, i1, i2, j1, j2 in ops if tag not in ("equal", "insert")]
+    offending = [
+        (tag, baseline[i1:i2], live[j1:j2])
+        for tag, i1, i2, j1, j2 in ops
+        if not (tag in ("equal", "insert")
+                or (tag == "delete" and baseline[i1:i2] == _REMOVED_LINES))
+    ]
     assert not offending, (
-        f"{name}: the re-mint diff must be INSERT-ONLY; found {offending[:3]}"
+        f"{name}: the re-mint diff must be INSERT-ONLY apart from the single ruled deletion "
+        f"{_REMOVED_LINES} (R178(a)); found {offending[:3]}"
+    )
+    deleted = [line for tag, i1, i2, _, _ in ops if tag == "delete" for line in baseline[i1:i2]]
+    assert deleted == _REMOVED_LINES, (
+        f"{name}: exactly one line may be deleted, once — R178(a)'s; got {deleted}"
+    )
+
+
+def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
+    """The allowance's own guard: this file tolerates deletion at all only because R178(a)
+    ORDERED one, and the tolerance must never become "deletions are fine".
+
+    MUTATION THAT REDS IT: a later phase that needs its own key gone and widens
+    `_REMOVED_LEAVES` / `_REMOVED_LINES` instead of getting a ruling. The sets are closed at
+    one element each and the leaf and the line must name the SAME key, so a widened allowance
+    cannot pass as a maintenance edit."""
+    assert _REMOVED_LEAVES == {"train.buffer_save_interval"}, (
+        "the ruled deletion set is R178(a)'s and is closed at one leaf; widening it is a "
+        "ruling (R183(a) assigned this one deletion, not a deletion policy)"
+    )
+    assert _REMOVED_LINES == ["  buffer_save_interval: 0"], (
+        "the tolerated line must be the ruled leaf's own minted line"
+    )
+    assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
+        "a leaf cannot be both added and removed by one re-mint"
     )
 
 

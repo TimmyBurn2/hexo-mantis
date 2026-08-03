@@ -121,7 +121,7 @@ train:
   # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
   # ── the step-coordinator knobs (WPMINT Phase K-B — CARD-COORD-KNOBS, R78/R80) ────────
-  # Until this phase these nineteen were LITERALS inside `mantis.run._step_coordinator_config`
+  # Until this phase these knobs were LITERALS inside `mantis.run._step_coordinator_config`
   # and terminal defaults on `StepCoordinatorConfig`: they decided what a run WAS while no
   # config could see them and no mint record published them. Every value below is the value
   # the code already used, so this template is a change of AUTHOR, not of behaviour — with
@@ -131,9 +131,10 @@ train:
   # Read by ONE path: mantis.config.resolve.coordinator.resolve_coordinator_knobs.
   eval_interval: 1000
   log_interval: 1000
-  # NOT `train.checkpoint_interval` above — this is the REPLAY-BUFFER save cadence; `0` means
-  # no cadence save (close-out and the shutdown signal still save).
-  buffer_save_interval: 0
+  # `buffer_save_interval` DELETED by R178(a) (R116/LAW-08): the replay-BUFFER save it
+  # paced was measured production-dead on every leg (WP12-R Phase CS, F-CS-2), so the key
+  # had no reachable effect and does not ship into the run5 mint record. The comment that
+  # stood here ("close-out and the shutdown signal still save") was false on both halves.
   min_buf_size: 1
   replay_capacity: 100000
   # `[]` = no ramp. Each stage is `{step: <train step>, capacity: <new capacity>}` and the

@@ -1,8 +1,10 @@
-""">300 justify (R8), stated at this file's MEASURED size of 367 lines: it is ~70% DATA — the
-SECOND copy of the 175-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+""">300 justify (R8), stated at this file's MEASURED size of 374 lines: it is ~70% DATA — the
+SECOND copy of the 174-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
 WPMAIN moved it 341 -> 367 and the registry 170 -> 175 (R120 `eval_enabled`, R122's
-`monitor.disk_guard.*` family, R126 `train.device`). Both figures are re-measured at HEAD —
+`monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved the registry
+175 -> 174, the first DOWNWARD move (`train.buffer_save_interval` deleted as a dead knob under
+R116/LAW-08). Both figures are re-measured at HEAD —
 `wc -l` and the live `len(CONSUMER_REGISTRY)` — never transcribed (SF-7, REVIEW-impl F-4).
 Splitting it would create a THIRD copy to keep in sync, which is the drift the duplication
 exists to detect. The three tests below are ~24 lines together.
@@ -124,7 +126,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.draw_rate_abort.consec":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
-    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 19 step-coordinator knobs. Every
+    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 18 step-coordinator knobs (19 until
+    # R178(a) deleted `train.buffer_save_interval`, whose only consumer chain ended in the
+    # no-op `_try_save_buffer` D4 arm — F-CS-2 measured it production-dead). Every
     # citation below names the path from the ONE resolver to the line that READS the value,
     # and every one was verified BY MUTATION per R93 (set the knob, drive the production
     # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
@@ -135,9 +139,6 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.log_interval":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_log_interval"
         " boundary (payload events + WARN rules + both hard-abort gates + monitor_gates)",
-    "train.buffer_save_interval":
-        "resolve_coordinator_knobs -> _step_coordinator_config ->"
-        " StepCoordinatorConfig.checkpoint_interval -> step.py D4 _try_save_buffer cadence",
     "train.min_buf_size":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py O4 warmup floor",
     "train.replay_capacity":
@@ -341,7 +342,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_175_entries():
+def test_registry_has_exactly_174_entries():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
     # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
@@ -356,8 +357,12 @@ def test_registry_has_exactly_175_entries():
     # and `train.device` (R126, the CLI-only run input on both callers promoted to a typed
     # `train.*` key). 170 + 1 + 3 + 1 = 175. The nested `monitor.disk_guard` block itself is
     # DESCENDED by `_leaf_paths`, so it contributes three leaves and not four.
-    assert len(CONSUMER_REGISTRY) == 175
-    assert len(_leaf_paths(RunConfig)) == 175
+    # WP12-R R178(a) SUBTRACTS 1 — the first DOWNWARD move this count has ever made:
+    # `train.buffer_save_interval` is deleted under R116/LAW-08 because F-CS-2 measured its
+    # only consumer chain (`_try_save_buffer`) production-dead on every leg, and a minted key
+    # with no reachable effect is the dead-knob class R1 exists to kill. 175 - 1 = 174.
+    assert len(CONSUMER_REGISTRY) == 174
+    assert len(_leaf_paths(RunConfig)) == 174
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

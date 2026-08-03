@@ -47,7 +47,6 @@ from mantis.monitor.rules import (
     emit_training_step_alerts,
     sealbot_wr_trajectory_alert,
 )
-from mantis.train.buffer_persist import try_save_buffer as _try_save_buffer
 from mantis.train.coordinator.config import (
     ClockLike,
     RealClock,
@@ -393,10 +392,13 @@ class StepCoordinator:
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
 
-        # O3: shutdown-save (signal-handler flag) — save + buffer save, then stop.
+        # O3: shutdown-save (signal-handler flag) — save the checkpoint, then stop. The
+        # `_try_save_buffer(..., "shutdown_signal", ...)` call that stood here is DELETED by
+        # R178(a) (R116/LAW-08): F-CS-2 measured it a no-op on the production path
+        # (`mixing_cfg={}`, nothing in `src/` sets `buffer_persist`), so removing it changes
+        # no production behaviour and stops the signal leg claiming a save it never made.
         if self.shutdown.shutdown_save:
             self.trainer.save_checkpoint(self._last_loss_info or None)
-            _try_save_buffer(self.buffer, self.mixing_cfg, "shutdown_signal", self.recent_buffer)
             self.shutdown.running = False
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
@@ -477,12 +479,14 @@ class StepCoordinator:
             else:
                 self._consec_high_gn = 0
 
-            # D4: checkpoint-cadence buffer save (the trainer saves its own ckpt inside the step).
-            if cfg.checkpoint_interval > 0 and self._train_step > 0 \
-                    and self._train_step % cfg.checkpoint_interval == 0:
-                _try_save_buffer(self.buffer, self.mixing_cfg, "checkpoint_interval",
-                                 self.recent_buffer)
-                checkpoint_saved = True
+            # D4 IS DELETED (R178(a) / R116 / LAW-08). It was the checkpoint-cadence
+            # replay-BUFFER save, gated on `cfg.checkpoint_interval` (fed by the now-deleted
+            # `train.buffer_save_interval`), and F-CS-2 measured its `_try_save_buffer` call
+            # a no-op on every production leg. Every committed config minted the interval at
+            # `0`, so the arm never fired even before the helper's own early return — the
+            # deletion moves no production behaviour. `checkpoint_saved` therefore stays
+            # `False` for the whole burst path; the O2/O3 legs above still report `True`,
+            # which is where a real checkpoint write is announced.
 
             # WP13-A: the log_interval boundary is tested PER TRAINING STEP (old-side parity,
             # `step_coordinator.py:1370/1383`). Testing it once per burst would skip every

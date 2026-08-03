@@ -315,9 +315,15 @@ def test_exactly_one_checkpoint_interval_authority_in_src() -> None:
     Honest limit, stated rather than implied: a read spelled differently
     (`getattr(self.hp, "checkpoint" + "_interval")`, an alias captured at `__init__`) defeats
     it. The census raises the cost of a second authority; it does not make one impossible."""
+    # WP12-R R178(a) deleted `train.buffer_save_interval`, the replay-BUFFER cadence, and
+    # with it `StepCoordinatorConfig.checkpoint_interval` and both no-op `_try_save_buffer`
+    # arms. The two reads that vanish are exactly the BUFFER key's — `run.py`'s transport of
+    # `knobs.checkpoint_interval` and `step.py`'s D4 gate (which read `cfg.checkpoint_interval`
+    # twice on one line). The TRAINER's authority, the row this census exists to protect, is
+    # UNCHANGED at one: `core.py`'s `self.hp` read inside the resolver. The census is now
+    # STRONGER — a same-spelled second reader anywhere in `src/mantis/` reds it, where before
+    # two legitimate buffer-key reads sat in the expectation as noise.
     _EXPECTED_READS = collections.Counter({
-        ("src/mantis/run.py", "knobs", "_step_coordinator_config"): 1,
-        ("src/mantis/train/coordinator/step.py", "cfg", "step"): 2,
         ("src/mantis/train/trainer/core.py", "self.hp", _RESOLVER): 1,
     })
     resolvers = _core_functions(_RESOLVER)
@@ -427,11 +433,14 @@ def test_periodic_artefact_loads_through_the_one_loader_with_its_stamp(
 
 # ── OP-8 ⊕ — the leg-1 / leg-3 terminus coincidence, on a REAL StepCoordinator ───────────
 def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
-    """`checkpoint_interval=0` here is the COORDINATOR field — the replay-BUFFER cadence
-    (`resolve/coordinator.py:93` resolves it from `train.buffer_save_interval`), a different
-    key from the trainer's. Zeroing it keeps the D4 buffer save out of this drive."""
+    """The COORDINATOR's replay-BUFFER cadence field `checkpoint_interval` USED to be set
+    here at 0, to keep the D4 buffer save out of this drive. WP12-R R178(a) deleted the field,
+    its `train.buffer_save_interval` key and the D4 arm itself (the save was measured
+    production-dead on every leg, F-CS-2), so there is nothing left to zero. The trainer's own
+    `checkpoint_interval` is a DIFFERENT key and is unaffected — it is passed via
+    `full_train_hparams`, not here."""
     base: dict[str, Any] = dict(
-        eval_interval=0, log_interval=0, checkpoint_interval=0, min_buf_size=1,
+        eval_interval=0, log_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=4.0, max_train_burst=4,
         batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
         mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,

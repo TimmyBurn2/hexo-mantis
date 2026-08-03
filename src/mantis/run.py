@@ -390,7 +390,6 @@ def _step_coordinator_config(
     return StepCoordinatorConfig(
         eval_interval=knobs.eval_interval,
         log_interval=knobs.log_interval,
-        checkpoint_interval=knobs.checkpoint_interval,
         min_buf_size=knobs.min_buf_size,
         capacity=knobs.capacity,
         buffer_schedule=knobs.buffer_schedule,

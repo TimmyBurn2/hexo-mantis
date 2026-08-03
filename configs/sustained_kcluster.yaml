@@ -108,7 +108,6 @@ train:
   draw_rate_abort: null
   eval_interval: 1000
   log_interval: 1000
-  buffer_save_interval: 0
   min_buf_size: 1
   replay_capacity: 100000
   replay_capacity_schedule: []

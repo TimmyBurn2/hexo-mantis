@@ -300,6 +300,13 @@ class StepCoordinatorConfig:
     `train.draw_rate_abort.consec` and thence onto `DrawRateAbortLike.consec`, because a term
     of a DISARMED abort is not a fact (R80's "the terms travel together").
 
+    `checkpoint_interval` is DELETED by R178(a) (R116/LAW-08). It was the REPLAY-BUFFER save
+    cadence — never the trainer's, which is `TrainHParams.checkpoint_interval` and is
+    untouched — and its only reader was `step.py`'s D4 `_try_save_buffer` arm, which WP12-R
+    Phase CS (F-CS-2) measured production-dead on every leg. The arm and the config key
+    `train.buffer_save_interval` that fed it are deleted with the field; buffer persistence
+    returns only as ONE design under CARD-RESUME (R178(c), post-mint).
+
     NO FIELD HAS A DEFAULT, and that is the invariant, not a coincidence: with the schema
     authoritative a default here is a second authority a caller silently inherits, which is
     exactly what `draw_rate_threshold: float = 0.0` was and what the drain caps' four
@@ -308,7 +315,6 @@ class StepCoordinatorConfig:
 
     eval_interval: int
     log_interval: int
-    checkpoint_interval: int
     min_buf_size: int
     capacity: int
     buffer_schedule: tuple[dict[str, Any], ...]

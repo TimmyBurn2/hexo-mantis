@@ -263,7 +263,9 @@ the precedent this follows verbatim.
    `max_train_burst`, `batch_size`, `augment`, `recency_weight`, `mixing_initial_w`,
    `mixing_min_w`, `mixing_decay_steps`, `hard_gn_threshold`, `hard_gn_min_steps`,
    `terminal_eval_enabled`, `bot_batch_share`, `selfplay_stall_timeout_sec` — read by ONE
-   resolver, `mantis.config.resolve.coordinator.resolve_coordinator_knobs`. The twentieth is
+   resolver, `mantis.config.resolve.coordinator.resolve_coordinator_knobs`. (`buffer_save_
+   interval` was DELETED at WP12-R by R178(a); see the v5 → v6 amendment below. This list is
+   the historical record of what Phase K-B authored.) The twentieth is
    `train.draw_rate_abort.consec`, which joins the abort family's block because R80 says its
    terms travel together. Incompatible for the same reason S-4's and Phase D's were: a config
    lacking any of them fails to load. `mantis.run._step_coordinator_config` now holds **zero
@@ -278,7 +280,8 @@ the precedent this follows verbatim.
    would have bought a cheap registry count by hiding from the LAW-08 bijection that justifies
    them.
 
-   **Three names differ from their runtime fields, each for a measured reason.**
+   **Three names differ from their runtime fields, each for a measured reason** — two, since
+   the v5 → v6 amendment below deleted the first of them with its key.
    `buffer_save_interval` -> `checkpoint_interval` (the coordinator's is the REPLAY-BUFFER
    save cadence; `train.checkpoint_interval` is the already-authored TRAINER cadence, and two
    config keys with one spelling is the duplicated-authority class R1 exists to kill);
@@ -319,7 +322,7 @@ the precedent this follows verbatim.
    so the same-commit clause is half-kept a third time: version bumped here, contract doc
    deferred. The run5-mint checklist item now covers **three** owed entries —
    `train.max_train_steps`, `train.draw_rate_abort` (including `consec`) and the nineteen
-   `train.*` coordinator knobs.
+   `train.*` coordinator knobs (eighteen since the v5 → v6 amendment below).
 
 ### AMENDMENT — the deferred doc half is DISCHARGED; contract #10 is added
 
@@ -329,7 +332,8 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
 1. **`docs/contracts/run_config_schema.md` is committed and current at v4.** It carries the
    version history v1 -> v4, the run-length key, the draw-rate block including `consec` and the
    `min_samples` -> `N_pool_min` swap, the nineteen coordinator knobs with their three
-   schema-vs-runtime renames, the `ReplayCapacityStage` sub-block, and every cross-field
+   schema-vs-runtime renames (eighteen and two since the v5 → v6 amendment below), the
+   `ReplayCapacityStage` sub-block, and every cross-field
    validator by name. The run5-mint checklist item raised in the v2 amendment is **discharged**:
    all three owed entries are in the doc.
 2. **The curation was TRUTH-CHECKED, not merely extended.** Every claim inherited from the WP8
@@ -370,6 +374,65 @@ half-kept the same-commit clause and deferred the doc to WP14. This is that comm
    entirely is invisible to it, and it does not read prose for truth. Stated here rather than
    left for a reader to discover, because a gate whose real reach is narrower than its name is
    the class §9 keeps closing.
+
+### AMENDMENT — contract #5 v5 → v6: `train.buffer_save_interval` is DELETED (a knob count goes DOWN)
+
+**WP12-R, operator ruling R178(a), assigned for execution by R183(a); grounds R116 + LAW-08 +
+R1.** Recorded here rather than left as silent drift (R9). This is the FIRST amendment in which
+a required leaf is REMOVED, and the shape is worth naming because every prior one added.
+
+   **A gap in this log, recorded not laundered:** `docs/contracts/run_config_schema.md` is at
+   **v5** (WPMAIN's five promotions — `eval_enabled`, the `monitor.disk_guard` family,
+   `train.device`), and no v4 → v5 amendment was written here; item 1 of the amendment above
+   still says the doc is "current at v4". That bump belongs to WPMAIN and is not this
+   amendment's to author, so it is flagged rather than back-filled. This amendment is
+   therefore **v5 → v6**, counted from the contract doc's own version table.
+
+1. **The deletion.** `train.buffer_save_interval` is gone. It was one of the nineteen flat
+   `train.*` step-coordinator keys the v3 → v4 amendment above authored, and it was the only
+   one whose consumer chain ended nowhere: it fed `StepCoordinatorConfig.checkpoint_interval`,
+   whose sole reader was `coordinator/step.py`'s D4 `_try_save_buffer` arm, and WP12-R Phase CS
+   MEASURED (F-CS-2) that `buffer_persist.try_save_buffer` returns immediately unless
+   `mixing_cfg["buffer_persist"]` is truthy while the production composition root passes
+   `mixing_cfg={}` and nothing in `src/` ever sets that key. A key minted into `run5.yaml` with
+   zero reachable effect is the dead-knob class R1 exists to kill, and R178(a) refused to ship
+   it into the mint record. **`RunConfig`'s leaf count moves 175 → 174** (measured, not
+   transcribed — item 4 of the amendment above states `170`, which was already stale).
+2. **What went with it.** The rename seam retires whole: `CoordinatorKnobsSpec.checkpoint_
+   interval`, `StepCoordinatorConfig.checkpoint_interval` and both no-op `_try_save_buffer`
+   call sites (D4's cadence arm and O3's shutdown-signal arm). **Three schema-vs-runtime
+   renames become two** — the surviving pair is `replay_capacity` -> `capacity` and
+   `replay_capacity_schedule` -> `buffer_schedule`. The v3 → v4 amendment's third rename
+   existed only because `train.checkpoint_interval` (the TRAINER's periodic save, which is
+   untouched and still live) would otherwise have collided with a same-named coordinator key;
+   with the coordinator field deleted there is no collision left to disambiguate. The
+   nineteen coordinator knobs are now **eighteen**; the enumerations above are left as the
+   historical record of what Phase K-B authored, which is what an amendment log is for.
+3. **`train/buffer_persist.py` SURVIVES, deliberately.** Only the arms are deleted, not the
+   helper, and that is R178(c)'s doing: buffer persistence returns, if at all, as ONE design
+   under `CARD-RESUME` (post-mint) covering weights + optimizer/scheduler + buffer + launcher
+   together. Half-resumes are the trap the WP had just finished killing, so nobody builds a
+   piece of it separately. Consequence to state plainly rather than discover later: with both
+   arms gone, `buffer_persist.buffer_save_errors_total` — published in the LAW-18
+   `monitor_gates` payload — has no production producer. It had none before either (both arms
+   returned early on every production leg), so the deletion changes reachability by nothing;
+   the gauge is now visibly, rather than invisibly, pinned at zero until CARD-RESUME lands.
+4. **Zero production behaviour moves.** Every committed config minted the interval at `0`, so
+   the D4 arm's own gate (`cfg.checkpoint_interval > 0`) never opened even before the helper's
+   early return, and the O3 arm's call was a no-op by the same measurement. The re-mint is a
+   pure one-line deletion in each of the six configs, verified by replaying each config's own
+   header-recorded template + deltas through `tools/mint_config.py` and diffing: header lines
+   byte-identical, no other leaf moved.
+5. **The one instrument this forced open, and how.** `tests/config/test_minted_config_remint.py`
+   required the live configs to be INSERT-ONLY against the frozen `b482243` baseline. The
+   baseline was NOT re-cut — `tests/fixtures/manifest.toml` is a frozen oracle and the
+   directory name is a commit pin, and a re-cut baseline would make every assertion in that
+   file vacuous. Instead the instrument learned ONE named deletion: closed one-element
+   `_REMOVED_LEAVES` / `_REMOVED_LINES` sets, set EQUALITY on both halves, `replace` still
+   forbidden outright, plus a guard test asserting the allowance cannot widen without a
+   ruling. Every mutation class the pre-R178 version caught still reds — value drift, armed-
+   value drift, a dropped header line, a second deleted leaf, a reformat, a reorder, a
+   rewritten comment, and a same-shape deletion of a different line.
 
 
 ## 5. Config system

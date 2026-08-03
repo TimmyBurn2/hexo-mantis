@@ -1,10 +1,11 @@
-# >300 justify (R8), stated at this file's MEASURED size of 491 lines (was 430 at K-B, 454 at
+# >300 justify (R8), stated at this file's MEASURED size of 488 lines (was 430 at K-B, 454 at
 # DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count; 455 -> 481 at
 # WPMAIN, which promoted `device` to a typed field per R126 with its grounds; 481 -> 491 at
 # WP12-R Phase CS, which replaces `buffer_save_interval`'s grounds sentence — it claimed
 # close-out and the shutdown-signal path still save, and F-CS-2 measured both halves
-# false). The number is `wc -l` at HEAD, re-measured AFTER the edit that moved it (SF-7,
-# REVIEW-impl F-4). WPMINT Phase K-B
+# false; 491 -> 488 at WP12-R R178(a), which DELETES `buffer_save_interval` outright and
+# leaves a shorter tombstone in its place). The number is `wc -l` at HEAD, re-measured AFTER
+# the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
@@ -297,23 +298,20 @@ class TrainConfig(StrictModel):
     # that would make it visible is switched off by the same knob. There is no legitimate
     # "never log" posture, so the schema cannot express one.
     log_interval: int = Field(ge=1)
-    # `buffer_save_interval` — the REPLAY-BUFFER save cadence (`_try_save_buffer`), NOT the
-    # trainer checkpoint cadence. RENAMED from the dataclass field `checkpoint_interval` for
-    # exactly that reason: `train.checkpoint_interval` above is a different, already-authored
-    # fact (the trainer's periodic save), and two config keys spelled the same would be the
-    # duplicated-authority class R1 exists to kill — the census that found this knob flagged
-    # the collision as its headline hazard. `ge=0` because `0` is REAL and is what every
-    # committed config ships. The sentence that stood here — "no cadence save, with close-out
-    # and the shutdown-signal path still saving" — was FALSE on both halves and is corrected
-    # (WP12-R Phase CS, F-CS-2): `close_out` (`train/coordinator/drain.py`) writes no buffer
-    # snapshot at all, and the replay-buffer save is production-dead on EVERY leg, the
-    # signal path included — `buffer_persist.try_save_buffer` returns unless
-    # `mixing_cfg["buffer_persist"]` is truthy and the production root passes `mixing_cfg={}`
-    # with nothing in `src/` setting that key. So a zero here disables something already
-    # disabled, and the CHECKPOINT legs are a different key entirely (`checkpoint_interval`
-    # above) and are unaffected by it. That is a persistence CADENCE, not a guard, so a zero
-    # here still disables nothing LAW-16 requires.
-    buffer_save_interval: int = Field(ge=0)
+    # `buffer_save_interval` IS DELETED (R178(a), executing under R116/LAW-08). It was the
+    # REPLAY-BUFFER save cadence (`_try_save_buffer`), never the trainer checkpoint cadence,
+    # and WP12-R Phase CS (F-CS-2) MEASURED the whole leg production-dead:
+    # `buffer_persist.try_save_buffer` returns unless `mixing_cfg["buffer_persist"]` is
+    # truthy and the production root passes `mixing_cfg={}` with nothing in `src/` ever
+    # setting that key. A key minted into `run5.yaml` with zero reachable effect is the
+    # dead-knob class R1 exists to kill, so it does not ship into the mint record; the two
+    # no-op `_try_save_buffer` arms in `coordinator/step.py` (D4 cadence, O3 signal) go with
+    # it, and `StepCoordinatorConfig.checkpoint_interval` — which existed only to carry this
+    # key across the rename seam — goes with them. Buffer persistence returns, if at all, as
+    # ONE design under CARD-RESUME (R178(c), post-mint): weights + optimizer/scheduler +
+    # buffer + launcher together, never a piece at a time. `train.checkpoint_interval` above
+    # is the TRAINER's periodic save and is a different, unaffected fact — the rename that
+    # kept the two apart is retired with the key.
     # `min_buf_size` — the warmup floor: below it `step()` returns `in_warmup` and the learner
     # sees nothing. `ge=1` because a floor of 0 means "train on an empty buffer", which the
     # sampler cannot satisfy; `1` (the shipped value) already means "train on the first
