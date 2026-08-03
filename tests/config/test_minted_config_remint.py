@@ -1,3 +1,9 @@
+# >300 justify (R8), stated at this file's MEASURED size of 404 lines (218 at WPMAIN, grown by
+# R178(a)'s ruled deletion and R187's ruled header re-render). The oracles are ONE claim — "a
+# re-mint of the six configs changes exactly what was ruled and nothing else" — driven from ONE
+# committed baseline through two instruments that must stay in the same file because each
+# allowance (`_REMOVED_LINES`, `_REHEADERED_DELTAS`) is read by both the tolerance it widens and
+# the closure guard that keeps it closed. Splitting them separates an allowance from its guard.
 """⊕ WPMAIN ORACLE — the re-mint is ADDITIVE, and run5's armed values survive it (O-E2).
 
 This WP adds three items to the schema — `eval_enabled` (R120), the `monitor.disk_guard`
@@ -93,6 +99,31 @@ _REMOVED_LEAVES = {"train.buffer_save_interval"}
 #: and not merely a deletion of the same SIZE somewhere else in the file.
 _REMOVED_LINES = ["  buffer_save_interval: 0"]
 
+#: Exactly which minted-header delta lines R187's re-mint may RE-RENDER, by (config, key). A
+#: closed set of five, and the second non-insertion this file has ever seen.
+#:
+#: `tools/mint_config.py` stamped its header values with Python `str()`, so a `None` came out
+#: as the six characters `None` and read back as the STRING `"None"` — which is why replaying
+#: `smoke_preflight_armed.yaml`'s `eval.ladder.rungs` delta through the tool that wrote it
+#: failed schema validation. R187 orders the serializer fixed and the affected configs
+#: re-minted; a re-mint rewrites the header line, which is a `replace`, which this file
+#: forbids. Same two shapes as the R178(a) deletion above, same resolution: teach the
+#: instrument the ruled change BY NAME rather than relax it.
+#:
+#: The allowance is not a free pass on these five lines. `_is_ruled_reheader` re-derives each
+#: one: the key must be unchanged, and applying the OLD renderer (`str()`) to the NEW slot's
+#: parsed value must reproduce the BASELINE slot byte-for-byte. That is a proof that the ONLY
+#: thing that changed is the rendering — a re-mint that moved a value cannot satisfy it, and
+#: neither can a hand-edit. Reach beyond that is held by `test_mint_header_roundtrip.py`,
+#: which pins every live header slot to canonical form AND to the config body's own value.
+_REHEADERED_DELTAS = {
+    ("run5.yaml", "monitor.actor_lag_abort_enabled"),
+    ("run5.yaml", "train.draw_rate_abort"),
+    ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
+    ("smoke_preflight_armed.yaml", "monitor.actor_lag_abort_enabled"),
+    ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
+}
+
 #: R122's minted family (revisable at mint prereg per the R85 pattern — the literals were
 #: dead, so nothing has ever measured them; a revision is a prereg row, not an IMPL edit).
 _DISK_GUARD = {"monitor.disk_guard.interval_sec": 60.0,
@@ -114,6 +145,29 @@ def _leaves(node, prefix: str = "") -> dict[str, object]:
             out.update(_leaves(value, f"{prefix}{key}."))
         return out
     return {prefix.rstrip("."): node}
+
+
+def _is_ruled_reheader(name: str, old_line: str, new_line: str) -> bool:
+    """True iff `new_line` is `old_line` with its delta values RE-RENDERED and nothing else.
+
+    Derived, not transcribed: the two slots are split back out, and `str()` — the renderer
+    R187 replaced — applied to the NEW slot's parsed value must reproduce the BASELINE slot
+    exactly. A replay that moved a value, renamed a key, touched a body line, or re-rendered a
+    delta outside `_REHEADERED_DELTAS` fails at least one conjunct."""
+    if not (old_line.startswith("# delta:") and new_line.startswith("# delta:")):
+        return False
+    old_key, _, old_rest = old_line[len("# delta:"):].strip().partition(":")
+    new_key, _, new_rest = new_line[len("# delta:"):].strip().partition(":")
+    if old_key.strip() != new_key.strip():
+        return False
+    if (name, new_key.strip()) not in _REHEADERED_DELTAS:
+        return False
+    old_before, old_sep, old_after = old_rest.strip().partition(" -> ")
+    new_before, new_sep, new_after = new_rest.strip().partition(" -> ")
+    if not (old_sep and new_sep):
+        return False
+    return all(str(yaml.safe_load(new)) == old
+               for old, new in ((old_before, new_before), (old_after, new_after)))
 
 
 def _live_leaves(name: str) -> dict[str, object]:
@@ -174,15 +228,21 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
     is the provenance a mint record is reconstructed from. A value map cannot see a lost
     header line, a reordered section, or a rewritten comment.
 
-    `replace` stays forbidden outright, and that is what keeps the allowance narrow: a
-    reformat presents as `replace`, so tolerating `delete` does not tolerate a rewrite. A
-    `delete` is tolerated only when its removed lines are EXACTLY `_REMOVED_LINES` — same
+    A `delete` is tolerated only when its removed lines are EXACTLY `_REMOVED_LINES` — same
     text, same count — so a second dropped line, a dropped header line, or a different line
     of the same length all still red.
 
+    `replace` was forbidden outright until R187, and it is not open now: it is tolerated only
+    where every replaced line satisfies `_is_ruled_reheader`, which requires a named
+    (config, delta key) from `_REHEADERED_DELTAS` and PROVES the change is rendering-only by
+    reproducing the baseline slot from the live slot through the old `str()` renderer. A
+    re-render nobody ruled, on a key nobody named, or one that moved a value, all still red.
+
     MUTATION THAT REDS IT: a minter that reformats (re-wraps a long ladder line, re-orders
-    keys, normalises quoting). The diff stops being insert-only, and the re-mint stops being
-    reviewable as "the new keys, minus the one ruled deletion, and nothing else"."""
+    keys, normalises quoting) anywhere outside those five lines — and, inside them, one that
+    changes what the delta SAYS while reformatting it. The diff stops being insert-only, and
+    the re-mint stops being reviewable as "the new keys, minus the one ruled deletion, plus
+    the five ruled re-renders, and nothing else"."""
     baseline = (_BASELINE / name).read_text(encoding="utf-8").splitlines()
     live = (_LIVE / name).read_text(encoding="utf-8").splitlines()
     ops = difflib.SequenceMatcher(a=baseline, b=live, autojunk=False).get_opcodes()
@@ -190,11 +250,15 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
         (tag, baseline[i1:i2], live[j1:j2])
         for tag, i1, i2, j1, j2 in ops
         if not (tag in ("equal", "insert")
-                or (tag == "delete" and baseline[i1:i2] == _REMOVED_LINES))
+                or (tag == "delete" and baseline[i1:i2] == _REMOVED_LINES)
+                or (tag == "replace" and i2 - i1 == j2 - j1
+                    and all(_is_ruled_reheader(name, old, new)
+                            for old, new in zip(baseline[i1:i2], live[j1:j2]))))
     ]
     assert not offending, (
         f"{name}: the re-mint diff must be INSERT-ONLY apart from the single ruled deletion "
-        f"{_REMOVED_LINES} (R178(a)); found {offending[:3]}"
+        f"{_REMOVED_LINES} (R178(a)) and the five ruled header re-renders (R187); found "
+        f"{offending[:3]}"
     )
     deleted = [line for tag, i1, i2, _, _ in ops if tag == "delete" for line in baseline[i1:i2]]
     assert deleted == _REMOVED_LINES, (
@@ -220,6 +284,44 @@ def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
     assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
         "a leaf cannot be both added and removed by one re-mint"
     )
+
+
+def test_the_permitted_reheader_is_exactly_five_named_delta_lines() -> None:
+    """The re-render allowance's own guard, mirroring the deletion guard above.
+
+    R187 ordered two configs re-minted because their headers carried a stringified `None`;
+    exactly five delta lines moved, and the allowance is closed at those five. It must never
+    become "header churn is fine" — that would retire the reach this file exists for, since a
+    minted header IS provenance and a silently rewritten one is a silently rewritten record.
+
+    MUTATION THAT REDS IT: a later phase adding its own key to `_REHEADERED_DELTAS` instead of
+    getting a ruling; or the predicate loosening to "any `# delta:` line may be replaced" —
+    the fabricated pair below must stay rejected even though its key IS named."""
+    assert _REHEADERED_DELTAS == {
+        ("run5.yaml", "monitor.actor_lag_abort_enabled"),
+        ("run5.yaml", "train.draw_rate_abort"),
+        ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
+        ("smoke_preflight_armed.yaml", "monitor.actor_lag_abort_enabled"),
+        ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
+    }, "the ruled re-render set is R187's and is closed at five delta lines"
+    assert _is_ruled_reheader(
+        "run5.yaml",
+        "# delta: monitor.actor_lag_abort_enabled: False -> True",
+        "# delta: monitor.actor_lag_abort_enabled: false -> true",
+    ), "premise: the predicate accepts the ruled re-render it exists for"
+    assert not _is_ruled_reheader(
+        "run5.yaml",
+        "# delta: monitor.actor_lag_abort_enabled: False -> True",
+        "# delta: monitor.actor_lag_abort_enabled: false -> false",
+    ), "a re-render that changed the VALUE is not a re-render"
+    assert not _is_ruled_reheader(
+        "run5.yaml",
+        "# delta: seed: 20260716 -> 20260718",
+        "# delta: seed: 20260716 -> 20260719",
+    ), "a delta key nobody ruled may not be rewritten at all"
+    assert not _is_ruled_reheader(
+        "run5.yaml", "  buffer_save_interval: 0", "  buffer_save_interval: 1"
+    ), "the allowance is for header delta lines, never body lines"
 
 
 @pytest.mark.parametrize("name", _CONFIGS)
@@ -274,8 +376,15 @@ def test_run5s_armed_draw_rate_values_survive_the_remint_byte_identical() -> Non
     Asserted THREE ways, because each sees a different way to lose them: the parsed values
     (a changed number), the literal source lines (a reformat that rounds `0.25` to `0.3`
     through a float round-trip), and the minted header's delta line (a replay that dropped
-    the delta and fell back to the template's `None`, which DISARMS the abort entirely while
+    the delta and fell back to the template's null, which DISARMS the abort entirely while
     every schema check stays green).
+
+    The header line moved ONCE, at R187, from `None -> {'threshold': 0.25, …}` to
+    `null -> {threshold: 0.25, …}` — the same delta, re-rendered so the header replays through
+    its own minter. The three numbers are byte-identical across that move and the structural
+    arm above proves no leaf shifted, so R119's stop is untouched: nothing was re-armed, a
+    rendering was repaired. The pinned text is the CURRENT canonical form, so a regression to
+    the old renderer reds this row too.
 
     MUTATION THAT REDS IT: any of the three. This is the one assertion in the WP that is not
     about correctness but about authority: these numbers were pre-registered at mint prereg
@@ -288,8 +397,8 @@ def test_run5s_armed_draw_rate_values_survive_the_remint_byte_identical() -> Non
     text = (_LIVE / "run5.yaml").read_text(encoding="utf-8")
     for line in ("    threshold: 0.25", "    min_step: 25000", "    N_pool_min: 50"):
         assert line in text, f"run5's armed line {line!r} is not byte-identical after re-mint"
-    assert ("# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, "
-            "'N_pool_min': 50, 'consec': 3}") in text, (
+    assert ("# delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, "
+            "N_pool_min: 50, consec: 3}") in text, (
         "the minted header's own record of the arming delta must survive the replay — "
         "without it the provenance of the armed values is gone even if the values are not"
     )

@@ -2,8 +2,8 @@
 # template: dev
 # delta: run_id: template_dev -> smoke_preflight_armed
 # delta: train.max_train_steps: 1000000 -> 200
-# delta: train.draw_rate_abort: None -> {'threshold': 0.5, 'min_step': 10, 'N_pool_min': 50, 'consec': 3}
-# delta: monitor.actor_lag_abort_enabled: False -> True
+# delta: train.draw_rate_abort: null -> {threshold: 0.5, min_step: 10, N_pool_min: 50, consec: 3}
+# delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: monitor.actor_lag_threshold_steps: 100 -> 14
 # delta: monitor.heartbeat_poll_interval_sec: 5.0 -> 0.5
 # delta: monitor.heartbeat_file_interval_sec: 15.0 -> 0.5
@@ -24,7 +24,7 @@
 # delta: eval.gate.confirm_games: 128 -> 1
 # delta: eval.gate.deploy_sims: 150 -> 1
 # delta: eval.gate.min_distinct_per_pair: 10 -> 1
-# delta: eval.ladder.rungs: [{'name': 'sealbot_d5', 'bot': 'sealbot', 'variant': 'd5', 'depth': 5, 'opponent_sims': None, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}, {'name': 'kraken_raw', 'bot': 'kraken', 'variant': 'raw', 'depth': None, 'opponent_sims': None, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}, {'name': 'sealbot_d6', 'bot': 'sealbot', 'variant': 'd6', 'depth': 6, 'opponent_sims': None, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}, {'name': 'kraken_mcts200', 'bot': 'kraken', 'variant': 'mcts200', 'depth': None, 'opponent_sims': 200, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}, {'name': 'strix_128', 'bot': 'strix', 'variant': 's128', 'depth': None, 'opponent_sims': 128, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}, {'name': 'strix_256', 'bot': 'strix', 'variant': 's256', 'depth': None, 'opponent_sims': 256, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 32}] -> [{'name': 'sealbot_d1', 'bot': 'sealbot', 'variant': 'd1', 'depth': 1, 'opponent_sims': None, 'opening_book': 'book_v1_s20260625_p4', 'deploy_matched': True, 'games_max': 1}]
+# delta: eval.ladder.rungs: [{name: sealbot_d5, bot: sealbot, variant: d5, depth: 5, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}, {name: kraken_raw, bot: kraken, variant: raw, depth: null, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}, {name: sealbot_d6, bot: sealbot, variant: d6, depth: 6, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}, {name: kraken_mcts200, bot: kraken, variant: mcts200, depth: null, opponent_sims: 200, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}, {name: strix_128, bot: strix, variant: s128, depth: null, opponent_sims: 128, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}, {name: strix_256, bot: strix, variant: s256, depth: null, opponent_sims: 256, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}] -> [{name: sealbot_d1, bot: sealbot, variant: d1, depth: 1, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 1}]
 # delta: eval.ladder.round_games: 64 -> 1
 # delta: eval.ladder.min_games_per_active_rung: 4 -> 1
 # delta: eval.ladder.calibration_games: 8 -> 1

@@ -3,8 +3,8 @@
 # delta: run_id: template_dev -> run5
 # delta: seed: 20260716 -> 20260718
 # delta: eval.random_floor_games: 4 -> 0
-# delta: monitor.actor_lag_abort_enabled: False -> True
-# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, 'N_pool_min': 50, 'consec': 3}
+# delta: monitor.actor_lag_abort_enabled: false -> true
+# delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 schema_version: 1
 run_id: run5
 seed: 20260718

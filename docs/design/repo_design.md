@@ -429,10 +429,27 @@ a required leaf is REMOVED, and the shape is worth naming because every prior on
    directory name is a commit pin, and a re-cut baseline would make every assertion in that
    file vacuous. Instead the instrument learned ONE named deletion: closed one-element
    `_REMOVED_LEAVES` / `_REMOVED_LINES` sets, set EQUALITY on both halves, `replace` still
-   forbidden outright, plus a guard test asserting the allowance cannot widen without a
-   ruling. Every mutation class the pre-R178 version caught still reds — value drift, armed-
-   value drift, a dropped header line, a second deleted leaf, a reformat, a reorder, a
-   rewritten comment, and a same-shape deletion of a different line.
+   forbidden outright (narrowed once since, at R187 — item 6), plus a guard test asserting the
+   allowance cannot widen without a ruling. Every mutation class the pre-R178 version caught
+   still reds — value drift, armed-value drift, a dropped header line, a second deleted leaf, a
+   reformat, a reorder, a rewritten comment, and a same-shape deletion of a different line.
+6. **The minted header is now REPLAYABLE, and two configs were re-minted for it (R187).**
+   `tools/mint_config.py` stamped its `# delta:` values with Python `str()`, so a `None` came
+   out as the six characters `None` and read back as the STRING `"None"` — measured on
+   `configs/smoke_preflight_armed.yaml`'s `eval.ladder.rungs` delta, whose replay through its
+   own minter failed schema validation. R1's "minted, never hand-varied" is only checkable
+   because a minted config's header replays to the config, so the defect sits under the rule.
+   The renderer is now `yaml.safe_dump` — the inverse of the `yaml.safe_load` that parses
+   `--set`, which is what makes the header's value domain and the tool's own parser the same
+   language — with a per-value round-trip CHECK and a loud rc-2 refusal for the two values in
+   that domain it cannot invert (`!!omap`, `!!pairs`). `configs/run5.yaml` and
+   `configs/smoke_preflight_armed.yaml` were re-minted mechanically: bodies byte-identical,
+   five header lines re-rendered, run5's armed `0.25 / 25000 / 50` untouched (R119) and proven
+   so by the structural half of the instrument above staying green through the re-mint. That
+   re-mint is the `replace` the instrument had to learn: a closed five-element
+   `_REHEADERED_DELTAS`, and a tolerance that PROVES each change is rendering-only by
+   reproducing the baseline slot from the live slot through the old `str()`. New producer:
+   `tests/config/test_mint_header_roundtrip.py` (LAW-07).
 
 
 ## 5. Config system
