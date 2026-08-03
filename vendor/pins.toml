@@ -20,6 +20,8 @@
 #   git ls-remote <url>  ->  refs/heads/master = c94749c21c16c3b072fff6da49762dd5f92f3986
 # (raw output in the phase's IMPL notes; a different sha means upstream moved and R145 must
 # be re-ruled, never silently re-pinned.)
+#
+# LICENCE: none at this sha (R175c) — local eval only; no SealBot code/artifact ships.
 url    = "https://github.com/ramora0/SealBot.git"
 sha    = "c94749c21c16c3b072fff6da49762dd5f92f3986"
 branch = "master"
