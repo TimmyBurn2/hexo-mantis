@@ -381,3 +381,20 @@ added_by = "WP12-R"
 path = "eval_selfplay_parity/target_parity_dispersed_v1.json"
 sha256 = "cd8bdf6b846213fd9b7c60e9b23178e767f7513b1e6f3774bebec7649a8a980b"
 added_by = "WP12-R"
+
+# ── WP12-R R181 (THE PARITY-ORACLE RE-POINT) ──────────────────────────────────────────
+# The null-distribution calibration: the identical-code (HEAD-vs-HEAD) distribution of
+# every OF1-3/OF1-4 parity statistic on CUDA at 982da03, torch 2.11.0+cu128, RTX 5080 —
+# 3 675 null pairs, 3 000 F1-vs-HEAD pairs, 1 140 CPU null pairs, 1 200 CPU F1 pairs, with
+# the treat-side per-pair values in full. It is R69's CITED GROUNDS for the derived envelope
+# `_CUDA_NULL_ENVELOPE = 1.0e-3` and for the retirement of the max-form rows, and six tests
+# in tests/model/test_bf16_parity_nulldist.py + test_gine_bf16_drift.py re-derive their
+# numbers from its per-pair columns rather than from its companion report. Registered here
+# for DISCOVERABILITY (grant G-R181-1, additive row only): the loader in
+# tests/model/_bf16_parity.py already sha-verifies on EVERY read, which is tighter than this
+# manifest's once-per-tier check — the gap this row closes is "what fixture data does the
+# repo carry", not protection. 976 398 B, inside R7's 10 MB fixture ceiling (9.8 % of it).
+[[required]]
+path = "bf16_nulldist/measurement_raw_R181_NULLDIST.json"
+sha256 = "431ccf2846615fa6ac06d073af008dcee6969a4286139aea4cebe316ddf5b740"
+added_by = "WP12-R R181"

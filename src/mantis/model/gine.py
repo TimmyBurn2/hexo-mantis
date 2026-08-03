@@ -57,9 +57,20 @@ class _GINEConv(nn.Module):
         if edge_index.shape[1] > 0:
             src = edge_index[0]
             dst = edge_index[1]
-            # message from src -> dst using that edge's attr
-            msg = (x.index_select(0, src) + self.lin(edge_attr)).relu()
-            agg = x.new_zeros((n, x.shape[1]))
+            # message from src -> dst using that edge's attr. The edge projection is
+            # evaluated FIRST and the node tensor aligned to ITS dtype BEFORE the gather:
+            # under autocast the projection is the regime witness (bf16, LAW-06), while
+            # `index_select` is dtype-PRESERVING and would otherwise materialise an
+            # [E, H] copy of the fp32 pre-norm tensor -- 2x the width the bf16 regime
+            # implies, on the one tensor that scales with E (WP12-R D-FIX F1, R179;
+            # CARD-RUN5-GPU-OOM died on a single 8.94 GiB request here). `Tensor.to`
+            # returns `self` when the dtype already matches, so with autocast OFF this
+            # is an exact no-op and the fp32 deploy arm is bit-unchanged.
+            e = self.lin(edge_attr)
+            xs = x.to(e.dtype)
+            msg = (xs.index_select(0, src) + e).relu()
+            # `agg` is built from `xs`: `index_add_` requires matching dtypes.
+            agg = xs.new_zeros((n, xs.shape[1]))
             agg.index_add_(0, dst, msg)
         else:
             agg = x.new_zeros((n, x.shape[1]))
