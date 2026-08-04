@@ -162,20 +162,25 @@ instrument is the vendored engine plus the uniform floor. The first consumer is 
 Stage 0 re-baseline, which cannot open until the card lands and the LAW-10 anchors are
 re-measured on it.
 
-## Ladder liveness: unverified in CI (R169)
+## Ladder liveness: verified at box preflight (R169)
 
-2/6 resolve locally; liveness unverified in CI; verified at box preflight.
-
-*Status: `not_run` — box preflight pending (WP12-R Phase D rider). No sealbot rung has been
-observed playing.*
+2/6 resolve locally; liveness **verified at box preflight** on 2026-08-04 at commit
+`cebe4cc924856ed8d392ba3b00173312a11bd6ed`: rules agreement 3/3 passed (0 disagreeing
+positions over 200 book + 200 decided), depth receipt 100% at depths 5 and 6 (3 passed),
+determinism identical (2 passed), and one eval round in which `sealbot_d5` played 4 games, the
+in-round depth receipt raised nothing, the illegal-buffer counter read 0, and `wr_sealbot`
+carried a float (0.0). *Status: `covered` — box preflight, not CI. CI does not exercise the
+vendor tests and that is expected. Upgraded in place per R96 (box result of the §3.5 rider,
+dispatch 8B, 2026-08-04).*
 
 Resolution and execution are different properties and the split is the substance of the
 claim. Resolution is a property of mantis code plus the local filesystem: it has a producer
 that runs in CI, in both directions, and CI runs it. Execution is a property of a built
 C++/pybind11 extension running, and it has no producer CI can run — `vendor/external/` is
-gitignored, so the branch that would exercise it can never be taken there. The correct word
-until the box rider returns its four measurements is therefore `not_run` — and `not_run` is a
-RESULT, not an absence.
+gitignored, so the branch that would exercise it can never be taken there. The box rider has
+now returned its four measurements (all passing), so the correct word is `covered` — box
+preflight, not CI; before it returned, the correct word was a measured-pending result, not an
+absence.
 
 The box rider is specified in the WP12-R Phase A design and rides the Phase D box session. It
 returns four measurements: rules agreement, the depth receipt, determinism, and one scored
