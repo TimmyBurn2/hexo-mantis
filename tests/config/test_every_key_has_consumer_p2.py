@@ -158,6 +158,14 @@ CONSUMER_REGISTRY: dict[str, str] = {
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " _run_training_step batch size (replaced the train_cfg/full_config dict lookup whose"
         " literal 256 was the real production value, WPMINT K-A)",
+    "train.microbatch_caps.max_edges":
+        "resolve_microbatch_caps -> MicrobatchCapsSpec.max_edges ->"
+        " StepCoordinator._microbatch_caps (threaded as caps_provider) ->"
+        " dispatch.py::_graph_step edge-term partition (graph route only)",
+    "train.microbatch_caps.max_nodes":
+        "resolve_microbatch_caps -> MicrobatchCapsSpec.max_nodes ->"
+        " StepCoordinator._microbatch_caps (threaded as caps_provider) ->"
+        " dispatch.py::_graph_step node-term partition (graph route only)",
     "train.augment":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
         " -> trainer.train_step(augment=) / assemble_mixed_batch(augment=)",
@@ -361,8 +369,13 @@ def test_registry_has_exactly_174_entries():
     # `train.buffer_save_interval` is deleted under R116/LAW-08 because F-CS-2 measured its
     # only consumer chain (`_try_save_buffer`) production-dead on every leg, and a minted key
     # with no reachable effect is the dead-knob class R1 exists to kill. 175 - 1 = 174.
-    assert len(CONSUMER_REGISTRY) == 174
-    assert len(_leaf_paths(RunConfig)) == 174
+    # WP12-R F2 (CARD-RUN5-GPU-OOM, R179) ADDS 2: `train.microbatch_caps.{max_edges,
+    # max_nodes}` — ONE block, ONE fact ("how big may one micro-batch be"), sized TOGETHER
+    # from one measured cost model. Their consumer is GRAPH-ROUTE-SCOPED and the registry
+    # rows say so: the provider is threaded to `_graph_step` alone and `_grid_step` is not
+    # given it, so a grid run structurally cannot reach them. 174 + 2 = 176.
+    assert len(CONSUMER_REGISTRY) == 176
+    assert len(_leaf_paths(RunConfig)) == 176
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

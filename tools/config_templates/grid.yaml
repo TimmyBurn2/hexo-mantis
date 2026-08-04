@@ -143,6 +143,21 @@ train:
   training_steps_per_game: 1.0
   max_train_burst: 1
   batch_size: 256
+  # `microbatch_caps` — the GRAPH training step's memory bound (WP12-R F2,
+  # CARD-RUN5-GPU-OOM, R179). `batch_size` above bounds the number of GRAPHS and bounds
+  # neither quantity that drives memory; these two bound both terms of the measured cost
+  # model `peak ~ a + b*E + c*N`. The sampled batch is SPLIT at graph boundaries under both
+  # members and gradients are ACCUMULATED, so the optimizer result is the un-split step's.
+  # THE TEMPLATE VALUES ARE NON-BINDING BY CONSTRUCTION and that is deliberate: the largest
+  # batch ever measured in this repository is run5's `batch_size: 256` collate at
+  # E = 18 735 930 / N = 699 533, so 100 000 000 / 4 000 000 sit 5.3x and 5.7x above it and
+  # cannot split any batch a smoke config produces. A smoke config whose cap BOUND would make
+  # CI exercise a split BY ACCIDENT, and the split's coverage has to come from the oracles,
+  # where the micro-batch count is asserted rather than incidental. run5 overrides both
+  # members with the operator's sized values at mint (R119/R85).
+  microbatch_caps:
+    max_edges: 100000000
+    max_nodes: 4000000
   augment: false
   recency_weight: 0.0
   mixing_initial_w: 0.0

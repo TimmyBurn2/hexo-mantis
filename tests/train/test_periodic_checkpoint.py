@@ -1,5 +1,8 @@
-# >300 justify (R8), stated at this file's MEASURED size (`wc -l` at ORACLE-WRITE, never
-# transcribed — SF-7; IMPL re-measures rather than carrying the number forward): 515 lines.
+# >300 justify (R8). The stated LINE COUNT is DELETED, not updated (G-DFIX-4): R8 asks for a
+# one-line justification, not a line tally, and a number that must be re-edited whenever a
+# sibling row is added will eventually be wrong and then be read as evidence. This file had
+# already gone stale on that number once. The justification itself is what R8 wants and it
+# stands unchanged below.
 # The nine rows are ONE claim — R173's leg-1 seam: `train.checkpoint_interval` is read in
 # exactly ONE place, both training-step tails converge on it, and the write it triggers rides
 # the ONE stamped writer. Splitting them would separate the two R173 mutation arms (OP-1/OP-2)
@@ -77,6 +80,7 @@ import torch
 
 from mantis._engine import HexgBuffer, ReplayBuffer
 from mantis.config.loader import load_config
+from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
 from mantis.train import checkpoints
@@ -100,6 +104,13 @@ _DENSE_STEP = "_train_on_batch"
 _GRAPH_STEP = "train_step_from_graph_batch"
 _RESOLVER = "_maybe_periodic_checkpoint"
 _EVENT = "periodic_checkpoint_save"
+
+#: G-DFIX-2 (WP12-R F2): `run_declared_train_step` gained a REQUIRED `caps_provider` and the
+#: two drives below pass it. The values sit far past anything this file's fixtures can build,
+#: so neither drive splits and every R173 cadence assertion exercises exactly what it did.
+def _NON_BINDING_CAPS() -> MicrobatchCapsSpec:
+    return MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
+
 
 #: `{run_id}_{step:08d}_{sha8}.ckpt` (`checkpoints.py:197`), decoded STRICTLY: `run_id` may
 #: itself carry underscores, so a naive `split("_")` would decode the wrong field on a
@@ -230,14 +241,16 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     buffer = _graph_buffer()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None)
+                                recency_weight=0.0, recent_buffer=None,
+                                caps_provider=_NON_BINDING_CAPS)
 
 
 def _drive_dense(trainer: Trainer, n_steps: int) -> None:
     buffer = _dense_buffer()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, _DSPEC, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None)
+                                recency_weight=0.0, recent_buffer=None,
+                                caps_provider=_NON_BINDING_CAPS)
 
 
 # ── OP-1 ⊕ — R173 arm 1: interval N → checkpoints at N and 2N (the GRAPH route) ──────────

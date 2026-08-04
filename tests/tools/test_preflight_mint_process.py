@@ -191,6 +191,14 @@ def _mint_run5_cpu_twin(out_dir: Path) -> Path:
         f"monitor.actor_lag_abort_enabled={str(bool(run5.monitor.actor_lag_abort_enabled)).lower()}",
         (f"train.draw_rate_abort={{threshold: {draw.threshold}, min_step: {draw.min_step}, "
          f"N_pool_min: {draw.N_pool_min}, consec: {draw.consec}}}"),
+        # G-DFIX-3 (WP12-R F2): run5 overrides `train.microbatch_caps` too, so the twin has to
+        # carry it or it stops being run5. Read OFF run5, like the five deltas above — not
+        # transcribed. The `differing` assertion below is UNCHANGED and still reads
+        # {"run_id", "train.device"}: that is the point of repairing the input rather than the
+        # check. (Q-DFIX-3: this list is itself a transcription of run5's delta SET and goes
+        # stale on any new delta — deriving it is a separate change with its own census.)
+        (f"train.microbatch_caps={{max_edges: {run5.train.microbatch_caps.max_edges}, "
+         f"max_nodes: {run5.train.microbatch_caps.max_nodes}}}"),
         "train.device=cpu",
     ]
     argv = [sys.executable, str(REPO_ROOT / "tools" / "mint_config.py"),

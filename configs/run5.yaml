@@ -3,6 +3,7 @@
 # delta: run_id: template_dev -> run5
 # delta: seed: 20260716 -> 20260718
 # delta: eval.random_floor_games: 4 -> 0
+# delta: train.microbatch_caps: {max_edges: 100000000, max_nodes: 4000000} -> {max_edges: 4500000, max_nodes: 170000}
 # delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 schema_version: 1
@@ -121,6 +122,9 @@ train:
   training_steps_per_game: 1.0
   max_train_burst: 1
   batch_size: 256
+  microbatch_caps:
+    max_edges: 4500000
+    max_nodes: 170000
   augment: false
   recency_weight: 0.0
   mixing_initial_w: 0.0

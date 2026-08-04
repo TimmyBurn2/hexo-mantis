@@ -24,10 +24,11 @@ YAML keys and enumerates the audit root name-agnostically.
 | v4 | twenty new required leaves: nineteen flat `train.*` step-coordinator knobs plus `train.draw_rate_abort.consec`. Six sibling coordinator fields were DELETED rather than authored (no reader in `src/`), and `train.batch_size` is minted at the value the code actually used | WPMINT Phase K-B |
 | v6 | one required leaf REMOVED — the `train` section's `buffer_save_interval`, the first leaf this contract has ever dropped. Its only consumer chain ended in `coordinator/step.py`'s D4 `_try_save_buffer` arm, which WP12-R Phase CS MEASURED (F-CS-2) production-dead on every leg, so a key minted into `run5.yaml` had zero reachable effect (R116/LAW-08/R1). The `buffer_save_interval` -> `checkpoint_interval` rename seam and both no-op `_try_save_buffer` arms go with it. `extra="forbid"` makes this incompatible in reverse: a config still carrying the key fails to load | WP12-R (R178(a), assigned by R183(a)) |
 | v5 | five new required leaves, all promotions of authority OUT of code: `eval_enabled` (top-level bool — was a `compose_run` parameter with a code-side default `True`, R120), the `monitor.disk_guard` family `{interval_sec, warn_gb, fail_gb}` (was four dead `dict.get` literals in a function with zero callers, R122) and `train.device` (`Literal["cpu","cuda"]` — was a `--device` CLI flag on BOTH callers, which let a cpu-flagged preflight false-clear a cuda-minted run, R126) | WPMAIN (CARD-RUN-MAIN) |
+| v7 | two new required leaves, ONE block: `train.microbatch_caps.{max_edges, max_nodes}` — the GRAPH training step's memory bound. `train.batch_size` bounds the number of GRAPHS and bounds neither quantity that drives memory (E and N are SUMS over the sampled graphs; CARD-RUN5-GPU-OOM was one unbounded `[E, hidden]` allocation, measured at `E = 18 735 930`). A nested block and not two flat keys because the members are sized TOGETHER from ONE measured cost model against ONE budget — `DrawRateAbortConfig`'s grounds applied to a different fact. `ge=1` on both and NO off value: the schema cannot express "uncapped", because an uncapped graph step is the defect the block exists to make unconstructible (R79). GRAPH-ROUTE-SCOPED consumer: the resolver's PROVIDER is threaded to `dispatch.py::_graph_step` alone and `_grid_step` is not given it, so a grid run structurally cannot read the block | WP12-R dispatch 6 phase F2 (R179) |
 
 ## Shape
 
-Ten top-level fields; **174 leaf key-paths** under the walker that descends nested blocks
+Ten top-level fields; **176 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -38,7 +39,7 @@ Ten top-level fields; **174 leaf key-paths** under the walker that descends nest
 | `eval_enabled` | 1 | bool |
 | `identity` | 2 | `IdentityConfig` |
 | `eval` | 30 | `EvalConfig`, `GateConfig`, `LadderConfig`, `LadderRung` |
-| `train` | 51 | `TrainConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage` |
+| `train` | 53 | `TrainConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
 | `selfplay` | 44 | `SelfplayConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 8 | `InferenceConfig` |
 | `monitor` | 36 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
@@ -117,7 +118,7 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
 | regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py, tests/config/test_regime_parity_p2.py |
-| every-key-has-consumer bijection, the 174 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
+| every-key-has-consumer bijection, the 176 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
 | `train.entropy_reg_weight` sign law; `policy_target`/`completed_q_values` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |
@@ -130,6 +131,8 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | `monitor` section field-for-field parity with the runtime `MonitorConfig` | tests/config/test_monitor_schema.py |
 | `train.actor_sync_cadence_steps` bounds and its reachability inside `train.max_train_steps` | tests/config/test_actor_sync_schema.py |
 | the eval section survives a re-mint byte-identically | tests/config/test_eval_config_remint.py |
+| `train.microbatch_caps` bounds (`ge=1` on both members, both required, no third member), the ONE-authority reader census, the graph-route-only consumer on run5's own config, and the five smoke configs' caps proven NON-BINDING on their own batches | tests/config/test_train_schema.py, tests/train/test_graph_microbatch_authority.py |
+| the micro-batch split is the un-split step: partition properties, slice fidelity, the exact normalisation identity, one optimizer step per training step, the LAW-18 fire-rate counter, and the named out-of-domain raise | tests/train/test_graph_microbatch.py, tests/train/test_graph_microbatch_bound.py |
 
 ## Deliberately absent
 

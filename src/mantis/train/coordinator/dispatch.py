@@ -27,9 +27,34 @@ torch-free environments.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from mantis.encoding.resolvers import resolve_from_config
+
+
+@dataclass(frozen=True)
+class GraphStepInputs:
+    """ONE micro-batch's collated tensors + targets — what a `parts` callable returns.
+
+    Defined here rather than in the trainer because THIS is where it is built; the trainer
+    consumes it by attribute access and needs no import, which keeps the
+    `train.trainer -> train.coordinator` edge from existing at all.
+    """
+
+    x: Any
+    edge_index: Any
+    edge_attr: Any
+    legal_mask: Any
+    stone_mask: Any
+    node_offsets: Any
+    legal_offsets: Any
+    policy_target: Any
+    outcomes: Any
+    value_valid: Any
+    is_full_search: Any
+    n_graphs: int
 
 
 class RepresentationRouteError(TypeError):
@@ -61,12 +86,28 @@ def run_declared_train_step(
     augment: bool,
     recency_weight: float,
     recent_buffer: Any | None,
+    caps_provider: Callable[[], Any],
 ) -> dict[str, float]:
-    """One straight self-play gradient update through the typed route for ``spec``."""
+    """One straight self-play gradient update through the typed route for ``spec``.
+
+    ``caps_provider`` is a ZERO-ARG CALLABLE returning the resolved
+    `train.microbatch_caps` — the PROVIDER, never the value, and it is handed to the GRAPH arm
+    ALONE. `_grid_step` does not take the parameter, so a grid run structurally cannot read
+    the caps: a property of the call graph, checkable from two signatures, rather than a
+    convention a later edit can break silently. Python evaluates every argument before the
+    call, so passing the resolved VALUE here would read `full_config["train"]` on both
+    representations — and four FROZEN grid coordinators construct a `full_config` with no
+    `train` key at all (WP12-R F2, DESIGN_DFIX §3.11.1).
+
+    It is REQUIRED and has no default. A default would be a code-side default for a
+    config-derived value — the exact class R1 kills — and a caller that forgot it would
+    silently get an UNCAPPED step, which is the defect this whole card exists to close.
+    """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
-                           recency_weight=recency_weight, recent_buffer=recent_buffer)
+                           recency_weight=recency_weight, recent_buffer=recent_buffer,
+                           caps_provider=caps_provider)
     if representation == "grid":
         return _grid_step(trainer, buffer, batch_size=batch_size, augment=augment,
                           recency_weight=recency_weight, recent_buffer=recent_buffer)
@@ -79,13 +120,25 @@ def run_declared_train_step(
 def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
+    caps_provider: Callable[[], Any],
 ) -> dict[str, float]:
-    """graph: `sample_graph_batch` → `collate_graph_batch` (semantic="full", the trainer's
-    every-batch posture) → `stone_mask_from_batch` → `train_step_from_graph_batch`.
+    """graph: `sample_graph_batch` → wire payload (ONCE) → `plan_microbatches` →
+    per-part `collate_graph_batch` (semantic="full", the trainer's every-batch posture) +
+    `stone_mask_from_batch` → `train_step_from_graph_batch`.
 
     Recency flows IN-ENGINE via `recent_frac=recency_weight` (old-side WP-5b commit-B
     parity); the graph side constructs no dense `RecentBuffer`, so receiving one is
     mis-wiring, refused loud rather than silently ignored.
+
+    THE CAPS ARE RESOLVED HERE, on this route, after the route decision, and the raise is
+    never caught: `caps_provider()` is the one invocation, and an absent block reaches the
+    caller as `MissingMicrobatchCapsError` with the missing level named (LAW-11). There is no
+    fallback arm and no `.get` on this path (WP12-R F2, F2-ABORT-5).
+
+    THE SPLIT IS PRE-COLLATE. The wire is converted to a payload EXACTLY ONCE — the Rust
+    getters COPY OUT, so a getter read per micro-batch would copy every array M times — and
+    each part is a numpy slice that is collated on demand. The per-part callables are LAZY so
+    only one micro-batch's tensors are ever resident; that laziness IS the memory bound.
     """
     if recent_buffer is not None:
         raise RepresentationRouteError(
@@ -103,35 +156,83 @@ def _graph_step(
     import numpy as np
     import torch
 
-    from mantis.selfplay.graph_collate import collate_graph_batch, stone_mask_from_batch
-
-    wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight)
-    # Parameterization = the production collate call (`inference_server.py`), trainer
-    # cadence: semantic="full" every batch (old seam design §6.1 — hot path runs "canary").
-    batch = collate_graph_batch(
-        wire,
-        expected_version=1,
-        trunk_size=spec.trunk_size,
-        win_length=spec.win_length,
-        node_feat_dim=spec.node_feat_dim,
-        edge_feat_dim=spec.edge_feat_dim,
-        device=str(trainer.device),
-        semantic="full",
-        target_argmax_cells=targets.target_argmax_cells,
+    from mantis.selfplay.graph_collate import (
+        collate_graph_batch,
+        graph_wire_from_rust,
+        stone_mask_from_batch,
     )
-    stone_mask = stone_mask_from_batch(batch)
+    from mantis.selfplay.graph_wire_split import (
+        plan_microbatches,
+        slice_graph_wire,
+        slice_targets,
+    )
+    from mantis.train.losses import graph_loss_denominators
+
+    # ONE read of each member, into a local. Not a style choice: `train.microbatch_caps` has
+    # exactly one authority and `tests/train/test_graph_microbatch_authority.py` freezes the
+    # reader census at two reads here and three in the resolver, so a second read anywhere
+    # (including a convenience re-read for the event payload) is a census failure by design.
+    caps = caps_provider()
+    max_edges = caps.max_edges
+    max_nodes = caps.max_nodes
+    wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight)
+    payload = graph_wire_from_rust(wire)
+    plan = plan_microbatches(payload.edge_offsets, payload.node_offsets,
+                             max_edges, max_nodes)
     device = trainer.device
-    policy_target = torch.from_numpy(np.asarray(targets.policy_target, dtype=np.float32)).to(device)
-    outcomes = torch.from_numpy(np.asarray(targets.outcomes, dtype=np.float32)).to(device)
-    value_valid = torch.from_numpy(np.asarray(targets.value_valid, dtype=np.uint8)).to(device)
-    is_full_search = torch.from_numpy(
-        np.asarray(targets.is_full_search, dtype=np.uint8)).to(device)
+    n_graphs = int(payload.n_graphs)
+
+    def _make(g0: int, g1: int):
+        def _materialise():
+            sub = slice_graph_wire(payload, g0, g1)
+            tsl = slice_targets(targets, payload.legal_offsets, g0, g1)
+            # Parameterization = the production collate call (`inference_server.py`), trainer
+            # cadence: semantic="full" EVERY batch (old seam design §6.1 — hot path runs
+            # "canary"), and now on every PART, so each micro-batch passes the full
+            # structural + semantic contract on its own rather than inheriting the whole
+            # batch's verdict.
+            batch = collate_graph_batch(
+                sub,
+                expected_version=1,
+                trunk_size=spec.trunk_size,
+                win_length=spec.win_length,
+                node_feat_dim=spec.node_feat_dim,
+                edge_feat_dim=spec.edge_feat_dim,
+                device=str(device),
+                semantic="full",
+                target_argmax_cells=tsl.target_argmax_cells,
+            )
+            return GraphStepInputs(
+                x=batch.x, edge_index=batch.edge_index, edge_attr=batch.edge_attr,
+                legal_mask=batch.legal_mask, stone_mask=stone_mask_from_batch(batch),
+                node_offsets=batch.node_offsets, legal_offsets=batch.legal_offsets,
+                policy_target=torch.from_numpy(
+                    np.asarray(tsl.policy_target, dtype=np.float32)).to(device),
+                outcomes=torch.from_numpy(
+                    np.asarray(tsl.outcomes, dtype=np.float32)).to(device),
+                value_valid=torch.from_numpy(
+                    np.asarray(tsl.value_valid, dtype=np.uint8)).to(device),
+                is_full_search=torch.from_numpy(
+                    np.asarray(tsl.is_full_search, dtype=np.uint8)).to(device),
+                n_graphs=g1 - g0,
+            )
+
+        return _materialise
+
+    # The denominators are the WHOLE step's, computed ONCE from the FULL target arrays, so
+    # every micro-batch divides by the quantity the un-split batch would have divided by and
+    # the parts sum to the un-split loss exactly. They are NOT `1/M` and NOT `B_m/B`: neither
+    # denominator is the graph count, and the two are different quantities from each other.
+    policy_denominator, value_denominator = graph_loss_denominators(
+        np.asarray(targets.is_full_search), np.asarray(targets.value_valid), n_graphs)
     return trainer.train_step_from_graph_batch(
-        x=batch.x, edge_index=batch.edge_index, edge_attr=batch.edge_attr,
-        legal_mask=batch.legal_mask, stone_mask=stone_mask,
-        node_offsets=batch.node_offsets, legal_offsets=batch.legal_offsets,
-        policy_target=policy_target, outcomes=outcomes,
-        value_valid=value_valid, is_full_search=is_full_search,
+        parts=tuple(_make(g0, g1) for g0, g1 in plan),
+        policy_denominator=policy_denominator,
+        value_denominator=value_denominator,
+        total_edges=int(payload.edge_offsets[-1]),
+        total_nodes=int(payload.node_offsets[-1]),
+        caps_max_edges=max_edges,
+        caps_max_nodes=max_nodes,
     )
 
 

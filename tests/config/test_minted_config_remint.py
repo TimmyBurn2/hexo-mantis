@@ -1,5 +1,7 @@
-# >300 justify (R8), stated at this file's MEASURED size of 404 lines (218 at WPMAIN, grown by
-# R178(a)'s ruled deletion and R187's ruled header re-render). The oracles are ONE claim — "a
+# >300 justify (R8). NO LINE COUNT is stated, per G-DFIX-4 and R192(e)'s derive-or-delete:
+# R8 asks for a one-line justification, not a tally. (Grown from WPMAIN by R178(a)'s ruled
+# deletion, R187's ruled header re-render, and WP12-R F2's block-level expression of the
+# insert-only rule with its own closure guard.) The oracles are ONE claim — "a
 # re-mint of the six configs changes exactly what was ruled and nothing else" — driven from ONE
 # committed baseline through two instruments that must stay in the same file because each
 # allowance (`_REMOVED_LINES`, `_REHEADERED_DELTAS`) is read by both the tolerance it widens and
@@ -85,6 +87,14 @@ _ADDED_LEAVES = {
     "monitor.disk_guard.warn_gb",
     "monitor.disk_guard.fail_gb",
     "train.device",
+    # WP12-R dispatch 6 phase F2 (CARD-RUN5-GPU-OOM, R179): `train.microbatch_caps` is a
+    # REQUIRED schema block, so every config necessarily gains both leaves — the re-mint is
+    # still purely ADDITIVE and the textual half stays insert-only. run5 additionally gains
+    # one `# delta:` HEADER line, which is an insertion too. The values are the operator's at
+    # mint prereg (R119/R85) and this instrument does not pin them; `_RUN5_ARMED` below is the
+    # closed set of values that ARE pinned, and it is deliberately not widened here.
+    "train.microbatch_caps.max_edges",
+    "train.microbatch_caps.max_nodes",
 }
 
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted
@@ -170,6 +180,35 @@ def _is_ruled_reheader(name: str, old_line: str, new_line: str) -> bool:
                for old, new in ((old_before, new_before), (old_after, new_after)))
 
 
+def _replace_is_reheaders_plus_insertions(name: str, old: list[str], new: list[str]) -> bool:
+    """True iff every OLD line is matched, IN ORDER, by a NEW line that is IDENTICAL or a
+    RULED re-header, and every remaining NEW line is an addition.
+
+    THIS IS NOT A NEW ALLOWANCE — it is the SAME rule, expressed at block level instead of
+    requiring the two blocks to be the same length. `difflib` merges an insertion that touches
+    a `replace` op INTO that op, so a config that both gains a header line and carries a ruled
+    re-render on an adjacent line arrives as one `2 -> 3 replace` that the length-equal form
+    cannot decompose. WP12-R F2 is the first such case: `run5.yaml` gains ONE
+    `# delta: train.microbatch_caps: ...` line beside the two R187 re-renders.
+
+    Nothing that the length-equal form rejects passes here. EVERY old line must still find a
+    counterpart that is identical or satisfies `_is_ruled_reheader` — which still requires a
+    named `(config, delta key)` in `_REHEADERED_DELTAS` and still PROVES the change is
+    rendering-only. A vanished old line, a rewritten old line, a moved value, a re-render on
+    an unnamed key: all still fail, because the loop runs out of new lines or never matches.
+    `test_the_block_level_replace_rule_still_rejects_a_rewrite` is that closure's producer.
+    """
+    i = 0
+    for old_line in old:
+        while i < len(new) and not (new[i] == old_line
+                                    or _is_ruled_reheader(name, old_line, new[i])):
+            i += 1                       # an ADDED line: allowed, it is an insertion
+        if i == len(new):
+            return False                 # an old line vanished or was rewritten
+        i += 1
+    return True
+
+
 def _live_leaves(name: str) -> dict[str, object]:
     return _leaves(yaml.safe_load((_LIVE / name).read_text(encoding="utf-8")))
 
@@ -251,9 +290,9 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
         for tag, i1, i2, j1, j2 in ops
         if not (tag in ("equal", "insert")
                 or (tag == "delete" and baseline[i1:i2] == _REMOVED_LINES)
-                or (tag == "replace" and i2 - i1 == j2 - j1
-                    and all(_is_ruled_reheader(name, old, new)
-                            for old, new in zip(baseline[i1:i2], live[j1:j2]))))
+                or (tag == "replace"
+                    and _replace_is_reheaders_plus_insertions(
+                        name, baseline[i1:i2], live[j1:j2])))
     ]
     assert not offending, (
         f"{name}: the re-mint diff must be INSERT-ONLY apart from the single ruled deletion "
@@ -284,6 +323,40 @@ def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
     assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
         "a leaf cannot be both added and removed by one re-mint"
     )
+
+
+def test_the_block_level_replace_rule_still_rejects_a_rewrite() -> None:
+    """The closure guard for `_replace_is_reheaders_plus_insertions`, mirroring the deletion
+    and re-header guards. The block-level form exists ONLY so a `replace` op that difflib
+    merged an insertion into can be decomposed; it must reject everything the length-equal
+    form rejected.
+
+    MUTATION THAT REDS IT: relaxing the predicate to "the new block contains the old block's
+    keys somewhere", or to a length/tag check — either would let a re-mint that MOVED a value
+    or DROPPED a header line pass as an insertion."""
+    ruled_old = "# delta: monitor.actor_lag_abort_enabled: False -> True"
+    ruled_new = "# delta: monitor.actor_lag_abort_enabled: false -> true"
+    added = "# delta: train.microbatch_caps: {max_edges: 1} -> {max_edges: 2}"
+    # the real case: one ruled re-header plus one inserted line
+    assert _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [added, ruled_new])
+    assert _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [ruled_new, added])
+    # a DROPPED old line is still a failure, however many new lines surround it
+    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [added])
+    # a MOVED value inside a ruled key is still a failure — `_is_ruled_reheader` re-derives
+    # the baseline slot through the OLD renderer and a moved value cannot reproduce it
+    moved = "# delta: monitor.actor_lag_abort_enabled: false -> false"
+    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [moved])
+    # a re-render on a key nobody named is still a failure
+    unnamed_old = "# delta: train.batch_size: 8 -> 256"
+    unnamed_new = "# delta: train.batch_size: 8 -> 257"
+    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [unnamed_old], [unnamed_new])
+    # order is still enforced: two old lines cannot match one new line, and a swap fails
+    other_old = "# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, 'N_pool_min': 50, 'consec': 3}"
+    other_new = "# delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}"
+    assert _replace_is_reheaders_plus_insertions(
+        "run5.yaml", [ruled_old, other_old], [added, ruled_new, other_new])
+    assert not _replace_is_reheaders_plus_insertions(
+        "run5.yaml", [ruled_old, other_old], [other_new, ruled_new])
 
 
 def test_the_permitted_reheader_is_exactly_five_named_delta_lines() -> None:

@@ -24,6 +24,7 @@ import pytest
 import torch
 
 from mantis._engine import HexgBuffer
+from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.losses import ragged_policy_ce
@@ -53,6 +54,17 @@ class _RecordingTrainer:
         return {"policy_loss": 0.0}
 
 
+#: G-DFIX-1 (WP12-R F2). The largest per-graph edge count this fixture can produce, MEASURED
+#: over 40 draws of its own buffer: the records carry 2 or 3 stones, giving exactly two
+#: distinct per-graph edge counts, 3142 and 3316. Setting `max_edges` to the LARGER makes no
+#: single graph over-cap (so nothing raises) while making any two graphs together over-cap —
+#: which forces `len(parts) >= 2` on a `batch_size=3` drive and is what makes the strengthened
+#: assertions below exercise the cross-micro-batch property at all. `max_nodes` is set past
+#: the whole batch so the split is edge-driven and the binding member is unambiguous.
+_S4_MAX_PER_GRAPH_EDGES = 3316
+_S4_CAPS = MicrobatchCapsSpec(max_edges=_S4_MAX_PER_GRAPH_EDGES, max_nodes=1_000_000)
+
+
 def test_dispatch_forwards_policy_target_value_intact() -> None:
     real = _graph_buffer()
     sampled: list[Any] = []
@@ -68,19 +80,35 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
 
     rec = _RecordingTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC, batch_size=3, augment=False,
-                            recency_weight=0.0, recent_buffer=None)
+                            recency_weight=0.0, recent_buffer=None,
+                            caps_provider=lambda: _S4_CAPS)
     assert len(rec.calls) == 1 and len(sampled) == 1
-    got = rec.calls[0]["policy_target"]
+    # G-DFIX-1 (WP12-R F2): after the micro-batch split the trainer receives a PARTITION, not
+    # a `policy_target` kwarg. The pin is UNCHANGED in what it claims and STRICTLY STRONGER in
+    # what it checks — the dtype is now asserted on every part, and the value assertion now
+    # also pins ORDER ACROSS micro-batch boundaries, which the single-tensor form could not
+    # express. The `len(parts) >= 2` assertion is what earns that: without a BINDING cap the
+    # fixture gives M = 1 and the cross-boundary claim would be vacuous.
+    parts = [make() for make in rec.calls[0]["parts"]]
+    assert len(parts) >= 2, (
+        f"the caps did not bind — {len(parts)} micro-batch(es) from a batch_size=3 drive. "
+        "With M = 1 the concatenation below is the old single-tensor assertion wearing a "
+        "loop, and the 'strictly stronger' claim this grant rests on is FALSE"
+    )
     want = torch.from_numpy(np.asarray(sampled[0].policy_target, dtype=np.float32))
-    assert got.dtype == torch.float32
-    assert torch.equal(got.cpu(), want), (
+    assert all(p.policy_target.dtype == torch.float32 for p in parts)
+    assert torch.equal(torch.cat([p.policy_target.cpu() for p in parts]), want), (
         "policy_target reached the trainer MUTATED — the dispatcher must forward the "
-        "sampled ragged target verbatim (dispatch.py:124; M-L's exact kill surface)"
+        "sampled ragged target verbatim, in order, ACROSS the micro-batch split "
+        "(dispatch.py `_graph_step`; M-L's exact kill surface)"
     )
     # And the forwarded target is per-graph unit mass (the post-fix producer law seen
     # at the consumer): each legal_offsets segment of the sampled batch sums to ~1.
     ifs = np.asarray(sampled[0].is_full_search)
     assert ifs.shape[0] == 3
+    assert sum(p.is_full_search.shape[0] for p in parts) == 3, (
+        "the split dropped or duplicated a per-graph target"
+    )
 
 
 # ── S5: ragged CE carries sub-unity mass LINEARLY (no renorm) ────────────────────────

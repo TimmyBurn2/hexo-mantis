@@ -729,6 +729,15 @@ def strip_and_restamp(
             "eval_interval": 1000, "log_interval": 1000,
             "min_buf_size": 1, "replay_capacity": 100_000, "replay_capacity_schedule": [],
             "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
+            # WP12-R F2 / R179: `train.microbatch_caps` is a REQUIRED block, so this
+            # synthetic config must carry it. Placeholder posture, same as `seed=0` and
+            # `device="cpu"` above and for the same measured reason — the field is
+            # required-with-no-default by construction, so there is no schema default to
+            # derive from, and NOTHING EVER TRAINS FROM A STRIPPED ARTIFACT'S SNAPSHOT,
+            # so no graph step ever reads these numbers. They are the template's own
+            # non-binding pair, which is the value that cannot mislead a reader into
+            # thinking a cap was sized here.
+            "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
             "augment": False, "recency_weight": 0.0, "mixing_initial_w": 0.0,
             "mixing_min_w": 0.0, "mixing_decay_steps": 1.0, "hard_gn_threshold": 1e9,
             "hard_gn_min_steps": 3, "terminal_eval_enabled": True, "bot_batch_share": 0.0,

@@ -45,18 +45,34 @@ def binned_value_loss(
     bin_logits: torch.Tensor,
     outcome: torch.Tensor,
     value_mask: torch.Tensor | None = None,
+    denominator: float | None = None,
 ) -> torch.Tensor:
     """Masked cross-entropy of head softmax vs two-hot(outcome). fp32 targets.
 
     Mask semantics: value_mask==0 rows excluded from numerator AND denominator;
-    all-masked → zeros(())."""
+    all-masked → zeros(()).
+
+    `denominator` (WP12-R F2): when supplied, the reduction is `kept.sum() / denominator`
+    instead of this batch's own mean — how ONE micro-batch of a gradient-accumulating split
+    divides by the WHOLE step's denominator, so the parts sum to the un-split loss exactly
+    (`mantis.train.losses.graph_loss_denominators`). With `denominator=None` every statement
+    below is unchanged, which is what keeps the dense caller bit-identical.
+
+    ONE DIFFERENCE, STATED so it is not mistaken for a discrepancy: in the all-masked case
+    the un-supplied path returns `torch.zeros(())`, a DETACHED constant, while the supplied
+    path returns `kept.sum() / denominator`, a zero WITH a `grad_fn`. Value equal, gradient
+    equal (zero); the only difference is graph connectivity, which no consumer observes."""
     target = scalar_to_two_hot(outcome.reshape(-1))          # (N, 65) fp32
     logp = F.log_softmax(bin_logits.to(torch.float32), dim=-1)
     per_row = -(target * logp).sum(dim=-1)                   # (N,)
     if value_mask is None:
+        if denominator is not None:
+            return per_row.sum() / denominator
         return per_row.mean()
     mask = value_mask.reshape(-1).bool()
     kept = per_row[mask]
+    if denominator is not None:
+        return kept.sum() / denominator
     if kept.numel() == 0:
         return torch.zeros((), device=per_row.device, dtype=per_row.dtype)
     return kept.mean()

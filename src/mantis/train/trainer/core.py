@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -55,10 +56,13 @@ from mantis.model import (
 from mantis.model import (
     binned_value_loss as _binned_value_loss,
 )
+from mantis.selfplay.graph_wire_split import GraphEmptyBatchError
 from mantis.train import checkpoints
 from mantis.train.emit import emit_via
 from mantis.train.losses import (
+    backward_accumulate,
     chain_loss_with_fire_rate,
+    clip_and_step,
     compute_aux_loss,
     compute_kl_policy_loss,
     compute_ply_index_loss,
@@ -493,44 +497,92 @@ class Trainer:
     def train_step_from_graph_batch(
         self,
         *,
-        x: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_attr: torch.Tensor,
-        legal_mask: torch.Tensor,
-        stone_mask: torch.Tensor,
-        node_offsets: torch.Tensor,
-        legal_offsets: torch.Tensor,
-        policy_target: torch.Tensor,
-        outcomes: torch.Tensor,
-        value_valid: torch.Tensor | None = None,
-        is_full_search: torch.Tensor | None = None,
+        parts: Sequence[Callable[[], Any]],
+        policy_denominator: float,
+        value_denominator: float,
+        total_edges: int,
+        total_nodes: int,
+        caps_max_edges: int,
+        caps_max_nodes: int,
     ) -> dict[str, float]:
-        """One gradient update from an ALREADY-collated graph batch (block-diagonal tensors).
+        """One gradient update from a PARTITIONED graph batch (WP12-R F2, CARD-RUN5-GPU-OOM).
 
-        The numeric core of the old `_train_on_batch`-graph sibling — factored so the bench
-        (fixed synthetic batch) and any injected self-play graph buffer drive the SAME
-        forward/loss/backward path. bf16 autocast (LAW-06). GnnNet ships policy + dist65 value
-        only, so there is no aux/entropy branch (standing §6.3)."""
+        The numeric core of the old `_train_on_batch`-graph sibling. bf16 autocast (LAW-06).
+        GnnNet ships policy + dist65 value only, so there is no aux/entropy branch
+        (standing §6.3).
+
+        `parts` is a Sequence of ZERO-ARG CALLABLES and that is load-bearing. `Sequence` gives
+        `len()` for the LAW-18 counter without consuming anything; the callables make
+        materialisation LAZY, which is the whole bound — a `Sequence` of already-collated
+        batches would hold every micro-batch resident at once, defeating the cap while passing
+        every count-based oracle. The loop materialises one, uses it, and drops the reference
+        before the next `make()`.
+
+        ONE OPTIMIZER STEP PER TRAINING STEP. `zero_grad` once before the loop, `backward`
+        once per part, `clip_and_step` ONCE after it, one `self.step` increment, one scheduler
+        step, one EMA update, one `training_step` event and one `_maybe_periodic_checkpoint`
+        call (R173's seam is untouched and still fires exactly once per training step).
+        Clipping is nonlinear in the whole gradient and `grad_norm` is an armed gate's input,
+        so clipping once is a correctness requirement, not a preference.
+
+        SINGLE TAIL: exactly one `return`, the last statement, returning a dict literal with
+        exactly `loss`, `policy_loss`, `value_loss`, `grad_norm`, `lr`. There is no early
+        return on any path — the degenerate-mask cases return finite-or-`nan` through this
+        same tail, and the two failure paths RAISE. That matters because
+        `train/coordinator/step.py` reads `loss_info.get("grad_norm", 0.0)`: a path returning
+        a dict without the key would silently feed `grad_norm_hard_abort` a `0.0` that always
+        passes its threshold.
+        """
         for key in GRAPH_FORBIDDEN_NONZERO_WEIGHTS:
             if float(getattr(self.hp, key, 0.0)) != 0.0:
                 raise ValueError(
                     f"train_step_from_graph_batch: {key} is nonzero on a graph run — GnnNet "
                     "ships policy + dist65 value only (no aux heads / entropy). Zero every "
                     "GRAPH_FORBIDDEN_NONZERO_WEIGHTS key (standing §6.3).")
+        if len(parts) == 0:
+            raise GraphEmptyBatchError(
+                "train_step_from_graph_batch: zero micro-batches — the sampled batch holds no "
+                "graphs, so this step cannot produce a gradient. Raised BEFORE zero_grad, so "
+                "no optimizer state moved: a silent no-op here would let the run report a "
+                "step it never took (LAW-14)."
+            )
         self.optimizer.zero_grad()
-        with autocast(device_type=self.device.type, dtype=self.amp_dtype,
-                      enabled=self._autocast_enabled):
-            # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
-            # `forward_batch` is GnnNet's real method.
-            policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets=node_offsets)
-            policy_loss = ragged_policy_ce(policy_logits, policy_target, legal_offsets,
-                                           full_search_mask=is_full_search)
-            value_loss = _binned_value_loss(bin_logits, outcomes, value_mask=value_valid)
-            loss = policy_loss + value_loss
+        loss_total = 0.0
+        policy_total = 0.0
+        value_total = 0.0
+        for make in parts:
+            inputs = make()
+            with autocast(device_type=self.device.type, dtype=self.amp_dtype,
+                          enabled=self._autocast_enabled):
+                # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
+                # `forward_batch` is GnnNet's real method.
+                policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                    inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_mask,
+                    inputs.stone_mask, node_offsets=inputs.node_offsets)
+                if int(bin_logits.shape[0]) != int(inputs.n_graphs):
+                    raise ValueError(
+                        f"train_step_from_graph_batch: bin_logits has "
+                        f"{int(bin_logits.shape[0])} rows for {int(inputs.n_graphs)} graphs. "
+                        "`binned_value_loss` reduces over bin_logits ROWS while the value "
+                        "denominator is computed from the per-GRAPH mask, so a mismatch "
+                        "would silently make the denominator a second authority over a count "
+                        "it does not own.")
+                policy_loss = ragged_policy_ce(policy_logits, inputs.policy_target,
+                                               inputs.legal_offsets,
+                                               full_search_mask=inputs.is_full_search,
+                                               denominator=policy_denominator)
+                value_loss = _binned_value_loss(bin_logits, inputs.outcomes,
+                                                value_mask=inputs.value_valid,
+                                                denominator=value_denominator)
+                loss = policy_loss + value_loss
+            backward_accumulate(loss, self.scaler, self._scaler_enabled)
+            loss_total += loss.item()
+            policy_total += policy_loss.item()
+            value_total += value_loss.item()
+            del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
 
-        grad_norm = fp16_backward_step(loss, self.optimizer, self.scaler, self.model,
-                                       self._scaler_enabled, max_grad_norm=float(self.hp.grad_clip))
+        grad_norm = clip_and_step(self.optimizer, self.scaler, self.model,
+                                  self._scaler_enabled, float(self.hp.grad_clip))
         self.step += 1
         if self.scheduler is not None and math.isfinite(grad_norm):
             self.scheduler.step()
@@ -538,10 +590,14 @@ class Trainer:
                 and self.step % self.ema_update_every == 0):
             self.ema_model.update_parameters(self._base_model())
         lr = self.optimizer.param_groups[0]["lr"]
-        result = {"loss": loss.item(), "policy_loss": policy_loss.item(),
-                  "value_loss": value_loss.item(), "grad_norm": grad_norm, "lr": lr}
+        result = {"loss": loss_total, "policy_loss": policy_total,
+                  "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
         emit_via(self._sink, {"event": "training_step", "step": self.step,
-                              "representation": "graph", **result})
+                              "representation": "graph", **result,
+                              "microbatches": len(parts), "edges": int(total_edges),
+                              "nodes": int(total_nodes),
+                              "caps_max_edges": int(caps_max_edges),
+                              "caps_max_nodes": int(caps_max_nodes)})
         self._maybe_periodic_checkpoint(result)
         return result
 

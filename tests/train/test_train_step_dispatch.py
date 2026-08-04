@@ -34,6 +34,7 @@ from mantis.encoding import lookup
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import GnnArch, build_net
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.train.coordinator.dispatch import (
     RepresentationRouteError,
     resolve_step_spec,
@@ -121,6 +122,17 @@ class _Pool:
         self.n_workers = 1
 
 
+#: WP12-R F2: `run_declared_train_step` gained a REQUIRED `caps_provider` — a zero-arg
+#: callable the GRAPH arm alone invokes. A default was refused: it would be a code-side
+#: default for a config-derived value (R1) and a caller that forgot it would silently get an
+#: UNCAPPED step, which is the defect CARD-RUN5-GPU-OOM exists to close. These drives use caps
+#: far past anything the tiny fixtures can build, so every route assertion below is about
+#: ROUTING and none of them accidentally exercises a split — the split's own coverage lives in
+#: `tests/train/test_graph_microbatch*.py`, where the micro-batch count is asserted.
+def _NON_BINDING_CAPS() -> MicrobatchCapsSpec:
+    return MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
+
+
 class _RecordingTypedTrainer:
     """A double conforming to the DECLARED seam (both typed entry points; no train_step)."""
 
@@ -179,6 +191,7 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
     run_declared_train_step(
         trainer, _graph_buffer(), _GSPEC,
         batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
+        caps_provider=_NON_BINDING_CAPS,
     )
     assert trainer.step == before + 1
 
@@ -188,7 +201,7 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _graph_buffer(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.0,
-                            recent_buffer=None)
+                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
     assert len(rec.graph_calls) == 1
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
@@ -200,7 +213,7 @@ def test_graph_spec_over_a_dense_buffer_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="graph"):
         run_declared_train_step(rec, _dense_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
     assert rec.tensor_calls == [] and rec.graph_calls == []
 
 
@@ -209,7 +222,7 @@ def test_grid_spec_over_a_graph_buffer_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="grid"):
         run_declared_train_step(rec, _graph_buffer(), _DSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
     assert rec.tensor_calls == [] and rec.graph_calls == []
 
 
@@ -264,7 +277,8 @@ def test_grid_recency_mix_contract_matches_old_side() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _DenseBuf(), _DSPEC,
                             batch_size=8, augment=False, recency_weight=0.25,
-                            recent_buffer=_RecentBuf())
+                            recent_buffer=_RecentBuf(),
+                            caps_provider=_NON_BINDING_CAPS)
     assert len(rec.tensor_calls) == 1
     call = rec.tensor_calls[0]
     assert call["n"] == 8, "recent + uniform rows must concatenate to the full batch"
@@ -297,7 +311,7 @@ def test_unknown_representation_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="voxel"):
         run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _AlienSpec(),
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
 
 
 def test_undeclared_encoding_raises_from_the_one_resolver() -> None:
@@ -331,7 +345,7 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
         run_declared_train_step(_HalfTrainer(), _graph_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
 
 
 # ── O-T7: graph-arm recency semantics (old-side commit-B parity) ─────────────────────────
@@ -342,7 +356,8 @@ def test_graph_arm_refuses_a_dense_recent_buffer() -> None:
     with pytest.raises(RepresentationRouteError, match="recent_buffer"):
         run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=_RecentBuf())
+                                recent_buffer=_RecentBuf(),
+                            caps_provider=_NON_BINDING_CAPS)
 
 
 def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
@@ -362,11 +377,45 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.25,
-                            recent_buffer=None)
+                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS)
     assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
     assert len(rec.graph_calls) == 1
     kw = rec.graph_calls[0]
+    # WP12-R F2: the graph entry point takes a PARTITION plus the whole step's denominators,
+    # not eleven loose tensors. The eleven names moved one level down, onto what each part
+    # materialises — asserted below so the pass-through is still checked at tensor level and
+    # this row did not quietly shrink to a signature check.
+    assert set(kw) == {"parts", "policy_denominator", "value_denominator", "total_edges",
+                       "total_nodes", "caps_max_edges", "caps_max_nodes"}
+    assert len(kw["parts"]) >= 1
+    inputs = kw["parts"][0]()
     for name in ("x", "edge_index", "edge_attr", "legal_mask", "stone_mask",
                  "node_offsets", "legal_offsets", "policy_target", "outcomes",
                  "value_valid", "is_full_search"):
-        assert name in kw, f"graph entry point kwarg {name!r} missing"
+        assert getattr(inputs, name, None) is not None, (
+            f"a materialised micro-batch is missing {name!r}")
+
+
+# ── O-T8 (WP12-R F2): the caps provider reaches the GRAPH arm and ONLY the graph arm ──────
+def test_the_grid_route_never_invokes_the_caps_provider() -> None:
+    """The route assertion the F2 keyword buys. `_grid_step` is not GIVEN the provider, so a
+    grid run structurally cannot read `train.microbatch_caps` — and four FROZEN files build a
+    `StepCoordinator` whose `full_config` has no `train` key at all. A provider that raises on
+    call turns "the grid arm does not read the caps" into a drive rather than a claim."""
+    def _explode() -> MicrobatchCapsSpec:
+        raise AssertionError("the grid arm invoked caps_provider")
+
+    rec = _RecordingTypedTrainer()
+    run_declared_train_step(rec, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
+                            recency_weight=0.0, recent_buffer=None, caps_provider=_explode)
+    assert len(rec.tensor_calls) == 1
+
+    invoked: list[int] = []
+
+    def _counting() -> MicrobatchCapsSpec:
+        invoked.append(1)
+        return _NON_BINDING_CAPS()
+
+    run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
+                            recency_weight=0.0, recent_buffer=None, caps_provider=_counting)
+    assert invoked == [1], "the graph arm must invoke the provider exactly once"

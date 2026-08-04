@@ -4,8 +4,11 @@
 # WP12-R Phase CS, which replaces `buffer_save_interval`'s grounds sentence — it claimed
 # close-out and the shutdown-signal path still save, and F-CS-2 measured both halves
 # false; 491 -> 488 at WP12-R R178(a), which DELETES `buffer_save_interval` outright and
-# leaves a shorter tombstone in its place). The number is `wc -l` at HEAD, re-measured AFTER
-# the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
+# leaves a shorter tombstone in its place; 488 -> 558 at WP12-R dispatch 6 phase F2, which
+# authors `MicrobatchCapsConfig` — one nested block, two `ge=1` members, and the grounds for
+# both the block SHAPE and the ABSENT off value, since a cap with a disable sentinel is a
+# switch for turning CARD-RUN5-GPU-OOM's fix back on). The number is `wc -l` at HEAD,
+# re-measured AFTER the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
@@ -176,6 +179,66 @@ class ReplayCapacityStage(StrictModel):
 
     step: int = Field(ge=0)
     capacity: int = Field(ge=1)
+
+
+class MicrobatchCapsConfig(StrictModel):
+    """The GRAPH training step's memory bound — ONE block, ONE fact (WP12-R dispatch 6 phase
+    F2, CARD-RUN5-GPU-OOM, R179; `DrawRateAbortConfig`'s shape applied to a different fact).
+
+    The fact is "how big may one micro-batch be", and it has TWO INSEPARABLE components,
+    which is why this is a nested block and not two flat keys: the members are sized TOGETHER
+    from ONE measured cost model against ONE budget (`peak ~ a + b*E + c*N`, so
+    `a + b*max_edges + c*max_nodes <= budget`), and two independent keys would give two
+    authorities over one byte budget and let an operator mint one and forget the other.
+
+    `train.batch_size` bounds the number of GRAPHS; it bounds neither quantity that drives
+    memory. `_GINEConv.forward` (`model/gine.py`) materialises per-edge `[E, hidden]` tensors,
+    three per conv layer, and the JK-cat materialises `[N, L*hidden]`; E and N are SUMS over
+    the sampled graphs that nothing bounded before this block existed. CARD-RUN5-GPU-OOM was
+    one unbounded allocation of the first shape (measured: `E = 18 735 930` at
+    `batch_size: 256`, a single 8.94 GiB request on a 15.48 GiB card, with run5's per-graph
+    node count spanning 26 -> 5 234, a 200x spread).
+
+    BOTH MEMBERS, because N is unbounded off-distribution: a micro-batch of many low-degree
+    graphs passes an edge-only bound and can be arbitrarily large in N, and a curve that
+    characterises only E cannot bound peak allocation.
+
+    The bound is enforced by SPLITTING the sampled batch at graph boundaries into
+    micro-batches under BOTH members and ACCUMULATING gradients, so the optimizer result is
+    the un-split step's: one optimizer step, one scheduler step, one `trainer.step` increment,
+    one clip of the accumulated gradient per training step. NOT a truncation and NOT a drop
+    (R114). A single graph exceeding either member raises `GraphMicroBatchOverCap`, naming it
+    and naming which member it exceeded.
+
+    `ge=1` on both, and NO off value: the schema cannot express "uncapped" (R79 — arming is a
+    property of the resolved value, and here the off state is deliberately unrepresentable,
+    the `actor_sync_cadence_steps` posture). An uncapped graph step is the defect this block
+    exists to make unconstructible, so a disable sentinel would be a switch for turning the
+    fix off. The bound is the mechanism's own range: a micro-batch of zero edges (or zero
+    nodes) is not a micro-batch.
+
+    GRAPH-ROUTE ONLY: the dense batch is a fixed-shape tensor already bounded by `batch_size`,
+    so there is no unbounded quantity there for a cap to bound. (No in-repo precedent is
+    claimed for the scoping shape: `amp_dtype`'s consumer runs on every route and only its
+    EFFECT is grid-scoped, which is a different thing.)
+
+    RUN-SCOPED CONSTANTS (R85/R179), sized from a measured headroom curve and fixed at mint
+    prereg — never chosen, never hand-edited in a minted file. The five non-run5 configs mint
+    values that are NON-BINDING BY CONSTRUCTION (larger than any batch those smoke configs
+    can produce), because a smoke config whose cap bound would make CI exercise a split by
+    accident and the split's coverage must come from the oracles.
+
+    Read by ONE path, and read LATE:
+    `mantis.config.resolve.microbatch.resolve_microbatch_caps` ->
+    `StepCoordinator._microbatch_caps` (passed as a CALLABLE) ->
+    `run_declared_train_step(..., caps_provider=)` -> invoked by
+    `train/coordinator/dispatch.py::_graph_step` ONLY. The grid arm is never given the
+    provider, so this graph-only block is never read on a grid run — which is why a grid
+    `full_config` carrying no `train` section stays loadable.
+    """
+
+    max_edges: int = Field(ge=1)
+    max_nodes: int = Field(ge=1)
 
 
 class TrainConfig(StrictModel):
@@ -350,6 +413,12 @@ class TrainConfig(StrictModel):
     # phase moves the authority, never the number. `ge=1` — a batch of zero samples is not a
     # batch.
     batch_size: int = Field(ge=1)
+    # `microbatch_caps` — the GRAPH training step's memory bound. `batch_size` above bounds
+    # the number of GRAPHS and bounds NEITHER quantity that drives memory; this block bounds
+    # both. Consumed by mantis.config.resolve.microbatch.resolve_microbatch_caps ->
+    # StepCoordinator._microbatch_caps (threaded as caps_provider) ->
+    # train/coordinator/dispatch.py::_graph_step, on the GRAPH route only.
+    microbatch_caps: MicrobatchCapsConfig
     # `augment` — 12-fold hex-symmetry augmentation of every sampled batch. A first-order
     # "what is this run" fact: it multiplies the effective dataset, so two runs that differ
     # only here are not comparable.

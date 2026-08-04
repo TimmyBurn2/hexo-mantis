@@ -40,6 +40,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import mantis.train.buffer_persist as _buffer_persist
+from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     check_draw_rate_collapse,
@@ -233,6 +234,8 @@ class StepCoordinator:
         # route dispatches off spec.representation, resolved from the DECLARED config this
         # coordinator already holds, through THE one resolver (never a buffer sniff).
         self._resolved_step_spec: Any | None = None
+        #: WP12-R F2: the memo behind `_microbatch_caps`, the graph-only cap thunk.
+        self._resolved_caps: Any | None = None
         self._initial_policy_loss: float | None = None
         self._consec_high_gn = 0
         self._eval_round_last_step = -1
@@ -935,6 +938,7 @@ class StepCoordinator:
             self.trainer, self.buffer, self._step_spec(),
             batch_size=batch_size, augment=cfg.augment,
             recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
+            caps_provider=self._microbatch_caps,
         )
 
     def _step_spec(self) -> Any:
@@ -944,6 +948,28 @@ class StepCoordinator:
         if self._resolved_step_spec is None:
             self._resolved_step_spec = resolve_step_spec(self.full_config)
         return self._resolved_step_spec
+
+    def _microbatch_caps(self) -> Any:
+        """The resolved graph micro-batch caps, lazily resolved ONCE from the declared config
+        this coordinator holds, through THE one resolver. Absence raises by name.
+
+        Passed to the dispatcher as a CALLABLE — the BOUND METHOD, not a call — and invoked by
+        the GRAPH arm only, so a grid run never reads `train`. That asymmetry is the whole
+        point and it is not decoration: Python evaluates every argument before the call, so
+        `caps_provider=self._microbatch_caps()` would resolve `full_config["train"]` on BOTH
+        representations, and FOUR FROZEN test files build a `StepCoordinator` whose
+        `full_config` is `{"identity": {...}}` with no `train` key at all. A graph-only knob
+        must not make a grid config unloadable (WP12-R F2, DESIGN_DFIX §3.11.1).
+
+        Memoised, mirroring `_step_spec` above — the burst calls this once per coordinator,
+        not once per step. It mirrors `_step_spec` in MEMOISATION and deliberately NOT in call
+        site: `_step_spec()` is invoked unconditionally because it DECIDES the route, while
+        these caps are meaningful only on one branch OF that decision. Eager for the router,
+        lazy for the routed.
+        """
+        if self._resolved_caps is None:
+            self._resolved_caps = resolve_microbatch_caps(self.full_config)
+        return self._resolved_caps
 
     # ── eval kickoff at the boundary (via the INJECTED EvalPipelineLike; no train→eval) ───
     def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> tuple[bool, bool]:

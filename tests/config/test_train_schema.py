@@ -62,6 +62,12 @@ VALID_TRAIN_PAYLOAD: dict = {
     "training_steps_per_game": 1.0,
     "max_train_burst": 1,
     "batch_size": 256,
+    # WP12-R F2 (CARD-RUN5-GPU-OOM, R179): ONE block, TWO inseparable members. The minted
+    # value here is the TEMPLATE's non-binding pair; run5 overrides both with the operator's
+    # sized values at mint. `batch_size` above bounds the number of GRAPHS and bounds neither
+    # quantity that drives memory — E and N are sums over the sampled graphs, and nothing
+    # bounded either before this block existed.
+    "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
     "augment": False,
     "recency_weight": 0.0,
     "mixing_initial_w": 0.0,
@@ -121,6 +127,19 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("training_steps_per_game", 0.0),   # reads as off; `_steps_budget`'s max(1, ...) is not
     ("max_train_burst", 0),             # here it really does stop the learner forever
     ("batch_size", 0),
+    # WP12-R F2: `ge=1` on BOTH members, and the bound is the MECHANISM's own range, not
+    # policy — a micro-batch of zero edges (or zero nodes) is not a micro-batch. There is no
+    # off value and no disable sentinel: an uncapped graph step is the defect the block exists
+    # to make unconstructible, so a sentinel would be a switch for turning the fix off (R79).
+    ("microbatch_caps", {"max_edges": 0, "max_nodes": 1}),
+    ("microbatch_caps", {"max_edges": 1, "max_nodes": 0}),
+    ("microbatch_caps", {"max_edges": -1, "max_nodes": 1}),
+    # both members arrive together or not at all — one alone bounds only one term of
+    # `peak ~ a + b*E + c*N`
+    ("microbatch_caps", {"max_edges": 1}),
+    ("microbatch_caps", {"max_nodes": 1}),
+    # `extra="forbid"` reaches INTO the block, so a third member cannot be smuggled in
+    ("microbatch_caps", {"max_edges": 1, "max_nodes": 1, "max_bytes": 1}),
     ("recency_weight", -0.1),
     ("recency_weight", 1.1),            # the sampler clamps, so above 1 is a difference the
                                         # config can express and the run cannot have

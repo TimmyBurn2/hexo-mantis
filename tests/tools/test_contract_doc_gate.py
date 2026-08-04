@@ -95,15 +95,36 @@ def test_a_retired_resolver_symbol_reds_the_gate(tmp_path, doc_text):
     assert "does not resolve" in res.stdout
 
 
-def test_a_stale_leaf_count_reds_the_gate(tmp_path, doc_text):
-    doc = _mutate(tmp_path, doc_text, "**174 leaf key-paths**", "**148 leaf key-paths**")
+#: The doc's own stated leaf count, DERIVED from the live schema rather than transcribed.
+#: A literal here is exactly the defect gate 13 exists to catch, one layer up: it goes stale
+#: the moment any phase adds a leaf, and it goes stale SILENTLY as a mutation anchor that
+#: matches nothing — which `_mutate` refuses, but only after the arm has stopped testing what
+#: it names. WP12-R F2 is the phase that made this concrete (174 -> 176).
+#:
+#: The gate module arrives through the `gate_module` FIXTURE, which loads it by
+#: `importlib.util.spec_from_file_location` (`:37`). The first version of this helper did
+#: `from tools.ci_gates.contract_doc_gate import _leaf_paths` instead, and that import is
+#: UNRESOLVABLE under the project's own test command: `tools/` and `tools/ci_gates/` carry no
+#: `__init__.py`, so the name only resolves as a PEP 420 namespace package when the repo root
+#: happens to be on `sys.path` — true under `python -m pytest` (which prepends CWD), FALSE
+#: under `uv run pytest` (a console script, which does not). It was the only `from tools.`
+#: import in the suite. Recorded here rather than only in a log: a helper whose import cannot
+#: resolve is indistinguishable from one that was never called.
+def _live_count_claim(gate_module) -> str:
+    from mantis.config.schema import RunConfig
+    return f"**{len(gate_module._leaf_paths(RunConfig))} leaf key-paths**"
+
+
+def test_a_stale_leaf_count_reds_the_gate(tmp_path, doc_text, gate_module):
+    doc = _mutate(tmp_path, doc_text, _live_count_claim(gate_module),
+                  "**148 leaf key-paths**")
     res = _run(doc)
     assert res.returncode == 1
     assert "states 148 leaf key-paths" in res.stdout
 
 
-def test_a_doc_that_states_no_count_reds_the_gate(tmp_path, doc_text):
-    doc = _mutate(tmp_path, doc_text, "**174 leaf key-paths**", "a lot of leaves")
+def test_a_doc_that_states_no_count_reds_the_gate(tmp_path, doc_text, gate_module):
+    doc = _mutate(tmp_path, doc_text, _live_count_claim(gate_module), "a lot of leaves")
     res = _run(doc)
     assert res.returncode == 1
     assert "does not state its leaf-key-path count" in res.stdout

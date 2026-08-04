@@ -67,11 +67,60 @@ def compute_policy_loss(
     return torch.zeros(1, device=device, dtype=torch.float32).squeeze()
 
 
+def graph_loss_denominators(
+    is_full_search: Any,
+    value_valid: Any,
+    n_graphs: int,
+) -> tuple[float, float]:
+    """`(policy_denominator, value_denominator)` for ONE training step's WHOLE batch.
+
+    The gradient-accumulating micro-batch split (WP12-R F2) is exactly equivalent to the
+    un-split step only if every micro-batch divides by the denominator the UN-SPLIT batch
+    would have used, computed once from the FULL target arrays. Weighting by `B_m/B` is wrong
+    and weighting by `1/M` is wrong: neither denominator is the graph count, and no single
+    scalar weight per micro-batch can be right for both terms at once.
+
+    THE TWO EXPRESSIONS ARE DELIBERATELY ASYMMETRIC BECAUSE HEAD'S ARE:
+
+      policy -> sum of mask VALUES     (`ragged_policy_ce` casts the mask to the loss dtype
+                                        and sums it, `:101-102` below)
+      value  -> count of TRUE entries  (`binned_value_loss` divides by `kept.numel()`,
+                                        `model/dist65.py:58-62`)
+
+    They agree only while the masks are strictly 0/1 — which they are on the production path
+    (uint8 at `train/coordinator/dispatch.py`) — so a SYMMETRIC implementation would pass
+    every behavioural oracle while encoding a latent divergence that surfaces the first time
+    a non-binary mask reaches either loss. Measured at HEAD on the mask `[2, 0, 3]`: 5.0 vs
+    2.0.
+
+    The `None` arms fall back to the graph count, which reproduces HEAD's `per_graph.mean()`
+    and `per_row.mean()`. The value arm's fallback is only correct while `bin_logits` has one
+    row per graph; the caller ASSERTS that at the call rather than assuming it, so this
+    function does not become a second authority over a count it does not own.
+
+    The two mask parameters are `Any` rather than `torch.Tensor | None` because the ONE
+    production caller (`train/coordinator/dispatch.py::_graph_step`) has the targets as NUMPY
+    at this point — the denominators are computed PRE-COLLATE, from the full target arrays,
+    before any per-part tensor exists. `torch.as_tensor` is the coercion and it is a no-op on
+    a tensor.
+    """
+    if is_full_search is None:
+        p_den = float(n_graphs)
+    else:
+        p_den = max(float(torch.as_tensor(is_full_search).sum()), 1.0)
+    if value_valid is None:
+        v_den = float(n_graphs)
+    else:
+        v_den = max(float(torch.as_tensor(value_valid).reshape(-1).bool().sum()), 1.0)
+    return p_den, v_den
+
+
 def ragged_policy_ce(
     policy_logits: torch.Tensor,
     policy_target: torch.Tensor,
     legal_offsets: torch.Tensor,
     full_search_mask: torch.Tensor | None = None,
+    denominator: float | None = None,
 ) -> torch.Tensor:
     """Ragged per-legal-node policy CE for the GNN graph branch — the no-drop replacement
     for the dense-362 `compute_policy_loss`. Per graph: log_softmax over its legal-node
@@ -82,6 +131,12 @@ def ragged_policy_ce(
     segment softmax autopromotes to fp32 but an fp16 `policy_logits` drags fp16 along and
     the scatter_add dtype-mismatches (WP5b BREAK-1); the cast also fixes the fp16 log-clamp
     underflow (1e-12 flushing to 0 → log(0) → NaN).
+
+    `denominator` (WP12-R F2): when supplied, the reduction is `numerator_sum / denominator`
+    instead of this batch's own mean — how ONE micro-batch divides by the WHOLE step's
+    denominator so the parts sum to the un-split loss exactly (`graph_loss_denominators`).
+    With `denominator=None` every statement below is HEAD's, unchanged, which is what keeps
+    the DENSE path's behaviour bit-identical.
     """
     policy_logits = policy_logits.to(torch.float32)
     device = policy_logits.device
@@ -99,8 +154,12 @@ def ragged_policy_ce(
     per_graph.scatter_add_(0, seg, per_node)  # (B,)
     if full_search_mask is not None:
         mask = full_search_mask.reshape(-1).to(per_graph.dtype)
+        if denominator is not None:
+            return (per_graph * mask).sum() / denominator
         denom = mask.sum().clamp_min(1.0)
         return (per_graph * mask).sum() / denom
+    if denominator is not None:
+        return per_graph.sum() / denominator
     return per_graph.mean()
 
 
@@ -300,6 +359,45 @@ def compute_total_loss(
     return total
 
 
+def backward_accumulate(loss: torch.Tensor, scaler: GradScaler, fp16: bool) -> None:
+    """The BACKWARD half of `fp16_backward_step` — accumulate into `.grad`, step nothing.
+
+    Called once per micro-batch by the gradient-accumulating graph step (WP12-R F2). No
+    `zero_grad` inside, which is the whole point: the loop body accumulates and the caller
+    zeroes once before it and steps once after it.
+    """
+    if fp16:
+        scaler.scale(loss).backward()
+    else:
+        loss.backward()
+
+
+def clip_and_step(
+    optimizer: torch.optim.Optimizer,
+    scaler: GradScaler,
+    model: nn.Module,
+    fp16: bool,
+    max_grad_norm: float,
+) -> float:
+    """The CLIP+STEP half — run ONCE per training step, on the ACCUMULATED gradient.
+
+    Once, not once per micro-batch, and that is a correctness requirement rather than a
+    preference: clipping is NONLINEAR in the whole gradient, and the pre-clip norm it returns
+    is an ARMED GATE'S INPUT (`train/coordinator/step.py` reads `grad_norm` and fires
+    `grad_norm_hard_abort` off it). Clipping per micro-batch would feed that gate the norm of
+    a FRACTION of the gradient, rescaling a live abort threshold by an operator-invisible M.
+    """
+    if fp16:
+        scaler.unscale_(optimizer)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
+        optimizer.step()
+    return grad_norm
+
+
 def fp16_backward_step(
     loss: torch.Tensor,
     optimizer: torch.optim.Optimizer,
@@ -309,15 +407,13 @@ def fp16_backward_step(
     max_grad_norm: float = 1.0,
 ) -> float:
     """Backward pass with optional FP16 gradient scaling + clipping. Returns the pre-clip
-    gradient norm (the diagnostic signal)."""
-    if fp16:
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
-        scaler.step(optimizer)
-        scaler.update()
-    else:
-        loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
-        optimizer.step()
-    return grad_norm
+    gradient norm (the diagnostic signal).
+
+    DECOMPOSED, NOT FORKED (WP12-R F2): this is now exactly the composition of
+    `backward_accumulate` and `clip_and_step` — the same five statements, in the same order,
+    on the same objects. The dense step keeps calling THIS function, so its update is
+    unchanged; `tests/train/test_graph_microbatch_authority.py` pins that bit-exactly against
+    a golden captured before the decomposition.
+    """
+    backward_accumulate(loss, scaler, fp16)
+    return clip_and_step(optimizer, scaler, model, fp16, max_grad_norm)
