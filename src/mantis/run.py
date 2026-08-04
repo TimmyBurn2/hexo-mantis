@@ -26,6 +26,13 @@
 # abort's rc seam is four lines of code in the teardown plus its rationale, and it belongs at
 # this root for the reason stated there — the rule NAME is a manifest fact, `mantis.train` may
 # not import the manifest, and this module already imports it for the launcher's own rc.
+# Re-measured a FOURTH time at WP12R Step 3 R208 (911 -> 1010): the _DeferredHeartbeat
+# adapter + the _assert_pool_producers_live conjunct + the bind + the conjunct call are
+# composition-root code that belongs here for the SAME one-authority reason — the pool's
+# heartbeat is injected at :381 inside build_run_collaborators (the ONE builder), and the
+# conjunct gates the SAME watchdog.start() at :761. A split would create a second site
+# that touches the pool's heartbeat path, which is precisely the two-surfaces shape the
+# one-authority tests forbid. The argument is unchanged in kind.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
 TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that
@@ -171,6 +178,81 @@ class _DeferredSink:
 
     def emit(self, event: Mapping[str, Any]) -> None:
         self._inner.emit(event)
+
+
+class _DeferredHeartbeat:
+    """Late-binding heartbeat adapter (WP12R Step 3, CARD-PHANTOM-BEAT / R208/R225).
+
+    The production WorkerPool is constructed at run.py:381 inside
+    `build_run_collaborators`, BEFORE `run_safety.heartbeat` exists (`run_safety` is
+    built at run.py:531 inside `compose_run`). `pool.start()` (which spawns the drain
+    thread + inference server that call `pool._heartbeat`) runs at run.py:669, AFTER
+    `run_safety.heartbeat` exists — so the real heartbeat fn exists before any producer
+    ticks, but NOT at the pool's construction site.
+
+    This adapter is injected at run.py:381 BEFORE `run_safety.heartbeat` exists; `bind()`
+    is called in `compose_run` after `build_run_safety` returns and before `pool.start()`.
+    Pre-bind, `__call__` is a no-op (the pool is not started, so no producer ticks);
+    post-bind, `__call__` delegates to the real `registry.beat`.
+
+    R217 grant boundary: this adapter is heartbeat-ONLY. The `sink=` keyword at the same
+    construction site (run.py:380) is the narration chunk's (`_DeferredSink`) and is left
+    untouched. This class is a SEPARATE class from `_DeferredSink` (R217: separate class,
+    `sink=`/`_DeferredSink` untouched) and does NOT touch the sink path.
+
+    R208 producer-liveness conjunct: the `bound` flag is the composition root's
+    verification surface — before `watchdog.start()` (run.py:671), the root asserts the
+    pool's `_DeferredHeartbeat` is bound (`_assert_pool_producers_live`), so a pool that
+    got `heartbeat=None` (the rc-34 phantom-beat mutation) cannot arm the watchdog.
+
+    The defect this closes: `_BASE_WIRED_SOURCES` (run.py:113) declares
+    `inference_dispatch` + `selfplay_drain` as wired unconditionally, but `heartbeat=None`
+    at :381 made the pool's producers dead (pool_drain.py:57-59, inference_server.py:528-529
+    guard on `if pool._heartbeat is not None`). The watchdog armed on a lie and fired 42
+    at 1800 s on every healthy run5 — the rc-34 false-positive abort class (LAW-07's
+    founding class: a phantom gate input arming an abort chain).
+    """
+
+    def __init__(self) -> None:
+        self._inner: Callable[[str], None] = lambda _source: None
+        self.bound: bool = False
+
+    def bind(self, real: Callable[[str], None]) -> None:
+        self._inner = real
+        self.bound = True
+
+    def __call__(self, source: str) -> None:
+        self._inner(source)
+
+
+def _assert_pool_producers_live(pool: Any) -> None:
+    """R208/R225 producer-liveness conjunct at the composition root (CARD-PHANTOM-BEAT).
+
+    Called before `run_safety.watchdog.start()` at run.py:671. `_BASE_WIRED_SOURCES`
+    (run.py:113) declares `inference_dispatch` + `selfplay_drain` as wired unconditionally;
+    their producers live in the pool (pool_drain.py:55-59, inference_server.py:528-529) and
+    beat via `pool._heartbeat`. A real `WorkerPool` ALWAYS sets `self._heartbeat` at
+    pool.py:160 — if it got `heartbeat=None` (the rc-34 mutation at :381), the producers
+    are dead and the watchdog arms on phantom sources. This conjunct rejects that.
+
+    A test fake WITHOUT a `_heartbeat` attribute (FakePoolNeverStarted in
+    test_run_composition.py) is SKIPPED — the conjunct targets real WorkerPools, not
+    harness doubles, so the existing composition-root tests stay GREEN (R225: the watchdog
+    itself is correct as written; the conjunct lives HERE, not inside `arm()`).
+    """
+    if not hasattr(pool, "_heartbeat"):
+        return  # test fake — no producer surface; skip (harness, not subject)
+    hb = pool._heartbeat
+    if isinstance(hb, _DeferredHeartbeat) and hb.bound:
+        return  # the WIRED route: bound adapter forwards beats to the registry
+    raise RuntimeError(
+        "R208 producer-liveness conjunct: _BASE_WIRED_SOURCES declares pool-backed "
+        "sources (inference_dispatch, selfplay_drain) but the pool's heartbeat is not a "
+        f"bound _DeferredHeartbeat (got {hb!r}); the watchdog would arm on phantom "
+        "producers — the rc-34 false-positive abort class (LAW-07). Either the pool was "
+        "constructed with heartbeat=None (the pre-R208 defect) or the bind at compose_run "
+        "never ran (build_run_safety raised before it)."
+    )
 
 
 class RunCollaborators(NamedTuple):
@@ -378,7 +460,7 @@ def build_run_collaborators(*, config: RunConfig, out_dir: str | Path) -> RunCol
         # hparams dict path elsewhere, so it is handed `config.model_dump()`.
         pool = WorkerPool(model=trainer.model, config=config.model_dump(), device=device,
                           replay_buffer=buffer, arch=trainer.arch, sink=_DeferredSink(),
-                          heartbeat=None)
+                          heartbeat=_DeferredHeartbeat())
     return RunCollaborators(trainer=trainer, pool=pool, buffer=buffer, log_dir=log_dir,
                             checkpoint_dir=checkpoint_dir)
 
@@ -549,6 +631,21 @@ def compose_run(
     if isinstance(deferred, _DeferredSink):
         deferred.bind(run_safety.sink)
 
+    # WP12R Step 3 R208 (CARD-PHANTOM-BEAT): bind the pool's `_DeferredHeartbeat` to the
+    # real heartbeat fn now that it exists. The adapter was injected at `run.py:381`
+    # (inside `build_run_collaborators`) BEFORE `run_safety.heartbeat` existed;
+    # `pool.start()` (which spawns the drain thread + inference server that call
+    # `pool._heartbeat`) runs below, AFTER this bind, so beats are forwarded from the
+    # first tick. R217: `sink=`/`_DeferredSink` are UNTOUCHED here — this is heartbeat-
+    # only, a SEPARATE bind for a SEPARATE adapter. The `isinstance` guard keeps test
+    # harnesses that inject a bare fake pool (no `_heartbeat` attr, or a non-deferred
+    # heartbeat) working — production always passes a real `WorkerPool` with a
+    # `_DeferredHeartbeat`. The `bound` flag is the conjunct's verification surface at
+    # :744 (before `watchdog.start()`).
+    deferred_hb = getattr(pool, "_heartbeat", None)
+    if isinstance(deferred_hb, _DeferredHeartbeat):
+        deferred_hb.bind(run_safety.heartbeat)
+
     pool_start_attempted = False
     coordinator = None
     disk_guard = None
@@ -667,6 +764,15 @@ def compose_run(
         with _seam("pool.start"):
             pool_start_attempted = True
             pool.start()
+        # R208/R225 producer-liveness conjunct (CARD-PHANTOM-BEAT): before the watchdog
+        # arms, assert the pool's heartbeat is a bound _DeferredHeartbeat. A pool that got
+        # heartbeat=None (the rc-34 mutation) has dead producers (pool_drain.py:57-59,
+        # inference_server.py:528-529 guard on `if pool._heartbeat is not None`) — the
+        # watchdog would arm on phantom sources and fire 42 at 1800 s on every healthy
+        # run5. The conjunct lives HERE (R225), not inside HeartbeatWatchdog.arm(); a
+        # test fake without _heartbeat is skipped (harness, not subject).
+        with _seam("producer_liveness_conjunct"):
+            _assert_pool_producers_live(pool)
         with _seam("watchdog.start"):
             run_safety.watchdog.start()
 
