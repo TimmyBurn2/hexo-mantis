@@ -443,10 +443,18 @@ def test_system_stats_cadence(run_drain, drain_goldens):
     """C-07 — PASS iff a clock crossing the 5 s boundary emits exactly one `system_stats`
     payload (equal to capture) AFTER the six `game_complete` events, and a clock that does
     NOT cross emits none. FAIL = warmup-visibility emission drifted — either it stops (blind
-    monitor) or it fires every tick (event-stream flood)."""
+    monitor) or it fires every tick (event-stream flood).
+
+    WP12R Step 3 narration: the event stream now also carries lifecycle events
+    (`game_loop_entered`, `first_record_drained`) not in the old capture golden. The
+    `event_order` comparison filters to the golden's tracked types (`game_complete` +
+    `system_stats`) so C-07's cadence assertion holds against the old capture while the
+    new lifecycle events travel in the same stream."""
+    _GOLDEN_TYPES = {"game_complete", "system_stats"}
     crossed_golden = _variant(drain_goldens, "dense_5s_crossed")
     pool, _ = run_drain(clock=CLOCK_CROSSED)
-    assert [e["event"] for e in pool._sink.events] == crossed_golden["event_order"]
+    golden_tracked = [e for e in pool._sink.events if e["event"] in _GOLDEN_TYPES]
+    assert [e["event"] for e in golden_tracked] == crossed_golden["event_order"]
     stats = pool._sink.named("system_stats")
     assert len(stats) == 1
     expected_stats = [e for e in crossed_golden["events"] if e["event"] == "system_stats"][0]
@@ -455,7 +463,8 @@ def test_system_stats_cadence(run_drain, drain_goldens):
 
     not_crossed_golden = _variant(drain_goldens, "dense_5s_not_crossed")
     pool2, _ = run_drain(clock=CLOCK_NOT_CROSSED)
-    assert [e["event"] for e in pool2._sink.events] == not_crossed_golden["event_order"]
+    golden_tracked2 = [e for e in pool2._sink.events if e["event"] in _GOLDEN_TYPES]
+    assert [e["event"] for e in golden_tracked2] == not_crossed_golden["event_order"]
     assert pool2._sink.named("system_stats") == [], (
         "system_stats must not fire before the 5 s boundary"
     )

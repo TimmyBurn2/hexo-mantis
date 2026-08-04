@@ -67,7 +67,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -101,7 +101,7 @@ from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.determinism import seed_everything
-from mantis.train.emit import emit_via
+from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 from mantis.train.loop import run_training_loop
@@ -140,6 +140,37 @@ class RunHandles(NamedTuple):
     run_safety: Any
     eval_pipeline: Any | None
     shutdown: ShutdownState
+
+
+class _DeferredSink:
+    """Late-binding sink adapter (WP12R Step 3 narration, R216): satisfies BOTH `EventSink`
+    Protocols (selfplay-local `pool_hooks.EventSink` and train-local `mantis.train.emit.EventSink`)
+    via the single structural `emit(Mapping) -> None` method.
+
+    The pool is constructed at `run.py:349` inside `build_run_collaborators`, which runs BEFORE
+    `compose_run`. `run_safety.sink` (the real `JsonlEventSink`) is created at `run.py:499`
+    inside `compose_run`, AFTER the pool object exists. `pool.start()` (which spawns the drain
+    thread that calls `_emit`) runs at `run.py:624`, AFTER `run_safety.sink` exists — so the
+    sink exists before any event is emitted, but NOT at the pool's construction site.
+
+    This adapter is injected at `run.py:349` BEFORE `run_safety.sink` exists; `bind()` is called
+    in `compose_run` after `build_run_safety` returns and before `pool.start()`. Pre-bind,
+    events drop via `NullEventSink` (== `sink=None` behaviour); the pool is not started until
+    after `bind()`, so the pre-bind no-op is never exercised in production.
+
+    R217 grant boundary: this adapter is sink-ONLY. The `heartbeat=` keyword at the same
+    construction site (`run.py:349`) is R208's (CARD-PHANTOM-BEAT) and is left at `None`
+    untouched. The adapter does NOT touch the heartbeat path.
+    """
+
+    def __init__(self) -> None:
+        self._inner: Any = NullEventSink()
+
+    def bind(self, real: Any) -> None:
+        self._inner = real
+
+    def emit(self, event: Mapping[str, Any]) -> None:
+        self._inner.emit(event)
 
 
 class RunCollaborators(NamedTuple):
@@ -346,7 +377,8 @@ def build_run_collaborators(*, config: RunConfig, out_dir: str | Path) -> RunCol
         # from an injection-first disclaimer): the pool still builds only via the legacy
         # hparams dict path elsewhere, so it is handed `config.model_dump()`.
         pool = WorkerPool(model=trainer.model, config=config.model_dump(), device=device,
-                          replay_buffer=buffer, arch=trainer.arch, sink=None, heartbeat=None)
+                          replay_buffer=buffer, arch=trainer.arch, sink=_DeferredSink(),
+                          heartbeat=None)
     return RunCollaborators(trainer=trainer, pool=pool, buffer=buffer, log_dir=log_dir,
                             checkpoint_dir=checkpoint_dir)
 
@@ -503,6 +535,19 @@ def compose_run(
             actor_ckpt_step_fn=lambda: actor_sync.actor_ckpt_step(),
             learner_step_fn=lambda: int(trainer.step),
         )
+
+    # WP12R Step 3 narration (R216): bind the pool's `_DeferredSink` to the real sink now
+    # that it exists. The adapter was injected at `run.py:349` (inside
+    # `build_run_collaborators`) BEFORE `run_safety.sink` existed; `pool.start()` (which
+    # spawns the drain thread that calls `_emit`) runs below, AFTER this bind, so events are
+    # delivered from the first emit. `bind()` is not a resource-claiming step (no file, no
+    # thread, no segment), so it sits OUTSIDE the teardown ladder (which opens at the sink
+    # at `:522-530`). R217: `heartbeat=` is untouched here — this is sink-only. The
+    # `isinstance` guard keeps test harnesses that inject a bare fake pool (no `_sink`)
+    # working — production always passes a real `WorkerPool` with a `_DeferredSink`.
+    deferred = getattr(pool, "_sink", None)
+    if isinstance(deferred, _DeferredSink):
+        deferred.bind(run_safety.sink)
 
     pool_start_attempted = False
     coordinator = None

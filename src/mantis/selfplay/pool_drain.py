@@ -62,15 +62,22 @@ def _beat(pool: Any) -> None:
 def run_stats_loop(pool: Any) -> None:
     """Run the feeder loop until the pool's stop event is set."""
     _last_buf_emit = time.monotonic()
+    # WP12R Step 3 narration (R210/R216/R218, LAW-18): lifecycle events through the injected
+    # selfplay-local `EventSink`. `game_loop_entered` fires once on drain-thread entry.
+    if pool._sink is not None:
+        pool._sink.emit({"event": "game_loop_entered"})
+    _first_record_drained = False
     while not pool._stop_event.is_set():
         # ONE hoisted branch. A graph spec drains via `collect_graph_data()` →
         # `push_graph_position` (no planes / chain / ownership / winning line — the graph
         # net has only policy and value heads); every grid encoding takes the dense
         # `collect_data()` → bulk-push arm unchanged.
         if pool._is_graph:
-            push_graph(pool, pool._runner.collect_graph_data())
+            collected_rows = pool._runner.collect_graph_data()
+            push_graph(pool, collected_rows)
         else:
-            push_dense(pool, pool._runner.collect_data())
+            collected_rows = pool._runner.collect_data()
+            push_dense(pool, collected_rows)
 
         with pool._lock:
             pool.games_completed = int(pool._runner.games_completed)
@@ -81,6 +88,19 @@ def run_stats_loop(pool: Any) -> None:
         # Fully consumed each iteration; no unbounded accumulation. The drain returns
         # metadata-only tuples — spatial aux targets flow per-row through the push arm.
         games_batch = pool._runner.drain_game_results()
+
+        # WP12R Step 3 narration (R210/R216/R218, DESIGN §4.5 (β)): `first_record_drained`
+        # fires once on the first NON-EMPTY drain (a record actually flowed — the event name
+        # is honest, not a "drain loop first iteration" regardless of content). OR semantics:
+        # positions flow before games complete, so the gate is (collected_rows OR games_batch)
+        # — a position push counts as a record flowing even when no game has finished yet.
+        if not _first_record_drained and (collected_rows or games_batch):
+            _first_record_drained = True
+            if pool._sink is not None:
+                pool._sink.emit({
+                    "event": "first_record_drained",
+                    "representation": "graph" if pool._is_graph else "dense",
+                })
 
         # Bill one search per MOVE, not per GAME. `positions_generated` counts
         # row-producing moves, so the delta tracks moves accrued in this interval and is

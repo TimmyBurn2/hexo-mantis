@@ -1,13 +1,15 @@
-# R8 >300 justify (330, MEASURED by `wc -l` at WP12-R Phase O; 293 before it, and the figure
-# is restated at the file's measured size rather than the size it was written for — SF-7):
-# `emit_training_events` builds and emits BOTH per-boundary payloads (`training_step` and
-# `iteration_complete`) in one pass and returns the first, because the four WARN rules run on
-# the payload that was actually emitted — splitting the two builders would put the rule's
-# input and the rule's producer behind an import and re-open exactly the LAW-07 gap the
-# return exists to close. Phase O adds the `target_integrity` block (+18 lines, 3 of them
-# code) plus the SF-7 correction to `PoolTelemetryLike`'s disjointness sentence; the rest is
-# the rationale that IS the row (R164/LAW-18: the counter attributing a run's own drift was
-# test-visible only).
+# R8 >300 justify (402, MEASURED by `wc -l`; was 330 at WP12-R Phase O, 293 before it —
+# SF-7): the file builds and emits BOTH per-boundary payloads (`training_step` and
+# `iteration_complete`). WP12R Step 3 narration (R210) SPLIT the builder into
+# `emit_training_step_event` + `emit_iteration_complete_event` so the two halves can live on
+# different cadences (training_step stays `log_interval`-gated; iteration_complete emits per
+# coordinator step), keeping the OLD combined `emit_training_events` as a thin wrapper for the
+# `tests/train/test_target_counter_events.py:486` signature pin. The 4 WARN rules run on the
+# `training_step` payload that was actually emitted, so a rule can never fire on a shape the
+# event stream does not carry (LAW-07 — the alert and its producer are the same object).
+# Phase O adds the `target_integrity` block; WP12R R218 rider 1 adds the `Q-O-TWO-POOL-READS`
+# collapse (`rstats` passed into `emit_iteration_complete_event` so it does NOT make its own
+# `pool.runner_stats()` call — ONE atomic snapshot, the straddle ELIMINATED).
 """Training-loop event BUILDERS (WP10 §a.3 IMPROVE — route through the injected EventSink).
 
 Ported behaviour-exact from the old `training/events.py`, but every payload is funnelled
@@ -201,45 +203,24 @@ def emit_axis_distribution(
     return axis_q
 
 
-def emit_training_events(
+def emit_training_step_event(
     train_step: int,
     loss_info: dict[str, float],
-    w_pre: float,
-    games_played: int,
-    last_iter_games: int,
-    pool: PoolTelemetryLike,
-    buffer: Any,
-    gpu_monitor: Any,
-    config: dict[str, Any],
-    mcts_config: dict[str, Any],
-    capacity: int,
-    games_per_hour_fn: Any,
     qfire_delta: int | None,
     sink: EventSink,
     early_game_probe: Any | None = None,
     trainer_model: Any | None = None,
     solver_deltas: dict[str, Any] | None = None,
-    steps_per_hour_fn: Any | None = None,
-    *,
-    target_integrity: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Emit `training_step` + `iteration_complete` events through the injected sink and
-    RETURN the `training_step` payload.
+    """Build + emit the `training_step` event (WP13-A §c.4) and RETURN its payload.
 
-    `target_integrity` (WP12-R Phase O, R164) is REQUIRED, keyword-only and carries NO
-    default, and that is the whole difference from `solver_deltas` two lines above — a
-    defaulted parameter with zero callers passing it, whose payload keys therefore silently
-    never appear and whose absence no test can see. A parameter default is a MIGRATED
-    authority, not an absent one (`run.py:366-372`, MF-2 Attack B): with no default, a
-    caller that forgets it is a `TypeError` at the first `log_interval` boundary, loudly.
-    (`solver_deltas` itself is left byte-untouched here — its fix needs a semantics decision
-    about denominators and about the documented-unproduced `quiescence_fires_per_step`, and
-    taking that inside this commit would be the scope widening R119 forbids.)
-
-    The return is what the 4 WARN rules read (`monitor.rules.emit_training_step_alerts`):
-    the rules run on the payload that was actually emitted, so a rule can never fire on a
-    shape the event stream does not carry (LAW-07 — the alert and its producer are the
-    same object)."""
+    Split out of `emit_training_events` (WP12R Step 3 narration, R210): `training_step` is
+    the per-`log_interval`-boundary payload the 4 WARN rules read
+    (`monitor.rules.emit_training_step_alerts`). The rules run on the payload that was
+    actually emitted, so a rule can never fire on a shape the event stream does not carry
+    (LAW-07 — the alert and its producer are the same object). Stays `log_interval`-gated
+    at the coordinator call site (R210: "training_step alerting stays gated").
+    """
     policy_entropy = float(loss_info.get("policy_entropy", 0.0))
     value_accuracy = float(loss_info.get("value_accuracy", 0.0))
     grad_norm = float(loss_info.get("grad_norm", float("nan")))
@@ -290,11 +271,44 @@ def emit_training_events(
     if solver_deltas:
         training_step_event.update(solver_deltas)
     emit_via(sink, training_step_event)
+    return training_step_event
 
+
+def emit_iteration_complete_event(
+    train_step: int,
+    w_pre: float,
+    games_played: int,
+    last_iter_games: int,
+    pool: PoolTelemetryLike,
+    buffer: Any,
+    config: dict[str, Any],
+    mcts_config: dict[str, Any],
+    capacity: int,
+    games_per_hour_fn: Any,
+    steps_per_hour_fn: Any | None,
+    target_integrity: Mapping[str, Any],
+    rstats: Any,
+    sink: EventSink,
+) -> None:
+    """Build + emit the `iteration_complete` event (WP13-A §c.4, WP12-R Phase O).
+
+    Split out of `emit_training_events` (WP12R Step 3 narration, R210): `iteration_complete`
+    is the per-iteration counter payload (`games_total`, `buffer_size`,
+    `corpus_selfplay_frac`, `batch_fill_pct`, the `target_integrity` block). R210: "games_total
+    is a per-iteration counter, not a training-logging event" — emitted per coordinator step
+    (per burst), NOT `log_interval`-gated.
+
+    `rstats` (R218 rider 1, `Q-O-TWO-POOL-READS` collapse): the `RunnerStats` snapshot from
+    `StepCoordinator._target_integrity_report`, passed IN so this builder does NOT make its
+    own `pool.runner_stats()` call. The collapse ELIMINATES the straddle — the
+    `target_integrity` block and the `mcts_mean_depth`/cluster block become ONE atomic read
+    instead of two microseconds-apart reads that could straddle a game boundary. This is a
+    SEMANTIC CHANGE (more correct, not a no-op): the two blocks are now guaranteed-consistent
+    on one snapshot.
+    """
     gph = games_per_hour_fn()
     avg_gl = pool.avg_game_length if hasattr(pool, "avg_game_length") else 0.0
     pph = gph * avg_gl if avg_gl > 0 else 0.0
-    rstats = pool.runner_stats()
     _puct_regime = not pool.gumbel_mcts
     iteration_complete_event: dict[str, Any] = {
         "event": "iteration_complete",
@@ -327,4 +341,64 @@ def emit_training_events(
     }
     iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
     emit_via(sink, iteration_complete_event)
+
+
+def emit_training_events(
+    train_step: int,
+    loss_info: dict[str, float],
+    w_pre: float,
+    games_played: int,
+    last_iter_games: int,
+    pool: PoolTelemetryLike,
+    buffer: Any,
+    gpu_monitor: Any,
+    config: dict[str, Any],
+    mcts_config: dict[str, Any],
+    capacity: int,
+    games_per_hour_fn: Any,
+    qfire_delta: int | None,
+    sink: EventSink,
+    early_game_probe: Any | None = None,
+    trainer_model: Any | None = None,
+    solver_deltas: dict[str, Any] | None = None,
+    steps_per_hour_fn: Any | None = None,
+    *,
+    target_integrity: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Emit `training_step` + `iteration_complete` events through the injected sink and
+    RETURN the `training_step` payload.
+
+    RETAINED as a thin wrapper (WP12R Step 3 narration, R210): the production coordinator
+    now calls `emit_training_step_event` + `emit_iteration_complete_event` directly (the
+    two halves live on different cadences after R210 — `training_step` stays
+    `log_interval`-gated, `iteration_complete` emits per coordinator step). This wrapper
+    keeps the OLD combined signature so `tests/train/test_target_counter_events.py:486`'s
+    `inspect.signature(emit_training_events).parameters` assertion stays green. It has no
+    production caller after the split; retiring it is a wider change out of scope here.
+
+    `target_integrity` (WP12-R Phase O, R164) is REQUIRED, keyword-only and carries NO
+    default, and that is the whole difference from `solver_deltas` two lines above — a
+    defaulted parameter with zero callers passing it, whose payload keys therefore silently
+    never appear and whose absence no test can see. A parameter default is a MIGRATED
+    authority, not an absent one (`run.py:366-372`, MF-2 Attack B): with no default, a
+    caller that forgets it is a `TypeError` at the first `log_interval` boundary, loudly.
+    (`solver_deltas` itself is left byte-untouched here — its fix needs a semantics decision
+    about denominators and about the documented-unproduced `quiescence_fires_per_step`, and
+    taking that inside this commit would be the scope widening R119 forbids.)
+
+    The return is what the 4 WARN rules read (`monitor.rules.emit_training_step_alerts`):
+    the rules run on the payload that was actually emitted, so a rule can never fire on a
+    shape the event stream does not carry (LAW-07 — the alert and its producer are the
+    same object)."""
+    training_step_event = emit_training_step_event(
+        train_step, loss_info, qfire_delta, sink,
+        early_game_probe=early_game_probe, trainer_model=trainer_model,
+        solver_deltas=solver_deltas,
+    )
+    rstats = pool.runner_stats()
+    emit_iteration_complete_event(
+        train_step, w_pre, games_played, last_iter_games, pool, buffer,
+        config, mcts_config, capacity, games_per_hour_fn, steps_per_hour_fn,
+        target_integrity, rstats, sink,
+    )
     return training_step_event

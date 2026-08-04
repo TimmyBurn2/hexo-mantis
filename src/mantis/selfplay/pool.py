@@ -130,6 +130,7 @@ class WorkerPool:
             batcher=self._runner.batcher,
             encoding_spec=spec,
             heartbeat=heartbeat,
+            sink=sink,
         )
 
         self._stop_event = threading.Event()
@@ -316,8 +317,26 @@ class WorkerPool:
         self._stop_event.clear()
         self.model.eval()
 
+        # WP12R Step 3 narration (R210/R216/R218, LAW-18): lifecycle events emitted through
+        # the injected selfplay-local `EventSink`. No sink ⇒ dropped (the declared default,
+        # not a silent failure — `pool_hooks.EventSink`'s docstring at `:32-40`).
+        if self._sink is not None:
+            self._sink.emit({
+                "event": "runner_started",
+                "n_workers": self.n_workers,
+                "encoding": self.encoding_spec.name,
+            })
+
         self._inference_server.start()
         self._runner.start()
+
+        # The Rust spawn loop (`crates/mantis-selfplay/src/runner/spawn.rs:67-79`) is
+        # synchronous, so by the time `_runner.start()` returns the N threads are spawned.
+        if self._sink is not None:
+            self._sink.emit({
+                "event": "workers_spawned",
+                "n_workers": self.n_workers,
+            })
 
         self._stats_thread = threading.Thread(
             target=self._stats_loop,

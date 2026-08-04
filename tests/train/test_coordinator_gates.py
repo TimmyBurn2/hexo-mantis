@@ -415,12 +415,19 @@ def test_iteration_complete_carries_both_rate_gap_metrics() -> None:
 
 def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
     """O-22 (F-3 regression) — with `log_interval=5` and a burst of 4 TRAINING steps per
-    outer iteration, 20 training steps must produce EXACTLY 4 emissions, at steps 5/10/15/20.
+    outer iteration, 20 training steps must produce EXACTLY 4 `training_step` + `monitor_gates`
+    emissions, at steps 5/10/15/20.
 
     Bites the once-per-burst boundary test: evaluating `step % log_interval` only after the
     burst (when `_train_step` has already advanced by up to `max_train_burst`) hits a boundary
     only when the post-burst step happens to be an exact multiple — here just step 20, i.e. 1
     emission instead of 4, thinning the LAW-18 stream and both gates' sampling by ~the burst.
+
+    WP12R Step 3 narration (R210, DESIGN §3.6): `iteration_complete` was DECOUPLED from
+    `log_interval` — it now emits per coordinator step (per burst), NOT per `log_interval`
+    boundary. So with 5 outer iterations × burst 4, `iteration_complete` emits 5 times at the
+    post-burst step values `[4, 8, 12, 16, 20]` (the `_train_step` value at the O6 return),
+    while `training_step`/`monitor_gates` stay `log_interval`-gated at `[5, 10, 15, 20]`.
     """
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
                        draw_rate_abort=None)
@@ -430,9 +437,16 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
         h.coord.step()
 
     assert h.trainer.step == 20, "5 outer iterations × burst 4 must run 20 training steps"
-    assert [e["step"] for e in h.sink.named("training_step")] == [5, 10, 15, 20]
-    assert [e["step"] for e in h.sink.named("iteration_complete")] == [5, 10, 15, 20]
-    assert [e["step"] for e in h.sink.named("monitor_gates")] == [5, 10, 15, 20]
+    assert [e["step"] for e in h.sink.named("training_step")] == [5, 10, 15, 20], (
+        "training_step stays log_interval-gated (R210: training_step alerting stays gated)"
+    )
+    assert [e["step"] for e in h.sink.named("iteration_complete")] == [4, 8, 12, 16, 20], (
+        "iteration_complete emits per coordinator step (per burst) after R210's decoupling, "
+        "NOT per log_interval boundary. The step value is the post-burst _train_step."
+    )
+    assert [e["step"] for e in h.sink.named("monitor_gates")] == [5, 10, 15, 20], (
+        "monitor_gates stays log_interval-gated (R210: training_step alerting stays gated)"
+    )
 
 
 def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:

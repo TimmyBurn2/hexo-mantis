@@ -41,6 +41,7 @@ from mantis.encoding import EncodingSpec as RegistrySpec
 from mantis.encoding import resolve_from_config
 from mantis.model import amp_dtype_for
 from mantis.selfplay.hparams import InferenceHParams, is_graph_representation
+from mantis.selfplay.pool_hooks import EventSink
 
 _LOG = logging.getLogger(__name__)
 
@@ -62,11 +63,20 @@ class InferenceServer(threading.Thread):
         encoding_spec: RegistrySpec | None = None,
         *,
         heartbeat: Callable[[str], None] | None = None,
+        sink: EventSink | None = None,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
         self.model.eval()
         self.device = device
+        # WP12R Step 3 narration (R216/R218): the selfplay-local `EventSink` Protocol
+        # (`pool_hooks.py:32-40`), structural (single `emit(Mapping) -> None`). NOT
+        # `mantis.train.emit.EventSink` — this module must not import the train-side
+        # Protocol (R216: no `selfplay → train` DAG edge). Same structural-typing pattern
+        # as `HeartbeatFn` (`:47-49`: "the server only needs the structural type").
+        self._sink = sink
+        self._first_enqueued_emitted = False
+        self._first_served_emitted = False
         # Behaviour-neutral by default: with no sink injected the emission points below
         # do nothing at all. The consuming watchdog is not built here.
         self._heartbeat = heartbeat
@@ -424,6 +434,14 @@ class InferenceServer(threading.Thread):
                     )
                     if not request_ids:
                         continue
+                    if not self._first_enqueued_emitted:
+                        self._first_enqueued_emitted = True
+                        if self._sink is not None:
+                            self._sink.emit({
+                                "event": "first_inference_enqueued",
+                                "batch_size": len(request_ids),
+                                "representation": "graph",
+                            })
                     self._total_requests += len(request_ids)
                     try:
                         batch = collate_graph_batch(
@@ -499,6 +517,14 @@ class InferenceServer(threading.Thread):
                         self._batcher.submit_graph_inference_failure(request_ids, error_msg)
                         continue
                     self._forward_count += 1
+                    if not self._first_served_emitted:
+                        self._first_served_emitted = True
+                        if self._sink is not None:
+                            self._sink.emit({
+                                "event": "first_inference_served",
+                                "batch_size": len(request_ids),
+                                "representation": "graph",
+                            })
                     if self._heartbeat is not None:
                         self._heartbeat(_HEARTBEAT_SOURCE)
                 except Exception as exc:  # noqa: BLE001 — loop keeps serving next batch
@@ -554,6 +580,14 @@ class InferenceServer(threading.Thread):
                     )
                     if not request_ids:
                         continue
+                    if not self._first_enqueued_emitted:
+                        self._first_enqueued_emitted = True
+                        if self._sink is not None:
+                            self._sink.emit({
+                                "event": "first_inference_enqueued",
+                                "batch_size": len(request_ids),
+                                "representation": "dense",
+                            })
                     _t_fetched = time.perf_counter() if _perf else 0.0
                     # Bound here so the `_perf` log block below is never reading an
                     # unbound name; the real values are assigned only under `_perf`.
@@ -700,6 +734,14 @@ class InferenceServer(threading.Thread):
                         continue
 
                     self._forward_count += 1
+                    if not self._first_served_emitted:
+                        self._first_served_emitted = True
+                        if self._sink is not None:
+                            self._sink.emit({
+                                "event": "first_inference_served",
+                                "batch_size": len(request_ids),
+                                "representation": "dense",
+                            })
                     if self._heartbeat is not None:
                         self._heartbeat(_HEARTBEAT_SOURCE)
                 except Exception as exc:  # noqa: BLE001 — loop keeps serving next batch

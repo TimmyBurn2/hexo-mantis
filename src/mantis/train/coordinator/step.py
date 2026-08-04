@@ -61,7 +61,11 @@ from mantis.train.coordinator.dispatch import (
     run_declared_train_step,
 )
 from mantis.train.emit import NullEventSink, emit_via
-from mantis.train.events import emit_axis_distribution, emit_training_events
+from mantis.train.events import (
+    emit_axis_distribution,
+    emit_iteration_complete_event,
+    emit_training_step_event,
+)
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
 
@@ -504,6 +508,14 @@ class StepCoordinator:
         # completed rounds reach `on_eval_round_complete` via the async drain (§c.4b).
         # `_maybe_kick_eval` consumes the ACK only for `eval_skipped_busy` (WP13-A P-06 pin).
         eval_kicked_off, eval_skipped_busy = self._maybe_kick_eval(cfg)
+        # WP12R Step 3 narration (R210): `iteration_complete` emits at the O6 training-burst
+        # return, per coordinator step, INDEPENDENT of `log_interval`. `training_step`
+        # alerting stays `log_interval`-gated (above, in `_run_log_interval`); only
+        # `iteration_complete` (the per-iteration counter) was decoupled — "games_total is
+        # a per-iteration counter, not a training-logging event" (R210). NOT called on O2/O3
+        # early returns (clean-completion / shutdown-save): those are not training-burst
+        # returns (`loss_info` would be {}, `games_this_iter` degenerate).
+        self._emit_iteration_complete(cfg)
         return self._build_outcome(
             in_warmup=False, waiting_for_games=False,
             **{**base, "steps_run": steps_budget, "buffer_resized": buffer_resized,
@@ -570,14 +582,22 @@ class StepCoordinator:
     def _run_log_interval(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float]
     ) -> tuple[bool, bool]:
-        """At the `log_interval` boundary: emit the run's payload events, run the 4 WARN
-        rules on them, run the two LIVE-producer hard-abort gates, and publish the LAW-18
-        `monitor_gates` summary. Returns ``(axis_emitted, hard_abort_fired)``."""
+        """At the `log_interval` boundary: emit the `training_step` payload, run the 4 WARN
+        rules on it, run the two LIVE-producer hard-abort gates, and publish the LAW-18
+        `monitor_gates` summary. Returns ``(axis_emitted, hard_abort_fired)``.
+
+        WP12R Step 3 narration (R210): `iteration_complete` is NO LONGER emitted here. It
+        moved to `_emit_iteration_complete` at the O6 training-burst return, per coordinator
+        step, INDEPENDENT of `log_interval`. R210: "training_step alerting stays gated" —
+        the `training_step` event, the WARN rules, `emit_axis_distribution`, the hard-abort
+        gates and `monitor_gates` all STAY `log_interval`-gated here. Only
+        `iteration_complete` (the per-iteration counter, not a training-logging event) was
+        decoupled."""
         if not loss_info or cfg.log_interval <= 0 or self._train_step % cfg.log_interval != 0:
             return False, False
         sink = self._sink if self._sink is not None else NullEventSink()
 
-        payload = self._emit_training_events(cfg, loss_info, sink)
+        payload = self._emit_training_step(cfg, loss_info, sink)
         emit_training_step_alerts(payload, self.monitor_cfg, self._loss_window, sink=sink)
         keep = max(2 * int(self.monitor_cfg.alert_loss_increase_window) + 2, 8)
         del self._loss_window[:-keep]
@@ -591,33 +611,57 @@ class StepCoordinator:
         self._emit_monitor_gates(cfg, sink)
         return axis is not None, fired
 
-    def _emit_training_events(
+    def _emit_training_step(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
     ) -> dict[str, Any]:
-        """Build + emit `training_step` and `iteration_complete` through the injected sink
-        (the WP10 builders; payload shapes unchanged) and return the `training_step`
-        payload the WARN rules read."""
+        """Build + emit the `training_step` event (WP13-A §c.4) through the injected sink
+        and return its payload (the 4 WARN rules read it). Split out of the old
+        `_emit_training_events` (WP12R Step 3 narration, R210): `iteration_complete` moved to
+        `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated."""
+        payload = emit_training_step_event(
+            self._train_step, loss_info,
+            # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
+            # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
+            # as a real measurement ("quiescence never fires") — a miniature F-10.
+            None, sink,
+        )
+        return payload
+
+    def _emit_iteration_complete(self, cfg: StepCoordinatorConfig) -> None:
+        """Build + emit `iteration_complete` (the per-iteration counter payload) at the O6
+        training-burst return, per coordinator step, INDEPENDENT of `log_interval` (WP12R
+        Step 3 narration, R210). Carries `games_total`, `games_this_iter`, `buffer_size`,
+        `corpus_selfplay_frac`, `batch_fill_pct`, the `target_integrity` block, plus
+        `mcts_mean_depth` and the regime-gated cluster stats.
+
+        R218 rider 1 (`Q-O-TWO-POOL-READS` collapse): takes the `RunnerStats` snapshot from
+        `_target_integrity_report` and passes it INTO `emit_iteration_complete_event` as the
+        `rstats` kwarg, so the builder does NOT make its own `pool.runner_stats()` call. ONE
+        atomic snapshot per emit — the straddle between the `target_integrity` block and the
+        `mcts_mean_depth`/cluster block is ELIMINATED (a semantic change, more correct than a
+        no-op). See `_target_integrity_report`'s docstring for the cost disclosure.
+
+        Updates `self._last_iter_games` so an "iteration" = one coordinator `step()` = one
+        burst (the `games_this_iter` denominator). NOT called on O2/O3 early returns
+        (clean-completion / shutdown-save) — those are not training-burst returns.
+        """
+        sink = self._sink if self._sink is not None else NullEventSink()
         w_pre = 0.0
         if self.pretrained_buffer is not None:
             w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
                                                cfg.mixing_min_w, cfg.mixing_decay_steps)
-        payload = emit_training_events(
-            self._train_step, loss_info, w_pre, self._games_played, self._last_iter_games,
-            self.pool, self.buffer, getattr(self.subsystems, "gpu_monitor", None),
-            self.full_config, self.full_config.get("mcts", {}), cfg.capacity,
-            # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
-            # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
-            # as a real measurement ("quiescence never fires") — a miniature F-10.
-            self._games_per_hour, None, sink,
-            steps_per_hour_fn=self._steps_per_hour,
-            target_integrity=self._target_integrity_report(),
+        rstats_report, rstats = self._target_integrity_report()
+        emit_iteration_complete_event(
+            self._train_step, w_pre, self._games_played, self._last_iter_games,
+            self.pool, self.buffer, self.full_config, self.full_config.get("mcts", {}),
+            cfg.capacity, self._games_per_hour, self._steps_per_hour,
+            rstats_report, rstats, sink,
         )
         self._last_iter_games = self._games_played
-        return payload
 
-    def _target_integrity_report(self) -> dict[str, Any]:
+    def _target_integrity_report(self) -> tuple[dict[str, Any], Any]:
         """The three Phase-T target-integrity counters as an `iteration_complete` block
-        (WP12-R Phase O, R164 / LAW-18).
+        (WP12-R Phase O, R164 / LAW-18), and the `RunnerStats` snapshot they were built from.
 
         `PREREG_T §0b` names `export_offwindow_mass_moves` as THE in-run witness attributing
         the expected game-shape drift — and at HEAD that counter was readable only by a test
@@ -630,22 +674,26 @@ class StepCoordinator:
         `target_integrity_defects` — its latch is run-fatal, so it reads 0 in every run that
         survives to emit — distinguishable from a field with no producer.
 
-        COST, stated as MEASURED rather than as assumed (RED-TEAM F-03 corrected an earlier
-        version of this paragraph, which claimed "no new pool read … off a snapshot of the
-        same surface" — that was FALSE): this method takes its OWN snapshot, so an
-        `iteration_complete` boundary now makes **two** `runner_stats()` calls, this one and
-        `mantis.train.events`'s. Measured: 2 calls per emit, at every `log_interval`. That is
-        one extra FFI crossing (~20 atomic loads) per BOUNDARY — not per step: the emit is
-        gated by `_run_log_interval`'s `self._train_step % cfg.log_interval != 0` early
-        return, and run5 mints `log_interval: 1000` (`configs/run5.yaml:117`), so it executes
-        on 1 train step in 1000. Beyond the read: three subtractions and three divisions.
+        Returns `(report, rstats)`: the report dict travels into `iteration_complete`'s
+        `target_integrity` block; `rstats` (the SAME snapshot) travels into
+        `emit_iteration_complete_event`'s `rstats` kwarg so the builder does NOT make its own
+        `pool.runner_stats()` call (R218 rider 1, `Q-O-TWO-POOL-READS` collapse).
 
-        CONSEQUENCE, disclosed because nothing else states it: `iteration_complete` is
-        therefore NOT a single-instant payload. `target_integrity` comes from THIS snapshot;
-        `mcts_mean_depth` and the regime-gated cluster block come from the later one taken
-        inside `emit_training_events`. The two are taken microseconds apart with workers
-        live, so the counters and the cluster stats can straddle a game boundary. Collapsing
-        the two reads into one is `Q-O-TWO-POOL-READS`, deliberately not taken here.
+        COST, stated as MEASURED (WP12R Step 3 narration, R210 + R218 rider 1): this method
+        makes ONE `pool.runner_stats()` FFI crossing per `iteration_complete` emit. After
+        R210's decoupling `iteration_complete` emits per coordinator step (per burst), so this
+        runs once per burst, NOT once per `log_interval` boundary. R218 rider 1 COLLAPSED the
+        two reads (this one + `events.py:297`'s) into ONE — the builder no longer takes its
+        own snapshot. One FFI crossing (~20 atomic loads) per burst, plus three subtractions
+        and three divisions. At run5's `log_interval=1000` this ran on 1 step in 1000; per
+        burst it runs on every `step()` return.
+
+        SEMANTIC CHANGE (R218 rider 1): the collapse ELIMINATES the straddle. Before it,
+        `target_integrity` came from THIS snapshot and `mcts_mean_depth`/cluster stats came
+        from a second `runner_stats()` call inside `emit_iteration_complete_event`, taken
+        microseconds apart with workers live — the two could straddle a game boundary (a
+        counter increment between the reads). After the collapse, both blocks operate on the
+        SAME atomic snapshot. This is more correct (guaranteed-consistent), not a no-op.
         """
         rstats = self.pool.runner_stats()
         positions = _snapshot_counter(rstats, _POSITIONS_COUNTER)
@@ -661,7 +709,7 @@ class StepCoordinator:
                 self._last_target_counters[name] = total
         if positions is not None:
             self._last_target_counters[_POSITIONS_COUNTER] = positions
-        return report
+        return report, rstats
 
     def _games_per_hour(self) -> float:
         elapsed = self._clock.now() - self._run_started

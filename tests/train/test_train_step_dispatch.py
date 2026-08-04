@@ -114,12 +114,39 @@ def _tiny_dense_trainer(tmp_path, mk_config, tiny_arch) -> Trainer:
                    checkpoint_dir=tmp_path / "ckpt", device=torch.device("cpu"))
 
 
+class _RunnerStats:
+    """Minimal `RunnerStats` surface for `emit_iteration_complete_event`."""
+    mcts_mean_depth = 5.0
+    mcts_mean_root_concentration = 0.1
+    cluster_value_std_mean = 0.0
+    cluster_policy_disagreement_mean = 0.0
+    cluster_variance_sample_count = 0
+
+
 class _Pool:
-    """Minimal WorkerPoolLike stand-in for driving step() past O4/O5 (not the subject)."""
+    """Minimal WorkerPoolLike stand-in for driving step() past O4/O5 (not the subject).
+
+    WP12R Step 3 narration: gained the `PoolTelemetryLike` surface `iteration_complete`
+    reads (`runner_stats`, `avg_game_length`, `x_winrate`, `o_winrate`, `draws`,
+    `sims_per_sec`, `batch_fill_pct`, `gumbel_mcts`) because `iteration_complete` now emits
+    per-burst (every O6 return) instead of only at `log_interval` boundaries, so this stub
+    must satisfy `emit_iteration_complete_event` on every `step()` call.
+    """
 
     def __init__(self, games_completed: int = 3) -> None:
         self.games_completed = games_completed
         self.n_workers = 1
+        self.gumbel_mcts = True
+        self.avg_game_length = 20.0
+        self.x_winrate = 0.5
+        self.o_winrate = 0.45
+        self.draws = 1
+        self.sims_per_sec = 100.0
+        self.batch_fill_pct = 0.9
+        self.recent_move_histories: list = []
+
+    def runner_stats(self) -> Any:
+        return _RunnerStats()
 
 
 #: WP12-R F2: `run_declared_train_step` gained a REQUIRED `caps_provider` — a zero-arg
