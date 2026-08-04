@@ -33,6 +33,21 @@ InferFn = Callable[[Any], tuple[list[float], float]]
 ExpandFn = Callable[[MCTSTree, list[Any]], None]
 
 
+def _release_cuda_cache() -> None:
+    """Release the CUDA caching allocator's freed blocks after each move.
+
+    VERDICT-A (CARD_VRAM_ACCUMULATION): the graph path generates variable-size
+    tensor batches per MCTS leaf; the caching allocator cannot reuse blocks of
+    mismatched sizes and accumulates them. Without this release, reserved VRAM
+    grows monotonically to 8.4+ GiB at deploy_sims=150; with it, reserved stays
+    at ~24–108 MiB (measured V-0.2). No-op when CUDA is unavailable.
+    """
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def select_argmax_child(
     children_info: list[ChildInfo], *, c_visit: float, c_scale: float
 ) -> tuple[int, int]:
@@ -122,7 +137,11 @@ class DeployHeadPlayer:
                 values.append(value)
             tree.expand_and_backup(policies, values)
         children_info = tree.get_root_children_info()
-        return select_argmax_child(children_info, c_visit=self._c_visit, c_scale=self._c_scale)
+        try:
+            move = select_argmax_child(children_info, c_visit=self._c_visit, c_scale=self._c_scale)
+        finally:
+            _release_cuda_cache()
+        return move
 
 
 __all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn", "InferFn", "select_argmax_child"]
