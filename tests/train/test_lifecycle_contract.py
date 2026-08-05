@@ -85,18 +85,24 @@ def test_sigterm_sets_save_then_exit_state(restore_signals):
 
 
 def test_double_signal_force_exits(restore_signals, monkeypatch):
-    """T-LC-03 — PASS iff a second signal (stop_count>=2) calls sys.exit(1). Bites: the second
-    signal not forcing exit."""
+    """T-LC-03 — PASS iff a second signal (stop_count>=2) force-tears-down registered children
+    then calls os._exit(1). Bites: the second signal not forcing exit, or exiting without
+    tearing down children (CARD-ORPHAN-WORKERS, R230)."""
+    from mantis.train.lifecycle import signals as sig_mod
     state = ShutdownState()
     install_signal_handlers(state)
     handler = signal.getsignal(signal.SIGINT)
-    monkeypatch.setattr(sys, "exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
+    teardown_called = []
+    monkeypatch.setattr(sig_mod, "force_teardown_all",
+                        lambda: teardown_called.append(1))
+    monkeypatch.setattr(os, "_exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
     handler(signal.SIGINT, None)  # 1st → save-then-exit request
     assert state.stop_count >= 1
     with pytest.raises(SystemExit) as ei:
-        handler(signal.SIGINT, None)  # 2nd → force exit
+        handler(signal.SIGINT, None)  # 2nd → force teardown + os._exit(1)
     assert ei.value.code == 1
     assert state.stop_count >= 2
+    assert teardown_called, "second signal must force-teardown children before os._exit"
 
 
 def test_loop_saves_final_checkpoint_on_shutdown():

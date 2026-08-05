@@ -4,16 +4,67 @@ Wraps SIGINT/SIGTERM → cooperative shutdown state. Two presses force-exit; one
 flips ``running=False`` and ``shutdown_save=True`` so the loop saves a checkpoint before
 returning (save-then-exit). Ported verbatim from the old `training/signals.py`
 (structlog → stdlib logging is the only change — no behaviour change).
+
+CARD-ORPHAN-WORKERS (R230): the second-signal path now force-tears-down all registered
+child processes (terminate → bounded join → kill) before ``os._exit(1)`` — the old
+``sys.exit(1)`` raised ``SystemExit`` which could propagate out of ``finally`` blocks and
+leave the eval pipeline's spawn-child orphaned (PPID=1, CPU-pinned). The eval pipeline
+registers its spawn child via ``register_child``/``unregister_child``.
 """
 from __future__ import annotations
 
 import logging
+import os
 import signal
-import sys
+import threading
 from dataclasses import dataclass
 from typing import Any
 
 _LOG = logging.getLogger(__name__)
+
+#: Bounded join timeout (s) for the second-signal force-teardown. Short by design: the
+#: first signal already requested cooperative shutdown; the second means "exit NOW."
+_FORCE_TEARDOWN_GRACE_SEC = 3.0
+
+_child_lock = threading.Lock()
+_children: set[Any] = set()
+
+
+def register_child(proc: Any) -> None:
+    """Track a live child process for force-teardown on second signal."""
+    with _child_lock:
+        _children.add(proc)
+
+
+def unregister_child(proc: Any) -> None:
+    """Drop a child that exited or was torn down through the normal path."""
+    with _child_lock:
+        _children.discard(proc)
+
+
+def force_teardown_all(*, grace_sec: float = _FORCE_TEARDOWN_GRACE_SEC) -> None:
+    """Terminate → bounded join → kill for every registered child (CARD-ORPHAN-WORKERS).
+
+    Idempotent and best-effort: called from the second-signal handler before
+    ``os._exit(1)``. Each child gets ``terminate()`` → ``join(grace)`` → (if still alive)
+    ``kill()`` → ``join(grace)``. Errors are swallowed — this is the force-exit path.
+    """
+    with _child_lock:
+        procs = list(_children)
+    for proc in procs:
+        try:
+            if not proc.is_alive():
+                continue
+            proc.terminate()
+            proc.join(grace_sec)
+            if proc.is_alive():
+                proc.kill()
+                proc.join(grace_sec)
+        except Exception:  # noqa: BLE001 — best-effort during force-exit; never re-raise
+            pass
+        finally:
+            with _child_lock:
+                _children.discard(proc)
 
 
 @dataclass
@@ -77,15 +128,18 @@ class ShutdownState:
 def install_signal_handlers(state: ShutdownState) -> None:
     """Install SIGINT/SIGTERM handlers that flip ``state``.
 
-    Two consecutive signals force-exit (``sys.exit(1)``); one signal sets
-    ``running=False`` and ``shutdown_save=True``. The training loop is responsible for
-    polling ``state`` between iterations.
+    Two consecutive signals force-teardown all registered child processes then
+    ``os._exit(1)`` (not ``sys.exit`` — ``SystemExit`` can re-enter ``finally`` blocks
+    and leave children orphaned); one signal sets ``running=False`` and
+    ``shutdown_save=True``. The training loop is responsible for polling ``state``
+    between iterations.
     """
 
     def _stop(sig: int, frame: Any) -> None:
         state.stop_count += 1
         if state.stop_count >= 2:
-            sys.exit(1)
+            force_teardown_all()
+            os._exit(1)
         _LOG.info(
             "shutdown_requested: finishing current step… press Ctrl+C again to force",
         )

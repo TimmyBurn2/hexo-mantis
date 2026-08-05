@@ -389,12 +389,18 @@ def test_a_second_signal_force_exits(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
     """O-D1(b) — the second press is the operator's escape hatch: `stop_count >= 2` ->
-    `sys.exit(1)`. Driven by invoking the handler the ROOT installed (calling it is exactly
-    what the OS does); a real second delivery would take pytest with it.
+    force-teardown all children then `os._exit(1)`. Driven by invoking the handler the
+    ROOT installed (calling it is exactly what the OS does); a real second delivery would
+    take pytest with it, so `os._exit` and `force_teardown_all` are intercepted.
 
     MUTATION THAT REDS IT: a root that installs its own cooperative-only handler instead of
     `install_signal_handlers` — a run that cannot be force-stopped is a run that has to be
     `kill -9`d, which loses the buffer."""
+    from mantis.train.lifecycle import signals as sig_mod
+    import os
+    teardown_called: list = []
+    monkeypatch.setattr(sig_mod, "force_teardown_all", lambda: teardown_called.append(1))
+    monkeypatch.setattr(os, "_exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
     _install_recorders(monkeypatch)
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_Trainer(), pool=_Pool(),
@@ -406,6 +412,7 @@ def test_a_second_signal_force_exits(
     with pytest.raises(SystemExit) as exit_info:
         handler(signal.SIGTERM, None)
     assert exit_info.value.code == 1, f"the second signal force-exits 1; got {exit_info.value.code!r}"
+    assert teardown_called, "second signal must force-teardown children before os._exit"
 
 
 def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(

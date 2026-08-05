@@ -19,3 +19,15 @@ def best_device() -> torch.device:
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def release_cuda_cache() -> None:
+    """Release the CUDA caching allocator's freed blocks (CARD_VRAM_ACCUMULATION, VERDICT-A).
+
+    The graph path generates variable-size tensor batches per MCTS leaf; the caching
+    allocator cannot reuse blocks of mismatched sizes and accumulates them. Without this
+    release, reserved VRAM grows monotonically; with it, reserved stays bounded. No-op
+    when CUDA is unavailable.
+    """
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()

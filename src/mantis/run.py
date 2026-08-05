@@ -855,6 +855,13 @@ def compose_run(
             _stop_pool_if_start_attempted(pool, start_attempted=pool_start_attempted)()
             run_safety.watchdog.stop()
             run_safety.sink.close()
+        # The eval pipeline's poller thread and any in-flight spawn child need explicit
+        # teardown on BOTH paths (CARD-ORPHAN-WORKERS, R230). `close_out` drains the
+        # in-flight round via `drain_pending` on the completed path, but the poller thread
+        # is never joined there; and on the PARTIAL path `close_out` never ran at all.
+        # `pipeline.stop()` joins the poller and terminates/kills any residual child.
+        if eval_pipeline is not None:
+            eval_pipeline.stop()
         # The disk guard is this root's on BOTH paths — `close_out` has never heard of it
         # (it is composed here for the first time in this WP), and a daemon guard that
         # outlives its run will SIGTERM a process that is no longer running one.

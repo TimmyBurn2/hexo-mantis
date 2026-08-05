@@ -439,6 +439,8 @@ class EvalPipeline:
             kwargs={}, daemon=True,
         )
         proc.start()
+        from mantis.train.lifecycle.signals import register_child
+        register_child(proc)
         return proc
 
     # ── mailbox / bounded drains ───────────────────────────────────────────────────────
@@ -468,6 +470,8 @@ class EvalPipeline:
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
     ) -> dict[str, Any]:
         proc = inflight["proc"]
+        from mantis.train.lifecycle.signals import unregister_child
+        unregister_child(proc)
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
         exit_code = getattr(proc, "exitcode", None)
 
@@ -700,9 +704,14 @@ class EvalPipeline:
             inflight = self._inflight
         if inflight is not None:
             proc = inflight["proc"]
+            from mantis.train.lifecycle.signals import unregister_child
+            unregister_child(proc)
             if proc.is_alive():
                 proc.terminate()
                 proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
 
 
 def build_eval_pipeline(
