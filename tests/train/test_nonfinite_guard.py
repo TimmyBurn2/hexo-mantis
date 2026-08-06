@@ -170,19 +170,41 @@ def test_a_finite_or_absent_loss_does_not_fire_the_nonfinite_rule() -> None:
     )
 
 
-def test_the_hard_abort_no_longer_excludes_a_nonfinite_grad_norm() -> None:
-    """Source census on the gate condition (item 6's third path).
+def test_the_hard_abort_gap_is_documented_and_pin_bound() -> None:
+    """KNOWN GAP, deliberately left open — and pinned so it cannot close by accident.
 
-    The gate lives inside a long coordinator method that needs a full StepCoordinator to
-    drive; the CONDITION is the whole of the change, so it is asserted structurally. The old
-    form `math.isfinite(step_gn) and step_gn > ...` is what excluded NaN from the abort.
+    Item 6's third path (make a non-finite grad norm trip `grad_norm_hard_abort`) was
+    implemented and then REVERTED. Two operator-owned reasons, both discovered by the
+    preflight rather than by reasoning:
+
+      1. R56 — `config/armed_aborts.py`'s `grad_norm_hard_abort` row SOURCE-PINS this exact
+         comparison. Changing it reds `tools/ci_gates/preflight_mint.py --audit-only` with
+         "source pin(s) no longer match their file — re-adjudicate the row rather than
+         editing the pin". The pin exists precisely so a change to the gate's decision forces
+         a re-adjudication instead of a quiet edit.
+      2. The row is DEFERRED and knowingly DISARMED: `train.hard_gn_threshold` is the
+         unauthored `1e9` that no finite gradient norm reaches, and the manifest records that
+         run5 mints with this abort off "knowingly and in writing". Firing on non-finite
+         REGARDLESS of the threshold would partially arm it — an armed-value change, which is
+         operator-only.
+
+    So this test asserts the CURRENT state and the reason for it, rather than the fix. A NaN
+    is still caught: the trainer guard stops the cascade and the alert rules report it. Only
+    the abort backstop stays gated. See ADJ-D13.
+
+    MUTATION THAT REDS IT: change the condition without re-adjudicating the manifest row —
+    which is exactly what the preflight would also catch, one layer up.
     """
     src = (Path(__file__).resolve().parents[2]
            / "src" / "mantis" / "train" / "coordinator" / "step.py").read_text(encoding="utf-8")
-    assert "if not math.isfinite(step_gn) or step_gn > cfg.hard_gn_threshold:" in src, (
-        "the grad-norm hard abort does not treat a non-finite norm as exceeding the "
-        "threshold — a NaN gradient cannot fire the abort"
+    assert "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:" in src, (
+        "the grad-norm abort's comparison changed. That comparison is an R56 SOURCE PIN in "
+        "`mantis/config/armed_aborts.py` — re-adjudicate the manifest row, do not edit the "
+        "pin, and do not change this test to match (ADJ-D13)"
     )
-    assert "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:" not in src, (
-        "the old NaN-excluding condition is back"
+    manifest = (Path(__file__).resolve().parents[2]
+                / "src" / "mantis" / "config" / "armed_aborts.py").read_text(encoding="utf-8")
+    assert "if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:" in manifest, (
+        "the manifest no longer pins this comparison — the two sides have drifted apart, "
+        "which is the state R56's scan exists to make impossible"
     )

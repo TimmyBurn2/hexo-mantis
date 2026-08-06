@@ -70,7 +70,12 @@ _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _CONFIGS = _REPO / "configs"
 
 #: The launcher's whole flag surface (DESIGN §1.3, as amended by R126: NO `--device`).
-_LAUNCHER_OPTIONS = {"--config", "--out-dir"}
+#: The two REQUIRED launcher inputs. Neither may carry a `default=` (R1).
+_LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
+#: The one OPTIONAL flag, added by item 4(a). See the census below for the grounds — it is
+#: enumerated by name so a SECOND optional flag still reds the census.
+_LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from"}
+_LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
 #: The armed-smoke config is the one minted config with a burst-scale posture on CPU
 #: (R103's grant); 16 is its minimum legal burst plus headroom, the same number
@@ -96,9 +101,18 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
     """O-B2, AST half — the O-1 twin census on the launcher's own parser.
 
     MUTATION THAT REDS IT: add `default="runs"` to `--out-dir` (the tempting convenience),
-    or add a third flag. A defaulted out-dir is a run input the code decides — R1's exact
+    or add a FOURTH flag. A defaulted out-dir is a run input the code decides — R1's exact
     subject — and every run that forgets the flag then writes into one shared directory,
     which is how two runs' checkpoints end up in one lineage.
+
+    AMENDED BY ITEM 4(a) — DESIGN §1.3 deviation, recorded (R9), see ADJ-D14. The set was
+    `{--config, --out-dir}`, both required, neither defaulted. `--resume-from` is now
+    admitted as the ONE optional flag, because item 4(a) required making the resume leg
+    reachable and the config-key route was ruled OUT by the operator (ADJ-D4: "wire mechanism
+    only; touch NO config value"). A resume target is a property of THIS invocation, not of
+    the run's identity — the same minted config launched fresh and launched resumed is the
+    same config — so a schema key would make two runs differ by an identity key describing
+    neither. The optional flag is still enumerated BY NAME: a second one reds this census.
 
     The option SET is pinned, not merely a floor: `>= N` censuses go on passing while the
     surface silently changes underneath them (measured on the tool's own `len(calls) >= 6`,
@@ -113,6 +127,23 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
     )
     for call in calls:
         names = [arg.value for arg in call.args if isinstance(arg, ast.Constant)]
+        flag = next((n for n in names if n in _LAUNCHER_OPTIONS), None)
+        if flag in _LAUNCHER_OPTIONAL_OPTIONS:
+            # The ONE optional flag. Its `default=None` is checked to be exactly `None`:
+            # `None` selects no action (init_trainer resumes only on an explicit path and
+            # otherwise builds fresh), which is not what R1 bans. R1 bans a default that
+            # picks a VALUE on the operator's behalf — `default="runs"` on --out-dir is the
+            # canonical example. A non-None default here WOULD be that, so it still reds.
+            default = [kw for kw in call.keywords if kw.arg == "default"]
+            assert default and isinstance(default[0].value, ast.Constant) \
+                and default[0].value.value is None, (
+                f"add_argument{names} is the optional resume flag: its default must be "
+                "exactly None (no action), never a stand-in path"
+            )
+            assert not [kw for kw in call.keywords if kw.arg == "required"], (
+                f"add_argument{names} is optional; it must not declare required="
+            )
+            continue
         assert not [kw for kw in call.keywords if kw.arg == "default"], (
             f"add_argument{names} passes default= — R1: no code-side defaults for a run "
             "input; a default lives only in a schema field"
@@ -358,16 +389,33 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     )
 
     residents = sorted(p.name for p in (tmp_path / "checkpoints").iterdir())
-    assert len(residents) == 1, (
+
+    # AMENDED BY ITEM 5(a). `best_model.pt` — the promotion ANCHOR — now lands here. It used
+    # to be written to a CWD-RELATIVE `checkpoints/best_model.pt`, because `resolve_anchor`
+    # defaulted `best_model_path` and `train/loop.py` passed nothing; so a run's anchor went
+    # into whatever `./checkpoints/` the launch happened to sit next to, while the promotion
+    # WRITE side was handed the run's real `<out-dir>/checkpoints/best_model.pt`. Read and
+    # write named different files. This assertion counting ONE resident was itself evidence
+    # of that: the anchor was landing outside `tmp_path` entirely and the row could not see
+    # it. The `.ckpt` count — the thing R137 is actually about — is unchanged at exactly one,
+    # and is asserted separately below so the two facts cannot mask each other.
+    ckpts = [n for n in residents if n.endswith(".ckpt")]
+    assert "best_model.pt" in residents, (
+        "the promotion anchor is not under the run's own checkpoint_dir — it has gone back "
+        f"to a CWD-relative path (item 5(a)). Found {residents}"
+    )
+    assert len(ckpts) == 1, (
         "a CLEAN bounded stop now writes EXACTLY ONE checkpoint under the derived "
         "checkpoint_dir — the clean-completion leg (R137/CARD-CLEANSTOP-SAVE, the O2 arm of "
         "`train/coordinator/step.py`). NOT zero: that was the pre-R137 truth this row "
         "recorded, and its own notice told the next reader to re-point rather than delete. "
         "NOT two: leg 2 is latched out by `clean_stop_saved`, and two saves at one step are "
         f"two DISTINCT files (the filename carries a content hash over a microsecond-"
-        f"resolution `created_utc`, so there is no idempotence to lean on). Found {residents}"
+        f"resolution `created_utc`, so there is no idempotence to lean on). Found {ckpts}"
     )
-    run_id, step_field, _sha8 = Path(residents[0]).stem.rsplit("_", 2)
+    # `ckpts[0]`, not `residents[0]`: `best_model.pt` now sorts first (item 5(a)) and is
+    # not an envelope-v2 filename, so the stem parse below must read the CKPT.
+    run_id, step_field, _sha8 = Path(ckpts[0]).stem.rsplit("_", 2)
     assert run_id == config.run_id and int(step_field) == _BURST_STEPS, (
         "…and the ONE artefact is stamped with THIS run's lineage at THIS run's terminus. "
         "The decomposition is production's own (`checkpoints.py`'s `_verify_provenance` "
