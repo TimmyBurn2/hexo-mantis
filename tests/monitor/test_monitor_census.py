@@ -32,6 +32,12 @@ _EXPECTED_TRAIN_MONITOR_SITES = {
     "train/coordinator/step.py",
     "train/subsystems.py",
     "train/lifecycle/heartbeat_watchdog.py",
+    # Item 4 amendment. The stall watchdog's fire path routes its two saves through
+    # `monitor.best_effort` — the SAME sanctioned optional-effect seam, for the same LAW-14
+    # reason, as its sibling `heartbeat_watchdog.py` two lines up. It replaced an
+    # `except Exception: pass`. This is the declared seam being used by one more lifecycle
+    # unit, not a new kind of edge.
+    "train/lifecycle/watchdog.py",
 }
 
 
@@ -125,8 +131,8 @@ def test_monitor_mantis_imports_are_within_the_allowed_set() -> None:
     assert violations == [], f"monitor/** mantis-imports must be within the allowed set: {violations}"
 
 
-def test_train_to_monitor_import_sites_are_exactly_the_pinned_three() -> None:
-    """O-19 / P-19 — the ONLY train files that top-level import `mantis.monitor` are the three
+def test_train_to_monitor_import_sites_are_exactly_the_pinned_set() -> None:
+    """O-19 / P-19 — the ONLY train files that top-level import `mantis.monitor` are the four
     declared seams. Any extra edge (or a missing one) is DAG drift. NOTE for IMPL: the existing
     `tests/train/test_train_import_dag.py` FORBIDDEN set must drop `mantis.monitor` — this
     census with its exact allowlist takes over policing that edge (ORACLE_NOTES)."""

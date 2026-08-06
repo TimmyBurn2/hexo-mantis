@@ -256,6 +256,11 @@ class Trainer:
         self.scaler = GradScaler(device=self.device.type, enabled=self._scaler_enabled)
 
         self.step = 0
+        #: Non-finite guard counters (item 6). Both MUST read 0 in a healthy run. Non-zero
+        #: means a NaN/inf was produced and suppressed — the F-11 cascade caught early
+        #: rather than after it had written NaN into every weight.
+        self.nonfinite_loss_microbatches = 0
+        self.nonfinite_grad_steps = 0
         # CONFRES F1(A) back-prop: keys the resume F1 defer preserved (empty on a fresh run).
         self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
@@ -575,6 +580,29 @@ class Trainer:
                                                 value_mask=inputs.value_valid,
                                                 denominator=value_denominator)
                 loss = policy_loss + value_loss
+            # Non-finite guard on the PRODUCTION graph step (item 6), mirroring the pretrain
+            # trainer's (`pretrain/trainer.py`). Without it a single NaN/inf microbatch loss
+            # backwards into a NaN clip coefficient, which writes NaN to EVERY weight — the
+            # model is destroyed in one step and the run continues reporting numbers. That is
+            # falsified row F-11's exact cascade (0×−inf in aux CE → NaN total loss → BN
+            # poisoning), and the pretrain path was guarded while the path that trains run5
+            # was not.
+            #
+            # The microbatch is SKIPPED, not zeroed: its gradient contribution is undefined,
+            # and dropping it keeps the remaining microbatches' step valid. Counted so the
+            # skip is never silent — a run quietly dropping half its microbatches looks
+            # exactly like a healthy one on loss alone (LAW-18).
+            if not torch.isfinite(loss):
+                self.nonfinite_loss_microbatches += 1
+                if (self.nonfinite_loss_microbatches <= 5
+                        or self.nonfinite_loss_microbatches % 50 == 0):
+                    _LOG.warning(
+                        "skipped_nonfinite_loss step=%s n_skipped=%s loss=%s",
+                        self.step + 1, self.nonfinite_loss_microbatches,
+                        float(loss.detach().item()),
+                    )
+                del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
+                continue
             backward_accumulate(loss, self.scaler, self._scaler_enabled)
             loss_total += loss.item()
             policy_total += policy_loss.item()
@@ -589,7 +617,21 @@ class Trainer:
         if (self.ema_model is not None and math.isfinite(grad_norm)
                 and self.step % self.ema_update_every == 0):
             self.ema_model.update_parameters(self._base_model())
+        if not math.isfinite(grad_norm):
+            # A non-finite grad norm means `clip_and_step` scaled by a NaN/inf coefficient.
+            # Counted for the same reason as above, and carried in the payload so the monitor
+            # rules can SEE it — before item 6 every NaN was filtered out of the alerts and
+            # out of the hard abort, so the one condition that destroys a model outright was
+            # the one condition nothing reported.
+            self.nonfinite_grad_steps += 1
+            _LOG.warning("nonfinite_grad_norm step=%s n=%s grad_norm=%s",
+                         self.step, self.nonfinite_grad_steps, grad_norm)
         lr = self.optimizer.param_groups[0]["lr"]
+        # `result` stays the FIVE-key loss_info contract (OF2-9: one tail, five keys). The
+        # non-finite counters ride the EVENT, not the return: `loss_info` is consumed by the
+        # coordinator's gates and by checkpoint metadata, and widening it would change a
+        # contract those readers pin — while the event stream is where LAW-18 in-run counters
+        # belong anyway.
         result = {"loss": loss_total, "policy_loss": policy_total,
                   "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
         emit_via(self._sink, {"event": "training_step", "step": self.step,
@@ -597,7 +639,9 @@ class Trainer:
                               "microbatches": len(parts), "edges": int(total_edges),
                               "nodes": int(total_nodes),
                               "caps_max_edges": int(caps_max_edges),
-                              "caps_max_nodes": int(caps_max_nodes)})
+                              "caps_max_nodes": int(caps_max_nodes),
+                              "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
+                              "nonfinite_grad_steps": self.nonfinite_grad_steps})
         self._maybe_periodic_checkpoint(result)
         return result
 
