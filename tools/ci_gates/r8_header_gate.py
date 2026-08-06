@@ -119,10 +119,17 @@ IDIOM_RE = re.compile(
     r"\bwc\s*-\s*l\b|\bre-?measured\b|\bMEASURED\b|\bjustif\w*[^\n]{0,24}?\(\s*\d{2,5}\b"
 )
 
-#: A gate that scans nothing finds nothing. Set below the measured 135 over-cap / 147 headers
-#: with room for deletion, high enough that a broken REPO_ROOT or glob cannot pass silently.
-MIN_OVER_CAP = 100
-MIN_HEADERS = 110
+#: Non-vacuity floors, PER ROOT. A gate that scans nothing finds nothing -- but a single global
+#: floor is not enough: with one number (measured at 100 against 137 over-cap files) a typo that
+#: dropped `src/` entirely still reported green, because the other three roots cleared it on
+#: their own. That was mutation-tested here and it is why this is a dict. Set below the measured
+#: file counts (src 148, tools 14, crates 134, tests 256) with room for deletion, high enough
+#: that losing any ONE root is fatal.
+MIN_FILES = {"src": 120, "tools": 10, "crates": 110, "tests": 210}
+#: The corpus-wide floors stay too, as a second net: they catch a scope that shrank without any
+#: root vanishing (measured: 137 over the cap, 151 justifications).
+MIN_OVER_CAP = 120
+MIN_HEADERS = 130
 
 
 def source_files(root: Path = REPO_ROOT) -> list[Path]:
@@ -218,14 +225,16 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
     return violations, over_cap, True
 
 
-def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int]:
-    """Return (violations, files_over_cap, files_carrying_a_marker)."""
+def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int, dict[str, int]]:
+    """Return (violations, files_over_cap, files_carrying_a_marker, files_scanned_per_root)."""
     violations: list[str] = []
     over_cap = 0
     headers = 0
+    scanned: dict[str, int] = {name: 0 for name in ROOTS}
 
     for path in source_files(root):
         rel = path.relative_to(root).as_posix()
+        scanned[rel.split("/")[0]] += 1
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError as exc:
@@ -236,7 +245,7 @@ def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int]:
         over_cap += int(is_over)
         headers += int(has_marker)
 
-    return violations, over_cap, headers
+    return violations, over_cap, headers, scanned
 
 
 #: (name, synthetic header, must_fire) -- the trigger's own proof. Each arm is the exact defect
@@ -287,14 +296,24 @@ def main(argv: list[str]) -> int:
         print(f"gate 15 self-test: {len(SELF_TEST)} no-count arms + 2 presence arms, all correct")
         return 0
 
-    violations, over_cap, headers = scan()
+    violations, over_cap, headers, scanned = scan()
     rc = 0
 
+    for name, floor in MIN_FILES.items():
+        # `.get` and not `[...]`: if a root is dropped from ROOTS the key is absent, and a
+        # KeyError traceback is a worse verdict than the sentence this floor exists to print.
+        found = scanned.get(name, 0)
+        if found < floor:
+            print(
+                f"gate 15 FAIL -- scanned only {found} file(s) under {name}/ "
+                f"(floor {floor}). A gate that scans nothing finds nothing; refusing to "
+                "report green."
+            )
+            rc = 1
     if over_cap < MIN_OVER_CAP or headers < MIN_HEADERS:
         print(
-            f"gate 15 FAIL -- scanned {over_cap} file(s) over the cap and {headers} header(s) "
-            f"(floors {MIN_OVER_CAP}/{MIN_HEADERS}). A gate that scans nothing finds nothing; "
-            "refusing to report green."
+            f"gate 15 FAIL -- found {over_cap} file(s) over the cap and {headers} header(s) "
+            f"(floors {MIN_OVER_CAP}/{MIN_HEADERS}). The corpus shrank; refusing to report green."
         )
         rc = 1
 

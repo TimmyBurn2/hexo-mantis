@@ -270,7 +270,7 @@ def test_a_non_utf8_source_is_reported_not_crashed_on(tmp_path: Path) -> None:
     """Gates 9 and 10 BOTH crashed with UnicodeDecodeError for want of `encoding=`. A gate that
     dies on the input it is meant to judge reports nothing at all (S-19)."""
     _scratch_tree(tmp_path, "src/bad.py", "# >300 justify\n".encode() + b"x = '\xff\xfe'\n")
-    violations, _over, _headers = GATE.scan(tmp_path)
+    violations, _over, _headers, _scanned = GATE.scan(tmp_path)
     assert violations and "not UTF-8" in violations[0]
 
 
@@ -283,7 +283,7 @@ def test_the_scan_finds_a_planted_defect_in_a_scratch_tree(tmp_path: Path) -> No
         + "\n".join(_body(400))
         + "\n",
     )
-    violations, over_cap, headers = GATE.scan(tmp_path)
+    violations, over_cap, headers, _scanned = GATE.scan(tmp_path)
     assert over_cap == 2
     assert headers == 1
     assert len(violations) == 2
@@ -293,16 +293,34 @@ def test_the_scan_finds_a_planted_defect_in_a_scratch_tree(tmp_path: Path) -> No
 
 def test_gate_is_green_on_the_committed_tree() -> None:
     """The baseline R98 requires: a gate may only be adopted over a clean baseline."""
-    violations, over_cap, headers = GATE.scan()
+    violations, over_cap, headers, scanned = GATE.scan()
     assert not violations, "gate 15 baseline is dirty:\n" + "\n\n".join(violations)
     assert over_cap >= GATE.MIN_OVER_CAP
     assert headers >= GATE.MIN_HEADERS
+    for root, floor in GATE.MIN_FILES.items():
+        assert scanned[root] >= floor, f"{root}/ scanned {scanned[root]}, floor {floor}"
 
 
-def test_the_non_vacuity_floor_would_fire_on_an_empty_tree(tmp_path: Path) -> None:
+def test_the_non_vacuity_floors_would_fire_on_an_empty_tree(tmp_path: Path) -> None:
     """`scanned nothing, found nothing` must never read as green (gate 16's own lesson)."""
-    _, over_cap, headers = GATE.scan(tmp_path)
+    _, over_cap, headers, scanned = GATE.scan(tmp_path)
     assert over_cap < GATE.MIN_OVER_CAP and headers < GATE.MIN_HEADERS
+    assert all(scanned[root] < floor for root, floor in GATE.MIN_FILES.items())
+
+
+def test_the_floors_are_per_root_because_one_global_floor_was_measured_too_weak() -> None:
+    """A single corpus-wide floor let a typo that dropped `src/` entirely report GREEN.
+
+    Mutation-tested at adoption: renaming `src` in `ROOTS` left 109 over-cap files, which
+    cleared the then-floor of 100. Each root now carries its own floor, so losing any one of
+    them is fatal on its own. This test pins the SHAPE, not the numbers.
+    """
+    _violations, _over, _headers, scanned = GATE.scan()
+    assert set(GATE.MIN_FILES) == set(GATE.ROOTS), (
+        "every scanned root needs its own floor, or losing that root reads as green"
+    )
+    for root, floor in GATE.MIN_FILES.items():
+        assert 0 < floor <= scanned[root], f"{root}/ floor {floor} vs {scanned[root]} scanned"
 
 
 def test_the_gates_own_self_test_passes() -> None:
