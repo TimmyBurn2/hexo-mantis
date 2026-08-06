@@ -37,6 +37,7 @@ import logging
 import math
 import os
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any, cast
 
 import mantis.train.buffer_persist as _buffer_persist
@@ -267,13 +268,31 @@ class StepCoordinator:
 
         # Self-play stall watchdog — always armed (context law, LAW-16). Driven via
         # `.tick(...)` from step(); fires → best-effort snapshot to a DISTINCT path + exit.
-        bp = self.mixing_cfg.get("buffer_persist_path", "checkpoints/replay_buffer.bin")
+        # NO code-side default (R1). This read used to be
+        # `mixing_cfg.get("buffer_persist_path", "checkpoints/replay_buffer.bin")`, and the
+        # production root passes `mixing_cfg={}` — so the default ALWAYS won, and it is
+        # CWD-relative: a run launched from outside the repo root wrote its stall snapshot
+        # into some unrelated `./checkpoints/`, not into its own `--out-dir`. Derived instead
+        # from the trainer's own checkpoint directory, which is the object that actually
+        # knows where this run's artifacts live (R98, derive at point of use).
+        # Resolved at FIRE time, not here: the path is only needed if the watchdog actually
+        # fires, and deferring keeps construction free of any trainer-attribute requirement.
+        def _snapshot_target() -> Path:
+            bp = self.mixing_cfg.get("buffer_persist_path")
+            if bp is None:
+                bp = _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir)
+            return watchdog_snapshot_path(Path(bp))
+
         self._watchdog = StallWatchdog(
             timeout_sec=config.selfplay_stall_timeout_sec,
             clock=self._clock.now,
             sink=sink,
             exit_fn=exit_fn,
-            save_snapshot=lambda: self._snapshot_buffer(watchdog_snapshot_path(bp)),
+            save_snapshot=lambda: self._snapshot_buffer(_snapshot_target()),
+            # Item 4(b): the stall abort saves WEIGHTS, not just positions. Routed through
+            # the trainer's own stamped save path so the artifact is a real envelope-v2
+            # checkpoint (LAW-12), not a bare state_dict nothing can load.
+            save_model=lambda: self.trainer.save_checkpoint(self._last_loss_info or None),
         )
         self._watchdog.arm(getattr(pool, "games_completed", 0))
 

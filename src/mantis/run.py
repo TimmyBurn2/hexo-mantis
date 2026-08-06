@@ -97,6 +97,7 @@ from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
 from mantis.selfplay.pool import WorkerPool
 from mantis.train.actor_sync import ActorSync
+from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
@@ -404,7 +405,9 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     )
 
 
-def build_run_collaborators(*, config: RunConfig, out_dir: str | Path) -> RunCollaborators:
+def build_run_collaborators(
+    *, config: RunConfig, out_dir: str | Path, checkpoint_path: str | None = None,
+) -> RunCollaborators:
     """Build the three injected collaborators and derive the run's output directories.
 
     Lifted VERBATIM IN SEQUENCE from the preflight child's own boot (D-1): seed, derive
@@ -420,10 +423,21 @@ def build_run_collaborators(*, config: RunConfig, out_dir: str | Path) -> RunCol
     at a different device than the config declares — which is exactly how a `--device cpu`
     preflight false-cleared a cuda-minted run's 16 GiB GPU wall (CARD-RUN5-GPU-OOM).
 
-    `checkpoint_path` is deliberately never passed to `init_trainer`: resume threading is
-    the owed S-2 work and is untouched here (resume fires only on an explicit
-    `checkpoint_path`, `orchestrator.py:97,113`), which is also what makes the preflight's
-    §4.2 resumed-trainer refusal a meaningful read.
+    `checkpoint_path` IS now threaded to `init_trainer` (item 4(a); this paragraph used to
+    say it deliberately never was, and that the threading was owed S-2 work). Until it was
+    wired, `init_trainer`'s resume branch — which fires only on an explicit
+    `checkpoint_path`, `orchestrator.py:97,113` — was UNREACHABLE from the production
+    launcher: the code existed, was unit-tested, and no run could ever enter it. A run that
+    died therefore had no way back in, which is the other half of the survivability defect
+    whose first half was the watchdog saving positions but not weights.
+
+    It is a LAUNCH fact, not a config fact, so it comes in as a parameter and not as a
+    schema key — the same reasoning R126 applies to `device` in reverse. A resume target is
+    a property of THIS invocation ("continue from that artifact"), not of the run's identity;
+    two runs from one minted config, one fresh and one resumed, are the same config. It
+    defaults to `None` meaning "fresh run": that is the ABSENCE of an action, not a code-side
+    default choosing a value for the operator (R1), and the preflight's §4.2 resumed-trainer
+    refusal stays a meaningful read because the preflight passes nothing.
 
     `capacity` comes from `resolve_coordinator_knobs(config.train).capacity` — the sanctioned
     one-authority read of the 19 coordinator knobs. The throwaway `StepCoordinatorConfig`
@@ -443,7 +457,7 @@ def build_run_collaborators(*, config: RunConfig, out_dir: str | Path) -> RunCol
     device = torch.device(config.train.device)
     with _seam("init_trainer"):
         trainer = init_trainer(config=config.model_dump(), checkpoint_dir=str(checkpoint_dir),
-                               device=device, sink=None)
+                               device=device, sink=None, checkpoint_path=checkpoint_path)
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
@@ -605,7 +619,7 @@ def compose_run(
     with _seam("build_run_safety"):
         run_safety = build_run_safety(
             log_dir=log_dir, run_id=run_id, buffer=buffer,
-            buffer_persist_path=checkpoint_dir / "replay_buffer.bin",
+            buffer_persist_path=canonical_buffer_path(checkpoint_dir),
             wired_sources=wired_sources, monitor_cfg=monitor_cfg,
             actor_ckpt_step_fn=lambda: actor_sync.actor_ckpt_step(),
             learner_step_fn=lambda: int(trainer.step),
@@ -909,7 +923,9 @@ def compose_run(
                       shutdown=shutdown)
 
 
-def launch_run(*, config: RunConfig, out_dir: str | Path) -> RunHandles:
+def launch_run(
+    *, config: RunConfig, out_dir: str | Path, checkpoint_path: str | None = None,
+) -> RunHandles:
     """THE launch path: build the collaborators, compose the run. Nothing else.
 
     The body is EXACTLY those two calls, pass-through, and it is censused as such (O-A2): a
@@ -917,8 +933,15 @@ def launch_run(*, config: RunConfig, out_dir: str | Path) -> RunHandles:
     DIFFERENT config object handed to the composer than the collaborators were built from
     would be a divergent boot path wearing the one-authority name, and both mutations are
     behaviourally invisible on a green tier.
+
+    `checkpoint_path` (item 4(a)) is FORWARDED, never branched on: the resume decision lives
+    in `init_trainer`, which already dispatches fresh-vs-resume on this value being `None`.
+    That is exactly why it may ride this pass-through without violating O-A2 — the census
+    forbids a third STATEMENT here, and adding a `if resume:` branch is precisely the
+    mutation it names. There is none; the parameter rides the existing builder call.
     """
-    collaborators = build_run_collaborators(config=config, out_dir=out_dir)
+    collaborators = build_run_collaborators(
+        config=config, out_dir=out_dir, checkpoint_path=checkpoint_path)
     return compose_run(config=config, trainer=collaborators.trainer, pool=collaborators.pool,
                        buffer=collaborators.buffer, log_dir=collaborators.log_dir,
                        checkpoint_dir=collaborators.checkpoint_dir)
@@ -939,10 +962,20 @@ def _lazy_guarded_load(model: Any, state_dict: Any) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     """`python -m mantis.run --config <path> --out-dir <path>` — the production launcher.
 
-    R1 posture at the CLI boundary: BOTH inputs are required and NEITHER has a `default=`.
-    A defaulted `--out-dir` in particular is a run input the code decides, and every run
-    that forgets the flag then writes into one shared directory — which is how two runs'
-    checkpoints end up in one lineage. A usage error is argparse's own rc 2.
+    R1 posture at the CLI boundary: `--config` and `--out-dir` are required and NEITHER has
+    a `default=`. A defaulted `--out-dir` in particular is a run input the code decides, and
+    every run that forgets the flag then writes into one shared directory — which is how two
+    runs' checkpoints end up in one lineage. A usage error is argparse's own rc 2.
+
+    `--resume-from` (item 4(a)) is the one OPTIONAL flag, and its `default=None` is not the
+    thing R1 bans. R1 bans a default that picks a VALUE on the operator's behalf; `None` here
+    selects no action at all — `init_trainer` resumes only on an explicit path and otherwise
+    builds fresh, which is the same dispatch it already had. It is a flag rather than a
+    schema key because a resume target is a property of THIS invocation, not of the run's
+    identity: the same minted config launched fresh and launched resumed is the same config,
+    so putting it in the config would make two runs differ by an identity key that describes
+    neither. Until this flag existed the resume branch was unreachable from production — a
+    run that died had no supported way back in.
 
     There is NO `--device` flag (R126): the device is `config.train.device`, so preflighting
     or launching run5 uses run5's own minted device and no invocation can point either
@@ -984,9 +1017,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="path to the minted run config")
     parser.add_argument("--out-dir", required=True,
                         help="run artifacts root; logs/ and checkpoints/ are derived from it")
+    parser.add_argument(
+        "--resume-from", default=None,
+        help="checkpoint to resume the trainer from; omit for a fresh run")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
-    handles = launch_run(config=load_config(args.config), out_dir=args.out_dir)
+    handles = launch_run(config=load_config(args.config), out_dir=args.out_dir,
+                         checkpoint_path=args.resume_from)
     rule = handles.shutdown.abort_rule
     if rule is None:
         return 0

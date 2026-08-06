@@ -290,10 +290,10 @@ def test_launch_run_is_exactly_build_then_compose_with_nothing_in_between() -> N
     assert not build_stmt.value.args and not return_stmt.value.args, (
         "both calls are keyword-only at the seam the census reads (DESIGN §1.1)"
     )
-    assert set(build_kwargs) == {"config", "out_dir"}, (
-        "the builder takes the validated config and the out-dir — and NOT a device "
-        "parameter (R126/MF-1: no parameter carries a config fact); got "
-        f"{sorted(build_kwargs)}"
+    assert set(build_kwargs) == {"config", "out_dir", "checkpoint_path"}, (
+        "the builder takes the validated config, the out-dir and the optional resume "
+        "target — and NOT a device parameter (R126/MF-1: no parameter carries a config "
+        f"fact); got {sorted(build_kwargs)}"
     )
     assert set(compose_kwargs) == set(_COMPOSE_KWARGS), (
         f"the composer's call must pass exactly {list(_COMPOSE_KWARGS)}; got "

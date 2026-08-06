@@ -20,6 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from mantis.monitor.best_effort import BestEffortCounters, best_effort
 from mantis.train.emit import emit_via
 
 _LOG = logging.getLogger(__name__)
@@ -58,14 +59,37 @@ class StallWatchdog:
         sink: Any,
         exit_fn: Callable[[int], None] = os._exit,
         save_snapshot: Callable[[], None],
+        save_model: Callable[[], None] | None = None,
+        counters: BestEffortCounters | None = None,
     ) -> None:
         self._timeout = timeout_sec
         self._clock = clock
         self._sink = sink
         self._exit_fn = exit_fn
         self._save_snapshot = save_snapshot
+        # `save_model` is what makes a stall abort SURVIVABLE. The fire path used to save the
+        # replay buffer and nothing else, so a run wedged at step N exited with its positions
+        # preserved and its WEIGHTS GONE back to the last periodic checkpoint — and
+        # `train.checkpoint_interval` is 0 in every shipped config, so "the last periodic
+        # checkpoint" is routinely NONE. The buffer is the cheap half to regenerate; the
+        # weights are the expensive half, and they were the half being dropped.
+        #
+        # Optional (`None`) rather than required because the lifecycle ⊕ suite constructs
+        # this unit without a trainer; a production wiring that omits it loses the weights
+        # save, which is why both production call sites pass it.
+        self._save_model = save_model
+        # LAW-14: an optional effect in a fire path is COUNTED, never swallowed. Owned here
+        # when not injected, mirroring `HeartbeatWatchdog`, so the count always exists and is
+        # readable via `.counters` even in a harness that injects nothing.
+        self._counters = counters if counters is not None else BestEffortCounters()
         self._last_games = 0
         self._last_progress_time = 0.0
+
+    @property
+    def counters(self) -> BestEffortCounters:
+        """Best-effort failure counts for the fire path (`watchdog_snapshot`,
+        `watchdog_model_save`). Reads 0 for a label that never failed."""
+        return self._counters
 
     def arm(self, games_completed: int) -> None:
         """Seed the stall clock + games count and emit ``selfplay_stall_watchdog_armed``.
@@ -120,8 +144,18 @@ class StallWatchdog:
             stalled_for,
             self._timeout,
         )
-        try:
-            self._save_snapshot()
-        except Exception:  # noqa: BLE001 — fail-fast must not be blocked by a save
-            pass
+        # MODEL FIRST, then buffer. Both are best-effort — a fire path must not be blocked
+        # by a save — but they are no longer SILENT: `except Exception: pass` swallowed the
+        # failure uncounted, which is precisely what LAW-14 bans and what made a stall abort
+        # that also failed to save look identical to one that saved fine.
+        #
+        # The ordering is deliberate and is the whole point of item 4(b): the weights are the
+        # expensive half to regenerate and the half that was being dropped, so they are
+        # written before the buffer gets a chance to consume the remaining time or disk.
+        if self._save_model is not None:
+            best_effort("watchdog_model_save", self._save_model, counters=self._counters)
+        best_effort("watchdog_snapshot", self._save_snapshot, counters=self._counters)
+        failures = self._counters.snapshot()
+        if failures:
+            emit_via(self._sink, {"event": "selfplay_stall_watchdog_save_failed", **failures})
         self._exit_fn(SELFPLAY_STALL_EXIT_CODE)

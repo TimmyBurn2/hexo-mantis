@@ -45,6 +45,10 @@ class TrainerLike(Protocol):
     step: int
     model: Any
     device: Any
+    #: The run's checkpoint directory. Read by the stall watchdog's snapshot-path
+    #: derivation (item 4(c)): the path used to be a CWD-relative code-side default, and
+    #: the trainer is the collaborator that actually knows where this run's artifacts live.
+    checkpoint_dir: Any
 
     def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]: ...
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
