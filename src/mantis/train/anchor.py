@@ -73,6 +73,22 @@ class AnchorLoadError(RuntimeError):
     or the state dict carried keys the declared arch does not accept."""
 
 
+#: The canonical anchor (best-model) filename, in ONE place.
+#:
+#: The anchor is the promotion INCUMBENT: every eval round scores the candidate against
+#: whatever this path holds, and a promotion overwrites it. Read and write must therefore
+#: name the same file, and they did not — `resolve_anchor` defaulted to a CWD-relative
+#: `checkpoints/best_model.pt` while the promotion hook was handed the run's real
+#: `<out-dir>/checkpoints/best_model.pt`. A run launched from anywhere but the repo root
+#: consequently evaluated against one file and promoted into another.
+CANONICAL_ANCHOR_FILENAME = "best_model.pt"
+
+
+def canonical_anchor_path(checkpoint_dir: str | Path) -> Path:
+    """The run's anchor path, derived from ITS checkpoint directory (R98)."""
+    return Path(checkpoint_dir) / CANONICAL_ANCHOR_FILENAME
+
+
 @dataclass
 class AnchorState:
     """Resolved best-model anchor + provenance. `best_model` is None only when no eval pipeline
@@ -447,7 +463,23 @@ def resolve_anchor(
     inf_representation = getattr(getattr(trainer, "arch", None), "representation", "grid")
     if declared_encoding is None:
         declared_encoding = _resolve_declared_encoding(config)
-    bmp = Path(best_model_path) if best_model_path is not None else Path("checkpoints/best_model.pt")
+    # NO CWD FALLBACK (item 5(a)). This used to default to `Path("checkpoints/best_model.pt")`
+    # when the caller passed nothing — and `train/loop.py` passed nothing, so the default was
+    # the production path. The promotion WRITE side (`DeployTagHooks`) was meanwhile handed
+    # the run's real `<out-dir>/checkpoints/best_model.pt`. Read and write therefore named
+    # DIFFERENT FILES for any run not launched from the repo root: every round scored the
+    # candidate against a stale or absent incumbent, and promotions landed somewhere the next
+    # round would not look. A wrong incumbent is silently wrong — the round still completes,
+    # still reports a win rate, still promotes — so this fails loud instead (LAW-11's spirit:
+    # an absent identity is an error, never a default).
+    if best_model_path is None:
+        raise ValueError(
+            "resolve_anchor requires an explicit best_model_path. There is no default: the "
+            "old CWD-relative fallback let the anchor READ and the promotion WRITE name "
+            "different files. Derive it with "
+            "`mantis.train.anchor.canonical_anchor_path(checkpoint_dir)`."
+        )
+    bmp = Path(best_model_path)
 
     if eval_pipeline is None:
         return AnchorState(None, None, bmp, inf_representation)

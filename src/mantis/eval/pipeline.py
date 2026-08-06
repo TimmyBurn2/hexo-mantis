@@ -275,6 +275,11 @@ class EvalPipeline:
         self._mailbox: list[dict[str, Any]] = []
         self._round_counter = 0
         self._last_p_hat: dict[str, float] = {}
+        #: Times `_finalize_round` was re-entered for a round it had already finalised and
+        #: the duplicate was SUPPRESSED. Reads 0 in a healthy run. Non-zero means the poll
+        #: loop and a drain both reached the same in-flight round — see the guard in
+        #: `_finalize_round` for why that double-counts a promotion (LAW-18).
+        self._double_finalize_suppressed = 0
 
         # LAZY: the ladder state is only ever needed once a round is actually kicked
         # (`_build_round_spec`/`_success_result`) — deferring construction means a
@@ -468,7 +473,37 @@ class EvalPipeline:
 
     def _finalize_round(
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
+        # ONCE-ONLY (item 5(c)). Two independent routes finalise: `_poll_loop` (proc no
+        # longer alive, or round timeout via `_escalate_and_finalize`) and the drain
+        # (`drain_pending` / the terminal-eval path). Both read `self._inflight` and then
+        # act, and `self._inflight` is not cleared until the END of this method — so both
+        # can hold the SAME dict and finalise it twice. That is not a harmless repeat: it
+        # appends the round's result to the mailbox TWICE, calls `unregister_child` twice,
+        # persists the ladder twice, and — through `apply_gate_decision` on the second copy
+        # — can promote off one round's games counted as two.
+        #
+        # The latch lives on the `inflight` dict rather than on `self`, because it must be
+        # per-ROUND: a `self`-level flag would have to be reset between rounds and a missed
+        # reset silently disables the guard forever.
+        with self._lock:
+            if inflight.get("_finalized"):
+                self._double_finalize_suppressed += 1
+                _LOG.warning(
+                    "eval_round_double_finalize_suppressed round_id=%s step=%s",
+                    inflight.get("round_id"), inflight.get("step"),
+                )
+                _emit(self._sink, {
+                    "event": "eval_round_double_finalize_suppressed",
+                    "round_id": inflight.get("round_id"), "step": inflight.get("step"),
+                    "suppressed_total": self._double_finalize_suppressed,
+                })
+                # The first finalise's result if it has already been produced; `None` while
+                # it is still in flight, which `drain_pending`/`poll_completed` already
+                # treat as "nothing ready" (their declared `dict | list | None`).
+                return inflight.get("_result")
+            inflight["_finalized"] = True
+
         proc = inflight["proc"]
         from mantis.train.lifecycle.signals import unregister_child
         unregister_child(proc)
@@ -520,6 +555,9 @@ class EvalPipeline:
         with self._lock:
             self._inflight = None
             self._mailbox.append(result)
+            # Cache under the same lock the guard reads, so a suppressed second caller that
+            # arrives after this point gets the real result rather than `None`.
+            inflight["_result"] = result
         return result
 
     def _read_worker_result(
@@ -687,9 +725,18 @@ class EvalPipeline:
             proc, budget_sec=self._caps.terminal_eval_hard_cap_sec,
             worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec, clock=self._clock,
         )
-        if reason is not None:
-            return self._finalize_round(inflight, escalated_reason=reason)
-        return self._finalize_round(inflight)
+        # `_finalize_round` returns `None` only when the round was ALREADY finalised by
+        # another route. `inflight` here is local to this call and has never been published
+        # to `self._inflight`, so no other route can hold it and the suppression arm is
+        # structurally unreachable — asserted rather than assumed, so a future change that
+        # DOES publish it fails loudly instead of returning a `None` the caller unpacks.
+        result = (self._finalize_round(inflight, escalated_reason=reason) if reason is not None
+                  else self._finalize_round(inflight))
+        assert result is not None, (
+            "the terminal-eval round was finalised twice — its inflight record is local to "
+            "this call and must be unreachable from the poller and the drain"
+        )
+        return result
 
     # ── gate-decision delegation (the ONE call site lives in promote.py) ────────────────
     def apply_gate_decision(self, result: Mapping[str, Any]) -> int | None:

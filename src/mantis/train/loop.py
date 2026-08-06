@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from mantis.train.emit import emit_via
@@ -70,6 +71,8 @@ def run_training_loop(
     anchor_state: Any = None,
     sink: Any = None,
     loss_info: dict | None = None,
+    best_model_path: str | Path | None = None,
+    expected_anchor_sha256: str | None = None,
 ) -> ShutdownState:
     """Drive the training loop under the §c.8 injection contract; return the final state.
 
@@ -95,8 +98,12 @@ def run_training_loop(
     if eval_pipeline is not None:
         if resolve_anchor is None:
             from mantis.train.anchor import resolve_anchor as resolve_anchor  # lazy (Slice 3)
+        # `best_model_path` is FORWARDED, never defaulted here (item 5(a)). The loop used to
+        # pass neither of these, so `resolve_anchor` fell back to a CWD-relative anchor while
+        # the promotion hook wrote the run's real one — read and write naming different files.
         resolved = resolve_anchor(
-            trainer=trainer, eval_pipeline=eval_pipeline, anchor_state=anchor_state, sink=sink)
+            trainer=trainer, eval_pipeline=eval_pipeline, anchor_state=anchor_state, sink=sink,
+            best_model_path=best_model_path, expected_anchor_sha256=expected_anchor_sha256)
         if anchor_state is None:
             anchor_state = resolved
         else:

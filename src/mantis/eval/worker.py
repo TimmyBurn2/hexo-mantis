@@ -121,6 +121,15 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
         "moves": [list(m) for m in game_record.moves],
         "regime_key": game_record.regime_key.canonical(),
         "trajectory_hash": game_record.trajectory_hash,
+        # The SEAT (item 5(b)). `play_paired_match` plays every opening twice with
+        # `candidate_color` in (1, -1), but `trajectory_hash` is a sha256 over the MOVE LIST
+        # ALONE — so the two legs of a colour pair whose move sequences coincide hash
+        # identically, and this record used to carry nothing else to tell them apart
+        # (`p1`/`p2` are the constants "cand"/"opponent" by this worker's own construction).
+        # LAW-04's dedupe then collapsed the pair to ONE game, dropping a real result whose
+        # outcome is typically the OPPOSITE of the leg it kept — a WR biased toward whichever
+        # leg arrived first, on half the eff_n. Carrying the colour keeps both legs distinct.
+        "candidate_color": game_record.colors["candidate"],
     }
 
 

@@ -97,6 +97,7 @@ from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
 from mantis.selfplay.pool import WorkerPool
 from mantis.train.actor_sync import ActorSync
+from mantis.train.anchor import canonical_anchor_path
 from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
@@ -757,7 +758,7 @@ def compose_run(
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(
                         anchor_state=resolved_anchor,
-                        best_model_path=checkpoint_dir / "best_model.pt", run_id=run_id,
+                        best_model_path=canonical_anchor_path(checkpoint_dir), run_id=run_id,
                         encoding=config.identity.encoding,
                         save_anchor=_lazy_save_anchor, guarded_load=_lazy_guarded_load,
                     ),
@@ -823,7 +824,8 @@ def compose_run(
         try:
             run_training_loop(trainer=trainer, shutdown_state=shutdown,
                               eval_pipeline=eval_pipeline, coordinator=coordinator,
-                              anchor_state=resolved_anchor, sink=run_safety.sink)
+                              anchor_state=resolved_anchor, sink=run_safety.sink,
+                              best_model_path=canonical_anchor_path(checkpoint_dir))
         finally:
             coordinator.close_out(
                 on_drained=_stop_pool_if_start_attempted(

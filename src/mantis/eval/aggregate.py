@@ -1,3 +1,14 @@
+# >300 justify (R8): one arithmetic unit. Every function here reads the SAME record
+# convention and feeds ONE decision — the promotion gate. `_traj_key`/`_distinct_outcomes`
+# (the LAW-04 dedupe), `pair_bootstrap_wr_ci` (the CI over those distinct games),
+# `aggregate_rung`/`aggregate_gate` (the draw-aware pooled WR) and the two truth-table
+# functions `aggregate_gate` calls are a single chain in which every step's output is the
+# next step's input. Splitting it would put the dedupe key in one file and the estimator
+# that depends on its semantics in another — and the defect this file most recently carried
+# was exactly a dedupe key whose meaning had drifted from what the estimator assumed
+# (colour-paired legs collapsing into one game, biasing the WR the gate then read). The
+# parity citations to run3's `deploy_strength_eval.py` line ranges are load-bearing for the
+# same reason: they must sit beside the arithmetic they certify.
 """Vectorized aggregation over game-record arrays (design §a.3 aggregate.py).
 
 `aggregate_rung` RAISES `MixedRegimeError` on >1 distinct `regime_key` in one call (A3);
@@ -54,9 +65,28 @@ def _outcome_value(record: Mapping[str, Any]) -> float:
 
 
 def _traj_key(record: Mapping[str, Any]) -> str:
-    """The LAW-04 dedupe key: the record's own `trajectory_hash`, or a hash of `moves`."""
+    """The LAW-04 dedupe key: the trajectory, QUALIFIED BY WHO SAT WHERE.
+
+    LAW-04 dedupes COPIES of one game, because a deterministic regime replays the same game
+    and a CI over the raw count is over-confident by sqrt(copies). Two legs of a colour pair
+    are not copies: `play_paired_match` plays every opening twice with the colours swapped,
+    and the two legs have genuinely different outcomes. But `trajectory_hash` is a sha256
+    over the MOVE LIST alone, so when the two legs' move sequences coincide — routine under
+    argmax/temp-0 from a fixed opening, which is exactly the regime LAW-04 is about — they
+    hash identically and the unqualified key threw one away.
+
+    Dropping a leg is not a wash: it biases the win rate toward whichever leg was seen first
+    (its outcome supplies the pair's value) AND halves eff_n, so LAW-04's own remedy was
+    corrupting the LAW-15 promotion bar it feeds. The seat is therefore part of the identity
+    of a game, not metadata about it.
+
+    `candidate_color` is absent on legacy/`moves`-only records; those key as before, so this
+    is additive — a record that never carried a seat cannot start colliding because of one.
+    """
+    seat = record.get("candidate_color")
+    qualifier = f"{record.get('p1')}|{record.get('p2')}|{seat}|"
     if "trajectory_hash" in record:
-        return str(record["trajectory_hash"])
+        return qualifier + str(record["trajectory_hash"])
     moves = record.get("moves")
     if moves is None:
         raise KeyError(
@@ -66,7 +96,7 @@ def _traj_key(record: Mapping[str, Any]) -> str:
     h = hashlib.sha256()
     for q, r in moves:
         h.update(f"{int(q)},{int(r)};".encode())
-    return h.hexdigest()
+    return qualifier + h.hexdigest()
 
 
 def _pair_key(record: Mapping[str, Any]) -> tuple[Any, Any]:
