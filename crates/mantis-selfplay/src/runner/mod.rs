@@ -95,6 +95,8 @@ pub struct RunnerStatsSnapshot {
     pub gridls_zero_policy_rows: u64,
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
+    /// Worker threads that died by panic (must read 0 in a healthy run).
+    pub worker_panics: u64,
 }
 
 /// Pure-Rust self-play runner core. Spawns worker threads (`spawn.rs`) that run
@@ -121,6 +123,15 @@ pub struct SelfPlayRunner {
     // ── control ──
     running: Arc<AtomicBool>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    /// Worker threads that died by panic. MUST read 0 in a healthy run.
+    ///
+    /// Before this counter existed a panicking worker was invisible: `thread::spawn`
+    /// captures the panic in its `JoinHandle`, `stop()` discarded that result
+    /// (`let _ = handle.join()`), and `running` stayed `true` — so the pool silently ran
+    /// with fewer workers, or none, and presented as "slow" rather than "broken". Written
+    /// from two places: `spawn::WorkerPanicGuard` on the unwind itself (live, mid-run) and
+    /// `stop()`'s join-result check (belt-and-braces, at shutdown).
+    worker_panics: Arc<AtomicU64>,
 
     /// WP7 NN model-version snapshot source. Each worker reads this once per move and
     /// dedup-pushes it into `version_seen` (drain tuple `mv_min/mv_max/mv_distinct`).
@@ -308,6 +319,7 @@ impl SelfPlayRunner {
             recent_game_results: Arc::new(Mutex::new(VecDeque::new())),
             running: Arc::new(AtomicBool::new(false)),
             handles: Arc::new(Mutex::new(Vec::new())),
+            worker_panics: Arc::new(AtomicU64::new(0)),
             model_version: Arc::new(AtomicU64::new(0)),
             seed_corpus: Arc::new(seed_corpus_vec),
             games_completed: Arc::new(AtomicUsize::new(0)),
@@ -365,6 +377,12 @@ impl SelfPlayRunner {
             .clone()
     }
 
+    /// Worker threads that have died by panic. Reads 0 in a healthy run.
+    #[must_use]
+    pub fn worker_panics(&self) -> u64 {
+        self.worker_panics.load(Ordering::SeqCst)
+    }
+
     /// Spawn `n_workers` self-play threads (idempotent). See [`spawn`].
     pub fn start(&self) {
         self.start_impl();
@@ -379,7 +397,16 @@ impl SelfPlayRunner {
         self.graph_queue.close();
         let mut handles = self.handles.lock().expect("runner handles lock poisoned");
         while let Some(handle) = handles.pop() {
-            let _ = handle.join();
+            // CHECKED, not discarded. `Err` here means the thread unwound all the way OUT
+            // of the spawn closure — which the normal path cannot do, because the closure
+            // wraps `run_worker_thread` in `catch_unwind` and counts the panic itself
+            // (`spawn.rs`). So this arm double-counts nothing; it is the escape hatch for a
+            // panic raised outside that `catch_unwind` (in the closure's own prologue, or a
+            // panic while panicking). If it ever fires, the count is still right and the
+            // alternative is the old behaviour: silence.
+            if handle.join().is_err() {
+                self.worker_panics.fetch_add(1, Ordering::SeqCst);
+            }
         }
     }
 
@@ -468,6 +495,7 @@ impl SelfPlayRunner {
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
             gridls_zero_policy_rows: self.gridls_zero_policy_rows.load(Ordering::Relaxed),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
+            worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
     }
 
@@ -593,6 +621,85 @@ mod seam_roundtrip {
         assert!(r.drain_graph_records().is_empty());
     }
 
+    // ── worker-panic propagation (item 3) ────────────────────────────────────────────
+    //
+    // The defect these pin: a panicking worker was parked in its `JoinHandle`, `stop()`
+    // discarded the result, and `running` stayed true — so the pool reported healthy while
+    // producing nothing. Every test below injects a REAL panic; none simulate one.
+
+    /// The live arm, driving the SAME `guard_worker` the spawn closure calls.
+    #[test]
+    fn injected_worker_panic_is_counted_and_halts_the_run() {
+        use std::sync::atomic::{AtomicBool, AtomicU64};
+
+        let panics = AtomicU64::new(0);
+        let running = AtomicBool::new(true);
+
+        crate::runner::spawn::guard_worker(&panics, &running, || {
+            panic!("injected worker panic");
+        });
+
+        assert_eq!(panics.load(Ordering::SeqCst), 1, "the panic was not COUNTED");
+        assert!(
+            !running.load(Ordering::SeqCst),
+            "the panic was counted but the run was not HALTED — the pool would keep \
+             reporting healthy with a dead worker, which is the original defect"
+        );
+    }
+
+    /// Mutation self-test (LAW-07): the arm must stay silent on a clean worker.
+    ///
+    /// Mechanism: `guard_worker` fires only on `catch_unwind` returning `Err`, so a body
+    /// that returns normally must leave both the counter and the flag untouched. Without
+    /// this, an arm that counted unconditionally would pass the test above while making
+    /// `worker_panics` meaningless — a counter that always reads non-zero reports nothing.
+    #[test]
+    fn a_clean_worker_neither_counts_nor_halts() {
+        use std::sync::atomic::{AtomicBool, AtomicU64};
+
+        let panics = AtomicU64::new(0);
+        let running = AtomicBool::new(true);
+
+        crate::runner::spawn::guard_worker(&panics, &running, || { /* returns normally */ });
+
+        assert_eq!(panics.load(Ordering::SeqCst), 0, "counted a panic that never happened");
+        assert!(running.load(Ordering::SeqCst), "halted a run over a healthy worker");
+    }
+
+    /// The escape arm: `stop()` must CHECK the join result, not discard it.
+    ///
+    /// A handle that panicked outside `guard_worker` is pushed straight onto the runner's
+    /// handle list — the one state `stop()` reads — and `stop()` must come back with the
+    /// panic counted. Before the fix this was `let _ = handle.join()` and the count stayed 0.
+    #[test]
+    fn stop_counts_a_panic_that_escaped_the_guard() {
+        let r = runner();
+        assert_eq!(r.worker_panics(), 0);
+
+        r.handles
+            .lock()
+            .expect("handles lock")
+            .push(std::thread::spawn(|| panic!("escaped worker panic")));
+
+        r.stop();
+
+        assert_eq!(
+            r.worker_panics(),
+            1,
+            "stop() swallowed a join Err — a worker died and nothing recorded it"
+        );
+        assert_eq!(r.stats_snapshot().worker_panics, 1, "the count did not reach the stats");
+    }
+
+    /// A clean worker must not be counted by the `stop()` arm either.
+    #[test]
+    fn stop_does_not_count_a_worker_that_exited_cleanly() {
+        let r = runner();
+        r.handles.lock().expect("handles lock").push(std::thread::spawn(|| {}));
+        r.stop();
+        assert_eq!(r.worker_panics(), 0, "a clean thread exit was counted as a panic");
+    }
+
     #[test]
     fn stats_snapshot_reads_back_each_private_atomic() {
         let r = runner();
@@ -628,6 +735,7 @@ mod seam_roundtrip {
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
         r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
+        r.worker_panics.store(25, Ordering::Relaxed);
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -654,6 +762,7 @@ mod seam_roundtrip {
             export_offwindow_mass_moves: 22,
             gridls_zero_policy_rows: 23,
             target_integrity_defects: 24,
+            worker_panics: 25,
         };
         assert_eq!(
             r.stats_snapshot(),

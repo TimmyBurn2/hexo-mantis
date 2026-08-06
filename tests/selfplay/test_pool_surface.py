@@ -84,6 +84,11 @@ RUNNER_STATS_FIELDS = {
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
     "export_offwindow_mass_moves", "gridls_zero_policy_rows",
     "target_integrity_defects",
+    # Worker threads that died by panic (item 3). A DIFFERENT family from the three
+    # above despite sitting beside them: those are Phase-T target-integrity latches,
+    # this is a lifecycle counter. Kept out of `_TARGET_INTEGRITY_COUNTERS` for that
+    # reason — see the queue's ADJ-D9.
+    "worker_panics",
     "runner_encoding",
 }
 INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}

@@ -22,6 +22,37 @@ use super::params::{
 use super::stats::WorkerStats;
 use super::{game, SelfPlayRunner};
 
+/// Run one worker body, converting a panic into a COUNTED, run-halting event.
+///
+/// A worker that panicked used to vanish silently: `thread::spawn` parks the panic in the
+/// `JoinHandle`, `SelfPlayRunner::stop()` threw that result away (`let _ = handle.join()`),
+/// and `running` stayed `true`. The pool therefore kept reporting healthy while producing
+/// nothing — the failure presented as "self-play is slow", which is the most expensive way
+/// for it to present.
+///
+/// Catching HERE rather than reading join results at `stop()` is what makes the halt LIVE:
+/// the run stops at the panic, not whenever someone gets round to shutting down. It also
+/// leaves `join()` returning `Ok`, so `stop()`'s own join check counts only panics that
+/// ESCAPED this function and the counter never double-counts one death.
+///
+/// Store-then-halt, matching `store_fatal_defect`'s ordering: the count is visible BEFORE
+/// the flag flips, so a supervisor woken by `!is_running()` can always read a non-zero
+/// `worker_panics` and attribute the halt instead of guessing.
+///
+/// `AssertUnwindSafe` is the honest annotation and not a workaround: the worker bundles are
+/// moved in and dropped with the thread, and the only state touched after the catch is the
+/// two atomics. Nothing observes a half-updated worker, because the run halts.
+pub(crate) fn guard_worker<F: FnOnce()>(
+    worker_panics: &std::sync::atomic::AtomicU64,
+    running: &std::sync::atomic::AtomicBool,
+    body: F,
+) {
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)).is_err() {
+        worker_panics.fetch_add(1, Ordering::SeqCst);
+        running.store(false, Ordering::SeqCst);
+    }
+}
+
 impl SelfPlayRunner {
     /// Spawn `n_workers` self-play threads. Idempotent: a second call while
     /// already running is a no-op (the `running.swap(true)` guard).
@@ -70,10 +101,17 @@ impl SelfPlayRunner {
             let channels = channels_proto.clone();
             let params = params_proto.clone();
             let sym_tables = sym_tables_static;
+            // The two lifecycle Arcs the panic arm needs. Captured directly rather than
+            // through the runner because the worker closure is `'static` and the runner is
+            // borrowed here.
+            let worker_panics = self.worker_panics.clone();
+            let running = self.running.clone();
             let handle = thread::spawn(move || {
-                game::run_worker_thread(
-                    worker_id, stats, atomics, channels, params, sym_tables, geometry,
-                );
+                guard_worker(&worker_panics, &running, || {
+                    game::run_worker_thread(
+                        worker_id, stats, atomics, channels, params, sym_tables, geometry,
+                    );
+                });
             });
             handles.push(handle);
         }

@@ -577,6 +577,17 @@ impl PySelfPlayRunner {
         self.snapshot().target_integrity_defects
     }
 
+    /// Worker threads that died by panic — must read 0 in a healthy run.
+    ///
+    /// A panicking worker used to be invisible from Python: the panic sat in its
+    /// `JoinHandle`, `stop()` discarded it, and the pool kept reporting healthy while
+    /// producing nothing. Non-zero here means self-play halted on a worker death, and it is
+    /// the difference between diagnosing that and chasing "self-play got slow".
+    #[getter]
+    pub fn worker_panics(&self) -> u64 {
+        self.snapshot().worker_panics
+    }
+
     /// Drain and return all buffered game results since the last call.
     pub fn drain_game_results(&self) -> Vec<GameResultRow> {
         self.inner.drain_game_results()

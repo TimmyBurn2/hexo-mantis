@@ -139,6 +139,10 @@ class RunnerStats:
     export_offwindow_mass_moves: int = 0
     gridls_zero_policy_rows: int = 0
     target_integrity_defects: int = 0
+    # Worker threads that died by panic. Reads 0 in a healthy run; non-zero means
+    # self-play HALTED on a worker death rather than merely slowing down, which is the
+    # distinction the old silent-swallow made impossible to draw.
+    worker_panics: int = 0
     # Vestigial `None`-valued slot: the legacy 4-field encoding-spec getter retired with
     # the runner field it mirrored. Kept so external callers that construct `RunnerStats`
     # by kwarg do not break; the live spec cross-check reads `pool.encoding_spec`.
@@ -194,6 +198,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
+        worker_panics=int(getattr(r, "worker_panics", 0)),
     )
 
 
