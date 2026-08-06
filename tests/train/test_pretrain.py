@@ -11,7 +11,7 @@ from pathlib import Path
 
 import mantis.train.pretrain.dataset as dataset
 
-_DATASET_SRC = Path(dataset.__file__).read_text()
+_DATASET_SRC = Path(dataset.__file__).read_text(encoding="utf-8")
 
 
 def _imported_modules(src: str) -> set[str]:

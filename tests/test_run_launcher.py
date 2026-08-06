@@ -1,9 +1,9 @@
-# >300 justify (R8), stated at this file's MEASURED size of 400 lines (`wc -l`, never
-# transcribed — SF-7). The file was 248 lines at ORACLE-WRITE and crossed the cap on the R129
+# >300 justify (R8). The file crossed the cap on the R129
 # re-point, which replaced O-B1's one-line checkpoint assertion with the measured truth plus
 # the reasoning a later reader needs to know WHY `checkpoints/` was empty and what would make
-# that expire (CARD-CLEANSTOP-SAVE). The 333 -> 397 delta is that expiry arriving: WP12-R
-# Phase CS / R137 re-points the same clause to EXACTLY ONE checkpoint and decomposes it by
+# that expire (CARD-CLEANSTOP-SAVE). WP12-R
+# Phase CS / R137 is that expiry arriving: it re-points the same clause to EXACTLY ONE
+# checkpoint and decomposes it by
 # filename and by event, and the two-re-point history is kept because it is the argument the
 # next reader needs. A split is argued AGAINST: O-B1, O-B2 and O-B3 are three
 # instruments on ONE surface — `mantis.run`'s launcher — and O-B2's AST census parses the very

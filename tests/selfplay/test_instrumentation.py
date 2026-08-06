@@ -31,7 +31,7 @@ from mantis.selfplay.instrumentation import (
 # Module-level load: parametrize ids are resolved at COLLECTION time.
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay"
 _BATTERY: dict[str, Any] = json.loads(
-    (_FIXTURES / "instrumentation" / "pure_function_battery.json").read_text()
+    (_FIXTURES / "instrumentation" / "pure_function_battery.json").read_text(encoding="utf-8")
 )
 _CASES = sorted(_BATTERY["cases"])
 CAPTURE_SEED = _BATTERY["seed"]  # 20260723 — the random-history generator seed, recorded

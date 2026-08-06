@@ -12,7 +12,7 @@ from pathlib import Path
 from mantis.data import replay as replay_mod
 from mantis.data.replay import _SUPPORTED
 
-_REPLAY_SRC = Path(replay_mod.__file__).read_text()
+_REPLAY_SRC = Path(replay_mod.__file__).read_text(encoding="utf-8")
 
 
 def test_supported_set_has_no_v8() -> None:

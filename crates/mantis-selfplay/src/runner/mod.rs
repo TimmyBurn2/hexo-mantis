@@ -1,7 +1,7 @@
 //! R8-justify: the pure-Rust `SelfPlayRunner` core (the ~40-field accumulator/
 //! queue-owning struct + its resolving ctor + start/stop/drain lifecycle) is one
-//! indivisible unit — the frozen `game_runner/mod.rs` was 1199 LOC; the phase
-//! bodies split into sibling modules (`spawn`/`game`/…) but the struct and its
+//! indivisible unit — the frozen `game_runner/mod.rs` was a single long module; the
+//! phase bodies split into sibling modules (`spawn`/`game`/…) but the struct and its
 //! lifecycle stay together so the ownership story is greppable in one file.
 //!
 //! Self-play runner core (WP6 D1) — the pyo3-STRIPPED half of the frozen

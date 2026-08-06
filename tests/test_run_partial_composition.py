@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 404 lines. The three oracles are
+# >300 justify (R8). The three oracles are
 # one claim — "a composition that fails partway leaks nothing and says WHERE" — driven
 # through ONE real composed boot (real `build_run_safety`, real `JsonlEventSink`, real
 # `HeartbeatWatchdog`, real `DiskGuard`, real signal handlers). R5 bars cross-test imports

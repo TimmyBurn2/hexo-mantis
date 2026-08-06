@@ -56,7 +56,7 @@ from mantis.selfplay.graph_collate import (
 # sweep tables (A-20 24 cells, A-23 13 cells) cannot come from a session fixture.
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay"
 _EXPECT: dict[str, Any] = json.loads(
-    (_FIXTURES / "collate" / "collate_expectations.json").read_text()
+    (_FIXTURES / "collate" / "collate_expectations.json").read_text(encoding="utf-8")
 )
 _BOUNDARY_CELLS = sorted(_EXPECT["boundary_sweep"])
 _DTYPE_CELLS = sorted(_EXPECT["dtype_sweep"])

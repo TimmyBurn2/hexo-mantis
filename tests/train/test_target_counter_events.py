@@ -1,6 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 538 lines (`wc -l` at
-# ORACLE-WRITE, never transcribed — SF-7; IMPL re-measures rather than carrying this number
-# forward). The eight rows are ONE claim — the three Phase-T target-integrity counters reach the
+# >300 justify (R8). The eight rows are ONE claim — the three Phase-T target-integrity counters reach the
 # run's OWN event stream with a fire-rate over a published denominator (LAW-18) — over ONE
 # harness: a real `StepCoordinator` driven past its `log_interval` boundary with a riggable
 # `runner_stats` snapshot. Every row needs the whole rig, R5 bars cross-test imports, and a

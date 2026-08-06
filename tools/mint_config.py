@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     if not template_path.is_file():
         print(f"unknown template: {args.template} (no {template_path})", file=sys.stderr)
         return 2
-    data = yaml.safe_load(template_path.read_text())
+    data = yaml.safe_load(template_path.read_text(encoding="utf-8"))
 
     delta_lines: list[str] = []
     for raw in args.deltas:
@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         ["# minted-by: tools/mint_config.py", f"# template: {args.template}", *delta_lines]
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(header + "\n" + yaml.safe_dump(data, sort_keys=False))
+    out_path.write_text(header + "\n" + yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     print(f"minted {out_path} from template {args.template} ({len(delta_lines)} delta(s))")
     return 0
 

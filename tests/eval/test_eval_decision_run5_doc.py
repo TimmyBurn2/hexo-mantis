@@ -1,6 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size (`wc -l` at ORACLE-WRITE, never
-# transcribed; re-measured, never carried forward): **411 lines** after G-A4's re-wrap row
-# (357 at ORACLE-WRITE).
+# >300 justify (R8).
 # O-A16/O-A17/O-A19 are ONE claim — `docs/contracts/eval_decision_run5.md` says only true
 # things and says the not-yet-true ones in the ONE form R169 and R151 permit — over one
 # artefact. They share the section parser and the doc loader; a split forks those into

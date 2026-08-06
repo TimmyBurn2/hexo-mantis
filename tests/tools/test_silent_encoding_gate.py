@@ -1,6 +1,6 @@
-# >300 justify (R8), stated at this file's MEASURED size of 345 lines (249 before WP12-R;
-# the delta is the KNOWN_DEBT register's three-way split, O-7a/b/c, which gave the gate's
-# stale and reporting branches the producers they never had). It is ONE gate's producer
+# >300 justify (R8). The file grew at WP12-R with
+# the KNOWN_DEBT register's three-way split, O-7a/b/c, which gave the gate's
+# stale and reporting branches the producers they never had. It is ONE gate's producer
 # suite over ONE loaded module object (`GATE`) plus ONE corpus fixture, and R5 bars
 # cross-test imports — a split forks the loader and the `_fires` helper into two copies that
 # drift apart while both stay green, which is this gate's own defect class.

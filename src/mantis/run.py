@@ -1,5 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 867 lines (re-measured at
-# WP12-R Phase O, which adds the terminal-eval rc seam to the teardown this root owns). WPMAIN made this
+# >300 justify (R8). WPMAIN made this
 # module the ONE composition authority in fact and not only in name: the collaborator
 # builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
 # `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
@@ -16,23 +15,17 @@
 # exist to forbid. The honest alternative (a `mantis.launch` sibling plus a repo_design §2
 # amendment) is recorded as REJECTED for that reason. Executable content stays a minority of
 # the file; the rest is the per-decision rationale R8's clause protects (R64, MF-1/MF-2,
-# S-4/Phase D/K-A/K-B, R120/R121/R122/R125/R126). The previous header claimed 335 lines
-# against a 349-line file; SF-7 — a justification that is not true is worse than none — so
-# the number above is re-measured by `wc -l`, never transcribed. Re-measured AGAIN at the
-# RED-TEAM close (734 -> 806): the teardown ladder now opens at the sink instead of at
-# `pool.start()` and eleven composition steps carry a seam name (RT-3/RT-4). That adds no
-# executable branch — `with` lines and the rationale for them — so the argument above is
-# unchanged in kind. Re-measured a THIRD time at the R132 fix pass (806 -> 829): the disk-guard
-# abort's rc seam is four lines of code in the teardown plus its rationale, and it belongs at
-# this root for the reason stated there — the rule NAME is a manifest fact, `mantis.train` may
-# not import the manifest, and this module already imports it for the launcher's own rc.
-# Re-measured a FOURTH time at WP12R Step 3 R208 (911 -> 1010): the _DeferredHeartbeat
-# adapter + the _assert_pool_producers_live conjunct + the bind + the conjunct call are
-# composition-root code that belongs here for the SAME one-authority reason — the pool's
-# heartbeat is injected at :381 inside build_run_collaborators (the ONE builder), and the
-# conjunct gates the SAME watchdog.start() at :761. A split would create a second site
-# that touches the pool's heartbeat path, which is precisely the two-surfaces shape the
-# one-authority tests forbid. The argument is unchanged in kind.
+# S-4/Phase D/K-A/K-B, R120/R121/R122/R125/R126).
+# Every later addition landed here for the SAME one-authority reason and is unchanged in
+# kind: the RED-TEAM close reopened the teardown ladder at the sink instead of at
+# `pool.start()` and gave eleven composition steps a seam name (RT-3/RT-4); the R132 fix
+# pass added the disk-guard abort's rc seam, because the rule NAME is a manifest fact and
+# `mantis.train` may not import the manifest while this root already does for the launcher's
+# own rc; WP12R Step 3 R208 added the `_DeferredHeartbeat` adapter and the
+# `_assert_pool_producers_live` conjunct, because the pool's heartbeat is injected at `:381`
+# inside `build_run_collaborators` (the ONE builder) and the conjunct gates the SAME
+# `watchdog.start()` at `:761`. Each of those splits would create a second site touching the
+# path it names, which is precisely the two-surfaces shape the one-authority tests forbid.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
 TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that

@@ -44,7 +44,7 @@ def _code_text(path: Path) -> str:
         )
 
 
-PARENT_SOURCE = PARENT_PATH.read_text()
+PARENT_SOURCE = PARENT_PATH.read_text(encoding="utf-8")
 PARENT_TREE = ast.parse(PARENT_SOURCE)
 PARENT_CODE = _code_text(PARENT_PATH)
 

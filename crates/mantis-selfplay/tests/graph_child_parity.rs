@@ -1,4 +1,4 @@
-// R8 >300 justify (MEASURED 310 lines, `wc -l`): one oracle — the self-play call sequence
+// R8 >300 justify: one oracle — the self-play call sequence
 // executed verbatim — plus the flat-fixture reader it needs. The reader exists only because
 // the card's file plan touches no Cargo manifest, so it cannot take a JSON dependency;
 // splitting it into a second file would separate the reader from the ONE test that proves

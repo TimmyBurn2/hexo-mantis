@@ -53,8 +53,12 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
    files >1 MB and `*.jsonl` only under tests/fixtures/, and even there a 10 MB per-file
    ceiling holds — the carve-out is a raised ceiling, not an exemption (CI gate 6 enforces).
    Reason: run outputs in git history are unremovable and poison clones.
-8. **R8 file size.** 300-line soft cap; exceeding is fine WITH a one-line justification
-   at the top of the file.
+8. **R8 file size.** 300-line soft cap; exceeding is fine WITH a justification in the
+   file's opening comment or module docstring saying WHY the file is one unit. It states a
+   reason, NEVER a line count: a transcribed tally must be re-edited on every edit, will
+   eventually be wrong, and is then read as evidence (ratified G-DFIX-4 / R192(e),
+   derive-or-delete). Sizes are derived by `wc -l`, never asserted. Gate 15 enforces both
+   halves — the justification is present, and it states no count.
    Reason: keeps the audit greppable; unjustified growth hides structure drift.
 9. **R9 registers.** docs/registers/falsified.md is read-before-optimizing;
    docs/registers/laws.md governs; deviations from docs/design/repo_design.md require an
@@ -133,6 +137,17 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
     select + pyright (basic, src+tools) held at ZERO. A rule is adopted only with a named
     in-repo defect class AND a clean baseline (R98); exclusions are enumerated with grounds
     in pyproject.toml; the trigger self-tests every run.
+15. R8 justification headers (tools/ci_gates/r8_header_gate.py) — every `.py`/`.rs` file over
+    300 lines under src/, tools/, crates/, tests/ carries a justification, and NO justification
+    states a line count. The second half is the load-bearing one: 47 headers stated a tally,
+    at least 8 were already wrong, and run.py claimed 867 against 1024. A stale count is
+    misinformation a future reader trusts (SF-7). Line counts are derived, never asserted.
+16. Encoding-less text I/O (tools/ci_gates/encoding_io_gate.py) — `open`/`read_text`/
+    `write_text` without `encoding=` default to the platform codepage, so they raise
+    UnicodeDecodeError on any non-UTF-8 locale. ZERO in tools/ (these are the gates
+    themselves); ZERO at MODULE scope in tests/ (a module-scope failure is collection-fatal
+    and takes down the whole tier). Binary mode is correctly exempt; exemptions are
+    self-expiring. Function-scope tests/ sites are a registered backlog, not a rule.
 
 Every gate's check logic is a repo-local script or make target under tools/ — nothing
 lives only in workflow YAML.

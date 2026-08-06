@@ -1,5 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size (`wc -l` at ORACLE-WRITE, never
-# transcribed; IMPL re-measures rather than carrying the number forward): 428 lines.
+# >300 justify (R8).
 # O-A7/O-A10/O-A14 are ONE claim — the adapter translates honestly and REFUSES rather than
 # degrading — over one seam (`bots/sealbot.py`). They share the `_FakeMinimax` recording
 # double (SR-1/SR-2) and the two board constructions; a split forks those into copies that

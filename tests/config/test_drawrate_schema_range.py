@@ -1,7 +1,7 @@
-""">300 justify (R8), stated at this file's MEASURED size of 331 lines. The file was already
+""">300 justify (R8). The file was already
 over the cap with NO justify at all (a pre-existing gap WPMINT Phase K-A flagged); WPMINT Phase
 K-B touches it to author `train.draw_rate_abort.consec`, so it is written now rather than left.
-One block, one rejection corpus: the ~15 rejected payloads and the per-config posture census are
+One block, one rejection corpus: the rejected payloads and the per-config posture census are
 DATA whose reason text IS the assertion — each row names the defect the bound closes and the
 spelling an operator would actually write. Splitting them would separate a rejection from the
 prereg pin it is judged against, and R5 bars the cross-test import that would rejoin them.

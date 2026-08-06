@@ -1,4 +1,4 @@
-//! R8-justify (339 lines): the P-07/P-08 queue round-trip pair (dense + graph) and the disjoint-pool invariant that binds them share one mock-producer scaffold; the graph leg's D6 reason-travels arms are the bulk of the overage.
+//! R8-justify: the P-07/P-08 queue round-trip pair (dense + graph) and the disjoint-pool invariant that binds them share one mock-producer scaffold; the graph leg's D6 reason-travels arms are the bulk of the overage.
 //! P-07 / P-08 — mock-game queue round-trips (dense + graph), pyo3-free.
 //!
 //! A MOCK producer (D16 surrogate stand-in; the NN + numpy face is WP7) pops the

@@ -1,4 +1,4 @@
-//! R8-justify (443 lines): the HEXB persist oracle roster (O-1..O-12 + O-34a — the four-version compat matrix, the hard-reject legs, and the frozen v9 byte-golden) binds ONE on-disk format; the version legs share one write-then-load scaffold and the O-numbering is contiguous by design.
+//! R8-justify: the HEXB persist oracle roster (O-1..O-12 + O-34a — the four-version compat matrix, the hard-reject legs, and the frozen v9 byte-golden) binds ONE on-disk format; the version legs share one write-then-load scaffold and the O-numbering is contiguous by design.
 //! HEXB (dense) oracle suite — version round-trips (O-1..O-4), v5 hard-reject
 //! (O-5), all-grid + max-name round-trips (O-6/O-7), P13 reject leg (O-8),
 //! unknown-encoding + n_planes guards (O-10/O-11), the frozen byte-golden

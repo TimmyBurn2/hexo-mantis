@@ -1,6 +1,6 @@
 // Exceeds the 300-line soft cap (R8): the single collect-all-errors, multi-pass
 // TOML field parser for one encoding entry — the per-field error-collection loop
-// is >100 LOC by design, kept whole so one pass reports every field fault at once.
+// is long by design, kept whole so one pass reports every field fault at once.
 //! TOML field-parser for one `[encodings.<name>]` entry.
 //!
 //! `parse_one` and its inline macros (`get_int!`, `get_str!`, `get_bool!`) live

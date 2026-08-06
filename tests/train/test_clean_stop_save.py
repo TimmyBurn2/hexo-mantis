@@ -1,5 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size (`wc -l` at ORACLE-WRITE, never
-# transcribed — SF-7; IMPL re-measures rather than carrying the number forward): 759 lines.
+# >300 justify (R8).
 # The ten rows are ONE claim — R137's THIRD save leg: a run that reaches its own declared
 # terminus writes EXACTLY ONE stamped checkpoint, a rigged failure is supervisor-distinguishable,
 # and an in-loop abort still writes nothing — over one seam that runs from `step.py`'s O2 arm

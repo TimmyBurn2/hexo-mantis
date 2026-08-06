@@ -6,7 +6,7 @@ block factories (`train`/`selfplay`/`inference`/`monitor`) all have to stay co-l
 every `tests/train/` suite draws its config shape from ONE place; splitting them would let
 two copies of a block factory drift apart. WPSC Phase 2 SC-A1/SC-A2's `train:`/`selfplay:`
 reshape of `make_run_config` plus the new `full_train_hparams` fixture factory
-(DESIGN_P2.md §2.1) is what pushed this file from 226 to 336 lines.
+(DESIGN_P2.md §2.1) is what pushed this file past the cap.
 
 This conftest imports ONLY already-present layers (torch + mantis.model / mantis.encoding
 / mantis.config) and NEVER `mantis.train.*` — so it collects cleanly while the two suites

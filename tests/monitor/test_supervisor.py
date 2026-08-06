@@ -1,3 +1,11 @@
+# >300 justify (R8): ONE subject — the supervisor's relaunch decision — reached through ONE
+# scripted harness (`FakeChild` + `_Clock` + `_make_supervisor`'s injected spawn/kill/sleep).
+# The exit-code table (0 stop, 42 relaunch, 43 stop, 48 stop, any other propagate, budget
+# exhausted loud) and the stale-`seq` SIGTERM→SIGKILL→relaunch ladder are two routes to that
+# SAME decision, and `test_exit_code_equality_pin` only reads as a pin while the rc rows that
+# consume 42 sit beside it. `LivenessTracker`'s seq/pid rows are the input the decision is
+# computed FROM, so splitting them puts a verdict in one file and its premise in another;
+# R5 bars cross-test imports, so any split also forks the harness into copies free to drift.
 """⊕ O-12 / O-17 / O-13(ii,iii) — the out-of-process supervisor (L-C).
 
 RED-at-import until IMPL writes `mantis.monitor.supervise`. ORACLE-FIRST (⊕): the top-level

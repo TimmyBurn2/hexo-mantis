@@ -6,16 +6,14 @@ the RAW per-cluster grid decode (`infer_batch_per_cluster`), and the no-drop GRA
 (`infer_batch_ls`) — splitting them would separate each decode from the docstring stating
 what it drops, and the only way to read "which decode drops what" is to read them side by
 side. WPSC Phase 2 SC-A2's explicit 8-field `InferenceHParams`-default dict literal
-(replacing the old `{"selfplay": {}}` fallback) is what pushed this file from 292 to 303
-lines; WPCLEAN Phase LT's type-visibility guards (batcher None-guard, canonical autocast
-import) took it to 323; WP12-R Phase C's deletion of the `lookup("v6")` ternary (gate 11's
-arm 8) took it to 330; WP12-R Phase EVALDECODE (operator ruling R138) added the fourth
-decode, `infer_batch_ls`/`infer_ls`, which keeps BOTH halves of the shared producer's
-legal-set policy plus the builder's window centre, taking it to 412. MEASURED size now 425
-lines (`wc -l`, re-measured after WP12-R Phase Q): ADJ-WP12R-12's R73 name-truth correction
-to `_infer_batch_graph`'s docstring, which also records that no production consumer reaches
-that method — prose only, no assertion and no behaviour moved (the `v6` R20 control-round
-sha is byte-identical at `4d8d6321aae18d7a` across the edit).
+replaced the old `{"selfplay": {}}` fallback; WPCLEAN Phase LT added the type-visibility
+guards (batcher None-guard, canonical autocast import); WP12-R Phase C deleted the
+`lookup("v6")` ternary (gate 11's arm 8); WP12-R Phase EVALDECODE (operator ruling R138)
+added the fourth decode, `infer_batch_ls`/`infer_ls`, which keeps BOTH halves of the shared
+producer's legal-set policy plus the builder's window centre. ADJ-WP12R-12's R73 name-truth
+correction to `_infer_batch_graph`'s docstring also records that no production consumer
+reaches that method — prose only, no assertion and no behaviour moved (the `v6` R20
+control-round sha is byte-identical at `4d8d6321aae18d7a` across the edit).
 
 One class, four decode contracts that must be read together: the dense `infer_batch`
 scatter-max/min-pool decode, the graph leg that rides the ONE server, the RAW

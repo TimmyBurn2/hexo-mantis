@@ -38,7 +38,7 @@ child set" is the *reason* these are red, not their HEAD traceback.
     RED   C-1a-d, C-2, C-3, C-4, C-5a/b, C-6, C-7, C-10
     GREEN C-8   test_no_drop_pooling_encoding_is_still_refused   (CONTROL, not a flip)
 
-R8 >300 justify (MEASURED 649 lines, `wc -l`): ONE class boundary — eval-vs-self-play
+R8 >300 justify: ONE class boundary — eval-vs-self-play
 consumption of one producer — and R72 requires every conjunct of every predicate the card
 ships to be flipped in the same flip-set. Splitting the P-rows from the C-rows would put
 the flip-set in a different file from the behaviour it bounds, and would duplicate the

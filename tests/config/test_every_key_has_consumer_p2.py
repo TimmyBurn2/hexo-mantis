@@ -1,13 +1,13 @@
-""">300 justify (R8), stated at this file's MEASURED size of 374 lines: it is ~70% DATA — the
+""">300 justify (R8): it is mostly DATA — the
 SECOND copy of the 174-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
-WPMAIN moved it 341 -> 367 and the registry 170 -> 175 (R120 `eval_enabled`, R122's
+WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
 `monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved the registry
 175 -> 174, the first DOWNWARD move (`train.buffer_save_interval` deleted as a dead knob under
-R116/LAW-08). Both figures are re-measured at HEAD —
-`wc -l` and the live `len(CONSUMER_REGISTRY)` — never transcribed (SF-7, REVIEW-impl F-4).
+R116/LAW-08). The registry figure is re-derived at HEAD from the live
+`len(CONSUMER_REGISTRY)`, never transcribed (SF-7, REVIEW-impl F-4).
 Splitting it would create a THIRD copy to keep in sync, which is the drift the duplication
-exists to detect. The three tests below are ~24 lines together.
+exists to detect. The three tests below are short by comparison.
 
 SC-A1..A4 oracle — O15 every-key-has-consumer bijection, re-asserted against the FULL
 POST-Phase-2 leaf set (DESIGN_P2.md §1.1/§1.2/§4.2/§4.3 / PREREG_P2.md suite #10; edit-

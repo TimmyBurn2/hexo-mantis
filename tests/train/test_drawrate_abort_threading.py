@@ -34,7 +34,7 @@ The oracles, and the defect each is the ONLY witness to:
 R7 / gate 6: nothing here writes a `*.jsonl`; every drive writes under `tmp_path`.
 
 >300 justify (R8): one seam, one set of drivable fakes. `_Pool` / `_Trainer` / `_Buffer` /
-`_SpySink` are ~90 lines of harness that BOTH `compose_run` (O-D2) and a directly-built
+`_SpySink` are the shared harness that BOTH `compose_run` (O-D2) and a directly-built
 `StepCoordinator` (O-D8, O-D10) drive, and `_Pool` is the one fake this delta's Protocol
 widening actually changes — splitting the file would fork it into two copies free to drift
 apart in exactly the direction the delta moves. The remaining length is the per-oracle LAW-07

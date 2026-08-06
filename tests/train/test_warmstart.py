@@ -19,7 +19,7 @@ from mantis.train.warmstart import (
     resolve_warmstart_head_file,
 )
 
-_WARMSTART_SRC = Path(warmstart.__file__).read_text()
+_WARMSTART_SRC = Path(warmstart.__file__).read_text(encoding="utf-8")
 
 
 class _TrainerStub:

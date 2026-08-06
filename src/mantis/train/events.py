@@ -1,5 +1,4 @@
-# R8 >300 justify (402, MEASURED by `wc -l`; was 330 at WP12-R Phase O, 293 before it —
-# SF-7): the file builds and emits BOTH per-boundary payloads (`training_step` and
+# R8 >300 justify: the file builds and emits BOTH per-boundary payloads (`training_step` and
 # `iteration_complete`). WP12R Step 3 narration (R210) SPLIT the builder into
 # `emit_training_step_event` + `emit_iteration_complete_event` so the two halves can live on
 # different cadences (training_step stays `log_interval`-gated; iteration_complete emits per

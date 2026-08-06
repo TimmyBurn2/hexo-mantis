@@ -1,22 +1,15 @@
-# >300 justify (R8), stated at this file's MEASURED size of 488 lines (was 430 at K-B, 454 at
-# DSV-2, which added R94's ratification grounds; DSV-3 corrects the term count; 455 -> 481 at
-# WPMAIN, which promoted `device` to a typed field per R126 with its grounds; 481 -> 491 at
-# WP12-R Phase CS, which replaces `buffer_save_interval`'s grounds sentence — it claimed
-# close-out and the shutdown-signal path still save, and F-CS-2 measured both halves
-# false; 491 -> 488 at WP12-R R178(a), which DELETES `buffer_save_interval` outright and
-# leaves a shorter tombstone in its place; 488 -> 558 at WP12-R dispatch 6 phase F2, which
-# authors `MicrobatchCapsConfig` — one nested block, two `ge=1` members, and the grounds for
-# both the block SHAPE and the ABSENT off value, since a cap with a disable sentinel is a
-# switch for turning CARD-RUN5-GPU-OOM's fix back on). The number is `wc -l` at HEAD,
-# re-measured AFTER the edit that moved it (SF-7, REVIEW-impl F-4). WPMINT Phase K-B
+# >300 justify (R8). WPMINT Phase K-B
 # authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
 # inexpressible, and the ONE resolver that reads it. `DrawRateAbortConfig`'s docstring set that
-# precedent and it is the reason MF-1's open upper half was catchable at all. Splitting the
+# precedent and it is the reason MF-1's open upper half was catchable at all. WP12-R dispatch 6
+# phase F2 authors `MicrobatchCapsConfig` — one nested block, two `ge=1` members, and the
+# grounds for both the block SHAPE and the ABSENT off value, since a cap with a disable
+# sentinel is a switch for turning CARD-RUN5-GPU-OOM's fix back on. Splitting the
 # class would put a field and its grounds on opposite sides of an import, and splitting the two
 # classes apart would separate `train.draw_rate_abort.consec` from the three terms R80 says
-# "travel together". The executable content is 4 validators and ~50 field lines.
+# "travel together". The executable content is 4 validators and the field declarations.
 """`TrainConfig` — training hyperparameters as first-class schema fields (R-TRAINCONFIG-SCHEMA
 closure, DESIGN_P2.md §2). Training knobs are no longer a code-side-default `TrainHParams`
 R1-exception: this schema field IS the sole default authority (R1); `TrainHParams` (still a

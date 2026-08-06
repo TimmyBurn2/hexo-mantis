@@ -37,10 +37,8 @@ and deliberately minimal: everything the card asserts on is real. The `StepCoord
 objects; only the trainer/buffer/pool collaborators are fakes, and none of them touches the
 abort decision.
 
->300 justify (R8), at the file's MEASURED size of 440 lines (Phase X wrote 420; K-A's
-coordinator-census consolidation restated 428; WPMINT Phase K-B's `resolve_coordinator_knobs`
-harness threading is the 428 -> 440 delta, restated per SF-7). Two components, and neither is
-splittable without losing what it is for. (1) ~110 lines are the local `StepCoordinator`
+>300 justify (R8). Two components, and neither is
+splittable without losing what it is for. (1) The local `StepCoordinator`
 harness, which exists ONLY because R5 bars cross-test imports — the alternative is a shared
 fixture module, which is the collection-shadowing shape R5 forbids. (2) The rest is one card's
 six oracles held together on purpose: X-5's mutation is only meaningful beside the X-1 it must

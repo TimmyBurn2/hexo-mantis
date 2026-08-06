@@ -1,6 +1,6 @@
-# >300 justify (R8), stated at this file's MEASURED size of 382 lines (re-measured at
-# WP12-R Phase O, which declares `runner_stats` on `WorkerPoolLike` — the coordinator now
-# reads the runner snapshot itself for `iteration_complete`'s target-integrity block). It crossed the cap at
+# >300 justify (R8). WP12-R Phase O declares `runner_stats` on `WorkerPoolLike` — the
+# coordinator now reads the runner snapshot itself for `iteration_complete`'s
+# target-integrity block. It crossed the cap at
 # WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
 # onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
 # docstring recording WHY six fields are gone and why no field may carry a default; WPCLEAN

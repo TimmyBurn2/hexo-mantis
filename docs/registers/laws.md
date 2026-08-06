@@ -92,7 +92,9 @@ optimization or experiment (LAW-05).
   `tests/`; no directory named `tests` below it. No `#[pyclass]`/`#[pymethods]`/
   `#[pyfunction]` outside the bridge crate. Configs are explicit and complete — no
   inheritance, no base-merge, no code-side defaults; a default lives in exactly one place:
-  the schema field. Files >300 lines carry a one-line justification at the top.
+  the schema field. Files >300 lines carry a justification at the top stating why the file is
+  one unit; the justification never states a line count (G-DFIX-4 / R192(e) derive-or-delete —
+  a transcribed tally goes stale and is then read as evidence).
 - **LAW-18 In-run observability law.** A lever under test must log its own fire-rate in-run;
   a post-hoc offline probe cannot distinguish "starved" from "ineffective" (measured
   incident: a density lever's null read was unreadable without in-run counters).

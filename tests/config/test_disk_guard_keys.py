@@ -1,8 +1,8 @@
-# >300 justify (R8, by 8 lines): O-D3 and O-D4 are two instruments on ONE config family and
+# >300 justify (R8, and only just): O-D3 and O-D4 are two instruments on ONE config family and
 # share its minted values (`_MINTED` = 60/10/5), the injected-sink spy and the rigged
 # filesystem. R5 bars cross-test imports, so splitting them writes R122's three minted
 # numbers into a second file — a duplicated value authority, which is the shape R1 exists to
-# kill and a poor trade for eight lines.
+# kill and a poor trade for the handful of lines it would save.
 """⊕ WPMAIN ORACLE — the `monitor.disk_guard` family (DESIGN §5.5/§7/§9, O-D3 + O-D4).
 
 RED-at-import until IMPL lands `mantis.config.schema.DiskGuardConfig` +

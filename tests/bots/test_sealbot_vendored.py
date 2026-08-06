@@ -1,8 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size (`wc -l`, never transcribed):
-# **597 lines** after the G-A1/G-A2 re-points, the REVIEW-impl wrapper fix and G-A4's
-# row — 352 at ORACLE-WRITE, re-measured here rather
-# than carried forward, because a stale size in an R8 line is a false statement in the one
-# place the rule asks for a true one. The four Tier-2 oracles are ONE claim — the
+# >300 justify (R8). The four Tier-2 oracles are ONE claim — the
 # REAL vendored engine is the bar the rungs say it is — over one precondition ladder
 # (`_require_vendored_game` / `_require_built_extension`). A split forks that ladder into
 # copies, and the whole point of the file is that its skip is a RESULT with one reason

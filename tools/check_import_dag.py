@@ -104,7 +104,7 @@ def main(argv: list[str]) -> int:
     module_graph: dict[str, set[str]] = {m: set() for m in modules}
     for mod, path in modules.items():
         try:
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except SyntaxError as exc:
             print(f"PARSE ERROR: {path}:{exc.lineno}: {exc.msg}", file=sys.stderr)
             parse_failed = True

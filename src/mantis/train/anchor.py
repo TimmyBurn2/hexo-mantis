@@ -3,8 +3,9 @@
 >300 justify: this owns the whole `best_model.pt` artifact lifecycle — atomic save with
 round-trip verify + `.bak` rotation + provenance sidecar, the resilient best→.bak→bootstrap
 load fallback with corrupt-anchor quarantine, the tensor-identity sha256 launch-pin, and the
-anchor↔inference-model sync — one cohesive artifact-IO surface (the old `training/anchor.py`,
-659 L). Splitting it would scatter the save/load/verify invariants that must move together.
+anchor↔inference-model sync — one cohesive artifact-IO surface (the old `training/anchor.py`
+ported whole). Splitting it would scatter the save/load/verify invariants that must move
+together.
 
 Three ratified WP10 amendments over a pure relocation:
   * **Representation off the DECLARED arch (§c.6, WP9 O3 census).** The DELETED arch-off-a-live-

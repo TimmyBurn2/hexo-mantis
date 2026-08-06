@@ -343,7 +343,7 @@ def _scan_file(path: Path) -> list[tuple[int, str, list[str]]]:
     """Return [(lineno, line, hits)] for unjustified hits in `path`."""
     suffix = path.suffix
     try:
-        text = path.read_text(errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
     lines = text.splitlines()
@@ -425,7 +425,7 @@ def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool
                 )
     else:
         try:
-            with _HARDCODE_HITS_DUMP.open("w") as fh:
+            with _HARDCODE_HITS_DUMP.open("w", encoding="utf-8") as fh:
                 for p in sorted(file_hits):
                     fh.write(f"# {p}\n")
                     for lineno, line, hits in file_hits[p]:

@@ -1,6 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 961 lines (`wc -l` at
-# ORACLE-WRITE, never transcribed — SF-7; IMPL re-measures rather than carrying this number
-# forward). The seven rows are ONE claim — a BROKEN TERMINAL eval round is
+# >300 justify (R8). The seven rows are ONE claim — a BROKEN TERMINAL eval round is
 # supervisor-distinguishable from a clean run, and a MID-RUN one is deliberately not — over
 # one seam that runs from `drain.run_terminal_eval` through a set-once latch on the
 # coordinator to `mantis.run.main`'s rc. Measuring it needs the whole ladder in one place:

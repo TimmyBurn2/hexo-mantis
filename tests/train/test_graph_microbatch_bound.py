@@ -1,3 +1,13 @@
+# >300 justify (R8): ONE claim — OF2-10, that the peak allocation of one graph training step
+# is bounded BY CONSTRUCTION by the two members of `train.microbatch_caps` — and every row
+# below is a leg of that one claim over one shared rig (`_microbatch_harness`, the enumerated
+# `_bank`, the run5 caps). The device-free legs and the GPU legs must not be separated: R179
+# makes the construction the evidence and the measurement corroboration, and a reader who
+# meets leg 2 on its own will read a survived burst as the bar, which is precisely what R179
+# bans. The R96 correction recorded below is the same argument in the other direction — leg
+# 2's premise puts the batch under both caps, i.e. M = 1, so it cannot detect MB-17 at all
+# and conjunct 3's residency probe is the only detector. That is checkable only while the
+# two sit in one file.
 """⊕ WP12-R dispatch 6 phase F2 — OF2-10, the STRUCTURAL bound (DESIGN_DFIX §5.2,
 PREREG_DFIX §4, R179).
 

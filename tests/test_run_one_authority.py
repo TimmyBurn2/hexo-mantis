@@ -1,7 +1,7 @@
 # >300 justify (R8): O-A1..O-A5 are ONE census family making ONE claim — that exactly one
 # composition path exists — and they share the instrument that makes the claim checkable
 # (`_call_sites` / `_enclosing_defs` / `_body_without_docstring` / `_root_name` /
-# `_code_text`, ~90 lines). R5 bars cross-test imports, so a split forks that helper set into
+# `_code_text`). R5 bars cross-test imports, so a split forks that helper set into
 # two copies, and the helpers ARE the instrument: two copies is two instruments that drift
 # apart while both stay green. The src-side census (O-A2) and the child-side census (O-A4)
 # are also deliberately readable side by side — they are twins, and a reviewer checking that

@@ -1,4 +1,4 @@
-""">300 justify (R8), stated at this file's MEASURED size of 389 lines. Already over the cap
+""">300 justify (R8). Already over the cap
 with NO justify (the pre-existing gap WPMINT Phase K-A flagged); K-B touches it for
 `DrawRateAbortSpec.consec`, so it is written now. One gate, one branch table: every drive below
 exercises a different arm of `_run_hard_abort_gates`/`_sample` against the SAME coordinator

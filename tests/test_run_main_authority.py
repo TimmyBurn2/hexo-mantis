@@ -1,9 +1,9 @@
-# >300 justify (R8), stated at this file's MEASURED size of 327 lines (239 at `aa8e7b2`; the
-# RED-TEAM RT-5 row and its two helpers are the delta). The four rows are ONE census family
+# >300 justify (R8). The four rows are ONE census family
 # making ONE claim — that `main` loads what the operator typed and launches it unchanged —
 # over ONE parse of `src/mantis/run.py`, sharing the AST instrument that makes the claim
-# checkable (`_binding_targets` / `_config_binding` / `_launch_call` / `_parsed_args_name`,
-# ~70 lines). R5 bars cross-test imports, so a split forks that instrument into two copies,
+# checkable (`_binding_targets` / `_config_binding` / `_launch_call` /
+# `_parsed_args_name`). R5 bars cross-test imports, so a split forks that instrument into two
+# copies,
 # and the helpers ARE the instrument: two copies is two instruments that drift apart while
 # both stay green. Executable content is a minority of the file; the rest is the mutation
 # each row reds against, which is what makes a census auditable at all.

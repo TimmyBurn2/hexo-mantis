@@ -25,7 +25,7 @@ from mantis.train.anchor import (
     state_dict_sha256,
 )
 
-_ANCHOR_SRC = Path(anchor_mod.__file__).read_text()
+_ANCHOR_SRC = Path(anchor_mod.__file__).read_text(encoding="utf-8")
 _ENC = "v6_live2_ls"
 _CPU = torch.device("cpu")
 _OPTIONAL_PREFIXES = anchor_mod._OPTIONAL_HEAD_PREFIXES

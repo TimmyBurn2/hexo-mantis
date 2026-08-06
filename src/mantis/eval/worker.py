@@ -8,8 +8,7 @@ the random floor. Writes the sidecar result JSON ATOMICALLY (tmp + os.replace). 
 `mantis.selfplay.inference_local` for leaf inference — the ONE parent-side-excepted
 inference surface (isolation law 1: this module is the out-of-process leg).
 
->300 justify, stated at this file's MEASURED size of 424 lines (`wc -l`, re-measured after
-WP12-R Phase Q; 284 before Phase B, 328 after it, 385 after Phase EVALDECODE): one entry point
+>300 justify (R8): one entry point
 owning the gate block, ladder-rung blocks, and the random floor — each phase shares the
 candidate DeployHeadPlayer/inference engine/book-loading machinery; splitting them would
 duplicate that setup three times and let the phases drift out of the

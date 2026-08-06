@@ -1,10 +1,7 @@
-""">300 justify (R8), stated at this file's MEASURED size of 744 lines (762 at WPMAIN's
-two-line payload completion; 762 -> 744 at WP12-R R178(a), which deleted
-`buffer_save_interval`'s row and its behavioural drive; `wc -l` at HEAD, re-measured after
-the edit — SF-7, REVIEW-impl F-4): it is R93's evidence
+""">300 justify (R8): it is R93's evidence
 for EIGHTEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
 knob, observe the consumer", never a shared arm a sibling could ride. Roughly half the length
-is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the ~120-line
+is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the shared
 fakes harness that BOTH halves use (a real `compose_run` drive and a real `StepCoordinator`
 drive). Splitting it would fork that harness into two copies free to drift apart, which is the
 exact failure `tests/config/test_drain_caps_wiring.py`'s own justify names, and R5 bars the

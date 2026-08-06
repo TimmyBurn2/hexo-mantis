@@ -1,10 +1,9 @@
-# >300 justify (R8), at this file's MEASURED size (`wc -l`, re-measured after this line was
-# added, never projected): 452 lines after the REVIEW-impl receipt fix. ONE seam — the vendored engine's translation boundary —
+# >300 justify (R8). ONE seam — the vendored engine's translation boundary —
 # whose three properties (the depth receipt, stateless position reconstruction, the
 # `sys.modules` install) share the loader, the player map and the shadow view; splitting them
 # forks that shared state into copies that drift while both halves stay green. Executable
 # content is a minority: the rest is the per-surface "which register row is this the answer
-# to" rationale, and DESIGN_A §7 projected 180-250 lines by counting only the former.
+# to" rationale, which DESIGN_A §7's projection did not count.
 """SealBot adapter — the vendored fixed-depth external bar (WP12-R Phase A, DESIGN_A §2.4/§2.5).
 
 Pure Python; no pyo3 (R6/LAW-17 hold trivially — the bridge is untouched). Nothing in this

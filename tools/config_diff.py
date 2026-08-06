@@ -81,7 +81,7 @@ def _parse_header(text: str) -> tuple[str | None, set[str]]:
 def _run_from_header(config_path: str) -> int:
     path = Path(config_path)
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError as exc:
         print(f"cannot read config: {exc}", file=sys.stderr)
         return 2

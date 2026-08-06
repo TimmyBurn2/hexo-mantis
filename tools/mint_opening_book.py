@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = mint_book(seed=args.seed, plies=args.plies, n=args.n)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    out_path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
     return 0
 
 

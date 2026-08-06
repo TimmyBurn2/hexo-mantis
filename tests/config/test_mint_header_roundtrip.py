@@ -1,4 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 330 lines. The two halves are one
+# >300 justify (R8). The two halves are one
 # claim — "a minted config's header is replayable by its own minter" — and they cannot be split:
 # the behavioural half establishes what the renderer does and the census half asserts the
 # committed configs are in exactly that form, so a split leaves either half asserting a format

@@ -1,27 +1,11 @@
 #!/usr/bin/env python3
-# >300 justify (R8), stated at the file's MEASURED size rather than at the size it was
-# written for. Producer for both figures: an AST transitive closure from `_boot_main` over
-# this file's own top-level functions — re-measured at WPMAIN IMPL (CARD-RUN-MAIN, R121(a)),
-# the pass that lifted the boot out of this tool, and re-measured AGAIN at the WPMAIN R132 fix
-# pass, which touched one docstring line (the reserved band 42–46 -> 42–47) and no function
-# body: **1135 lines total, 147 in the child closure, 585 in parent-only function bodies** —
-# the two body figures are unmoved, which is the producer saying so rather than a reader
-# assuming it. The child closure shrank 198 -> 147 at WPMAIN IMPL because
-# `_build_buffer` left with the boot (now `mantis.run._select_buffer`) and `_boot_main` is a
-# call-through; parent-only moved 581 -> 585 with the `--device` deletion's surrounding
-# prose. Prior reading, WPBOX Phase Q, the pass that EXECUTED
-# CARD-PREFLIGHT-SPLIT-PARENT-HALF (R110-approved plan, GROUND_PFC.md): 1162/198/581.
-# Figures are re-derived by running the producer above, never transcribed (SF-7). The old
-# clause (2) — "when
+# >300 justify (R8). The old clause (2) — "when
 # the freeze lifts, the parent half should be split out and this clause deleted" — is
-# DISCHARGED: the leaf parent layers (~794 lines: shared vocabulary, exit taxonomy, the two
+# DISCHARGED: the leaf parent layers (shared vocabulary, exit taxonomy, the two
 # predicate evaluators, report helpers, the classifier, the segment/verdict/identity
 # leaves) moved VERBATIM to `preflight_mint_parent.py` (S-3 hunk hashes in
 # wp/WPBOX/DISPATCH_LOG.md) and are re-exported by plain assignment, so every oracle that
-# binds `TOOL.<name>` off this module path keeps binding one object. Pre-split figures for
-# the record, per SF-7 (a justification which is not true is worse than none): WPCLEAN
-# Phase PFC measured 1875/198/1110; the lineage back through WPMINT K-B/K-A/B/X
-# (1877→1793→1672→1452) is preserved in git history rather than restated here.
+# binds `TOOL.<name>` off this module path keeps binding one object.
 # Two reasons the file is still >300, and saying exactly what stays is the point:
 #
 #  (1) CHILD SIDE (_boot_main, _abort_rc, _load, _apply_burst_override,

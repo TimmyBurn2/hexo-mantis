@@ -1,6 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 794 lines (785 was already stale by
-# 5 before WPMAIN, which added 2 more with R127's strip-path placeholder completion; `wc -l` at
-# HEAD, re-measured after the edit — SF-7, REVIEW-impl F-4). Pre-existing gap, closed
+# >300 justify (R8). Pre-existing gap, closed
 # by WPMINT Phase W. This is ⊕⊕ Suite A, an oracle-first conformance suite whose every test is
 # numbered against a PREREG row (`T-CK-*`) and was written and reviewed BEFORE the port existed.
 # Splitting it renumbers nothing but breaks the 1:1 test->spec mapping REVIEW-design reads it

@@ -1,8 +1,7 @@
-# >300 justify (R8), stated at this file's MEASURED size of 485 lines (`wc -l`, re-measured
-# after the last edit — this run produced three stale headers by transcribing instead). The
+# >300 justify (R8). The
 # seven rows are ONE claim — a fired disk guard is supervisor-distinguishable from a clean run
 # — over ONE harness: the collaborator stand-ins, the rigged `disk_usage`, the config writer
-# and the `main()` driver are ~140 lines and every end-to-end row needs all of them. R5 bars
+# and the `main()` driver are the bulk of it and every end-to-end row needs all of them. R5 bars
 # cross-test imports, so a split forks that harness into two copies which then drift while both
 # stay green, and it would ALSO fork the drive's one safety property — the guard delivers a
 # REAL SIGTERM here, so the wait-for-fire hook and the bounded signal wait must stay in one

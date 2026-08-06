@@ -84,6 +84,18 @@ jobs:
       # header), trigger self-tested on every run.
       - name: "gate 14: curated lint/type gate (R98)"
         run: bash tools/ci_gates/lint_gate.sh --self-test
+      # Gate 15 (P1-01): R8 asked for a reason and the convention accreted a tally. 47 headers
+      # stated one, at least 8 were wrong at the adoption commit, and run.py claimed 867 against
+      # 1024 — a stale count is misinformation a future reader trusts (SF-7). The no-count half
+      # is what stops it re-accreting; the presence half is the original rule.
+      - name: "gate 15: R8 justification headers (present, and stating no line count)"
+        run: uv run python tools/ci_gates/r8_header_gate.py
+      # Gate 16 (P0-05): this class has bitten three times — gates 9 and 10 both crashed with
+      # UnicodeDecodeError, and two module-scope reads in tests/ took down pytest collection
+      # entirely on Windows (S-19). Linux CI cannot see it (UTF-8 locale), which is exactly why
+      # it needs a static gate rather than vigilance.
+      - name: "gate 16: no encoding-less text I/O (tools/, and tests/ at module scope)"
+        run: uv run python tools/ci_gates/encoding_io_gate.py
 
   hygiene:
     runs-on: ubuntu-latest

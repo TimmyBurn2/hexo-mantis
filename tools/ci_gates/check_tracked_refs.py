@@ -42,7 +42,7 @@ def main() -> int:
 
     failures = 0
     for path in _scope_files():
-        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             for match in TOKEN_RE.finditer(line):
                 token = match.group(0).rstrip(".,;:!?")
                 if not token_ok(token):

@@ -1,25 +1,21 @@
-# R8 >300 justify (697, re-measured by `wc -l` at WP12-R Phase O; was 609 at WPMAIN RT-2/R132, 527 at WPMINT Phase K-B, 399 at Phase X, 343 at DS-VERIFY and 324 at WPAX
-# Phase D, and the
-# figure is restated at the file's MEASURED size rather than the size it was written for —
-# `preflight_mint.py`'s header sets that precedent, and SF-7's rule is that a justification
-# which is not true is worse than none): the manifest ROWS are data and their reason text IS the row —
+# R8 >300 justify: the manifest ROWS are data and their reason text IS the row —
 # `note` is a live consumer's field, printed by gate 12 on every run, not a comment that
-# can be trimmed. The two walkers below (`_dotted`, `audit_arming`) are ~35 lines of code
-# carrying the F-4 named-arm and disarmed-short-circuit rationale; splitting them from the
+# can be trimmed. The two walkers below (`_dotted`, `audit_arming`) carry the F-4 named-arm
+# and disarmed-short-circuit rationale; splitting them from the
 # rows they walk would put "which aborts must arm" and the predicate that reads it on
 # opposite sides of an import, which is the drift this module exists to prevent. Phase X adds
-# `exit_code_for_abort` (+52 lines, 8 of them code) for the same reason: "which code does a
+# `exit_code_for_abort` for the same reason: "which code does a
 # fired abort exit with" is answered BY the rows, and a resolver living anywhere else becomes
 # a second authority for that answer the first time a row's `exit_code` moves. Phase K-B adds
-# a third row (+43 lines, 8 of them fields) and the `ceiling_path` mechanism it needs: the row
+# a third row and the `ceiling_path` mechanism it needs: the row
 # is where "why is grad-norm deferred, and what closes it" is written, and gate 12 prints that
-# text on every run. WPMAIN RT-2/R132 adds a FOURTH row (+51 lines, 10 of them fields) plus the
+# text on every run. WPMAIN RT-2/R132 adds a FOURTH row plus the
 # exported `DISK_SPACE_ABORT_RULE` the composition root imports: the disk-guard abort's rule
 # name has two readers — this row and `mantis.run` — because `mantis.train` may not import this
 # module, so a bare literal at each would be the duplicated-authority shape R1 exists to kill.
 # The row's own `note` carries why it is REQUIRED, what drift it exists to catch and the
 # operator-SIGTERM residual R132 did not close, which is data gate 12 prints, not a comment.
-# WP12-R Phase O (R152) adds a FIFTH row (+70 lines, 8 of them fields) plus the exported
+# WP12-R Phase O (R152) adds a FIFTH row plus the exported
 # `TERMINAL_EVAL_BROKEN_ABORT_RULE`, for the reason the disk-guard row above exists in this
 # shape: the broken-terminal-eval rule name has two readers (this row and `mantis.run`), and
 # `mantis.train` may not import this module. Its `note` carries the one-code-for-seven-reasons

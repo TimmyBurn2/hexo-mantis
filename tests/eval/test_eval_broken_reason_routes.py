@@ -1,6 +1,4 @@
-# >300 justify (R8), stated at this file's MEASURED size of 511 lines (`wc -l` at
-# ORACLE-WRITE, never transcribed — SF-7; IMPL re-measures rather than carrying this number
-# forward). The seven eval-failure routes are ONE claim (each route yields its OWN typed
+# >300 justify (R8). The seven eval-failure routes are ONE claim (each route yields its OWN typed
 # reason, its own phase, one emitted event that agrees with the routed result, and a
 # traceback where an exception was in flight) driven over ONE harness. The fake-process /
 # fake-context / spy-sink rig plus the seven-route driver is the majority of the file and

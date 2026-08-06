@@ -1,9 +1,6 @@
 """Run-config schema (contract run-config-schema v1).
 
->300 justify (R8), at this file's MEASURED size of 410 lines (was 397 before WPMAIN added
-`eval_enabled` per R120 with its grounds; WPMINT DSV-2 re-scoped the draw-rate capacity
-validator per R95). The number is `wc -l` at HEAD, re-measured after the edit that moved it
-and never transcribed (SF-7, REVIEW-impl F-4). This file carries the `RunConfig` root model and the six
+>300 justify (R8). This file carries the `RunConfig` root model and the six
 `model_validator`s of this schema's cross-field rules — the four on `RunConfig` span
 SECTIONS (train x selfplay, train x monitor), so they cannot live in any section module.
 
