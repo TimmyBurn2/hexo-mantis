@@ -19,15 +19,61 @@ python-source = "python"
 features = ["extension-module"]
 
 [tool.uv]
-# uv rebuilds this member when Rust sources change, not only on pyproject edits.
+# INVARIANT: every file whose content can change the built extension is a cache key.
+#
+# uv's `cache-keys` REPLACES the default key set (that is why `pyproject.toml` is re-declared
+# below), and uv decides whether to invoke the build AT ALL. So a missing key is not "cargo
+# rebuilds anyway" - cargo is never asked. The venv keeps serving the previous .so/.pyd, and
+# because CI always builds cold, CI cannot see it: green in CI, stale in every developer
+# checkout that already had a build.
+#
+# Measured before this list was fixed (P0-03): editing ONLY `registry.toml` and running
+# `uv sync --locked` produced no rebuild, and `_engine.registry_sha_hex()` stayed at the old
+# value while the file on disk hashed to a new one. That value is the cross-language identity
+# handshake (CI gate 8), so the split was silent and load-bearing.
+#
+# ADDING A CRATE? Add BOTH its `src/**/*` and its `Cargo.toml` here. That is the step a future
+# crate author will forget, and nothing else in the repo will notice.
+#
+# Globs are `src/**/*`, not `src/**/*.rs`, on purpose: `crates/mantis-encoding/src` holds
+# `registry.toml` and `manifests.toml`, both `include_str!`-ed into the binary, and a future
+# embedded data file must not need this list edited again. Verified that `src/` contains
+# nothing else non-`.rs`, so the broader glob costs no extra invalidation today.
+#
+# NOT keys, deliberately:
+#   - `python/**/*` - maturin WRITES `python/mantis/_engine.pyd` there, so keying on it would
+#     make every build invalidate its own key and rebuild forever. Only the `.pyi` is keyed.
+#   - `tests/fixtures/search_golden/completed_q/golden_bits.txt` - `include_str!`-ed at
+#     `mantis-search/src/mcts/golden_tests.rs:267`, but behind `#[cfg(test)]` (`mcts/mod.rs:271`),
+#     so it is never compiled into the shipped extension. Keying it would force rebuilds that
+#     change nothing.
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
     { file = "../../Cargo.toml" },
-    { file = "src/**/*.rs" },
-    { file = "../mantis-core/src/**/*.rs" },
-    { file = "../mantis-graph/src/**/*.rs" },
-    { file = "../mantis-encoding/src/**/*.rs" },
-    { file = "../mantis-search/src/**/*.rs" },
-    { file = "../mantis-selfplay/src/**/*.rs" },
+    # Dependency versions are build inputs: `cargo update` bumping pyo3 0.28.3 -> 0.28.4
+    # changes the emitted binary without touching a single source file.
+    { file = "../../Cargo.lock" },
+    # The compiler is a build input. rust-toolchain.toml pins the channel (P0-01), and cargo's
+    # own fingerprint would catch a rustc change - but only if uv invokes cargo at all.
+    { file = "../../rust-toolchain.toml" },
+    { file = "src/**/*" },
+    # Packaged into the wheel by `python-source = "python"`; not a compile input, but a change
+    # must still reach the venv. Scoped to `.pyi` to exclude the built `.pyd` beside it.
+    { file = "python/**/*.pyi" },
+    { file = "../mantis-core/src/**/*" },
+    { file = "../mantis-core/Cargo.toml" },
+    { file = "../mantis-graph/src/**/*" },
+    { file = "../mantis-graph/Cargo.toml" },
+    { file = "../mantis-encoding/src/**/*" },
+    { file = "../mantis-encoding/Cargo.toml" },
+    { file = "../mantis-search/src/**/*" },
+    { file = "../mantis-search/Cargo.toml" },
+    { file = "../mantis-selfplay/src/**/*" },
+    { file = "../mantis-selfplay/Cargo.toml" },
+    # `make build.native` sets RUSTFLAGS=-C target-cpu=native. Without these, a later plain
+    # `make build` sees no keyed change and KEEPS the host-pinned binary - R2/LAW-13's
+    # portability promise with no return path, and a silently poisoned `make bench` (LAW-09).
+    { env = "RUSTFLAGS" },
+    { env = "CARGO_BUILD_RUSTFLAGS" },
 ]
