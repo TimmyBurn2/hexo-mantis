@@ -100,6 +100,9 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   rustc attested in `tools/bench_floors.toml`, so changing it invalidates all 28 bench
   floors: a bump is a perf-host event, not a local one. Without rustup the file is inert,
   and the `rust-version = "1.87"` MSRV in `[workspace.package]` is what refuses the build.
+- Commits are ONE line: `type(scope): what changed and why it matters`. Informative, not
+  bloated — no body paragraphs, no trailing register/dispatch dumps, no multi-line footers.
+  If the change needs more explanation than one line, it is more than one commit.
 
 ## CI gates (all locally runnable — run them before pushing)
 
