@@ -94,6 +94,12 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 - `make vendor` — fetch vendor pins. `make clean` — cargo clean + dist removal.
 - Entry points are `python -m mantis.*` or console scripts — no loose script files.
 - Python floor is 3.11 (CI pins 3.11; local interpreters may be newer).
+- Rust toolchain is PINNED by `rust-toolchain.toml` (channel 1.97.1 + clippy, rustfmt,
+  wasm32-unknown-unknown). rustup honours it automatically — no `rustup default`, no setup
+  step, and it provisions the components and target on first use. The channel matches the
+  rustc attested in `tools/bench_floors.toml`, so changing it invalidates all 28 bench
+  floors: a bump is a perf-host event, not a local one. Without rustup the file is inert,
+  and the `rust-version = "1.87"` MSRV in `[workspace.package]` is what refuses the build.
 
 ## CI gates (all locally runnable — run them before pushing)
 

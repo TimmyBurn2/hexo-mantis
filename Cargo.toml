@@ -13,6 +13,20 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+# MSRV floor — the oldest compiler this workspace claims to accept, so Cargo emits a clean
+# "package requires rustc 1.87" diagnostic instead of a wall of errors inside a dependency.
+# Distinct from rust-toolchain.toml's channel, which is what we BUILD with (1.97.1, pinned
+# to the bench-floor attestation). Inheritance is opt-in per key: every member manifest
+# must carry `rust-version.workspace = true` or this line is inert for that crate.
+#
+# 1.87 is MEASURED, not chosen, and two independent floors agree on it:
+#   (1) first-party source calls `usize::is_multiple_of`, stable since 1.87.0 —
+#       mantis-bridge/src/board.rs:343, graph_contract.rs:90,104,
+#       mantis-selfplay/benches/graph_build_bench.rs:100;
+#   (2) the highest `rust-version` declared by any locked dependency is wasip2 1.87.0.
+# Lowering this reds `clippy::incompatible_msrv` (in clippy::all, hence CI gate 2b) at
+# those four sites. Raise it only alongside a re-measurement of both floors.
+rust-version = "1.87"
 
 [workspace.dependencies]
 pyo3 = { version = "0.28", features = ["abi3-py311"] }

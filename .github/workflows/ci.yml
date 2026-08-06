@@ -11,8 +11,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5          # libpython for `cargo test` linking pyo3
         with: { python-version: "3.11" }
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: wasm32-unknown-unknown }
+      # rust-toolchain.toml is the SINGLE source of truth for the compiler; do not name a
+      # version here too. `dtolnay/rust-toolchain@stable` used to install a floating stable
+      # and `rustup default` it — which was already inert (a toolchain file outranks the
+      # rustup default for every invocation inside the workspace) while reading as though
+      # CI compiled with stable. It also installed `targets:` against the WRONG toolchain.
+      # rustup provisions the pinned channel, its components and its targets on first use;
+      # this step just makes that happen loudly and early, in its own log line, instead of
+      # inside whichever cargo command runs first. Idiom is rustup's own (1.28 release notes).
+      - name: "toolchain: materialise the rust-toolchain.toml pin"
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: "toolchain: report what CI actually compiles with"
+        run: rustc --version --verbose && cargo --version
       - name: "gate 2a: cargo test workspace"
         run: cargo test --workspace --locked
       - name: "gate 2b: clippy (pedantic=warn baseline, default lints deny)"
@@ -26,7 +36,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # Same single-source rule as the rust job: the compiler comes from
+      # rust-toolchain.toml. This job needs cargo only so that `uv sync` can drive maturin
+      # to build mantis._engine — and that build already resolved to the pinned channel via
+      # the toolchain file, so the previous floating `@stable` install was doing nothing
+      # except making the two jobs look like they used different compilers.
+      - name: "toolchain: materialise the rust-toolchain.toml pin"
+        run: rustup show active-toolchain || rustup toolchain install
       - uses: astral-sh/setup-uv@v6
         with: { python-version: "3.11" }
       - name: "setup: build the job workspace from the lockfile"

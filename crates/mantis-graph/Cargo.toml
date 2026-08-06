@@ -2,6 +2,7 @@
 name = "mantis-graph"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 # Dep-free by contract: the [dependencies] table is EMPTY and must stay empty —

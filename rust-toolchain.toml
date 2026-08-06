@@ -1,0 +1,22 @@
+# The compiler is pinned, not floated. rustup honours this file automatically for every
+# cargo/rustc/clippy invocation made anywhere in this workspace, and installs the channel
+# on first use if it is absent — no `rustup default` and no per-developer setup step.
+#
+# WHY THIS EXACT CHANNEL — do not bump it casually. `tools/bench_floors.toml:11` attests
+# that all 28 production bench floors were measured under `rustc 1.97.1 (8bab26f4f
+# 2026-07-14)`. Codegen moves between releases (this workspace builds `lto = "fat"` /
+# `codegen-units = 1`), and a criterion baseline compares clean across a compiler change
+# with no red signal anywhere — so changing this channel silently recalibrates LAW-09's
+# instrument to noise. A bump is therefore a perf-host event: it lands in the same commit
+# as a full re-measurement of `tools/bench_floors.toml`, or it does not land.
+#
+# `components` and `targets` are part of the pin, not conveniences: `make lint`/CI gate 2
+# need clippy, and `make check.wasm` (CI gate 4) needs the wasm32 std, which nothing else
+# in the repo installs for a developer.
+#
+# MSRV is a separate, lower floor — `rust-version = "1.87"` in `[workspace.package]`. This
+# file says what we BUILD with; `rust-version` says the oldest compiler we claim to accept.
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-unknown-unknown"]
