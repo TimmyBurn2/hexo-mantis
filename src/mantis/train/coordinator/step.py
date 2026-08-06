@@ -457,6 +457,11 @@ class StepCoordinator:
         checkpoint_saved = False
         hard_abort_fired = False
         axis_emitted = False
+        # Burst accumulators (item 7): the eval kick now runs PER TRAINING STEP inside the
+        # burst, so its two outcomes are OR-folded across the burst exactly like the flags
+        # above rather than being the single post-burst call's return.
+        eval_kicked_off = False
+        eval_skipped_busy = False
 
         for _ in range(steps_budget):
             self._beat("train_step")
@@ -529,10 +534,22 @@ class StepCoordinator:
             axis_emitted = axis_emitted or axis_step
             hard_abort_fired = hard_abort_fired or gate_fired
 
-        # The eval KICK return is NEVER consumed for WR and `step()` adds NO blocking call:
-        # completed rounds reach `on_eval_round_complete` via the async drain (§c.4b).
-        # `_maybe_kick_eval` consumes the ACK only for `eval_skipped_busy` (WP13-A P-06 pin).
-        eval_kicked_off, eval_skipped_busy = self._maybe_kick_eval(cfg)
+            # INSIDE the burst (item 7). `_maybe_kick_eval` tests
+            # `self._train_step % cfg.eval_interval != 0`, and it used to run ONCE after the
+            # whole burst — so with `max_train_burst > 1` a burst that steps over the exact
+            # multiple (e.g. interval 500, burst 3, landing on 499 → 502) never satisfied the
+            # modulo and the eval round was SILENTLY SKIPPED. Not delayed: skipped, because
+            # `_eval_round_last_step` is keyed on the round index. Long runs could go many
+            # intervals without an eval while the config said otherwise. Tested per training
+            # step, the exact boundary is always hit.
+            #
+            # The kick return is NEVER consumed for WR and adds NO blocking call: completed
+            # rounds reach `on_eval_round_complete` via the async drain (§c.4b).
+            # `_maybe_kick_eval` consumes the ACK only for `eval_skipped_busy` (P-06 pin).
+            kicked_step, skipped_step = self._maybe_kick_eval(cfg)
+            eval_kicked_off = eval_kicked_off or kicked_step
+            eval_skipped_busy = eval_skipped_busy or skipped_step
+
         # WP12R Step 3 narration (R210): `iteration_complete` emits at the O6 training-burst
         # return, per coordinator step, INDEPENDENT of `log_interval`. `training_step`
         # alerting stays `log_interval`-gated (above, in `_run_log_interval`); only
