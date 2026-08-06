@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
@@ -95,6 +95,34 @@ struct InFlightGraph {
     legal_coords: Vec<(i32, i32)>,
 }
 
+/// Take a lock, RECOVERING from poisoning instead of propagating it.
+///
+/// Poisoning is a one-way latch: the first panic while the guard is held marks the mutex
+/// forever, so every later `.lock().expect(...)` panics too. On this seam that turns one bad
+/// graph into a permanently bricked batcher — and under R2/LAW-13 (`panic = "unwind"`) the
+/// panic crosses the FFI as a catchable `PanicException` rather than aborting, so the process
+/// SURVIVES to keep hitting the dead lock for the rest of the run. Loud once, then silent
+/// forever, is the worst of both.
+///
+/// Recovery is sound HERE specifically because the guarded value is plain owned data
+/// (`HashMap<u64, InFlightGraph>` — no raw pointers, no cross-field invariant). The worst a
+/// mid-mutation panic can leave behind is a missing or half-updated entry, and the seam
+/// already tolerates a missing id by construction: `submit_graph_inference_results` skips
+/// unknown ids under the frozen tolerant-remove semantics. A poisoned map is degraded, not
+/// unsound, so continuing beats dying.
+///
+/// Every recovery bumps `counter`, which is what makes this observable rather than a silent
+/// swallow (LAW-18: a lever under test logs its own fire-rate in-run).
+fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, counter: &AtomicUsize) -> MutexGuard<'a, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            counter.fetch_add(1, Ordering::SeqCst);
+            poisoned.into_inner()
+        }
+    }
+}
+
 /// Saturating decrement of a mock-pending counter (never underflows on a
 /// production batcher whose real submits the bridge never incremented).
 fn decrement_pending(counter: &AtomicUsize, by: usize) {
@@ -128,6 +156,11 @@ pub struct PyInferenceBatcher {
     graph_contract_version: u32,
     model_version: ModelVersionSrc,
     in_flight_graphs: Arc<Mutex<HashMap<u64, InFlightGraph>>>,
+    /// Times `in_flight_graphs` was found poisoned and recovered. Non-zero means a panic
+    /// happened under the guard on some earlier call; the seam kept serving. Read from Python
+    /// via the `lock_recoveries` getter so a run can alert on it instead of discovering it in
+    /// a post-mortem (LAW-18).
+    lock_recoveries: Arc<AtomicUsize>,
     completed_mock_games: Arc<AtomicUsize>,
     completed_graph_games: Arc<AtomicUsize>,
     dense_pending: Arc<AtomicUsize>,
@@ -165,6 +198,7 @@ impl PyInferenceBatcher {
             graph_contract_version,
             model_version,
             in_flight_graphs: Arc::new(Mutex::new(HashMap::new())),
+            lock_recoveries: Arc::new(AtomicUsize::new(0)),
             completed_mock_games: Arc::new(AtomicUsize::new(0)),
             completed_graph_games: Arc::new(AtomicUsize::new(0)),
             dense_pending: Arc::new(AtomicUsize::new(0)),
@@ -201,6 +235,12 @@ impl PyInferenceBatcher {
 
     /// Graph seam guard: a grid batcher (every dense construction) raises
     /// `RepresentationMismatch` (frozen `require_graph`, error text verbatim).
+    /// The ONE place `in_flight_graphs` is locked. Poison-recovering (see `lock_or_recover`)
+    /// and recovery-counting; no caller may re-introduce a bare `.lock().expect(...)`.
+    fn lock_in_flight(&self) -> MutexGuard<'_, HashMap<u64, InFlightGraph>> {
+        lock_or_recover(&self.in_flight_graphs, &self.lock_recoveries)
+    }
+
     fn require_graph(&self) -> PyResult<()> {
         if !self.is_graph {
             return Err(PyValueError::new_err(
@@ -216,10 +256,7 @@ impl PyInferenceBatcher {
     /// only sets `Err` on a not-yet-set waiter — idempotent).
     fn fail_remaining_graph_ids(&self, ids: &[u64], msg: &str) {
         {
-            let mut in_flight = self
-                .in_flight_graphs
-                .lock()
-                .expect("in_flight_graphs lock poisoned");
+            let mut in_flight = self.lock_in_flight();
             for &id in ids {
                 in_flight.remove(&id);
             }
@@ -314,6 +351,17 @@ impl PyInferenceBatcher {
                 }
             });
         }
+    }
+
+    /// How many times the in-flight-graph lock was found poisoned and recovered.
+    ///
+    /// STAYS ZERO in a healthy run. Non-zero is a real defect report: a panic occurred under
+    /// the guard, the seam recovered and kept serving, and the in-flight map may be missing an
+    /// entry. Surfaced so a run can alert on it (LAW-18) rather than have it show up as
+    /// unexplained missing-id skips much later.
+    #[getter]
+    pub fn lock_recoveries(&self) -> usize {
+        self.lock_recoveries.load(Ordering::SeqCst)
     }
 
     /// Number of completed mock games (test assertions).
@@ -524,10 +572,7 @@ impl PyInferenceBatcher {
         let mut ids: Vec<u64> = Vec::with_capacity(pulled.len());
         let mut graphs: Vec<AxisGraph> = Vec::with_capacity(pulled.len());
         {
-            let mut in_flight = self
-                .in_flight_graphs
-                .lock()
-                .expect("in_flight_graphs lock poisoned");
+            let mut in_flight = self.lock_in_flight();
             for (id, graph) in pulled {
                 // builder_impl handshake (defense-in-depth; the build path asserted
                 // it) — a non-native tag must never reach the wire.
@@ -536,16 +581,31 @@ impl PyInferenceBatcher {
                         "next_graph_batch: non-native builder_impl on a queued graph",
                     ));
                 }
-                let legal_coords: Vec<(i32, i32)> = graph
+                // CHECKED, not indexed. This runs WITH `in_flight` held, so a panic here
+                // poisons the lock for the rest of the process — and `legal_node_gather` is
+                // queue-supplied data indexing a SEPARATE array (`node_coords`), which is
+                // precisely the pairing where a builder bug or a truncated wire yields an
+                // out-of-range row. `lock_or_recover` above is the second line of defence;
+                // this is the first: turn the malformed graph into a `PyValueError` the
+                // caller can see, and never enter the panic path at all.
+                let legal_coords: Option<Vec<(i32, i32)>> = graph
                     .legal_node_gather
                     .iter()
                     .map(|&row| {
-                        (
-                            graph.node_coords[row as usize * 2],
-                            graph.node_coords[row as usize * 2 + 1],
-                        )
+                        let base = usize::try_from(row).ok()?.checked_mul(2)?;
+                        Some((
+                            *graph.node_coords.get(base)?,
+                            *graph.node_coords.get(base.checked_add(1)?)?,
+                        ))
                     })
                     .collect();
+                let Some(legal_coords) = legal_coords else {
+                    return Err(PyValueError::new_err(format!(
+                        "next_graph_batch: legal_node_gather holds a row out of range for \
+                         node_coords (len {}) on graph id {id} — malformed graph wire",
+                        graph.node_coords.len(),
+                    )));
+                };
                 in_flight.insert(
                     id,
                     InFlightGraph {
@@ -612,12 +672,7 @@ impl PyInferenceBatcher {
             }
             let leaf_probs = &probs[start as usize..end as usize];
 
-            let meta = {
-                self.in_flight_graphs
-                    .lock()
-                    .expect("in_flight_graphs lock poisoned")
-                    .remove(&id)
-            };
+            let meta = { self.lock_in_flight().remove(&id) };
             // Unknown id (already consumed / never emitted) — skip (frozen tolerant
             // remove semantics).
             let Some(meta) = meta else { continue };
@@ -885,6 +940,84 @@ mod tests {
 
     fn gnn_spec() -> &'static RegistrySpec {
         mantis_encoding::lookup("gnn_axis_v1").expect("gnn_axis_v1 registered")
+    }
+
+    // ── poisoned-lock recovery (item 2) ───────────────────────────────────────────────
+    //
+    // Poison a real `Mutex` the only way it can be poisoned — panic while the guard is held,
+    // on another thread — then prove the seam keeps working. Without recovery every one of
+    // these would panic instead, which is the bricked-batcher defect.
+
+    /// Panic under the guard on a scratch thread; returns once the mutex is genuinely poisoned.
+    fn poison<T: Send + 'static>(mutex: &Arc<Mutex<T>>) {
+        let handle = Arc::clone(mutex);
+        let joined = std::thread::spawn(move || {
+            let _guard = handle.lock().expect("scratch thread takes a clean lock");
+            panic!("deliberate poison for the recovery test");
+        })
+        .join();
+        assert!(joined.is_err(), "the scratch thread was supposed to panic");
+        assert!(mutex.is_poisoned(), "mutex did not actually get poisoned");
+    }
+
+    #[test]
+    fn lock_or_recover_recovers_and_counts() {
+        let mutex = Arc::new(Mutex::new(HashMap::<u64, InFlightGraph>::new()));
+        let counter = AtomicUsize::new(0);
+        lock_or_recover(&mutex, &counter).insert(
+            7,
+            InFlightGraph { policy_dst_slot: vec![1, 2], legal_coords: vec![(3, 4)] },
+        );
+        assert_eq!(counter.load(Ordering::SeqCst), 0, "a clean lock must not count");
+
+        poison(&mutex);
+
+        let guard = lock_or_recover(&mutex, &counter);
+        assert_eq!(counter.load(Ordering::SeqCst), 1, "recovery must be counted (LAW-18)");
+        // The data is intact: recovery hands back the map, it does not reset it.
+        assert_eq!(guard.get(&7).expect("entry survived poisoning").policy_dst_slot, vec![1, 2]);
+        drop(guard);
+
+        // Poisoning is a one-way latch, so every later lock recovers and counts again.
+        drop(lock_or_recover(&mutex, &counter));
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
+        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None)
+            .expect("graph batcher constructs");
+        assert_eq!(b.lock_recoveries(), 0, "a fresh batcher has recovered nothing");
+
+        poison(&b.in_flight_graphs);
+
+        // The real seam method, on the poisoned lock. Before the fix this panicked.
+        b.fail_remaining_graph_ids(&[1, 2, 3], "post-poison call");
+
+        assert!(
+            b.lock_recoveries() >= 1,
+            "the seam recovered but did not REPORT — a silent swallow is what LAW-18 forbids"
+        );
+        // And it is still usable afterwards, not wedged.
+        b.fail_remaining_graph_ids(&[4], "second post-poison call");
+        assert!(b.lock_recoveries() >= 2);
+    }
+
+    /// The mutation self-test for the recovery arm (LAW-07): if `lock_or_recover` ever stops
+    /// counting, `lock_recoveries` becomes a phantom input that reads 0 through a real
+    /// incident. Mechanism: the counter is the ONLY evidence a poisoning happened — the
+    /// recovered map looks identical to a healthy one, so an uncounted recovery is invisible
+    /// by construction.
+    #[test]
+    fn recovery_counter_is_the_only_evidence_and_it_moves() {
+        let mutex = Arc::new(Mutex::new(HashMap::<u64, InFlightGraph>::new()));
+        let counter = AtomicUsize::new(0);
+        poison(&mutex);
+        let before = counter.load(Ordering::SeqCst);
+        let guard = lock_or_recover(&mutex, &counter);
+        let after = counter.load(Ordering::SeqCst);
+        assert!(guard.is_empty(), "recovered map is indistinguishable from a healthy empty one");
+        assert_eq!(after - before, 1, "counter did not move on a recovery that definitely happened");
     }
 
     #[test]
