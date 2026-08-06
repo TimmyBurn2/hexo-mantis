@@ -6,10 +6,19 @@ __pycache__/
 /vendor/external/
 .pytest_cache/
 .ruff_cache/
-# maturin editable builds drop the compiled extension next to its type stub
-/crates/mantis-bridge/python/mantis/_engine.abi3.so
+# maturin editable builds drop the compiled extension next to its type stub. maturin names
+# it per platform — _engine.abi3.so (Linux), _engine.pyd (Windows), _engine.abi3.dylib
+# (macOS) — so the rule is EXTENSION-scoped, not filename-scoped: the original single-name
+# rule was written on Linux and left the Windows artifact untracked-and-unignored, which is
+# how it turned up as a staging candidate the first time this repo was built on Windows.
+# `_engine.pyi` is the TRACKED type stub and is deliberately not matched by any line below.
+/crates/mantis-bridge/python/mantis/_engine*.so
+/crates/mantis-bridge/python/mantis/_engine*.pyd
+/crates/mantis-bridge/python/mantis/_engine*.dylib
 # artifact dirs are never tracked (CI gate 6 is the enforcement; this is defense in depth)
 /reports/
 /checkpoints/
 /logs/
 /benchmarks/
+# scratch/audit workspace — never tracked
+/tmp/
