@@ -496,13 +496,20 @@ class StepCoordinator:
             # byte-identical to WP10.
             self._gate_stats["grad_norm_hard_abort"]["checks"] += 1
             step_gn = float(loss_info.get("grad_norm", 0.0))
-            # NON-FINITE COUNTS AS EXCEEDING (item 6). The condition was
-            # `math.isfinite(step_gn) and step_gn > threshold`, which EXCLUDED NaN/inf from
-            # the abort — so the one gradient state that has already corrupted every weight
-            # (F-11's cascade) was the one state that could never trip the gate, while a
-            # merely large finite norm did. A NaN norm is not "unknown, so assume fine"; it
-            # is unbounded, and unbounded is above any threshold.
-            if not math.isfinite(step_gn) or step_gn > cfg.hard_gn_threshold:
+            # NaN/inf is EXCLUDED from this abort, and that is a KNOWN GAP, not an oversight
+            # — see ADJ-D13. Item 6 changed this line to
+            # `if not math.isfinite(step_gn) or step_gn > cfg.hard_gn_threshold:` and it was
+            # REVERTED for two reasons, both operator-owned:
+            #   1. R56 — this exact comparison is a SOURCE PIN in
+            #      `config/armed_aborts.py`'s `grad_norm_hard_abort` row. The preflight's own
+            #      failure text is "re-adjudicate the row rather than editing the pin".
+            #   2. The row is DEFERRED and knowingly disarmed: `train.hard_gn_threshold` is
+            #      the unauthored 1e9 that no finite norm reaches. Making non-finite fire
+            #      REGARDLESS of the threshold would partially ARM a row the manifest says
+            #      run5 mints disarmed "knowingly and in writing" — an armed-value change.
+            # The other two item-6 paths (the trainer's non-finite guard, and the alert rules)
+            # DID land, so a NaN is caught and reported; only this backstop stays gated.
+            if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
                 self._consec_high_gn += 1
                 if self._consec_high_gn >= cfg.hard_gn_min_steps:
                     _LOG.error("hard_abort_grad_norm step=%s consec=%s gn=%.4f",
