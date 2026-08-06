@@ -1,3 +1,11 @@
+# >300 justify (R8): one decision surface. Every function here is a PURE predicate over one
+# `training_step`-shaped payload, and they are read together — the WARN rules fire as an
+# ordered tuple through a single emitter (`WARN_RULE_NAMES` / `emit_training_step_alerts`),
+# and the hard-abort rules are the same predicates at abort severity. Splitting the WARN set
+# from the emitter, or the warns from the aborts, would separate the rule ORDER from the code
+# that depends on it and put a rule's threshold in a different file from the one place that
+# reads it. The decision-parity citations to `hexo_rl/monitoring/alert_rules.py` are
+# load-bearing and must sit beside the predicate each one certifies.
 """Pure stateless run-safety rules + the headless training-step alert emitter (§c.5/§c.6).
 
 Ports the surviving ~55% of `hexo_rl/monitoring/alert_rules.py` with DECISION PARITY (the
@@ -45,6 +53,10 @@ WARN_RULE_NAMES: tuple[str, ...] = (
     "selfplay_entropy_collapse",
     "grad_norm_spike",
     "loss_increase_window",
+    # Item 6. A non-finite loss is excluded from the loss window BY DESIGN (a NaN poisons
+    # every later comparison), and that exclusion was silently also excluding it from every
+    # alert. This rule is what makes the excluded value visible.
+    "nonfinite_loss",
 )
 
 
@@ -80,15 +92,44 @@ def check_selfplay_entropy_collapse(
 
 
 def check_grad_norm_spike(payload: Mapping[str, Any], cfg: MonitorConfig) -> str | None:
-    """Grad norm strictly above ``alert_grad_norm_max``; a NaN grad norm is IGNORED.
+    """Grad norm strictly above ``alert_grad_norm_max``, OR non-finite.
 
-    The ``gn == gn`` NaN filter is preserved verbatim from the old site — a NaN must never
-    trip the instability alert (NaN comparisons are False, so the guard is load-bearing).
+    NON-FINITE FIRES (item 6). This rule used to carry a `gn == gn` NaN filter, described as
+    "a NaN must never trip the instability alert" — old-side parity, preserved verbatim. It
+    is backwards. A NaN grad norm is not a missing reading, it is the most severe instability
+    there is: `clip_and_step` has scaled by a NaN coefficient and every weight is now NaN
+    (falsified row F-11's cascade). Under the old filter that step alerted on NOTHING, while
+    a merely large-but-finite norm alerted — so the alert was quietest exactly when the model
+    had just been destroyed. `inf` fires for the same reason. An ABSENT `grad_norm` is still
+    no fire: absence is a missing reading, which is a different thing from a bad one.
     """
     gn = payload.get("grad_norm")
-    if gn is not None and gn == gn and gn > float(cfg.alert_grad_norm_max):
+    if gn is None:
+        return None
+    if not math.isfinite(gn):
+        return f"grad norm {gn} — NON-FINITE, weights are corrupt"
+    if gn > float(cfg.alert_grad_norm_max):
         return f"grad norm {gn:.1f} — instability"
     return None
+
+
+def check_nonfinite_loss(payload: Mapping[str, Any], cfg: MonitorConfig) -> str | None:
+    """A non-finite ``loss_total`` fires (item 6).
+
+    The loss window deliberately does NOT accept a non-finite value — appending one poisons
+    every later comparison in `check_loss_increase_window`, since NaN comparisons are False.
+    But "not in the window" was silently becoming "not reported at all": a run whose loss
+    went NaN dropped out of the loss-increase rule and triggered nothing else, so the trace
+    showed a healthy-looking flat window while training was already dead. Keeping the value
+    out of the window and firing a rule ON it is what separates those two.
+    """
+    del cfg  # threshold-free: non-finite is not a matter of degree
+    loss = payload.get("loss_total")
+    if loss is None or isinstance(loss, bool) or not isinstance(loss, (int, float)):
+        return None
+    if math.isfinite(loss):
+        return None
+    return f"loss_total {loss} — NON-FINITE, training step produced no usable gradient"
 
 
 def check_loss_increase_window(
@@ -132,6 +173,7 @@ def emit_training_step_alerts(
         check_selfplay_entropy_collapse(payload, cfg),
         check_grad_norm_spike(payload, cfg),
         check_loss_increase_window(loss_window, cfg),
+        check_nonfinite_loss(payload, cfg),
     )
     fired: list[str] = []
     for name, message in zip(WARN_RULE_NAMES, results, strict=True):

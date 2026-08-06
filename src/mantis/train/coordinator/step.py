@@ -491,7 +491,13 @@ class StepCoordinator:
             # byte-identical to WP10.
             self._gate_stats["grad_norm_hard_abort"]["checks"] += 1
             step_gn = float(loss_info.get("grad_norm", 0.0))
-            if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
+            # NON-FINITE COUNTS AS EXCEEDING (item 6). The condition was
+            # `math.isfinite(step_gn) and step_gn > threshold`, which EXCLUDED NaN/inf from
+            # the abort — so the one gradient state that has already corrupted every weight
+            # (F-11's cascade) was the one state that could never trip the gate, while a
+            # merely large finite norm did. A NaN norm is not "unknown, so assume fine"; it
+            # is unbounded, and unbounded is above any threshold.
+            if not math.isfinite(step_gn) or step_gn > cfg.hard_gn_threshold:
                 self._consec_high_gn += 1
                 if self._consec_high_gn >= cfg.hard_gn_min_steps:
                     _LOG.error("hard_abort_grad_norm step=%s consec=%s gn=%.4f",

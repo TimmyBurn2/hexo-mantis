@@ -12,7 +12,7 @@ by definition and are NOT edges).
 WP13-A: `mantis.monitor` LEAVES this blanket-ban tuple — `train → monitor` is a legal §2
 edge and the run-safety wiring uses exactly three of them. It is now policed by a STRICTER
 oracle with an exact allowlist rather than a ban:
-`tests/monitor/test_monitor_census.py::test_train_to_monitor_import_sites_are_exactly_the_pinned_three`
+`tests/monitor/test_monitor_census.py::test_train_to_monitor_import_sites_are_exactly_the_pinned_set`
 (O-19: {coordinator/step.py, subsystems.py, lifecycle/heartbeat_watchdog.py} — a fourth
 site fails, and so does a missing one). The `mantis.eval` ban is untouched (L-A, O-23).
 """
