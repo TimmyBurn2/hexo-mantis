@@ -1,0 +1,51 @@
+# Line-ending policy. Without this file git applies core.autocrlf, which is a PER-DEVELOPER
+# setting (`true` by default on Git for Windows) — so the bytes in a working tree depended on
+# who cloned it. Measured on this repo before this file existed: 33 of 65 manifest-pinned
+# fixtures failed their sha256 on a Windows checkout, and the Rust suite's
+# tests/fixtures/graph_parity/wpa_positions.json arrived 124 768 bytes too large — exactly one
+# 0x0D per line. `git status` stayed clean throughout, because autocrlf normalises on the way
+# in, so the damage presented as unexplainable digest drift whose obvious "fix" — re-minting
+# the manifest — would have broken Linux CI. Line endings are now a property of the
+# REPOSITORY, not of a developer's git config.
+#
+# ALREADY HAVE A MANGLED CLONE? Adding this file does NOT repair one. git only re-materialises
+# files that changed between commits, so a tree checked out before this landed keeps its CRLF
+# bytes — and `git status` still reports clean. Verified recovery (measured, not guessed):
+#
+#     git rm --cached -r .   &&   git reset --hard
+#
+# tests/test_line_endings.py detects exactly that state and prints this same command.
+
+# ── Default ────────────────────────────────────────────────────────────────────────────────
+# Normalise to LF in the object store AND check out LF on every platform. `eol=lf` (rather
+# than bare `text=auto`) is deliberate: it makes every working tree byte-identical to CI's,
+# which is the only way "run the gates locally before pushing" (CLAUDE.md) can mean anything.
+# Safe here because the repo contains zero .bat/.cmd/.ps1 files — nothing needs CRLF.
+*                                         text=auto eol=lf
+
+# ── Byte-significant: never convert, in either direction ───────────────────────────────────
+# These are hashed, embedded, or compared byte-for-byte. `-text` (not the `binary` macro)
+# because `binary` also implies `-diff`, and these goldens ARE reviewed as diffs — see
+# tests/fixtures/manifest.toml's own note on golden_bits.txt, "one line moved, capture-diff
+# verified". Keeping them diffable is load-bearing for review; keeping them unconverted is
+# load-bearing for correctness.
+
+# Every fixture is pinned by sha256 in tests/fixtures/manifest.toml (65 rows) or read
+# byte-wise by a Rust golden test (e.g. crates/mantis-search/src/mcts/golden_tests.rs:267
+# include_str!s search_golden/completed_q/golden_bits.txt).
+tests/fixtures/**                         -text
+
+# registry.toml is include_str!'d at crates/mantis-encoding/src/registry/mod.rs:25 and its
+# sha256 IS the cross-language identity handshake: mantis_encoding::registry_sha() →
+# _engine.registry_sha() → CI gate 8. A CRLF checkout changes that value, and the existing
+# guard (tests/encoding/test_registry_sha_handshake.py) compares DISK to COMPILED — both of
+# which would be mangled together on such a box, so they would agree with each other while
+# silently disagreeing with Linux. Nothing else would notice.
+crates/mantis-encoding/src/registry.toml  -text
+crates/mantis-encoding/src/manifests.toml -text
+
+# ── Functional requirements ────────────────────────────────────────────────────────────────
+# All five carry `#!/usr/bin/env bash`; a CRLF shebang yields `bad interpreter: ... ^M`.
+# Redundant under the eol=lf default, stated anyway so the requirement survives a change to
+# that default.
+*.sh                                      text eol=lf
