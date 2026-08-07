@@ -74,10 +74,35 @@ class MonitorSchemaConfig(StrictModel):
     """Every `mantis.monitor.config.MonitorConfig` field (27), same name/type, minted at its
     current dataclass default (DESIGN_P2.md §4.2). `resolve_monitor_config`
     (`mantis.config.resolve.monitor`) is the pure 1:1 field-copy consumer onto the runtime
-    `MonitorConfig` dataclass; `drain` and `disk_guard` are schema-only (they feed
-    `DrainCaps`/`StepCoordinatorConfig` and `DiskGuard` respectively, never `MonitorConfig`),
-    each through its OWN resolver — which is what legitimates `resolve_monitor_config`'s two
-    enumerated drops."""
+    `MonitorConfig` dataclass; `gate_interval`, `drain` and `disk_guard` are schema-only (they
+    feed `StepCoordinatorConfig`, `DrainCaps`/`StepCoordinatorConfig` and `DiskGuard`
+    respectively, never `MonitorConfig`) — which is what legitimates `resolve_monitor_config`'s
+    three enumerated drops."""
+
+    # ── the ARMING cadence (R242 / ADJ-D12; schema-only, see resolve_monitor_config) ───
+    # The stride, in TRAINING STEPS, at which `coordinator/step.py::_run_gate_interval` runs
+    # the live hard-abort gates and publishes the LAW-18 `monitor_gates` summary. It is a
+    # `monitor.*` key and NOT a `train.*` one because it decides when the run's SAFETY
+    # machinery looks, not what the trainer does.
+    #
+    # WHY IT EXISTS. Until R242 both of those hung off `train.log_interval`, the NARRATION
+    # cadence — so at run5's minted `log_interval: 1000` the draw-rate hard abort could take
+    # its first sample no earlier than training step 1000 and no `monitor_gates` event existed
+    # before then: armed machinery with a blind first kilometre, and the instrument that would
+    # have shown it was switched off by the same knob. R242 splits the two; `log_interval`
+    # reverts to narration-only.
+    #
+    # `ge=1` for the reason `train.log_interval` carries the same bound (WPMINT DR-7, restated
+    # here for THIS knob): at `<= 0` the whole live hard-abort family stops being evaluated
+    # (checks=0, fires=0, skips=0) AND the `monitor_gates` event that would make the deadness
+    # readable stops emitting, together — while gate 12 goes on auditing the draw-rate row
+    # ARMED. There is no legitimate "never gate" posture, so the schema cannot express one.
+    #
+    # NOTE for the mint record: every committed config mints this EQUAL to its own
+    # `train.log_interval`, so the shipped arming cadence and every armed value are unchanged
+    # in effect by R242's landing. The operator's real gate stride, and the `consec` re-derived
+    # in gate-interval units, are mint-prereg rows — not values this schema chooses.
+    gate_interval: int = Field(ge=1)
 
     # ── the 4 training-step WARN rules (monitor/rules.py) ──────────────────────────────
     alert_entropy_min: float = Field(ge=0)

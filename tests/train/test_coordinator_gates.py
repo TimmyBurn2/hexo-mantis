@@ -59,6 +59,10 @@ _DRAIN_CAPS = resolve_drain_caps(
 #: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
 _KNOBS = resolve_coordinator_knobs(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config.
+_GATE_INTERVAL = load_config(
+    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
 
 
 # ── fakes ─────────────────────────────────────────────────────────────────────────────
@@ -207,11 +211,21 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     `stop_step`/`draw_rate_abort` are passed EXPLICITLY (`None` is the disarmed posture,
     and this harness is not about the draw-rate abort) because the builder gives them no
     default and neither does this factory.
+
+    R242 (ADJ-D12): `gate_interval` MIRRORS whatever `log_interval` the drive asks for, unless
+    the drive names it. That is not a convenience — it is the SHIPPED posture stated once:
+    every committed config mints `monitor.gate_interval` equal to its own
+    `train.log_interval`, so a drive that only moves `log_interval` keeps exactly the cadence
+    it had before the split. The rows that pin the DECOUPLING state the two knobs apart,
+    explicitly, and are the only ones that should.
     """
+    settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
+    settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **settings,
     )
 
 
@@ -445,18 +459,54 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
         "NOT per log_interval boundary. The step value is the post-burst _train_step."
     )
     assert [e["step"] for e in h.sink.named("monitor_gates")] == [5, 10, 15, 20], (
-        "monitor_gates stays log_interval-gated (R210: training_step alerting stays gated)"
+        "monitor_gates rides monitor.gate_interval (R242), which `_make_config` mirrors onto "
+        "log_interval here exactly as every committed config does"
     )
 
 
-def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:
-    """O-03 (F-3 regression) — the live-producer gate must sample once per log_interval
-    BOUNDARY, not once per outer iteration. With `log_interval=5`, burst 4 and a sustained
+def test_gate_interval_boundaries_are_evaluated_per_training_step() -> None:
+    """R242 (ADJ-D12) — the GATE-INTERVAL twin of the row above, and the reason both are
+    needed: the per-training-step evaluation property has to hold SEPARATELY on each knob now.
+
+    `gate_interval=5` with `log_interval=1000` and a burst of 4: 20 training steps must
+    produce EXACTLY 4 `monitor_gates` summaries, at steps 5/10/15/20, and ZERO `training_step`
+    events. Testing the gate boundary once per burst instead would hit only step 20 — one
+    summary instead of four — thinning the LAW-18 stream and stretching the draw-rate gate's
+    `consec` window by ~the mean burst, which is the F-3 defect restated on the new knob.
+    """
+    cfg = _make_config(log_interval=1000, gate_interval=5, max_train_burst=4,
+                       training_steps_per_game=4.0, draw_rate_abort=None)
+    h = _make_coordinator(config=cfg)
+    for _ in range(5):
+        h.pool.games_completed += 5
+        h.coord.step()
+
+    assert h.trainer.step == 20, "5 outer iterations × burst 4 must run 20 training steps"
+    assert [e["step"] for e in h.sink.named("monitor_gates")] == [5, 10, 15, 20], (
+        "the gate boundary is tested PER TRAINING STEP; once per burst would give [20] alone"
+    )
+    assert h.sink.named("training_step") == [], (
+        "and narration is silent throughout — the two knobs are independent (R242)"
+    )
+
+
+def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
+    """O-03 (F-3 regression) — the live-producer gate must sample once per GATE-INTERVAL
+    BOUNDARY, not once per outer iteration. With `gate_interval=5`, burst 4 and a sustained
     draw rate of 0.9 (>= 0.4, consec 3), the draw-rate gate collects its 3rd sample at step 15
     and fires THERE. A once-per-burst implementation would sample at most at step 20 and could
-    not have fired yet — the `consec` window silently stretched by the burst factor."""
+    not have fired yet — the `consec` window silently stretched by the burst factor.
+
+    RENAMED AND RE-POINTED by R242 (ADJ-D12), which authorises it in scope: the subject was
+    `log_interval` because arming rode the narration knob, and that identity was the defect
+    (at run5's `log_interval: 1000` this gate could not sample at all before step 1000). The
+    BURST claim — the thing this row actually exists to catch — is untouched, and the numbers
+    are identical because the harness mirrors the two knobs. The row is stated on
+    `gate_interval` now, which is the knob that really decides it.
+    """
     pool = FakePool(draw_counts=(90, 100))
-    cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
+    cfg = _make_config(log_interval=5, gate_interval=5, max_train_burst=4,
+                       training_steps_per_game=4.0,
                        draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                         N_pool_min=10, consec=3),
                        hard_gn_threshold=1e9)
@@ -470,11 +520,12 @@ def test_gate_sampling_cadence_follows_log_interval_not_the_burst() -> None:
         f"the 3rd gate sample lands at step 15 (boundaries 5/10/15), got {aborts[0]['step']}"
     )
     gates = h.sink.named("monitor_gates")
-    assert [e["step"] for e in gates] == [5, 10, 15], (
+    at_fire = next(e for e in gates if e["step"] == 15)
+    assert [e["step"] for e in gates][:3] == [5, 10, 15], (
         "one gate summary per boundary, up to the boundary that fired"
     )
-    assert gates[-1]["gates"]["draw_rate_collapse"]["checks"] == 3, (
-        "exactly 3 gate samples were taken — one per log_interval boundary, not per burst"
+    assert at_fire["gates"]["draw_rate_collapse"]["checks"] == 3, (
+        "exactly 3 gate samples were taken — one per gate_interval boundary, not per burst"
     )
 
 

@@ -49,13 +49,23 @@ VALID_DRAIN: dict = {
 #: sub-block (after `drain`) — it feeds `mantis.train.lifecycle.disk_guard.DiskGuard`
 #: through `resolve_disk_guard` and is NOT part of the 1:1 `MonitorConfig` copy.
 VALID_DISK_GUARD: dict = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
-VALID_MONITOR: dict = dict(VALID_MONITOR_SCALARS, drain=dict(VALID_DRAIN),
-                           disk_guard=dict(VALID_DISK_GUARD))
+#: R242 (ADJ-D12): `monitor.gate_interval`, the ARMING cadence. A SCALAR that is nonetheless
+#: NOT in `VALID_MONITOR_SCALARS`, because that name means "scalar of the 1:1 `MonitorConfig`
+#: copy" everywhere in this file (the round-trip test iterates it and reads each name off the
+#: runtime dataclass). `gate_interval` is deliberately schema-only — its reader is
+#: `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval` — so it is a THIRD
+#: enumerated drop in `resolve_monitor_config`, exactly like `drain` and `disk_guard`, and it
+#: belongs on the payload but off the dataclass census. Minted equal to the template's own
+#: `train.log_interval` in every committed config; the value here is that same 1000.
+VALID_GATE_INTERVAL: int = 1000
+VALID_MONITOR: dict = dict(VALID_MONITOR_SCALARS, gate_interval=VALID_GATE_INTERVAL,
+                           drain=dict(VALID_DRAIN), disk_guard=dict(VALID_DISK_GUARD))
 
 #: Re-derived from the population this file NAMES, never transcribed: `MONITOR_FIELDS` is
-#: the payload's own key set, which is `MonitorSchemaConfig.model_fields` (29 scalars + the
-#: two sub-blocks = 31). The runtime `MonitorConfig` dataclass stays at 29 — both sub-blocks
-#: are popped by name in `resolve_monitor_config`, each because it has its OWN resolver.
+#: the payload's own key set, which is `MonitorSchemaConfig.model_fields` (29 copied scalars +
+#: `gate_interval` + the two sub-blocks = 32). The runtime `MonitorConfig` dataclass stays at
+#: 29 — all three of the others are popped BY NAME in `resolve_monitor_config`, each because
+#: it has its own reader elsewhere.
 MONITOR_FIELDS = sorted(VALID_MONITOR)
 DRAIN_FIELDS = sorted(VALID_DRAIN)
 
@@ -95,6 +105,24 @@ def test_monitor_extra_key_rejected():
 def test_monitor_has_no_pydantic_level_default():
     for name, field in MonitorSchemaConfig.model_fields.items():
         assert field.is_required(), f"MonitorSchemaConfig.{name} has a code-side default"
+
+
+def test_monitor_gate_interval_is_required_and_at_least_one():
+    """R242 (ADJ-D12) — the ARMING cadence has NO code-side default and no off value.
+
+    `ge=1` for `train.log_interval`'s measured reason applied to THIS knob (WPMINT DR-7): a
+    non-positive stride stops `_run_gate_interval` running the live hard-abort family AND
+    stops the `monitor_gates` summary that would make the deadness readable, together, while
+    gate 12 goes on auditing the draw-rate row ARMED.
+    """
+    assert MonitorSchemaConfig.model_fields["gate_interval"].is_required(), (
+        "monitor.gate_interval carries a code-side default — R1/R242: the config is then not "
+        "its only authority and a caller inherits an ARMING posture"
+    )
+    for bad in (0, -1):
+        with pytest.raises(ValidationError, match="gate_interval"):
+            MonitorSchemaConfig.model_validate(_monitor(gate_interval=bad))
+    assert MonitorSchemaConfig.model_validate(_monitor(gate_interval=1)).gate_interval == 1
 
 
 def test_monitor_bound_examples_reject_negative_thresholds():
@@ -145,7 +173,12 @@ def test_monitor_schema_scalar_fields_equal_monitor_config_dataclass_fields():
     # census (`tests/config/test_disk_guard_keys.py`) forbids on `resolve_monitor_config`'s
     # pop. `disk_guard` joins `drain` here for the same reason `drain` was there: it is
     # schema-only and has its own resolver.
-    schema_fields = set(MONITOR_FIELDS) - {"drain", "disk_guard"}
+    # `gate_interval` (R242/ADJ-D12) joins both on the SAME grounds and by the same
+    # discipline — it is NAMED here, never filtered out: its reader is
+    # `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval`, and it is
+    # deliberately absent from `MonitorConfig` because that dataclass defaults every field it
+    # carries, so a 28th code-side default is exactly what R242's "no default" forbids.
+    schema_fields = set(MONITOR_FIELDS) - {"gate_interval", "drain", "disk_guard"}
     dataclass_fields = set(MonitorConfig.__dataclass_fields__)
     assert schema_fields == dataclass_fields, (
         f"schema-only: {schema_fields - dataclass_fields}; "

@@ -29,7 +29,13 @@ gates:
       statistic: it is the POOLED COUNT-WEIGHTED rate Sum(draws)/Sum(completed) over the
       union of worker windows, and below `N_pool_min` completed games the producer reports
       NO OBSERVATION (None, skip-counted) rather than a fabricated healthy 0.0. The live
-      posture is named in every `monitor_gates` event.
+      posture is named in every `monitor_gates` event. R242 (ADJ-D12) re-pointed the
+      CADENCE: the gate runs from `_run_gate_interval` on `monitor.gate_interval`, not from
+      `_run_log_interval` on `train.log_interval` — under the old coupling run5's minted
+      log_interval 1000 made this gate unable to take even one observation before training
+      step 1000. Every committed config mints gate_interval equal to its own log_interval,
+      so the arithmetic in the armed-abort row is unchanged; the re-scaled stride is a mint
+      prereg row.
     producer_test: tests/train/test_coordinator_gates.py::test_draw_rate_gate_fires_on_live_producer
 
   # (stride5_spam gate REMOVED at close-out per operator directive B — stride5-spam is a

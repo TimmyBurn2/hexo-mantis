@@ -255,6 +255,12 @@ inference:
   perf_timing: false
   perf_sync_cuda: false
 monitor:
+  # R242 (ADJ-D12): the ARMING cadence — the stride, in training steps, at which the live
+  # hard-abort gates run and the LAW-18 `monitor_gates` summary emits. Minted EQUAL to this
+  # template's own `train.log_interval`, so the shipped arming behaviour is unchanged by the
+  # split; the operator's real stride (and the `consec` re-derived in these units) is a mint
+  # prereg row, not a value chosen here.
+  gate_interval: 1000
   alert_entropy_min: 1.0
   collapse_threshold_nats: 1.5
   alert_grad_norm_max: 10.0

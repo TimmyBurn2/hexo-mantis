@@ -206,6 +206,7 @@ inference:
   perf_timing: false
   perf_sync_cuda: false
 monitor:
+  gate_interval: 1000
   alert_entropy_min: 1.0
   collapse_threshold_nats: 1.5
   alert_grad_norm_max: 10.0

@@ -453,7 +453,11 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
     `checkpoint_interval` is a DIFFERENT key and is unaffected — it is passed via
     `full_train_hparams`, not here."""
     base: dict[str, Any] = dict(
-        eval_interval=0, log_interval=0, min_buf_size=1,
+        # R242 (ADJ-D12): `gate_interval` joins `log_interval` — the ARMING cadence,
+        # split off the narration one. 0 on both here for the same reason: this drive
+        # is about the training step / the checkpoint terminus, not about either
+        # boundary, and 0 keeps both quiet.
+        eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=4.0, max_train_burst=4,
         batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
         mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,

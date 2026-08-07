@@ -781,6 +781,12 @@ def strip_and_restamp(
         # WPSC Phase 2 SC-A3: `monitor:` is now a required RunConfig section — placeholder
         # values, same posture as the eval/train/selfplay blocks above (DESIGN_P2.md §4.2).
         "monitor": {
+            # R242 (ADJ-D12): `monitor.gate_interval` is REQUIRED. The literal is the TEMPLATE
+            # value (1000), which every committed config also mints as its own
+            # `train.log_interval` — the same posture as the `disk_guard` literals below: a
+            # placeholder in a weights-strip payload must never be able to disagree with a
+            # real run's cadence, and this block reaches no coordinator.
+            "gate_interval": 1000,
             "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
             "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
             "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,

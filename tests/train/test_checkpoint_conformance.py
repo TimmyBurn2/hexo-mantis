@@ -688,6 +688,8 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
             "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
         },
         "monitor": {
+            # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+            "gate_interval": 1000,
             "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
             "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
             "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
