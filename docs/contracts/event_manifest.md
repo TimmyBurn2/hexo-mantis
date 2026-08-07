@@ -297,8 +297,14 @@ is silently disabled.
   unproduced: `training_step.quiescence_fires_per_step` (the solver-delta half is
   DEFER/ARCH; the key is retained for schema stability and travels as `None` = NOT
   MEASURED). A consumer must treat `None` as "no producer", never as zero.
-- **The ONE exception, ADJ-D32 (R249 + R250): `iteration_complete`'s cluster block can be
-  ABSENT, not `None`.** Its three keys — `cluster_value_std_mean`,
+- **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
+  encoding does not have is ABSENT from that encoding's stream — never zero, never
+  `null`-as-value.** Two `iteration_complete` blocks are subtracted on these grounds, both
+  keyed on the SAME authority (`mantis.train.events.is_graph_run`, which reads the run's
+  declared `identity.representation`), so they cannot disagree about which arm the run is on.
+  The `None` convention above still governs every OTHER key, including these two when their
+  mechanism EXISTS but has no producer wired.
+- **(1) ADJ-D32 (R249 + R250): the cluster block.** Its three keys — `cluster_value_std_mean`,
   `cluster_policy_disagreement_mean`, `cluster_variance_sample_count` — have three arms:
   - **GRAPH representation** — all three OMITTED. The cluster-variance accumulators are
     structurally unreachable on that arm (the search drive returns into the graph inference
@@ -316,6 +322,22 @@ is silently disabled.
     it is UNDER ADJUDICATION; until ruled, S2 stands.
   `mcts_root_concentration` is NOT a cluster field — it is accumulated once per search,
   path-independently — and stays on both representations, subject only to the S2 regime gate.
+- **(2) Item 10(b) (R250): `iteration_complete.k_cluster_histogram`.** The LAW-18 fire-rate
+  log for the K-cluster lever: a mapping from K (cluster views per recorded position) to the
+  cumulative count of positions recorded at that K, over buckets `"1"`..`"8"` plus a `">8"`
+  guard for any K outside the registry's `k_max`. Three arms:
+  - **GRAPH representation** — the key is OMITTED. The only writer is
+    `record_position` on the dense arm; `record_position_graph_dispatch` does not take the
+    histogram as a parameter, so a graph run's buckets are zero for want of a producer. A
+    histogram of zeros is a WORSE fabrication than a scalar zero, because it has shape and
+    therefore reads as a measured distribution.
+  - **No producer** (an engine build predating the getter) — keyed, carrying `None`, per the
+    unproduced-field convention. This is the case the R250 subtraction is NOT.
+  - **Grid** — the bucket mapping, cumulative since pool start. The labels are derived from
+    the vector's LENGTH, so widening the bucket array in Rust relabels the payload with no
+    Python edit. LAW-03: the unit is RECORDED POSITIONS; the buckets sum to the dense
+    `record_position` call count, so the distribution is self-normalising and no separate
+    denominator ships beside it.
 - Known counter overlap (debt **R-QUARANTINE-COUNTER**): `checkpoints.persist_errors_total`
   is incremented BOTH by a fatal write failure and by a deliberately survivable quarantine
   write (`checkpoints.py::_write_quarantine`, the §6/R3 survive-run clause). Under the

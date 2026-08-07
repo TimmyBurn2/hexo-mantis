@@ -217,6 +217,40 @@ gates:
       atomics are monotonic and a negative delta is therefore a wiring bug.
     producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
 
+  - id: k_cluster_histogram
+    input: iteration_complete.k_cluster_histogram
+    producer:
+      kind: symbol
+      module: mantis.train.events
+      symbol: k_cluster_histogram_block
+    also:
+      kind: symbol
+      module: mantis.selfplay.pool_hooks
+      symbol: runner_stats
+    note: >-
+      Item 10(b) / R250 — the LAW-18 fire-rate log for the K-CLUSTER lever, which had none.
+      K (how many cluster views a recorded position expands into) is known only inside
+      crates/mantis-selfplay/src/runner/record.rs::record_position, and a live run could not
+      read it at all: K_avg after the fact cannot separate "K is 1 on every position, the
+      multi-window lever is dead" from "K is spread and the lever is working", which is the
+      exact starved-vs-ineffective distinction LAW-18 says a post-hoc probe cannot make. The
+      Rust producer is a fixed 9-bucket relaxed-atomic array on the runner (buckets 1..=8 by
+      K, the last a guard for every K outside that range, derived-bounded against every
+      registered k_max by
+      mantis_selfplay::runner::record::k_histogram_tests::no_registered_encoding_declares_a_k_max_past_the_real_buckets);
+      it crosses the FFI as the SelfPlayRunner.k_cluster_histogram getter and is labelled
+      here from the vector's own LENGTH, never a transcribed bucket count.
+      ABSENT, not zero, on a GRAPH representation (R250, the ADJ-D32 discipline and the same
+      is_graph_run authority the cluster block uses): record_position_graph_dispatch does not
+      take the histogram as a parameter, so on that arm the buckets are zero for want of a
+      producer. A histogram of zeros is a worse fabrication than a scalar zero because it has
+      SHAPE — it reads as a measured distribution. `None` (keyed, never dropped) is the
+      distinct case of an engine build with no such getter, per the event_manifest
+      unproduced-field convention. LAW-03: the unit is RECORDED POSITIONS, cumulative since
+      pool start; the buckets SUM to the dense record_position call count, so the
+      distribution is self-normalising and publishes no separate denominator.
+    producer_test: tests/train/test_k_cluster_histogram.py::test_a_real_coordinator_publishes_the_k_histogram_on_a_grid_run
+
   # ── Q3: the inference batching instrument (iteration_complete, LAW-18) ────────────
   - id: batch_fill_pct
     input: iteration_complete.batch_fill_pct

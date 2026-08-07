@@ -84,6 +84,11 @@ RUNNER_STATS_FIELDS = {
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
     "export_offwindow_mass_moves", "gridls_zero_policy_rows",
     "target_integrity_defects",
+    # Item 10(b) / R250: the DENSE record path's K distribution — the LAW-18 fire-rate
+    # log for the K-cluster lever. A THIRD family again: not a Phase-T latch and not a
+    # lifecycle counter but a per-encoding instrument, `None` where no producer exists
+    # and dropped entirely from the event stream on a graph run.
+    "k_cluster_histogram",
     # Worker threads that died by panic (item 3). A DIFFERENT family from the three
     # above despite sitting beside them: those are Phase-T target-integrity latches,
     # this is a lifecycle counter. Kept out of `_TARGET_INTEGRITY_COUNTERS` for that
@@ -273,6 +278,17 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
             f"{getattr(rstats, name)!r}"
         )
     assert isinstance(rstats.cluster_variance_sample_count, int)
+    # Item 10(b): a LIVE grid pool really carries the K histogram across the seam — a
+    # tuple of ints, one per bucket, all zero on a pool that has recorded nothing. `None`
+    # here would mean the engine build has no such getter, which on a live pool is the
+    # wheel-compat arm firing where it must not.
+    assert rstats.k_cluster_histogram is not None, (
+        "a live engine must supply the K histogram; None is the no-producer arm"
+    )
+    assert set(rstats.k_cluster_histogram) == {0}, (
+        f"a pool that recorded nothing has an all-zero K histogram, got "
+        f"{rstats.k_cluster_histogram!r}"
+    )
 
     istats = pool.inference_stats()
     assert isinstance(istats, InferenceStats)

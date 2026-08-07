@@ -97,6 +97,13 @@ pub struct RunnerStatsSnapshot {
     pub export_offwindow_mass_moves: u64,
     /// §3.5 zero-row fills, counted per recorded grid-ls cluster row.
     pub gridls_zero_policy_rows: u64,
+    /// Item 10(b) / R250 — the in-run K histogram, DENSE record path only.
+    /// Bucket `i` in `0..8` counts recorded positions with exactly `i + 1`
+    /// cluster views; the last bucket guards every K outside `1..=8`
+    /// (`record::k_cluster_bucket`). All-zero on a graph run, where nothing
+    /// calls `record_position` — the emitter OMITS the field there rather than
+    /// publishing that zero as a distribution (R250).
+    pub k_cluster_histogram: [u64; record::K_CLUSTER_HISTOGRAM_BUCKETS],
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
@@ -175,6 +182,8 @@ pub struct SelfPlayRunner {
     // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
     export_offwindow_mass_moves: Arc<AtomicU64>,
     gridls_zero_policy_rows: Arc<AtomicU64>,
+    /// Item 10(b) — the K histogram's live atomics (see the snapshot field).
+    k_cluster_histogram: Arc<[AtomicU64; record::K_CLUSTER_HISTOGRAM_BUCKETS]>,
     target_integrity_defects: Arc<AtomicU64>,
     /// The fatal-defect latch (DESIGN_T §3.4): a worker panic is NOT loud —
     /// `stop()` swallows join results — so a `TargetIntegrityError` at the
@@ -349,6 +358,7 @@ impl SelfPlayRunner {
             seeded_games_started: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
             gridls_zero_policy_rows: Arc::new(AtomicU64::new(0)),
+            k_cluster_histogram: Arc::new(std::array::from_fn(|_| AtomicU64::new(0))),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             fatal_defect: Arc::new(Mutex::new(None)),
         })
@@ -498,6 +508,9 @@ impl SelfPlayRunner {
             seeded_games_started: self.seeded_games_started.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
             gridls_zero_policy_rows: self.gridls_zero_policy_rows.load(Ordering::Relaxed),
+            k_cluster_histogram: std::array::from_fn(|i| {
+                self.k_cluster_histogram[i].load(Ordering::Relaxed)
+            }),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
@@ -740,6 +753,11 @@ mod seam_roundtrip {
         r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
+        // Item 10(b): DISTINCT per bucket (26..=34) — an array read back with a
+        // transposed or constant index would pass an all-equal seeding.
+        for (i, slot) in r.k_cluster_histogram.iter().enumerate() {
+            slot.store(26 + i as u64, Ordering::Relaxed);
+        }
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -765,6 +783,7 @@ mod seam_roundtrip {
             seeded_games_started: 21,
             export_offwindow_mass_moves: 22,
             gridls_zero_policy_rows: 23,
+            k_cluster_histogram: std::array::from_fn(|i| 26 + i as u64),
             target_integrity_defects: 24,
             worker_panics: 25,
         };

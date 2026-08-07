@@ -145,6 +145,7 @@ impl SelfPlayRunner {
             seeded_games_started: self.seeded_games_started.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
             gridls_zero_policy_rows: self.gridls_zero_policy_rows.clone(),
+            k_cluster_histogram: self.k_cluster_histogram.clone(),
         };
         let atomics_proto = WorkerAtomics {
             running: self.running.clone(),

@@ -10,6 +10,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 
+use super::record::K_CLUSTER_HISTOGRAM_BUCKETS;
+
 #[derive(Clone)]
 pub(crate) struct WorkerStats {
     pub(crate) games_completed: Arc<AtomicUsize>,
@@ -37,4 +39,9 @@ pub(crate) struct WorkerStats {
     // WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6).
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
     pub(crate) gridls_zero_policy_rows: Arc<AtomicU64>,
+    /// Item 10(b) / R250: the in-run K histogram, one bucket per cluster-view
+    /// count at the DENSE record path. Written only by `record::record_position`,
+    /// which the graph arm never calls — so on a graph run every bucket stays 0
+    /// and the emitter omits the field rather than publishing that zero.
+    pub(crate) k_cluster_histogram: Arc<[AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS]>,
 }

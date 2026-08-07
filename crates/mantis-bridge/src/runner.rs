@@ -618,6 +618,24 @@ impl PySelfPlayRunner {
         self.snapshot().target_integrity_defects
     }
 
+    /// Item 10(b) / R250 — the in-run K histogram from the DENSE record path.
+    ///
+    /// Bucket `i` in `0..len-1` counts recorded positions that expanded into
+    /// exactly `i + 1` cluster views; the LAST bucket guards every K outside that
+    /// range. Handed over as a raw list so the Python side derives its own labels
+    /// from the length instead of transcribing a bucket count that would then
+    /// have to be re-edited (R192(e), derive-or-delete).
+    ///
+    /// ALL-ZERO on a graph run, and that zero is not publishable: nothing on the
+    /// graph arm calls `record_position`, so there is no producer to report a
+    /// distribution for. The event builder OMITS the field there (R250) — the
+    /// same absence discipline the cluster-variance block got at R249, keyed on
+    /// the same `is_graph_run` authority.
+    #[getter]
+    pub fn k_cluster_histogram(&self) -> Vec<u64> {
+        self.snapshot().k_cluster_histogram.to_vec()
+    }
+
     /// Worker threads that died by panic — must read 0 in a healthy run.
     ///
     /// A panicking worker used to be invisible from Python: the panic sat in its

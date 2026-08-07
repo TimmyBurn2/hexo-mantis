@@ -154,6 +154,58 @@ def regime_gated_cluster_stats(
     return stats
 
 
+#: The `iteration_complete` key the K histogram travels under (item 10(b)). Named once so
+#: the emitter, the absence rule and the tests share ONE authority for the spelling.
+K_CLUSTER_HISTOGRAM_KEY = "k_cluster_histogram"
+
+
+def k_cluster_histogram_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
+    """The in-run K distribution — the LAW-18 fire-rate log for the K-cluster lever.
+
+    K (how many cluster views a recorded position expands into) is known ONLY at the dense
+    record path (`crates/mantis-selfplay/src/runner/record.rs::record_position`), and until
+    now a live run could not read it at all: an operator could see K_avg after the fact and
+    still not tell "K is 1 on every position, the multi-window lever is dead" from "K is
+    spread and the lever is doing work". A mean cannot separate those; the distribution can.
+
+    THREE arms, and the middle one is the point:
+
+      GRAPH run — the key is ABSENT, the same R250 subtraction the cluster block gets and
+        keyed on the same `is_graph_run` authority. `record_position_graph_dispatch` does
+        not take the histogram as a parameter at all, so the buckets on that arm are zero
+        for want of a producer, not because K was never 1..=8. Publishing those zeros would
+        state a distribution nothing measured — and a histogram of zeros is a far more
+        confident-looking fabrication than a scalar zero, because it has SHAPE.
+      NO PRODUCER — `None` (an engine build predating the getter). The event_manifest
+        unproduced-field convention governs: keyed, `None`, never a fabricated zero.
+      DENSE run with a producer — the bucket counts, labelled by the K each one counts.
+
+    The labels are DERIVED from the vector's own length (R192(e)): buckets `0..n-1` are
+    `K == i + 1` and the last is the guard for every K outside that range. Nothing here
+    restates the bucket count, so widening `K_CLUSTER_HISTOGRAM_BUCKETS` in Rust relabels
+    this payload correctly with no Python edit — and cannot leave a stale `">8"` behind.
+
+    Cumulative since pool start, like every other counter on this event. No separate
+    denominator is published because none is needed: the buckets SUM to the number of dense
+    `record_position` calls, so the distribution is self-normalising (LAW-03 — the unit is
+    RECORDED POSITIONS, not games and not plies).
+    """
+    if graph_run:
+        return {}
+    buckets = getattr(rstats, K_CLUSTER_HISTOGRAM_KEY, None)
+    if buckets is None:
+        return {K_CLUSTER_HISTOGRAM_KEY: None}
+    counts = list(buckets)
+    if not counts:
+        # A producer that reported NO buckets. Distinct from `None` (no producer) and
+        # published as the empty mapping rather than laundered into either — and, more to
+        # the point, a builder that raised here would take the run down over a telemetry
+        # field, which is exactly what `is_graph_run` refuses to risk one function up.
+        return {K_CLUSTER_HISTOGRAM_KEY: {}}
+    labels = [str(i + 1) for i in range(len(counts) - 1)] + [f">{len(counts) - 1}"]
+    return {K_CLUSTER_HISTOGRAM_KEY: dict(zip(labels, counts, strict=True))}
+
+
 def replay_pretrain_events(log_dir: str | Path, sink: EventSink) -> None:
     """Replay up to 500 pretrain `training_step` events into the sink on resume."""
     pretrain_log = Path(log_dir) / "pretrain.jsonl"
@@ -401,12 +453,19 @@ def emit_iteration_complete_event(
         # boundary's readings (`StepCoordinator._target_integrity_report`).
         "target_integrity": dict(target_integrity),
     }
-    # ADJ-D32 (R249 + R250): the cluster block is the ONLY part of this payload whose keys
-    # can be absent. `config` is the coordinator's `full_config` — the same declaration the
-    # engine's encoding was resolved from — so the graph/dense question is answered from
-    # the run's own identity, never from a reading that has no producer behind it.
+    # ADJ-D32 (R249 + R250) and item 10(b): the cluster block and the K histogram are the
+    # only parts of this payload whose keys can be absent. `config` is the coordinator's
+    # `full_config` — the same declaration the engine's encoding was resolved from — so the
+    # graph/dense question is answered from the run's own identity, never from a reading
+    # that has no producer behind it. ONE `is_graph_run` call feeds both, deliberately: two
+    # instruments subtracted on the same R250 grounds must not be able to disagree about
+    # which arm the run is on.
+    _graph_run = is_graph_run(config)
     iteration_complete_event.update(
-        regime_gated_cluster_stats(rstats, _puct_regime, graph_run=is_graph_run(config))
+        regime_gated_cluster_stats(rstats, _puct_regime, graph_run=_graph_run)
+    )
+    iteration_complete_event.update(
+        k_cluster_histogram_block(rstats, graph_run=_graph_run)
     )
     emit_via(sink, iteration_complete_event)
 

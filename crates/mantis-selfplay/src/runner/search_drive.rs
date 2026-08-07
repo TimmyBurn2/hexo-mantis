@@ -63,7 +63,9 @@ pub fn aggregate_cluster_values_min(leaf_values: &[f32]) -> f32 {
 }
 use crate::replay::sym::SymTables;
 
-use super::record::{record_position, record_position_graph_dispatch, RecordTuple};
+use super::record::{
+    record_position, record_position_graph_dispatch, RecordTuple, K_CLUSTER_HISTOGRAM_BUCKETS,
+};
 use super::rotate::{rotate_policy_inplace, rotate_state_inplace};
 
 // ── Copy arg-bundles (frozen `inner.rs:63-183`) ─────────────────────────────
@@ -100,6 +102,9 @@ pub(crate) struct ClusterVarianceAtomics<'a> {
 /// the solver_counters pattern): `export_offwindow_mass_moves` fires once per
 /// move whose exported target carries overflow mass; `gridls_zero_policy_rows`
 /// fires per recorded grid-ls cluster row filled with the §3.5 zero-row sentinel.
+/// Item 10(b) adds `k_cluster_histogram`, the DENSE record path's K distribution
+/// (R250: structurally unreachable on the graph arm — `record_position` is the
+/// only writer and the graph branch below never calls it).
 #[derive(Clone, Copy)]
 pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_depth_accum: &'a AtomicU64,
@@ -109,6 +114,7 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
     pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
+    pub(crate) k_cluster_histogram: &'a [AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS],
 }
 
 /// WP12-R Phase T fatal-defect latch handle (DESIGN_T §3.4; LAW-14). Store the
@@ -769,6 +775,7 @@ pub(crate) fn play_one_move(
             board, kept_planes, n_cells, agg_trunk_sz, ctx.is_fast_game, ctx.completed_q_values,
             policy_stride, has_pass_slot, &target_policy, ctx.sym_idx, infer.sym_tables, record_full_search, records_vec,
             accumulators.gridls_zero_policy_rows,
+            accumulators.k_cluster_histogram,
         );
     }
 

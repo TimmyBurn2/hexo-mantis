@@ -196,3 +196,45 @@ def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
         "owes a live producer and a named producer test (R4/LAW-07). Rows present: "
         f"{sorted(present)}"
     )
+
+
+# ── item 10(b) (R4/LAW-07) — the K histogram's row cannot be quietly deleted ──────────
+def test_the_k_cluster_histogram_instrument_has_a_manifest_row() -> None:
+    """The in-run K histogram carries a producer-manifest row, keyed on the emitter's OWN
+    name for the field.
+
+    THE ASYMMETRY THIS CLOSES (O-29, argued in full above): `verify_manifest` resolves the
+    rows it is HANDED, and an absent row is not a row — so `test_shipped_manifest_every_row_
+    resolves` stays GREEN under a deletion. Every registered family needs its own presence
+    pin; this is the K histogram's.
+
+    DERIVED, not transcribed: the expected row id comes from
+    `mantis.train.events.K_CLUSTER_HISTOGRAM_KEY`, the single authority the emitter, the
+    absence rule and the payload key all read, so renaming the field without renaming the row
+    reds here rather than leaving a row that resolves and describes nothing. The PRODUCER is
+    asserted to be the emitter function itself for the same reason resolution alone is not
+    enough: a row re-pointed at some other live symbol resolves perfectly and cites the wrong
+    thing.
+
+    MUTATIONS THAT RED IT: (1) delete the `k_cluster_histogram` row from
+    `producer_manifest.yaml`; (2) re-point its producer symbol at anything but the emitter.
+
+    RECORDED, NOT FIXED HERE (out of this card's scope): the sibling R250 subtraction — the
+    `iteration_complete` cluster block landed at ADJ-D32 — has NO manifest row at all, so
+    this pin is deliberately single-row rather than derived over the whole R250 absence
+    family. A family-derived expectation would red on that gap today.
+    """
+    from mantis.train.events import K_CLUSTER_HISTOGRAM_KEY
+
+    rows = {row["id"]: row for row in load_manifest(_SHIPPED_MANIFEST)["gates"]}
+    assert K_CLUSTER_HISTOGRAM_KEY in rows, (
+        f"the in-run K histogram publishes `iteration_complete.{K_CLUSTER_HISTOGRAM_KEY}` and "
+        f"owes a live producer plus a named producer test (R4/LAW-07). Rows present: "
+        f"{sorted(rows)}"
+    )
+    producer = rows[K_CLUSTER_HISTOGRAM_KEY]["producer"]
+    assert producer["module"] == "mantis.train.events", producer
+    assert producer["symbol"] == "k_cluster_histogram_block", (
+        f"the row must cite the function that BUILDS the field, not a symbol that merely "
+        f"resolves; got {producer['symbol']!r}"
+    )

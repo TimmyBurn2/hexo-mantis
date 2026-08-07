@@ -151,6 +151,14 @@ class RunnerStats:
     export_offwindow_mass_moves: int = 0
     gridls_zero_policy_rows: int = 0
     target_integrity_defects: int = 0
+    # Item 10(b) / R250: the DENSE record path's K histogram, bucket `i` counting
+    # recorded positions with `K == i + 1` and the LAST bucket guarding every K outside
+    # that range. `None` = NO PRODUCER, and it is the wheel-compat default for the same
+    # reason R249 gave the cluster means theirs: an engine build without the getter has
+    # measured nothing, and an all-zero tuple would read as "K was never anything",
+    # which is a distribution. On a graph run the buckets are genuinely all zero and the
+    # EMITTER drops the field — absence is decided there, on `is_graph_run`, not here.
+    k_cluster_histogram: tuple[int, ...] | None = None
     # Worker threads that died by panic. Reads 0 in a healthy run; non-zero means
     # self-play HALTED on a worker death rather than merely slowing down, which is the
     # distinction the old silent-swallow made impossible to draw.
@@ -175,6 +183,18 @@ def _optional_mean(value: Any) -> float | None:
     samples (R249). `float(None)` raises and a `getattr(..., 0.0)` default would
     manufacture the very zero ADJ-D32 removed, so the absence is preserved explicitly."""
     return None if value is None else float(value)
+
+
+def _k_histogram(value: Any) -> tuple[int, ...] | None:
+    """Freeze the bridge's K-histogram list into a tuple, or carry `None` through when
+    the engine build has no such getter (item 10(b)).
+
+    Frozen because `RunnerStats` is a frozen dataclass and a list field would hand every
+    consumer a mutable alias of one snapshot. `None` is preserved rather than defaulted to
+    zeros for the R249 reason: zeros here are a DISTRIBUTION claim, and an absent producer
+    has not measured one. An EMPTY list from a live getter is likewise not zeros — it is
+    kept as an empty tuple, so the emitter can tell "no buckets" from "no producer"."""
+    return None if value is None else tuple(int(v) for v in value)
 
 
 def runner_stats(pool: Any) -> RunnerStats:
@@ -221,6 +241,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
+        k_cluster_histogram=_k_histogram(getattr(r, "k_cluster_histogram", None)),
         worker_panics=int(getattr(r, "worker_panics", 0)),
     )
 
