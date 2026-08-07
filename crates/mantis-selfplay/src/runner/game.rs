@@ -170,6 +170,7 @@ pub(crate) fn run_worker_thread(
         seeded_games_started,
         export_offwindow_mass_moves,
         gridls_zero_policy_rows,
+        uncovered_forced_win,
         k_cluster_histogram,
     } = stats;
     let WorkerAtomics { running, model_version, fatal_defect, target_integrity_defects } = atomics;
@@ -265,6 +266,7 @@ pub(crate) fn run_worker_thread(
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
         gridls_zero_policy_rows: &gridls_zero_policy_rows,
         k_cluster_histogram: &k_cluster_histogram,
+        uncovered_forced_win: &uncovered_forced_win,
     };
     // WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14).
     let fatal_latch = FatalDefectLatch {

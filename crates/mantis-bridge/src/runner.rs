@@ -611,6 +611,13 @@ impl PySelfPlayRunner {
     pub fn gridls_zero_policy_rows(&self) -> u64 {
         self.snapshot().gridls_zero_policy_rows
     }
+    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
+    /// the injecting lever was armed. LS-path mechanism; the Python emitter
+    /// publishes it on the GRAPH arm only and omits it elsewhere (R250/R256).
+    #[getter]
+    pub fn uncovered_forced_win(&self) -> u64 {
+        self.snapshot().uncovered_forced_win
+    }
     /// Fatal-defect latch fire count — must read 0 in a healthy run (the latch
     /// message itself surfaces through `collect_graph_data`'s typed raise).
     #[getter]

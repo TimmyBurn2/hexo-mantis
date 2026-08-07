@@ -299,11 +299,11 @@ is silently disabled.
   MEASURED). A consumer must treat `None` as "no producer", never as zero.
 - **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
   encoding does not have is ABSENT from that encoding's stream — never zero, never
-  `null`-as-value.** Two `iteration_complete` blocks are subtracted on these grounds, both
-  keyed on the SAME authority (`mantis.train.events.is_graph_run`, which reads the run's
-  declared `identity.representation`), so they cannot disagree about which arm the run is on.
-  The `None` convention above still governs every OTHER key, including these two when their
-  mechanism EXISTS but has no producer wired.
+  `null`-as-value.** Every `iteration_complete` block subtracted on these grounds (the
+  numbered rows below) is keyed on the SAME authority (`mantis.train.events.is_graph_run`,
+  which reads the run's declared `identity.representation`), so they cannot disagree about
+  which arm the run is on. The `None` convention above still governs every OTHER key,
+  including these blocks when their mechanism EXISTS but has no producer wired.
 - **(1) ADJ-D32 (R249 + R250): the cluster block.** Its three keys — `cluster_value_std_mean`,
   `cluster_policy_disagreement_mean`, `cluster_variance_sample_count` — have three arms:
   - **GRAPH representation** — all three OMITTED. The cluster-variance accumulators are
@@ -338,6 +338,33 @@ is silently disabled.
     Python edit. LAW-03: the unit is RECORDED POSITIONS; the buckets sum to the dense
     `record_position` call count, so the distribution is self-normalising and no separate
     denominator ships beside it.
+- **(3) R256/ADJ-D37: `iteration_complete.uncovered_forced_win`.** The LAW-18 fire-rate
+  log for the forced-win coverage clip: per-lever DROP EVENTS — a proven forced win
+  swallowed by the K-cluster WINDOW criterion while the injecting lever (O1
+  `forced_win_policy_weight` or the solver's `solver_visit_weight`) was armed. LAW-03 unit
+  note: the unit is lever-drop events, not distinct wins — a move with BOTH levers armed
+  can contribute two ticks (each armed lever independently dropped an injection).
+  Disclosure: every shipped config disarms both levers (`forced_win_policy_enabled:
+  false`, `solver_enabled: false`), so on minted runs this reads a truthful 0 until a
+  prereg row arms one — the instrument pre-positions for that re-arm (R163's
+  recommendation), per LAW-18. Producer: the ONE counted helper
+  `records::apply_forced_win_one_hot_ls_counted` (both mechanism sites route through it;
+  producer + mutation self-tests in `records::ls_tests`, Python seam pins in
+  `tests/train/test_uncovered_forced_win.py`). Three arms — the K histogram's gate,
+  INVERTED, on the same `is_graph_run` authority (R256: the instrument attaches to the
+  mechanism's measured live path, the LS target path, live on run5's graph arm):
+  - **GRAPH representation** — cumulative `{"total", "per_position"}`; `total` is a raw
+    counter, truthful at 0; `per_position` is the rate over the snapshot's cumulative
+    `positions_generated`, `None` before any position is recorded (a rate over zero
+    samples is not a measurement, R249).
+  - **Dense (grid) representation** — the key is OMITTED. Publishing it would resurrect
+    the ADJ-D37 arm-(i) trap: a `{total: 0}` reading zero on arms whose forced-win drops a
+    DIFFERENT mechanism owns (`v6`/`v6w25` take the Dense target arm). Disclosed:
+    `v6_live2_ls` is itself LS, so its Rust-side counter can tick while emission stays
+    graph-scoped per R256's explicit landing — the dense-LS stream gap is an adjudication-
+    queue disclosure, not an oversight.
+  - **No producer** (an engine build predating the getter) — keyed, carrying `None`, per
+    the unproduced-field convention.
 - Known counter overlap (debt **R-QUARANTINE-COUNTER**): `checkpoints.persist_errors_total`
   is incremented BOTH by a fatal write failure and by a deliberately survivable quarantine
   write (`checkpoints.py::_write_quarantine`, the §6/R3 survive-run clause). Under the

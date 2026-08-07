@@ -89,6 +89,11 @@ RUNNER_STATS_FIELDS = {
     # lifecycle counter but a per-encoding instrument, `None` where no producer exists
     # and dropped entirely from the event stream on a graph run.
     "k_cluster_histogram",
+    # R256/ADJ-D37: the forced-win coverage-clip counter — the same per-encoding
+    # instrument family as the histogram, gated the INVERSE way (present on graph,
+    # dropped on dense; `None` where no producer exists). Pins:
+    # tests/train/test_uncovered_forced_win.py.
+    "uncovered_forced_win",
     # Worker threads that died by panic (item 3). A DIFFERENT family from the three
     # above despite sitting beside them: those are Phase-T target-integrity latches,
     # this is a lifecycle counter. Kept out of `_TARGET_INTEGRITY_COUNTERS` for that

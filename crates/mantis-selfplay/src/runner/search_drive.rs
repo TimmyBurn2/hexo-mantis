@@ -31,7 +31,7 @@ use mantis_core::board::hex_distance;
 use mantis_core::Board;
 use mantis_encoding::{encode_state_to_buffer_channels, RegistrySpec};
 use mantis_search::{
-    compute_move_temperature, is_covered, ply_to_compound_move, GumbelSearchState, LegalSetPolicy,
+    compute_move_temperature, ply_to_compound_move, GumbelSearchState, LegalSetPolicy,
     MCTSTree, Outcome, TacticalConfig, TacticalSolver,
 };
 
@@ -115,6 +115,12 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
     pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
     pub(crate) k_cluster_histogram: &'a [AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS],
+    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
+    /// the injecting lever was armed (`apply_forced_win_one_hot_ls_counted`, both
+    /// the O1 arm and the solver hook). LS-path mechanism: ticks wherever
+    /// `legal_set` targets are built; the EMITTER publishes it on the graph arm
+    /// only (R256 — see `events.uncovered_forced_win_block`).
+    pub(crate) uncovered_forced_win: &'a AtomicU64,
 }
 
 /// WP12-R Phase T fatal-defect latch handle (DESIGN_T §3.4; LAW-14). Store the
@@ -727,23 +733,23 @@ pub(crate) fn play_one_move(
                         false
                     }
                 }
-                // Coverage-gated: a covered win one-hots; an uncovered win is a no-op.
-                MovePolicy::Ls(ls) => {
-                    let (bcq, bcr) = board.window_center();
-                    let half = (agg_trunk_sz - 1) / 2;
-                    let (_, centers) = board.get_cluster_views();
-                    let covered = is_covered(wq, wr, &centers, agg_trunk_sz, half);
-                    records::apply_forced_win_one_hot_ls(
-                        ls, (wq, wr), ctx.forced_win_weight, covered, bcq, bcr, agg_trunk_sz, half,
-                    )
-                }
+                // Coverage-gated: a covered win one-hots; an uncovered win is a no-op
+                // COUNTED by the R256 instrument (the one counted helper, shared with
+                // the solver hook so mechanism and instrument cannot drift).
+                MovePolicy::Ls(ls) => records::apply_forced_win_one_hot_ls_counted(
+                    board, ls, (wq, wr), ctx.forced_win_weight, agg_trunk_sz,
+                    accumulators.uncovered_forced_win,
+                ),
             },
             None => false,
         };
 
     // D-WS3 L1: native solver-in-loop SOFT visit-injection (default-OFF =
     // byte-identical hot path).
-    let solver_fired = run_solver_hook(board, &mut target_policy, &ctx, legal_set, policy_stride, agg_trunk_sz, solver_counters, solver_fires);
+    let solver_fired = run_solver_hook(
+        board, &mut target_policy, &ctx, legal_set, policy_stride, agg_trunk_sz,
+        solver_counters, solver_fires, accumulators.uncovered_forced_win,
+    );
 
     let record_full_search = move_is_full_search || forced_win_fired || solver_fired;
 
@@ -809,6 +815,7 @@ fn run_solver_hook(
     agg_trunk_sz: i32,
     solver_counters: SolverCounters,
     solver_fires: &mut u32,
+    uncovered_forced_win: &AtomicU64,
 ) -> bool {
     if !ctx.solver_enabled {
         return false;
@@ -854,16 +861,15 @@ fn run_solver_hook(
                 (false, false)
             }
         }
-        // Coverage-gated (mirrors the O1 LS path).
+        // Coverage-gated (the SAME counted helper as the O1 LS path — R256).
         MovePolicy::Ls(ls) => {
-            let (bcq, bcr) = board.window_center();
-            let half = (agg_trunk_sz - 1) / 2;
-            let (_, centers) = board.get_cluster_views();
-            let covered = is_covered(wq, wr, &centers, agg_trunk_sz, half);
-            let did =
-                records::apply_forced_win_one_hot_ls(ls, (wq, wr), ctx.solver_visit_weight, covered, bcq, bcr, agg_trunk_sz, half);
+            let did = records::apply_forced_win_one_hot_ls_counted(
+                board, ls, (wq, wr), ctx.solver_visit_weight, agg_trunk_sz, uncovered_forced_win,
+            );
             // Off-window = injected into the ragged OVERFLOW target: the win maps
             // outside the dense global window (>= policy_stride).
+            let (bcq, bcr) = board.window_center();
+            let half = (agg_trunk_sz - 1) / 2;
             let off = did && Board::window_flat_idx_at_geom(wq, wr, bcq, bcr, agg_trunk_sz, half) >= policy_stride;
             (did, off)
         }

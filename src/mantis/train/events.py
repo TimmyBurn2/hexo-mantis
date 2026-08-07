@@ -158,6 +158,48 @@ def regime_gated_cluster_stats(
 #: the emitter, the absence rule and the tests share ONE authority for the spelling.
 K_CLUSTER_HISTOGRAM_KEY = "k_cluster_histogram"
 
+#: The `iteration_complete` key the R256 forced-win-drop counter travels under. One
+#: spelling authority, exactly as for the K histogram above.
+UNCOVERED_FORCED_WIN_KEY = "uncovered_forced_win"
+
+
+def uncovered_forced_win_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
+    """R256/ADJ-D37 — the LAW-18 fire-rate log for the forced-win coverage clip.
+
+    The mechanism (`records::apply_forced_win_one_hot_ls_counted`, serving both the O1
+    forced-win arm and the solver hook) refuses a PROVEN win when the K-cluster WINDOW
+    criterion says its cell is uncovered — a pure target loss nothing witnessed until this
+    counter. R250 first ruled the instrument onto the dense path by description; measurement
+    inverted the premise (the LS mechanism is TRUE on graph, FALSE on the shipped dense
+    grids), and R256 re-derived the mapping from code: the instrument attaches to the
+    mechanism's measured live path, so this block is the K histogram's gate INVERTED —
+    present on GRAPH, ABSENT on dense — keyed on the same `is_graph_run` authority so two
+    subtractions on the same grounds cannot disagree about the arm.
+
+    Disclosed, not hidden: `v6_live2_ls` is itself an LS encoding, so its Rust counter can
+    tick while this emission stays graph-scoped — that is R256's explicit landing ("
+    uncovered_forced_win lands on the graph path"), and the dense-LS stream gap is a
+    recorded adjudication-queue disclosure, not an oversight in this gate.
+
+    Three arms, mirroring 10(b):
+      DENSE run — the key is OMITTED (publishing here is the exact D37 arm-(i) trap: a
+        `{total: 0}` reading zero on arms whose drops a different mechanism owns).
+      NO PRODUCER — keyed `None` (an engine build predating the getter; the
+        event_manifest unproduced-field convention).
+      GRAPH run — cumulative `{"total", "per_position"}`: the raw count (truthful at 0 —
+        the R249 distinction; only a DERIVED rate over zero samples is fabrication) and
+        the rate over the snapshot's own cumulative `positions_generated`, `None` when no
+        position has been recorded yet.
+    """
+    if not graph_run:
+        return {}
+    total = getattr(rstats, UNCOVERED_FORCED_WIN_KEY, None)
+    if total is None:
+        return {UNCOVERED_FORCED_WIN_KEY: None}
+    positions = getattr(rstats, "positions_generated", None)
+    rate = None if not positions else total / positions
+    return {UNCOVERED_FORCED_WIN_KEY: {"total": total, "per_position": rate}}
+
 
 def k_cluster_histogram_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
     """The in-run K distribution — the LAW-18 fire-rate log for the K-cluster lever.
@@ -453,19 +495,22 @@ def emit_iteration_complete_event(
         # boundary's readings (`StepCoordinator._target_integrity_report`).
         "target_integrity": dict(target_integrity),
     }
-    # ADJ-D32 (R249 + R250) and item 10(b): the cluster block and the K histogram are the
-    # only parts of this payload whose keys can be absent. `config` is the coordinator's
-    # `full_config` — the same declaration the engine's encoding was resolved from — so the
-    # graph/dense question is answered from the run's own identity, never from a reading
-    # that has no producer behind it. ONE `is_graph_run` call feeds both, deliberately: two
-    # instruments subtracted on the same R250 grounds must not be able to disagree about
-    # which arm the run is on.
+    # ADJ-D32 (R249 + R250), item 10(b) and R256: the representation-gated blocks below
+    # are the only parts of this payload whose keys can be absent. `config` is the
+    # coordinator's `full_config` — the same declaration the engine's encoding was
+    # resolved from — so the graph/dense question is answered from the run's own identity,
+    # never from a reading that has no producer behind it. ONE `is_graph_run` call feeds
+    # every such block, deliberately: instruments subtracted on the same R250 grounds must
+    # not be able to disagree about which arm the run is on.
     _graph_run = is_graph_run(config)
     iteration_complete_event.update(
         regime_gated_cluster_stats(rstats, _puct_regime, graph_run=_graph_run)
     )
     iteration_complete_event.update(
         k_cluster_histogram_block(rstats, graph_run=_graph_run)
+    )
+    iteration_complete_event.update(
+        uncovered_forced_win_block(rstats, graph_run=_graph_run)
     )
     emit_via(sink, iteration_complete_event)
 

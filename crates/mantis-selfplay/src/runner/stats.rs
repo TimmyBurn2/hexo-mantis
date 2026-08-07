@@ -39,6 +39,9 @@ pub(crate) struct WorkerStats {
     // WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6).
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
     pub(crate) gridls_zero_policy_rows: Arc<AtomicU64>,
+    /// R256/ADJ-D37: proven forced wins swallowed by the LS coverage gate while
+    /// the injecting lever was armed (both the O1 arm and the solver hook).
+    pub(crate) uncovered_forced_win: Arc<AtomicU64>,
     /// Item 10(b) / R250: the in-run K histogram, one bucket per cluster-view
     /// count at the DENSE record path. Written only by `record::record_position`,
     /// which the graph arm never calls — so on a graph run every bucket stays 0

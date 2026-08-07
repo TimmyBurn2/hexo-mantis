@@ -144,6 +144,7 @@ impl SelfPlayRunner {
             solver_injected_seeded: self.solver_injected_seeded.clone(),
             seeded_games_started: self.seeded_games_started.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
+            uncovered_forced_win: self.uncovered_forced_win.clone(),
             gridls_zero_policy_rows: self.gridls_zero_policy_rows.clone(),
             k_cluster_histogram: self.k_cluster_histogram.clone(),
         };

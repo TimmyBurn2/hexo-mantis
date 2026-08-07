@@ -52,7 +52,7 @@ pub type WorkerResultRow = (Vec<f32>, Vec<f32>, Vec<f32>, f32, usize, Vec<u8>, b
 /// model_version_distinct, seeded, solver_fires)`.
 pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32, u8, u32);
 
-/// Flat snapshot of the runner's 24 LAW-18 in-run counter atomics, each read once
+/// Flat snapshot of the runner's LAW-18 in-run counter atomics, each read once
 /// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
 /// counters — see the module doc). RAW cumulative counts ONLY: the fixed-point
 /// ×1_000_000 accumulators (`*_accum`) are handed back UNDIVIDED so the WP7 bridge
@@ -97,6 +97,11 @@ pub struct RunnerStatsSnapshot {
     pub export_offwindow_mass_moves: u64,
     /// §3.5 zero-row fills, counted per recorded grid-ls cluster row.
     pub gridls_zero_policy_rows: u64,
+    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
+    /// the injecting lever (O1 forced-win or solver visit weight) was armed.
+    /// LS-path mechanism (`legal_set` targets); the emitter publishes it on the
+    /// GRAPH arm only and OMITS it elsewhere (R250 absence, R256 mapping).
+    pub uncovered_forced_win: u64,
     /// Item 10(b) / R250 — the in-run K histogram, DENSE record path only.
     /// Bucket `i` in `0..8` counts recorded positions with exactly `i + 1`
     /// cluster views; the last bucket guards every K outside `1..=8`
@@ -185,6 +190,7 @@ pub struct SelfPlayRunner {
 
     // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
     export_offwindow_mass_moves: Arc<AtomicU64>,
+    uncovered_forced_win: Arc<AtomicU64>,
     gridls_zero_policy_rows: Arc<AtomicU64>,
     /// Item 10(b) — the K histogram's live atomics (see the snapshot field).
     k_cluster_histogram: Arc<[AtomicU64; record::K_CLUSTER_HISTOGRAM_BUCKETS]>,
@@ -340,6 +346,7 @@ impl SelfPlayRunner {
             solver_injected_seeded: Arc::new(AtomicU64::new(0)),
             seeded_games_started: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
+            uncovered_forced_win: Arc::new(AtomicU64::new(0)),
             gridls_zero_policy_rows: Arc::new(AtomicU64::new(0)),
             k_cluster_histogram: Arc::new(std::array::from_fn(|_| AtomicU64::new(0))),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
@@ -490,6 +497,7 @@ impl SelfPlayRunner {
             solver_injected_seeded: self.solver_injected_seeded.load(Ordering::Relaxed),
             seeded_games_started: self.seeded_games_started.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
+            uncovered_forced_win: self.uncovered_forced_win.load(Ordering::Relaxed),
             gridls_zero_policy_rows: self.gridls_zero_policy_rows.load(Ordering::Relaxed),
             k_cluster_histogram: std::array::from_fn(|i| {
                 self.k_cluster_histogram[i].load(Ordering::Relaxed)
@@ -709,8 +717,10 @@ mod seam_roundtrip {
             "a fresh runner reports all-zero counters"
         );
 
-        // Distinct values 1..=24, one per atomic, in struct-field order — a getter
-        // wired to the wrong atomic would read the wrong number and fail.
+        // DISTINCT values, one per atomic, in struct-field order — a getter wired
+        // to the wrong atomic would read the wrong number and fail. The values are
+        // never reused across fields (the histogram occupies its own contiguous
+        // run), so an adjacent-field miswire cannot pass by coincidence.
         r.games_completed.store(1, Ordering::Relaxed);
         r.positions_generated.store(2, Ordering::Relaxed);
         r.x_wins.store(3, Ordering::Relaxed);
@@ -733,6 +743,7 @@ mod seam_roundtrip {
         r.solver_injected_seeded.store(20, Ordering::Relaxed);
         r.seeded_games_started.store(21, Ordering::Relaxed);
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
+        r.uncovered_forced_win.store(35, Ordering::Relaxed);
         r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
@@ -765,6 +776,7 @@ mod seam_roundtrip {
             solver_injected_seeded: 20,
             seeded_games_started: 21,
             export_offwindow_mass_moves: 22,
+            uncovered_forced_win: 35,
             gridls_zero_policy_rows: 23,
             k_cluster_histogram: std::array::from_fn(|i| 26 + i as u64),
             target_integrity_defects: 24,

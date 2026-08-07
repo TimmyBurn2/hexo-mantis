@@ -815,6 +815,39 @@ pub(crate) fn apply_forced_win_one_hot_ls(
     true
 }
 
+/// R256/ADJ-D37 — the ONE coverage-gated LS forced-win injection, WITH its LAW-18
+/// fire-rate instrument. Both mechanism sites (the O1 forced-win arm and the
+/// D-WS3 solver hook's LS arm, `runner/search_drive.rs`) route here, so the
+/// coverage refusal and its counter cannot drift apart — the instrument attaches
+/// to the mechanism's measured live path (R256: the LS target path, live on
+/// run5's graph arm), never to an encoding family by description.
+///
+/// `uncovered` ticks exactly when the K-cluster WINDOW criterion swallows a
+/// PROVEN win that an armed weight would have injected (`!covered && weight > 0`).
+/// A disarmed lever (`weight <= 0`) never ticks: nothing would have been
+/// injected, so nothing was dropped. LAW-03 unit note: the counter's unit is
+/// per-lever DROP EVENTS — a move with both the O1 lever and the solver armed
+/// reaches this helper twice and can tick twice. Geometry (window center,
+/// half-width, cluster centers) is derived from the board at the call, exactly
+/// as the two call sites derived it before the extraction.
+pub(crate) fn apply_forced_win_one_hot_ls_counted(
+    board: &Board,
+    ls: &mut LegalSetPolicy,
+    win: (i32, i32),
+    weight: f32,
+    trunk_sz: i32,
+    uncovered: &std::sync::atomic::AtomicU64,
+) -> bool {
+    let (bcq, bcr) = board.window_center();
+    let half = (trunk_sz - 1) / 2;
+    let (_, centers) = board.get_cluster_views();
+    let covered = mantis_search::is_covered(win.0, win.1, &centers, trunk_sz, half);
+    if !covered && weight > 0.0 {
+        uncovered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    apply_forced_win_one_hot_ls(ls, win, weight, covered, bcq, bcr, trunk_sz, half)
+}
+
 #[cfg(test)]
 mod o1_tests {
     use super::*;
@@ -935,6 +968,99 @@ mod ls_tests {
         // Project into cluster-2's local-362: (28,0) must land non-zero at local 104.
         let local = aggregate_policy_to_local_ls(NA, true, TRUNK, &board, &(32, 0), &ls, &legal);
         assert!((local[local_28] - 1.0).abs() < 1e-6, "off-window cell projected into covering cluster's local-362, got {}", local[local_28]);
+    }
+
+    // ── R256/ADJ-D37: the uncovered_forced_win fire-rate counter (LAW-18) ────────
+    // Mechanism column (R166): each pin names the mutation that reds it.
+
+    #[test]
+    fn uncovered_win_with_armed_weight_ticks_the_counter_and_noops() {
+        // Killer: deleting the `fetch_add` in `apply_forced_win_one_hot_ls_counted`
+        // (the instrument goes dark while the clip keeps clipping).
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let board = spread_board();
+        let cp = vec![vec![0.1f32; NA], vec![0.1f32; NA]];
+        let centers = vec![(2, 0), (32, 0)];
+        let base = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
+        // Premise: (60,0) is outside every cluster window (the §9.9.2 uncovered cell).
+        assert!(!is_covered(60, 0, &centers, TRUNK, HALF));
+
+        let counter = AtomicU64::new(0);
+        let mut ls = base.clone();
+        let fired = apply_forced_win_one_hot_ls_counted(
+            &board, &mut ls, (60, 0), 1.0, TRUNK, &counter,
+        );
+        assert!(!fired, "uncovered win must still NO-OP (the clip is unchanged)");
+        assert_eq!(base.dense, ls.dense, "uncovered O1 must not touch the target");
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            1,
+            "the coverage gate swallowed a proven win an armed weight would have \
+             injected — the LAW-18 counter must witness it"
+        );
+    }
+
+    #[test]
+    fn covered_win_does_not_tick_the_counter() {
+        // Killer: inverting the `!covered` condition (counter fires exactly backwards).
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let board = spread_board();
+        let cp = vec![vec![0.1f32; NA], vec![0.1f32; NA]];
+        let centers = vec![(2, 0), (32, 0)];
+        let mut ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
+        assert!(is_covered(28, 0, &centers, TRUNK, HALF), "premise: (28,0) is covered");
+
+        let counter = AtomicU64::new(0);
+        let fired = apply_forced_win_one_hot_ls_counted(
+            &board, &mut ls, (28, 0), 1.0, TRUNK, &counter,
+        );
+        assert!(fired, "covered win must fire exactly as before");
+        assert_eq!(counter.load(Ordering::Relaxed), 0, "an injected win is not a drop");
+    }
+
+    #[test]
+    fn disarmed_weight_does_not_tick_the_counter() {
+        // Killer: dropping the `weight > 0` conjunct — a disarmed lever (weight 0)
+        // injects nothing whether covered or not, so nothing was DROPPED; counting
+        // it would fabricate drops on runs that never armed the lever.
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let board = spread_board();
+        let cp = vec![vec![0.1f32; NA], vec![0.1f32; NA]];
+        let centers = vec![(2, 0), (32, 0)];
+        let mut ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
+
+        let counter = AtomicU64::new(0);
+        let fired = apply_forced_win_one_hot_ls_counted(
+            &board, &mut ls, (60, 0), 0.0, TRUNK, &counter,
+        );
+        assert!(!fired);
+        assert_eq!(counter.load(Ordering::Relaxed), 0, "weight 0 = disarmed, not dropped");
+    }
+
+    #[test]
+    fn counted_helper_is_behavior_identical_to_the_primitive() {
+        // Killer: the helper drifting from `apply_forced_win_one_hot_ls` (e.g. its own
+        // coverage or geometry arithmetic) — both arms must produce byte-identical
+        // targets for covered AND uncovered wins.
+        use std::sync::atomic::AtomicU64;
+        let board = spread_board();
+        let cp = vec![vec![0.2f32; NA], vec![0.2f32; NA]];
+        let centers = vec![(2, 0), (32, 0)];
+        let base = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
+        for win in [(28, 0), (60, 0), (2, 1)] {
+            let covered = is_covered(win.0, win.1, &centers, TRUNK, HALF);
+            let mut via_primitive = base.clone();
+            let f1 = apply_forced_win_one_hot_ls(
+                &mut via_primitive, win, 0.9, covered, 17, 0, TRUNK, HALF,
+            );
+            let mut via_helper = base.clone();
+            let f2 = apply_forced_win_one_hot_ls_counted(
+                &board, &mut via_helper, win, 0.9, TRUNK, &AtomicU64::new(0),
+            );
+            assert_eq!(f1, f2, "fired verdict must agree at {win:?}");
+            assert_eq!(via_primitive.dense, via_helper.dense, "dense target at {win:?}");
+            assert_eq!(via_primitive.overflow, via_helper.overflow, "overflow at {win:?}");
+        }
     }
 
     #[test]

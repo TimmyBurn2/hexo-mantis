@@ -159,6 +159,13 @@ class RunnerStats:
     # which is a distribution. On a graph run the buckets are genuinely all zero and the
     # EMITTER drops the field — absence is decided there, on `is_graph_run`, not here.
     k_cluster_histogram: tuple[int, ...] | None = None
+    # R256/ADJ-D37: proven forced wins swallowed by the LS coverage gate while the
+    # injecting lever was armed. `None` = NO PRODUCER (an engine build predating the
+    # getter), the k_cluster_histogram wheel-compat posture — NOT the Phase-T zeros:
+    # an old wheel has measured nothing, and a fabricated produced-0 here would be
+    # the exact reading R256 exists to kill. On dense runs the EMITTER omits the
+    # field; absence is decided there, on `is_graph_run`, not here.
+    uncovered_forced_win: int | None = None
     # Worker threads that died by panic. Reads 0 in a healthy run; non-zero means
     # self-play HALTED on a worker death rather than merely slowing down, which is the
     # distinction the old silent-swallow made impossible to draw.
@@ -242,6 +249,11 @@ def runner_stats(pool: Any) -> RunnerStats:
         gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         k_cluster_histogram=_k_histogram(getattr(r, "k_cluster_histogram", None)),
+        uncovered_forced_win=(
+            None
+            if getattr(r, "uncovered_forced_win", None) is None
+            else int(r.uncovered_forced_win)
+        ),
         worker_panics=int(getattr(r, "worker_panics", 0)),
     )
 
