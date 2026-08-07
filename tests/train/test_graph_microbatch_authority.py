@@ -196,7 +196,17 @@ _RUN5_CENSUSED_NODES = 699_533
 _CENSUS_BATCH_SIZE = 256
 
 
-def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default() -> None:
+#: F-P2B (R259, review finding 1): BOTH production configs, so the arming/sizing witness
+#: covers the config actually being launched. The transfer is legitimate and guarded:
+#: `shakedown_20260807.yaml` mints run5's caps at run5's `batch_size: 256` on the graph arm,
+#: so the censused (E, N) describe its batch verbatim — and the `_CENSUS_BATCH_SIZE`
+#: staleness guard inside the test re-derives that premise per config rather than assuming it.
+_PRODUCTION_CAPPED = ("run5.yaml", "shakedown_20260807.yaml")
+
+
+@pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
+def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default(
+        name: str) -> None:
     """**N-1 — the arming of the fix itself.** Nothing else in the repository pins this.
 
     THE DEFECT THIS IS THE ONLY WITNESS TO: a future re-mint that loses run5's
@@ -229,31 +239,31 @@ def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default
 
     All three are kept: they assert different properties, and the failure messages say which
     one broke."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / name)
     minted = resolve_microbatch_caps(cfg.model_dump())
-    template = _template_caps_of("run5.yaml")
+    template = _template_caps_of(name)
     assert (minted.max_edges, minted.max_nodes) != (template["max_edges"],
                                                     template["max_nodes"]), (
-        "configs/run5.yaml carries the TEMPLATE's non-binding caps — run5's sized delta has "
+        f"configs/{name} carries the TEMPLATE's non-binding caps — its sized delta has "
         "been lost. The cap resolves and reports as present while bounding nothing: the fix "
         "is disarmed (R4/LAW-07)")
     # The staleness guard on the censused constants below. They were measured AT
-    # `batch_size: 256`; if run5 re-mints a different batch size they no longer describe
-    # run5's batch and this row must be re-derived rather than quietly keep passing.
+    # `batch_size: 256`; if this config re-mints a different batch size they no longer
+    # describe its batch and this row must be re-derived rather than quietly keep passing.
     assert int(cfg.train.batch_size) == _CENSUS_BATCH_SIZE, (
-        f"run5 mints batch_size={int(cfg.train.batch_size)}, but the censused (E, N) this row "
-        f"binds against were measured at batch_size={_CENSUS_BATCH_SIZE}. Re-census before "
-        "trusting the arming check — the constants no longer describe run5's batch")
+        f"{name} mints batch_size={int(cfg.train.batch_size)}, but the censused (E, N) this "
+        f"row binds against were measured at batch_size={_CENSUS_BATCH_SIZE}. Re-census "
+        "before trusting the arming check — the constants no longer describe this batch")
     # THE ARMING PROPERTY. Tighter-than-the-template is NOT this property, it is its converse:
     # `run5 >= template => cannot bind` does not give `run5 < template => can bind`.
     assert minted.max_edges < _RUN5_CENSUSED_EDGES, (
-        f"run5 max_edges {minted.max_edges} is NOT below the censused production edge count "
-        f"{_RUN5_CENSUSED_EDGES}, so run5's own batch never reaches the cap and the step is "
-        "never split. The cap resolves, types, round-trips its `# delta:` header and reports "
-        "present in the LAW-18 event — and bounds nothing. That is the phantom-arming shape "
-        "(R4/LAW-07) this row exists to kill")
+        f"{name} max_edges {minted.max_edges} is NOT below the censused production edge count "
+        f"{_RUN5_CENSUSED_EDGES}, so this config's own batch never reaches the cap and the "
+        "step is never split. The cap resolves, types, round-trips its `# delta:` header and "
+        "reports present in the LAW-18 event — and bounds nothing. That is the phantom-arming "
+        "shape (R4/LAW-07) this row exists to kill")
     assert minted.max_nodes < _RUN5_CENSUSED_NODES, (
-        f"run5 max_nodes {minted.max_nodes} is NOT below the censused production node count "
+        f"{name} max_nodes {minted.max_nodes} is NOT below the censused production node count "
         f"{_RUN5_CENSUSED_NODES} — same defect on the node member")
     # THE SIZING PROPERTY. Binding is necessary and not sufficient: a cap can sit one edge
     # below the censused batch, split it into two, and still ask for 4x the card per
@@ -263,7 +273,7 @@ def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default
                       + _FIT_BYTES_PER_EDGE * minted.max_edges
                       + _FIT_BYTES_PER_NODE * minted.max_nodes)
     assert predicted_peak <= _SIZING_BUDGET_BYTES, (
-        f"run5's caps ({minted.max_edges}, {minted.max_nodes}) predict a per-micro-batch peak "
+        f"{name}'s caps ({minted.max_edges}, {minted.max_nodes}) predict a per-micro-batch peak "
         f"of {predicted_peak / 1024 ** 3:.3f} GiB against the measured budget of "
         f"{_SIZING_BUDGET_BYTES / 1024 ** 3:.3f} GiB — "
         f"{predicted_peak / _SIZING_BUDGET_BYTES:.2f}x over. The cap BINDS but is not SIZED: "
@@ -272,24 +282,26 @@ def test_n1_run5_is_ARMED_with_a_sized_cap_not_the_templates_non_binding_default
         "these constants with it")
 
 
-def test_n1_run5s_minted_header_records_the_microbatch_caps_delta() -> None:
+@pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
+def test_n1_run5s_minted_header_records_the_microbatch_caps_delta(name: str) -> None:
     """N-1's provenance half — the sized pair arrived by MINT, not by a hand-edit (R1).
 
     The value half above would still pass if someone hand-edited the body and left the header
     silent; that config would then fail to replay from its own provenance record. This asserts
     the header carries the delta line, and that the line's NEW slot round-trips to the body's
-    live value — again without pinning what that value is."""
-    text = (_CONFIGS / "run5.yaml").read_text(encoding="utf-8")
+    live value — again without pinning what that value is. Parametrized over both production
+    configs (F-P2B, review finding 1)."""
+    text = (_CONFIGS / name).read_text(encoding="utf-8")
     lines = [line for line in text.splitlines()
              if line.startswith("# delta: train.microbatch_caps:")]
     assert len(lines) == 1, (
-        f"run5's minted header records {len(lines)} `train.microbatch_caps` deltas, want "
+        f"{name}'s minted header records {len(lines)} `train.microbatch_caps` deltas, want "
         "exactly 1 — the sized cap must be a recorded mint act, replayable from the header "
         "(R1: configs are minted, never hand-varied)")
     _, _, rest = lines[0].partition("# delta: train.microbatch_caps:")
     _, sep, new_slot = rest.strip().partition(" -> ")
     assert sep, f"the delta line is not splittable into old -> new: {lines[0]}"
-    minted = resolve_microbatch_caps(load_config(_CONFIGS / "run5.yaml").model_dump())
+    minted = resolve_microbatch_caps(load_config(_CONFIGS / name).model_dump())
     recorded = yaml.safe_load(new_slot)
     assert recorded == {"max_edges": minted.max_edges, "max_nodes": minted.max_nodes}, (
         f"the header's recorded delta {recorded} disagrees with the config body "
@@ -577,7 +589,14 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
 
 
 def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:
-    """OF2-14 premise — the five above plus `run5.yaml` are ALL the configs. A seventh config
-    appearing mid-WP would otherwise slip out of this sweep silently."""
+    """OF2-14 premise — the five above plus the production configs are ALL the configs. A
+    new FLAT `configs/*.yaml` appearing mid-WP would otherwise slip out of this sweep
+    silently (the glob is flat; subdirectory/`.yml` shapes are `discover_configs`' and
+    gate 12's subject, per ADJ-13 F-1/R75).
+
+    F-P2B (R259): `shakedown_20260807.yaml` joins run5 on the EXCLUDED side, on run5's own
+    grounds — it mints run5's CARD-RUN5-GPU-OOM caps (4500000/170000) at run5's batch_size
+    256, and those caps exist BECAUSE they bind on the production GPU. Putting it through
+    the "caps do not bind" sweep would assert the opposite of the caps' purpose."""
     live = sorted(p.name for p in _CONFIGS.glob("*.yaml"))
-    assert live == sorted((*_NON_RUN5, "run5.yaml"))
+    assert live == sorted((*_NON_RUN5, "run5.yaml", "shakedown_20260807.yaml"))

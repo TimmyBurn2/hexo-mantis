@@ -80,6 +80,28 @@ _BASELINE = _REPO / "tests" / "fixtures" / "wpmain" / "config_baseline_b482243"
 _CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
             "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
+#: Configs minted AFTER the b482243 baseline was cut — `(name, template)` rows, named here,
+#: closed, one per row (F-P2B, R259 shakedown). This is the "its own baseline row" the
+#: membership premise demands, in the only shape the frozen oracle permits:
+#: `config_baseline_b482243/` and its manifest sha256s are FROZEN (§1 of this docstring's
+#: re-cut rejection), the directory name IS a commit pin, and a config that did not exist at
+#: b482243 has no bytes to freeze there — a "baseline" equal to the live file would make the
+#: O-E2 added-leaves equality false and the diff vacuous, destroying the instrument for a
+#: subject it never had. So a post-baseline mint is DECLARED here instead: the membership
+#: assert enumerates it by name (an eighth FLAT `configs/*.yaml` still reds; subdirectory/
+#: `.yml` shapes are gate 12's subject per ADJ-13 F-1/R75), the baseline-free value sweeps
+#: below run over it, and its provenance instruments are its own minted header (pinned live
+#: by `test_mint_header_roundtrip.py`) plus gate 12's by-name production audit.
+#:
+#: WHY THE TEMPLATE IS PART OF THE ROW (review F-P2B finding 5c): a post-baseline mint
+#: escapes the six configs' structural/textual diffs, so its drift detection rides the
+#: BASELINED configs that share its template — dev-template drift still reds through them.
+#: A row minted from a template NO baselined config uses would have zero drift witness, so
+#: the membership test asserts each declared row's own `# template:` header line matches the
+#: declared template AND that some baselined config carries the same line (derived from the
+#: baseline files at point of use, never transcribed).
+_POST_BASELINE_MINTS = (("shakedown_20260807.yaml", "dev"),)
+
 #: Exactly what this WP's re-mint may add — one key, one family of three leaves, one key.
 _ADDED_LEAVES = {
     "eval_enabled",
@@ -231,10 +253,32 @@ def test_the_committed_baseline_covers_every_minted_config() -> None:
     baseline edited to make a diff go away is caught by `test_fixtures_manifest.py`, not by
     nobody."""
     assert sorted(path.name for path in _BASELINE.glob("*.yaml")) == sorted(_CONFIGS)
-    assert sorted(path.name for path in _LIVE.glob("*.yaml")) == sorted(_CONFIGS), (
-        "the live set must still be the six this WP re-mints — a seventh config appearing "
-        "mid-WP needs its own baseline row before this sweep means anything"
+    assert sorted(path.name for path in _LIVE.glob("*.yaml")) == sorted(
+        (*_CONFIGS, *[name for name, _template in _POST_BASELINE_MINTS])), (
+        "the live set must be the six this WP re-mints plus exactly the DECLARED "
+        "post-baseline mints (`_POST_BASELINE_MINTS`) — a config appearing mid-WP needs its "
+        "own row there, with grounds, before this sweep means anything"
     )
+    # The template half of each post-baseline row (finding 5c): the row's declared template
+    # must be the file's own `# template:` header line, and some BASELINED config must carry
+    # the same line — that is what gives the un-baselined mint a drift witness at all.
+    baselined_template_lines = {
+        next(line for line in (_BASELINE / name).read_text(encoding="utf-8").splitlines()
+             if line.startswith("# template:"))
+        for name in _CONFIGS
+    }
+    for name, template in _POST_BASELINE_MINTS:
+        line = next(line for line in (_LIVE / name).read_text(encoding="utf-8").splitlines()
+                    if line.startswith("# template:"))
+        assert line == f"# template: {template}", (
+            f"{name}: the declared template {template!r} must be the file's own header line; "
+            f"got {line!r} — a declaration the file contradicts is a false provenance row"
+        )
+        assert line in baselined_template_lines, (
+            f"{name}: template {template!r} is used by NO baselined config, so template "
+            "drift for this row has no witness anywhere — a post-baseline mint from a new "
+            "template needs its own instrument (or a baseline re-cut ruling), not a row here"
+        )
 
 
 @pytest.mark.parametrize("name", _CONFIGS)
@@ -405,14 +449,17 @@ def test_the_permitted_reheader_is_exactly_five_named_delta_lines() -> None:
     ), "the allowance is for header delta lines, never body lines"
 
 
-@pytest.mark.parametrize("name", _CONFIGS)
+@pytest.mark.parametrize("name", (*_CONFIGS, *[n for n, _t in _POST_BASELINE_MINTS]))
 def test_every_config_mints_the_disk_guard_family_at_the_ruled_values(name: str) -> None:
     """O-E2, the R122 family arm. The three values are the previously-DEAD code-side
     literals (`subsystems.py:163-168`), minted so the guard R121(b) mandates has operator-
-    visible thresholds instead of numbers nobody could see.
+    visible thresholds instead of numbers nobody could see. Post-baseline mints are swept
+    too (F-P2B) — this arm reads only the LIVE file, so it needs no baseline row, and the
+    armed-abort manifest's terminal-eval residual leans on the `eval_enabled` half holding
+    over every committed config.
 
     MUTATION THAT REDS IT: mint a different value on one config (a per-config guard posture
-    nobody decided), or mint the block on five of six."""
+    nobody decided), or mint the block on all but one."""
     leaves = _live_leaves(name)
     for path, value in _DISK_GUARD.items():
         assert leaves[path] == value, (
@@ -424,9 +471,10 @@ def test_every_config_mints_the_disk_guard_family_at_the_ruled_values(name: str)
     )
 
 
-@pytest.mark.parametrize("name", _CONFIGS)
+@pytest.mark.parametrize("name", (*_CONFIGS, *[n for n, _t in _POST_BASELINE_MINTS]))
 def test_every_config_declares_a_train_device_from_the_closed_vocabulary(name: str) -> None:
-    """O-E2, the R126 arm — the KEY is pinned on all six; the VALUE is pinned only where the
+    """O-E2, the R126 arm — the KEY is pinned on every committed config (post-baseline mints
+    included, F-P2B: the arm reads only the live file); the VALUE is pinned only where the
     design states it.
 
     `smoke_preflight_armed` = cpu is transcription, not a decision: its own minted header

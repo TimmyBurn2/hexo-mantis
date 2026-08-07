@@ -330,6 +330,25 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     # constants — asserting the distinction keeps run5's values run-scoped). Every OTHER
     # non-production config still disarms DELIBERATELY (R59), and `null` is what makes that
     # observable rather than forgotten.
+    # F-P2B (R259): the SECOND armed production config. `shakedown_20260807.yaml` arms the
+    # same four census values ADJ-08 armed — minted, not hand-copied: its `--set` line is the
+    # template's own arming example (`tools/config_templates/dev.yaml`), the delta is in its
+    # header, and MAIN ratified the mint for the R259 shakedown burn. The equality below is
+    # a PIN on the minted file, so an in-place edit of the shakedown's armed block reds here
+    # exactly as run5's does above; gate 12 audits the config by name (PRODUCTION_CONFIGS).
+    shakedown = postures.pop("shakedown_20260807.yaml", None)
+    assert shakedown is not None, (
+        "configs/shakedown_20260807.yaml is a declared PRODUCTION config and must ARM the "
+        "draw-rate row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
+    )
+    assert (shakedown.threshold, shakedown.min_step, shakedown.N_pool_min,
+            shakedown.consec) == (
+        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
+        RUN5_PREREG["consec"]), (
+        f"the shakedown mints the ADJ-08 armed census values verbatim (recorded header "
+        f"delta, R259/F-P2B); got {shakedown}. Changing one in place is R1's hand-varied "
+        "config; it is re-minted with a recorded delta or not at all"
+    )
     others = {name: block for name, block in postures.items() if name != "run5.yaml"}
     armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
     assert armed_smoke is not None, (

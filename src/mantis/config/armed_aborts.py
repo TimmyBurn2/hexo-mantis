@@ -697,7 +697,16 @@ MANIFEST: tuple[ArmedAbort, ...] = (
 #: exempting it is a red gate rather than a bookkeeping edit. (Recheck R-8: this citation
 #: named a test that does not exist — a LAW-07 producer citation that greps to nothing is
 #: LAW-07's own failure mode. Every citation in this pass was `grep`-verified.)
-PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run5.yaml",)
+#: F-P2B (R259 shakedown, MAIN-adopted fix-forward): `configs/shakedown_20260807.yaml` is a
+#: PRODUCTION config, not an exempt smoke — it ARMS both required rows (actor-lag bool true,
+#: draw-rate triple {0.25, 25000, 50, consec 3}) and soaks the eval/promotion machinery, so
+#: gate 12 must audit it BY NAME exactly as it audits run5. Declaring it EXEMPT would have
+#: spelled "armed production run" and "deliberately disarmed smoke" with the same observable,
+#: which is the confusion MF-7 exists to kill.
+PRODUCTION_CONFIGS: tuple[str, ...] = (
+    "configs/run5.yaml",
+    "configs/shakedown_20260807.yaml",
+)
 
 #: The OTHER half of the same authority (MF-7). R59's "deliberate disarming remains legal for
 #: smoke configs" used to be expressed by ABSENCE from `PRODUCTION_CONFIGS` — which made

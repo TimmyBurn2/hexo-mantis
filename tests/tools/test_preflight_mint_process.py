@@ -2347,9 +2347,16 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
         "one config reached by two spellings must be ONE entry — a set of paths that "
         f"normalise differently is a set of spellings, not of configs; got {paths}"
     )
-    assert paths == [target], f"…and both spellings must collapse onto the target; got {paths}"
+    # F-P2B: the production set is no longer run5 alone, so the expectation is DERIVED from
+    # the declaration at point of use — the subject stays "two spellings collapse onto one",
+    # and the other production members ride along un-symlinked.
+    others = sorted((root / rel).resolve() for rel in PRODUCTION_CONFIGS
+                    if rel != "configs/run5.yaml")
+    assert paths == sorted([target, *others]), (
+        f"…and both spellings must collapse onto the target; got {paths}"
+    )
     bare = TOOL._audit_paths(None)
-    assert bare == [target], (
+    assert bare == sorted([target, *others]), (
         "the production side alone must normalise the same way, or the union is still "
         f"comparing two schemes; got {bare}"
     )
@@ -2963,6 +2970,13 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
         f"tuple is not a red gate, it is silence. got {PRODUCTION_CONFIGS}"
     )
     assert "configs/run5.yaml" not in exempt
+    # F-P2B (R259): the SAME by-name pin for the second production config — N-1's escape is
+    # not specific to run5, and the shakedown config is the run actually being launched.
+    assert "configs/shakedown_20260807.yaml" in PRODUCTION_CONFIGS, (
+        "the armed shakedown config must be bound BY NAME for the same reason run5 is — "
+        f"exempting it is a red test, never a bookkeeping edit. got {PRODUCTION_CONFIGS}"
+    )
+    assert "configs/shakedown_20260807.yaml" not in exempt
 
     # …and the escape the pin exists to refuse, driven.
     root = _mini_tree(tmp_path)
@@ -3015,7 +3029,12 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
                               "    min_step: 1\n"
                               "    N_pool_min: 50\n"
                               "    consec: 3"))
-    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", ("configs/smoke_gnn.yaml",))
+    # F-P2B: the editor's swap touches run5 ONLY — every other production member (the
+    # shakedown config) stays declared exactly as shipped, so the partition stays exact for
+    # the same reason it did when run5 was the sole member.
+    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS",
+                        ("configs/smoke_gnn.yaml",
+                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run5.yaml"]))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
                         (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],
                          ("configs/run5.yaml", "moved with a written reason")))

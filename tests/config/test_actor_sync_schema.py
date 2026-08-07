@@ -27,7 +27,7 @@ from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, Monitor
 from mantis.monitor.config import MonitorConfig
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml",
+_CONFIGS = ("dev_example.yaml", "run5.yaml", "shakedown_20260807.yaml", "smoke_gnn.yaml",
             "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
 _NEW_KEYS = (

@@ -88,7 +88,8 @@ def test_the_relation_is_graph_scoped(smoke_run_config) -> None:
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
     """Gate-7 invariant, asserted here so a future re-mint cannot regress it
     silently: all shipped graph configs pass the derivation (their regimes are
-    50-sims/leaf-8 → capacity 57)."""
-    for name in ("run5.yaml", "smoke_gnn.yaml", "dev_example.yaml"):
+    50-sims/leaf-8 → capacity 57). `shakedown_20260807.yaml` joins at F-P2B (R259) —
+    same regime as run5, and it is the config the R255 relation actually gates next."""
+    for name in ("run5.yaml", "shakedown_20260807.yaml", "smoke_gnn.yaml", "dev_example.yaml"):
         config = smoke_run_config(name)
         assert config.identity.representation == "graph"

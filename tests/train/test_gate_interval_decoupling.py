@@ -396,9 +396,18 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     it is not a law that the two must agree forever, it is the record that they agree TODAY
     and therefore that this bundle changed no cadence. Deleting it instead of re-pointing it
     would erase the only in-repo evidence for that claim.
+
+    F-P2B (R259 shakedown): the seventh committed config, `shakedown_20260807.yaml`, mints
+    BOTH knobs to 100 — the equal-mint held only because MAIN ratified the ninth delta
+    `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
+    first mint carried gate_interval alone and this very assertion refused it. The count
+    below ratchets 6 -> 7 so an eighth FLAT `configs/*.yaml` cannot slip past the equality
+    sweep unseen — this file's glob is flat, so subdirectory/`.yml` shapes (legal per
+    ADJ-13 F-1/R75) are the ONE discovery authority's subject (`discover_configs`, consumed
+    by gates 7 and 12), not this sweep's.
     """
     configs = sorted((_REPO / "configs").glob("*.yaml"))
-    assert len(configs) == 6, f"expected the six committed configs, found {configs}"
+    assert len(configs) == 7, f"expected the seven committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
         assert cfg.monitor.gate_interval == cfg.train.log_interval, (
