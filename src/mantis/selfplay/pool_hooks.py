@@ -1,3 +1,11 @@
+# >300 justify (R8): one boundary, seen from both directions. The injected collaborators the
+# pool writes OUT to (EventSink / RecorderLike / HeartbeatFn), the CALLEE surface the train-side
+# sync engine calls IN to (ActorSyncTarget), and the typed read-only snapshots that cross that
+# same boundary carrying values are the pool's edge contract; splitting them would put a shape
+# and the reader that fills it in separate files, where a dropped or re-typed field stops being
+# a one-diff read. It crossed the cap when ADJ-D32 gave the two cluster means their
+# `float | None` zero-sample semantics — precisely the kind of edge-contract change that has to
+# be visible beside the Protocol the value flows through.
 """The pool's outward hook surface: injection Protocols + read-only snapshots.
 
 This is the "promotion-hooks" quarter of the pool split. Two kinds of thing live here and
@@ -121,8 +129,12 @@ class RunnerStats:
     mcts_quiescence_fires: int
     mcts_mean_depth: float
     mcts_mean_root_concentration: float
-    cluster_value_std_mean: float
-    cluster_policy_disagreement_mean: float
+    # ADJ-D32 / R249: `None` = no samples, NOT "measured zero". The bridge getters
+    # return `None` at `cluster_variance_sample_count == 0`, and this snapshot carries
+    # that through unchanged — the count beside them says why. Coercing to 0.0 here
+    # would restore the fabrication one layer up from where it was removed.
+    cluster_value_std_mean: float | None
+    cluster_policy_disagreement_mean: float | None
     cluster_variance_sample_count: int
     # In-run solver fire-rate counters (cumulative since pool start). The `getattr`
     # defaults below cover engine builds that pre-date an individual counter (all 0).
@@ -158,12 +170,21 @@ class InferenceStats:
     encoding_spec: Any
 
 
+def _optional_mean(value: Any) -> float | None:
+    """Carry a derived mean through as `float`, or `None` when the producer has no
+    samples (R249). `float(None)` raises and a `getattr(..., 0.0)` default would
+    manufacture the very zero ADJ-D32 removed, so the absence is preserved explicitly."""
+    return None if value is None else float(value)
+
+
 def runner_stats(pool: Any) -> RunnerStats:
     """Snapshot the runner's counters / scalars.
 
     Defaults via `getattr` cover engine builds that pre-date an individual counter —
     they reproduce the legacy per-field `getattr(runner, name, 0.0)` reaches this
-    dataclass replaced, so a counter added later cannot break an older wheel.
+    dataclass replaced, so a counter added later cannot break an older wheel. The two
+    cluster means default to `None`, not 0.0: their absence is a REAL state (zero
+    samples), so the wheel-compat default and the live zero-count reading agree.
     """
     r = pool._runner
     return RunnerStats(
@@ -178,9 +199,11 @@ def runner_stats(pool: Any) -> RunnerStats:
         mcts_mean_root_concentration=float(
             getattr(r, "mcts_mean_root_concentration", 0.0)
         ),
-        cluster_value_std_mean=float(getattr(r, "cluster_value_std_mean", 0.0)),
-        cluster_policy_disagreement_mean=float(
-            getattr(r, "cluster_policy_disagreement_mean", 0.0)
+        cluster_value_std_mean=_optional_mean(
+            getattr(r, "cluster_value_std_mean", None)
+        ),
+        cluster_policy_disagreement_mean=_optional_mean(
+            getattr(r, "cluster_policy_disagreement_mean", None)
         ),
         cluster_variance_sample_count=int(
             getattr(r, "cluster_variance_sample_count", 0)

@@ -12,8 +12,10 @@
 //!
 //! The runner's ~20 counter getters read a one-instant `RunnerStatsSnapshot`
 //! (RAW atomics from the SEAM) and the bridge DERIVES the 4 means per DESIGN §c.6
-//! (fixed-point ÷(count × 1e6) with a `count == 0 → 0.0` guard; the root-
-//! concentration mean is f32 arithmetic, the other three f64). F-42:
+//! (fixed-point ÷(count × 1e6); the root-concentration mean is f32 arithmetic, the
+//! other three f64). ADJ-D32 / R249: the f64 derivation returns `Option<f32>` and
+//! yields `None` at zero count — a mean over zero samples is not a measurement, and
+//! the two cluster getters surface that `None` to Python verbatim. F-42:
 //! `module = "mantis._engine"`.
 
 use std::sync::Arc;
@@ -58,15 +60,41 @@ type GraphRecordRow = (
     u16,
 );
 
-/// Derived fixed-point mean in f64 arithmetic (frozen `mcts_mean_depth` /
-/// `cluster_*_mean`): `accum / (count × 1e6)`, `count == 0 → 0.0`. The `*_accum`
+/// Derived fixed-point mean in f64 arithmetic (`mcts_mean_depth` /
+/// `cluster_*_mean`): `accum / (count × 1e6)`, `count == 0 → None`. The `*_accum`
 /// atomics are ×1_000_000 integers, so the ×1e6 divisor is load-bearing.
-fn derived_mean_f64(accum: u64, count: u64) -> f32 {
+///
+/// ADJ-D32 / R249: the zero-count arm used to return `0.0`. On the graph arm
+/// `cluster_variance_samples` is permanently 0 — `search_drive.rs` returns into
+/// `infer_and_expand_graph` before any variance code runs, and the atomics are not
+/// even passed to it — so that guard published a hard `0.0` forever and a reader
+/// could not tell a settled cluster ensemble from an instrument that never fired.
+/// `None` is the only honest reading of a mean over zero samples; the caller decides
+/// whether its field is publishable, and the emitter drops it.
+fn derived_mean_f64(accum: u64, count: u64) -> Option<f32> {
     if count == 0 {
-        0.0
+        None
     } else {
-        (accum as f64 / (count as f64 * 1_000_000.0)) as f32
+        Some((accum as f64 / (count as f64 * 1_000_000.0)) as f32)
     }
+}
+
+/// The two cluster-variance means from ONE snapshot, in field order:
+/// `(value spread, top-1 policy disagreement)`.
+///
+/// Extracted from the two getters solely so the snapshot→getter mapping can be pinned
+/// at all. The getters read `self.snapshot()`, whose atomics are `pub(crate)` to
+/// `mantis-selfplay` with no bridge- or Python-reachable setter, so a transposition of
+/// the two accumulators is unobservable from BOTH sides of the FFI — and it is the worst
+/// class of telemetry defect: permanent, silent, and invisible in aggregate, because the
+/// two series simply trade places for the whole run. `mantis-selfplay`'s
+/// `stats_snapshot_reads_back_each_private_atomic` applies exactly this discipline to the
+/// atomic→snapshot half; this is the missing other half.
+fn cluster_means(s: &RunnerStatsSnapshot) -> (Option<f32>, Option<f32>) {
+    (
+        derived_mean_f64(s.cluster_value_std_accum, s.cluster_variance_samples),
+        derived_mean_f64(s.cluster_policy_disagreement_accum, s.cluster_variance_samples),
+    )
 }
 
 /// Derived fixed-point mean in f32 arithmetic (frozen
@@ -498,10 +526,16 @@ impl PySelfPlayRunner {
     }
 
     // ── MCTS-health derived means (bridge-derived per DESIGN §c.6 / O19) ────────
+    /// SCOPE NOTE (ADJ-D32 / R249): this getter keeps its `f32` shape and its
+    /// zero-count `0.0`. `mcts_stat_count` increments once per search in
+    /// `play_one_move`, path-independently, so its zero is TRANSIENT (a run before its
+    /// first move) rather than the graph arm's permanent one — a different severity
+    /// class, and the ruling's mandate is the cluster pair. Changing it is a separate
+    /// decision, reported not taken.
     #[getter]
     pub fn mcts_mean_depth(&self) -> f32 {
         let s = self.snapshot();
-        derived_mean_f64(s.mcts_depth_accum, s.mcts_stat_count)
+        derived_mean_f64(s.mcts_depth_accum, s.mcts_stat_count).unwrap_or(0.0)
     }
     #[getter]
     pub fn mcts_mean_root_concentration(&self) -> f32 {
@@ -512,16 +546,23 @@ impl PySelfPlayRunner {
     pub fn mcts_quiescence_fires(&self) -> u64 {
         self.snapshot().mcts_quiescence_fires
     }
+    /// Mean per-cluster value spread, or `None` when nothing was measured (R249).
+    ///
+    /// `None` reaches Python as `None` and the event builder DROPS the field. The
+    /// zero-count case is not hypothetical: the whole graph arm sits in it permanently,
+    /// and the dense arm sits in it until the first leaf with `k >= 2`.
     #[getter]
-    pub fn cluster_value_std_mean(&self) -> f32 {
-        let s = self.snapshot();
-        derived_mean_f64(s.cluster_value_std_accum, s.cluster_variance_samples)
+    pub fn cluster_value_std_mean(&self) -> Option<f32> {
+        cluster_means(&self.snapshot()).0
     }
+    /// Mean per-cluster top-1 policy disagreement, or `None` when nothing was measured
+    /// (R249 — same producer and same zero-count semantics as the value spread above).
     #[getter]
-    pub fn cluster_policy_disagreement_mean(&self) -> f32 {
-        let s = self.snapshot();
-        derived_mean_f64(s.cluster_policy_disagreement_accum, s.cluster_variance_samples)
+    pub fn cluster_policy_disagreement_mean(&self) -> Option<f32> {
+        cluster_means(&self.snapshot()).1
     }
+    /// The sample count the two means are derived from — a RAW atomic, truthful at 0,
+    /// and the field that lets a reader see WHY the means are missing.
     #[getter]
     pub fn cluster_variance_sample_count(&self) -> u64 {
         self.snapshot().cluster_variance_samples
@@ -705,20 +746,87 @@ mod tests {
         assert!(PySelfPlayRunner::new(&cfg).is_err(), "absent encoding_name is an error (LAW-11)");
     }
 
-    /// O19 — the derived-mean formulae + the zero-guard, on seeded accum/count.
+    /// O19 — the derived-mean formulae on seeded accum/count.
     #[test]
     fn derived_means_match_fixed_point_formula() {
-        // count == 0 → 0.0 (zero-guard) for BOTH the f64 and f32 forms.
-        assert_eq!(derived_mean_f64(12_345, 0), 0.0);
-        assert_eq!(derived_mean_f32(12_345, 0), 0.0);
         // accum = mean × count × 1e6. depth mean 3.5 over 4 samples:
         // accum = 3.5 × 4 × 1e6 = 14_000_000.
-        assert!((derived_mean_f64(14_000_000, 4) - 3.5).abs() < 1e-6);
+        assert!((derived_mean_f64(14_000_000, 4).unwrap() - 3.5).abs() < 1e-6);
         // root-concentration mean 0.75 over 2 samples (f32 path):
         // accum = 0.75 × 2 × 1e6 = 1_500_000.
         assert!((derived_mean_f32(1_500_000, 2) - 0.75).abs() < 1e-6);
         // A single sample of 1.0 → accum 1_000_000, count 1 → 1.0.
-        assert!((derived_mean_f64(1_000_000, 1) - 1.0).abs() < 1e-6);
+        assert!((derived_mean_f64(1_000_000, 1).unwrap() - 1.0).abs() < 1e-6);
+        // The f32 root-concentration form KEEPS its zero-guard (see the getter's scope
+        // note): its count is `mcts_stat_count`, whose zero is transient.
+        assert_eq!(derived_mean_f32(12_345, 0), 0.0);
+    }
+
+    /// ADJ-D32 / R249 MUTATION pin — a derived f64 mean over ZERO samples is `None`,
+    /// never a number.
+    ///
+    /// This is the defect's root: with `cluster_variance_samples` pinned at 0 on the
+    /// graph arm, a `0.0` here became `cluster_value_std_mean: 0.0` in every
+    /// `iteration_complete` of the run — a fabricated measurement in the run's ONE
+    /// event channel, indistinguishable from a real settled ensemble.
+    ///
+    /// FALSIFYING MUTATION: restore the zero-count arm to `Some(0.0)` (or revert the
+    /// return type to `f32` with `0.0`, which reds this by compile error instead).
+    /// Either MUST turn this test RED.
+    #[test]
+    fn zero_count_derived_mean_is_none_never_zero() {
+        assert_eq!(
+            derived_mean_f64(0, 0),
+            None,
+            "R249: an empty accumulator over zero samples is NOT a measured 0.0"
+        );
+        assert_eq!(
+            derived_mean_f64(12_345, 0),
+            None,
+            "R249: zero count is None regardless of the accumulator's residue"
+        );
+        // The guard is on the COUNT alone — a genuine zero mean over real samples is a
+        // measurement and must still be published.
+        assert_eq!(derived_mean_f64(0, 4), Some(0.0));
+    }
+
+    /// ADJ-D32 closing pin — each cluster mean derives from its OWN accumulator.
+    ///
+    /// The two accumulators share a divisor and a type, so a transposition compiles,
+    /// reads plausible, and is invisible in aggregate — the two series trade places for
+    /// the whole run and no post-hoc analysis can separate them again. Every
+    /// Python-side pin drives both means `None` (zero samples), where a swap is
+    /// `None == None`; DISTINCT seeded values are the only instrument that can see it.
+    /// The producing crate pins the atomic→snapshot half the same way
+    /// (`mantis_selfplay::runner::tests::stats_snapshot_reads_back_each_private_atomic`);
+    /// this is the snapshot→getter half.
+    ///
+    /// FALSIFYING MUTATION: swap `cluster_value_std_accum` and
+    /// `cluster_policy_disagreement_accum` inside `cluster_means`. MUST turn this RED.
+    #[test]
+    fn cluster_means_read_their_own_accumulators() {
+        let s = RunnerStatsSnapshot {
+            // mean 0.5 over 4 samples = 0.5 × 4 × 1e6.
+            cluster_value_std_accum: 2_000_000,
+            // mean 1.5 over the SAME 4 samples = 1.5 × 4 × 1e6. Deliberately unequal and
+            // deliberately not a permutation of the other, so a swap cannot read as noise.
+            cluster_policy_disagreement_accum: 6_000_000,
+            cluster_variance_samples: 4,
+            ..RunnerStatsSnapshot::default()
+        };
+
+        let (value_std, disagreement) = cluster_means(&s);
+        assert_eq!(
+            value_std,
+            Some(0.5),
+            "cluster_value_std_mean must derive from cluster_value_std_accum"
+        );
+        assert_eq!(
+            disagreement,
+            Some(1.5),
+            "cluster_policy_disagreement_mean must derive from \
+             cluster_policy_disagreement_accum"
+        );
     }
 
     /// A fresh runner's graph-record drain is empty (numpy-free — no numpy is

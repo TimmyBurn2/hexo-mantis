@@ -81,27 +81,77 @@ class PoolTelemetryLike(Protocol):
 # warn-log behaviour for a duck-typed probe a caller may still inject.
 EARLY_GAME_ENTROPY_WARN_THRESHOLD: float = 4.5
 
+#: The two derived means R249 drops at zero samples (ADJ-D32). Named FIRST so the wider
+#: tuples below are built from this one — the field names have a single authority here.
+_CLUSTER_DERIVED_MEAN_KEYS = ("cluster_value_std_mean", "cluster_policy_disagreement_mean")
+# ADJ-D32 / R250: the three fields whose PRODUCER is the dense search arm's per-leaf
+# cluster-variance accumulation. On a graph representation the accumulators are never
+# reached at all — `search_drive.rs` returns into `infer_and_expand_graph` before any
+# variance code runs, and the `ClusterVarianceAtomics` are not even a parameter of that
+# function — so on that arm these keys have NO producer and are ABSENT, not None. The
+# sample COUNT joins the two means here but is NOT one of them: it is a raw counter,
+# truthful at 0, and it is what tells a reader the means are missing because nothing was
+# measured rather than because the field was renamed.
+_CLUSTER_PRODUCER_KEYS = (*_CLUSTER_DERIVED_MEAN_KEYS, "cluster_variance_sample_count")
 # CONFRES S2: PUCT-descent-specific cluster stats — always-keyed (value under PUCT, None under
-# Gumbel) so the iteration_complete schema is regime-STABLE.
-_REGIME_GATED_CLUSTER_STAT_KEYS = (
-    "mcts_root_concentration",
-    "cluster_value_std_mean",
-    "cluster_policy_disagreement_mean",
-    "cluster_variance_sample_count",
-)
+# Gumbel) so the iteration_complete schema is regime-STABLE. `mcts_root_concentration` leads
+# the tuple and is NOT a cluster field: it is accumulated once per search in `play_one_move`,
+# path-independently, so it survives the R250 graph drop.
+_REGIME_GATED_CLUSTER_STAT_KEYS = ("mcts_root_concentration", *_CLUSTER_PRODUCER_KEYS)
 
 
-def regime_gated_cluster_stats(rstats: Any, puct_regime: bool) -> dict[str, Any]:
-    """The PUCT-descent-specific cluster stats, always keyed: value under PUCT, `None` under
-    Gumbel. Schema-stable (S2) — the keys are never dropped."""
+def is_graph_run(config: Mapping[str, Any]) -> bool:
+    """Whether the run's DECLARED representation is `graph` (R250's absence condition).
+
+    Reads `identity.representation` off the config the builder already holds — the
+    operator's declaration, which `IdentityConfig` cross-checks against the encoding's
+    registry representation at load time, so it cannot disagree with the spec the engine
+    resolved. No new config key, no resolver call: a builder that raised
+    `MissingEncodingError` mid-emit would take the run down over a telemetry field.
+
+    A config that declares nothing reads as non-graph — the arm where these fields DO have
+    a producer, so an undeclared config gets the zero-count rules of R249 rather than
+    silent absence, and absence never hides a live instrument.
+    """
+    identity = config.get("identity")
+    representation = identity.get("representation") if isinstance(identity, Mapping) else None
+    return representation == "graph"
+
+
+def regime_gated_cluster_stats(
+    rstats: Any, puct_regime: bool, *, graph_run: bool
+) -> dict[str, Any]:
+    """The PUCT-descent-specific cluster stats: value under PUCT, `None` under Gumbel
+    (CONFRES S2, schema-stable), MINUS the fields that have nothing to report.
+
+    Two subtractions, both of them the ADJ-D32 fix:
+
+      R250 `graph_run` — the three `_CLUSTER_PRODUCER_KEYS` are omitted ENTIRELY. Their
+           producer does not exist on the graph arm, and a keyed `None` there would still
+           be read as "measured, empty" by anything that JSON-decodes the stream. This
+           subtraction is about the ARM, so it applies whatever the snapshot happens to
+           read — a graph run reporting cluster numbers is an anomaly to fix at the
+           source, not to launder into the event channel.
+      R249 zero samples — a derived mean arrives as `None` from the bridge getter when
+           `cluster_variance_sample_count` is 0, and a `None` mean is DROPPED rather than
+           published. Per field, so a live reading beside a missing one still publishes.
+           The count itself stays: it is the evidence for the drop.
+    """
+    if graph_run:
+        # `mcts_root_concentration` is live on the graph path and keeps the S2 regime gate.
+        return {"mcts_root_concentration":
+                rstats.mcts_mean_root_concentration if puct_regime else None}
     if not puct_regime:
         return {k: None for k in _REGIME_GATED_CLUSTER_STAT_KEYS}
-    return {
+    stats: dict[str, Any] = {
         "mcts_root_concentration": rstats.mcts_mean_root_concentration,
-        "cluster_value_std_mean": rstats.cluster_value_std_mean,
-        "cluster_policy_disagreement_mean": rstats.cluster_policy_disagreement_mean,
         "cluster_variance_sample_count": rstats.cluster_variance_sample_count,
     }
+    for key in _CLUSTER_DERIVED_MEAN_KEYS:
+        value = getattr(rstats, key)
+        if value is not None:
+            stats[key] = value
+    return stats
 
 
 def replay_pretrain_events(log_dir: str | Path, sink: EventSink) -> None:
@@ -351,7 +401,13 @@ def emit_iteration_complete_event(
         # boundary's readings (`StepCoordinator._target_integrity_report`).
         "target_integrity": dict(target_integrity),
     }
-    iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
+    # ADJ-D32 (R249 + R250): the cluster block is the ONLY part of this payload whose keys
+    # can be absent. `config` is the coordinator's `full_config` — the same declaration the
+    # engine's encoding was resolved from — so the graph/dense question is answered from
+    # the run's own identity, never from a reading that has no producer behind it.
+    iteration_complete_event.update(
+        regime_gated_cluster_stats(rstats, _puct_regime, graph_run=is_graph_run(config))
+    )
     emit_via(sink, iteration_complete_event)
 
 

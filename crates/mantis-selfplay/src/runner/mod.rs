@@ -56,8 +56,12 @@ pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32, 
 /// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
 /// counters — see the module doc). RAW cumulative counts ONLY: the fixed-point
 /// ×1_000_000 accumulators (`*_accum`) are handed back UNDIVIDED so the WP7 bridge
-/// derives the 4 means itself (`accum / (count × 1e6)`, `count == 0 → 0.0`; the
-/// SEAM does NOT compute means). Every field maps 1:1 to a [`SelfPlayRunner`]
+/// derives the 4 means itself (`accum / (count × 1e6)`; the SEAM does NOT compute
+/// means). ADJ-D32 / R249: the two cluster means are `None` at `count == 0` — a mean
+/// over zero samples is not a measurement — while the two MCTS means keep a `0.0`
+/// zero-guard, because their count advances on every arm and its zero is transient.
+/// The distinction lives at the bridge; this snapshot carries only raw counts.
+/// Every field maps 1:1 to a [`SelfPlayRunner`]
 /// counter of the same name. Cumulative since `start()`; monotone across calls.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RunnerStatsSnapshot {

@@ -297,6 +297,25 @@ is silently disabled.
   unproduced: `training_step.quiescence_fires_per_step` (the solver-delta half is
   DEFER/ARCH; the key is retained for schema stability and travels as `None` = NOT
   MEASURED). A consumer must treat `None` as "no producer", never as zero.
+- **The ONE exception, ADJ-D32 (R249 + R250): `iteration_complete`'s cluster block can be
+  ABSENT, not `None`.** Its three keys — `cluster_value_std_mean`,
+  `cluster_policy_disagreement_mean`, `cluster_variance_sample_count` — have three arms:
+  - **GRAPH representation** — all three OMITTED. The cluster-variance accumulators are
+    structurally unreachable on that arm (the search drive returns into the graph inference
+    path before any variance code runs, and the atomics are not passed to it), so there is
+    no producer to report `None` for. Absence rather than `None` because these keys had
+    already shipped as hard `0.0`s for a whole run: a key that has carried a number is read
+    as one, and `null` is what a JSON consumer coerces back to zero most readily.
+  - **PUCT + grid** — `cluster_variance_sample_count` ALWAYS present (a raw counter,
+    truthful at 0, and the evidence for the drop); each derived mean present only when the
+    producer supplied one, DROPPED per-field when the bridge returns `None` at zero samples.
+  - **Gumbel + grid** — the CONFRES S2 convention is RETAINED: all four regime-gated keys
+    (the three above plus `mcts_root_concentration`) stay present carrying `None`, so the
+    payload shape is regime-stable. That `None` is a REGIME-`None` ("no such instrument
+    under this descent"), not R249's zero-count `None`. Whether R249's drop should extend to
+    it is UNDER ADJUDICATION; until ruled, S2 stands.
+  `mcts_root_concentration` is NOT a cluster field — it is accumulated once per search,
+  path-independently — and stays on both representations, subject only to the S2 regime gate.
 - Known counter overlap (debt **R-QUARANTINE-COUNTER**): `checkpoints.persist_errors_total`
   is incremented BOTH by a fatal write failure and by a deliberately survivable quarantine
   write (`checkpoints.py::_write_quarantine`, the §6/R3 survive-run clause). Under the

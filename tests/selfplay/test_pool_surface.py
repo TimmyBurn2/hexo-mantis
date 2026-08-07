@@ -260,9 +260,18 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
     rstats = pool.runner_stats()
     assert isinstance(rstats, RunnerStats)
     # The trainer's regime-gated cluster block reads these four by name.
-    for name in ("mcts_mean_depth", "mcts_mean_root_concentration",
-                 "cluster_value_std_mean", "cluster_policy_disagreement_mean"):
+    for name in ("mcts_mean_depth", "mcts_mean_root_concentration"):
         assert isinstance(getattr(rstats, name), float)
+    # ADJ-D32 / R249: the two CLUSTER means are `float | None`, and on a pool that has
+    # played nothing they are None — no samples, so no measurement. This assertion used
+    # to demand a `float`, which is how a fabricated 0.0 travelled the whole seam
+    # unchallenged; the snapshot must carry the absence, not paper over it.
+    assert rstats.cluster_variance_sample_count == 0
+    for name in ("cluster_value_std_mean", "cluster_policy_disagreement_mean"):
+        assert getattr(rstats, name) is None, (
+            f"{name} must be None at zero cluster-variance samples (R249), got "
+            f"{getattr(rstats, name)!r}"
+        )
     assert isinstance(rstats.cluster_variance_sample_count, int)
 
     istats = pool.inference_stats()
