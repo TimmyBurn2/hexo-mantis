@@ -95,6 +95,35 @@ gates:
       literal: selfplay_drain
     producer_test: tests/selfplay/test_pool_drain_parity.py::test_heartbeat_emission_at_drain
 
+  - id: heartbeat.eval_round
+    producer:
+      kind: event_literal
+      module: mantis.eval.pipeline
+      literal: eval_round
+    also:
+      kind: symbol
+      module: mantis.monitor.heartbeat
+      symbol: HEARTBEAT_SOURCES
+    note: >-
+      The FOURTH watchdog source (WP11-A) and the one that shipped with no row: the other
+      three were registered here and `eval_round` was not, while being armed exactly like
+      them — `HEARTBEAT_SOURCES` carries it, `MonitorConfig.heartbeat_deadline_eval_round_sec`
+      gives it a 1800 s deadline, `mantis.run` declares it wired iff an eval pipeline was
+      built, and a stale beat fires `WATCHDOG_STALL_EXIT_CODE` (42). An ARMED abort input with
+      no manifest row is the F-10 shape this file exists to make un-shippable, and the gap was
+      invisible because `docs/contracts/event_manifest.md` already TABULATES this row as
+      shipped. The producer is the eval pipeline's persistent poller thread
+      (`EvalPipeline._poll_loop` -> `_beat("eval_round")`), which beats on EVERY tick with or
+      without an in-flight round: a between-round gap must not be able to false-fire the
+      watchdog, and round PROGRESS is bounded separately by `round_timeout_sec`. So the source
+      answers "is the enforcement thread alive", never "is a round making progress" — a beat
+      is NOT evidence of eval progress, and reading it as such would re-invent the silent-hang
+      class it closes. The row is `event_literal` on the quoted `"eval_round"` in
+      `mantis.eval.pipeline` rather than `symbol` on `_beat`, matching the three sibling
+      heartbeat rows: the token the registry keys on is the thing that must not drift, and a
+      private method name is not it.
+    producer_test: tests/train/test_eval_heartbeat.py::test_poller_thread_beats_eval_round
+
   # ── run-fatal persistence + the kept lifecycle gates ──────────────────────────────
   - id: persist_fatal
     input: persist_errors_total

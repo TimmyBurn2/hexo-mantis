@@ -157,3 +157,42 @@ def test_the_shipped_manifest_contains_the_phase_O_rows() -> None:
     assert len(present) == len(set(present)), (
         f"duplicate row ids in the shipped manifest: {present}"
     )
+
+
+# ── item 9 (R4/LAW-07) — the heartbeat family is registered IN FULL ───────────────────
+def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
+    """Each member of `HEARTBEAT_SOURCES` carries a `heartbeat.<source>` row.
+
+    MEASURED GAP THIS CLOSES: three of the four sources had rows and `eval_round` — added
+    as the fourth at WP11-A — did not, while being armed identically (a deadline in
+    `MonitorConfig`, a `wired_sources` entry from `mantis.run`, and
+    `WATCHDOG_STALL_EXIT_CODE` on staleness). That is the F-10 shape: an input that can stop
+    a run, citing no producer and no producer test. Nothing could see it —
+    `test_shipped_manifest_every_row_resolves` resolves the rows it is HANDED and an absent
+    row is not a row (the O-29 asymmetry, argued in full above), and
+    `docs/contracts/event_manifest.md` tabulates `heartbeat.eval_round` among its shipped
+    rows, so the doc AGREED the row existed.
+
+    DERIVED, not transcribed (R192(e) / R8's derive-or-delete): the expectation comes from
+    `HEARTBEAT_SOURCES` — the tuple the registry, the watchdog deadlines and the arm event
+    all key on — so a FIFTH source added later without a row reds here on the commit that
+    adds it. A transcribed list of four would have to be re-edited to notice, which is the
+    same rot as an asserted line count. The naming convention `heartbeat.<source>` is the
+    shipped one for all four and is asserted, not guessed at: a row that registered the
+    source under some other id would satisfy no reader looking for it.
+
+    MUTATIONS THAT RED IT: (1) delete the `heartbeat.eval_round` row from
+    `producer_manifest.yaml` — `test_shipped_manifest_every_row_resolves` stays GREEN under
+    it; (2) append a source to `HEARTBEAT_SOURCES` without adding its row.
+    """
+    from mantis.monitor.heartbeat import HEARTBEAT_SOURCES
+
+    assert HEARTBEAT_SOURCES, "premise: the watchdog declares heartbeat sources at all"
+    present = {row["id"] for row in load_manifest(_SHIPPED_MANIFEST)["gates"]}
+    missing = [s for s in HEARTBEAT_SOURCES if f"heartbeat.{s}" not in present]
+    assert missing == [], (
+        f"armed heartbeat sources with no producer-manifest row: {missing}. Each of these "
+        "feeds the stall watchdog and can exit the run at WATCHDOG_STALL_EXIT_CODE, so each "
+        "owes a live producer and a named producer test (R4/LAW-07). Rows present: "
+        f"{sorted(present)}"
+    )
