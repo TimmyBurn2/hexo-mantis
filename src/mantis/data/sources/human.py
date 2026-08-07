@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import PIPELINE_COUNTERS
 from mantis.data.sources.base import CorpusSource, GameRecord
+from mantis.monitor.best_effort import best_effort
 
 log = get_logger(__name__)
 
@@ -46,12 +48,17 @@ class HumanGameSource(CorpusSource):
     # ------------------------------------------------------------------
 
     def _load(self, path: Path) -> GameRecord | None:
-        try:
-            data: dict[str, Any] = json.loads(path.read_text())
-        except Exception as exc:  # noqa: BLE001 — skip unreadable/malformed game JSON
-            log.warning("human_game_skipped", reason="json_parse_error",
-                        path=str(path), error=str(exc))
+        ok, data = best_effort(
+            "data.sources.human.game_unreadable_skipped",
+            lambda: json.loads(path.read_text(encoding="utf-8")),
+            counters=PIPELINE_COUNTERS,
+        )
+        if not ok or data is None:
+            # `best_effort` already WARNed the exception under the label; this keeps the
+            # per-file skip event the pipeline's other skip reasons emit.
+            log.warning("human_game_skipped", reason="json_parse_error", path=str(path))
             return None
+        data = cast("dict[str, Any]", data)
 
         if not self._passes_filter(data, path):
             return None

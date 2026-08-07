@@ -24,7 +24,9 @@ from typing import Any, Protocol, runtime_checkable
 
 from mantis._engine import Board
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import PIPELINE_COUNTERS, log_pipeline_losses
 from mantis.env.game_state import GameState
+from mantis.monitor.best_effort import best_effort
 
 log = get_logger(__name__)
 
@@ -72,12 +74,19 @@ def _play_one_game(
     rng = random.Random(rng_seed + game_idx)
 
     if use_human_seeding and human_corpus_dir:
-        # Try human-seeded opening; fall back to random on failure
-        try:
+        # Try human-seeded opening; fall back to random on failure. Partial progress is
+        # preserved EXACTLY: the closure rebinds the enclosing `state` via `nonlocal` as
+        # it applies, so a mid-sequence failure leaves board/state/moves where the old
+        # inline `try` left them (returning the final state instead would silently
+        # discard the plies already applied to the shared `board`).
+        corpus_dir: str = human_corpus_dir  # narrowed here; closures do not narrow
+
+        def _seed_opening() -> None:
+            nonlocal state
             from mantis.data.human_seeding import sample_human_midgame_position
 
             opening_moves = sample_human_midgame_position(
-                corpus_dir=human_corpus_dir,
+                corpus_dir=corpus_dir,
                 min_move=human_seeding_min_move,
                 max_move=human_seeding_max_move,
                 rng=rng,
@@ -87,13 +96,16 @@ def _play_one_game(
                     break
                 state = state.apply_move(board, q, r)
                 moves.append((q, r))
-        except Exception as exc:  # noqa: BLE001 — human-seeding is best-effort; fall back to random
-            log.warning(
-                "human_seeding_fallback",
-                game=game_idx,
-                error=str(exc),
-                fallback="random_opening",
-            )
+
+        seeded, _ = best_effort(
+            "data.generate.human_seeding_failed_fallback_random",
+            _seed_opening,
+            counters=PIPELINE_COUNTERS,
+        )
+        if not seeded:
+            # `best_effort` already WARNed the exception under the label; this keeps the
+            # operator-facing event (which game, which fallback) the pipeline had.
+            log.warning("human_seeding_fallback", game=game_idx, fallback="random_opening")
             # Fall through to random opening below
             use_human_seeding = False
 
@@ -109,11 +121,22 @@ def _play_one_game(
 
     while (not board.check_win() and board.legal_move_count() > 0
            and len(moves) < MAX_MOVES_PER_GAME):
-        try:
-            q, r = bot.get_move(state, board)
-        except Exception as exc:  # noqa: BLE001 — a bot move error ends this game, not the run
-            log.warning("bot_move_error", game=game_idx, ply=len(moves), error=str(exc))
+        # The UNPACK is inside the counted arm, exactly as the old inline `try` covered
+        # it: a bot returning a non-pair raised inside the old handler and ended the
+        # game, and must still — not escape as a TypeError that kills the whole run.
+        def _next_move(s: GameState = state) -> tuple[int, int]:  # default-bound (B023)
+            mq, mr = bot.get_move(s, board)
+            return mq, mr
+
+        got, move = best_effort(
+            "data.generate.bot_move_error_truncated_game",
+            _next_move,
+            counters=PIPELINE_COUNTERS,
+        )
+        if not got or move is None:
+            log.warning("bot_move_error", game=game_idx, ply=len(moves))
             break
+        q, r = move
         state = state.apply_move(board, q, r)
         moves.append((q, r))
 
@@ -196,6 +219,7 @@ def generate_bot_games(
     log.info("corpus_generation_complete",
              saved=saved, dupes=dupes, attempted=n_games,
              total_on_disk=len(existing), elapsed_min=f"{elapsed / 60:.1f}")
+    log_pipeline_losses("data.generate.generate_bot_games")
     return saved
 
 
@@ -215,14 +239,21 @@ def load_cached_bot_games(bot_dir: Path) -> list[list[tuple[int, int]]]:
     games: list[list[tuple[int, int]]] = []
     json_files = sorted(bot_dir.rglob("*.json"))
 
-    for p in json_files:
-        try:
-            with open(p) as f:
-                data: dict[str, Any] = json.load(f)
-            moves = [(m["x"], m["y"]) for m in data["moves"]]
-            games.append(moves)
-        except Exception:  # noqa: BLE001 — skip unreadable/malformed cached game JSON
-            continue
+    def _load(path: Path) -> list[tuple[int, int]]:
+        with open(path, encoding="utf-8") as f:
+            data: dict[str, Any] = json.load(f)
+        return [(m["x"], m["y"]) for m in data["moves"]]
 
-    log.info("loaded_cached_bot_games", count=len(games), dir=str(bot_dir))
+    for p in json_files:
+        ok, moves = best_effort(
+            "data.generate.cached_game_unreadable_skipped",
+            lambda path=p: _load(path),  # default-bound (ruff B023)
+            counters=PIPELINE_COUNTERS,
+        )
+        if ok and moves is not None:
+            games.append(moves)
+
+    log.info("loaded_cached_bot_games", count=len(games), dir=str(bot_dir),
+             skipped=len(json_files) - len(games))
+    log_pipeline_losses("data.generate.load_cached_bot_games")
     return games

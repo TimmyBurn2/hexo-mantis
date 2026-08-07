@@ -12,6 +12,8 @@ import random
 from pathlib import Path
 
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import PIPELINE_COUNTERS
+from mantis.monitor.best_effort import best_effort
 
 log = get_logger(__name__)
 
@@ -26,16 +28,24 @@ def _build_file_index(corpus_dir: str, min_total_moves: int) -> list[tuple[Path,
     if not corpus_path.exists():
         return []
 
+    def _eligible(path: Path) -> tuple[Path, int] | None:
+        """The ELIGIBILITY test lives inside the counted arm, exactly as the old inline
+        `try` covered it: a `moveCount` that parses but is not comparable (a string, a
+        null) raised INSIDE the old handler and was skipped, and must still be."""
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        move_count = data.get("moveCount", len(data.get("moves", [])))
+        return (path, move_count) if move_count >= min_total_moves else None
+
     index: list[tuple[Path, int]] = []
     for p in corpus_path.glob("*.json"):
-        try:
-            with open(p) as f:
-                data = json.load(f)
-            move_count = data.get("moveCount", len(data.get("moves", [])))
-            if move_count >= min_total_moves:
-                index.append((p, move_count))
-        except Exception:  # noqa: BLE001 — skip unreadable/malformed game JSON
-            continue
+        ok, entry = best_effort(
+            "data.human_seeding.index_game_unreadable_skipped",
+            lambda path=p: _eligible(path),  # default-bound (ruff B023)
+            counters=PIPELINE_COUNTERS,
+        )
+        if ok and entry is not None:
+            index.append(entry)
 
     return index
 
