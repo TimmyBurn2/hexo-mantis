@@ -67,6 +67,9 @@ _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _DEV = load_config(_CONFIGS / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config.
+_GATE_INTERVAL = _DEV.monitor.gate_interval
 
 #: The drive is bounded so `compose_run` terminates; the three step-clock knobs move together
 #: because the reachability validator spans them (DESIGN_S §6.6 MF-3).
@@ -322,10 +325,16 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
 def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
                  mixing_cfg=None, **knob_over):
     """A real `StepCoordinator` whose config is DERIVED from the production builder."""
+    # R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names
+    # it — the shipped posture (every committed config mints the two equal), so a drive
+    # that moves only `log_interval` keeps the cadence it had before the split.
+    settings = {"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over}
+    settings.setdefault("gate_interval", settings["log_interval"])
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **settings,
     )
     pool, buffer, sink = _Pool(), _Buffer(), _Sink()
     coord = StepCoordinator(
@@ -414,10 +423,23 @@ def test_eval_interval_decides_when_a_promotion_round_is_kicked() -> None:
 
 
 def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> None:
-    """`train.log_interval` -> `step.py::_run_log_interval`: the payload events, the WARN
-    rules, BOTH live hard-abort gates and the LAW-18 `monitor_gates` summary all hang off this
-    one boundary. WPMINT DR-7 measured that `<= 0` kills the whole family at once; the schema's
-    `ge=1` makes that unwritable, and this is the arm that shows the value still DECIDES."""
+    """`train.log_interval` -> `step.py::_run_log_interval`: the payload events and the WARN
+    rules hang off this boundary. WPMINT DR-7 measured that `<= 0` kills the family; the
+    schema's `ge=1` makes that unwritable, and this is the arm that shows the value DECIDES.
+
+    R242 (ADJ-D12) NARROWED WHAT THIS KNOB DECIDES, and this test's second half is where that
+    shows. It used to assert "the LAW-18 gate summary rides the SAME boundary — DR-7's
+    finding is that these two cannot be separated", which was a true reading of the code and
+    a FALSE reading of DR-7: DR-7 measured that `log_interval <= 0` killed both, which is an
+    argument for the `ge=1` bound, never a rule that arming must ride narration. That coupling
+    was the defect — at run5's `log_interval: 1000` the hard aborts had a blind first
+    kilometre — so the gates now ride `monitor.gate_interval` (`_run_gate_interval`).
+
+    The count below is UNCHANGED because `_coordinator` mirrors the two knobs, which is the
+    shipped posture (every committed config mints them equal). It is asserted here against an
+    EXPLICIT `gate_interval`, so the line now says what it means; the decoupling itself is
+    pinned by `tests/train/test_gate_interval_decoupling.py`.
+    """
     every = _coordinator(log_interval=1)
     _drive(every, steps=4, games=1)
     rare = _coordinator(log_interval=3)
@@ -428,9 +450,20 @@ def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> Non
         "at log_interval 3 exactly one of four steps is a boundary; got "
         f"{len(rare.sink.named('training_step'))}"
     )
+    assert rare.config.gate_interval == 3, (
+        "this drive mirrors the two knobs (the shipped posture), which is what makes the "
+        "gate-summary count below readable — it is gate_interval's doing, not log_interval's"
+    )
     assert len(rare.sink.named("monitor_gates")) == 1, (
-        "the LAW-18 gate summary rides the same boundary — DR-7's finding is that these two "
-        "cannot be separated, so they are asserted together"
+        "the LAW-18 gate summary rides monitor.gate_interval (R242), which this drive mints "
+        "equal to log_interval exactly as every committed config does"
+    )
+    apart = _coordinator(log_interval=10**9, gate_interval=1)
+    _drive(apart, steps=4, games=1)
+    assert apart.sink.named("training_step") == [] and len(
+        apart.sink.named("monitor_gates")) == 4, (
+        "and stated APART they separate: no narration, four gate summaries. Before R242 this "
+        "drive produced neither, which is the defect ADJ-D12 measured"
     )
 
 
@@ -732,7 +765,8 @@ def test_the_builder_holds_no_literal_for_any_authored_knob() -> None:
         for key, value in _DISTINGUISHABLE.items()
     })
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=None,
-                                     drain_caps=_DRAIN_CAPS, knobs=distinguishable)
+                                     drain_caps=_DRAIN_CAPS,
+                                     gate_interval=_GATE_INTERVAL, knobs=distinguishable)
     for field in dataclasses.fields(CoordinatorKnobsSpec):
         assert getattr(built, field.name) == getattr(distinguishable, field.name), (
             f"`_step_coordinator_config` overrode {field.name} with something other than the "

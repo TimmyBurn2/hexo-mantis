@@ -1,5 +1,5 @@
 """>300 justify (R8): it is mostly DATA — the
-174-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
+177-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
 splitting it would create a second registry copy to keep in sync (there is already exactly one
 deliberate duplicate, `test_every_key_has_consumer_p2.py`). The five tests below are short by
 comparison. WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
@@ -278,6 +278,13 @@ CONSUMER_REGISTRY = {
     # field-copy onto mantis.monitor.config.MonitorConfig; the 4 monitor.drain.* leaves feed
     # DrainCaps (run.py) / drain_budget_sec + _run_terminal_sync (eval/pipeline.py) through
     # their own resolver, mantis.config.resolve.drain.resolve_drain_caps (WPMINT K-A).
+    # ── monitor.gate_interval (R242 / ADJ-D12) — schema-only, like `drain`/`disk_guard`:
+    # named directly by compose_run (one leaf, no shape to resolve) and threaded into
+    # StepCoordinatorConfig. It is the ARMING cadence; train.log_interval is narration.
+    "monitor.gate_interval":
+        "mantis.run.compose_run -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.gate_interval -> step.py _run_gate_interval"
+        " (hard-abort gates + the LAW-18 monitor_gates summary)",
     "monitor.alert_entropy_min": "resolve_monitor_config -> monitor/rules.py entropy WARN",
     "monitor.collapse_threshold_nats": "resolve_monitor_config -> monitor/rules.py collapse threshold",
     "monitor.alert_grad_norm_max": "resolve_monitor_config -> monitor/rules.py grad-norm WARN",
@@ -376,7 +383,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_174_entries():
+def test_registry_matches_the_live_leaf_count():
     # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
     # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
     # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
@@ -422,8 +429,13 @@ def test_registry_has_exactly_174_entries():
     # from one measured cost model. Their consumer is GRAPH-ROUTE-SCOPED and the registry
     # rows say so: the provider is threaded to `_graph_step` alone and `_grid_step` is not
     # given it, so a grid run structurally cannot reach them. 174 + 2 = 176.
-    assert len(CONSUMER_REGISTRY) == 176
-    assert len(_leaf_paths(RunConfig)) == 176
+    # R242 (ADJ-D12) ADDS 1: `monitor.gate_interval`, the ARMING cadence split off the
+    # NARRATION cadence `train.log_interval`. It is a monitor leaf and a SCHEMA-ONLY one
+    # (a third enumerated drop in `resolve_monitor_config`, beside `drain` and
+    # `disk_guard`), so the runtime `MonitorConfig` field count does not move with it.
+    # 176 + 1 = 177.
+    assert len(CONSUMER_REGISTRY) == 177
+    assert len(_leaf_paths(RunConfig)) == 177
 
 
 def test_no_forward_reference_strings_in_registry():

@@ -92,6 +92,11 @@ _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG = load_config(_REPO / "configs" / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
+#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
+#: two equal), so these drives keep exactly the cadence they had before R242's split.
+_GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
 #: The three Phase-T counters, in the order `IMPL_NOTES_T §3.6` names them, plus the
 #: denominator the rate is taken over. Transcribed rather than derived from the payload under
@@ -227,8 +232,11 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
     assert snapshots, "a drive with no snapshot measures nothing"
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        # R242: gate cadence mirrors narration cadence (the shipped posture).
+        **{"eval_interval": 10**9, "log_interval": 1, "gate_interval": 1,
+           "min_buf_size": 10},
     )
     pool = _Pool(snapshots[0])
     sink = _SpySink()

@@ -96,6 +96,10 @@ _MINTED_DRAIN_CAPS = resolve_drain_caps(load_config(CONFIGS_DIR / "dev_example.y
 #: minted config, for the same reason — this file is about THRESHOLD authority, so the 19
 #: coordinator knobs arrive derived rather than as eighteen more literals to keep in step.
 _MINTED_KNOBS = resolve_coordinator_knobs(load_config(CONFIGS_DIR / "dev_example.yaml").train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config.
+_MINTED_GATE_INTERVAL = load_config(
+    CONFIGS_DIR / "dev_example.yaml").monitor.gate_interval
 
 #: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place
 #: they may change, so they are written here as the pin that makes an in-place edit visible.
@@ -143,7 +147,9 @@ def _complete_kwargs(spec) -> dict:
     that phase wired.
     """
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
-                                     drain_caps=_MINTED_DRAIN_CAPS, knobs=_MINTED_KNOBS)
+                                     drain_caps=_MINTED_DRAIN_CAPS,
+                                     gate_interval=_MINTED_GATE_INTERVAL,
+                                     knobs=_MINTED_KNOBS)
     return {field.name: getattr(built, field.name)
             for field in dataclasses.fields(StepCoordinatorConfig)}
 
@@ -269,7 +275,9 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     )
 
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
-                                     drain_caps=_MINTED_DRAIN_CAPS, knobs=_MINTED_KNOBS)
+                                     drain_caps=_MINTED_DRAIN_CAPS,
+                                     gate_interval=_MINTED_GATE_INTERVAL,
+                                     knobs=_MINTED_KNOBS)
     assert built.draw_rate_abort is spec and built.stop_step == 11, (
         "the builder must hand ON both config-authored values. A builder that takes them as "
         "required parameters and then ignores them satisfies every signature and field "

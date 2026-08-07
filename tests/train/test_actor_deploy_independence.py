@@ -42,6 +42,12 @@ _DRAIN_CAPS = resolve_drain_caps(
 #: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
 _KNOBS = resolve_coordinator_knobs(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
+#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
+#: two equal), so these drives keep exactly the cadence they had before R242's split.
+_GATE_INTERVAL = load_config(
+    Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
 
 
 # ── shared spies ──────────────────────────────────────────────────────────────────────
@@ -200,8 +206,11 @@ def _kick_config() -> StepCoordinatorConfig:
     a MINTED `monitor.drain` block (R93/DR-11)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        eval_interval=4, log_interval=0,
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        # R242: `gate_interval` mirrors `log_interval` here — this file drives the deploy
+        # seam, not either cadence, and 0 is its way of asking for no emission at all.
+        eval_interval=4, log_interval=0, gate_interval=0,
     )
 
 

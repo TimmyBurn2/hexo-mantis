@@ -263,9 +263,13 @@ def _coordinator_config(spec, **overrides) -> StepCoordinatorConfig:
     base = _step_coordinator_config(
         stop_step=10**9, draw_rate_abort=spec,
         drain_caps=resolve_drain_caps(load_config(_CONFIGS / "dev_example.yaml").monitor),
+        gate_interval=load_config(_CONFIGS / "dev_example.yaml").monitor.gate_interval,
         knobs=resolve_coordinator_knobs(load_config(_CONFIGS / "dev_example.yaml").train))
-    return dataclasses.replace(base, log_interval=1, eval_interval=1, min_buf_size=1,
-                               terminal_eval_enabled=False, **overrides)
+    # R242 (ADJ-D12): the gate cadence mirrors the narration cadence (the shipped posture).
+    settings = {"log_interval": 1, "eval_interval": 1, "min_buf_size": 1,
+                "terminal_eval_enabled": False, **overrides}
+    settings.setdefault("gate_interval", settings["log_interval"])
+    return dataclasses.replace(base, **settings)
 
 
 # ── O-D2 — the audited value IS the value the coordinator runs on ─────────────────────

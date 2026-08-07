@@ -99,6 +99,22 @@ _MINTED = load_config(_REPO / "configs" / "dev_example.yaml")
 #: resolvers, never from literals here (WPMINT Phase K-A/K-B; R1).
 _DRAIN_CAPS = resolve_drain_caps(_MINTED.monitor)
 _KNOBS = resolve_coordinator_knobs(_MINTED.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
+#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
+#: two equal), so these drives keep exactly the cadence they had before R242's split.
+_GATE_INTERVAL = _MINTED.monitor.gate_interval
+
+
+def _mirrored(settings: dict) -> dict:
+    """R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names it.
+
+    That mirroring is the SHIPPED posture, not a convenience — every committed config mints
+    `monitor.gate_interval` equal to its own `train.log_interval` — so a drive here that moves
+    only `log_interval` keeps exactly the cadence it had before R242 split the two knobs.
+    """
+    settings.setdefault("gate_interval", settings["log_interval"])
+    return settings
 
 #: The declared terminus for the leg-3 drives.
 _CEILING = 5
@@ -234,8 +250,10 @@ def _config(**overrides) -> StepCoordinatorConfig:
     (R1: no code-side default for anything an assertion's meaning depends on)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=_CEILING, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 0, "log_interval": 1, "min_buf_size": 10, **overrides},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **_mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
+                     **overrides}),
     )
 
 

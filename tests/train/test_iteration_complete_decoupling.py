@@ -1,3 +1,10 @@
+# >300 justify (R8), no tally stated (G-DFIX-4 / R192(e)). ONE decoupling claim driven by TWO
+# oracles that must see the SAME emit: O-N1 counts the `iteration_complete` events a burst
+# produces and O-N1b counts the `pool.runner_stats()` calls THOSE SAME events cost. The
+# `_CountingPool` spy is the instrument for both, so splitting the file would fork the fake
+# that makes each other's numbers meaningful. It crossed the cap when R242/ADJ-D12 re-pointed
+# the `monitor_gates` assertion here onto `monitor.gate_interval` — the growth is that
+# explanation, which a future reader needs precisely because the assertion did NOT move.
 """⊕ WP12R Step 3 narration — oracle 1 (part i): `iteration_complete` decoupled from
 `log_interval` + the R218 rider 1 `Q-O-TWO-POOL-READS` collapse oracle.
 
@@ -53,13 +60,22 @@ from mantis.train.lifecycle.signals import ShutdownState
 _CONFIG = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_CONFIG.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config.
+_GATE_INTERVAL = _CONFIG.monitor.gate_interval
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
+    """R242 (ADJ-D12): `gate_interval` MIRRORS `log_interval` unless a drive names it —
+    the shipped posture (every committed config mints the two equal), which is what lets
+    the R210 conjunct below keep asserting exactly what it asserted before the split."""
+    settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
+    settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **settings,
     )
 
 
@@ -233,6 +249,13 @@ def test_on1_training_step_alerting_stays_gated_below_log_interval() -> None:
 
     This conjunct is GREEN at HEAD (the gating is unchanged for the alerting path) and MUST
     stay GREEN after IMPL (the decoupling removes the gate for `iteration_complete` ONLY).
+
+    R242 (ADJ-D12) NOTE, so the `monitor_gates` line below is not misread: that event now
+    rides `monitor.gate_interval`, not `log_interval`. It is still absent on this drive
+    because `_make_config` MIRRORS the two knobs — the shipped posture, since every committed
+    config mints them equal — so this test asserts exactly what it always did, at exactly the
+    cadence the run actually ships. The two knobs stated APART are pinned in
+    `tests/train/test_gate_interval_decoupling.py`.
     """
     cfg = _make_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
@@ -245,7 +268,8 @@ def test_on1_training_step_alerting_stays_gated_below_log_interval() -> None:
         "(R210). If this fires at step < log_interval, the decoupling over-reached."
     )
     assert h.sink.named("monitor_gates") == [], (
-        "O-N1 conjunct: monitor_gates must STAY log_interval-gated (R210)."
+        "O-N1 conjunct: monitor_gates must stay GATED — on monitor.gate_interval since R242, "
+        "which this drive mirrors onto log_interval exactly as every committed config does."
     )
     assert h.sink.named("training_alert") == [], (
         "O-N1 conjunct: the WARN rules must STAY log_interval-gated (R210)."

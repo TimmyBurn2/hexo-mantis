@@ -478,6 +478,7 @@ def _step_coordinator_config(
     stop_step: int,
     draw_rate_abort: DrawRateAbortSpec | None,
     drain_caps: DrainCapsSpec,
+    gate_interval: int,
     knobs: CoordinatorKnobsSpec,
 ) -> StepCoordinatorConfig:
     """Assemble `StepCoordinatorConfig` from RESOLVED CONFIG FACTS ONLY — zero literals
@@ -508,10 +509,20 @@ def _step_coordinator_config(
     registry-claimed `monitor.drain.*` block was popped and discarded by
     `resolve_monitor_config` (the DR-11 finding). The four values now arrive whole, through
     `resolve_drain_caps`, or this call raises.
+
+    R242 (ADJ-D12): `gate_interval` is the FIFTH such fact and it arrives the same way — a
+    required keyword-only parameter with no default, named by `compose_run` off
+    `config.monitor.gate_interval`. A scalar needs no `resolve_*` module of its own (there is
+    exactly one leaf and no shape to resolve), but the no-default rule is the same and the
+    reason is sharper here than anywhere else on this signature: a default would let a caller
+    silently inherit an ARMING cadence, and the defect R242 closes is the arming cadence
+    having been an inherited property of `train.log_interval` all along. There is deliberately
+    NO fallback to `log_interval` on this path — the value arrives whole or the call raises.
     """
     return StepCoordinatorConfig(
         eval_interval=knobs.eval_interval,
         log_interval=knobs.log_interval,
+        gate_interval=gate_interval,
         min_buf_size=knobs.min_buf_size,
         capacity=knobs.capacity,
         buffer_schedule=knobs.buffer_schedule,
@@ -740,6 +751,11 @@ def compose_run(
                 stop_step=resolve_max_train_steps(config.train),
                 draw_rate_abort=resolve_draw_rate_abort(config.train),
                 drain_caps=resolve_drain_caps(config.monitor),
+                # R242 (ADJ-D12): the ARMING cadence, named directly off the validated
+                # monitor section — the same shape `config.train.device` takes above. It is
+                # NOT `knobs.log_interval` and must never become it: that identity IS the
+                # defect (armed aborts with a blind first `log_interval` steps).
+                gate_interval=config.monitor.gate_interval,
                 knobs=resolve_coordinator_knobs(config.train),
             )
 

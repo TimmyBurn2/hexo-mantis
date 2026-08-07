@@ -1,10 +1,13 @@
 # Contract: run config schema
 
-- version: v6
+- version: v8
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Five growth steps since (v1 -> v6), each recorded as a
-  named amendment in docs/design/repo_design.md §4; v2 through v5 are *incompatible* — a
-  config lacking any of the added keys fails to load — and v6 is incompatible in the other
+- status: LIVE since scaffold (WP0). Seven growth steps since (v1 -> v8). Each through v6 is
+  recorded as a named amendment in docs/design/repo_design.md §4; v7 and v8 are NOT, and that
+  is stated rather than implied — v7 landed without one and v8 (R242/ADJ-D12) inherits that
+  gap rather than back-filling somebody else's amendment. v2 through v5, v7 and v8 are
+  *incompatible* — a config lacking any of the added keys fails to load — and v6 is
+  incompatible in the other
   direction: a config still CARRYING the deleted key fails `extra="forbid"`. The config files' own `schema_version:`
   key is a FILE-FORMAT pin and is unchanged at `1`; it is not this contract's version.
 
@@ -24,11 +27,12 @@ YAML keys and enumerates the audit root name-agnostically.
 | v4 | twenty new required leaves: nineteen flat `train.*` step-coordinator knobs plus `train.draw_rate_abort.consec`. Six sibling coordinator fields were DELETED rather than authored (no reader in `src/`), and `train.batch_size` is minted at the value the code actually used | WPMINT Phase K-B |
 | v6 | one required leaf REMOVED — the `train` section's `buffer_save_interval`, the first leaf this contract has ever dropped. Its only consumer chain ended in `coordinator/step.py`'s D4 `_try_save_buffer` arm, which WP12-R Phase CS MEASURED (F-CS-2) production-dead on every leg, so a key minted into `run5.yaml` had zero reachable effect (R116/LAW-08/R1). The `buffer_save_interval` -> `checkpoint_interval` rename seam and both no-op `_try_save_buffer` arms go with it. `extra="forbid"` makes this incompatible in reverse: a config still carrying the key fails to load | WP12-R (R178(a), assigned by R183(a)) |
 | v5 | five new required leaves, all promotions of authority OUT of code: `eval_enabled` (top-level bool — was a `compose_run` parameter with a code-side default `True`, R120), the `monitor.disk_guard` family `{interval_sec, warn_gb, fail_gb}` (was four dead `dict.get` literals in a function with zero callers, R122) and `train.device` (`Literal["cpu","cuda"]` — was a `--device` CLI flag on BOTH callers, which let a cpu-flagged preflight false-clear a cuda-minted run, R126) | WPMAIN (CARD-RUN-MAIN) |
+| v8 | one new required leaf: `monitor.gate_interval` — the ARMING cadence, split off the NARRATION cadence `train.log_interval`. Until this version the live hard-abort gates and the LAW-18 `monitor_gates` summary both ran inside `_run_log_interval`, so at run5's minted `log_interval: 1000` the draw-rate abort could take no observation and no `monitor_gates` event could exist before training step 1000 — armed machinery with a blind first kilometre, and the instrument that would have shown it switched off by the same knob. `ge=1` and NO off value, for the reason `log_interval` carries the same bound (WPMINT DR-7): a non-positive stride kills the whole hard-abort family AND its visibility together. Every committed config mints it EQUAL to its own `train.log_interval`, so NO armed value's meaning moves as this lands; the re-scaled stride and the `consec` re-derived in gate-interval units are mint-prereg rows. Consumer: `mantis.run.compose_run` names it directly and threads it into `StepCoordinatorConfig.gate_interval`, read by `_run_gate_interval` — a scalar with one leaf and no shape needs no `resolve_*` module, but it carries no default and no fallback to `log_interval` anywhere | remediation bundle (R242, ADJ-D12) |
 | v7 | two new required leaves, ONE block: `train.microbatch_caps.{max_edges, max_nodes}` — the GRAPH training step's memory bound. `train.batch_size` bounds the number of GRAPHS and bounds neither quantity that drives memory (E and N are SUMS over the sampled graphs; CARD-RUN5-GPU-OOM was one unbounded `[E, hidden]` allocation, measured at `E = 18 735 930`). A nested block and not two flat keys because the members are sized TOGETHER from ONE measured cost model against ONE budget — `DrawRateAbortConfig`'s grounds applied to a different fact. `ge=1` on both and NO off value: the schema cannot express "uncapped", because an uncapped graph step is the defect the block exists to make unconstructible (R79). GRAPH-ROUTE-SCOPED consumer: the resolver's PROVIDER is threaded to `dispatch.py::_graph_step` alone and `_grid_step` is not given it, so a grid run structurally cannot read the block | WP12-R dispatch 6 phase F2 (R179) |
 
 ## Shape
 
-Ten top-level fields; **176 leaf key-paths** under the walker that descends nested blocks
+Ten top-level fields; **177 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -42,7 +46,7 @@ Ten top-level fields; **176 leaf key-paths** under the walker that descends nest
 | `train` | 53 | `TrainConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage`, `MicrobatchCapsConfig` |
 | `selfplay` | 44 | `SelfplayConfig`, `MctsConfig`, `PlayoutCapConfig` |
 | `inference` | 8 | `InferenceConfig` |
-| `monitor` | 36 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
+| `monitor` | 37 | `MonitorSchemaConfig`, `DrainCapsConfig`, `DiskGuardConfig` |
 
 `mantis.config.schema` is a package, not a module: `_base` carries the ONE `StrictModel` every
 section subclasses, and `core`/`train`/`selfplay`/`monitor` carry the sections. The split is
@@ -69,7 +73,7 @@ what keeps the package's internal import graph a DAG (CI gate 9) — `core` impo
 | two configs differ exactly where claimed | tools/config_diff.py `--expect` |
 | a committed config's stamped header cannot lie about its delta | tools/config_diff.py `--from-header` |
 | every committed config schema-validates (empty set = gate failure) | CI gate 7 (tools/ci_gates/validate_configs.py) |
-| every schema leaf key has a live consumer (174-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
+| every schema leaf key has a live consumer (177-entry bijection, LAW-08), in two independently-maintained copies | tests/config/test_every_key_has_consumer.py + tests/config/test_every_key_has_consumer_p2.py |
 | every `required` armed-abort row is armed in every production config | CI gate 12 (tools/ci_gates/preflight_mint.py `--audit-only`) |
 
 ## Cross-field rules (the invariants no single field can carry)
@@ -118,7 +122,7 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
 | lying-header `--from-header` self-check + mutation self-test | tests/config/test_config_diff_from_header.py |
 | regime parity per LAW knob (sims, amp, encoding) and the radius knob's ABSENCE from every production config | tests/config/test_regime_parity.py, tests/config/test_regime_parity_p2.py |
-| every-key-has-consumer bijection, the 176 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
+| every-key-has-consumer bijection, the 177 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
 | `train.entropy_reg_weight` sign law; `policy_target`/`completed_q_values` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |

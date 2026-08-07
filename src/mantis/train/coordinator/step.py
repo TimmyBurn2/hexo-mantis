@@ -7,8 +7,9 @@ through the injected collaborators (`config.py` Protocols); the stall watchdog i
 the Slice-1 `lifecycle.watchdog.StallWatchdog.tick(...)` (the slice-2 wiring the DESIGN calls
 for). The terminal-eval flush + close_out live in `drain.py`. WP13-A adds the run-safety
 instrumentation half to the SAME control-flow unit (it is one loop, not two): the
-`train_step` heartbeat beats, the log_interval event emission + the 4 WARN rules, the
-draw-rate hard-abort gate, the LAW-18 `monitor_gates` summary, and the async eval-RESULT
+`train_step` heartbeat beats, the log_interval NARRATION emission + the 4 WARN rules, the
+gate_interval ARMING boundary (the draw-rate hard-abort gate + the LAW-18 `monitor_gates`
+summary — split off the narration knob by R242/ADJ-D12), and the async eval-RESULT
 consumer `on_eval_round_complete` (warn-only sealbot by default, operator G-3) — all in this
 file so the loop's decision trail stays readable end to end. (The stride5-spam gate was
 REMOVED at close-out, operator directive B.) WP12-R Phase CS adds the THIRD save leg
@@ -532,14 +533,18 @@ class StepCoordinator:
             # `False` for the whole burst path; the O2/O3 legs above still report `True`,
             # which is where a real checkpoint write is announced.
 
-            # WP13-A: the log_interval boundary is tested PER TRAINING STEP (old-side parity,
-            # `step_coordinator.py:1370/1383`). Testing it once per burst would skip every
+            # WP13-A: the cadence boundaries are tested PER TRAINING STEP (old-side parity,
+            # `step_coordinator.py:1370/1383`). Testing them once per burst would skip every
             # boundary the post-burst step does not land exactly on, thinning BOTH the LAW-18
             # emission stream and the sampling cadence of the draw-rate gate by ~the mean
             # burst — the gate's `consec` window would silently stretch by that factor.
-            axis_step, gate_fired = self._run_log_interval(cfg, loss_info)
-            axis_emitted = axis_emitted or axis_step
-            hard_abort_fired = hard_abort_fired or gate_fired
+            #
+            # R242 (ADJ-D12): TWO boundaries now, on TWO knobs. `_run_log_interval` is
+            # narration (`train.log_interval`); `_run_gate_interval` is arming
+            # (`monitor.gate_interval`). Both are still tested per training step, for the
+            # reason above, which is unchanged.
+            axis_emitted = self._run_log_interval(cfg, loss_info) or axis_emitted
+            hard_abort_fired = self._run_gate_interval(cfg) or hard_abort_fired
 
             # INSIDE the burst (item 7). `_maybe_kick_eval` tests
             # `self._train_step % cfg.eval_interval != 0`, and it used to run ONCE after the
@@ -559,9 +564,11 @@ class StepCoordinator:
 
         # WP12R Step 3 narration (R210): `iteration_complete` emits at the O6 training-burst
         # return, per coordinator step, INDEPENDENT of `log_interval`. `training_step`
-        # alerting stays `log_interval`-gated (above, in `_run_log_interval`); only
-        # `iteration_complete` (the per-iteration counter) was decoupled — "games_total is
-        # a per-iteration counter, not a training-logging event" (R210). NOT called on O2/O3
+        # alerting stays `log_interval`-gated (above, in `_run_log_interval`) — "games_total
+        # is a per-iteration counter, not a training-logging event" (R210). R242 (ADJ-D12)
+        # decoupled a SECOND thing R210 had left on that knob and which R210 never governed:
+        # the hard-abort gates and `monitor_gates` now ride `monitor.gate_interval`
+        # (`_run_gate_interval`). NOT called on O2/O3
         # early returns (clean-completion / shutdown-save): those are not training-burst
         # returns (`loss_info` would be {}, `games_this_iter` degenerate).
         self._emit_iteration_complete(cfg)
@@ -627,23 +634,32 @@ class StepCoordinator:
         if self._heartbeat is not None:
             self._heartbeat(source)
 
-    # ── WP13-A: log_interval instrumentation + the hard-abort gates ───────────────────
+    # ── WP13-A: the NARRATION boundary (log_interval) ─────────────────────────────────
     def _run_log_interval(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float]
-    ) -> tuple[bool, bool]:
-        """At the `log_interval` boundary: emit the `training_step` payload, run the 4 WARN
-        rules on it, run the two LIVE-producer hard-abort gates, and publish the LAW-18
-        `monitor_gates` summary. Returns ``(axis_emitted, hard_abort_fired)``.
+    ) -> bool:
+        """At the `log_interval` boundary, emit the run's NARRATION: the `training_step`
+        payload, the 4 WARN rules over it (plus the loss-window trim) and the axis
+        distribution. Returns ``axis_emitted``.
 
-        WP12R Step 3 narration (R210): `iteration_complete` is NO LONGER emitted here. It
-        moved to `_emit_iteration_complete` at the O6 training-burst return, per coordinator
-        step, INDEPENDENT of `log_interval`. R210: "training_step alerting stays gated" —
-        the `training_step` event, the WARN rules, `emit_axis_distribution`, the hard-abort
-        gates and `monitor_gates` all STAY `log_interval`-gated here. Only
-        `iteration_complete` (the per-iteration counter, not a training-logging event) was
-        decoupled."""
+        R242 (ADJ-D12) — WHAT LEFT THIS METHOD. The two LIVE-producer hard-abort gates and the
+        LAW-18 `monitor_gates` summary are NO LONGER run here; they moved to
+        `_run_gate_interval`, on `monitor.gate_interval`. R210's clause "training_step
+        alerting stays gated" governed GAMES-VISIBILITY narration and is SUPERSEDED IN SCOPE
+        by R242 for the arming half: it was never arming-cadence law. What it still governs is
+        exactly this method — the `training_step` event, the WARN rules and
+        `emit_axis_distribution` stay `log_interval`-gated, because they are logging.
+
+        WP12R Step 3 narration (R210): `iteration_complete` is NO LONGER emitted here either.
+        It moved to `_emit_iteration_complete` at the O6 training-burst return, per
+        coordinator step, INDEPENDENT of `log_interval`.
+
+        The `loss_info` guard STAYS on this half and is correct here: every payload this
+        method builds is made OF the trainer's loss dict, so with no loss there is nothing to
+        narrate. `_run_gate_interval` deliberately carries no such guard — see its docstring.
+        """
         if not loss_info or cfg.log_interval <= 0 or self._train_step % cfg.log_interval != 0:
-            return False, False
+            return False
         sink = self._sink if self._sink is not None else NullEventSink()
 
         payload = self._emit_training_step(cfg, loss_info, sink)
@@ -656,9 +672,44 @@ class StepCoordinator:
             getattr(self.subsystems, "axis_baseline", None) or {},
             getattr(self.subsystems, "tb_writer", None), sink,
         )
+        return axis is not None
+
+    # ── R242: the ARMING boundary (gate_interval) ─────────────────────────────────────
+    def _run_gate_interval(self, cfg: StepCoordinatorConfig) -> bool:
+        """At the `monitor.gate_interval` boundary: run the LIVE-producer hard-abort gates and
+        publish the LAW-18 `monitor_gates` summary. Returns ``hard_abort_fired``.
+
+        THE DEFECT THIS CLOSES (ADJ-D12 / R242). Both of these used to sit inside
+        `_run_log_interval`, behind `self._train_step % cfg.log_interval != 0` — so the whole
+        arming path ran on the NARRATION cadence. At run5's minted `train.log_interval: 1000`
+        that means no draw-rate observation could be taken and no `monitor_gates` event could
+        exist before training step 1000: armed machinery with a blind first kilometre, the
+        F-43 class on the abort path itself. The two knobs are now independent, and
+        `log_interval` decides nothing about arming.
+
+        NO `loss_info` CONDITION HERE, and that is a deliberate semantic WIDENING, not an
+        omission. The gates' producer is the POOL (`pooled_draw_counts`), not the trainer, so
+        an arming decision that waited on the trainer having produced a loss dict would be the
+        same hidden coupling this item removes, one layer in. (The KEPT grad-norm gate is
+        untouched by this: it is evaluated inline in the burst at D3, per training step,
+        because its producer really is the trainer's own loss dict.)
+
+        `consec` semantics follow the stride: `_sample` appends one observation per gate run,
+        so `train.draw_rate_abort.consec` counts consecutive observations at a stride of
+        `gate_interval` training steps. Every committed config mints `gate_interval` equal to
+        its own `train.log_interval`, so no armed value's meaning moves as this lands; the
+        re-scaled stride and the re-derived `consec` are mint-prereg rows.
+
+        The `<= 0` arm mirrors `_run_log_interval`'s and is unreachable from any minted config
+        (`MonitorSchemaConfig.gate_interval` is `ge=1`, for the reason stated at the field);
+        it exists so a direct construction cannot raise `ZeroDivisionError` inside the burst.
+        """
+        if cfg.gate_interval <= 0 or self._train_step % cfg.gate_interval != 0:
+            return False
+        sink = self._sink if self._sink is not None else NullEventSink()
         fired = self._run_hard_abort_gates(cfg)
         self._emit_monitor_gates(cfg, sink)
-        return axis is not None, fired
+        return fired
 
     def _emit_training_step(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
@@ -666,7 +717,9 @@ class StepCoordinator:
         """Build + emit the `training_step` event (WP13-A §c.4) through the injected sink
         and return its payload (the 4 WARN rules read it). Split out of the old
         `_emit_training_events` (WP12R Step 3 narration, R210): `iteration_complete` moved to
-        `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated."""
+        `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated,
+        and after R242 it is one of the three things that still are — narration is all
+        `log_interval` decides now."""
         payload = emit_training_step_event(
             self._train_step, loss_info,
             # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
@@ -774,6 +827,12 @@ class StepCoordinator:
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.
 
+        Run by `_run_gate_interval` at the `monitor.gate_interval` boundary (R242 / ADJ-D12) —
+        `monitor.gate_interval` train steps is THE STRIDE of this gate, and `consec` is
+        counted in those units. Until R242 the caller was `_run_log_interval` and the stride
+        was `train.log_interval`, which is why run5's minted 1000 made this gate unable to
+        take even one sample before training step 1000.
+
         draw-rate reads `pooled_draw_rate(pool.pooled_draw_counts(), N_pool_min=…)` — the
         POOLED COUNT-WEIGHTED rate over the union of worker windows (R92), with the evidence
         bar config-authored — never the NaN draw-target phantom at `pool_push.py:135`, whose
@@ -807,7 +866,8 @@ class StepCoordinator:
         # real flip-set: an armed spec, a live producer, and a pool below the bar. Its
         # witness is `test_drawrate_gate_branch_flipset.py`'s drive B5.
         #
-        # The return is required, not tidy: `consec` counts consecutive OBSERVATIONS, so
+        # The return is required, not tidy: `consec` counts consecutive OBSERVATIONS — one
+        # per gate run, i.e. one per `monitor.gate_interval` training steps (R242) — so
         # running the rule when nothing was appended would re-decide the abort on a stale
         # tail. `_sample` has already skip-counted this case (LAW-18, ONE skip site).
         if not self._sample(
@@ -824,6 +884,11 @@ class StepCoordinator:
     def _sample(self, gate: str, history: list[float], producer: Any) -> bool:
         """Append one LIVE producer sample to ``history``; False (+skip) when there is no
         observation to append.
+
+        THE SAMPLING STRIDE IS `monitor.gate_interval` (R242 / ADJ-D12), because this runs
+        once per `_run_gate_interval` boundary — so "consecutive OBSERVATIONS" below means
+        consecutive gate-interval boundaries, and a rule's `consec` is denominated in them.
+        Before R242 the stride was `train.log_interval` and the two facts were one knob.
 
         TWO absences, ONE counter (LAW-18). The producer itself may be absent — a disarmed
         gate, or a producer that has not landed — and a LIVE producer may return `None`,
