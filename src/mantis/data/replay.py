@@ -24,6 +24,7 @@ import numpy as np
 
 from mantis._engine import Board
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import REPLAY_COUNTERS
 from mantis.data.replay_v6w25 import replay_game_to_triples_v6w25
 from mantis.encoding import EncodingSpec
 from mantis.env.game_state import (
@@ -31,6 +32,7 @@ from mantis.env.game_state import (
     GameState,
     _compute_chain_planes,  # pyright: ignore[reportPrivateUsage]  # ported chain-plane kernel
 )
+from mantis.monitor.best_effort import best_effort
 from mantis.util.constants import HISTORY_LEN
 
 log = get_logger(__name__)
@@ -106,11 +108,21 @@ def replay_game_to_triples_v6(
             policies[t, target_idx] = 1.0
             outcomes[t]             = 1.0 if state.current_player == winner else -1.0
             t += 1
+        else:
+            # Off-window DROP (documented in the module docstring): this ply has no
+            # representable dense target and emits NO training row. Not an exception —
+            # a silent supervision loss, which is why it is COUNTED here (LAW-18).
+            REPLAY_COUNTERS.increment("data.replay.v6.off_window_ply_dropped")
 
-        try:
-            state = state.apply_move(board, q, r)
-        except Exception:  # noqa: BLE001 — engine raises on illegal move; skip the rest
-            break
+        ok, next_state = best_effort(
+            "data.replay.v6.illegal_move_truncated_game",
+            # default-bound (ruff B023): the closure runs inside THIS iteration only.
+            lambda s=state, mq=q, mr=r: s.apply_move(board, mq, mr),
+            counters=REPLAY_COUNTERS,
+        )
+        if not ok or next_state is None:
+            break  # engine raised on an illegal move; the rest of the game is lost
+        state = next_state
 
     return states[:t], chain_planes[:t], policies[:t], outcomes[:t]
 
@@ -168,6 +180,7 @@ def replay_game_to_triples_ls(
         _, _, H, W = tensor.shape
         half = (H - 1) // 2
         outcome = 1.0 if state.current_player == winner else -1.0
+        rows_before = len(states_rows)
         for k, (cq, cr) in enumerate(centers[:k_max]):
             wq = q - cq + half
             wr = r - cr + half
@@ -176,11 +189,20 @@ def replay_game_to_triples_ls(
                 target_rows.append(wq * W + wr)
                 outcome_rows.append(outcome)
                 ply_rows.append(ply)
+        if len(states_rows) == rows_before:
+            # A ply outside ALL cluster windows emits no row at all (docstring above) —
+            # an un-excepted supervision DROP, counted for the same LAW-18 reason.
+            REPLAY_COUNTERS.increment("data.replay.ls.off_window_ply_dropped")
 
-        try:
-            state = state.apply_move(board, q, r)
-        except Exception:  # noqa: BLE001 — engine raises on illegal move; skip the rest
-            break
+        ok, next_state = best_effort(
+            "data.replay.ls.illegal_move_truncated_game",
+            # default-bound (ruff B023): the closure runs inside THIS iteration only.
+            lambda s=state, mq=q, mr=r: s.apply_move(board, mq, mr),
+            counters=REPLAY_COUNTERS,
+        )
+        if not ok or next_state is None:
+            break  # engine raised on an illegal move; the rest of the game is lost
+        state = next_state
 
     n_rows = len(states_rows)
     if n_rows == 0:

@@ -91,9 +91,9 @@ DEDUPE -- read this before trusting the dedupe leg
 ================================================================================
 R247 says "dedupe overlap vs the in-repo corpus by game_hash". THERE IS NO IN-REPO
 ``game_hash`` PRODUCER FOR THE HUMAN CORPUS. Verified:
-  * ``src/mantis/data/sources/human.py:91`` -- a human game's identity is
+  * ``src/mantis/data/sources/human.py:98`` -- a human game's identity is
     ``game_id_str=path.stem``, i.e. the source UUID of the JSON filename. Not a hash.
-  * ``src/mantis/data/generate.py:132-135`` -- ``_game_hash`` is the ONLY hash-of-moves in
+  * ``src/mantis/data/generate.py:147-150`` -- ``_game_hash`` is the ONLY hash-of-moves in
     the repo. It hashes BOT self-play games and is used as a FILENAME stem; F-06 rules bot
     games non-canonical, so it is not the human corpus's key.
 Therefore this tool never compares the dataset's ``game_hash`` against an in-repo
@@ -141,7 +141,7 @@ I32_MAX = 2**31 - 1
 #: crates/mantis-core/src/board/state/core.rs:40-42 and board/zobrist.rs:77-81. The window
 #: SLIDES (board/mod.rs:12-14) -- this is a reporting reference, never a rejection bound.
 NOMINAL_WINDOW_HALF = 9
-#: src/mantis/data/sources/human.py:108-112 -- the in-repo ingestion filter's move floor,
+#: src/mantis/data/sources/human.py:115-119 -- the in-repo ingestion filter's move floor,
 #: in PLIES. R247 names the same floor as selection bias (b).
 DECLARED_MIN_PLIES = 20
 
@@ -341,7 +341,7 @@ def parse_record(obj: object, where: str) -> dict[str, Any]:
             raise ContractViolation(
                 f"{where}: moves[{i}] must be a 2-element [q, r] array; found "
                 f"{_describe_moves(raw_moves)}. The in-repo human corpus uses "
-                "{'x': q, 'y': r} objects (src/mantis/data/sources/human.py:78); if the "
+                "{'x': q, 'y': r} objects (src/mantis/data/sources/human.py:85); if the "
                 "dataset does too, amend the contract block -- this tool will not coerce."
             )
         q: object = mv[0]  # pyright: ignore[reportUnknownVariableType]
@@ -584,8 +584,8 @@ def derived_move_key(moves: list[tuple[int, int]]) -> str:
 def _in_repo_move_keys(corpus_dir: Path) -> tuple[list[str], list[str]]:
     """Derive move keys from the in-repo human corpus JSON cache.
 
-    Shape per src/mantis/data/sources/human.py:78 -- ``moves[i].x`` / ``moves[i].y`` ARE the
-    axial (q, r); src/mantis/data/generate.py:125 writes the same pair back out.
+    Shape per src/mantis/data/sources/human.py:85 -- ``moves[i].x`` / ``moves[i].y`` ARE the
+    axial (q, r); src/mantis/data/generate.py:140 writes the same pair back out.
     """
     keys: list[str] = []
     skipped: list[str] = []
@@ -633,8 +633,8 @@ def dedupe_leg(records: list[dict[str, Any]], corpus_dir: Path | None) -> dict[s
         "dataset_duplicate_derived_move_key": len(derived) - len(set(derived)),
         "in_repo_game_hash_producer": (
             "ABSENT -- human corpus identity is the source UUID filename stem "
-            "(src/mantis/data/sources/human.py:91); the only hash-of-moves in the repo is "
-            "src/mantis/data/generate.py:132-135, which hashes BOT games for use as a "
+            "(src/mantis/data/sources/human.py:98); the only hash-of-moves in the repo is "
+            "src/mantis/data/generate.py:147-150, which hashes BOT games for use as a "
             "filename and is non-canonical under F-06"
         ),
     }
@@ -705,7 +705,7 @@ def selection_biases(records: list[dict[str, Any]], conv: dict[str, Any]) -> lis
                 "min_plies_found": min(ply_counts) if ply_counts else None,
                 "games_below_declared_floor": below,
                 "declared_floor_plies": DECLARED_MIN_PLIES,
-                "floor_source": "src/mantis/data/sources/human.py:108-112",
+                "floor_source": "src/mantis/data/sources/human.py:115-119",
             },
         },
     ]

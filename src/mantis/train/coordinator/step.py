@@ -41,6 +41,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
+import mantis.data.loss_counters as _data_loss
 import mantis.train.buffer_persist as _buffer_persist
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.monitor.config import MonitorConfig
@@ -979,6 +980,14 @@ class StepCoordinator:
             # swallows are counted and read HERE, live — a module-attribute read, never a
             # from-import of the int (the subsystems.py counter-binding rule).
             "buffer_save_errors_total": int(_buffer_persist.buffer_save_errors_total),
+            # Item 8 (LAW-14/LAW-18): `data/**`'s skip/truncate arms are counted, and the
+            # IN-RUN half of them — the pretrain-reachable replayers, which drop training
+            # rows off-window and truncate a game at the first illegal move — is READ here
+            # while the run is alive. Without it a corpus that silently loses every game
+            # after ply 3 and a healthy one produce identical event streams. Module-attribute
+            # read (never a from-import of the snapshot) for the same reason as the line above.
+            # Cadence is this method's own: `monitor.gate_interval` (R242), not `log_interval`.
+            "data_loss_counters": dict(_data_loss.REPLAY_COUNTERS.snapshot()),
         })
 
     def _watchdog_counters(self) -> dict[str, int]:
