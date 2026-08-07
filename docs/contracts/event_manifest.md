@@ -91,6 +91,8 @@ producers is a phantom-armed abort chain waiting to happen).
 | `eval_round_wall` | event_literal (+`also`) | `eval.pipeline` / `eval_round_started` + `eval_round_complete` | `tests/eval/test_round_events.py::test_round_emits_start_and_complete_wall_events` |
 | `eval_broken` | event_literal | `eval.pipeline` / `eval_broken` — payload `reason` is a `mantis.eval.errors.EvalBrokenReason` member, the ONE authority (WP12-R Phase O / R152): `join_timeout`, `killed`, `exit_nonzero`, `result_missing`, `result_invalid`, `ladder_persist_failed`, `round_completion_error` — seven members, seven censused routes, wire spellings byte-identical to the bare literals they replace. `phase` stays on the payload as a FUNCTION of the reason (`drain` / `worker_exit` / `ladder_persist` / `round_completion`). The two exception-bearing routes carry a `detail`, and they carry DIFFERENT ones: `round_completion_error` carries `detail` = `repr(exc)` AND an `exception_class` key; `ladder_persist_failed` carries `detail` ONLY — a persistence message naming the ladder-state path, not `repr(exc)` — and NO `exception_class` key at all (the emitter adds each extra iff it was passed, `pipeline.py:499-501`). The other five routes carry neither. The routed round result carries the same value as `eval_broken_reason` (`None` IS the clean state — the `eval_broken` bool and the `error` key are DELETED, R79) plus `eval_broken_detail`, which is PROSE nobody branches on | `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain` (+ reason `round_completion_error` — RED-TEAM-FIX WP11-A F1 layer 2, ANY uncaught exception in round completion/scheduling converts to a delivered `eval_broken` rather than killing the poller thread silently — `tests/eval/test_round_completion_error.py::test_poller_thread_survives_an_uncaught_exception_in_round_completion`) |
 | `eval_rung_skipped` | event_literal | `eval.pipeline` / `eval_rung_skipped` | `tests/eval/test_rung_loud_skip.py::test_unresolvable_rung_emits_skip_event_and_log` |
+| `batch_fill_pct` | symbol (+`also`) | `selfplay.pool_hooks.batch_fill_pct` ← `selfplay.inference_server.InferenceServer.total_requests` / `.forward_count` | `tests/selfplay/test_inference_batch_timing.py::test_batch_fill_pct_reaches_the_sink_from_the_live_inference_counters` |
+| `inference_batch_timing` | symbol (+`also`) | `selfplay.inference_server.InferenceServer.batch_timing_snapshot` + `selfplay.pool_hooks.inference_batch_timing` | `tests/selfplay/test_inference_batch_timing.py::test_the_batching_block_reaches_the_sink_on_iteration_complete` |
 | `eval_rung_skip_class` | event_literal | `eval.pipeline` / `eval_rung_skip_class` — the fourth skip channel (WP12-R Phase A, LAW-18/R164: in-run FIRE RATE, not "a log line somewhere"). One event per skipped rung, emitted alongside its `eval_rung_skipped` through the same injected sink; payload `{event, round_id, rung, reason_class, class_count}`, where `class_count` is the running count for that class WITHIN the round. `reason_class` is drawn from the CLOSED partition `mantis.eval.pipeline.SKIP_REASON_CLASSES` = `operator_authorized` (the kraken/strix skip R139 ruled) / `vendor_absent` / `build_absent` / `load_failed` (the three ways a sealbot rung fails to resolve). Classification imports `mantis.bots.resolve.SKIP_REASON_MARKERS`, the same literals the refusal strings are built from, so the wording cannot drift out of the classifier's reach silently. A reason matching no marker (or more than one) emits NO class event and logs `eval_rung_skip_class_unclassified` at ERROR — a loud failure, never a fifth bucket invented at emission time. **Not a `producer_manifest.yaml` monitor input**: it is an event-stream counter with no consuming rule, and registering it as one would create a producer-without-consumer | `tests/eval/test_rung_skip_class_counter.py::test_each_skip_reason_class_counts_itself_in_run` (+ the closed-set / no-over-fire conjunct, `::test_the_class_set_is_closed_and_a_repeated_class_does_not_over_fire`) |
 
 ## WP-UNFREEZE rows (actor-sync ⊥ deploy-gate split; LAW-18)
@@ -213,6 +215,28 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   run-fatal — that permanent zero is the posture, not an unproduced field. A DECREASE is
   emitted as measured and never clamped: the atomics are monotonic, so a negative delta is a
   wiring bug and a `max(0, …)` would hide it (the `actor_lag_negative` precedent below).
+- `iteration_complete.inference_batching` is the Q3 in-run batching instrument (LAW-18),
+  and `iteration_complete.batch_fill_pct` gains the manifest row it shipped without.
+  `batch_fill_pct` has published a mean batch occupancy on every `iteration_complete` since
+  WP13-A, fed by `InferenceServer._total_requests` / `._forward_count` against
+  `._batch_size`, with nothing making either counter's disappearance un-shippable. The new
+  block carries what the ratio cannot resolve: `queue_wait` (the wall time inside
+  `InferenceBatcher.next_graph_batch` — EXACTLY the Rust collector's
+  `batch_size / 2`-or-`max_wait_ms` wait, `crates/mantis-selfplay/src/queues/graph.rs`),
+  `collate` (the `collate_graph_batch` cost) and `occupancy` (count/total/mean plus
+  min/max and a power-of-two histogram, because a mean cannot separate "always 1" from
+  "sometimes 64, sometimes 0"). Each timing sub-block publishes RAW `count` + `total_ms`
+  beside the derived `mean_ms`, so a consumer differences two consecutive events to get an
+  INTERVAL mean; min/max are run-cumulative extremes and do not difference. **Graph path
+  only** — the dense loop is not instrumented, so a grid run's block carries `None` for
+  every derived reading (the unproduced-field convention below, applied), while
+  `empty_polls` stays VISIBLE at 0 on the producing path. `graph_build_time` is
+  deliberately NOT built: it lives per-leaf in Rust (`mantis-graph::build_axis_graph`) and
+  would be a LAW-09 hot-path change owing re-run parity oracles and an IQR-gated bench.
+  Registration follows the `target_integrity_counters` precedent (R164) rather than the
+  `eval_rung_skip_class` exclusion above; those two rulings disagree about whether an
+  in-run instrument with no consuming gate rule belongs here, and an operator ruling
+  collapsing them is owed.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

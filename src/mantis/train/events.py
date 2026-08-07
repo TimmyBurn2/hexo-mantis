@@ -65,6 +65,11 @@ class PoolTelemetryLike(Protocol):
     draws: int
     sims_per_sec: float
     batch_fill_pct: float
+    # Q3 (LAW-18): the batching instrument behind `batch_fill_pct`'s single ratio.
+    # Optional on the SOURCE, not on the payload — a telemetry source that does not
+    # produce it publishes `None`, which the event-manifest convention defines as "no
+    # producer" and which a consumer must never read as zero.
+    inference_batch_timing: Mapping[str, Any] | None
     recent_move_histories: list[list[tuple[int, int]]]
 
     def runner_stats(self) -> Any: ...  # RunnerStats — Any keeps the no-`train → selfplay` edge
@@ -330,6 +335,14 @@ def emit_iteration_complete_event(
         "buffer_capacity": buffer.capacity,
         "corpus_selfplay_frac": round(1.0 - w_pre, 4),
         "batch_fill_pct": pool.batch_fill_pct,
+        # Q3 (LAW-18): the inference batching instrument — the collector wait, the
+        # collate cost and the served-batch occupancy DISTRIBUTION that `batch_fill_pct`'s
+        # single ratio cannot resolve. Rides `iteration_complete` because that is already
+        # the established seam for inference-server stats (`batch_fill_pct` itself) and
+        # because it emits per coordinator step, on neither interval knob. `None` = the
+        # telemetry source has no producer for it (event_manifest unproduced-field
+        # convention), never a fabricated zero block.
+        "inference_batching": getattr(pool, "inference_batch_timing", None),
         "mcts_mean_depth": rstats.mcts_mean_depth,
         # WP12-R Phase O (R164/LAW-18): the three Phase-T target-integrity counters reach
         # the ONE channel here, each as {total, delta, per_position} beside the

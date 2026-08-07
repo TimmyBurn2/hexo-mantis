@@ -48,6 +48,9 @@ from mantis.selfplay.pool_hooks import (
     RunnerStats,
 )
 from mantis.selfplay.pool_hooks import batch_fill_pct as _batch_fill_pct
+from mantis.selfplay.pool_hooks import (
+    inference_batch_timing as _inference_batch_timing,
+)
 from mantis.selfplay.pool_hooks import inference_stats as _inference_stats
 from mantis.selfplay.pool_hooks import latest_replay_path as _latest_replay_path
 from mantis.selfplay.pool_hooks import runner_stats as _runner_stats
@@ -182,6 +185,16 @@ class WorkerPool:
     @property
     def batch_fill_pct(self) -> float:
         return _batch_fill_pct(self)
+
+    @property
+    def inference_batch_timing(self) -> dict[str, Any]:
+        """The inference server's batching instrument (queue wait / collate / occupancy).
+
+        The LAW-18 companion to `batch_fill_pct`: the ratio says how full the batches
+        were on average, this says what the distribution was and what each batch waited
+        for.
+        """
+        return _inference_batch_timing(self)
 
     @property
     def x_winrate(self) -> float:

@@ -51,6 +51,57 @@ _LOG = logging.getLogger(__name__)
 _HEARTBEAT_SOURCE = "inference_dispatch"
 
 
+def _timing_agg(
+    count: int, total_s: float, min_s: float | None, max_s: float | None
+) -> dict[str, Any] | None:
+    """One timing accumulator as an event sub-block, or `None` when nothing was measured.
+
+    `None` at zero samples is deliberate and is the whole point: a field with no producer
+    on this path must NOT read as a real `0.0` measurement
+    (docs/contracts/event_manifest.md, the unproduced-field convention — the F-10 class in
+    miniature). The RAW `count`/`total_ms` travel beside the derived `mean_ms` so a
+    consumer can difference two consecutive events and recover an INTERVAL mean; the
+    min/max are run-cumulative extremes and do NOT difference.
+    """
+    if count == 0:
+        return None
+    return {
+        "count": count,
+        "total_ms": round(total_s * 1e3, 6),
+        "mean_ms": round((total_s / count) * 1e3, 6),
+        "min_ms": None if min_s is None else round(min_s * 1e3, 6),
+        "max_ms": None if max_s is None else round(max_s * 1e3, 6),
+    }
+
+
+def _occupancy_agg(
+    count: int,
+    total: int,
+    min_n: int | None,
+    max_n: int | None,
+    hist: dict[int, int],
+    batch_size: int,
+) -> dict[str, Any] | None:
+    """The served-batch occupancy distribution, or `None` when nothing was measured.
+
+    A mean ratio alone cannot distinguish "always 1 request per forward" from "sometimes
+    64, sometimes 0" — the two agree on the ratio and disagree completely on what the
+    queue is doing. So min/max and a power-of-two histogram travel with it; the histogram
+    key is the bucket's LOWER bound (`1`, `2`, `4`, … requests per forward).
+    """
+    if count == 0:
+        return None
+    return {
+        "count": count,
+        "total": total,
+        "mean": round(total / count, 6),
+        "min": min_n,
+        "max": max_n,
+        "fill_pct_mean": round((total / (count * max(batch_size, 1))) * 100.0, 6),
+        "histogram": {str(k): v for k, v in sorted(hist.items())},
+    }
+
+
 class InferenceServer(threading.Thread):
     """Thin Python inference loop backed by a Rust-owned batching queue."""
 
@@ -103,6 +154,25 @@ class InferenceServer(threading.Thread):
         # defaulting dense.
         self._is_graph = is_graph_representation(self.encoding_spec)
         self._policy_len = self.encoding_spec.policy_logit_count
+
+        # ── graph-loop batching instrumentation (LAW-18) ─────────────────────────────
+        # Written ONLY by `_run_graph_loop`. The dense loop leaves every accumulator at
+        # its zero, so `batch_timing_snapshot` reports `None` for each derived reading on
+        # a grid run — "no producer on this path", never a fabricated 0. Assigned before
+        # the representation branch so the accessor never raises on either arm.
+        self._batch_wait_count = 0
+        self._batch_wait_total_s = 0.0
+        self._batch_wait_min_s: float | None = None
+        self._batch_wait_max_s: float | None = None
+        self._collate_count = 0
+        self._collate_total_s = 0.0
+        self._collate_min_s: float | None = None
+        self._collate_max_s: float | None = None
+        self._occupancy_total = 0
+        self._occupancy_min: int | None = None
+        self._occupancy_max: int | None = None
+        self._occupancy_hist: dict[int, int] = {}
+        self._empty_polls = 0
 
         if self._is_graph:
             # Graph mode: the model is a `GnnNet` consuming block-diagonal graph tensors,
@@ -334,6 +404,79 @@ class InferenceServer(threading.Thread):
     def total_requests(self) -> int:
         return self._total_requests
 
+    # ── batching instrumentation (LAW-18) ───────────────────────────────────────
+    def _record_batch_wait(self, wait_s: float, n_requests: int) -> None:
+        """Accumulate ONE served pop: the collector wait that produced it + its occupancy.
+
+        AGGREGATE, never emit (LAW-09): this runs once per NN forward — potentially
+        thousands of times a second — so an event per call would make the sink the
+        bottleneck and would itself be the hot-path change this instrument exists to
+        measure around. What reaches the ONE channel is a SNAPSHOT on an existing event.
+
+        `wait_s` is the wall time spent inside `next_graph_batch`, i.e. exactly the Rust
+        collector's `batch_size / 2`-or-deadline wait (`queues/graph.rs`): if it sits at
+        `inference_max_wait_ms` on every forward, the collector never reached its
+        threshold and every batch ran to the deadline.
+        """
+        self._batch_wait_count += 1
+        self._batch_wait_total_s += wait_s
+        if self._batch_wait_min_s is None or wait_s < self._batch_wait_min_s:
+            self._batch_wait_min_s = wait_s
+        if self._batch_wait_max_s is None or wait_s > self._batch_wait_max_s:
+            self._batch_wait_max_s = wait_s
+        self._occupancy_total += n_requests
+        if self._occupancy_min is None or n_requests < self._occupancy_min:
+            self._occupancy_min = n_requests
+        if self._occupancy_max is None or n_requests > self._occupancy_max:
+            self._occupancy_max = n_requests
+        bucket = 1 << (n_requests.bit_length() - 1) if n_requests > 0 else 0
+        self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
+
+    def _record_collate(self, collate_s: float) -> None:
+        """Accumulate ONE successful `collate_graph_batch`. Counted SEPARATELY from the
+        wait: a batch whose collate raises still contributes a real wait sample, and
+        lock-stepping the two counters would hide that asymmetry."""
+        self._collate_count += 1
+        self._collate_total_s += collate_s
+        if self._collate_min_s is None or collate_s < self._collate_min_s:
+            self._collate_min_s = collate_s
+        if self._collate_max_s is None or collate_s > self._collate_max_s:
+            self._collate_max_s = collate_s
+
+    def batch_timing_snapshot(self) -> dict[str, Any]:
+        """Cumulative-since-start snapshot of the graph loop's batching instrument.
+
+        The block that reaches `iteration_complete` (LAW-18: a lever under test logs its
+        own fire rate IN-RUN — a post-hoc offline probe cannot distinguish a starved queue
+        from an ineffective one). `batch_size` and `max_wait_ms` travel with it because a
+        wait or an occupancy is unreadable without the deadline and the denominator that
+        produced it.
+
+        Every derived reading is `None` when its accumulator took no sample — including
+        the whole of a GRID run, whose dense loop is not instrumented and therefore has no
+        producer here.
+        """
+        return {
+            "representation": "graph" if self._is_graph else "grid",
+            "batch_size": self._batch_size,
+            "max_wait_ms": self._max_wait_ms,
+            "queue_wait": _timing_agg(
+                self._batch_wait_count, self._batch_wait_total_s,
+                self._batch_wait_min_s, self._batch_wait_max_s,
+            ),
+            "collate": _timing_agg(
+                self._collate_count, self._collate_total_s,
+                self._collate_min_s, self._collate_max_s,
+            ),
+            "occupancy": _occupancy_agg(
+                self._batch_wait_count, self._occupancy_total, self._occupancy_min,
+                self._occupancy_max, self._occupancy_hist, self._batch_size,
+            ),
+            # An idle counter stays VISIBLE at 0 on the producing path (the
+            # `target_integrity_defects` posture); `None` on the path with no producer.
+            "empty_polls": self._empty_polls if self._is_graph else None,
+        }
+
     # ── Thread body ─────────────────────────────────────────────────────────────
     def _padding_active(self) -> bool:
         """The compile + `reduce-overhead` path replays a captured CUDA graph, which
@@ -429,11 +572,19 @@ class InferenceServer(threading.Thread):
         try:
             while not self._stop_event.is_set():
                 try:
+                    _t_wait_start = time.perf_counter()
                     request_ids, wire = self._batcher.next_graph_batch(
                         self._batch_size, self._max_wait_ms,
                     )
+                    _wait_s = time.perf_counter() - _t_wait_start
                     if not request_ids:
+                        # An empty pop is a deadline that expired with nothing queued. It
+                        # is NOT a served-batch wait and must not enter the wait mean —
+                        # an idle server would otherwise peg it at max_wait_ms and hide
+                        # what the served batches actually cost.
+                        self._empty_polls += 1
                         continue
+                    self._record_batch_wait(_wait_s, len(request_ids))
                     if not self._first_enqueued_emitted:
                         self._first_enqueued_emitted = True
                         if self._sink is not None:
@@ -444,6 +595,7 @@ class InferenceServer(threading.Thread):
                             })
                     self._total_requests += len(request_ids)
                     try:
+                        _t_collate_start = time.perf_counter()
                         batch = collate_graph_batch(
                             wire,
                             expected_version=1,
@@ -455,6 +607,7 @@ class InferenceServer(threading.Thread):
                             semantic="canary",
                             canary_period=canary_period,
                         )
+                        self._record_collate(time.perf_counter() - _t_collate_start)
                         stone_mask = stone_mask_from_batch(batch)
                         if self._forward_count == 0:
                             assert not self.model.training, (

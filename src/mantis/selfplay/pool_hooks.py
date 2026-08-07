@@ -227,6 +227,18 @@ def batch_fill_pct(pool: Any) -> float:
     return min((reqs / (fwd * max(bs, 1))) * 100.0, 100.0)
 
 
+def inference_batch_timing(pool: Any) -> dict[str, Any]:
+    """The inference server's batching instrument, as an `iteration_complete` block.
+
+    The DISTRIBUTION behind `batch_fill_pct`'s single ratio, plus the two waits that ratio
+    cannot see: the collector wait (`queue_wait`) and the collate cost. `batch_fill_pct`
+    is a mean over the whole run and cannot distinguish "always 1 request per forward"
+    from "sometimes 64, sometimes 0"; this block carries the min/max and the histogram
+    that can, and it carries the deadline (`max_wait_ms`) each wait is measured against.
+    """
+    return pool._inference_server.batch_timing_snapshot()
+
+
 # ---------------------------------------------------------------------------
 # Forwarders on the same seam (mutating actions, so not on the snapshots)
 # ---------------------------------------------------------------------------
@@ -265,6 +277,7 @@ __all__ = [
     "RecorderLike",
     "RunnerStats",
     "batch_fill_pct",
+    "inference_batch_timing",
     "inference_stats",
     "latest_replay_path",
     "runner_stats",

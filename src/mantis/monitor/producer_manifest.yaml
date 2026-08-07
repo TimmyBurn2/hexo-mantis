@@ -217,6 +217,71 @@ gates:
       atomics are monotonic and a negative delta is therefore a wiring bug.
     producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
 
+  # ── Q3: the inference batching instrument (iteration_complete, LAW-18) ────────────
+  - id: batch_fill_pct
+    input: iteration_complete.batch_fill_pct
+    producer:
+      kind: symbol
+      module: mantis.selfplay.pool_hooks
+      symbol: batch_fill_pct
+      feeds_from: mantis.selfplay.inference_server.InferenceServer.total_requests
+    also:
+      kind: symbol
+      module: mantis.selfplay.inference_server
+      symbol: InferenceServer.forward_count
+    note: >-
+      SHIPPED WITH A LIVE PRODUCER AND NO ROW. The mean batch occupancy has been published
+      on every `iteration_complete` since WP13-A, fed by the inference server's own
+      `_total_requests` / `_forward_count` against `_batch_size`, and nothing made either
+      counter's disappearance un-shippable — the F-10 shape (a live-looking field fed by
+      nothing) with the producer merely still alive by luck. Registered on the
+      `target_integrity_counters` precedent (R164): an in-run LAW-18 instrument on
+      `iteration_complete` whose consumer is the operator reading the run, not a gate rule.
+      Stated so the difference is not silently re-litigated: `eval_rung_skip_class` was
+      deliberately NOT registered on the grounds that a counter with no consuming rule
+      would be a producer-without-consumer. The two rulings disagree, and this row follows
+      the LATER and closer one; an operator ruling that collapses them is owed.
+      LAW-03, because the unit is not obvious: the value is a PERCENTAGE of the configured
+      `inference_batch_size`, cumulative since server start, capped at 100 and reported as
+      0.0 — not None — before the first forward (the pre-existing spelling, untouched).
+    producer_test: tests/selfplay/test_inference_batch_timing.py::test_batch_fill_pct_reaches_the_sink_from_the_live_inference_counters
+
+  - id: inference_batch_timing
+    input: iteration_complete.inference_batching
+    producer:
+      kind: symbol
+      module: mantis.selfplay.inference_server
+      symbol: InferenceServer.batch_timing_snapshot
+    also:
+      kind: symbol
+      module: mantis.selfplay.pool_hooks
+      symbol: inference_batch_timing
+    note: >-
+      The distribution `batch_fill_pct`'s single ratio cannot resolve, plus the two costs
+      it never saw. `queue_wait` is the load-bearing one: it is the wall time spent inside
+      `InferenceBatcher.next_graph_batch`, i.e. EXACTLY the Rust collector's
+      `batch_size / 2`-or-`max_wait_ms` wait (crates/mantis-selfplay/src/queues/graph.rs),
+      so a wait pegged at `inference_max_wait_ms` on every forward is the in-run witness
+      that the collector's threshold was never reachable. `collate` is the
+      `collate_graph_batch` cost. `occupancy` carries min/max and a power-of-two histogram
+      because a mean cannot separate "always 1" from "sometimes 64, sometimes 0".
+      Cumulative since server start, with the RAW `count`/`total_ms` published beside the
+      derived `mean_ms` so a consumer can difference two consecutive events and recover an
+      interval mean.
+      PRODUCED ON THE GRAPH PATH ONLY. The dense loop is not instrumented (Q3 scope: no
+      hot-path change on a path the finding is not about), so a grid run publishes `None`
+      for every derived reading — no producer, never a fabricated 0. `empty_polls` is the
+      one counter that stays VISIBLE at 0 on the producing path (the
+      `target_integrity_defects` posture) and `None` on the path with no producer.
+      NOT BUILT, deliberately: `graph_build_time`. It lives in Rust
+      (`mantis-graph::build_axis_graph`, per LEAF), so instrumenting it means a counter
+      threaded selfplay -> bridge -> Python, a maturin rebuild and a timing call inside the
+      per-leaf hot path — a LAW-09 hot-path change requiring re-run parity oracles and an
+      IQR-gated bench, which this bundle's prep-only Phase P (8cb8577) does not have. An
+      instrument that perturbs the thing it measures and lands without a bench is not a
+      measurement.
+    producer_test: tests/selfplay/test_inference_batch_timing.py::test_the_batching_block_reaches_the_sink_on_iteration_complete
+
   - id: terminal_eval_broken
     input: the terminal round's typed eval_broken reason -> rc 48
     producer:
