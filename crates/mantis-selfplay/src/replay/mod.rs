@@ -1,7 +1,10 @@
-//! ReplayBuffer — pre-allocated ring buffer with vectorized 12-fold hex
-//! augmentation. Ported from the predecessor engine's `replay_buffer/` with the
-//! FFI-binding STRIP (R6/LAW-17: this crate compiles with ZERO Python/array
-//! bindings). The sample-return positional arrays become owned-Rust structs whose
+//! ReplayBuffer — pre-allocated ring buffer with vectorized hex augmentation, drawn
+//! per record over the group that is LOSSLESS for that record (R245(c); see
+//! `slot_is_compact` + `sym::draw_record_sym`). Ported from the predecessor engine's
+//! `replay_buffer/` with the FFI-binding STRIP (R6/LAW-17: this crate compiles with
+//! ZERO Python/array bindings).
+//!
+//! The sample-return positional arrays become owned-Rust structs whose
 //! field order is the versioned `SAMPLE_ORDER_V1` contract (O-35); array
 //! marshaling + the f16-bits reinterpret land in the bridge (WP7).
 //!
@@ -9,11 +12,17 @@
 //!   mod.rs        — `ReplayBuffer` struct + Rust facade (thin delegates)
 //!   storage.rs    — resize, dashboard stats, weight schedule, monotonic id
 //!   push.rs       — single-position `push_impl`, batched `push_game`/`push_many`
-//!   sample.rs     — `sample_batch_core` + weighted-sample + 12-fold apply_sym
+//!   sample.rs     — `sample_batch_core` + weighted-sample + gated apply_sym
 //!   persist/      — HEXB v9 save / load (on-disk format)
 //!   sym.rs        — 12-fold D6 permutation tables + geometry constants
 //!   schedule.rs   — game-length weight schedule
 //!   hexg/         — parallel graph-position ring (HEXG v1)
+//!
+//! R8: >300 LOC by design — the struct definition, the ONE constructor
+//! that fixes every column's NEUTRAL init value, and `slot_is_compact` (the R245(c)
+//! authority that reads those same neutrals back) are one unit. The gate is correct
+//! only while the two agree, so splitting the reader from the init it is written
+//! against would put the agreement across a file boundary where a drift is silent.
 //!
 //! ## Memory layout (flat, row-major; strides from the encoding spec)
 //!   states       : Vec<u16> — f16 bits, [capacity × spec.state_stride()]
@@ -48,7 +57,9 @@ pub use hexg::{GraphRecord, GraphTargets, HexgBuffer};
 
 // ── ReplayBuffer ───────────────────────────────────────────────────────────────
 
-/// Ring-buffer replay buffer with 12-fold hexagonal augmentation.
+/// Ring-buffer replay buffer with hexagonal augmentation gated PER RECORD (R245(c)):
+/// a record that fits the window under every D6 element draws from all 12, one that
+/// does not draws only from `sym::WINDOW_PRESERVING_SYMS`. See the `compact` column.
 ///
 /// Construction pre-allocates all storage. No heap allocation happens after
 /// `new`. Fields are `pub` so the relocated integration oracle suites
@@ -83,6 +94,20 @@ pub struct ReplayBuffer {
 
     /// Per-position 0-based ply index within its game. [capacity].
     pub position_indices: Vec<u16>,
+
+    /// R245(c) per-record losslessness flag: 1 = COMPACT (the record is neutral
+    /// on every cell of `sym_tables.dropped_cells`, so ALL 12 D6 elements
+    /// transform it exactly), 0 = SPREAD (restricted to
+    /// `sym::WINDOW_PRESERVING_SYMS`). [capacity]. Every slot writer recomputes
+    /// it from the row it just wrote via `slot_is_compact`.
+    ///
+    /// Initialised to 0, and the default errs to SPREAD DELIBERATELY: the fields
+    /// of this struct are `pub`, so the oracle suites and the sample bench write
+    /// ring columns directly, and such a write cannot update this flag. A
+    /// stale-FALSE flag costs a record some augmentation variety; a stale-TRUE
+    /// flag would emit a clipped copy into training, which is the failure R245
+    /// exists to remove. The asymmetry is the whole reason 0 is the init value.
+    pub compact: Vec<u8>,
 
     /// Static sym tables for this buffer's encoding.
     pub sym_tables: &'static SymTables,
@@ -125,6 +150,7 @@ impl ReplayBuffer {
             is_full_search: vec![1u8; capacity], // 1 = full-search default
             value_target_valid: vec![1u8; capacity], // 1 = supervise value default
             position_indices: vec![0u16; capacity],
+            compact: vec![0u8; capacity], // 0 = spread/uncertified (see field doc)
             sym_tables: sym_tables_for(spec), // unread on the graph path (see spawn.rs R28 note)
             weight_schedule: WeightSchedule::uniform(),
             next_game_id: 0,
@@ -153,6 +179,98 @@ impl ReplayBuffer {
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity
+    }
+}
+
+// ── R245(c): the per-record losslessness gate ──────────────────────────────────
+
+impl ReplayBuffer {
+    /// THE compactness authority: is the record at `slot` lossless under EVERY D6
+    /// element? True iff every channel equals its NEUTRAL on every cell of
+    /// `sym_tables.dropped_cells` (the set the eight window-dropping elements
+    /// delete) — then those elements delete nothing but neutral padding, the
+    /// neutral-initialised sample out-buffers already hold that padding at the
+    /// destinations no scatter pair writes, and the emitted record is the exact
+    /// transform. Otherwise the record is SPREAD and only
+    /// `sym::WINDOW_PRESERVING_SYMS` may be applied to it.
+    ///
+    /// The NEUTRALS are this buffer's own column init values (`build` above) —
+    /// the value a cell holds when nothing has been written to it: states 0, chain
+    /// 0, policy 0.0, ownership **1** (= empty, NOT 0 — 0 means "owned by P2"),
+    /// `winning_line` 0. The policy PASS slot (index `n_cells`) is positionally
+    /// invariant under every element (`apply_sym` copies it straight across), so
+    /// it is never consulted here.
+    ///
+    /// states/chain are compared as raw f16 BITS: any non-zero bit pattern counts
+    /// as content, so `-0.0` (bits `0x8000`) reads as content and the record is
+    /// called SPREAD. That is conservative in the safe direction (variety lost,
+    /// never correctness) and avoids an f16 decode on the write path.
+    ///
+    /// Cheapest channels are tested first so a spread record early-exits after a
+    /// single-plane scan; state/chain (8 and 6 planes on v6) are last.
+    #[must_use]
+    pub fn slot_is_compact(&self, slot: usize) -> bool {
+        let dropped = &self.sym_tables.dropped_cells;
+        let n_cells = self.sym_tables.n_cells;
+
+        let policy_stride = self.encoding.policy_stride();
+        let aux_stride = self.encoding.aux_stride();
+        let p0 = slot * policy_stride;
+        let a0 = slot * aux_stride;
+
+        for &d in dropped {
+            let cell = d as usize;
+            if cell < policy_stride && self.policies[p0 + cell] != 0.0 {
+                return false;
+            }
+            if cell < aux_stride
+                && (self.ownership[a0 + cell] != 1 || self.winning_line[a0 + cell] != 0)
+            {
+                return false;
+            }
+        }
+
+        // Multi-plane channels: the same cell offset in every plane. Plane counts
+        // are DERIVED from the strides (a graph spec carries n_planes = 0, which
+        // simply makes the state loop empty).
+        let state_stride = self.encoding.state_stride();
+        let chain_stride = self.encoding.chain_stride();
+        debug_assert_eq!(state_stride % n_cells, 0, "state_stride is a whole number of planes");
+        debug_assert_eq!(chain_stride % n_cells, 0, "chain_stride is a whole number of planes");
+        let s0 = slot * state_stride;
+        let c0 = slot * chain_stride;
+        for plane in 0..(state_stride / n_cells) {
+            let base = s0 + plane * n_cells;
+            for &d in dropped {
+                if self.states[base + d as usize] != 0 {
+                    return false;
+                }
+            }
+        }
+        for plane in 0..(chain_stride / n_cells) {
+            let base = c0 + plane * n_cells;
+            for &d in dropped {
+                if self.chain_planes[base + d as usize] != 0 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Recompute and store the R245(c) losslessness flag for `slot`. Every slot
+    /// writer (`push_impl`, `push_game_impl`, `push_many_impl`, `push_for_test`,
+    /// the HEXB load path) calls this on each row it lands, so the flag is never
+    /// carried over from the record a ring slot previously held.
+    pub(crate) fn refresh_compact(&mut self, slot: usize) {
+        let is_compact = u8::from(self.slot_is_compact(slot));
+        self.compact[slot] = is_compact;
+    }
+
+    /// Return the raw R245(c) `compact` byte at the given buffer slot.
+    #[must_use]
+    pub fn compact_at(&self, slot: usize) -> u8 {
+        self.compact[slot]
     }
 }
 
@@ -195,6 +313,10 @@ impl ReplayBuffer {
         };
         let new_bucket = Self::weight_bucket(self.weights[slot]);
         self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);
+        // R245(c): every row this helper writes is all-neutral, so the flag it
+        // derives is 1 — derived, not asserted, so a future edit to the fills
+        // above cannot silently leave a stale-TRUE flag behind.
+        self.refresh_compact(slot);
         self.head = (self.head + 1) % self.capacity;
         self.size = (self.size + 1).min(self.capacity);
     }

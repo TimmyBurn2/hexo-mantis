@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use half::f16;
 use rand::RngExt;
 
-use super::sym::{SymTables, N_CHAIN_PLANES, N_SYMS};
+use super::sym::{draw_record_sym, SymTables, N_CHAIN_PLANES, N_SYMS};
 use super::ReplayBuffer;
 
 // ── ⊕ O-35 tuple-order contract (versioned) ───────────────────────────────────
@@ -371,8 +371,16 @@ impl ReplayBuffer {
         }
     }
 
-    /// Sample `batch_size` entries with optional 12-fold hex augmentation,
-    /// returning the owned `SampleBatch` (field order = `SAMPLE_ORDER_V1`).
+    /// Sample `batch_size` entries with optional hex-symmetry augmentation, drawn
+    /// PER RECORD over the group that is lossless for that record (R245(c) — the
+    /// dense scatter drops off-window cells, so a record carrying content there
+    /// gets only `sym::WINDOW_PRESERVING_SYMS` while a window-fitting one gets all
+    /// 12). Returns the owned `SampleBatch` (field order = `SAMPLE_ORDER_V1`).
+    ///
+    /// The out-buffers below are NEUTRAL-initialised (`out_ownership` 1-fill =
+    /// empty, the rest 0-fill) and `apply_sym` writes only scatter pairs, so a
+    /// destination cell no pair reaches keeps its neutral — which is exactly what
+    /// the source cell held, for a compact record. No clipped copy is emitted.
     pub fn sample_batch_core(&mut self, batch_size: usize, augment: bool) -> Result<SampleBatch, String> {
         if self.size == 0 {
             return Err("Cannot sample from an empty replay buffer".to_string());
@@ -398,7 +406,7 @@ impl ReplayBuffer {
         let mut out_value_valid = vec![0u8; batch_size];
 
         for (b, &idx) in indices.iter().enumerate() {
-            let sym_idx = if augment { self.rng.random_range(0..N_SYMS) } else { 0 };
+            let sym_idx = if augment { draw_record_sym(&mut self.rng, self.compact[idx] != 0) } else { 0 };
 
             let src_state = &self.states[idx * state_stride..(idx + 1) * state_stride];
             let src_chain = &self.chain_planes[idx * chain_stride..(idx + 1) * chain_stride];
@@ -469,7 +477,7 @@ impl ReplayBuffer {
         let mut out_value_valid = vec![0u8; batch_size];
 
         for (b, &idx) in indices.iter().enumerate() {
-            let sym_idx = if augment { self.rng.random_range(0..N_SYMS) } else { 0 };
+            let sym_idx = if augment { draw_record_sym(&mut self.rng, self.compact[idx] != 0) } else { 0 };
 
             let src_state = &self.states[idx * state_stride..(idx + 1) * state_stride];
             let src_chain = &self.chain_planes[idx * chain_stride..(idx + 1) * chain_stride];

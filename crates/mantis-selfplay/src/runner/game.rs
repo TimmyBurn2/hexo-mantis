@@ -35,7 +35,7 @@ use mantis_encoding::RegistrySpec;
 use mantis_search::{MCTSTree, VIRTUAL_LOSS_PENALTY};
 
 use crate::replay::hexg::GraphRecord;
-use crate::replay::sym::{SymTables, N_SYMS};
+use crate::replay::sym::{draw_window_preserving_sym, SymTables};
 
 use super::atomics::WorkerAtomics;
 use super::finalize::{finalize_game, finalize_game_graph};
@@ -650,9 +650,22 @@ fn init_per_game_board(
         (false, 0)
     };
 
-    // §130: sample per-game rotation across the 12-element hex dihedral group.
+    // §130: sample the per-game rotation. R245 — the recorded frame is DENSE and
+    // window-clamped, so the draw is restricted to the window-preserving subgroup;
+    // the other eight D6 elements delete every cell that leaves the window while
+    // leaving the targets untouched (see `replay::sym::WINDOW_PRESERVING_SYMS`).
+    //
+    // Why this site keeps the FLAT restricted draw while the replay sample sites use
+    // the per-record gate (`sym::draw_record_sym`, R245(c)): this sym is drawn BEFORE
+    // the first stone is played and then rides the search input/inverse scatters
+    // (`search_drive.rs`) and finalize for the whole game. Its subject is the entire
+    // future game, whose compactness is unknowable here — there is no record yet to
+    // certify. So this IS the per-record gate, evaluated at the only moment it can be:
+    // with the subject uncertifiable the gate's answer is SPREAD, and the
+    // always-lossless subgroup is the only draw that honours "no clipped copy is ever
+    // trained (or searched)".
     let sym_idx: usize = if init_ctx.selfplay_rotation_enabled {
-        rng.random_range(0..N_SYMS)
+        draw_window_preserving_sym(rng)
     } else {
         0
     };

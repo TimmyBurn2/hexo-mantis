@@ -57,6 +57,10 @@ impl ReplayBuffer {
             self.is_full_search[..self.capacity].rotate_left(self.head);
             self.value_target_valid[..self.capacity].rotate_left(self.head);
             self.position_indices[..self.capacity].rotate_left(self.head);
+            // R245(c): the losslessness flag is a per-slot column and MUST ride
+            // the same rotation as the row it describes — otherwise linearising
+            // would pair every flag with a different record.
+            self.compact[..self.capacity].rotate_left(self.head);
         }
 
         // Extend storage to new capacity.
@@ -72,6 +76,7 @@ impl ReplayBuffer {
         self.is_full_search.resize(new_capacity, 1u8); // 1 = full-search default
         self.value_target_valid.resize(new_capacity, 1u8); // 1 = supervise value default
         self.position_indices.resize(new_capacity, 0u16);
+        self.compact.resize(new_capacity, 0u8); // 0 = spread/uncertified (R245(c))
 
         self.head = self.size;
         self.capacity = new_capacity;

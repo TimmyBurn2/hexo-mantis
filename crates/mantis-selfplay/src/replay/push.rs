@@ -112,6 +112,9 @@ impl ReplayBuffer {
         let new_bucket = Self::weight_bucket(self.weights[slot]);
         self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);
 
+        // R245(c): derive this row's losslessness flag from the row just written.
+        self.refresh_compact(slot);
+
         self.head = (self.head + 1) % self.capacity;
         self.size = (self.size + 1).min(self.capacity);
         Ok(())
@@ -231,6 +234,9 @@ impl ReplayBuffer {
             self.weights[slot] = w;
 
             self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);
+
+            // R245(c): per-row losslessness flag, derived from the row just written.
+            self.refresh_compact(slot);
         }
 
         self.head = (self.head + t) % self.capacity;
@@ -347,6 +353,9 @@ impl ReplayBuffer {
             self.weights[slot] = w;
 
             self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);
+
+            // R245(c): per-row losslessness flag, derived from the row just written.
+            self.refresh_compact(slot);
         }
 
         self.head = (self.head + t) % self.capacity;

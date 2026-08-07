@@ -213,14 +213,16 @@ def _augment_recent_rows(
     augment: bool,
     opp_slot: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Apply 12-fold hex augmentation to RecentBuffer rows in Python (they skip the Rust
-    sample kernel): Rust `apply_symmetries_batch` for stone planes (v6 fast path) or a pure-numpy
-    scatter (v6w25), chain planes recomputed from augmented stones, numpy scatter for targets."""
+    """Apply hex augmentation to RecentBuffer rows in Python (they skip the Rust sample
+    kernel), drawn PER ROW over the group that is lossless for that row (R245(c) — this is a
+    window-clamped DENSE site; see `mantis.data.augment.spread_mask`): Rust
+    `apply_symmetries_batch` for stone planes (v6 fast path) or a pure-numpy scatter (v6w25),
+    chain planes recomputed from augmented stones, numpy scatter for targets."""
     if not augment:
         return s_r, c_r, p_r, own_r_flat, wl_r_flat
 
     import mantis._engine as _engine
-    from mantis.data.augment import get_policy_scatters
+    from mantis.data.augment import draw_record_syms, get_policy_scatters, spread_mask
     from mantis.env.game_state import _compute_chain_planes
 
     n = len(s_r)
@@ -228,7 +230,14 @@ def _augment_recent_rows(
     n_cells = board_size * board_size
     has_pass = p_r.shape[1] == n_cells + 1
     scatters = get_policy_scatters(board_size, has_pass=has_pass)
-    sym_indices = np.random.randint(0, 12, size=n)
+    # R245(c): certify each row BEFORE augmenting, over exactly the channels scattered below.
+    # `c_r` is deliberately absent — the chain planes are RECOMPUTED post-augment from the
+    # augmented stone planes, so their content on D is induced by `s_r` and already covered.
+    sym_indices = draw_record_syms(
+        spread_mask(
+            board_size, states=s_r, policies=p_r, ownership=own_r_flat, winning_line=wl_r_flat
+        )
+    )
 
     states_f32 = s_r.astype(np.float32)
     if board_size == _V6_BOARD_SIZE:

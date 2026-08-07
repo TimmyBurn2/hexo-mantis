@@ -263,6 +263,15 @@ impl ReplayBuffer {
             self.weight_buckets[bucket].fetch_add(1, Ordering::Relaxed);
         }
 
+        // R245(c): the losslessness flag is NOT on the wire (no on-disk format
+        // change — a HEXB file written by any prior build still loads) and is
+        // RECOMPUTED here for every row that landed, after the whole row is in
+        // place. A slot the loaded file did not reach keeps whatever flag it held;
+        // it is outside `size` and unreachable by `sample_indices`.
+        for slot in 0..to_load {
+            self.refresh_compact(slot);
+        }
+
         self.size = to_load;
         self.head = to_load % self.capacity;
         Ok(to_load)

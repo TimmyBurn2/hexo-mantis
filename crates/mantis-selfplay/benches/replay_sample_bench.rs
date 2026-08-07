@@ -43,7 +43,7 @@ fn scatter_state_v6_b512(c: &mut Criterion) {
 /// Bench 2 — informational full-sample core (scatter/augment only; marshaling is
 /// WP7). Buffer filled so `weighted_sample_one` accepts on first draw
 /// (weight 1.0), game_id=-1 so dedup does batch_size skips → index-independent
-/// work; augment=true drives the full 12-fold apply_sym scatter.
+/// work; augment=true drives the apply_sym scatter under the R245(c) per-record gate.
 fn dense_sample_core_v6_b512_aug(c: &mut Criterion) {
     let capacity = 100_000usize;
     let mut buf = ReplayBuffer::new(capacity, "v6");
@@ -53,8 +53,14 @@ fn dense_sample_core_v6_b512_aug(c: &mut Criterion) {
     }
     assert_eq!(buf.size(), capacity);
 
-    // Warm sample (also asserts augment draws a non-identity sym in-run: with a
-    // filled uniform buffer the 12-fold scatter is always exercised).
+    // Warm sample. R245(c): the draw is gated per record, and `push_for_test` writes
+    // all-NEUTRAL rows, so every record in this buffer is COMPACT and the draw is the
+    // full 12-element group — at batch 512 a non-identity sym is drawn with
+    // probability 1 − 12^−512 and the scatter is always exercised. NOTE for LAW-09:
+    // the work mix here is the PRE-R245 one (the same 12-element draw over the same
+    // full/cell-dropping element mix) plus one `compact[idx]` byte read per draw. It
+    // is NOT the raised, all-full-window mix the un-gated R245 restriction produced —
+    // a floor captured against that intermediate would be wrong for this code.
     let _ = buf.sample_batch_core(512, true).expect("warm sample");
 
     c.bench_function("dense_sample_core_v6_b512_aug", |b| {

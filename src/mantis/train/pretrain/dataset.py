@@ -5,14 +5,17 @@ the ratified WP10 amendment: **the v8 dispatch key + the v8 augment branch are S
 (v8 never crosses — the registry has no v8; §a.7/§e). What remains is the v6-family (grid) path:
 
   - ``AugmentedBootstrapDataset`` — torch ``Dataset`` over flat (state, policy, outcome) triples.
-  - ``make_augmented_collate`` — a collate_fn that batches the triples and applies the 12-fold
-    hex augmentation via the Rust ``mantis._engine.apply_symmetries_batch`` binding (19×19 fast
-    path) or a pure-numpy scatter (25×25 K-cluster, e.g. v6w25). Chain planes are recomputed
-    post-augment from the augmented stone planes.
+  - ``make_augmented_collate`` — a collate_fn that batches the triples and applies hex
+    augmentation, drawn PER ROW over the group that is lossless for that row (R245(c) — this is
+    a window-clamped DENSE site; see ``mantis.data.augment.spread_mask``), via the Rust
+    ``mantis._engine.apply_symmetries_batch`` binding (19×19 fast path) or a pure-numpy scatter
+    (25×25 K-cluster, e.g. v6w25). Chain planes are recomputed post-augment from the augmented
+    stone planes.
   - ``_game_winner_from_replay`` — replay a move list on a ``Board`` and return the winner.
 
 Imports the WP9-relocated ``mantis.data`` seams (train → data is DAG-legal): the numpy replayer
-``mantis.data.replay.replay_game_to_triples`` + ``mantis.data.augment.get_policy_scatters``.
+``mantis.data.replay.replay_game_to_triples`` + ``mantis.data.augment.get_policy_scatters`` /
+``spread_mask`` / ``draw_record_syms``.
 """
 from __future__ import annotations
 
@@ -20,7 +23,7 @@ import numpy as np
 import torch
 
 from mantis._engine import Board, apply_symmetries_batch
-from mantis.data.augment import get_policy_scatters
+from mantis.data.augment import draw_record_syms, get_policy_scatters, spread_mask
 from mantis.data.replay import replay_game_to_triples
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.encoding import opp_stone_slot
@@ -41,10 +44,11 @@ __all__ = [
 class AugmentedBootstrapDataset(torch.utils.data.Dataset):
     """Pretrain dataset yielding raw (state, policy, outcome) triples.
 
-    The 12-fold hex augmentation is applied in ``make_augmented_collate`` via the Rust
-    ``apply_symmetries_batch`` binding (the same scatter kernel the ReplayBuffer uses at sample
-    time). Chain planes (6, the Q13 aux head target) are recomputed in collate from the augmented
-    stone planes — recomputing post-augment is self-consistent and avoids an axis-perm remap.
+    Hex augmentation (drawn per row over that row's lossless group, R245(c)) is applied in
+    ``make_augmented_collate`` via the Rust ``apply_symmetries_batch`` binding (the same scatter
+    kernel the ReplayBuffer uses at sample time). Chain planes (6, the Q13 aux head target) are
+    recomputed in collate from the augmented stone planes — recomputing post-augment is
+    self-consistent and avoids an axis-perm remap.
 
     Args:
         states:    (N, C, H, W) float16 array (mmap-compatible).
@@ -95,7 +99,14 @@ def make_augmented_collate(augment: bool, encoding: str):
         outcomes = np.asarray([b[2] for b in batch], dtype=np.float32)
 
         if augment and scatters_np is not None:
-            sym_indices = np.random.randint(0, 12, size=n).astype(np.int64)
+            # R245(c): window-clamped DENSE site — the draw is gated per row on whether that
+            # row fits the window (mantis.data.augment.spread_mask). A row a dropping element
+            # would clip gets only WINDOW_PRESERVING_SYMS; a window-fitting one gets all 12.
+            # Only the two channels this closure SCATTERS are certified — the chain planes are
+            # recomputed below from the augmented stone planes, so they are induced by states.
+            sym_indices = draw_record_syms(
+                spread_mask(board_size, states=states, policies=policies)
+            ).astype(np.int64)
 
             if board_size == _RUST_AUG_BOARD_SIZE:
                 states_f32 = states.astype(np.float32, copy=False)

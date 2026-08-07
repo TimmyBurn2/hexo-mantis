@@ -12,11 +12,47 @@
 //! `N_SYMS` (group order) and `N_CHAIN_PLANES` (table dimension) are retained.
 
 use mantis_encoding::RegistrySpec;
+use rand::RngExt;
 
 // ── Geometric constants (board-size invariant) ─────────────────────────────────
 
 /// D6 group order: 6 rotations × 2 (with/without prior reflection).
 pub const N_SYMS: usize = 12;
+
+/// The D6 elements under which the SQUARE axial window is CLOSED — the only
+/// elements whose `with_shape` scatter is a bijection of the window onto itself.
+///
+/// Derivation (geometric, not measured — the per-size cell counts are DERIVED by
+/// `window_preserving_syms_are_derived_not_asserted` below and are deliberately not
+/// transcribed here, R8/G-DFIX-4): `to_flat` accepts exactly `max(|q|, |r|) ≤ half`,
+/// so the window is the ∞-norm ball in the axial basis. A linear map preserves that
+/// ball iff its matrix is a signed permutation matrix — one `±1` per row and per
+/// column. Of the 12 D6 matrices in the axial basis only four are: the identity, the
+/// 180° rotation `(q, r) → (−q, −r)`, the axis swap `(q, r) → (r, q)`, and their
+/// product `(q, r) → (−r, −q)`. That is `{identity, 180°} × {no-reflect, reflect}`,
+/// a Klein four-group. Every other element carries the `q + r` term the 60° rotation
+/// `(q, r) → (−r, q + r)` introduces, so its matrix has a row `(±1, ±1)`, which sends
+/// a window corner to a coordinate of magnitude `2·half` — outside. Under this file's
+/// encoding (`reflect = sym_idx >= 6`, then `sym_idx % 6` sixty-degree rotations)
+/// those four elements are `0`, `3`, `6`, `9`.
+///
+/// Why it matters (R245): `with_shape` pushes a scatter pair ONLY when `to_flat`
+/// returns `Some` and has no `else` arm, so under one of the other eight elements a
+/// dense record is rewritten with a block of its cells silently deleted while the
+/// policy/value target rides along unchanged — label noise, not augmentation. But a
+/// cell is only deleted if it HELD something: under R245 ruled option (c) a dense
+/// site that can certify its subject record gates per record ([`draw_record_sym`] on
+/// [`SymTables::dropped_cells`]) and restricts to this set only for the records that
+/// would actually be clipped; a site that cannot certify its subject restricts
+/// unconditionally ([`draw_window_preserving_sym`]). Uniform-over-12 at a
+/// window-clamped DENSE site is never correct.
+///
+/// This is a property of the WINDOW, never of the transform: [`rotate_axial`] is a
+/// lattice automorphism and is exact for all 12 elements. The graph path has no
+/// window, so it keeps the full group — restricting it would discard 8/12 of the
+/// graph arm's augmentation for no correctness gain.
+pub const WINDOW_PRESERVING_SYMS: [usize; 4] = [0, 3, 6, 9];
+
 /// Number of Q13 chain-length planes: 3 hex axes × 2 players. The compile-time
 /// inner dimension of `axis_perm`/`chain_src_lookup`; NOT a buffer stride
 /// (`chain_stride()` is spec-derived).
@@ -66,10 +102,86 @@ pub fn rotate_axial(q: i32, r: i32, sym_idx: usize) -> (i32, i32) {
     rotate_n(q, r, sym_idx % 6)
 }
 
+/// Draw one D6 element uniformly from [`WINDOW_PRESERVING_SYMS`].
+///
+/// The correct draw for every WINDOW-CLAMPED (dense-grid) augmentation or rotation
+/// site whose subject cannot be certified lossless: the dense scatter deletes
+/// off-window cells, so the other eight elements inject label noise (R245). The
+/// graph sample path draws from the full `0..N_SYMS` instead and must keep doing
+/// so — `rotate_axial` never drops. A dense site that CAN certify its subject
+/// record uses [`draw_record_sym`] and recovers the full group for the records
+/// that are provably lossless.
+#[inline]
+pub fn draw_window_preserving_sym<R: RngExt>(rng: &mut R) -> usize {
+    WINDOW_PRESERVING_SYMS[rng.random_range(0..WINDOW_PRESERVING_SYMS.len())]
+}
+
+/// Draw one D6 element for a DENSE record, gated on that record's own
+/// losslessness (R245 ruled option (c)).
+///
+/// * `compact == true` — the record is NEUTRAL on every cell of
+///   [`SymTables::dropped_cells`], so each of the eight window-dropping elements
+///   deletes only neutral content from it and all 12 elements are exact. The full
+///   group is drawn.
+/// * `compact == false` — some channel carries content on a cell a dropping
+///   element would delete, so only the always-lossless subgroup may be applied.
+///
+/// Either way NO clipped copy is ever produced: the gate is the per-record
+/// evaluation of "is this element lossless HERE", and the subgroup is the answer
+/// whenever the record cannot be certified. `false` is therefore the safe default
+/// for an uncertified slot — it costs augmentation variety, never correctness.
+#[inline]
+pub fn draw_record_sym<R: RngExt>(rng: &mut R, compact: bool) -> usize {
+    if compact {
+        rng.random_range(0..N_SYMS)
+    } else {
+        draw_window_preserving_sym(rng)
+    }
+}
+
 /// Compare two axial vectors in a direction-unsigned sense (axis identity).
 #[inline]
 fn same_axis(a: (i32, i32), b: (i32, i32)) -> bool {
     a == b || (-a.0, -a.1) == b
+}
+
+/// Derive **D** — the source cells the window-DROPPING D6 elements delete — from a
+/// freshly built scatter table (R245(c)).
+///
+/// DERIVED, never transcribed: an element whose pair list is short of `n_cells`
+/// drops every source cell that owns no pair. D is the UNION over those elements,
+/// so "neutral on D" implies lossless under EVERY one of them — which is what makes
+/// the compact/spread gate a single binary per record.
+///
+/// The eight dropping elements in fact delete the IDENTICAL set (each of their
+/// matrices carries exactly one `(±1, ±1)` row, so the surviving condition is
+/// `|q + r| <= half` for all of them, and the other row is signed-unit hence always
+/// in range); `dropping_elements_drop_one_shared_cell_set` pins that equivalence,
+/// which is what makes the binary gate EXACT rather than merely sound. The union is
+/// used regardless, so the gate stays SOUND even if a future window shape broke the
+/// equivalence — it would only stop being tight.
+fn derive_dropped_cells(scatter: &[Vec<(u16, u16)>; N_SYMS], n_cells: usize) -> Vec<u16> {
+    let mut dropped = vec![false; n_cells];
+    for pairs in scatter {
+        if pairs.len() == n_cells {
+            continue; // window-preserving — drops nothing
+        }
+        let mut present = vec![false; n_cells];
+        for &(sc, _) in pairs {
+            present[sc as usize] = true;
+        }
+        for (cell, &seen) in present.iter().enumerate() {
+            if !seen {
+                dropped[cell] = true;
+            }
+        }
+    }
+    dropped
+        .iter()
+        .enumerate()
+        .filter(|&(_, &d)| d)
+        .map(|(cell, _)| u16::try_from(cell).expect("cell index fits u16"))
+        .collect()
 }
 
 // ── SymTables ──────────────────────────────────────────────────────────────────
@@ -91,6 +203,18 @@ pub struct SymTables {
     /// State plane count this table targets. v6: 8.
     pub n_planes: usize,
     pub scatter: [Vec<(u16, u16)>; N_SYMS],
+    /// **D** — the SOURCE cells that the window-dropping D6 elements delete,
+    /// ascending, DERIVED from `scatter` at construction (never a transcribed
+    /// index list). Empty is impossible for any shipped window: the eight
+    /// non-[`WINDOW_PRESERVING_SYMS`] elements each drop a corner wedge.
+    ///
+    /// This is the domain of the R245(c) per-record losslessness gate: a dense
+    /// record whose every channel equals its NEUTRAL on every cell of this set is
+    /// COMPACT — the full 12-element group transforms it exactly — and otherwise
+    /// SPREAD, restricted to [`WINDOW_PRESERVING_SYMS`]. See
+    /// `ReplayBuffer::slot_is_compact` for the neutrals and [`draw_record_sym`]
+    /// for the draw.
+    pub dropped_cells: Vec<u16>,
     /// Per-symmetry axis-plane remap for Q13 chain-length planes.
     /// `axis_perm[s][dst_j] = src_i`: destination plane for axis j reads from
     /// source plane for axis i under symmetry s. Board-size invariant.
@@ -206,6 +330,8 @@ impl SymTables {
             axis_perm[sym_idx] = perm;
         }
 
+        let dropped_cells = derive_dropped_cells(&scatter, n_cells);
+
         // Build chain_src_lookup for the 6 chain-length planes.
         let mut chain_src_lookup = [[0usize; N_CHAIN_PLANES]; N_SYMS];
         for s in 0..N_SYMS {
@@ -223,6 +349,7 @@ impl SymTables {
             n_cells,
             n_planes,
             scatter,
+            dropped_cells,
             axis_perm,
             chain_src_lookup,
         }
@@ -473,6 +600,249 @@ mod tests {
         assert_eq!(
             v6 as *const SymTables, live2 as *const SymTables,
             "v6 and v6_live2_ls must share the same size_19 static singleton"
+        );
+    }
+
+    // ── R245: the window-preserving subgroup, DERIVED ───────────────────────────
+
+    /// Live board sizes, taken from the registry rather than hardcoded, so a newly
+    /// registered encoding is covered automatically (LAW-08 / derive-never-transcribe).
+    fn registry_board_sizes() -> Vec<usize> {
+        let mut sizes: Vec<usize> =
+            mantis_encoding::registry::all_specs().map(|s| s.board_size).collect();
+        sizes.sort_unstable();
+        sizes.dedup();
+        assert!(!sizes.is_empty(), "registry must ship at least one encoding");
+        sizes
+    }
+
+    /// `WINDOW_PRESERVING_SYMS` is COMPUTED from the scatter geometry at every board
+    /// size the registry actually ships and then compared to the constant — the
+    /// constant is falsifiable by the geometry, never by a transcribed literal.
+    ///
+    /// A `sym_idx` preserves the window iff its scatter has one pair per cell (no
+    /// `to_flat` rejection). Two anti-vacuity arms keep the test honest: every
+    /// element OUTSIDE the set must genuinely drop cells (otherwise restricting the
+    /// draw would be a no-op and this test would pass for free), and every element
+    /// INSIDE it must be a true bijection of the window, not merely a full-length
+    /// pair list with a collided destination.
+    #[test]
+    fn window_preserving_syms_are_derived_not_asserted() {
+        for bs in registry_board_sizes() {
+            let tables = SymTables::with_shape(bs, 8);
+            let derived: Vec<usize> =
+                (0..N_SYMS).filter(|&s| tables.scatter[s].len() == tables.n_cells).collect();
+            assert_eq!(
+                derived.as_slice(),
+                WINDOW_PRESERVING_SYMS.as_slice(),
+                "board_size={bs}: the DERIVED window-preserving set disagrees with \
+                 WINDOW_PRESERVING_SYMS"
+            );
+
+            for s in 0..N_SYMS {
+                if WINDOW_PRESERVING_SYMS.contains(&s) {
+                    continue;
+                }
+                assert!(
+                    tables.scatter[s].len() < tables.n_cells,
+                    "board_size={bs}: sym {s} is outside WINDOW_PRESERVING_SYMS yet drops \
+                     no cell — the restriction would be vacuous"
+                );
+            }
+
+            for &s in &WINDOW_PRESERVING_SYMS {
+                let mut dsts: Vec<u16> = tables.scatter[s].iter().map(|&(_, d)| d).collect();
+                let n_pairs = dsts.len();
+                dsts.sort_unstable();
+                dsts.dedup();
+                assert_eq!(
+                    dsts.len(), n_pairs,
+                    "board_size={bs}: sym {s} has colliding destinations — not a bijection"
+                );
+            }
+        }
+    }
+
+    /// R245: the GRAPH path is structurally unaffected. `rotate_axial` is an axial
+    /// lattice automorphism with no window to leave, so it is injective (hence a
+    /// bijection of the lattice) for ALL 12 elements — restricting the DENSE draw
+    /// removes nothing from the graph arm. Checked over a box strictly larger than
+    /// the widest shipped window, so no element could hide a drop at the boundary.
+    #[test]
+    fn rotate_axial_is_injective_for_all_twelve_elements() {
+        use std::collections::HashSet;
+        let max_bs = registry_board_sizes().into_iter().max().expect("non-empty");
+        let reach = i32::try_from(max_bs).expect("board_size fits i32");
+        for s in 0..N_SYMS {
+            let mut seen: HashSet<(i32, i32)> = HashSet::new();
+            let mut n = 0usize;
+            for q in -reach..=reach {
+                for r in -reach..=reach {
+                    assert!(
+                        seen.insert(rotate_axial(q, r, s)),
+                        "rotate_axial: sym {s} is not injective at ({q},{r})"
+                    );
+                    n += 1;
+                }
+            }
+            assert_eq!(seen.len(), n, "rotate_axial: sym {s} lost points");
+        }
+    }
+
+    /// R245 boundary pin, both directions: the two window-clamped DENSE SAMPLE sites
+    /// use the per-record GATED draw, the per-game rotation site keeps the flat
+    /// window-preserving draw, and the GRAPH sample path keeps the FULL group.
+    /// Source-presence, because the three are indistinguishable to the type system —
+    /// any drift compiles cleanly and is silent in a run.
+    #[test]
+    fn dense_sites_restricted_and_graph_site_keeps_the_full_group() {
+        const DENSE_SAMPLE: &str = include_str!("sample.rs");
+        const GAME: &str = include_str!("../runner/game.rs");
+        const HEXG_SAMPLE: &str = include_str!("hexg/sample.rs");
+
+        assert_eq!(
+            DENSE_SAMPLE
+                .matches("draw_record_sym(&mut self.rng, self.compact[idx] != 0)")
+                .count(),
+            2,
+            "both dense replay draw sites must use the R245(c) per-record gated draw"
+        );
+        assert!(
+            !DENSE_SAMPLE.contains("random_range(0..N_SYMS)"),
+            "a dense replay draw site still draws from the full group UNGATED"
+        );
+        assert!(
+            !DENSE_SAMPLE.contains("draw_window_preserving_sym"),
+            "a dense replay draw site is restricted UNCONDITIONALLY — compact records \
+             must recover the full group (R245(c))"
+        );
+        // The per-game frame sym is drawn BEFORE the first stone is played and rides
+        // the search input/inverse scatters and finalize; the compactness of the
+        // yet-unplayed game is unknowable at draw time, so the record can never be
+        // certified and the gate's answer is permanently "spread". That IS the
+        // per-record gate evaluated at the only time it can be — hence the flat
+        // window-preserving draw here, not `draw_record_sym`.
+        assert!(
+            GAME.contains("draw_window_preserving_sym(rng)"),
+            "the per-game rotation draw must use the window-preserving draw"
+        );
+        assert!(
+            !GAME.contains("random_range(0..N_SYMS)"),
+            "the per-game rotation draw must not draw from the full group"
+        );
+        assert!(
+            HEXG_SAMPLE.contains("self.rng.random_range(0..N_SYMS)"),
+            "the graph sample path must keep the FULL 12-element draw (rotate_axial is exact)"
+        );
+        assert!(
+            !HEXG_SAMPLE.contains("draw_window_preserving_sym")
+                && !HEXG_SAMPLE.contains("draw_record_sym"),
+            "the graph sample path must NOT be gated or restricted — it has no window"
+        );
+    }
+
+    // ── R245(c): D (the dropped-cell set) + the gated draw ──────────────────────
+
+    /// `SymTables::dropped_cells` is DERIVED — cross-checked against an INDEPENDENT
+    /// derivation (the closed form `|q + r| > half` that the geometry argument
+    /// predicts) at every board size the registry ships, and asserted non-empty so
+    /// the gate can never be vacuously satisfied.
+    #[test]
+    fn dropped_cell_set_is_derived_not_asserted() {
+        for bs in registry_board_sizes() {
+            let tables = SymTables::with_shape(bs, 8);
+            let half = (i32::try_from(bs).expect("board_size fits i32") - 1) / 2;
+            let closed_form: Vec<u16> = (0..tables.n_cells)
+                .filter(|&flat| {
+                    let q = i32::try_from(flat / bs).expect("fits") - half;
+                    let r = i32::try_from(flat % bs).expect("fits") - half;
+                    (q + r).abs() > half
+                })
+                .map(|flat| u16::try_from(flat).expect("fits"))
+                .collect();
+            assert!(
+                !closed_form.is_empty(),
+                "board_size={bs}: the dropped set must be non-empty or the gate is vacuous"
+            );
+            assert_eq!(
+                tables.dropped_cells, closed_form,
+                "board_size={bs}: scatter-derived dropped set disagrees with the \
+                 independent |q + r| > half derivation"
+            );
+        }
+    }
+
+    /// The equivalence the BINARY gate rests on: all eight window-dropping elements
+    /// delete the IDENTICAL source-cell set, so "lossless under one dropping element"
+    /// and "lossless under all of them" are the same predicate and one flag per record
+    /// suffices. If a future window shape broke this, the per-element sets would
+    /// diverge and this test REDs (the union `dropped_cells` would stay sound but the
+    /// gate would no longer be exact).
+    #[test]
+    fn dropping_elements_drop_one_shared_cell_set() {
+        for bs in registry_board_sizes() {
+            let tables = SymTables::with_shape(bs, 8);
+            let per_element = |s: usize| -> Vec<u16> {
+                let mut present = vec![false; tables.n_cells];
+                for &(sc, _) in &tables.scatter[s] {
+                    present[sc as usize] = true;
+                }
+                (0..tables.n_cells)
+                    .filter(|&c| !present[c])
+                    .map(|c| u16::try_from(c).expect("fits"))
+                    .collect()
+            };
+            let mut n_dropping = 0usize;
+            for s in 0..N_SYMS {
+                let dropped = per_element(s);
+                if WINDOW_PRESERVING_SYMS.contains(&s) {
+                    assert!(
+                        dropped.is_empty(),
+                        "board_size={bs}: preserving sym {s} dropped {} cells",
+                        dropped.len()
+                    );
+                } else {
+                    n_dropping += 1;
+                    assert_eq!(
+                        dropped, tables.dropped_cells,
+                        "board_size={bs}: dropping sym {s} deletes a DIFFERENT cell set — \
+                         the binary compact/spread gate is no longer exact"
+                    );
+                }
+            }
+            assert_eq!(
+                n_dropping,
+                N_SYMS - WINDOW_PRESERVING_SYMS.len(),
+                "board_size={bs}: unexpected number of dropping elements"
+            );
+        }
+    }
+
+    /// `draw_record_sym` support is EXACT on both arms — compact records recover the
+    /// whole group, spread records see nothing outside the subgroup. Subset-only
+    /// checks would pass for a degenerate always-identity draw, so both directions
+    /// are asserted.
+    #[test]
+    fn draw_record_sym_support_is_exact_on_both_arms() {
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+        use std::collections::HashSet;
+
+        let mut rng = StdRng::seed_from_u64(0x0024_500C);
+        let compact_seen: HashSet<usize> =
+            (0..4096).map(|_| draw_record_sym(&mut rng, true)).collect();
+        assert_eq!(
+            compact_seen,
+            (0..N_SYMS).collect::<HashSet<usize>>(),
+            "a COMPACT record must draw over the full D6 group"
+        );
+
+        let spread_seen: HashSet<usize> =
+            (0..4096).map(|_| draw_record_sym(&mut rng, false)).collect();
+        assert_eq!(
+            spread_seen,
+            WINDOW_PRESERVING_SYMS.iter().copied().collect::<HashSet<usize>>(),
+            "a SPREAD record must draw ONLY from the window-preserving subgroup"
         );
     }
 
