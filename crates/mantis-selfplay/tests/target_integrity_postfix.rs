@@ -38,7 +38,12 @@ use mantis_core::{Cell, Player};
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::queues::DenseQueue;
 use mantis_selfplay::records::{record_position_graph, TargetIntegrityError};
-use mantis_selfplay::replay::hexg::{HexgBuffer, MAX_VISITS};
+use mantis_selfplay::replay::hexg::HexgBuffer;
+
+/// Test slot geometry (post-R255: the production value is DERIVED from the sims
+/// regime at composition; 128 keeps these frozen oracles' boundary arithmetic
+/// unchanged — a test geometry choice, not a shipped tunable).
+const MAX_VISITS: usize = 128;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 const NA: usize = 362; // gnn_axis_v1 / v6 policy stride (19*19+1)
@@ -209,7 +214,7 @@ fn s2b_refuses_129_mass_cells_with_the_typed_error() {
     match err {
         TargetIntegrityError::VisitSlotsExceeded { n, max, .. } => {
             assert_eq!(n, 129, "the error must carry the offending count");
-            assert_eq!(max, 128, "the error must carry the governing MAX_VISITS");
+            assert_eq!(max, 128, "the error must carry the capacity the record was built against");
         }
         other => panic!("expected VisitSlotsExceeded, got {other}"),
     }
@@ -301,7 +306,7 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
     assert!(rec_full.is_full_search && !rec_quick.is_full_search);
 
     // Buffer round-trip: the flag rides push → record_at verbatim.
-    let mut buf = HexgBuffer::new(4, "gnn_axis_v1").expect("graph buffer");
+    let mut buf = HexgBuffer::new(4, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec_full, 1).expect("push full");
     buf.push_record_impl(&rec_quick, 2).expect("push quick");
     assert!(buf.record_at(0).is_full_search);

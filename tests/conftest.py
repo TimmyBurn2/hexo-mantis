@@ -122,7 +122,7 @@ def mk_graph_buffer():
     from mantis._engine import HexgBuffer
 
     def make(n_records: int = 8, capacity: int = 64, encoding: str = "gnn_axis_v1"):
-        hb = HexgBuffer(capacity, encoding)
+        hb = HexgBuffer(capacity, encoding, 128)
         for i in range(n_records):
             stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
             hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i,

@@ -1,8 +1,9 @@
 """Run-config schema (contract run-config-schema v1).
 
->300 justify (R8). This file carries the `RunConfig` root model and the six
-`model_validator`s of this schema's cross-field rules — the four on `RunConfig` span
-SECTIONS (train x selfplay, train x monitor), so they cannot live in any section module.
+>300 justify (R8). This file carries the `RunConfig` root model and this schema's
+cross-field `model_validator`s — the ones on `RunConfig` span SECTIONS
+(train x selfplay, train x monitor, identity x selfplay), so they cannot live in any
+section module.
 
 Every model is strict: unknown key = hard error, missing key = hard error, silent scalar
 coercions (str->int, float->int, bool->int) rejected, values immutable. NO code-side
@@ -345,6 +346,64 @@ class RunConfig(StrictModel):
                 f"train.max_train_steps ({total}): a step floor the run never reaches is "
                 f"an invariant that can never fire — armed in the config, absent in effect"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _graph_sims_regime_fits_the_hexg_record_format(self) -> "RunConfig":
+        """R255/ADJ-D34 — the Phase-T guard's capacity is DERIVED from the sims regime,
+        and the schema validates the relation explicitly, so an unsupported regime is a
+        MINT-time error, never a boot surprise.
+
+        ADJ-D34's defect was the inversion: a ``MAX_VISITS = 128`` literal on the armed
+        boot path refused the prereg'd PCR 600/75 SIMS-REGIME row while every config
+        validated clean — the failure surface sat exactly one stage too late. The
+        derivation authority is ONE Rust function
+        (``mantis_selfplay::replay::hexg::derived_visit_capacity``), called here through
+        its bridge twin and by ``SelfPlayRunner::new`` at boot, so the two surfaces
+        cannot drift onto second formulas. No key is transcribed and no ceiling is
+        restated here (R98 derive-at-point-of-use): this validator only forwards the
+        regime keys and re-raises the engine's refusal with the field paths attached.
+
+        Graph-scoped: dense-362 records carry no HEXG visit slot, so the relation does
+        not constrain grid configs (R250's absence principle, mint-side). The
+        completed-Q leg of the derivation (child-count-wide support vs
+        ``MAX_CHILDREN_PER_NODE``) is unreachable from a validated ``RunConfig`` today —
+        ``train.policy_target`` is the single-member Literal ``"raw_visit_distribution"``,
+        so ``_policy_target_completed_q_consistency`` already forbids
+        ``selfplay.completed_q_values=true`` — but it rides the same call so the day
+        that Literal widens, the mint check is already standing.
+
+        The function-scope import mirrors ``mantis.run._select_buffer``'s stated
+        posture: ``mantis._engine`` is already a transitive dependency of this module
+        (``mantis.encoding.lookup`` above), so this adds no import-DAG edge.
+        """
+        if self.identity.representation != "graph":
+            return self
+        from mantis._engine import derived_hexg_visit_capacity
+
+        sp = self.selfplay
+        pc = sp.playout_cap
+        try:
+            derived_hexg_visit_capacity(
+                n_simulations=sp.mcts.n_simulations,
+                standard_sims=pc.standard_sims,
+                fast_prob=pc.fast_prob,
+                fast_sims=pc.fast_sims,
+                full_search_prob=pc.full_search_prob,
+                n_sims_quick=pc.n_sims_quick,
+                n_sims_full=pc.n_sims_full,
+                leaf_batch_size=sp.leaf_batch_size,
+                completed_q_values=sp.completed_q_values,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "the selfplay sims regime cannot be honored by the HEXG graph record "
+                f"format: {exc} [derived from selfplay.mcts.n_simulations, "
+                "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
+                "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
+                "selfplay.completed_q_values — R255/ADJ-D34: refused at mint, "
+                "never at boot]"
+            ) from exc
         return self
 
     @model_validator(mode="after")

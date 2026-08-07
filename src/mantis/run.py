@@ -393,9 +393,26 @@ def _select_buffer(config: Any, capacity: int) -> Any:
         # Lazy, with a STATED reason (repo_design §87): `mantis._engine` is not an edge on
         # §2's `run` row, and the extension module is the one import this root must not
         # make unconditional.
-        from mantis._engine import HexgBuffer
+        from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
 
-        return HexgBuffer(capacity, config.identity.encoding)
+        # R255/ADJ-D34: the ring's visit-slot geometry is DERIVED here, at
+        # composition, from the config's sims regime — the same Rust authority the
+        # schema validator already ran at load, so this call cannot raise on a
+        # validated config; it exists so no literal can reappear on this path.
+        sp = config.selfplay
+        pc = sp.playout_cap
+        visit_capacity = derived_hexg_visit_capacity(
+            n_simulations=sp.mcts.n_simulations,
+            standard_sims=pc.standard_sims,
+            fast_prob=pc.fast_prob,
+            fast_sims=pc.fast_sims,
+            full_search_prob=pc.full_search_prob,
+            n_sims_quick=pc.n_sims_quick,
+            n_sims_full=pc.n_sims_full,
+            leaf_batch_size=sp.leaf_batch_size,
+            completed_q_values=sp.completed_q_values,
+        )
+        return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
     if representation == "grid":
         from mantis._engine import ReplayBuffer
 

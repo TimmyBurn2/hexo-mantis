@@ -121,6 +121,10 @@ pub struct SelfPlayRunner {
     /// Runner config (with `standard_sims` already resolved to the effective
     /// budget; `seed_corpus` moved out to the `Arc` below).
     config: SelfPlayRunnerConfig,
+    /// HEXG visit-slot capacity, DERIVED once at composition from the sims
+    /// regime (`replay::hexg::derived_visit_capacity`, R255/ADJ-D34). `None` on
+    /// grid runs — dense-362 records carry no visit slot; never a default.
+    visit_capacity: Option<usize>,
 
     // ── inference queues (owned; producer handles exposed) ──
     dense_queue: DenseQueue,
@@ -229,12 +233,11 @@ impl SelfPlayRunner {
         };
 
         // Effective standard-search sim budget: `standard_sims` wins, else
-        // `n_simulations`. Reject zero on the *effective* value.
-        let effective_standard = if config.standard_sims == 0 {
-            config.n_simulations
-        } else {
-            config.standard_sims
-        };
+        // `n_simulations` — the ONE resolution rule, shared with the capacity
+        // derivation below (`effective_standard_sims`). Reject zero on the
+        // *effective* value.
+        let effective_standard =
+            crate::replay::hexg::effective_standard_sims(config.n_simulations, config.standard_sims);
         if effective_standard == 0 {
             return Err(
                 "SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string(),
@@ -251,58 +254,37 @@ impl SelfPlayRunner {
             ));
         }
 
-        // ── WP12-R Phase T boot guards (DESIGN_T §3.4; read EXISTING keys only,
-        // R120; armed VALUES are never set, R119). Scoped to GRAPH encodings:
-        // the bound being enforced is the graph record's fixed MAX_VISITS slot
+        // ── WP12-R Phase T boot guard, re-ruled by R255/ADJ-D34 (read EXISTING
+        // keys only, R120; armed VALUES are never set, R119). Scoped to GRAPH
+        // encodings: the bound being enforced is the graph record's visit slot
         // (`replay/hexg`); dense-362 records carry no such slot, and refusing a
         // grid config would be a behavior change no ruling ordered (PREREG_T
         // A-6 — grid exemption resolved HERE, grounds recorded in IMPL notes).
-        if spec.is_graph() {
-            use crate::replay::hexg::MAX_VISITS;
-            // Guard 1 (overshoot-aware temperature-arm bound): the production
-            // sim loops overshoot by up to leaf_batch_size - 1 (the uncapped
-            // final batch), so refuse when
-            // max(ARMED effective sim counts) + leaf_batch_size - 1 > MAX_VISITS.
-            // Armed arms: standard (always), fast iff fast_prob > 0,
-            // quick/full iff full_search_prob > 0.
-            let mut max_armed = effective_standard;
-            if config.fast_prob > 0.0 {
-                max_armed = max_armed.max(config.fast_sims);
-            }
-            if config.full_search_prob > 0.0 {
-                max_armed = max_armed.max(config.n_sims_quick).max(config.n_sims_full);
-            }
-            let worst_case = max_armed + config.leaf_batch_size.saturating_sub(1);
-            if worst_case > MAX_VISITS {
-                let lb = config.leaf_batch_size;
-                return Err(format!(
-                    "SelfPlayRunner: max armed sim budget {max_armed} + leaf_batch_size {lb} \
-                     - 1 = {worst_case} exceeds MAX_VISITS ({MAX_VISITS}) — a graph record's \
-                     visit target could carry more cells than the fixed HEXG slot holds and \
-                     silent truncation is deleted (WP12-R Phase T); lower the armed sim \
-                     budgets / leaf batch, or raise MAX_VISITS"
-                ));
-            }
-            // Guard 2 (completed-Q ls/graph arm, F-1(b)): the post-fix improved
-            // exporter places positive mass on ALL children, so its graph-record
-            // support is child-count-wide — no sims bound exists. Honest
-            // retirement-until-raised: delete this guard when MAX_VISITS is
-            // raised to MAX_CHILDREN_PER_NODE.
-            if config.completed_q_values
-                && mantis_search::MAX_CHILDREN_PER_NODE > MAX_VISITS
-            {
-                return Err(format!(
-                    "SelfPlayRunner: representation==graph with completed_q_values=true is \
-                     refused while MAX_CHILDREN_PER_NODE ({}) > MAX_VISITS ({MAX_VISITS}): \
-                     the completed-Q exporter places positive mass on every root child, so \
-                     a record's support is child-count-wide and cannot fit the HEXG visit \
-                     slot (WP12-R Phase T, DESIGN_T §3.4); set completed_q_values=false for \
-                     graph runs, or raise MAX_VISITS to {} and retire this guard",
-                    mantis_search::MAX_CHILDREN_PER_NODE,
-                    mantis_search::MAX_CHILDREN_PER_NODE,
-                ));
-            }
-        }
+        //
+        // The slot capacity is DERIVED from the configured sims regime by the
+        // ONE authority `derived_visit_capacity` — the SAME fn the mint-time
+        // schema validator calls through the bridge, so an unsupported regime
+        // (format ceiling; completed-Q below the child cap) REDs at config
+        // validation and this call is the defense-in-depth line for un-minted
+        // constructions. No literal, no default (the old MAX_VISITS = 128
+        // tunable on this armed path is deleted).
+        let visit_capacity = if spec.is_graph() {
+            let cap = crate::replay::hexg::derived_visit_capacity(
+                config.n_simulations,
+                config.standard_sims,
+                config.fast_prob,
+                config.fast_sims,
+                config.full_search_prob,
+                config.n_sims_quick,
+                config.n_sims_full,
+                config.leaf_batch_size,
+                config.completed_q_values,
+            )
+            .map_err(|e| format!("SelfPlayRunner: {e}"))?;
+            Some(cap)
+        } else {
+            None
+        };
 
         // Move the seed corpus into the shared `Arc`. STAGE R2 dry-replay
         // validates every prefix ONCE here (needs the R2 spec→Board resolution in
@@ -325,6 +307,7 @@ impl SelfPlayRunner {
         Ok(Self {
             spec,
             config,
+            visit_capacity,
             dense_queue,
             graph_queue,
             results: Arc::new(Mutex::new(VecDeque::new())),

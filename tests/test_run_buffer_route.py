@@ -138,3 +138,32 @@ def test_the_route_error_carries_no_tool_exit_code(smoke_run_config) -> None:
         "the lifted selector must not import or raise the tool's error class — the lift is "
         "out of `tools/`, not a copy of it"
     )
+
+
+# ── R255/ADJ-D34: the composed graph buffer carries the DERIVED visit capacity ──
+
+
+def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
+    smoke_run_config,
+) -> None:
+    """R255: 'derived at composition time from the configured sims regime'. The
+    composed buffer's slot geometry must be the derivation's output — under the
+    600/75 PCR shape that is max(50, 75, 600) + 8 − 1 = 607, and under the minted
+    run5 shape 50 + 8 − 1 = 57. A literal anywhere on this path reds one of the two.
+
+    MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity (the old
+    128, or a new constant) instead of calling the derivation."""
+    pcr = smoke_run_config(
+        "run5.yaml",
+        selfplay={
+            "playout_cap": {
+                "full_search_prob": 0.10,
+                "n_sims_quick": 75,
+                "n_sims_full": 600,
+            }
+        },
+    )
+    assert _select_buffer(pcr, _CAPACITY).visit_capacity == 607
+
+    minted = smoke_run_config("run5.yaml")
+    assert _select_buffer(minted, _CAPACITY).visit_capacity == 57

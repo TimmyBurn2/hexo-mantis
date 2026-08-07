@@ -35,7 +35,7 @@ _GSPEC = lookup(GRAPH_ENCODING)
 
 # ── S4: dispatch pass-through, value-intact ──────────────────────────────────────────
 def _graph_buffer(n_records: int = 6, capacity: int = 64) -> HexgBuffer:
-    hb = HexgBuffer(capacity, GRAPH_ENCODING)
+    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
         policy = [(2, 0, 0.6), (1, 1, 0.4)] if i % 2 == 0 else [(2, 0, 0.25), (1, 1, 0.75)]

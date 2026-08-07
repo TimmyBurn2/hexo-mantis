@@ -99,7 +99,7 @@ def test_verify_edge_geometry_hostile_input_raises_not_panics():
 
 # --- bridge single-graph structural guards ------------------------------------
 def _one_graph_wire():
-    hb = _engine.HexgBuffer(8, "gnn_axis_v1")
+    hb = _engine.HexgBuffer(8, "gnn_axis_v1", 128)
     hb.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 1.0)], 1, 100, 2, True, 0.0, True, 1)
     wire, _targets = hb.sample_graph_batch(1)
     return wire

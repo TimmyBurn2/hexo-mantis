@@ -170,6 +170,10 @@ pub(crate) struct WorkerParams {
     pub(crate) n_sims_quick: usize,
     pub(crate) n_sims_full: usize,
     pub(crate) random_opening_plies: u32,
+    /// DERIVED HEXG visit-slot capacity (R255/ADJ-D34) — composed once in
+    /// `SelfPlayRunner::new`'s graph arm; `None` on grid runs (no visit slot),
+    /// never a default.
+    pub(crate) visit_capacity: Option<usize>,
     /// Resolved (never `None` — LAW-11) encoding spec, used by the per-game board
     /// construction (`init_per_game_board`, R2).
     pub(crate) registry_spec: &'static RegistrySpec,

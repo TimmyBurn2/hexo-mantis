@@ -162,6 +162,8 @@ pub(crate) struct SolverCounters<'a> {
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct MovePlayContext {
     pub(crate) leaf_batch_size: usize,
+    /// DERIVED HEXG visit capacity (R255) — `Some` iff this is a graph run.
+    pub(crate) visit_capacity: Option<usize>,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
     pub(crate) zoi_lookback: usize,
@@ -761,8 +763,13 @@ pub(crate) fn play_one_move(
 
     // ── Record position (BEFORE apply_move; hoisted is_graph branch) ──
     if is_graph {
+        let visit_capacity = ctx.visit_capacity.expect(
+            "graph record dispatch requires the derived visit capacity — composed in \
+             SelfPlayRunner::new's graph arm (R255)",
+        );
         if let Err(err) = record_position_graph_dispatch(
             board, &target_policy, agg_trunk_sz, record_full_search, graph_records_vec,
+            visit_capacity,
         ) {
             // LAW-14: a target-integrity defect is RUN-FATAL — latch the typed
             // message (variant name in Display) and halt; the bridge drain face

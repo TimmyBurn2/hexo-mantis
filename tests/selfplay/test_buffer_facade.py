@@ -163,7 +163,7 @@ def test_kind_from_spec_no_attribute_raises() -> None:
 
 # ── E-02 — kind/raw cross-check at construction ──────────────────────────────────
 def test_kind_raw_type_crosscheck_graph_buffer_under_grid_spec() -> None:
-    raw = HexgBuffer(capacity=8, encoding="gnn_axis_v1")
+    raw = HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128)
     with pytest.raises(BufferKindMismatch):
         ReplayFacade(_GRID_SPEC, raw)
 
@@ -177,7 +177,7 @@ def test_kind_raw_type_crosscheck_dense_buffer_under_graph_spec() -> None:
 def test_matched_kind_raw_pairs_construct() -> None:
     """LAW-07 clean twin: the guard must not reject the CORRECT pairing."""
     dense = ReplayFacade(_GRID_SPEC, ReplayBuffer(capacity=8, encoding="v6"))
-    graph = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1"))
+    graph = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
     assert dense.kind is BufferKind.GRID
     assert graph.kind is BufferKind.GRAPH
     # The raw handle is held, not copied or re-wrapped.
@@ -321,7 +321,7 @@ def test_graph_arm_missing_getter_propagates() -> None:
     """E-05(iii): the graph buffer genuinely has no `outcome_in_range_count` on EITHER
     side. The facade must let the `AttributeError` out so the caller's NaN fallback stays
     reachable — fabricating a number here is an undeclared behaviour change."""
-    facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1"))
+    facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
     assert not hasattr(facade.raw, "outcome_in_range_count")
     with pytest.raises(AttributeError):
         facade.outcome_in_range_count(*_DRAW_BAND)
@@ -352,7 +352,7 @@ def test_cross_magic_load_rejected_loud(tmp_path) -> None:
     dense = ReplayFacade(_GRID_SPEC, _filled_dense_buffer())
     dense.save_to_path(str(hexb_path))
 
-    graph_raw = HexgBuffer(capacity=8, encoding="gnn_axis_v1")
+    graph_raw = HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128)
     graph_raw.push_graph_position(
         [(0, 0, 1), (1, 0, -1)], [(0, 1, 1.0)], 1, 2, 0, True, 0.0, True, 1,
     )

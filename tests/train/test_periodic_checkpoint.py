@@ -195,7 +195,7 @@ def _calls_in(fn: Any, receiver: str, attr: str) -> int:
 # ── drive builders (re-created LOCALLY — R5 bars cross-test imports) ─────────────────────
 def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     """A real HexgBuffer fed through the real graph push path."""
-    hb = HexgBuffer(capacity, GRAPH_ENCODING)
+    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
         policy = [(2, 0, 0.6), (1, 1, 0.4)]

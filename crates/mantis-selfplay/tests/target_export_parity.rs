@@ -132,7 +132,7 @@ fn load_pos(src: &str, i: usize) -> Pos {
     assert_eq!(coords.len(), mass.len(), "{id}: pair arrays misaligned");
     let sum: f64 = mass.iter().sum();
     assert!((sum - 1.0).abs() < 1e-4, "{id}: fixture pairs must sum to 1, got {sum}");
-    assert!(mass.len() <= 128, "{id}: fixture pairs exceed MAX_VISITS — mint defect");
+    assert!(mass.len() <= 128, "{id}: fixture pairs exceed the suite's 128-slot test geometry");
 
     Pos {
         id,
@@ -240,7 +240,7 @@ fn check_roundtrip(src: &str, i: usize) {
         value_valid: true,
         game_length: 0,
     };
-    let mut buf = HexgBuffer::new(2, "gnn_axis_v1").expect("graph buffer");
+    let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push refused: {e}", pos.id));
     let (graphs, targets) = buf
         .sample_graph_batch_impl(1, false, 0.0)
@@ -308,7 +308,7 @@ fn o1r_buffer_roundtrip_preserves_pairs() {
 #[test]
 fn o1r_record_chain_full_mass() {
     use mantis_selfplay::records::record_position_graph;
-    use mantis_selfplay::replay::hexg::MAX_VISITS;
+    const MAX_VISITS: usize = 128; // test slot geometry (post-R255: derived in prod)
 
     for name in ["target_parity_v1.json", "target_parity_dispersed_v1.json"] {
         let src = fixture_text(name);
@@ -327,7 +327,7 @@ fn o1r_record_chain_full_mass() {
                 MAX_VISITS,
             )
             .unwrap_or_else(|e| panic!("{}: a full-mass export must record: {e}", pos.id));
-            let mut buf = HexgBuffer::new(2, "gnn_axis_v1").expect("graph buffer");
+            let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
             buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push: {e}", pos.id));
             let (graphs, targets) = buf
                 .sample_graph_batch_impl(1, false, 0.0)

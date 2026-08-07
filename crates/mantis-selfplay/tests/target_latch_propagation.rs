@@ -118,7 +118,8 @@ fn latch_carries_the_variant_name_from_the_dispatch_site_to_the_drain_face() {
     assert!(
         n_legal > 160,
         "construction: post-prefix legal set must exceed the child regime that busts \
-         MAX_VISITS (need >128 children; got n_legal {n_legal})"
+         the derived visit slot (post-R255: sims 1 + batch 1 - 1 = capacity 1; \
+         got n_legal {n_legal})"
     );
 
     // sims=1 + batch=1: the single sim is the root expansion → all children 0 visits
@@ -176,8 +177,9 @@ fn latch_carries_the_variant_name_from_the_dispatch_site_to_the_drain_face() {
         "the VARIANT NAME must survive dispatch → latch → drain face verbatim: {msg}"
     );
     assert!(
-        msg.contains("128"),
-        "the Display fields (MAX_VISITS bound) must ride the latch: {msg}"
+        msg.contains("derived visit capacity 1 at"),
+        "the Display fields (the DERIVED bound, 1 + 1 - 1 = 1 under this regime) must \
+         ride the latch verbatim (R255): {msg}"
     );
     assert!(halted, "store-then-halt: running must be false once the latch stores (LAW-14)");
     assert!(fires >= 1, "the latch fire-count must be visible on the stats surface");
