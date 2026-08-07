@@ -165,7 +165,7 @@ def _graph_pool(device: torch.device, buffer: Any = None) -> WorkerPool:
     spec = lookup("gnn_axis_v1")
     arch = GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
                    hidden=16, num_layers=1)
-    raw = buffer if buffer is not None else HexgBuffer(capacity=32,
+    raw = buffer if buffer is not None else HexgBuffer(capacity=32, visit_capacity=128,
                                                        encoding="gnn_axis_v1")
     return WorkerPool(build_net(arch), _cfg("gnn_axis_v1"), device, raw, arch=arch)
 
@@ -338,7 +338,7 @@ def test_pool_replay_buffer_is_the_facade(device) -> None:
     assert pool.replay_buffer.raw is raw, "the facade must wrap the ctor's buffer, not a copy"
     assert pool.replay_buffer.kind is BufferKind.GRID
 
-    graph_raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1")
+    graph_raw = HexgBuffer(capacity=32, encoding="gnn_axis_v1", visit_capacity=128)
     graph_pool = _graph_pool(device, buffer=graph_raw)
     assert isinstance(graph_pool.replay_buffer, ReplayFacade)
     assert graph_pool.replay_buffer.raw is graph_raw
@@ -369,7 +369,7 @@ def test_pool_construction_rejects_a_mislabelled_buffer(device, kind: str) -> No
     written into a dense buffer and only surface later as corrupt training data."""
     if kind == "grid_pool_graph_buffer":
         with pytest.raises(BufferKindMismatch) as exc:
-            _grid_pool(device, buffer=HexgBuffer(capacity=16, encoding="gnn_axis_v1"))
+            _grid_pool(device, buffer=HexgBuffer(capacity=16, encoding="gnn_axis_v1", visit_capacity=128))
     else:
         with pytest.raises(BufferKindMismatch) as exc:
             _graph_pool(device, buffer=ReplayBuffer(capacity=16, encoding="v6"))

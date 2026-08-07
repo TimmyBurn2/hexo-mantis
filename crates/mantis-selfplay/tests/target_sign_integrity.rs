@@ -28,7 +28,9 @@ use mantis_core::board::Board;
 use mantis_core::{Cell, Player};
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::records::{record_position_graph, TargetIntegrityError};
-use mantis_selfplay::replay::hexg::MAX_VISITS;
+/// Test slot geometry passed explicitly to `record_position_graph` (post-R255
+/// the production value is DERIVED from the sims regime at composition).
+const VISIT_CAP: usize = 128;
 
 const NA: usize = 362;
 const TRUNK: i32 = 19;
@@ -58,7 +60,7 @@ fn ls_on_first_legal(board: &Board, masses: &[f32]) -> LegalSetPolicy {
 }
 
 fn record(board: &Board, ls: &LegalSetPolicy) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
-    record_position_graph(board, ls, TRUNK, 1, 2, 3, true, MAX_VISITS)
+    record_position_graph(board, ls, TRUNK, 1, 2, 3, true, VISIT_CAP)
 }
 
 // ── (1) the F-RT-1 reproducer, verbatim: {+1.5, −0.5} — scan Σ==1, stored 1.5 ────────

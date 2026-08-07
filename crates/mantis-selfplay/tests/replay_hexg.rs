@@ -12,7 +12,13 @@ use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList};
 use mantis_selfplay::replay::hexg::push::validate_stone_player;
 use mantis_selfplay::replay::hexg::push::{validate_outcome, validate_visit_prob};
 use mantis_selfplay::replay::hexg::sample::mass_drop_check;
-use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES, MAX_VISITS};
+use mantis_selfplay::replay::hexg::{
+    GraphRecord, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, HEXG_VISIT_COUNT_CEILING, MAX_STONES,
+};
+
+/// Slot geometry used by this suite's pre-R255 oracles (each buffer below is
+/// constructed with it EXPLICITLY — a test geometry choice, not a shipped tunable).
+const VISIT_CAP: usize = 128;
 use mantis_selfplay::replay::sym::rotate_axial;
 use mantis_selfplay::replay::ReplayBuffer;
 
@@ -58,7 +64,7 @@ fn inv_sym(s: usize) -> usize {
 
 #[test]
 fn push_read_roundtrip() {
-    let mut buf = HexgBuffer::new(8, ENC).unwrap();
+    let mut buf = HexgBuffer::new(8, ENC, 128).unwrap();
     let rec = sample_record();
     buf.push_record_impl(&rec, 42).unwrap();
     assert_eq!(buf.size, 1);
@@ -71,7 +77,7 @@ fn push_read_roundtrip() {
 #[test]
 fn ring_wraps_and_caps_size() {
     let cap = 4;
-    let mut buf = HexgBuffer::new(cap, ENC).unwrap();
+    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
     for i in 0..(cap + 3) {
         let mut rec = sample_record();
         rec.ply_index = i as u16;
@@ -89,18 +95,18 @@ fn ring_wraps_and_caps_size() {
 
 #[test]
 fn push_rejects_over_cap() {
-    let mut buf = HexgBuffer::new(2, ENC).unwrap();
+    let mut buf = HexgBuffer::new(2, ENC, 128).unwrap();
     let over = GraphRecord { stones: vec![(0, 0, 1); MAX_STONES + 1], ..sample_record() };
     assert!(buf.push_record_impl(&over, -1).is_err(), "over-MAX_STONES must die loud");
-    let over_v = GraphRecord { visits: vec![(0, 0, 0.1); MAX_VISITS + 1], ..sample_record() };
-    assert!(buf.push_record_impl(&over_v, -1).is_err(), "over-MAX_VISITS must die loud");
+    let over_v = GraphRecord { visits: vec![(0, 0, 0.1); VISIT_CAP + 1], ..sample_record() };
+    assert!(buf.push_record_impl(&over_v, -1).is_err(), "over-visit-capacity must die loud");
 }
 
 // ── O-20: persist round-trip byte-identical ─────────────────────────────────────
 
 #[test]
 fn persist_roundtrip_byte_identical() {
-    let mut buf = HexgBuffer::new(16, ENC).unwrap();
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
     for i in 0..10 {
         let mut rec = sample_record();
         rec.ply_index = i;
@@ -111,7 +117,7 @@ fn persist_roundtrip_byte_identical() {
     let path = unique_path("roundtrip");
     buf.save_to_path_impl(path.to_str().unwrap()).unwrap();
 
-    let mut buf2 = HexgBuffer::new(16, ENC).unwrap();
+    let mut buf2 = HexgBuffer::new(16, ENC, 128).unwrap();
     let n = buf2.load_from_path_impl(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 10);
     assert_eq!(buf2.size, 10);
@@ -135,7 +141,7 @@ fn o21_hexg_v1_byte_golden_load_and_resave_identity() {
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg golden must exist");
     assert_eq!(golden_bytes.len(), 148, "golden size drifted");
 
-    let mut buf = HexgBuffer::new(16, ENC).unwrap();
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
     let n = buf.load_from_path_impl(golden.to_str().unwrap()).unwrap();
     assert_eq!(n, 2, "golden holds 2 records");
 
@@ -182,7 +188,7 @@ fn load_rejects_bad_version() {
         f.write_all(&HEXG_MAGIC.to_le_bytes()).unwrap();
         f.write_all(&999u32.to_le_bytes()).unwrap();
     }
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let err = buf.load_from_path_impl(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not supported"), "bad version must LOUD-FAIL: {err}");
     let _ = std::fs::remove_file(path);
@@ -196,13 +202,13 @@ fn load_rejects_slot_geometry_mismatch() {
         f.write_all(&HEXG_MAGIC.to_le_bytes()).unwrap();
         f.write_all(&HEXG_VERSION.to_le_bytes()).unwrap();
         f.write_all(&(MAX_STONES as u32 + 1).to_le_bytes()).unwrap();
-        f.write_all(&(MAX_VISITS as u32).to_le_bytes()).unwrap();
+        f.write_all(&(VISIT_CAP as u32).to_le_bytes()).unwrap();
         f.write_all(&4u64.to_le_bytes()).unwrap();
         f.write_all(&0u64.to_le_bytes()).unwrap();
         f.write_all(&(ENC.len() as u32).to_le_bytes()).unwrap();
         f.write_all(ENC.as_bytes()).unwrap();
     }
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let err = buf.load_from_path_impl(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("slot-geometry"), "slot-geometry mismatch must reject: {err}");
     let _ = std::fs::remove_file(path);
@@ -218,7 +224,7 @@ fn load_rejects_dense_hexb_magic() {
         f.write_all(&0x4845_5842u32.to_le_bytes()).unwrap(); // "HEXB"
         f.write_all(&9u32.to_le_bytes()).unwrap();
     }
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let err = buf.load_from_path_impl(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("invalid magic"), "HEXB → HEXG load must reject on magic: {err}");
     let _ = std::fs::remove_file(path);
@@ -226,7 +232,7 @@ fn load_rejects_dense_hexb_magic() {
 
 #[test]
 fn dense_loader_rejects_hexg_file() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     buf.push_record_impl(&sample_record(), 0).unwrap();
     let path = unique_path("hexg_into_dense");
     buf.save_to_path_impl(path.to_str().unwrap()).unwrap();
@@ -244,14 +250,14 @@ fn dense_loader_rejects_hexg_file() {
 
 #[test]
 fn grid_encoding_rejected_at_construction() {
-    assert!(HexgBuffer::new(4, "v6").is_err(), "a grid encoding must be refused");
+    assert!(HexgBuffer::new(4, "v6", 128).is_err(), "a grid encoding must be refused");
 }
 
 // ── O-24: rebuild-at-sample parity vs direct builder (re-anchored to AxisGraph) ──
 
 #[test]
 fn sample_wire_matches_direct_builder_unaugmented() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = sample_record();
     buf.push_record_impl(&rec, 0).unwrap();
 
@@ -315,7 +321,7 @@ fn argmax_canary_passes(g: &AxisGraph, argmax_cell: (i32, i32)) -> bool {
 
 #[test]
 fn augmented_sample_target_is_coherent_every_element() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for _ in 0..48 {
         let (graphs, targets) = buf.sample_graph_batch_impl(1, true, 0.0).unwrap();
@@ -358,7 +364,7 @@ fn adv7_desync_is_caught_by_the_canary() {
 
 #[test]
 fn empty_board_record_survives_d6_augmented_sample_align() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord {
         stones: vec![],
         visits: vec![(2, 2, 0.6), (-2, -2, 0.3), (0, 0, 0.1)],
@@ -381,7 +387,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
 
 #[test]
 fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
-    let mut src = HexgBuffer::new(8, ENC).unwrap();
+    let mut src = HexgBuffer::new(8, ENC, 128).unwrap();
     for i in 0..3u16 {
         let mut rec = sample_record();
         rec.ply_index = i;
@@ -394,7 +400,7 @@ fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
     let trunc_path = unique_path("b1_trunc");
     std::fs::write(&trunc_path, &raw[..raw.len() - 20]).unwrap();
 
-    let mut victim = HexgBuffer::new(8, ENC).unwrap();
+    let mut victim = HexgBuffer::new(8, ENC, 128).unwrap();
     for i in 0..5u16 {
         let mut rec = sample_record();
         rec.ply_index = i;
@@ -428,7 +434,7 @@ fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
 
 #[test]
 fn sample_rejects_illegal_cell_visit_mass_drop() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord {
         stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)],
         visits: vec![(0, 0, 0.9), (2, 0, 0.1)],
@@ -463,7 +469,7 @@ fn mass_drop_check_tolerates_float_noise() {
 
 #[test]
 fn legit_push_sample_roundtrip_does_not_trip_mass_drop_guard() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for aug in [false, true] {
         for _ in 0..24 {
@@ -476,7 +482,7 @@ fn legit_push_sample_roundtrip_does_not_trip_mass_drop_guard() {
 
 #[test]
 fn load_rebases_next_game_id_past_loaded_max() {
-    let mut src = HexgBuffer::new(8, ENC).unwrap();
+    let mut src = HexgBuffer::new(8, ENC, 128).unwrap();
     for i in 0..3u16 {
         let mut rec = sample_record();
         rec.ply_index = i;
@@ -485,7 +491,7 @@ fn load_rebases_next_game_id_past_loaded_max() {
     let path = unique_path("ngid_rebase");
     src.save_to_path_impl(path.to_str().unwrap()).unwrap();
 
-    let mut dst = HexgBuffer::new(8, ENC).unwrap();
+    let mut dst = HexgBuffer::new(8, ENC, 128).unwrap();
     let n = dst.load_from_path_impl(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 3);
     assert_eq!(dst.next_game_id, 5, "next_game_id must continue past the loaded max (4)");
@@ -497,11 +503,11 @@ fn load_rebases_next_game_id_past_loaded_max() {
 
 #[test]
 fn load_of_empty_file_does_not_touch_next_game_id() {
-    let empty_src = HexgBuffer::new(4, ENC).unwrap();
+    let empty_src = HexgBuffer::new(4, ENC, 128).unwrap();
     let path = unique_path("ngid_guard_empty");
     empty_src.save_to_path_impl(path.to_str().unwrap()).unwrap();
 
-    let mut dst = HexgBuffer::new(4, ENC).unwrap();
+    let mut dst = HexgBuffer::new(4, ENC, 128).unwrap();
     let g0 = dst.next_game_id();
     assert_eq!(g0, 0);
     let n = dst.load_from_path_impl(path.to_str().unwrap()).unwrap();
@@ -512,12 +518,12 @@ fn load_of_empty_file_does_not_touch_next_game_id() {
 
 #[test]
 fn load_with_i64_max_game_id_does_not_panic_and_saturates() {
-    let mut src = HexgBuffer::new(4, ENC).unwrap();
+    let mut src = HexgBuffer::new(4, ENC, 128).unwrap();
     src.push_record_impl(&sample_record(), i64::MAX).unwrap();
     let path = unique_path("gid_i64max");
     src.save_to_path_impl(path.to_str().unwrap()).unwrap();
 
-    let mut dst = HexgBuffer::new(4, ENC).unwrap();
+    let mut dst = HexgBuffer::new(4, ENC, 128).unwrap();
     let n = dst.load_from_path_impl(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 1);
     assert_eq!(dst.next_game_id, i64::MAX, "saturating_add(1) on i64::MAX must saturate");
@@ -528,7 +534,7 @@ fn load_with_i64_max_game_id_does_not_panic_and_saturates() {
 
 #[test]
 fn push_rejects_nan_visit_prob() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord { visits: vec![(2, 0, f32::NAN)], ..sample_record() };
     assert!(buf.push_record_impl(&rec, 0).is_err(), "NaN visit prob must be rejected at push");
     let msg = validate_visit_prob(2, 0, f32::NAN).expect_err("pure helper must reject NaN");
@@ -539,7 +545,7 @@ fn push_rejects_nan_visit_prob() {
 
 #[test]
 fn push_rejects_negative_visit_prob() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord { visits: vec![(2, 0, -0.5), (-1, 0, 0.5)], ..sample_record() };
     assert!(buf.push_record_impl(&rec, 0).is_err(), "negative visit prob must be rejected at push");
     let msg = validate_visit_prob(2, 0, -0.5).expect_err("pure helper must reject a negative prob");
@@ -550,7 +556,7 @@ fn push_rejects_negative_visit_prob() {
 
 #[test]
 fn legit_push_unaffected_by_prob_validation_guard() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = sample_record();
     buf.push_record_impl(&rec, 42).expect("legit finite non-negative probs must pass");
     assert_eq!(buf.size, 1);
@@ -560,7 +566,7 @@ fn legit_push_unaffected_by_prob_validation_guard() {
 
 #[test]
 fn push_rejects_nan_outcome() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord { outcome: f32::NAN, ..sample_record() };
     assert!(buf.push_record_impl(&rec, 0).is_err(), "NaN outcome must be rejected at push");
     let msg = validate_outcome(f32::NAN).expect_err("pure helper must reject NaN");
@@ -570,7 +576,7 @@ fn push_rejects_nan_outcome() {
 
 #[test]
 fn push_rejects_inf_outcome() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord { outcome: f32::INFINITY, ..sample_record() };
     assert!(buf.push_record_impl(&rec, 0).is_err(), "inf outcome must be rejected at push");
     let msg = validate_outcome(f32::INFINITY).expect_err("pure helper must reject +inf");
@@ -580,7 +586,7 @@ fn push_rejects_inf_outcome() {
 
 #[test]
 fn push_rejects_bad_stone_player() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord { stones: vec![(0, 0, 1), (1, 0, 5), (0, 1, 1), (2, 1, -1)], ..sample_record() };
     assert!(buf.push_record_impl(&rec, 0).is_err(), "stone player outside {{+1,-1}} must be rejected");
     let msg = validate_stone_player(1, 0, 5).expect_err("pure helper must reject an out-of-range player");
@@ -591,7 +597,7 @@ fn push_rejects_bad_stone_player() {
 
 #[test]
 fn legit_push_unaffected_by_outcome_and_stone_player_guards() {
-    let mut buf = HexgBuffer::new(4, ENC).unwrap();
+    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = sample_record();
     buf.push_record_impl(&rec, 42).expect("legit finite outcome and ±1 players must pass");
     assert_eq!(buf.size, 1);
@@ -605,7 +611,7 @@ fn legit_push_unaffected_by_outcome_and_stone_player_guards() {
 fn recency_sampler_draws_the_newest_slot_fraction() {
     let cap = 600;
     let total_pushes: u32 = 700;
-    let mut buf = HexgBuffer::new(cap, ENC).unwrap();
+    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
     for i in 0..total_pushes {
         let mut rec = sample_record();
         rec.ply_index = (i % (u16::MAX as u32 + 1)) as u16;
@@ -628,7 +634,7 @@ fn recency_sampler_draws_the_newest_slot_fraction() {
 fn recency_sampler_zero_frac_is_byte_identical_to_full_ring_sample() {
     let cap = 600;
     let total_pushes: u32 = 700;
-    let mut buf = HexgBuffer::new(cap, ENC).unwrap();
+    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
     for i in 0..total_pushes {
         let mut rec = sample_record();
         rec.ply_index = (i % (u16::MAX as u32 + 1)) as u16;
@@ -646,7 +652,7 @@ fn recency_sampler_zero_frac_is_byte_identical_to_full_ring_sample() {
 #[test]
 fn recency_sampler_recent_window_clamped_by_size_before_ring_fills() {
     let cap = 1000;
-    let mut buf = HexgBuffer::new(cap, ENC).unwrap();
+    let mut buf = HexgBuffer::new(cap, ENC, 128).unwrap();
     for i in 0..50u32 {
         let mut rec = sample_record();
         rec.ply_index = i as u16;
@@ -659,4 +665,57 @@ fn recency_sampler_recent_window_clamped_by_size_before_ring_fills() {
     for i in &idx {
         assert!(buf.ply_index[*i] < 50, "must never draw a never-written slot");
     }
+}
+
+// ── R255/ADJ-D34: the visit slot is DERIVED capacity, not a 128 literal ─────────
+
+#[test]
+fn buffer_slots_are_sized_by_the_composed_visit_capacity() {
+    // A 600/75-regime-shaped capacity (607): a 130-visit record — over the old
+    // 128 literal — pushes and round-trips intact. Reds if anything on the
+    // push/read path still clamps at the deleted constant.
+    let mut buf = HexgBuffer::new(4, ENC, 607).unwrap();
+    let visits: Vec<(i16, i16, f32)> =
+        (0..130).map(|i| (i as i16, -(i as i16), 1.0 / 130.0)).collect();
+    let rec = GraphRecord { visits, ..sample_record() };
+    buf.push_record_impl(&rec, 7).unwrap();
+    assert_eq!(buf.record_at(0).visits.len(), 130, "all 130 visit cells survive");
+    // Over the COMPOSED capacity still dies loud.
+    let over = GraphRecord { visits: vec![(0, 0, 0.001); 608], ..sample_record() };
+    assert!(buf.push_record_impl(&over, -1).is_err(), "over composed capacity dies loud");
+}
+
+#[test]
+fn ctor_refuses_a_capacity_the_format_cannot_store() {
+    assert!(HexgBuffer::new(4, ENC, 0).is_err(), "zero visit capacity is meaningless");
+    assert!(
+        HexgBuffer::new(4, ENC, HEXG_VISIT_COUNT_CEILING + 1).is_err(),
+        "a capacity past the u16 count ceiling cannot be stored"
+    );
+    assert!(HexgBuffer::new(4, ENC, HEXG_VISIT_COUNT_CEILING).is_ok());
+}
+
+#[test]
+fn persist_roundtrips_a_non_default_capacity_and_rejects_mismatch() {
+    let mut buf = HexgBuffer::new(4, ENC, 607).unwrap();
+    let visits: Vec<(i16, i16, f32)> = (0..200).map(|i| (i as i16, 3, 1.0 / 200.0)).collect();
+    buf.push_record_impl(&GraphRecord { visits, ..sample_record() }, 1).unwrap();
+    let path = unique_path("r255_capacity");
+    let path_s = path.to_str().unwrap();
+    buf.save_to_path_impl(path_s).unwrap();
+
+    // Same-capacity load round-trips, 200-cell support intact.
+    let mut same = HexgBuffer::new(4, ENC, 607).unwrap();
+    assert_eq!(same.load_from_path_impl(path_s), Ok(1));
+    assert_eq!(same.record_at(0).visits.len(), 200);
+
+    // A buffer composed under a DIFFERENT regime refuses the file, naming both
+    // geometries — a silent remap would smuggle one regime's records into another.
+    let mut other = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    let err = other.load_from_path_impl(path_s).unwrap_err();
+    assert!(
+        err.contains("607") && err.contains("128"),
+        "mismatch must name both capacities: {err}"
+    );
+    let _ = std::fs::remove_file(&path);
 }

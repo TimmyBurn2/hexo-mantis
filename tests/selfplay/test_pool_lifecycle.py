@@ -87,7 +87,7 @@ def _graph_pool(**kw: Any) -> WorkerPool:
                    hidden=16, num_layers=1)
     return WorkerPool(
         build_net(arch), _cfg("gnn_axis_v1"), torch.device("cpu"),
-        HexgBuffer(capacity=256, encoding="gnn_axis_v1"), arch=arch, **kw,
+        HexgBuffer(capacity=256, encoding="gnn_axis_v1", visit_capacity=128), arch=arch, **kw,
     )
 
 

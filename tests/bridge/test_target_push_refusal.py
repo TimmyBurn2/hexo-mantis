@@ -33,7 +33,7 @@ def _push(hb: HexgBuffer, visits: list[tuple[int, int, float]]) -> None:
 
 
 def _refusal(visits: list[tuple[int, int, float]]) -> str:
-    hb = HexgBuffer(8, "gnn_axis_v1")
+    hb = HexgBuffer(8, "gnn_axis_v1", 128)
     with pytest.raises(ValueError) as ei:
         _push(hb, visits)
     assert hb.size == 0, "a refused row must never reach the ring"
@@ -71,7 +71,7 @@ def test_empty_visit_list_refused_naming_empty_target() -> None:
 def test_nan_and_negative_entries_stay_refused_per_entry() -> None:
     # Pre-existing per-entry lines (push_record_impl) — pinned here so the M-Q
     # mutation cannot silently widen the face while the row checks are gone.
-    hb = HexgBuffer(8, "gnn_axis_v1")
+    hb = HexgBuffer(8, "gnn_axis_v1", 128)
     with pytest.raises(ValueError):
         _push(hb, [(2, 0, math.nan), (3, 0, 1.0)])
     with pytest.raises(ValueError):
@@ -82,7 +82,7 @@ def test_nan_and_negative_entries_stay_refused_per_entry() -> None:
 def test_unity_and_within_tol_rows_admitted() -> None:
     # F-RT-3 admit-side pin, FFI parity: the ABSOLUTE 1e-4 window is the
     # intended width — exact unity and 1 + 5e-5 both ADMIT.
-    hb = HexgBuffer(8, "gnn_axis_v1")
+    hb = HexgBuffer(8, "gnn_axis_v1", 128)
     _push(hb, [(2, 0, 1.0)])
     _push(hb, [(2, 0, 0.6), (3, 0, 0.4 + 5.0e-5)])
     assert hb.size == 2

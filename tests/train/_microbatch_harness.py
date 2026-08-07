@@ -75,7 +75,7 @@ def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     count `c` and `B` graphs, `max_edges = c * (B // M)` yields EXACTLY `M` micro-batches for
     any `M` dividing `B`. A ragged fixture would make the requested M a search rather than an
     identity, and OF2-4/OF2-5 sweep M as an exact quantity."""
-    hb = HexgBuffer(capacity, GRAPH_ENCODING)
+    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
         policy = [(2, 0, 0.6), (1, 1, 0.4)]
@@ -87,7 +87,7 @@ def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 def ragged_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     """A real `HexgBuffer` whose records differ in stone count, so per-graph (N, E) varies —
     the fixture the slice-fidelity and over-cap legs want."""
-    hb = HexgBuffer(capacity, GRAPH_ENCODING)
+    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1), (2, 1, -1), (1, 2, 1)][: 2 + (i % 4)]
         policy = [(3, 0, 0.6), (1, 1, 0.4)]

@@ -9,7 +9,9 @@
 //! Header (little-endian native):
 //!   [magic:   u32 = 0x48455847]  ("HEXG" — distinct from HEXB 0x48455842)
 //!   [version: u32 = 1]
-//!   [max_stones: u32] [max_visits: u32]   (slot geometry; reject on mismatch)
+//!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the
+//!                                          buffer's DERIVED `visit_capacity`
+//!                                          (R255); reject on mismatch)
 //!   [capacity: u64] [size: u64]
 //!   [encoding_name_len: u32] [encoding_name: [u8; N]]
 //!   For each of `size` records (oldest → newest):
@@ -30,7 +32,7 @@
 use std::io::{BufWriter, Read, Write};
 use std::sync::atomic::Ordering;
 
-use super::{weight_bucket, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES, MAX_VISITS};
+use super::{weight_bucket, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES};
 
 impl HexgBuffer {
     /// Save all records (oldest → newest) to `path` in HEXG v1 format.
@@ -42,7 +44,7 @@ impl HexgBuffer {
         w.write_all(&HEXG_MAGIC.to_le_bytes()).map_err(io)?;
         w.write_all(&HEXG_VERSION.to_le_bytes()).map_err(io)?;
         w.write_all(&(MAX_STONES as u32).to_le_bytes()).map_err(io)?;
-        w.write_all(&(MAX_VISITS as u32).to_le_bytes()).map_err(io)?;
+        w.write_all(&(self.visit_capacity as u32).to_le_bytes()).map_err(io)?;
         w.write_all(&(self.capacity as u64).to_le_bytes()).map_err(io)?;
         w.write_all(&(self.size as u64).to_le_bytes()).map_err(io)?;
         let name = self.encoding.name.as_bytes();
@@ -72,8 +74,8 @@ impl HexgBuffer {
                 w.write_all(&self.stones_qr[stone_base + j * 2 + 1].to_le_bytes()).map_err(io)?;
                 w.write_all(&self.stone_players[player_base + j].to_le_bytes()).map_err(io)?;
             }
-            let visit_base = slot * MAX_VISITS * 2;
-            let prob_base = slot * MAX_VISITS;
+            let visit_base = slot * self.visit_capacity * 2;
+            let prob_base = slot * self.visit_capacity;
             for j in 0..nv as usize {
                 w.write_all(&self.visit_qr[visit_base + j * 2].to_le_bytes()).map_err(io)?;
                 w.write_all(&self.visit_qr[visit_base + j * 2 + 1].to_le_bytes()).map_err(io)?;
@@ -112,10 +114,14 @@ impl HexgBuffer {
         }
         let max_stones = cur.u32()? as usize;
         let max_visits = cur.u32()? as usize;
-        if max_stones != MAX_STONES || max_visits != MAX_VISITS {
+        if max_stones != MAX_STONES || max_visits != self.visit_capacity {
             return Err(format!(
                 "HEXG slot-geometry mismatch: file (max_stones {max_stones}, max_visits \
-                 {max_visits}) != build (max_stones {MAX_STONES}, max_visits {MAX_VISITS})"
+                 {max_visits}) != buffer (max_stones {MAX_STONES}, visit_capacity {}) — \
+                 the visit capacity is derived from the sims regime at composition \
+                 (R255/ADJ-D34), so a file written under a different regime is a \
+                 different record geometry and must not be remapped silently",
+                self.visit_capacity
             ));
         }
         let _capacity = cur.u64()? as usize;
@@ -137,7 +143,7 @@ impl HexgBuffer {
         }
 
         // ── PASS 1 (parse, no mutation of `self`) ──
-        let parsed = parse_records(&mut cur, size)?;
+        let parsed = parse_records(&mut cur, size, self.visit_capacity)?;
 
         // ── PASS 2 (commit) ──
         self.commit_records(&parsed);
@@ -180,10 +186,11 @@ impl HexgBuffer {
             self.stones_qr[stone_base..stone_base + rec.ns * 2].copy_from_slice(&rec.stones_qr);
             self.stone_players[player_base..player_base + rec.ns].copy_from_slice(&rec.stone_players);
 
-            let visit_base = slot * MAX_VISITS * 2;
-            let prob_base = slot * MAX_VISITS;
-            self.visit_qr[visit_base..visit_base + MAX_VISITS * 2].fill(0);
-            self.visit_probs[prob_base..prob_base + MAX_VISITS].fill(0.0);
+            let vcap = self.visit_capacity;
+            let visit_base = slot * vcap * 2;
+            let prob_base = slot * vcap;
+            self.visit_qr[visit_base..visit_base + vcap * 2].fill(0);
+            self.visit_probs[prob_base..prob_base + vcap].fill(0.0);
             self.visit_qr[visit_base..visit_base + rec.nv * 2].copy_from_slice(&rec.visit_qr);
             self.visit_probs[prob_base..prob_base + rec.nv].copy_from_slice(&rec.visit_probs);
 
@@ -196,12 +203,16 @@ impl HexgBuffer {
 /// PASS 1 helper: parse `size` records from `cur` into an owned staging Vec. A
 /// free function (no `&self`) — structurally cannot touch a `HexgBuffer`, so any
 /// `?` failure leaves the caller's buffer untouched.
-fn parse_records(cur: &mut Cursor, size: usize) -> Result<Vec<ParsedRecord>, String> {
+fn parse_records(
+    cur: &mut Cursor,
+    size: usize,
+    visit_capacity: usize,
+) -> Result<Vec<ParsedRecord>, String> {
     let mut parsed: Vec<ParsedRecord> = Vec::with_capacity(size);
     for slot in 0..size {
         let ns = cur.u16()? as usize;
         let nv = cur.u16()? as usize;
-        if ns > MAX_STONES || nv > MAX_VISITS {
+        if ns > MAX_STONES || nv > visit_capacity {
             return Err(format!(
                 "HEXG load: record {slot} declares {ns} stones / {nv} visits over cap"
             ));

@@ -431,7 +431,7 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, pipeline: _F
     out_dir = tmp_path / "out"
     from mantis._engine import HexgBuffer
 
-    buffer = HexgBuffer(64, "gnn_axis_v1")
+    buffer = HexgBuffer(64, "gnn_axis_v1", 128)
     for i in range(8):
         buffer.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 0.6), (1, 1, 0.4)],
                                    1, 30, 2 + i, True, 1.0 if i % 2 == 0 else -1.0, True, 10 + i)

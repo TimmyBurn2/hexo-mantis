@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 use half::f16;
 
 use super::super::schedule::{WeightBracket, WeightSchedule};
-use super::{HexgBuffer, MAX_STONES, MAX_VISITS};
+use super::{HexgBuffer, MAX_STONES};
 
 impl HexgBuffer {
     /// `(size, capacity, weight_histogram)` for dashboard display.
@@ -33,14 +33,15 @@ impl HexgBuffer {
         }
 
         let sstride = MAX_STONES * 2; // stones_qr per-record stride
-        let vstride = MAX_VISITS * 2; // visit_qr per-record stride
+        let vcap = self.visit_capacity;
+        let vstride = vcap * 2; // visit_qr per-record stride
 
         if self.size == self.capacity && self.head != 0 {
             self.stones_qr[..self.capacity * sstride].rotate_left(self.head * sstride);
             self.stone_players[..self.capacity * MAX_STONES].rotate_left(self.head * MAX_STONES);
             self.n_stones[..self.capacity].rotate_left(self.head);
             self.visit_qr[..self.capacity * vstride].rotate_left(self.head * vstride);
-            self.visit_probs[..self.capacity * MAX_VISITS].rotate_left(self.head * MAX_VISITS);
+            self.visit_probs[..self.capacity * vcap].rotate_left(self.head * vcap);
             self.n_visits[..self.capacity].rotate_left(self.head);
             self.current_player[..self.capacity].rotate_left(self.head);
             self.moves_remaining[..self.capacity].rotate_left(self.head);
@@ -58,7 +59,7 @@ impl HexgBuffer {
         self.stone_players.resize(new_capacity * MAX_STONES, 0i8);
         self.n_stones.resize(new_capacity, 0u16);
         self.visit_qr.resize(new_capacity * vstride, 0i16);
-        self.visit_probs.resize(new_capacity * MAX_VISITS, 0.0f32);
+        self.visit_probs.resize(new_capacity * vcap, 0.0f32);
         self.n_visits.resize(new_capacity, 0u16);
         self.current_player.resize(new_capacity, 1i8);
         self.moves_remaining.resize(new_capacity, 2u8);

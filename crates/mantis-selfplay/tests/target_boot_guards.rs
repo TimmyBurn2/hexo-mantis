@@ -1,28 +1,29 @@
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — S2b BOOT-GUARD oracles (DESIGN_T §3.4 guards
-//! 1 + 2), written at T-2 ORACLE-WRITE, byte-frozen through IMPL.
+//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — boot-guard oracles, RE-RULED by
+//! R255/ADJ-D34 (the previous byte-frozen S2b suite pinned the `MAX_VISITS = 128`
+//! literal this ruling deletes; rewriting these oracles is the ruling's own act).
 //!
-//! POST-FIX contract, at the runner's effective-sims resolution seam
-//! (`SelfPlayRunner::new`, runner/mod.rs — where zero-on-effective is already rejected):
+//! POST-R255 contract, at the runner's effective-sims resolution seam
+//! (`SelfPlayRunner::new`, runner/mod.rs):
 //!
-//!  * GUARD 1 (overshoot-aware temperature-arm bound): refuse to start when
-//!    `max(ARMED effective sim counts) + leaf_batch_size - 1 > MAX_VISITS (128)`.
+//!  * The guard's capacity is DERIVED at composition from the configured sims
+//!    regime: `max(ARMED effective sim counts) + leaf_batch_size - 1`, via the ONE
+//!    authority `replay::hexg::derived_visit_capacity` (shared verbatim with the
+//!    mint-time schema validator through the bridge — no second formula).
 //!    Armed arms: standard (always; effective = standard_sims else n_simulations),
-//!    fast iff `fast_prob > 0`, quick/full iff `full_search_prob > 0`. Reads two
-//!    EXISTING config values — no new key (R120); armed VALUES never set (R119).
-//!  * GUARD 2: refuse `representation == graph && completed_q_values == true` while
-//!    `MAX_CHILDREN_PER_NODE (192) > MAX_VISITS (128)`, both constants named in the
-//!    message (honest retirement-until-raised; F-1(b)).
+//!    fast iff `fast_prob > 0`, quick/full iff `full_search_prob > 0`.
+//!  * A regime the record format cannot honor (derived capacity past the
+//!    `u16` count ceiling `HEXG_VISIT_COUNT_CEILING`) is an ERROR — refused at
+//!    mint by the schema twin; this boot-side refusal is the defense-in-depth
+//!    line for un-minted constructions (tests, direct API use).
+//!  * completed-Q on graph refuses while `MAX_CHILDREN_PER_NODE (192)` exceeds
+//!    the DERIVED capacity (the old guard 2, generalized: its firing set shrinks
+//!    exactly when the derived slots genuinely cover child-count-wide support —
+//!    the "retirement-until-raised" condition realized per-regime).
 //!
-//! Every construction below uses a GRAPH encoding for the guard-1 cases (the guard's
-//! grounds are the graph record's MAX_VISITS slot; whether IMPL additionally scopes
-//! guard 1 by representation is deliberately NOT pinned — ORACLE_NOTES_T.md records
-//! the open scoping note).
-//!
-//! PRE-FIX status at HEAD: the three REFUSE cases are RED (HEAD's ctor admits them);
-//! the four ADMIT cases are GREEN (two-sided — they must STAY green post-fix).
-//! Killers (PREREG_T §3): M-G (admit-at-128 flips), M-I (guard-2 refuse), M-O
-//! (unarmed-arm admit flips), M-D roster context.
+//! Killers: M-G' (derivation dropped → 600/75 admit reds), M-I' (completed-Q
+//! refusal dropped below the child cap), M-O (unarmed-arm filter dropped).
 
+use mantis_selfplay::replay::hexg::{derived_visit_capacity, HEXG_VISIT_COUNT_CEILING};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 const GRAPH_ENC: &str = "gnn_axis_v1";
@@ -43,107 +44,143 @@ fn graph_cfg() -> SelfPlayRunnerConfig {
     }
 }
 
-// ── guard 1 ──────────────────────────────────────────────────────────────────────────
+/// The prereg'd PCR 600/75 shape (RUN5_MINT_PREREG SIMS-REGIME row: R160/R163/R165).
+fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
+    SelfPlayRunnerConfig {
+        full_search_prob: 0.10,
+        n_sims_quick: 75,
+        n_sims_full: 600,
+        ..graph_cfg()
+    }
+}
+
+// ── the derivation authority ─────────────────────────────────────────────────────────
 
 #[test]
-fn guard1_admits_at_the_exact_boundary_128() {
-    // sims 121 + batch 8 - 1 = 128 == MAX_VISITS → ADMIT (the F-2 admit-at-boundary
-    // case; M-G's `>` → `>=` flip reds exactly this).
-    let cfg = SelfPlayRunnerConfig { n_simulations: 121, ..graph_cfg() };
-    assert!(
-        SelfPlayRunner::new(cfg).is_ok(),
-        "guard 1 must ADMIT at the exact boundary (121 + 8 - 1 == 128)"
+fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
+    // standard-only: 50 + 8 - 1 = 57.
+    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false), Ok(57));
+    // standard_sims wins over n_simulations when set: 40 + 8 - 1 = 47.
+    assert_eq!(derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, false), Ok(47));
+    // PCR-armed: max(50, 75, 600) + 8 - 1 = 607.
+    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, false), Ok(607));
+    // fast-armed: max(50, 500) + 8 - 1 = 507.
+    assert_eq!(derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, false), Ok(507));
+}
+
+#[test]
+fn derivation_ignores_a_defined_but_unarmed_arm() {
+    // [M-O] `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
+    assert_eq!(derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, false), Ok(57));
+    // Quick/full carrying huge values while full_search_prob == 0.0: still 57.
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 70_000, 70_000, 8, false),
+        Ok(57)
     );
 }
 
 #[test]
-fn guard1_refuses_one_past_the_boundary_129() {
-    // sims 122 + batch 8 - 1 = 129 > 128 → REFUSE, naming MAX_VISITS.
-    let cfg = SelfPlayRunnerConfig { n_simulations: 122, ..graph_cfg() };
-    let err = SelfPlayRunner::new(cfg).err().unwrap_or_else(|| {
-        panic!(
-            "guard 1 must REFUSE 122 + 8 - 1 = 129 > MAX_VISITS — the silent top-k \
-             truncation's replacement boundary (DESIGN_T §3.4)"
-        )
-    });
+fn derivation_refuses_a_regime_over_the_format_ceiling() {
+    // 70_000 + 8 - 1 = 70_007 > u16::MAX (65_535): the record format's `n_visits`
+    // count is u16 — no capacity can honor this regime, whatever the config asks.
+    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 70_000, 8, false)
+        .expect_err("a regime past the u16 count ceiling cannot be honored");
     assert!(
-        err.contains("MAX_VISITS"),
-        "the refusal must name the governing constant MAX_VISITS: {err}"
+        err.contains(&HEXG_VISIT_COUNT_CEILING.to_string()),
+        "the refusal must name the structural ceiling {HEXG_VISIT_COUNT_CEILING}: {err}"
     );
-    assert!(err.contains("128"), "the refusal must name the bound value 128: {err}");
+    assert!(
+        err.contains("mint"),
+        "the refusal must say this is a mint-time error (R255: never a boot surprise): {err}"
+    );
 }
 
 #[test]
-fn guard1_admits_the_run5_shape() {
-    // run5: 50 + 8 - 1 = 57 <= 128 → ADMIT untouched (R119: the guard reads armed
-    // values, never sets them; run5.yaml:176,151 shape).
+fn the_ceiling_is_the_u16_count_type_not_a_tunable() {
+    // Derived from the storage type — if someone re-tunes it as a literal this reds.
+    assert_eq!(HEXG_VISIT_COUNT_CEILING, usize::from(u16::MAX));
+    // Admit at the exact ceiling: max_armed + lb - 1 == 65_535 → Ok.
+    assert_eq!(
+        derived_visit_capacity(65_528, 0, 0.0, 50, 0.0, 0, 0, 8, false),
+        Ok(HEXG_VISIT_COUNT_CEILING)
+    );
+    // One past → refuse.
+    assert!(derived_visit_capacity(65_529, 0, 0.0, 50, 0.0, 0, 0, 8, false).is_err());
+}
+
+// ── boot behavior (the dispatch's pin: 600/75 boots) ────────────────────────────────
+
+#[test]
+fn boot_admits_the_prereg_600_75_pcr_regime() {
+    // ADJ-D34's exact defect: the minted PCR config refused to boot at ANY
+    // leaf_batch_size >= 1 under the 128 literal. R255 pin: it boots.
+    assert!(
+        SelfPlayRunner::new(pcr_600_75_cfg()).is_ok(),
+        "R255: a 600/75-shaped PCR regime must BOOT — the guard's capacity is derived \
+         from the regime, not compared against a literal"
+    );
+}
+
+#[test]
+fn boot_admits_the_run5_shape() {
+    // run5: 50 + 8 - 1 = 57 → capacity 57, boots (R119: values read, never set).
     assert!(
         SelfPlayRunner::new(graph_cfg()).is_ok(),
-        "guard 1 must admit the run5 shape (50 sims + batch 8)"
+        "the guard must admit the run5 shape (50 sims + batch 8)"
     );
 }
 
 #[test]
-fn guard1_refuses_through_a_pcr_shaped_armed_arm() {
-    // The max-over-ARMED-arms conjunct: full_search_prob > 0 arms n_sims_full = 200;
-    // 200 + 8 - 1 = 207 > 128 → REFUSE even though the standard arm (50) fits.
+fn boot_refuses_a_regime_over_the_format_ceiling() {
+    // Defense-in-depth: the schema twin refuses this at mint; a direct construction
+    // must still die loud at boot, with the derivation's own message.
     let cfg = SelfPlayRunnerConfig {
-        full_search_prob: 0.5,
-        n_sims_quick: 10,
-        n_sims_full: 200,
+        full_search_prob: 0.10,
+        n_sims_quick: 75,
+        n_sims_full: 70_000,
         ..graph_cfg()
     };
-    let err = SelfPlayRunner::new(cfg).err().unwrap_or_else(|| {
-        panic!("guard 1 must take the MAX over armed arms — an armed 200-sim full arm busts 128")
-    });
-    assert!(err.contains("MAX_VISITS"), "PCR-arm refusal must name MAX_VISITS: {err}");
+    let err = SelfPlayRunner::new(cfg)
+        .err()
+        .expect("a regime past the u16 count ceiling must not boot");
+    assert!(
+        err.contains(&HEXG_VISIT_COUNT_CEILING.to_string()),
+        "the boot refusal must carry the derivation's ceiling message: {err}"
+    );
+}
+
+// ── completed-Q (old guard 2, generalized against the DERIVED capacity) ─────────────
+
+#[test]
+fn completed_q_graph_refused_while_derived_capacity_below_child_cap() {
+    // 50 + 8 - 1 = 57 < MAX_CHILDREN_PER_NODE (192): child-count-wide support
+    // cannot fit — refuse, naming both values and the offending key.
+    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..graph_cfg() };
+    let err = SelfPlayRunner::new(cfg)
+        .err()
+        .expect("completed-Q on graph must refuse while derived capacity < 192");
+    assert!(err.contains("192"), "must name MAX_CHILDREN_PER_NODE=192: {err}");
+    assert!(err.contains("57"), "must name the derived capacity 57: {err}");
+    assert!(err.contains("completed_q"), "must name the offending key: {err}");
 }
 
 #[test]
-fn guard1_admits_an_unarmed_arm_carrying_an_over_cap_value() {
-    // [rev-3, N-2 / M-O] The ARMED filter's admit side: `fast_sims: 500` with
-    // `fast_prob: 0.0` is a DEFINED but UNARMED arm — it must NOT enter the max.
-    let cfg = SelfPlayRunnerConfig { fast_sims: 500, fast_prob: 0.0, ..graph_cfg() };
+fn completed_q_graph_admitted_once_derived_capacity_covers_child_cap() {
+    // The generalization pin: under the 600/75 regime the derived capacity (607)
+    // covers MAX_CHILDREN_PER_NODE (192) — the record physically holds
+    // child-count-wide support, so the refusal would be vacuous and must not fire
+    // (the old guard's own "retirement-until-raised" condition, realized).
+    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..pcr_600_75_cfg() };
     assert!(
         SelfPlayRunner::new(cfg).is_ok(),
-        "guard 1 must compute its max over ARMED arms only — an unarmed fast_sims: 500 \
-         at fast_prob: 0.0 is inert (M-O's admit case)"
-    );
-}
-
-// ── guard 2 ──────────────────────────────────────────────────────────────────────────
-
-#[test]
-fn guard2_refuses_graph_with_completed_q_naming_both_constants() {
-    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..graph_cfg() };
-    let err = SelfPlayRunner::new(cfg).err().unwrap_or_else(|| {
-        panic!(
-            "guard 2 must refuse representation==graph + completed_q_values=true while \
-             MAX_CHILDREN_PER_NODE (192) > MAX_VISITS (128): the post-fix improved \
-             exporter is child-count-wide (DESIGN_T §1.3/§3.4, F-1(b))"
-        )
-    });
-    assert!(err.contains("192"), "guard-2 refusal must name MAX_CHILDREN_PER_NODE=192: {err}");
-    assert!(err.contains("128"), "guard-2 refusal must name MAX_VISITS=128: {err}");
-    assert!(
-        err.contains("completed_q"),
-        "guard-2 refusal must name the offending key so the operator can act: {err}"
+        "completed-Q on graph must ADMIT once the derived capacity covers \
+         MAX_CHILDREN_PER_NODE"
     );
 }
 
 #[test]
-fn guard2_admits_graph_without_completed_q() {
-    // Single-conjunct admit side 1: graph + completed_q=false (run5's own state).
-    assert!(
-        SelfPlayRunner::new(graph_cfg()).is_ok(),
-        "guard 2 must admit graph + completed_q_values=false"
-    );
-}
-
-#[test]
-fn guard2_admits_grid_with_completed_q() {
-    // Single-conjunct admit side 2: grid(dense) + completed_q=true — dense-362 records
-    // carry no MAX_VISITS; the key stays alive (F-23's history respected).
+fn completed_q_grid_is_untouched() {
+    // Dense-362 records carry no HEXG visit slot; the key stays alive (F-23).
     let cfg = SelfPlayRunnerConfig {
         encoding_name: Some("v6".to_string()),
         completed_q_values: true,
@@ -154,6 +191,6 @@ fn guard2_admits_grid_with_completed_q() {
     };
     assert!(
         SelfPlayRunner::new(cfg).is_ok(),
-        "guard 2 must admit a GRID encoding with completed_q_values=true"
+        "a GRID encoding with completed_q_values=true is outside this guard"
     );
 }

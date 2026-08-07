@@ -484,8 +484,9 @@ pub enum TargetIntegrityError {
     /// ~Zero mass over a NON-empty legal set (order-arm 2; the R157 named
     /// degenerate class keeps its own variant — checked BEFORE unity).
     EmptyTarget { ply_index: u16, n_legal: usize },
-    /// More positive-mass cells than the fixed HEXG visit slot holds — the
-    /// silent top-k truncation's typed replacement.
+    /// More positive-mass cells than the DERIVED HEXG visit slot holds — the
+    /// silent top-k truncation's typed replacement. `max` is the composed
+    /// `visit_capacity` (R255: derived from the sims regime, never a literal).
     VisitSlotsExceeded { n: usize, max: usize, ply_index: u16 },
 }
 
@@ -506,10 +507,12 @@ impl std::fmt::Display for TargetIntegrityError {
             ),
             TargetIntegrityError::VisitSlotsExceeded { n, max, ply_index } => write!(
                 f,
-                "VisitSlotsExceeded: {n} positive-mass cells exceed MAX_VISITS={max} at \
-                 ply_index={ply_index}; the effective sim budget + leaf batch must fit \
-                 MAX_VISITS, or MAX_VISITS must be raised — silent truncation is deleted \
-                 (LAW-14: run-fatal, never recorded)"
+                "VisitSlotsExceeded: {n} positive-mass cells exceed the derived visit \
+                 capacity {max} at ply_index={ply_index}; the capacity is derived from \
+                 the configured sims regime (max armed arm + leaf_batch_size − 1, \
+                 R255/ADJ-D34), so an exporter emitting more support than the regime \
+                 admits is a defect upstream — silent truncation is deleted (LAW-14: \
+                 run-fatal, never recorded)"
             ),
         }
     }

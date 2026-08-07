@@ -36,7 +36,7 @@ def test_replay_buffer_push_sample_round_trip():
 
 
 def test_hexg_buffer_and_graph_targets_round_trip():
-    hb = _engine.HexgBuffer(16, "gnn_axis_v1")
+    hb = _engine.HexgBuffer(16, "gnn_axis_v1", 128)
     hb.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 1.0)], 1, 100, 2, True, 0.0, True, 1)
     assert hb.size == 1
     assert hb.encoding_name == "gnn_axis_v1"

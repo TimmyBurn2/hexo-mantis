@@ -76,6 +76,8 @@ struct PerGameInitCtx {
 #[allow(clippy::struct_excessive_bools)]
 struct WorkerMoveCfg {
     leaf_batch_size: usize,
+    /// DERIVED HEXG visit capacity (R255) — `Some` iff this is a graph run.
+    visit_capacity: Option<usize>,
     temp_threshold: usize,
     temp_min: f32,
     zoi_lookback: usize,
@@ -204,6 +206,7 @@ pub(crate) fn run_worker_thread(
         n_sims_quick,
         n_sims_full,
         random_opening_plies,
+        visit_capacity,
         registry_spec,
         search_flags: SearchFlags { quiescence_enabled, completed_q_values, gumbel_mcts },
         exploration_flags: ExplorationFlags { dirichlet_enabled, selfplay_rotation_enabled },
@@ -294,6 +297,7 @@ pub(crate) fn run_worker_thread(
     };
     let move_cfg = WorkerMoveCfg {
         leaf_batch_size,
+        visit_capacity,
         temp_threshold,
         temp_min,
         zoi_lookback,
@@ -391,6 +395,7 @@ fn run_one_game(
 ) {
     let WorkerMoveCfg {
         leaf_batch_size,
+        visit_capacity,
         temp_threshold,
         temp_min,
         zoi_lookback,
@@ -448,6 +453,7 @@ fn run_one_game(
     };
     let play_ctx = MovePlayContext {
         leaf_batch_size,
+        visit_capacity,
         temp_threshold,
         temp_min,
         zoi_lookback,

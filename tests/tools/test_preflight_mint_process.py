@@ -1376,11 +1376,29 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
 #     predicate protected is re-stated in the CLASS by
 #     `tests/test_run_buffer_route.py::test_the_route_error_carries_no_tool_exit_code`.
 def _identity(representation: str, encoding: str = "gnn_axis_v1"):
-    """The two leaves `_select_buffer` reads. Not a stand-in for a production object the tool
+    """The leaves `_select_buffer` reads. Not a stand-in for a production object the tool
     constructs (O-2's subject) — it is the argument, and building a `RunConfig` whose
-    `identity.representation` is unknown is impossible by construction, which is the point."""
-    return SimpleNamespace(identity=SimpleNamespace(representation=representation,
-                                                    encoding=encoding))
+    `identity.representation` is unknown is impossible by construction, which is the point.
+    Post-R255 the graph arm also DERIVES its ring's visit capacity from the sims-regime
+    leaves, so the stub carries the minted run5 shape for those (50 sims, leaf 8, PCR
+    disarmed) — the derivation itself is pinned elsewhere
+    (`tests/test_run_buffer_route.py`, `tests/bridge/test_hexg_visit_capacity.py`)."""
+    return SimpleNamespace(
+        identity=SimpleNamespace(representation=representation, encoding=encoding),
+        selfplay=SimpleNamespace(
+            leaf_batch_size=8,
+            completed_q_values=False,
+            mcts=SimpleNamespace(n_simulations=50),
+            playout_cap=SimpleNamespace(
+                standard_sims=0,
+                fast_prob=0.0,
+                fast_sims=50,
+                full_search_prob=0.0,
+                n_sims_quick=0,
+                n_sims_full=0,
+            ),
+        ),
+    )
 
 
 def test_an_unknown_representation_raises_and_is_never_a_dense_default() -> None:

@@ -25,7 +25,7 @@ use mantis_core::{Board, Player};
 use mantis_encoding::{encode_chain_planes, encode_state_to_buffer_channels};
 
 use crate::records::{self, TargetIntegrityError};
-use crate::replay::hexg::{GraphRecord, MAX_VISITS};
+use crate::replay::hexg::GraphRecord;
 use crate::replay::sym::SymTables;
 
 use super::rotate::{rotate_chain_inplace, rotate_policy_inplace, rotate_state_inplace};
@@ -180,6 +180,7 @@ pub(crate) fn record_position_graph_dispatch(
     trunk_sz: i32,
     move_is_full_search: bool,
     graph_records_vec: &mut Vec<GraphRecord>,
+    visit_capacity: usize,
 ) -> Result<(), TargetIntegrityError> {
     let ls = match target_policy {
         MovePolicy::Ls(ls) => ls,
@@ -199,7 +200,7 @@ pub(crate) fn record_position_graph_dispatch(
         moves_remaining,
         ply_index,
         move_is_full_search,
-        MAX_VISITS,
+        visit_capacity,
     )?;
     graph_records_vec.push(rec);
     Ok(())
@@ -362,7 +363,7 @@ mod k_histogram_tests {
 
         let hist = fresh_hist();
         let mut graph_records: Vec<GraphRecord> = Vec::new();
-        record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records)
+        record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128)
             .expect("a full-mass target must record");
 
         assert_eq!(graph_records.len(), 1, "premise: the graph path really recorded a position");

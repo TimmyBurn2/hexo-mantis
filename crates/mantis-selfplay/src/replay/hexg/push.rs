@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 
 use half::f16;
 
-use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES, MAX_VISITS};
+use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES};
 
 /// Reject a non-finite or negative visit prob at push time (the earliest point
 /// that can see the raw, unaligned value), naming the offending coord + value.
@@ -51,8 +51,8 @@ pub fn validate_stone_player(q: i16, r: i16, player: i8) -> Result<(), String> {
 
 impl HexgBuffer {
     /// Write `rec` into the ring at `head`, advancing `head`/`size`. LOUD-FAILs
-    /// if the record exceeds the fixed slot geometry (`MAX_STONES` /
-    /// `MAX_VISITS`) — die loud, never silently truncate on push.
+    /// if the record exceeds the slot geometry (`MAX_STONES` / the derived
+    /// `visit_capacity`) — die loud, never silently truncate on push.
     pub fn push_record_impl(&mut self, rec: &GraphRecord, game_id: i64) -> Result<(), String> {
         if rec.stones.len() > MAX_STONES {
             return Err(format!(
@@ -62,13 +62,14 @@ impl HexgBuffer {
                 MAX_STONES
             ));
         }
-        if rec.visits.len() > MAX_VISITS {
+        if rec.visits.len() > self.visit_capacity {
             return Err(format!(
-                "push_graph_position: {} visit cells exceeds MAX_VISITS {} \
+                "push_graph_position: {} visit cells exceeds the derived visit capacity {} \
                  (record_position_graph refuses over-cap targets with a typed \
-                 VisitSlotsExceeded — this push guard is the independent second line)",
+                 VisitSlotsExceeded — this push guard is the independent second line; \
+                 R255: the capacity is derived from the sims regime at composition)",
                 rec.visits.len(),
-                MAX_VISITS
+                self.visit_capacity
             ));
         }
         if rec.current_player != 1 && rec.current_player != -1 {
@@ -108,11 +109,12 @@ impl HexgBuffer {
         }
         self.n_stones[slot] = rec.stones.len() as u16;
 
-        // ── visits (fixed slot, zero-pad tail) ──
-        let visit_base = slot * MAX_VISITS * 2;
-        let prob_base = slot * MAX_VISITS;
-        self.visit_qr[visit_base..visit_base + MAX_VISITS * 2].fill(0);
-        self.visit_probs[prob_base..prob_base + MAX_VISITS].fill(0.0);
+        // ── visits (derived slot, zero-pad tail) ──
+        let vcap = self.visit_capacity;
+        let visit_base = slot * vcap * 2;
+        let prob_base = slot * vcap;
+        self.visit_qr[visit_base..visit_base + vcap * 2].fill(0);
+        self.visit_probs[prob_base..prob_base + vcap].fill(0.0);
         for (i, &(q, r, prob)) in rec.visits.iter().enumerate() {
             self.visit_qr[visit_base + i * 2] = q;
             self.visit_qr[visit_base + i * 2 + 1] = r;
@@ -160,8 +162,8 @@ impl HexgBuffer {
                 )
             })
             .collect();
-        let visit_base = slot * MAX_VISITS * 2;
-        let prob_base = slot * MAX_VISITS;
+        let visit_base = slot * self.visit_capacity * 2;
+        let prob_base = slot * self.visit_capacity;
         let visits: Vec<(i16, i16, f32)> = (0..nv)
             .map(|i| {
                 (

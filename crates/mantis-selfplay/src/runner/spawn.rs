@@ -186,6 +186,7 @@ impl SelfPlayRunner {
             n_sims_quick: c.n_sims_quick,
             n_sims_full: c.n_sims_full,
             random_opening_plies: c.random_opening_plies,
+            visit_capacity: self.visit_capacity,
             registry_spec: self.spec,
             search_flags: SearchFlags {
                 quiescence_enabled: c.quiescence_enabled,

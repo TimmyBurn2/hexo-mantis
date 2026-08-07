@@ -14,7 +14,9 @@ use pyo3::prelude::*;
 
 use mantis_selfplay::queues::GraphWire;
 use mantis_selfplay::records::{TargetIntegrityError, TARGET_MASS_TOL};
-use mantis_selfplay::replay::hexg::{GraphRecord, GraphTargets, HexgBuffer};
+use mantis_selfplay::replay::hexg::{
+    derived_visit_capacity as derived_visit_capacity_impl, GraphRecord, GraphTargets, HexgBuffer,
+};
 
 use crate::inference::PyGraphWire;
 
@@ -58,21 +60,26 @@ pub struct PyHexgBuffer {
 
 #[pymethods]
 impl PyHexgBuffer {
-    /// Create a graph-position ring with `capacity` records. `encoding` MUST be a
-    /// graph spec and is REQUIRED — the `"gnn_axis_v1"` default was a silent-fallback arm
-    /// (R45, LAW-11), and becomes actively wrong the moment a second graph schema exists
-    /// (WP-AXIS2 adds `gnn_axis_v2`). A grid encoding is a LOUD `ValueError`; an unknown
-    /// name panics through `lookup_or_panic` → `PanicException`.
+    /// Create a graph-position ring with `capacity` records and `visit_capacity`
+    /// visit slots per record. `encoding` MUST be a graph spec and is REQUIRED — the
+    /// `"gnn_axis_v1"` default was a silent-fallback arm (R45, LAW-11), and becomes
+    /// actively wrong the moment a second graph schema exists (WP-AXIS2 adds
+    /// `gnn_axis_v2`). `visit_capacity` is likewise REQUIRED with no default
+    /// (R255/ADJ-D34): the production value is DERIVED from the sims regime via
+    /// [`derived_hexg_visit_capacity`] at the composition site (`mantis.run`), never
+    /// a literal. A grid encoding or an unstorable capacity is a LOUD `ValueError`;
+    /// an unknown name panics through `lookup_or_panic` → `PanicException`.
     #[new]
-    #[pyo3(signature = (capacity, encoding))]
-    pub fn new(capacity: usize, encoding: &str) -> PyResult<Self> {
+    #[pyo3(signature = (capacity, encoding, visit_capacity))]
+    pub fn new(capacity: usize, encoding: &str, visit_capacity: usize) -> PyResult<Self> {
         Ok(PyHexgBuffer {
-            inner: HexgBuffer::new(capacity, encoding).map_err(PyValueError::new_err)?,
+            inner: HexgBuffer::new(capacity, encoding, visit_capacity)
+                .map_err(PyValueError::new_err)?,
         })
     }
 
     /// Store one compact graph-position record. LOUD error if it exceeds
-    /// `MAX_STONES` / `MAX_VISITS`, and (F-RT-2) a typed refusal — the
+    /// `MAX_STONES` / the composed `visit_capacity`, and (F-RT-2) a typed refusal — the
     /// `TargetIntegrityError` Display as `ValueError` — when the visit row is
     /// not a distribution (empty / ~zero / off-unity mass): this ctor is the
     /// second public graph-record constructor and carries the same
@@ -186,6 +193,51 @@ impl PyHexgBuffer {
     pub fn encoding_name(&self) -> &'static str {
         self.inner.encoding_name()
     }
+
+    /// The DERIVED per-record visit-slot capacity this ring was composed with
+    /// (R255/ADJ-D34) — read back by the composition pin so a literal on the
+    /// compose path cannot survive unobserved.
+    #[getter]
+    pub fn visit_capacity(&self) -> usize {
+        self.inner.visit_capacity
+    }
+}
+
+/// R255/ADJ-D34 — the mint-side twin of the boot guard's capacity derivation.
+///
+/// Delegates VERBATIM to `mantis_selfplay::replay::hexg::derived_visit_capacity`
+/// (one formula, two surfaces): returns the derived HEXG visit-slot capacity
+/// `max(armed effective sim budgets) + leaf_batch_size − 1`, and raises
+/// `ValueError` for a regime the record format cannot honor (the u16 count
+/// ceiling; completed-Q below `MAX_CHILDREN_PER_NODE`). Live consumers: the
+/// `RunConfig` schema validator (mint-time refusal) and `mantis.run`'s buffer
+/// composition.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, completed_q_values))]
+pub fn derived_hexg_visit_capacity(
+    n_simulations: usize,
+    standard_sims: usize,
+    fast_prob: f32,
+    fast_sims: usize,
+    full_search_prob: f32,
+    n_sims_quick: usize,
+    n_sims_full: usize,
+    leaf_batch_size: usize,
+    completed_q_values: bool,
+) -> PyResult<usize> {
+    derived_visit_capacity_impl(
+        n_simulations,
+        standard_sims,
+        fast_prob,
+        fast_sims,
+        full_search_prob,
+        n_sims_quick,
+        n_sims_full,
+        leaf_batch_size,
+        completed_q_values,
+    )
+    .map_err(PyValueError::new_err)
 }
 
 /// Aligned training targets emitted alongside the `GraphWire` by
@@ -226,6 +278,7 @@ impl PyGraphTargets {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHexgBuffer>()?;
     m.add_class::<PyGraphTargets>()?;
+    m.add_function(wrap_pyfunction!(derived_hexg_visit_capacity, m)?)?;
     Ok(())
 }
 
@@ -235,12 +288,12 @@ mod tests {
 
     #[test]
     fn grid_encoding_is_loud_error() {
-        assert!(PyHexgBuffer::new(8, "v6").is_err(), "HexgBuffer rejects a grid encoding");
+        assert!(PyHexgBuffer::new(8, "v6", 128).is_err(), "HexgBuffer rejects a grid encoding");
     }
 
     #[test]
     fn construct_and_getters() {
-        let b = PyHexgBuffer::new(16, "gnn_axis_v1").expect("graph buffer constructs");
+        let b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).expect("graph buffer constructs");
         assert_eq!(b.size(), 0);
         assert_eq!(b.capacity(), 16);
         assert_eq!(b.encoding_name(), "gnn_axis_v1");
@@ -253,7 +306,7 @@ mod tests {
     /// O-side tests post-ASM (the embedded interpreter cannot load numpy).
     #[test]
     fn push_then_sample_fuses_wire_and_targets() {
-        let mut b = PyHexgBuffer::new(16, "gnn_axis_v1").unwrap();
+        let mut b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).unwrap();
         // A small in-window board (3 stones) with a 1-cell visit target.
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
         let visits = vec![(2i16, 0i16, 1.0f32)];
@@ -282,7 +335,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let text = |e: PyErr| e.value(py).to_string();
-            let mut b = PyHexgBuffer::new(8, "gnn_axis_v1").unwrap();
+            let mut b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
             // Σ = 0.5 → MassNotUnity (variant name must lead the message).
             let e = text(push_row(&mut b, vec![(2, 0, 0.5)]).unwrap_err());
             assert!(e.contains("MassNotUnity") && e.contains("0.5"), "{e}");
@@ -307,7 +360,7 @@ mod tests {
     fn push_admits_within_tol_and_exact_unity() {
         // F-RT-3 admit-side pin: the TOL window is the intended width — a
         // within-TOL row is ADMITTED (contract-conformant), unity likewise.
-        let mut b = PyHexgBuffer::new(8, "gnn_axis_v1").unwrap();
+        let mut b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
         push_row(&mut b, vec![(2, 0, 1.0)]).expect("exact unity admitted");
         push_row(&mut b, vec![(2, 0, 0.6), (3, 0, 0.4 + 5.0e-5)])
             .expect("a within-TOL (1 + 5e-5) row is ADMITTED — the documented window");

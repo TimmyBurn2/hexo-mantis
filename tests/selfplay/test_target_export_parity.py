@@ -94,7 +94,7 @@ def _assert_pairs(pos_id: str, got: dict, want: dict) -> None:
 # ── O1p: the Python side consumes the FULL ragged target ─────────────────────────────
 def test_policy_target_round_trips_the_full_ragged_target() -> None:
     for pos in _positions("target_parity_v1.json"):
-        hb = HexgBuffer(2, "gnn_axis_v1")
+        hb = HexgBuffer(2, "gnn_axis_v1", 128)
         _push(hb, pos)
         got, _ = _sampled_map(hb)
         _assert_pairs(pos["id"], got, pos["pairs"])
@@ -107,7 +107,7 @@ def test_policy_target_round_trips_the_dispersed_fixture() -> None:
     assert 193 <= int(d["p0_n_legal"]) <= 235, "p0 left the 193-235 band"
     assert int(d["p2_n_legal"]) >= 5000, "p2 left the >=5000-legal regime"
     for pos in _positions("target_parity_dispersed_v1.json"):
-        hb = HexgBuffer(2, "gnn_axis_v1")
+        hb = HexgBuffer(2, "gnn_axis_v1", 128)
         _push(hb, pos)
         got, _ = _sampled_map(hb)
         _assert_pairs(pos["id"], got, pos["pairs"])
@@ -135,7 +135,7 @@ def test_quick_arm_row_carries_full_mass_and_the_flag_rides() -> None:
     pos = next(iter(_positions("target_parity_v1.json")))
     maps = {}
     for flag in (True, False):
-        hb = HexgBuffer(2, "gnn_axis_v1")
+        hb = HexgBuffer(2, "gnn_axis_v1", 128)
         _push(hb, pos, is_full_search=flag)
         got, targets = _sampled_map(hb)
         ifs = np.asarray(targets.is_full_search)
