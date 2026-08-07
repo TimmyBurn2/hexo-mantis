@@ -1,10 +1,23 @@
 """Schema contract tests (run-config-schema v1): unknown/missing keys hard-fail,
 representation is the closed set {grid, graph}, and O16 schema round-trip + every-config-
-validates + no-code-side-defaults across the full model tree."""
+validates + no-code-side-defaults + strictness across the full model tree.
+
+>300 justify (R8): the O16 census and the payload builders are ONE unit and cannot be split.
+The builders below are the only schema-complete payload in this file, and every rejection test
+(`test_missing_*`, `test_nested_unknown_key_rejected`) mutates one of them by a single key --
+so a reviewer judging whether a rejection test still probes what it claims has to read the
+builder on the same screen. The census at the foot then closes the loop from the other side:
+the rejection tests prove hand-picked keys are enforced, the census proves the SAME property
+holds for every field of every model the walk reaches, and its mutation self-test is written
+against the same imports. Splitting them lets a builder drift out from under the rejection
+tests, or a census exemption appear with its counter-example in another file.
+"""
 from pathlib import Path
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import (
@@ -16,6 +29,7 @@ from mantis.config.schema import (
     MonitorSchemaConfig,
     RunConfig,
     SelfplayConfig,
+    StrictModel,
     TrainConfig,
 )
 
@@ -247,15 +261,239 @@ def test_o16_schema_round_trip():
     assert again == cfg
 
 
+# ── O16 census — DERIVED from RunConfig.model_fields, never enumerated ──
+#
+# The predecessor walked a HAND-WRITTEN tuple: RunConfig, IdentityConfig, EvalConfig,
+# SelfplayConfig, TrainConfig, MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig. Every
+# other block in the schema — `GateConfig`, `LadderConfig`, `LadderRung`, `MctsConfig`,
+# `PlayoutCapConfig`, `InferenceConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage`,
+# `MicrobatchCapsConfig` — was added AFTER that tuple was written and never joined it, because
+# nothing made adding a model to the schema also add it here. An enumerated census is a census
+# of what someone remembered; R1's "NO code-side defaults" is a claim about the schema itself.
+
+
+def _nested_block(ann: Any) -> type[BaseModel] | None:
+    """The single config BLOCK an annotation names, seen THROUGH `Optional` / `Block | None`.
+
+    Traversal semantics are the ones `tools/ci_gates/contract_doc_gate.py::_leaf_paths` and
+    its two `tests/config/test_every_key_has_consumer*.py` twins already hold, so the four
+    walkers agree about what a nested block is: an OPTIONAL block is descended into (WPMINT
+    DR-6 / R93 — `Block | None` is the house arming idiom and treating it as one opaque leaf
+    hid an entirely unconsumed key), and a union naming more than one BaseModel is NOT, since
+    it has no single block to hand out. R5/LAW-17 bar importing any of the three, which is why
+    this is a fourth copy; it is self-defending in the same way theirs are — a walker that
+    diverged would discover a different model set and red the reachability test below, which
+    derives its expected set from the package rather than from this walk.
+    """
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return ann
+    if get_origin(ann) in (Union, UnionType):
+        blocks = [a for a in get_args(ann) if isinstance(a, type) and issubclass(a, BaseModel)]
+        if len(blocks) == 1:
+            return blocks[0]
+    return None
+
+
+def _element_block(ann: Any) -> type[BaseModel] | None:
+    """The BLOCK inside a `list[SubModel]`, which `_leaf_paths` deliberately does NOT descend.
+
+    This is the one place the census parts company with the leaf-path walk, and the divergence
+    is required rather than incidental. NIT-3 keeps `list[SubModel]` as ONE leaf because a list
+    element has no single key-path to name — that is a statement about KEY PATHS. It says
+    nothing about the element MODEL, which is still a schema block whose fields must be
+    required and whose unknown keys must be refused. `eval.ladder.rungs` (`LadderRung`) and
+    `train.replay_capacity_schedule` (`ReplayCapacityStage`) are reachable ONLY through this
+    arm — measured: without it the census misses both, and both are real config blocks that
+    ship in every minted config.
+    """
+    if get_origin(ann) is list:
+        blocks = [a for a in get_args(ann) if isinstance(a, type) and issubclass(a, BaseModel)]
+        if len(blocks) == 1:
+            return blocks[0]
+    return None
+
+
+def _schema_census(root: type[BaseModel]) -> dict[type[BaseModel], str]:
+    """Every model reachable from `root`, mapped to the key path it was first reached by."""
+    found: dict[type[BaseModel], str] = {root: ""}
+
+    def walk(model: type[BaseModel], prefix: str) -> None:
+        for name, field in model.model_fields.items():
+            path = f"{prefix}{name}"
+            block = _nested_block(field.annotation)
+            if block is None:
+                block = _element_block(field.annotation)
+                path = f"{path}[]"
+            if block is not None and block not in found:
+                found[block] = path
+                walk(block, f"{path}.")
+
+    walk(root, "")
+    return found
+
+
+SCHEMA_CENSUS = _schema_census(RunConfig)
+#: Non-vacuity floor, measured at adoption. A derived census that quietly discovers ZERO models
+#: is the vacuous-pass class gate 15 was hardened against in 35f0bfe: it reports green having
+#: asserted nothing. This is a FLOOR and may only ratchet up; the exact-set claim is
+#: `test_o16_census_reaches_every_schema_block`, which is derived on both sides.
+MIN_SCHEMA_MODELS = 17
+
+
+def test_o16_census_is_not_vacuous():
+    assert len(SCHEMA_CENSUS) >= MIN_SCHEMA_MODELS, (
+        f"the derived census found {len(SCHEMA_CENSUS)} model(s), floor {MIN_SCHEMA_MODELS}. "
+        "A walk that discovers nothing asserts nothing and must never read as green."
+    )
+
+
+def test_o16_census_covers_every_model_the_hand_written_tuple_named():
+    """The predecessor's eight, as a regression pin: derived must be a SUPERSET of enumerated.
+
+    A walker refactor that lost `monitor.disk_guard` would still clear the floor above; this is
+    what makes that specific loss fatal, and it is why these eight names stay imported.
+    """
+    legacy = (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, TrainConfig,
+              MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig)
+    missing = [m.__name__ for m in legacy if m not in SCHEMA_CENSUS]
+    assert not missing, f"the derived census lost model(s) the enumerated one had: {missing}"
+
+
+def test_o16_census_reaches_every_schema_block():
+    """Exactness, derived on BOTH sides: reachable-from-RunConfig == defined-in-the-package.
+
+    A `StrictModel` subclass that no field points at is dead schema — nothing can supply it, so
+    nothing consumes it (LAW-08's shape) — and a block that exists but is unreachable is also
+    the one thing a reachability census can never check. Either direction failing is a real
+    finding, so both are reported.
+    """
+    import pkgutil
+    from importlib import import_module
+
+    import mantis.config.schema as pkg
+
+    defined: set[type[BaseModel]] = set()
+    for info in pkgutil.iter_modules(pkg.__path__):
+        module = import_module(f"{pkg.__name__}.{info.name}")
+        for obj in vars(module).values():
+            if (isinstance(obj, type) and issubclass(obj, StrictModel) and obj is not StrictModel
+                    and obj.__module__.startswith(pkg.__name__)):
+                defined.add(obj)
+
+    unreachable = sorted(m.__name__ for m in defined - set(SCHEMA_CENSUS))
+    unknown = sorted(m.__name__ for m in set(SCHEMA_CENSUS) - defined)
+    assert not unreachable, (
+        f"schema block(s) defined but not reachable from RunConfig: {unreachable}. Either wire "
+        "them in or delete them — an unreachable block is a key no config can ever set."
+    )
+    assert not unknown, f"census reached model(s) not defined in the schema package: {unknown}"
+
+
 def test_o16_all_fields_required_no_code_side_defaults():
-    # WPMAIN / §3.1 MISS-9: `DiskGuardConfig` joins the tuple. Without it R122's granted
+    # WPMAIN / §3.1 MISS-9: `DiskGuardConfig` is in the census. Without it R122's granted
     # family would be the one schema block in the tree with no no-pydantic-default census,
     # and a re-added `interval_sec: float = 60.0` is invisible to every liveness drive (they
     # supply a value on each path). This test is ALSO the structural holder of R120's "the
     # code-side default True dies" and R123(c): a re-added SCHEMA default on `eval_enabled`
     # or `run_id` reds it, which a signature census cannot see (wrong instrument).
-    # `TrainConfig` was already in the tuple, so `train.device` is covered with zero edits.
-    for model in (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, TrainConfig,
-                  MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig):
+    # `TrainConfig` is reached too, so `train.device` is covered — and now with zero edits for
+    # every FUTURE block as well, which is the point of deriving the set instead of listing it.
+    for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():
-            assert field.is_required(), f"{model.__name__}.{name} has a code-side default"
+            key = f"{path}.{name}" if path else name
+            assert field.is_required(), (
+                f"{model.__name__}.{name} (config key `{key}`) has a code-side default; "
+                "R1 puts a default in the schema field or nowhere"
+            )
+
+
+def test_o16_every_schema_block_is_strict():
+    """R1's "unknown key = error" is carried by `StrictModel`, so it must hold block by block.
+
+    `extra="forbid"` is not inherited by a block merely because its PARENT forbids extras —
+    pydantic resolves `model_config` per model — so one block declared `BaseModel` would accept
+    any typo'd key inside it while every rejection test above stayed green.
+    """
+    for model, path in SCHEMA_CENSUS.items():
+        assert issubclass(model, StrictModel), (
+            f"{model.__name__} (config key `{path or '<root>'}`) is not a StrictModel"
+        )
+        assert model.model_config.get("extra") == "forbid", (
+            f"{model.__name__} (config key `{path or '<root>'}`) overrides extra= to "
+            f"{model.model_config.get('extra')!r}; an unknown key inside it would be accepted"
+        )
+
+
+# ── the census's own mutation self-test (LAW-07): it must BITE ──
+#
+# Built from throwaway models that are never registered anywhere, so the real schema is not
+# mutated and no other test can see them. Each plants exactly one of the two defects the census
+# exists to catch, in the two shapes that are easy to miss: nested one level down, and reachable
+# only through the `list[SubModel]` arm.
+
+
+class _PlantedDefault(StrictModel):
+    knob: int = 3  # the defect: a code-side default (R1)
+
+
+class _PlantedLoose(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    knob: int
+
+
+class _PlantedPermissive(BaseModel):
+    model_config = ConfigDict(extra="allow")  # the defect: unknown keys accepted
+    knob: int
+
+
+class _PlantedRun(StrictModel):
+    nested_with_a_default: _PlantedDefault
+    nested_not_strict: _PlantedPermissive
+    optional_block: _PlantedLoose | None
+    element_only: list[_PlantedDefault]
+    scalar: int
+
+
+def test_the_census_walk_reaches_optional_and_list_element_blocks():
+    census = _schema_census(_PlantedRun)
+    assert census == {
+        _PlantedRun: "",
+        _PlantedDefault: "nested_with_a_default",
+        _PlantedPermissive: "nested_not_strict",
+        _PlantedLoose: "optional_block",
+    }, f"the walk missed a shape: {sorted(m.__name__ for m in census)}"
+
+
+def test_the_required_arm_bites_on_a_planted_default():
+    census = _schema_census(_PlantedRun)
+    offenders = [
+        f"{m.__name__}.{n}" for m in census for n, f in m.model_fields.items()
+        if not f.is_required()
+    ]
+    assert offenders == ["_PlantedDefault.knob"], (
+        f"the no-code-side-defaults arm did not bite exactly once: {offenders}"
+    )
+
+
+def test_the_strictness_arm_bites_on_a_planted_permissive_block():
+    census = _schema_census(_PlantedRun)
+    offenders = sorted(
+        m.__name__ for m in census
+        if not issubclass(m, StrictModel) or m.model_config.get("extra") != "forbid"
+    )
+    assert offenders == ["_PlantedLoose", "_PlantedPermissive"], (
+        f"the strictness arm did not bite on both shapes: {offenders}"
+    )
+    # `_PlantedLoose` is the second shape and the reason the assertion is two-limbed: it DOES
+    # forbid extras, so the `extra=` check alone passes it, and only the `issubclass` limb
+    # catches it. A block that reimplements strictness by hand is outside the one base every
+    # section is supposed to share, and the next `model_config` edit to it is unguarded.
+    assert _PlantedLoose.model_config.get("extra") == "forbid"
+
+
+def test_the_non_vacuity_floor_would_fire_on_a_walk_that_found_nothing():
+    """`walked nothing, found nothing` must never read as green (gate 15's own lesson)."""
+    class _Leaf(StrictModel):
+        scalar: int
+
+    assert len(_schema_census(_Leaf)) < MIN_SCHEMA_MODELS
