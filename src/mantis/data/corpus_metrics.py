@@ -29,8 +29,10 @@ import numpy as np
 
 from mantis._engine import Board
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import PIPELINE_COUNTERS, log_pipeline_losses
 from mantis.data.sources.base import GameRecord
 from mantis.env.game_state import GameState
+from mantis.monitor.best_effort import best_effort
 
 try:
     import matplotlib  # type: ignore
@@ -329,10 +331,13 @@ def analyse_opening_diversity(records: list[GameRecord], label: str = "all") -> 
             first_10_seqs.append(seq_10)
 
             for ply, (q, r_coord) in enumerate(r.moves):
-                try:
-                    board.apply_move(q, r_coord)
-                except Exception:  # noqa: BLE001 — engine raises on illegal move; stop replay
-                    break
+                ok, _ = best_effort(
+                    "data.corpus_metrics.opening_diversity_illegal_move_truncated_replay",
+                    lambda b=board, mq=q, mr=r_coord: b.apply_move(mq, mr),
+                    counters=PIPELINE_COUNTERS,
+                )
+                if not ok:
+                    break  # engine raised on an illegal move; stop replaying this game
                 move_num = ply + 1
                 if move_num in unique_hashes:
                     unique_hashes[move_num].add(board.zobrist_hash())
@@ -420,10 +425,14 @@ def analyse_cluster_counts(records: list[GameRecord],
                     progress.advance(task)
                 if ply_idx >= max_ply:
                     break
-                try:
-                    state = state.apply_move(board, q, r_coord)
-                except Exception:  # noqa: BLE001 — engine raises on illegal move; stop replay
-                    break
+                ok, next_state = best_effort(
+                    "data.corpus_metrics.cluster_counts_illegal_move_truncated_replay",
+                    lambda s=state, b=board, mq=q, mr=r_coord: s.apply_move(b, mq, mr),
+                    counters=PIPELINE_COUNTERS,
+                )
+                if not ok or next_state is None:
+                    break  # engine raised on an illegal move; stop replaying this game
+                state = next_state
 
     cc_arr = np.array(cluster_counts) if cluster_counts else np.array([1])
     median_k = int(np.median(cc_arr))
@@ -816,6 +825,8 @@ def run_analysis(records: list[GameRecord], label: str = "all",
     log.info("ply_coverage_done", label=label,
              late_game_fraction=ply_stats["late_game_fraction"],
              flag=ply_stats["late_game_flag"])
+
+    log_pipeline_losses(f"data.corpus_metrics.run_analysis[{label}]")
 
     return {
         "game_count": len(records),

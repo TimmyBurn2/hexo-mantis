@@ -13,12 +13,14 @@ import numpy as np
 
 from mantis._engine import Board
 from mantis.data._log import get_logger
+from mantis.data.loss_counters import REPLAY_COUNTERS
 from mantis.encoding import EncodingSpec
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.env.game_state import (
     GameState,
     _compute_chain_planes,  # pyright: ignore[reportPrivateUsage]  # ported chain-plane kernel
 )
+from mantis.monitor.best_effort import best_effort
 
 log = get_logger(__name__)
 
@@ -97,10 +99,19 @@ def replay_game_to_triples_v6w25(
             policies[t, target_idx] = 1.0
             outcomes[t] = 1.0 if state.current_player == winner else -1.0
             t += 1
+        else:
+            # Off-window DROP: this ply has no representable dense target and emits NO
+            # training row. Not an exception — a silent supervision loss (LAW-18).
+            REPLAY_COUNTERS.increment("data.replay.v6w25.off_window_ply_dropped")
 
-        try:
-            state = state.apply_move(board, q, r)
-        except Exception:  # noqa: BLE001 — engine raises on illegal move; skip the rest
-            break
+        ok, next_state = best_effort(
+            "data.replay.v6w25.illegal_move_truncated_game",
+            # default-bound (ruff B023): the closure runs inside THIS iteration only.
+            lambda s=state, mq=q, mr=r: s.apply_move(board, mq, mr),
+            counters=REPLAY_COUNTERS,
+        )
+        if not ok or next_state is None:
+            break  # engine raised on an illegal move; the rest of the game is lost
+        state = next_state
 
     return states[:t], chain_planes[:t], policies[:t], outcomes[:t]

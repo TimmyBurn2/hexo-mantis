@@ -38,8 +38,10 @@ from mantis.data.corpus_reporter import (
     _print_elo_stratified_table,
     _print_summary_table,
 )
+from mantis.data.loss_counters import PIPELINE_COUNTERS, log_pipeline_losses
 from mantis.data.sources.base import GameRecord
 from mantis.data.sources.human import HumanGameSource
+from mantis.monitor.best_effort import best_effort
 
 log = get_logger(__name__)
 
@@ -51,6 +53,40 @@ def _rich_console():
     except ImportError:  # pragma: no cover - rich is an optional dependency
         return None
     return Console()
+
+
+def _read_game_json(path: Path) -> dict:
+    """Load one game JSON. Raises on unreadable/malformed input — the CALLER decides
+    whether that is a counted skip (`best_effort`) or fatal."""
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _bot_record(path: Path, source_label: str) -> GameRecord:
+    data = _read_game_json(path)
+    return GameRecord(
+        game_id_str=path.stem,
+        moves=[(m["x"], m["y"]) for m in data["moves"]],
+        winner=data.get("winner", 0),
+        source=source_label,
+        metadata={"bot_name": data.get("bot_name", "unknown")},
+    )
+
+
+def _injected_record(path: Path) -> GameRecord:
+    data = _read_game_json(path)
+    return GameRecord(
+        game_id_str=path.stem,
+        moves=[(m["x"], m["y"]) for m in data["moves"]],
+        winner=data.get("winner", 0),
+        source="injected",
+        metadata={
+            "bot_name": data.get("bot_name", "unknown"),
+            "injection_point": data.get("injection_point"),
+            "human_moves": data.get("human_moves"),
+            "bot_moves": data.get("bot_moves"),
+        },
+    )
 
 
 def load_all_games(
@@ -93,52 +129,34 @@ def load_all_games(
                     continue
                 bot_count = 0
                 for game_file in sorted(sub_dir.glob("*.json")):
-                    try:
-                        with open(game_file) as f:
-                            data = json.load(f)
-                        moves = [(m["x"], m["y"]) for m in data["moves"]]
-                        winner = data.get("winner", 0)
-                        records.append(GameRecord(
-                            game_id_str=game_file.stem,
-                            moves=moves,
-                            winner=winner,
-                            source=source_label,
-                            metadata={"bot_name": data.get("bot_name", "unknown")},
-                        ))
+                    ok, rec = best_effort(
+                        "data.corpus_analysis.bot_game_malformed_skipped",
+                        lambda p=game_file, s=source_label: _bot_record(p, s),
+                        counters=PIPELINE_COUNTERS,
+                    )
+                    if ok and rec is not None:
+                        records.append(rec)
                         bot_count += 1
-                    except Exception:  # noqa: BLE001 — skip malformed bot game JSON
-                        continue
                 log.info("loaded_bot_games", depth=depth_dir, count=bot_count)
 
         # Injected games (human-seed bot-continuation)
         inj_dir = Path(injected_dir) if injected_dir is not None else None
         if inj_dir is not None and inj_dir.exists():
             for game_file in sorted(inj_dir.glob("*.json")):
-                try:
-                    with open(game_file) as f:
-                        data = json.load(f)
-                    moves = [(m["x"], m["y"]) for m in data["moves"]]
-                    winner = data.get("winner", 0)
-                    records.append(GameRecord(
-                        game_id_str=game_file.stem,
-                        moves=moves,
-                        winner=winner,
-                        source="injected",
-                        metadata={
-                            "bot_name": data.get("bot_name", "unknown"),
-                            "injection_point": data.get("injection_point"),
-                            "human_moves": data.get("human_moves"),
-                            "bot_moves": data.get("bot_moves"),
-                        },
-                    ))
+                ok, rec = best_effort(
+                    "data.corpus_analysis.injected_game_malformed_skipped",
+                    lambda p=game_file: _injected_record(p),
+                    counters=PIPELINE_COUNTERS,
+                )
+                if ok and rec is not None:
+                    records.append(rec)
                     injected_count += 1
-                except Exception:  # noqa: BLE001 — skip malformed injected game JSON
-                    continue
             log.info("loaded_injected_games", count=injected_count)
 
     log.info("games_loaded", total=len(records), human=human_total,
              bot=len(records) - human_total - injected_count if include_bot_games else 0,
              injected=injected_count if include_bot_games else 0)
+    log_pipeline_losses("data.corpus_analysis.load_all_games")
     return records
 
 
