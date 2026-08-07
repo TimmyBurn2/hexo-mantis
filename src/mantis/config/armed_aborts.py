@@ -24,6 +24,13 @@
 # (`actor_lag`'s bare 45 became `ACTOR_LAG_EXIT_CODE`): an AST census now forbids an integer
 # literal in any `exit_code=`, because an identity check cannot witness one — CPython interns
 # the small ints, so a typed `48` IS the imported constant under `is`.
+# R251 / ADJ-D22 adds the CADENCE axis — `Cadence`, `EARLIEST_FIRE_FRACTION` and
+# `audit_cadence` — and it belongs beside the rows for the same reason the rows and their
+# walkers do: "which aborts must arm" and "when can an armed one still fire" are one
+# question the moment a large `monitor.gate_interval` can leave a threshold armed in the
+# config and unread in the run. Splitting them would put the row set and the bound its rows
+# are judged against on opposite sides of an import, and the fraction is deliberately here
+# rather than in a schema model so no minted config can relax its own audit.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -168,6 +175,172 @@ class Mechanism(StrEnum):
         return float(value) > 0.0
 
 
+#: The FRACTION of a run's own `train.max_train_steps` inside which an ARMED abort must be
+#: able to fire (R251 / ADJ-D22). ONE authority, consumed by `audit_cadence` below.
+#:
+#: THE DEFECT IT CLOSES, measured. `monitor.gate_interval: 1000000000` with a 40-step run
+#: produces ZERO gate boundaries, so an ARMED `train.draw_rate_abort` is never evaluated —
+#: and gate 12 audited that config green, because `Mechanism.is_armed` reads a THRESHOLD and
+#: a threshold that is never READ is armed in the config and absent in effect. The interval's
+#: `ge=1` bans exactly one spelling of "never gate" and permits every larger one, so the
+#: arming predicate alone cannot see the class. A LARGE INTERVAL IS NEVER A SANCTIONED
+#: DISARM: the one sanctioned spelling stays the explicit R56-style pin the grad-norm row
+#: below carries, which is a written, owned, tamper-evident row and not a number nobody read.
+#:
+#: WHY IT IS NOT A PER-CONFIG KEY. A config that could set its own audit fraction could relax
+#: its own audit, and the disarm this constant exists to refuse would be re-spellable as
+#: `earliest_fire_fraction: 1.0` — ADJ-D20's gate-3c self-comparison class relocated one
+#: layer down. It lives HERE, beside the rows, because "which aborts must arm" already lives
+#: here: the row set and the bound its rows are judged against then cannot drift apart across
+#: an import, and `RunConfig`'s `extra="forbid"` makes minting the name a loud refusal rather
+#: than a quiet override (driven, not asserted, by
+#: `tests/config/test_armed_abort_cadence.py::
+#: test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it`).
+#:
+#: WHY 0.25, and the grounds are that IT BINDS NO MINTED VALUE TODAY. It is a bound, not a
+#: target: an armed abort that cannot possibly fire in the first quarter of a run has missed
+#: the early-run regime it exists to catch, and every armed row on every committed config
+#: clears it with margin (measured on the tree: run5's draw-rate row is earliest-fire 25000
+#: of 1000000, a 10x margin; its actor-lag row 101; the armed preflight smoke's draw-rate row
+#: 30 of 200). A TIGHTER fraction would begin authoring `train.draw_rate_abort.min_step`
+#: policy from a CI gate — the class call K-c/R84 refused when it declined to invent a
+#: grad-norm threshold — and a looser one buys nothing, because the class this refuses (an
+#: interval that outruns the run by orders of magnitude) sits nowhere near the boundary.
+#: Moving this number is a ruling, not a tuning.
+EARLIEST_FIRE_FRACTION: float = 0.25
+
+#: The config path the bound is taken FROM. Named once and walked through the SAME `_dotted`
+#: every row's own paths go through, so renaming the run-length key is one loud
+#: `ArmingSurfaceMissingError` rather than a silent bound of zero.
+RUN_LENGTH_PATH: str = "train.max_train_steps"
+
+
+class Cadence(StrEnum):
+    """WHEN a row's abort can FIRST fire, in TRAINING STEPS. DATA, not a branch on `name`.
+
+    The twin of `Mechanism`, and for the same reason: `audit_cadence` never asks which row it
+    is holding — `cadence` selects the arithmetic and the row supplies the operands through
+    `cadence_paths`. `mechanism` answers "is this abort armed"; `cadence` answers "can the
+    armed thing still fire inside the run", and ADJ-D22 measured that the first answer alone
+    is not enough.
+
+    Every member is DERIVED FROM THE CODE THAT EVALUATES THE ROW, cited at the member — never
+    from a key name someone typed here. No operand is baked in: the row names its own paths,
+    so the arithmetic runs over values the operator minted and this file invents no number.
+    That is the rule `CONFIG_THRESHOLD_BELOW_CEILING`'s `ceiling_path` already follows.
+
+    `earliest_fire_step` answers in three currencies and the difference between the last two
+    is load-bearing: a finite float is a step, `math.inf` is "these operands can never fire"
+    (the ADJ-D22 outcome), and `None` is "NO STEP CADENCE GOVERNS THIS ROW AT ALL" — which is
+    a truthful answer for a wall-clock or close-out rule and must never be forged into a
+    number, the class R84 refused when it declined to fabricate an exit code.
+    """
+
+    #: `train/coordinator/step.py::_run_gate_interval` runs the gate only when
+    #: `self._train_step % cfg.gate_interval == 0`, and `monitor/rules.py::
+    #: check_draw_rate_collapse` refuses on `len(history) < consec` and on
+    #: `current_step < min_step`. So the earliest fire is the first gate BOUNDARY that is both
+    #: the `consec`-th observation and at or past `min_step`. Operands, in order:
+    #: (gate-interval path, consec path, min-step path).
+    #:
+    #: BUG-1: a boundary that yields no observation neither advances NOR resets `consec`
+    #: (`_sample`), so `consec * interval` bounds a real fire from BELOW. That is exactly what
+    #: an EARLIEST-POSSIBLE-fire bound wants — the optimistic case — and it is why this is a
+    #: reachability floor and not a prediction of when a run would actually abort.
+    #:
+    #: DISCLOSED RESIDUAL, and it is a FALSE AFFIRMATIVE rather than a blind spot — the same
+    #: posture `WALL_CLOCK_POLL` states for the seconds axis, stated here for the sharper
+    #: case. `step.py::_sample` trims the gate history to `_GATE_HISTORY_DEPTH` entries while
+    #: `rules.py::check_draw_rate_collapse` refuses on `len(history) < consec`, so a `consec`
+    #: above that depth makes the abort PERMANENTLY unfireable — and this member will still
+    #: compute a finite step for it and PUBLISH that number as though the run could deliver
+    #: it. `train/schema/train.py`'s `consec` field names this exact case the OPEN "fifth
+    #: face" of "armed in the config, absent in effect" and declines to invent an upper bound
+    #: for it; every committed config mints `consec: 3`, far below the depth, so nothing on
+    #: the tree is misreported today.
+    #:
+    #: WHY THE DEPTH IS NOT IMPORTED AND NOT COPIED, which is the whole reason this stays a
+    #: disclosure: `_GATE_HISTORY_DEPTH` is a runtime constant of `mantis.train`, and
+    #: `mantis.config` importing it inverts the import DAG (gate 9) — while re-typing `32`
+    #: here creates precisely the second authority the schema field refused to create, whose
+    #: first divergence would make this member confidently wrong in the OTHER direction. So
+    #: the residual is written down rather than closed with a number this layer cannot own
+    #: (R84's class). Closing it belongs with the schema's fifth face, in one change, not
+    #: half-closed here.
+    GATE_INTERVAL_CONSEC = "gate_interval_consec"
+
+    #: `train/coordinator/step.py` D3: the grad-norm gate is evaluated PER TRAINING STEP
+    #: inside the burst (its producer is the trainer's own loss dict) and fires when
+    #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. The counter advances once per step, so
+    #: the earliest fire is the `hard_gn_min_steps`-th step. Operands: (min-steps path,).
+    CONSEC_TRAIN_STEPS = "consec_train_steps"
+
+    #: `train/lifecycle/heartbeat_watchdog.py::ActorLagSpec` — `learner_step_fn() -
+    #: actor_ckpt_step_fn() > threshold_steps`. The QUANTITIES are step-clock; the SAMPLING
+    #: rides the watchdog's seconds poll, which adds no STEP floor (the spec's own docstring
+    #: says so). With a frozen actor the strict `>` is first satisfiable one step past the
+    #: threshold. Operands: (threshold-steps path,).
+    STEP_LAG_THRESHOLD = "step_lag_threshold"
+
+    #: `train/lifecycle/disk_guard.py` — a daemon thread on `while not
+    #: self._stop_event.wait(timeout=self._interval)`. NO train-step boundary gates it, so the
+    #: earliest TRAIN STEP at which it can fire is 0. That is a derived answer and not an
+    #: exemption: the row stays inside the comparison, and a guard that ever acquired a step
+    #: gate would need its own member. Operands: none.
+    #:
+    #: DISCLOSED RESIDUAL, and it is the same class one axis over: a wall-clock rule can be
+    #: cadence-disarmed in SECONDS (`monitor.disk_guard.interval_sec` set past the run's wall
+    #: time) and this fraction cannot see it, because a config carries no wall-clock run
+    #: length to take a fraction OF. Stated, not papered over.
+    WALL_CLOCK_POLL = "wall_clock_poll"
+
+    #: `train/coordinator/drain.py::close_out` -> `run_terminal_eval` — the LAST action of the
+    #: run, reached on every termination including an aborted one. It has no in-run step
+    #: cadence, so it answers `None` and the fraction rule does not apply to it: asking when a
+    #: close-out rule can fire "early" is a category error, and answering `max_train_steps`
+    #: would fail every such row forever for a reason that is not a defect.
+    CLOSE_OUT_TERMINAL = "close_out_terminal"
+
+    @property
+    def arity(self) -> int:
+        """How many `cadence_paths` this member CONSUMES. Enforced by `ArmedAbort` in both
+        directions, so a path the arithmetic never reads cannot sit on a row pretending to be
+        an input (LAW-07's phantom-input class, the rule `ceiling_path` already gets)."""
+        return {
+            Cadence.GATE_INTERVAL_CONSEC: 3,
+            Cadence.CONSEC_TRAIN_STEPS: 1,
+            Cadence.STEP_LAG_THRESHOLD: 1,
+            Cadence.WALL_CLOCK_POLL: 0,
+            Cadence.CLOSE_OUT_TERMINAL: 0,
+        }[self]
+
+    def earliest_fire_step(self, values: tuple[Any, ...]) -> float | None:
+        """The earliest TRAIN STEP at which this cadence can fire, given the row's operands.
+
+        A real function of `values` in every step-cadenced member — a constant here would
+        pass or fail every row at once, the warning `is_armed` carries on the sibling axis.
+
+        An operand that is not a real, finite, non-`bool` number answers `math.inf`: an
+        unjudgeable rule must fail toward VISIBILITY, never toward silence, and reading a
+        gate that never runs as a gate that fires at step 0 is the exact inversion.
+        """
+        if self is Cadence.CLOSE_OUT_TERMINAL:
+            return None
+        if self is Cadence.WALL_CLOCK_POLL:
+            return 0.0
+        if not all(_is_real_number(value) for value in values):
+            return math.inf
+        if self is Cadence.STEP_LAG_THRESHOLD:
+            return float(values[0]) + 1.0
+        if self is Cadence.CONSEC_TRAIN_STEPS:
+            return float(values[0])
+        interval, consec, min_step = (float(value) for value in values)
+        if interval < 1.0 or consec < 1.0:
+            return math.inf
+        boundaries = max(consec, math.ceil(min_step / interval))
+        return interval * float(boundaries)
+
+
 @dataclass(frozen=True)
 class ArmedAbort:
     """One row: an abort, the config surface that arms it, and its ownership posture.
@@ -203,6 +376,15 @@ class ArmedAbort:
     #: construction sites to type `ceiling_path=None`, which buys nothing the predicate below
     #: does not already guarantee.
     ceiling_path: str | None = None
+    #: R251 / ADJ-D22: WHEN this row's abort can first fire, and the paths its arithmetic
+    #: reads. Both carry defaults for exactly the reason `ceiling_path` does — a no-default
+    #: field would force every synthetic-row construction site in the suite to type
+    #: `cadence=None`, buying nothing — and the defaults are safe because they are not silent:
+    #: `audit_cadence` reports a REQUIRED row with NO cadence as OUT OF BOUND by name, so an
+    #: undeclared cadence gates rather than passes. `__post_init__` enforces the arity pairing
+    #: in both directions, so a path the arithmetic never reads cannot sit on a row.
+    cadence: Cadence | None = None
+    cadence_paths: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.status is Status.DEFERRED and not self.owner:
@@ -235,6 +417,15 @@ class ArmedAbort:
                 "it: a config path the predicate never reads is a claim the audit does not "
                 "make (LAW-07's phantom-input class)"
             )
+        wanted = 0 if self.cadence is None else self.cadence.arity
+        if len(self.cadence_paths) != wanted:
+            declared = "no cadence" if self.cadence is None else self.cadence.value
+            raise ValueError(
+                f"armed-abort row {self.name!r} declares {len(self.cadence_paths)} "
+                f"cadence_paths ({list(self.cadence_paths)}) but {declared} consumes "
+                f"{wanted}: an operand the arithmetic never reads is a phantom input, and a "
+                "missing one would be computed from a value nobody minted (R251 / LAW-07)"
+            )
 
 
 @dataclass(frozen=True)
@@ -252,6 +443,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name="actor_lag",
         config_path="monitor.actor_lag_abort_enabled",
         mechanism=Mechanism.CONFIG_BOOL,
+        cadence=Cadence.STEP_LAG_THRESHOLD,
+        cadence_paths=("monitor.actor_lag_threshold_steps",),
         status=Status.REQUIRED,
         exit_code=ACTOR_LAG_EXIT_CODE,
         owner=None,
@@ -266,6 +459,9 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name="draw_rate_collapse",
         config_path="train.draw_rate_abort.threshold",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        cadence=Cadence.GATE_INTERVAL_CONSEC,
+        cadence_paths=("monitor.gate_interval", "train.draw_rate_abort.consec",
+                       "train.draw_rate_abort.min_step"),
         status=Status.REQUIRED,
         exit_code=DRAW_RATE_COLLAPSE_EXIT_CODE,
         owner=None,
@@ -320,6 +516,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name=DISK_SPACE_ABORT_RULE,
         config_path="monitor.disk_guard.fail_gb",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        cadence=Cadence.WALL_CLOCK_POLL,
+        cadence_paths=(),
         status=Status.REQUIRED,
         exit_code=DISK_SPACE_EXHAUSTED_EXIT_CODE,
         owner=None,
@@ -371,6 +569,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name=TERMINAL_EVAL_BROKEN_ABORT_RULE,
         config_path="train.terminal_eval_enabled",
         mechanism=Mechanism.CONFIG_BOOL,
+        cadence=Cadence.CLOSE_OUT_TERMINAL,
+        cadence_paths=(),
         status=Status.REQUIRED,
         exit_code=TERMINAL_EVAL_BROKEN_EXIT_CODE,
         owner=None,
@@ -437,6 +637,11 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="train.hard_gn_threshold",
         ceiling_path="monitor.alert_grad_norm_max",
         mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
+        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays
+        # the ONE-FIELD data edit §8.5 claims it is. It has a live consumer meanwhile:
+        # `preflight_mint.py::_print_deferred_rows` prints it on every gate run.
+        cadence=Cadence.CONSEC_TRAIN_STEPS,
+        cadence_paths=("train.hard_gn_min_steps",),
         status=Status.DEFERRED,
         exit_code=None,
         owner="CARD-COORD-KNOBS follow-up — the operator, at run5 mint prereg",
@@ -656,6 +861,87 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
 
 
+@dataclass(frozen=True)
+class CadenceVerdict:
+    """One armed row judged on the cadence axis. `within` is the only field that gates.
+
+    `earliest_step` carries the three currencies `Cadence.earliest_fire_step` answers in —
+    a step, `math.inf` for "these operands can never fire", and `None` for "no step cadence
+    governs this row" — because collapsing them here would destroy exactly the distinction
+    the operator needs to tell a DEFECT from a rule that is not step-cadenced at all.
+    """
+
+    row: ArmedAbort
+    earliest_step: float | None
+    bound: float
+    within: bool
+    detail: str
+
+
+def audit_cadence(
+    config: Any,
+    *,
+    manifest: tuple[ArmedAbort, ...] = MANIFEST,
+    fraction: float = EARLIEST_FIRE_FRACTION,
+) -> tuple[CadenceVerdict, ...]:
+    """R251: can every ARMED required row still FIRE inside this config's own run?
+
+    The second half of assertion (c). `audit_arming` asks whether the arming surface is set;
+    this asks whether the machinery that reads it ever runs, which ADJ-D22 measured are
+    different questions: `monitor.gate_interval: 1000000000` leaves a threshold armed in the
+    config and unread in the run, and every check that existed before this one read it green.
+
+    SCOPE, deliberately narrow in three directions:
+
+    * REQUIRED rows only — a DEFERRED row is printed loudly and audited by nothing (R56);
+    * ARMED rows only — a disarmed row is already rc 30 from `audit_arming`, and reporting it
+      again under a second name sends the operator chasing a cadence question about an abort
+      that is simply off;
+    * a row whose cadence answers `None` is REPORTED and never failed. Its rule has no in-run
+      step cadence (close-out), so a fraction of the run is a category error for it, and
+      forging a number would be the class R84 refused.
+
+    A REQUIRED row that declares NO cadence is OUT OF BOUND by name. That is the same rule
+    `Mechanism.is_armed` applies to a missing ceiling: an unjudgeable armed row must fail
+    toward visibility, or "nobody declared it" and "it is fine" become one observable.
+
+    `manifest` and `fraction` are keywords for the same reason `audit_arming`'s `manifest`
+    is: the trigger has to be drivable in both directions, and `fraction` is what the audit's
+    own mutation pin neuters to prove the comparison is live rather than decorative.
+    """
+    armed = audit_arming(config, manifest=manifest)
+    disarmed = {row.name for row in armed.disarmed}
+    total = _dotted(config, RUN_LENGTH_PATH, row="<cadence bound>")
+    # An unreadable run length yields a bound of `-inf`, so every judged row reports OUT of
+    # bound: the audit must never quietly widen its own bound to "anything goes" because the
+    # key it takes the bound from went missing.
+    bound = float(fraction) * float(total) if _is_real_number(total) else -math.inf
+    verdicts: list[CadenceVerdict] = []
+    for row in armed.required:
+        if row.name in disarmed:
+            continue
+        if row.cadence is None:
+            verdicts.append(CadenceVerdict(
+                row=row, earliest_step=math.inf, bound=bound, within=False,
+                detail=("declares no cadence, so the audit cannot compute when it could "
+                        "first fire — an unjudgeable armed row gates rather than passes"),
+            ))
+            continue
+        values = tuple(_dotted(config, path, row=row.name) for path in row.cadence_paths)
+        earliest = row.cadence.earliest_fire_step(values)
+        within = earliest is None or earliest <= bound
+        operands = ", ".join(f"{path}={value!r}"
+                             for path, value in zip(row.cadence_paths, values, strict=True))
+        verdicts.append(CadenceVerdict(
+            row=row, earliest_step=earliest, bound=bound, within=within,
+            detail=(f"cadence {row.cadence.value}"
+                    + (f" over {operands}" if operands else "")
+                    + ("; not step-cadenced, so the fraction rule does not bind it"
+                       if earliest is None else f"; earliest fire step {earliest}")),
+        ))
+    return tuple(verdicts)
+
+
 def exit_code_for_abort(
     rule: str, *, manifest: tuple[ArmedAbort, ...] = MANIFEST
 ) -> int | None:
@@ -692,15 +978,20 @@ def exit_code_for_abort(
 
 __all__ = [
     "DISK_SPACE_ABORT_RULE",
+    "EARLIEST_FIRE_FRACTION",
     "EXEMPT_CONFIGS",
     "MANIFEST",
     "PRODUCTION_CONFIGS",
+    "RUN_LENGTH_PATH",
     "TERMINAL_EVAL_BROKEN_ABORT_RULE",
     "ArmedAbort",
     "ArmingSurfaceMissingError",
     "AuditResult",
+    "Cadence",
+    "CadenceVerdict",
     "Mechanism",
     "Status",
     "audit_arming",
+    "audit_cadence",
     "exit_code_for_abort",
 ]

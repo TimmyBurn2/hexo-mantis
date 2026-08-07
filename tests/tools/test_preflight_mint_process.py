@@ -32,6 +32,13 @@ What each block is the only witness to (LAW-07):
 - **MF-7** gate 12's SCOPE — the config-declaration partition and the AUDIT/PREFLIGHT union.
   Both escapes were demonstrated at rc 0 by REVIEW-impl.
 - **MF-8** `b0`'s `>= 2` floor and `a4`, each satisfied by a constant (RR-39, RR-44).
+- **R251 / ADJ-D22** the CADENCE half of assertion (c), END TO END. `monitor.gate_interval:
+  1000000000` leaves a threshold armed in the config and unread in the run, and gate 12
+  audited that config green because it never read the interval at all. The module-layer
+  arithmetic is pinned in `tests/config/test_armed_abort_cadence.py`; what only THIS file can
+  witness is that the shipped tool WIRES it — that a real `--audit-only` over a real
+  `configs/` tree goes red — and that the check's own self-test bites, so a neutered
+  computation or a neutered bound cannot publish a green verdict.
 - **SF-I2** the evidence block's integrity claim and the segment glob's run scoping.
 - **SF-I3** rc 22, the burst-completeness refusal (RR-14).
 - **ADJ-12** the arithmetic that decides run5's expected preflight outcome, rc 23 vs rc 25.
@@ -76,6 +83,7 @@ from types import SimpleNamespace
 import pytest
 
 from mantis.config.armed_aborts import (
+    EARLIEST_FIRE_FRACTION,
     EXEMPT_CONFIGS,
     MANIFEST,
     PRODUCTION_CONFIGS,
@@ -919,6 +927,234 @@ def test_the_manifest_vacuity_guard_fires_before_anything_indexes_the_paths(
         "a manifest with no REQUIRED row audits every config green — the other half of the "
         f"guard; got {caught.value!s}"
     )
+
+
+# ══ R251 / ADJ-D22 — the CADENCE half of assertion (c), through the real tool ══════════
+def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
+    """ADJ-D22's measured defect, driven end to end on a real `configs/` tree.
+
+    The perturbation is the SMALLEST one that reproduces it: one key on the production
+    config, still schema-legal (`monitor.gate_interval` is `ge=1`), with the draw-rate
+    threshold left ARMED and every other key untouched. Before R251 this tree audited **rc
+    0** — `_audit_manifest_and_configs` never read `gate_interval`, so a config whose gate
+    boundaries fall three orders of magnitude past the end of the run was indistinguishable
+    from run5 itself.
+
+    Driven through the mini-tree rig rather than by editing `configs/run5.yaml`: the shipped
+    config is never touched, and the tool is the byte-identical shipped file reading a scratch
+    root as its own `REPO_ROOT`.
+    """
+    root = _mini_tree(tmp_path)
+    production = root / PRODUCTION_CONFIGS[0]
+    original = production.read_text()
+    assert original.count("gate_interval: 1000\n") == 1, (
+        "the rig rewrites exactly one key; if run5's gate_interval spelling moved, this "
+        "perturbation is no longer the one the defect needs"
+    )
+    production.write_text(original.replace("gate_interval: 1000\n",
+                                           "gate_interval: 1000000000\n"))
+    assert "draw_rate_abort" in production.read_text(), (
+        "the draw-rate row must still be ARMED, or this test is about the arming audit"
+    )
+
+    result = _mini_audit(root)
+    output = result.stdout + result.stderr
+    assert result.returncode == 30, (
+        "an armed abort that cannot fire inside its own run must FAIL assertion (c) — this "
+        f"tree was rc 0 before R251; got {result.returncode}\n{output[-3000:]}"
+    )
+    assert "CADENCE-DISARMED" in output and "draw_rate_collapse" in output, (
+        f"the failure must name the row and the class; got {output[-2000:]}"
+    )
+    assert "3000000000" in output and "250000.0" in output, (
+        "…and it must name the COMPUTED step and the BOUND, or an operator cannot tell "
+        f"which key to move; got {output[-2000:]}"
+    )
+    assert "NEVER a sanctioned disarm" in output, (
+        "…and say that a large interval is not a legal way to disarm a row, which is the "
+        f"whole ruling; got {output[-2000:]}"
+    )
+
+
+def test_the_green_audit_PUBLISHES_the_cadence_it_computed(tmp_path) -> None:
+    """The vacuity half. A check whose only visible output is its own failure cannot be
+    audited for having done anything — MF-3's `source_pins_ok: True` literal was exactly
+    that. The report therefore carries every judged row with its computed step and the bound
+    it cleared, on the GREEN path, and the fraction it used."""
+    result = _run_tool("--audit-only", "--out-dir", str(tmp_path / "cadence"))
+    assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
+    report = json.loads(
+        sorted((tmp_path / "cadence").glob("preflight_*.json"))[0].read_text())["manifest"]
+    assert report["cadence_fraction"] == EARLIEST_FIRE_FRACTION
+    judged = {row["name"] for row in report["cadence"]}
+    armed_required = {row.name for row in MANIFEST if row.status is Status.REQUIRED}
+    assert judged == armed_required, (
+        "every REQUIRED row armed on the production config must appear with a verdict; got "
+        f"{sorted(judged)} against {sorted(armed_required)}"
+    )
+    assert all(row["within"] for row in report["cadence"])
+    draw = [row for row in report["cadence"] if row["name"] == "draw_rate_collapse"][0]
+    assert draw["earliest_fire_step"] == 25000.0 and draw["bound"] == 250000.0, (
+        f"the published numbers must be the computed ones; got {draw!r}"
+    )
+
+
+class _NeuteredMember:
+    """A cadence member whose arithmetic answers a constant — the mutation the self-test
+    exists to catch. A stand-in in a TEST; O-2's ban is on stand-ins in the TOOL."""
+
+    @staticmethod
+    def earliest_fire_step(values):
+        return 0.0
+
+
+class _NeuteredCadence:
+    GATE_INTERVAL_CONSEC = _NeuteredMember
+    STEP_LAG_THRESHOLD = _NeuteredMember
+
+
+def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_path) -> None:
+    """FIX 2's stated property, which nothing witnessed until this pin.
+
+    The call site passes `fraction=EARLIEST_FIRE_FRACTION` explicitly; reverting that to the
+    callee's default leaves the whole suite green, because the tool constant and the default
+    are the same object at HEAD, so every published number agrees with every compared number
+    BY COINCIDENCE. The existing self-test pin structurally cannot see it — `_cadence_self_test`
+    reads the same tool-level name and rc-31s before the audit runs, so it returns 31 in both
+    worlds.
+
+    `1.0` is the fraction chosen deliberately: it is the only kind that LEAVES THE SELF-TEST
+    GREEN, so this pin is provably about the call site and not about the trigger. (A fraction
+    small enough to red a healthy config cannot exist here — the self-test's own arm A is
+    calibrated on run5's operands, so anything that reds run5's draw-rate row reds arm A first
+    and the rc becomes 31. Measured, and stated so the next reader does not try.)
+
+    Two properties, because either alone is satisfiable by accident:
+      * the PUBLISHED bound is a fraction of the run length taken at the TOOL's number;
+      * a config whose earliest fire sits BETWEEN the two bounds actually FLIPS verdict. Under
+        the callee default it would stay red, so this is a behavioural witness of which
+        fraction the comparison used, not merely of which one was printed.
+    """
+    assert not TOOL._cadence_self_test(), "the unmutated self-test must be green"
+    run5_length = load_config(RUN5).train.max_train_steps
+    # Earliest fire 100000 * max(3, ceil(25000/100000)) = 300000 — above run5's 0.25 bound
+    # (250000) and inside a 1.0 bound (1000000). Written OUTSIDE configs/ so the declaration
+    # partition is untouched and the only variable is the fraction.
+    between = tmp_path / "between_the_bounds.yaml"
+    between.write_text(RUN5.read_text().replace("gate_interval: 1000\n",
+                                                "gate_interval: 100000\n"))
+    with pytest.raises(TOOL.PreflightArmingAuditError):
+        TOOL._audit_manifest_and_configs([between])
+
+    monkeypatch.setattr(TOOL, "EARLIEST_FIRE_FRACTION", 1.0)
+    assert not TOOL._cadence_self_test(), (
+        "fraction 1.0 must leave the self-test green, or this pin is testing the trigger"
+    )
+    block = TOOL._audit_manifest_and_configs([between])
+    assert block["cadence_fraction"] == 1.0
+    for row in block["cadence"]:
+        assert row["bound"] == 1.0 * run5_length, (
+            "the PUBLISHED fraction must be the fraction the comparison USED — under the "
+            f"callee default this row's bound would still read {0.25 * run5_length}, and the "
+            f"report would say one number while the audit compared another; got {row!r}"
+        )
+
+
+def test_the_self_tests_arm_A_fires_ALONE_when_the_bound_would_refuse_a_healthy_row(
+    monkeypatch,
+) -> None:
+    """LAW-07's BOTH-directions half, which was decorative.
+
+    `_cadence_self_test`'s docstring promises the trigger is proven in both directions, but
+    only arm B (the vacuous operands must FAIL) had a witness: under both existing mutations
+    arm A is satisfied incidentally (an infinite bound accepts everything; a constant 0.0 is
+    below every bound). So the half that protects against the gate REFUSING A HEALTHY CONFIG
+    was witnessed only by the tree happening to be green — a coincidence, not a producer.
+
+    Driven by shrinking the self-test's own synthetic run length rather than the fraction, so
+    arm A fires ALONE: at run length 1 the bound is 0.25, which the healthy operands' 25000
+    exceeds (arm A) while the vacuous operands still exceed it too (arm B stays silent) and
+    the lag member still computes 101 (arm C stays silent).
+    """
+    monkeypatch.setattr(TOOL, "_SELF_TEST_RUN_LENGTH", 1)
+    failures = TOOL._cadence_self_test()
+    joined = "\n".join(failures)
+    assert "arm A" in joined, (
+        "a bound that refuses the HEALTHY operands must fire arm A — without this the "
+        f"false-positive half of the trigger has no producer; got {failures!r}"
+    )
+    assert "arm B" not in joined and "arm C" not in joined, (
+        "…and it must fire ALONE, or the arms are not independently observable and a "
+        f"one-armed self-test reads the same as a two-armed one; got {failures!r}"
+    )
+    assert TOOL.main(["--audit-only"]) == 31, (
+        "…and the gate must refuse to publish a verdict, by name, rather than auditing the "
+        "tree with a trigger that would reject every healthy config"
+    )
+
+
+@pytest.mark.parametrize("attribute,value", [("EARLIEST_FIRE_FRACTION", float("inf")),
+                                             ("Cadence", _NeuteredCadence)])
+def test_neutering_the_cadence_check_REDS_the_gates_own_self_test(
+    monkeypatch, attribute, value,
+) -> None:
+    """LAW-07's trigger discipline, given a producer in BOTH of the ways it can rot.
+
+    A gate that publishes a verdict from an instrument nobody watched work is the phantom
+    input LAW-07 names, and this check's failure mode is SILENCE: a bound treated as infinite
+    or an `earliest_fire_step` collapsed to a constant leaves gate 12 rc 0 on exactly the
+    configs it was built to refuse — which is the state of the tree ADJ-D22 measured. Both
+    mutations are applied to the TOOL MODULE OBJECT in a test (the tool's own source carries
+    no such token, which is what O-2 censuses) and both must reach the process boundary as
+    the named rc 31, not as a quiet green.
+    """
+    assert not TOOL._cadence_self_test(), (
+        "the unmutated self-test must pass, or the mutation below proves nothing"
+    )
+    monkeypatch.setattr(TOOL, attribute, value)
+    assert TOOL._cadence_self_test(), (
+        f"neutering {attribute} must be VISIBLE to the self-test — an instrument that cannot "
+        "notice its own arithmetic being replaced is not an instrument"
+    )
+    assert TOOL.main(["--audit-only"]) == 31, (
+        "…and the gate must refuse to publish a verdict, by name (rc 31), rather than "
+        "auditing the tree with a dead check"
+    )
+
+
+def test_the_deferred_rows_cadence_is_PRINTED_which_is_its_ONLY_live_consumer() -> None:
+    """R4 / LAW-08, on the one field whose sole reader is a print.
+
+    A DEFERRED row declares `cadence` so the flip to REQUIRED stays the ONE-FIELD data edit
+    §8.5 claims it is — which leaves the field with exactly one reader until that flip.
+    `audit_cadence` produces verdicts for REQUIRED ∧ ARMED rows only, so it never reads a
+    deferred row's cadence, and the report's `deferred` block carries name/config_path/owner/
+    source_pin/note and NOT cadence. Delete the two lines in `_print_deferred_rows` and
+    `grad_norm_hard_abort.cadence` has ZERO consumers — the exact violation the comment on
+    that row exists to avert, with the whole suite green.
+
+    Driven through the real CLI rather than the in-process seam the sibling field pins use:
+    what is claimed is that the field reaches an operator on every gate run, and only the
+    process output can witness that.
+    """
+    result = _run_tool("--audit-only")
+    assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
+    deferred = [row for row in MANIFEST if row.status is Status.DEFERRED]
+    assert deferred, "no deferred row means this test has no subject"
+    for row in deferred:
+        assert row.cadence is not None, (
+            f"deferred row {row.name!r} declares no cadence, so the flip to REQUIRED is not "
+            "the one-field data edit the row's own comment claims"
+        )
+        assert f"earliest-fire cadence: {row.cadence.value}" in result.stdout, (
+            f"the gate must PRINT {row.name!r}'s declared cadence — it is that field's only "
+            f"live consumer until the row flips; got {result.stdout[-2000:]}"
+        )
+        for path in row.cadence_paths:
+            assert path in result.stdout, (
+                f"…and the operands too: {path!r} is what makes the printed cadence auditable "
+                "rather than a bare enum name"
+            )
 
 
 #: WPAX Phase D re-basing (R81's shape, applied to this family). The flip left the SHIPPED
@@ -2731,9 +2967,30 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     # disarmed on either row the swap would fail the audit for its OWN reason and the escape
     # would look closed by something other than the by-name pin. `min_step` is 1 because this
     # config's `max_train_steps` is 2000 and the twin cross-validator binds it inside the run.
-    smoke.write_text(smoke.read_text()
+    #
+    # R251 / ADJ-D22 adds a SECOND way to be disarmed and this fixture was already caught by
+    # it, which is worth stating rather than patching silently: `min_step: 1` satisfies the
+    # cross-field validator, but at the smoke config's minted `gate_interval: 1000` the third
+    # consecutive observation lands at step 3000 — PAST the whole 2000-step run — so the
+    # promoted config armed an abort that could never fire. The interval is rescaled here for
+    # the same reason `min_step` was: the swap must be legal in every sense, or the escape
+    # this test demonstrates is closed by the fixture rather than by the by-name pin.
+    #
+    # The interval rewrite is NEWLINE-ANCHORED and its occurrence count is asserted, the shape
+    # `test_an_interval_that_outruns_the_run_REDS_the_real_gate` uses: an unanchored
+    # `"gate_interval: 1000"` is a PREFIX of `gate_interval: 10000`, so a future re-scale of
+    # this smoke config would be silently corrupted to 1000 and the fixture would go on
+    # looking deliberate.
+    smoke_text = smoke.read_text()
+    assert smoke_text.count("gate_interval: 1000\n") == 1, (
+        "the fixture rescales exactly one interval key; if the smoke config's gate_interval "
+        f"spelling moved, this rewrite is no longer the one the swap needs. got "
+        f"{smoke_text.count('gate_interval: 1000')} loose match(es)"
+    )
+    smoke.write_text(smoke_text
                      .replace("actor_lag_abort_enabled: false",
                               "actor_lag_abort_enabled: true")
+                     .replace("gate_interval: 1000\n", "gate_interval: 100\n")
                      .replace("draw_rate_abort: null",
                               "draw_rate_abort:\n"
                               "    threshold: 0.25\n"

@@ -626,8 +626,21 @@ class.** Recorded here rather than left as silent drift (R9).
     hidden in the justification hatch.
 12. Armed-abort manifest audit — every `required` row of the manifest
     (`src/mantis/config/armed_aborts.py`) must be ARMED in every config the manifest binds
-    (`PRODUCTION_CONFIGS`). Read through the real loader; no boot, no burst, no GPU
-    (`tools/ci_gates/preflight_mint.py --audit-only`). A `deferred` row is printed loudly on
+    (`PRODUCTION_CONFIGS`), and every armed row must still be ABLE TO FIRE inside that config's
+    own run. Read through the real loader; no boot, no burst, no GPU
+    (`tools/ci_gates/preflight_mint.py --audit-only`). The second clause is R251 / ADJ-D22 and
+    it is not a refinement of the first: `monitor.gate_interval: 1000000000` produces zero gate
+    boundaries, so an armed `train.draw_rate_abort` is never evaluated — armed in the config,
+    absent in effect — and the audit read it green because it never read the interval at all.
+    `ge=1` bans one spelling of "never gate" and permits every larger one. So each armed row's
+    EARLIEST POSSIBLE FIRE STEP is computed from that config's own cadence keys, declared per
+    row as `ArmedAbort.cadence` + `cadence_paths` and derived from the code that evaluates the
+    row, and a row whose value exceeds `armed_aborts.EARLIEST_FIRE_FRACTION *
+    train.max_train_steps` fails at the same rc as a disarmed one. The fraction is a module
+    constant beside the rows and deliberately NOT a config key — a config that could set its
+    own audit fraction could relax its own audit (ADJ-D20's class relocated). A large interval
+    is never a sanctioned disarm; the one sanctioned spelling stays the explicit R56-style
+    deferred row. A `deferred` row is printed loudly on
     every run, is tamper-evident through a pinned source literal, and does not gate. The
     same tool's full mint preflight — a real `compose_run` boot plus a bounded burst,
     asserting sync cadence and lag transport — is MANUAL and is invoked by no CI step. Its

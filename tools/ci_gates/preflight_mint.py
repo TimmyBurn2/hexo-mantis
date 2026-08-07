@@ -42,10 +42,24 @@
 
 Mode AUDIT (`--audit-only`): no boot, no burst, no GPU. Reads the committed production
 configs through the REAL loader and audits assertion (c) — every `required` row of
-`mantis.config.armed_aborts.MANIFEST` must be ARMED — plus manifest integrity and the R56
-source-pin tamper scan. This is the per-commit CI gate. **rc 0 in this mode covers
-assertion (c) ONLY**; assertions (a) and (b) are reported `not_run`, in the report and on
-stdout, on every run including a green one.
+`mantis.config.armed_aborts.MANIFEST` must be ARMED, and every armed row must still be
+ABLE TO FIRE inside its own run — plus manifest integrity and the R56 source-pin tamper
+scan. This is the per-commit CI gate. **rc 0 in this mode covers assertion (c) ONLY**;
+assertions (a) and (b) are reported `not_run`, in the report and on stdout, on every run
+including a green one.
+
+Assertion (c)'s SECOND half is R251 / ADJ-D22 and it is not a refinement of the first: the
+audit never read `monitor.gate_interval`, so `gate_interval: 1000000000` on a 40-step run
+produced zero gate boundaries, left the draw-rate threshold armed in the config and unread
+in the run, and audited GREEN. `Mechanism.is_armed` reads a threshold; whether the machinery
+that reads that threshold ever RUNS is a different question, and `ge=1` on the interval bans
+one spelling of "never gate" while permitting every larger one. So `audit_cadence` computes
+each armed row's earliest possible fire step from that config's own cadence keys and refuses
+any row whose value exceeds `EARLIEST_FIRE_FRACTION * train.max_train_steps` — rc 30, the
+same code, because an abort that cannot fire is not armed in any sense that protects the
+run. A large interval is NEVER a sanctioned disarm; the one sanctioned spelling stays the
+explicit R56-style deferred row with an owner and a source pin. `_cadence_self_test` proves
+the trigger fires in both directions before any verdict of it is published.
 
 Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec`): everything
 AUDIT does, then the REAL `compose_run` boot in production posture, a bounded burst, a
@@ -198,13 +212,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from mantis.config.armed_aborts import (
+    EARLIEST_FIRE_FRACTION,
     EXEMPT_CONFIGS,
     MANIFEST,
     PRODUCTION_CONFIGS,
+    RUN_LENGTH_PATH,
     ArmedAbort,
     ArmingSurfaceMissingError,
+    Cadence,
     Status,
     audit_arming,
+    audit_cadence,
     exit_code_for_abort,
 )
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
@@ -614,6 +632,12 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         surface = "present" if row.ceiling_path is None else f"present, ceiling {row.ceiling_path}"
         print(f"    arming surface: {row.config_path} "
               f"({surface}) — NOT audited, so a mint does not gate on it")
+        # R251 / LAW-08: a deferred row's `cadence` is declared so the flip to REQUIRED stays
+        # a one-field data edit (§8.5), which would leave it a field nothing reads until that
+        # flip. Printed instead — the same rule that put `note` on this path.
+        cadence = "NOT DECLARED" if row.cadence is None else (
+            f"{row.cadence.value} over {list(row.cadence_paths)}")
+        print(f"    earliest-fire cadence: {cadence} — judged only once this row is REQUIRED")
         if row.source_pin is not None:
             rel, text = row.source_pin
             print(f"    pinned to {rel}: {text!r}")
@@ -624,9 +648,71 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         print(f"    why: {row.note}")
 
 
+#: Synthetic operand sets for `_cadence_self_test`, and the run length they are judged
+#: against. HEALTHY is run5's own shape; VACUOUS is ADJ-D22's measured defect — an interval
+#: three orders of magnitude past the whole run — and neither is read from any config, so the
+#: self-test keeps working on a tree whose configs have all moved.
+_SELF_TEST_RUN_LENGTH = 1_000_000
+_SELF_TEST_HEALTHY = (1_000, 3, 25_000)
+_SELF_TEST_VACUOUS = (1_000_000_000, 3, 25_000)
+
+
+def _cadence_self_test() -> list[str]:
+    """R251 + LAW-07: prove the cadence trigger CAN fire, in BOTH directions, before any
+    verdict of it is trusted. The pattern is gates 8/14/15's — `r8_header_gate.py::self_test`
+    runs on every invocation and refuses to publish a verdict from an instrument it has not
+    just watched work.
+
+    It is worth having because this check's failure mode is SILENCE: a fraction read once and
+    discarded, or an `earliest_fire_step` that collapsed to a constant, leaves gate 12 green
+    on exactly the configs it was built to refuse — which is the state of the tree ADJ-D22
+    measured. Both mutations are caught here: an infinite (or absent) bound loses arm B, and a
+    constant computation cannot satisfy A and B at once.
+
+    Deliberately PURE ARITHMETIC over synthetic operands. It builds no config and no
+    collaborator: O-2 bans a stand-in for a production object inside this tool, and the audit's
+    WIRING to real configs is driven end-to-end elsewhere (the mini-tree rig), not simulated
+    here.
+    """
+    failures: list[str] = []
+    if not (0.0 < EARLIEST_FIRE_FRACTION <= 1.0):
+        failures.append(
+            f"    the bound arm: EARLIEST_FIRE_FRACTION is {EARLIEST_FIRE_FRACTION!r}, which "
+            "is not a fraction of a run — <= 0 fails every armed row and > 1 can fail none"
+        )
+        return failures
+    bound = EARLIEST_FIRE_FRACTION * _SELF_TEST_RUN_LENGTH
+    healthy = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(_SELF_TEST_HEALTHY)
+    vacuous = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(_SELF_TEST_VACUOUS)
+    lag = Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,))
+    if healthy is None or healthy > bound:
+        failures.append(
+            f"    arm A: operands {_SELF_TEST_HEALTHY} computed {healthy!r}, which does not "
+            f"clear the bound {bound} — the check would refuse a healthy production config"
+        )
+    if vacuous is None or vacuous <= bound:
+        failures.append(
+            f"    arm B: operands {_SELF_TEST_VACUOUS} computed {vacuous!r}, which the bound "
+            f"{bound} ACCEPTS — the ADJ-D22 config would audit ARMED all over again"
+        )
+    if lag is None or lag != 101.0:
+        failures.append(
+            f"    arm C: the lag cadence computed {lag!r} for a threshold of 100, not 101 — "
+            "member dispatch has collapsed and every row is being judged by one arithmetic"
+        )
+    return failures
+
+
 def _audit_manifest_and_configs(paths: list[Path]) -> dict:
     """Assertion (c) plus manifest integrity. Raises the named outcome; returns the report
     block on success."""
+    broken_trigger = _cadence_self_test()
+    if broken_trigger:
+        raise PreflightManifestError(
+            "the cadence check's SELF-TEST failed, so no cadence verdict on this run can be "
+            "trusted (R251 / LAW-07 — a gate publishes no verdict from an instrument it has "
+            "not just watched work):\n" + "\n".join(broken_trigger)
+        )
     required = [row for row in MANIFEST if row.status is Status.REQUIRED]
     if not required or not PRODUCTION_CONFIGS:
         raise PreflightManifestError(
@@ -666,10 +752,26 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             f"editing the pin (R56): {[row.name for row in broken]}"
         )
     disarmed: list[str] = []
+    cadence_rows: list[dict] = []
+    cadence_disarmed: list[str] = []
     audit = None
     for path in paths:
         try:
-            audit = audit_arming(_load(path))
+            config = _load(path)
+            audit = audit_arming(config)
+            # R251 / ADJ-D22: the SECOND half of assertion (c), on the same loaded config so
+            # the two answers cannot be about different bytes. `audit_cadence` judges only the
+            # rows `audit_arming` found ARMED — a disarmed row is the `disarmed` list's, and
+            # naming it twice would send the operator chasing a cadence question about an
+            # abort that is simply off.
+            # `fraction` is passed EXPLICITLY rather than left to the callee's default, and
+            # that is not a style choice: the report block and the rc-30 message below both
+            # interpolate `EARLIEST_FIRE_FRACTION` as read HERE, so a call that let the
+            # default supply it would publish one number while comparing against another the
+            # moment the two could differ. It also makes the tool-level name the ONE the
+            # audit sees, so neutering it reaches the comparison itself and not only the
+            # self-test — the pin-3 mutation would otherwise stop half-way.
+            verdicts = audit_cadence(config, fraction=EARLIEST_FIRE_FRACTION)
         except ArmingSurfaceMissingError as exc:
             # F-4, fixed to its class (R71). The shipped module raises the NAMED error; the
             # tool maps it onto its own already-defined manifest code. Without this the
@@ -682,10 +784,39 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             ) from exc
         for row in audit.disarmed:
             disarmed.append(f"{path.name}: {row.name} ({row.config_path})")
+        for verdict in verdicts:
+            cadence_rows.append({
+                "config": path.name, "name": verdict.row.name,
+                "cadence": None if verdict.row.cadence is None else verdict.row.cadence.value,
+                "cadence_paths": list(verdict.row.cadence_paths),
+                "earliest_fire_step": verdict.earliest_step,
+                "bound": verdict.bound, "within": verdict.within,
+                "detail": verdict.detail,
+            })
+            if not verdict.within:
+                cadence_disarmed.append(
+                    f"{path.name}: {verdict.row.name} — earliest possible fire step "
+                    f"{verdict.earliest_step}, bound {verdict.bound} "
+                    f"({EARLIEST_FIRE_FRACTION} x {RUN_LENGTH_PATH}); {verdict.detail}"
+                )
     if disarmed:
         raise PreflightArmingAuditError(
             "a REQUIRED armed-abort row is DISARMED on a production config — minting this "
             f"config re-enables the failure the abort exists to catch: {disarmed}"
+        )
+    if cadence_disarmed:
+        # Ordered AFTER the arming check: a row that is simply off is the plainer diagnosis,
+        # and an operator reading "cannot fire in time" about an abort that is not armed at
+        # all would be chasing the wrong key. Same rc, because it is the same assertion —
+        # an abort that cannot fire is not armed in any sense that protects the run (R251).
+        raise PreflightArmingAuditError(
+            "a REQUIRED armed-abort row is ARMED but CADENCE-DISARMED on a production config "
+            "— its own cadence keys put its earliest possible fire step outside "
+            f"{EARLIEST_FIRE_FRACTION} of {RUN_LENGTH_PATH}, so minting this config ships an "
+            "abort that cannot fire in time to catch what it exists to catch (R251/ADJ-D22). "
+            "A large interval is NEVER a sanctioned disarm: the one sanctioned spelling is "
+            f"the explicit R56-style deferred row with an owner and a source pin. "
+            f"{cadence_disarmed}"
         )
     return {
         "module_sha256": _sha256(REPO_ROOT / "src" / "mantis" / "config" / "armed_aborts.py"),
@@ -705,6 +836,14 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
                       "note": row.note}
                      for row in (audit.deferred if audit else ())],
         "disarmed": [],
+        # R251: the cadence half is PUBLISHED on the green path too, per config per row, with
+        # the computed step and the bound it cleared. A check whose only visible output is its
+        # own failure is a check nobody can audit for vacuity — the shape MF-3's
+        # `source_pins_ok: True` literal took.
+        "cadence_fraction": EARLIEST_FIRE_FRACTION,
+        "cadence_bound_path": RUN_LENGTH_PATH,
+        "cadence": cadence_rows,
+        "cadence_disarmed": [],
         "source_pins_ok": not broken,
         "source_pins_scanned": scanned,
         "audited_configs": [str(path) for path in paths],
