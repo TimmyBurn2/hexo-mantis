@@ -1,5 +1,5 @@
 """>300 justify (R8): it is mostly DATA — the
-SECOND copy of the 174-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+SECOND copy of the 177-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
 WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
 `monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved the registry
@@ -267,6 +267,13 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "inference.perf_timing": "InferenceHParams.perf_timing -> inference_server.py:74 ctor (diagnostics ns)",
     "inference.perf_sync_cuda": "InferenceHParams.perf_sync_cuda -> inference_server.py:74 ctor (diagnostics ns)",
     # ── monitor.* (27; resolve_monitor_config -> MonitorConfig, DESIGN_P2.md §4.2) ───────
+    # ── monitor.gate_interval (R242 / ADJ-D12) — schema-only, like `drain`/`disk_guard`:
+    # named directly by compose_run (one leaf, no shape to resolve) and threaded into
+    # StepCoordinatorConfig. It is the ARMING cadence; train.log_interval is narration.
+    "monitor.gate_interval":
+        "mantis.run.compose_run -> _step_coordinator_config ->"
+        " StepCoordinatorConfig.gate_interval -> step.py _run_gate_interval"
+        " (hard-abort gates + the LAW-18 monitor_gates summary)",
     "monitor.alert_entropy_min": "resolve_monitor_config -> monitor/rules.py entropy WARN",
     "monitor.collapse_threshold_nats": "resolve_monitor_config -> monitor/rules.py collapse threshold",
     "monitor.alert_grad_norm_max": "resolve_monitor_config -> monitor/rules.py grad-norm WARN",
@@ -350,7 +357,7 @@ def test_schema_leaves_equal_consumer_registry_bijection():
     )
 
 
-def test_registry_has_exactly_174_entries():
+def test_registry_matches_the_live_leaf_count():
     # 143 post-SC-A3 + 3 WP-UNFREEZE knobs (K1/K2/K3) + 1 WPAX S-4 knob
     # (train.max_train_steps, the run-length authority) = 147.
     # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
@@ -374,8 +381,13 @@ def test_registry_has_exactly_174_entries():
     # from one measured cost model. Their consumer is GRAPH-ROUTE-SCOPED and the registry
     # rows say so: the provider is threaded to `_graph_step` alone and `_grid_step` is not
     # given it, so a grid run structurally cannot reach them. 174 + 2 = 176.
-    assert len(CONSUMER_REGISTRY) == 176
-    assert len(_leaf_paths(RunConfig)) == 176
+    # R242 (ADJ-D12) ADDS 1: `monitor.gate_interval`, the ARMING cadence split off the
+    # NARRATION cadence `train.log_interval`. It is a monitor leaf and a SCHEMA-ONLY one
+    # (a third enumerated drop in `resolve_monitor_config`, beside `drain` and
+    # `disk_guard`), so the runtime `MonitorConfig` field count does not move with it.
+    # 176 + 1 = 177.
+    assert len(CONSUMER_REGISTRY) == 177
+    assert len(_leaf_paths(RunConfig)) == 177
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

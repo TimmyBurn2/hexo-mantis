@@ -95,6 +95,14 @@ _ADDED_LEAVES = {
     # closed set of values that ARE pinned, and it is deliberately not widened here.
     "train.microbatch_caps.max_edges",
     "train.microbatch_caps.max_nodes",
+    # R242 (ADJ-D12): `monitor.gate_interval` is a REQUIRED schema leaf, so every config
+    # necessarily gains it and the re-mint stays purely ADDITIVE. Its VALUE is not pinned
+    # here for the same reason the caps' are not — but it is not an operator choice either:
+    # the bundle mints it EQUAL to each config's own `train.log_interval`, which is what
+    # keeps the arming cadence byte-identical in effect across the split. The re-derived
+    # stride is a mint-prereg row. `smoke_preflight_armed.yaml` additionally gains ONE
+    # `# delta:` HEADER line (`monitor.gate_interval: 1000 -> 10`), which is an insertion too.
+    "monitor.gate_interval",
 }
 
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted

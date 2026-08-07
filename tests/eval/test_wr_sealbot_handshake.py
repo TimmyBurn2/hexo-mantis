@@ -162,10 +162,13 @@ def test_absent_sealbot_rounds_route_none_and_coordinator_skip_counts() -> None:
         _step_coordinator_config(
             stop_step=10**9, draw_rate_abort=None,
             drain_caps=resolve_drain_caps(load_config(_REPO / "configs" / "dev_example.yaml").monitor),
+            gate_interval=load_config(
+                _REPO / "configs" / "dev_example.yaml").monitor.gate_interval,
             knobs=resolve_coordinator_knobs(
                 load_config(_REPO / "configs" / "dev_example.yaml").train),
         ),
-        eval_interval=1, log_interval=1, min_buf_size=10,
+        # R242 (ADJ-D12): the gate cadence mirrors the narration cadence (shipped posture).
+        eval_interval=1, log_interval=1, gate_interval=1, min_buf_size=10,
     )
     coord = StepCoordinator(
         trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,

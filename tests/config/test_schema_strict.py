@@ -79,6 +79,8 @@ def _valid_inference_block() -> dict:
 
 def _valid_monitor_block() -> dict:
     return {
+        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
         "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,

@@ -213,6 +213,8 @@ def _make_inference_block(**over: Any) -> dict[str, Any]:
 # over verbatim (DESIGN_P2.md §4.2), plus the 4 `DrainCapsConfig` fields (§4.3).
 def _make_monitor_block(**over: Any) -> dict[str, Any]:
     base = {
+        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
         "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,

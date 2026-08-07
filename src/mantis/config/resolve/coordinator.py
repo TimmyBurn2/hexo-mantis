@@ -29,10 +29,12 @@ visible from the config:
   production path, so the batch size was unconditionally the literal `256` while the field
   beside it said `8`. `train.batch_size` is minted at **256**: this file moves the authority,
   never the number.
-* `log_interval` — WPMINT DR-7 measured that `log_interval <= 0` kills the entire hard-abort
-  family AND the `monitor_gates` event that would have shown it, while gate 12 still audits
-  the draw-rate row ARMED. The schema's `ge=1` makes that posture unwritable; this resolver
-  is where the value that cannot be zero arrives.
+* `log_interval` — NARRATION ONLY since R242; it runs no gate. WPMINT DR-7's measurement
+  (that `log_interval <= 0` killed the entire hard-abort family AND the `monitor_gates` event
+  that would have shown it, while gate 12 still audited the draw-rate row ARMED) was the
+  original ground for `ge=1`, and that argument MOVED WITH THE GATES to
+  `monitor.gate_interval`. The bound stays here on its own footing — there is no legitimate
+  "never narrate" posture — and this resolver is where the value that cannot be zero arrives.
 
 SIX SIBLINGS ARE NOT HERE, BY ADJUDICATION (call K-a). `composition_interval`,
 `value_probe_interval`, `soft_ew_threshold`, `soft_ew_min_pts`, `instrumentation_enabled` and

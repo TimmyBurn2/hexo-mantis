@@ -201,7 +201,12 @@ def test_the_monitor_resolver_drops_disk_guard_by_name_never_by_a_filter(smoke_r
     That is a weaken-class change, and it is exactly the kind P-11 already forbids on the
     sibling census."""
     source = Path(resolve_monitor_config.__globals__["__file__"]).read_text(encoding="utf-8")
-    for key in ('pop("drain")', 'pop("disk_guard")'):
+    # R242 (ADJ-D12) adds the THIRD drop, `gate_interval` — a schema-only scalar whose reader
+    # is `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval`. It is asserted in
+    # the SAME enumerated list, deliberately: a third member is exactly the pressure that
+    # tempts a reviewer to collapse the three pops into a filter, which is the move this
+    # test exists to red.
+    for key in ('pop("gate_interval")', 'pop("drain")', 'pop("disk_guard")'):
         assert key in source, (
             f"the drop must name the block: `data.{key}` — an enumerated pop is auditable, a "
             "filter is not"

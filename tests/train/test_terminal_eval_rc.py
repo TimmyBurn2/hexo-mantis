@@ -135,6 +135,22 @@ _DRIVE_GUARD = {"interval_sec": 0.02, "warn_gb": 4.0, "fail_gb": 2.0}
 _DEV_CONFIG = load_config(_CONFIGS / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
+#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
+#: two equal), so these drives keep exactly the cadence they had before R242's split.
+_GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
+
+
+def _mirrored(settings: dict) -> dict:
+    """R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names it.
+
+    That mirroring is the SHIPPED posture, not a convenience — every committed config mints
+    `monitor.gate_interval` equal to its own `train.log_interval` — so a drive here that moves
+    only `log_interval` keeps exactly the cadence it had before R242 split the two knobs.
+    """
+    settings.setdefault("gate_interval", settings["log_interval"])
+    return settings
 
 
 # ══ shared drivable collaborators ═════════════════════════════════════════════════════
@@ -314,9 +330,10 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
     `SimpleNamespace` silently answering `None`."""
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,
-           **(config_overrides or {})},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **_mirrored({"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,
+                     **(config_overrides or {})}),
     )
     pool = _Pool()
     shutdown = ShutdownState()
@@ -364,7 +381,13 @@ def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     train.update(train_overrides)
     base["train"] = train
     monitor = dict(base["monitor"])
+    # R242 (ADJ-D12): the ARMING cadence is `monitor.gate_interval` now, not
+    # `train.log_interval`. This drive sets `log_interval: 1` above so the draw-rate abort can
+    # take an observation on every step of a 3-step burst; that is an ARMING requirement, so
+    # it is the gate knob that has to carry it. Left at smoke_gnn's minted 1000 the gate would
+    # never run and O-09 arm (b) would measure a run that stopped for a different reason.
     monitor.update({"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
+                    "gate_interval": 1,
                     "disk_guard": dict(_DRIVE_GUARD)})
     base["monitor"] = monitor
     config = RunConfig.model_validate(base)

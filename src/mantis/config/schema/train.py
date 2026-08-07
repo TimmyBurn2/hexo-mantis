@@ -95,10 +95,14 @@ class DrawRateAbortConfig(StrictModel):
       unreachable one. DISCLOSED: a `consec` above that depth makes the abort unfireable
       while it audits ARMED — the fifth face of "armed in the config, absent in effect", left
       OPEN and written down rather than closed with an invented number (R84's class).
-      DISCLOSED (WPMINT DS-VERIFY): `consec` counts consecutive CHECKS at a stride of
-      `train.log_interval` train steps, so at the shipped 1000 three samples span 2000 steps —
-      it is a sustained-ness bar in steps, not in checks, and it does NOT delay the first
-      fire.
+      DISCLOSED (WPMINT DS-VERIFY; RE-POINTED and CORRECTED after R242): `consec` counts
+      consecutive OBSERVATIONS, and an observation is ATTEMPTED once per
+      `monitor.gate_interval` train steps — NOT `train.log_interval`, which R242 reduced to
+      narration and which this line went on naming after the split. A boundary that observes
+      nothing (absent producer, or fewer than `N_pool_min` completed games) neither advances
+      nor RESETS the counter, so at the shipped 1000 three consecutive observations span AT
+      LEAST 2000 steps: it is a sustained-ness bar whose step span is a lower bound, not a
+      product, and it does NOT delay the first fire.
 
     Read by exactly one path: `mantis.config.resolve.draw_rate.resolve_draw_rate_abort`.
     """
@@ -345,14 +349,17 @@ class TrainConfig(StrictModel):
     # `compose_run(eval_enabled=False)` "a parameter"; WPMAIN deleted that parameter, and
     # the R79(1) argument STRENGTHENS on the key: a fact is not a proxy.)
     eval_interval: int = Field(ge=1)
-    # `log_interval` — the boundary at which the run emits its payload events, runs the WARN
-    # rules, runs BOTH live hard-abort gates and publishes the LAW-18 `monitor_gates` summary
-    # (`_run_log_interval`). `ge=1` closes WPMINT DR-7, which MEASURED that `log_interval <= 0`
-    # kills the whole hard-abort family AND the `monitor_gates` event together
-    # (`checks=0, fires=0, skips=0`) while gate 12 still audits the draw-rate row ARMED — a
-    # fifth "armed in the config, absent in effect" axis, and the one where the instrument
-    # that would make it visible is switched off by the same knob. There is no legitimate
-    # "never log" posture, so the schema cannot express one.
+    # `log_interval` — NARRATION ONLY (R242): the boundary at which the run emits its
+    # `training_step` payload, runs the 4 WARN rules and emits the axis distribution
+    # (`_run_log_interval`). It runs NO gate. The hard-abort family and the LAW-18
+    # `monitor_gates` summary moved to `monitor.gate_interval` and `_run_gate_interval`,
+    # because at run5's minted 1000 no draw-rate abort could fire before training step 1000
+    # — armed machinery with a blind first kilometre (ADJ-D12).
+    # `ge=1` survives that move on a NARROWER ground than it was written for. WPMINT DR-7
+    # MEASURED that `log_interval <= 0` killed the hard-abort family AND the `monitor_gates`
+    # event that would have shown it; that argument now belongs to `monitor.gate_interval`
+    # and is restated at its field. What remains here is sufficient on its own: there is no
+    # legitimate "never narrate" posture, so the schema does not express one.
     log_interval: int = Field(ge=1)
     # `buffer_save_interval` IS DELETED (R178(a), executing under R116/LAW-08). It was the
     # REPLAY-BUFFER save cadence (`_try_save_buffer`), never the trainer checkpoint cadence,

@@ -147,7 +147,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; 18 assertions, 15+ named errors; single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
-| 5 | run config schema | v4 | pydantic models, extra=forbid; schema_version key in every file |
+| 5 | run config schema | v8 | pydantic models, extra=forbid; schema_version key in every file |
 | 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
@@ -450,6 +450,80 @@ a required leaf is REMOVED, and the shape is worth naming because every prior on
    `_REHEADERED_DELTAS`, and a tolerance that PROVES each change is rendering-only by
    reproducing the baseline slot from the live slot through the old `str()`. New producer:
    `tests/config/test_mint_header_roundtrip.py` (LAW-07).
+
+### AMENDMENT — contract #5 v7 → v8: `monitor.gate_interval` is ADDED (arming cadence leaves narration cadence)
+
+**Pre-mint correctness bundle, operator ruling R242 (ADJ-D12); grounds R1 + LAW-18 + the F-43
+class.** Recorded here rather than left as silent drift (R9).
+
+   **A gap in this log, recorded not laundered — same shape as the v5 → v6 block above.**
+   `docs/contracts/run_config_schema.md` reached **v7** under WP12-R (R179) and no v6 → v7
+   amendment was written here. That bump belongs to WP12-R and is not this amendment's to
+   author, so it is flagged rather than back-filled. This amendment is therefore **v7 → v8**,
+   counted from the contract doc's own version table. Item 5 of the table in §4 above still
+   reads `v4` and is corrected to `v8` by this amendment — it has been stale since v5.
+
+1. **The addition.** `monitor.gate_interval` (`int`, `ge=1`, **no default**) is a new required
+   leaf. **`RunConfig`'s leaf count moves 176 → 177** (derived from `_leaf_paths(RunConfig)`,
+   not transcribed; gate 13 asserts the contract doc's stated count against the live one, so
+   this number cannot rot silently).
+2. **The defect it closes, measured.** Everything downstream of `_run_log_interval`'s
+   `self._train_step % cfg.log_interval != 0` guard was `train.log_interval`-gated —
+   including the LIVE-producer `draw_rate_collapse` hard abort and the LAW-18 `monitor_gates`
+   summary. At run5's minted `log_interval: 1000` **no draw-rate abort could fire and no
+   `monitor_gates` event existed before training step 1000**: armed machinery with a blind
+   first kilometre, which is the F-43 "armed in the config, absent in effect" class landing on
+   the abort path itself. R242's words: "it is worse than the original item".
+3. **Why a key and not a constant.** `consec` counts consecutive OBSERVATIONS, and an
+   observation is ATTEMPTED once per gate boundary — a boundary whose producer is absent or
+   whose evidence is below `N_pool_min` is SKIP-counted and appends nothing, so it neither
+   advances nor resets `consec`. The sampling stride is therefore the gate's time constant
+   only as a LOWER BOUND on elapsed steps, never an equality. That is precisely why the
+   cadence needed to be a settable fact: running the gates per step without a knob would have
+   re-scaled every armed abort's window by `log_interval`, and run5's armed
+   `train.draw_rate_abort.consec: 3` would silently have meant 3 consecutive STEPS rather than
+   3 consecutive gate boundaries — a 1000× change to a pre-registered armed value. Armed
+   values are operator-only, so the cadence became explicit rather than a side effect of a
+   logging knob.
+
+      **Correction of record (R96 — corrected in the artifact, not only in the log).** The
+      first draft of this item stated "an observation is appended per gate run" and said the
+      re-scaling would have meant "50 STEPS instead of 50 boundaries". Both were wrong and
+      both were caught by the RED-TEAM pass on this commit: the append claim is falsified by a
+      measured drive (an observation, an 8-boundary evidence blackout, then two observations →
+      the abort fires with `consec` satisfied ACROSS the gap), and the `50` was
+      `N_pool_min` — a completed-game evidence bar — not `consec`, which is `3`. The same
+      false append-claim was found in four places in `coordinator/step.py` and one in
+      `schema/train.py`; all are corrected, and `monitor/rules.py::check_draw_rate_collapse`
+      had it right all along.
+4. **Zero production behaviour moves, and that is enforced, not asserted.** Every one of the
+   six configs mints `gate_interval` EQUAL to its own `train.log_interval` (1000 ×5; 10 for
+   `smoke_preflight_armed`), so the shipped cadence, every `consec` meaning and every armed
+   value are unchanged in effect. The re-scaled values the operator actually wants are prereg
+   rows, not code. `tests/train/test_gate_interval_decoupling.py::test_p6b` pins the equality
+   across all six and names itself as the row the prereg ruling RE-POINTS rather than deletes.
+   Verified by replaying each config's own header-recorded template + deltas through
+   `tools/mint_config.py` and diffing: byte-identical on all six, pure insertion, no other
+   leaf moved.
+5. **What `train.log_interval` becomes.** Narration only — the `training_step` payload, the 4
+   WARN rules, the axis distribution. Its `ge=1` survives on a NARROWER ground: WPMINT DR-7's
+   measurement (that `log_interval <= 0` killed the hard-abort family and the instrument that
+   would have shown it) moved WITH the gates to `monitor.gate_interval`, and what remains here
+   is that there is no legitimate "never narrate" posture. Both the schema field comment and
+   `resolve/coordinator.py` are re-pointed accordingly; leaving them would have told an
+   operator choosing `log_interval` that it still arms the aborts.
+6. **Scope boundary held.** R210's "training_step alerting stays gated" clause is superseded
+   IN SCOPE by R242 — R210 governed games-visibility narration and its clause is not
+   arming-cadence law — while `iteration_complete`'s decoupling (R210's actual subject) is
+   untouched and still pinned. The `grad_norm_hard_abort` row and every `source_pin` in
+   `src/mantis/config/armed_aborts.py` are UNTOUCHED: that abort stays disarmed at its
+   unauthored `1e9` per R56/R243, and arming it is a separate prereg row.
+7. **Carrier route, and why it is not a new shape.** Schema `monitor.gate_interval` → a THIRD
+   enumerated drop in `resolve_monitor_config` → `compose_run` → `StepCoordinatorConfig.
+   gate_interval`. That is exactly the route the four `monitor.drain.*` keys already take
+   (monitor-schema-scoped, resolver-dropped by name, composition-root-threaded), so no new
+   kind of edge is introduced. The drop is enumerated one name per line, never a filter —
+   `tests/config/test_disk_guard_keys.py` pins that, for the DR-11 reason it always did.
 
 
 ## 5. Config system

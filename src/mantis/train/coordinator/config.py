@@ -318,7 +318,21 @@ class StepCoordinatorConfig:
     """
 
     eval_interval: int
+    #: The NARRATION cadence: the `training_step` payload, the 4 WARN rules and the axis
+    #: distribution. Since R242 (ADJ-D12) it decides nothing about arming — see
+    #: `gate_interval` below. `train.log_interval`.
     log_interval: int
+    #: The ARMING cadence (R242 / ADJ-D12): the stride at which
+    #: `step.py::_run_gate_interval` runs the LIVE hard-abort gates and publishes the LAW-18
+    #: `monitor_gates` summary. `monitor.gate_interval`, threaded by `compose_run` exactly as
+    #: the four `monitor.drain.*` caps below are — monitor-schema-scoped, resolver-dropped,
+    #: composition-root-threaded. NO default here for their reason: with the schema
+    #: authoritative a default is a second authority a caller silently inherits, and this one
+    #: would silently inherit an ARMING posture. It is a separate field and not a reuse of
+    #: `log_interval` because the defect R242 closes is precisely that the two were one knob:
+    #: at run5's minted `log_interval: 1000` no draw-rate abort could fire and no
+    #: `monitor_gates` event existed before training step 1000.
+    gate_interval: int
     min_buf_size: int
     capacity: int
     buffer_schedule: tuple[dict[str, Any], ...]

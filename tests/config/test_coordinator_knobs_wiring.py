@@ -67,6 +67,9 @@ _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _DEV = load_config(_CONFIGS / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV.train)
+#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
+#: the ARMING cadence, from the same minted config.
+_GATE_INTERVAL = _DEV.monitor.gate_interval
 
 #: The drive is bounded so `compose_run` terminates; the three step-clock knobs move together
 #: because the reachability validator spans them (DESIGN_S §6.6 MF-3).
@@ -236,12 +239,20 @@ def _fake_run_safety(**_kwargs):
 
 # ══ HALF ONE — transport, through the REAL composition root ════════════════════════════
 def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
-                                 **train_over):
+                                 monitor_over=None, **train_over):
     """The `StepCoordinatorConfig` a REAL `compose_run` hands the running coordinator.
 
     WPTS/TD-1: the drive's buffer is a REAL preloaded `HexgBuffer` — smoke_gnn declares
     `graph`, and the declared route runs real sampling+collate; a shapeless fake buffer is
-    refused at dispatch by design."""
+    refused at dispatch by design.
+
+    R242 (ADJ-D12): `monitor_over` is the SECOND override axis. It exists because the fifth
+    config-authored fact this builder threads is a `monitor.*` key, and the `train.*` census
+    below cannot carry it (see
+    `test_the_composition_root_threads_monitor_gate_interval_and_never_log_interval`). It
+    merges INTO the drive's own monitor deltas rather than replacing them — `smoke_run_config`
+    is section-wise, so replacing the block would drop `actor_lag_threshold_steps` and wedge
+    the drive on the actor-lag abort."""
     import mantis.train.anchor as _anchor
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
@@ -261,7 +272,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
                # by design. Both drives (baseline and mutated) therefore share a raised start,
                # so the comparison stays one-key-at-a-time.
                "mixing_initial_w": 1.0, **train_over},
-        monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
+        monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **(monitor_over or {})},
         # WPMAIN/R120+R123: `eval_enabled` and `run_id` are CONFIG facts now — `compose_run`
         # has no parameter for either, so the drive's posture is declared where the config is.
         eval_enabled=False, run_id="knob_wiring",
@@ -318,14 +329,110 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
     )
 
 
+#: The ONE distinguishable ARMING cadence, held apart from `_DISTINGUISHABLE` for the reason
+#: the test below states: it is a `monitor.*` key and the census above is `train.*`-only. It
+#: is no value any config mints and no value another knob carries, so a field reporting a
+#: stale, defaulted or NEIGHBOURING number cannot match — and the drive ASSERTS that against
+#: the loaded config rather than trusting this comment (R192(e), derive-or-delete).
+_GATE_INTERVAL_MUTATED = 23
+
+
+def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interval(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
+) -> None:
+    """`monitor.gate_interval` reaches `StepCoordinatorConfig.gate_interval` through the REAL
+    `compose_run`, and it is THAT key which arrives — never `train.log_interval`.
+
+    A SIBLING TEST, NOT A `_DISTINGUISHABLE` ROW, and the reason is structural rather than
+    stylistic. The census above is `train.*`-ONLY by construction: its drive passes every row
+    through `smoke_run_config(train={...})` and `TrainConfig` is `extra="forbid"`, so a
+    `monitor.*` name in that map is a LOAD FAILURE, not a mutation. And
+    `test_the_resolver_is_the_only_read_of_the_eighteen_keys` asserts that
+    `CoordinatorKnobsSpec`'s field set EQUALS `_DISTINGUISHABLE`'s key set, while
+    `gate_interval` is deliberately NOT a `CoordinatorKnobsSpec` field — it does not travel
+    through `resolve_coordinator_knobs` at all (R242: `compose_run` names
+    `config.monitor.gate_interval` directly, and `resolve_monitor_config` pops it). Folding it
+    into the census would therefore either red that test or push the key into the one resolver
+    it must stay out of. It shares this file because it shares the harness: the transport claim
+    is the same claim, taken on the fifth config-authored fact.
+
+    WHY THE MUTATED VALUE IS SYNTHETIC. Every committed config mints `monitor.gate_interval`
+    EQUAL to its own `train.log_interval` (`tests/train/test_gate_interval_decoupling.py::
+    test_p6b`), so NO config-derived drive can tell the two apart — a composition root reading
+    `resolve_coordinator_knobs(config.train).log_interval` would carry the RIGHT NUMBER on all
+    six. The number below is invented for exactly that reason, and the baseline assertion
+    below records the equality that forces it.
+
+    DR-11's class on a new axis, in the sharpest form it has taken here: the mutation that
+    reds this test is ONE line in `run.py` — `gate_interval=resolve_coordinator_knobs(
+    config.train).log_interval` — and it RE-INTRODUCES THE DEFECT R242 EXISTS TO CLOSE (the
+    armed hard-abort gates riding the narration cadence, blind for run5's first 1000 training
+    steps) while `run.py`'s own docstring goes on claiming "There is deliberately NO fallback
+    to `log_interval` on this path". A docstring is not a pin. The RED-TEAM measured that
+    mutation over the FULL tier before this test existed: 1267 collected, 0 failures. Re-run
+    here with this pin in place, over the five suites that touch the split, it reds exactly
+    this test and nothing else — `assert 1000 == 23`, arm 1 below.
+
+    BOTH DIRECTIONS, because the mutation has two signatures. Arm 1 moves the ARMING key and
+    requires the coordinator to follow it; arm 2 moves the NARRATION key and requires the
+    coordinator's arming cadence NOT to follow. Arm 2 is not covered by the census's own
+    `moved` check — `gate_interval` is not in `_KNOB_KEYS`, so a `log_interval` drive that
+    dragged it along would be invisible there.
+    """
+    baseline = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
+                                            mk_graph_buffer)
+    assert baseline.gate_interval == baseline.log_interval, (
+        "the drive's own config mints the two knobs EQUAL (the shipped posture) — which is "
+        "precisely why the mutated value below has to be synthetic: a config-derived drive "
+        f"cannot distinguish them. Got {baseline.gate_interval} / {baseline.log_interval}"
+    )
+    assert baseline.gate_interval != _GATE_INTERVAL_MUTATED, (
+        "the test value is not distinguishable from the minted one — this oracle would pass "
+        "on a gate_interval that reached nothing"
+    )
+
+    # ── arm 1: the ARMING key moves, the coordinator follows it ──────────────────────────
+    armed = _composed_coordinator_config(
+        tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
+        monitor_over={"gate_interval": _GATE_INTERVAL_MUTATED},
+    )
+    assert armed.gate_interval == _GATE_INTERVAL_MUTATED, (
+        f"monitor.gate_interval did not reach StepCoordinatorConfig.gate_interval (got "
+        f"{armed.gate_interval}). If it is {baseline.log_interval} the composition root is "
+        "threading train.log_interval — the exact defect R242 exists to close, re-entered "
+        "through the one seam nothing else in the repo watches"
+    )
+    assert armed.log_interval == baseline.log_interval, (
+        "and NOTHING else moved with it: the narration cadence is untouched by an arming-"
+        "cadence change, or one key's citation is really the other's"
+    )
+
+    # ── arm 2: the NARRATION key moves, the arming cadence must NOT follow ───────────────
+    narrated = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
+                                            mk_graph_buffer,
+                                            log_interval=_DISTINGUISHABLE["log_interval"])
+    assert narrated.log_interval == _DISTINGUISHABLE["log_interval"]
+    assert narrated.gate_interval == baseline.gate_interval, (
+        f"train.log_interval dragged the ARMING cadence with it (got "
+        f"{narrated.gate_interval}, expected the minted {baseline.gate_interval}). The two "
+        "are one knob again, which is the pre-R242 shape"
+    )
+
+
 # ══ HALF TWO — behaviour, at the consumer each registry entry NAMES ════════════════════
 def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
                  mixing_cfg=None, **knob_over):
     """A real `StepCoordinator` whose config is DERIVED from the production builder."""
+    # R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names
+    # it — the shipped posture (every committed config mints the two equal), so a drive
+    # that moves only `log_interval` keeps the cadence it had before the split.
+    settings = {"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over}
+    settings.setdefault("gate_interval", settings["log_interval"])
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
-                                 drain_caps=_DRAIN_CAPS, knobs=_KNOBS),
-        **{"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over},
+                                 drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
+                                 knobs=_KNOBS),
+        **settings,
     )
     pool, buffer, sink = _Pool(), _Buffer(), _Sink()
     coord = StepCoordinator(
@@ -414,10 +521,23 @@ def test_eval_interval_decides_when_a_promotion_round_is_kicked() -> None:
 
 
 def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> None:
-    """`train.log_interval` -> `step.py::_run_log_interval`: the payload events, the WARN
-    rules, BOTH live hard-abort gates and the LAW-18 `monitor_gates` summary all hang off this
-    one boundary. WPMINT DR-7 measured that `<= 0` kills the whole family at once; the schema's
-    `ge=1` makes that unwritable, and this is the arm that shows the value still DECIDES."""
+    """`train.log_interval` -> `step.py::_run_log_interval`: the payload events and the WARN
+    rules hang off this boundary. WPMINT DR-7 measured that `<= 0` kills the family; the
+    schema's `ge=1` makes that unwritable, and this is the arm that shows the value DECIDES.
+
+    R242 (ADJ-D12) NARROWED WHAT THIS KNOB DECIDES, and this test's second half is where that
+    shows. It used to assert "the LAW-18 gate summary rides the SAME boundary — DR-7's
+    finding is that these two cannot be separated", which was a true reading of the code and
+    a FALSE reading of DR-7: DR-7 measured that `log_interval <= 0` killed both, which is an
+    argument for the `ge=1` bound, never a rule that arming must ride narration. That coupling
+    was the defect — at run5's `log_interval: 1000` the hard aborts had a blind first
+    kilometre — so the gates now ride `monitor.gate_interval` (`_run_gate_interval`).
+
+    The count below is UNCHANGED because `_coordinator` mirrors the two knobs, which is the
+    shipped posture (every committed config mints them equal). It is asserted here against an
+    EXPLICIT `gate_interval`, so the line now says what it means; the decoupling itself is
+    pinned by `tests/train/test_gate_interval_decoupling.py`.
+    """
     every = _coordinator(log_interval=1)
     _drive(every, steps=4, games=1)
     rare = _coordinator(log_interval=3)
@@ -428,9 +548,20 @@ def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> Non
         "at log_interval 3 exactly one of four steps is a boundary; got "
         f"{len(rare.sink.named('training_step'))}"
     )
+    assert rare.config.gate_interval == 3, (
+        "this drive mirrors the two knobs (the shipped posture), which is what makes the "
+        "gate-summary count below readable — it is gate_interval's doing, not log_interval's"
+    )
     assert len(rare.sink.named("monitor_gates")) == 1, (
-        "the LAW-18 gate summary rides the same boundary — DR-7's finding is that these two "
-        "cannot be separated, so they are asserted together"
+        "the LAW-18 gate summary rides monitor.gate_interval (R242), which this drive mints "
+        "equal to log_interval exactly as every committed config does"
+    )
+    apart = _coordinator(log_interval=10**9, gate_interval=1)
+    _drive(apart, steps=4, games=1)
+    assert apart.sink.named("training_step") == [] and len(
+        apart.sink.named("monitor_gates")) == 4, (
+        "and stated APART they separate: no narration, four gate summaries. Before R242 this "
+        "drive produced neither, which is the defect ADJ-D12 measured"
     )
 
 
@@ -732,7 +863,8 @@ def test_the_builder_holds_no_literal_for_any_authored_knob() -> None:
         for key, value in _DISTINGUISHABLE.items()
     })
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=None,
-                                     drain_caps=_DRAIN_CAPS, knobs=distinguishable)
+                                     drain_caps=_DRAIN_CAPS,
+                                     gate_interval=_GATE_INTERVAL, knobs=distinguishable)
     for field in dataclasses.fields(CoordinatorKnobsSpec):
         assert getattr(built, field.name) == getattr(distinguishable, field.name), (
             f"`_step_coordinator_config` overrode {field.name} with something other than the "
