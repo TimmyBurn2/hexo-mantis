@@ -492,7 +492,13 @@ class Trainer:
         }
         if chain_loss is not None:
             result["chain_loss"] = chain_loss.item()
-        emit_via(self._sink, {"event": "training_step", "step": self.step,
+        # `trainer_step`, NOT `training_step`: the coordinator's `log_interval`-gated
+        # narration owns the `training_step` literal (train/events.py, the manifest's one
+        # documented shape). This is the trainer's OWN per-step diagnostic row — delivered
+        # in production since F-R-P2B-2's sink threading — and one literal = one shape, so
+        # it emits under its own name (F-P4 review blocker: a second, non-conforming,
+        # ungated producer of the canonical literal at ~log_interval:1 volume).
+        emit_via(self._sink, {"event": "trainer_step", "step": self.step,
                               "representation": "grid", **result})
 
         self._maybe_periodic_checkpoint(result)
@@ -525,7 +531,7 @@ class Trainer:
 
         ONE OPTIMIZER STEP PER TRAINING STEP. `zero_grad` once before the loop, `backward`
         once per part, `clip_and_step` ONCE after it, one `self.step` increment, one scheduler
-        step, one EMA update, one `training_step` event and one `_maybe_periodic_checkpoint`
+        step, one EMA update, one `trainer_step` event and one `_maybe_periodic_checkpoint`
         call (R173's seam is untouched and still fires exactly once per training step).
         Clipping is nonlinear in the whole gradient and `grad_norm` is an armed gate's input,
         so clipping once is a correctness requirement, not a preference.
@@ -634,7 +640,8 @@ class Trainer:
         # belong anyway.
         result = {"loss": loss_total, "policy_loss": policy_total,
                   "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
-        emit_via(self._sink, {"event": "training_step", "step": self.step,
+        # `trainer_step`, not `training_step` — same reason as the dense tail's emit above.
+        emit_via(self._sink, {"event": "trainer_step", "step": self.step,
                               "representation": "graph", **result,
                               "microbatches": len(parts), "edges": int(total_edges),
                               "nodes": int(total_nodes),

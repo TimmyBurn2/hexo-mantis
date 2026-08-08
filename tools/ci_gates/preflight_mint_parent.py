@@ -264,9 +264,11 @@ def _named(events: list[dict], name: str) -> list[dict]:
 
 
 def _step_ground_truth(events: list[dict], samples: list[dict]) -> dict:
-    """§7.3. There is no per-step event in a 101-step burst (`log_interval=1000`,
-    `run.py:90`), so N comes from an independent witness — and the report NAMES which one
-    spoke, so a reader never has to guess."""
+    """§7.3. The canonical `training_step` narration is `log_interval`-gated (1000), so a
+    101-step burst carries none — and this reader deliberately does NOT count the trainer's
+    per-step `trainer_step` diagnostic rows (delivered since F-R-P2B-2's sink threading):
+    N comes from an independent terminal witness, and the report NAMES which one spoke, so
+    a reader never has to guess."""
     saves = _named(events, "shutdown_save")
     if saves:
         return {"source": "shutdown_save", "value": int(saves[-1]["step"])}

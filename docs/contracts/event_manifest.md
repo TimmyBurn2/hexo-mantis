@@ -383,3 +383,24 @@ is silently disabled.
   own contract (line atomicity, `ts` stamping, segment rotation-on-resume).
 - `tests/train/test_coordinator_gates.py`, `tests/monitor/test_persist_fatal.py`,
   `tests/train/test_lifecycle_contract.py` — the producer tests the rows cite.
+
+## Trainer-side narration literals (delivered since F-R-P2B-2; catalog note, not rows)
+
+The production Trainer emits through the composed sink since the F-P4 sink threading
+(`run.py` builds it with a `_DeferredSink` bound to the channel beside the pool's). Three
+literals ride the stream from the trainer itself; none is a gate/monitor INPUT, so none
+gets a `gates:` row — their producer tests live in pytest (LAW-07's half that applies):
+
+- `periodic_checkpoint_save` — one row per crossed `train.checkpoint_interval` boundary,
+  emitted AFTER the write with the writer's returned path (R173 seam;
+  `tests/train/test_periodic_checkpoint.py` + the composed-stream drive in
+  `tests/test_run_launcher.py`).
+- `trainer_step` — the trainer's OWN per-step diagnostic row (dense and graph tails,
+  `trainer/core.py`). Deliberately a DISTINCT literal from `training_step`: the
+  coordinator's `log_interval`-gated narration above owns that name and its one documented
+  shape. `trainer_step` is per-step and ungated — at `max_train_steps: 1e6` that is ~1e6
+  rows into one segment; the volume/retention posture is an open operator row
+  (FINDINGS_F-P4), recorded here so a reader of this catalog knows the cadence is a
+  decision still owed, not a contract.
+- `aux_chain_loss` — the chain-loss lever's per-step fire-rate leg (LAW-18), emitted only
+  when the lever is armed (`train.aux_chain_weight > 0`).

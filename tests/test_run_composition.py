@@ -449,6 +449,102 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
     )
 
 
+# ── F-R-P2B-2 — the TRAINER's sink is composed live, not authored-and-dropped ────────────
+def test_trainer_deferred_sink_is_bound_to_run_safety_sink(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+) -> None:
+    """`compose_run` binds a trainer-carried `_DeferredSink` to `run_safety.sink` — the
+    SEPARATE bind beside the pool's (R217 pattern). Asserted via identity through the real
+    adapter: after compose, the trainer's adapter delegates to the exact sink object
+    `build_run_safety` produced. FALSIFYING MUTATION: remove the trainer bind in
+    `compose_run` — the adapter still holds its pre-bind `NullEventSink` and this REDs."""
+    mantis_run = mantis.run
+    sink = SimpleNamespace(emit=lambda e: None)
+
+    def _fake_build_run_safety(**kwargs):
+        return SimpleNamespace(
+            sink=sink, registry=SimpleNamespace(beat=lambda s: None),
+            watchdog=FakeWatchdog(_OrderSpy()), heartbeat=lambda s: None,
+        )
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
+    trainer = _DrivableTrainer()
+    trainer._sink = mantis_run._DeferredSink()  # the production adapter, on the drivable fake
+
+    mantis_run.compose_run(
+        config=_bounded(smoke_run_config), trainer=trainer,
+        pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
+        log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
+    )
+    assert trainer._sink._inner is sink, (
+        "the trainer's _DeferredSink must be bound to run_safety.sink by compose_run — an "
+        "unbound adapter is the F-R-P2B-2 drop (periodic_checkpoint_save authored, "
+        "unit-tested, and absent from every production stream)"
+    )
+
+
+def test_build_run_collaborators_does_not_build_the_trainer_with_sink_none() -> None:
+    """SOURCE arm (the O-N2 precedent, `tests/selfplay/test_game_complete_delivery.py`,
+    applied to the TRAINER's construction site): the `init_trainer(...)` call in
+    `mantis/run.py` passes a real `sink=` — not `None`, not omitted. This is the arm that
+    bites the EXACT F-R-P2B-2 defect in the default tier: `run.py` composing `init_trainer`
+    with `sink=None` while the pool got the deferred adapter, so
+    `trainer/core.py::_maybe_periodic_checkpoint`'s emission was dropped in production.
+    FALSIFYING MUTATION: revert `run.py` to `sink=None` — this REDs."""
+    import ast
+
+    tree = ast.parse((_SRC / "run.py").read_text(encoding="utf-8"))
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name) and node.func.id == "init_trainer"
+    ]
+    assert len(calls) == 1, (
+        f"run.py must have exactly ONE init_trainer call site (the builder); found {len(calls)}"
+    )
+    sink_kw = [kw for kw in calls[0].keywords if kw.arg == "sink"]
+    assert sink_kw, "the init_trainer call must pass sink= explicitly (F-R-P2B-2)"
+    val = sink_kw[0].value
+    # Stronger than a `is not None` refusal (F-P4 review SHOULD-5): `sink=NullEventSink()`
+    # or an adapter nobody binds would satisfy a bare not-None pin while still dropping
+    # every event. The site must construct the SAME late-binding adapter the pool's
+    # construction does — the one object `compose_run`'s bind arm targets.
+    assert isinstance(val, ast.Call) and isinstance(val.func, ast.Name) \
+        and val.func.id == "_DeferredSink", (
+        "the production trainer's sink must be a _DeferredSink(...) construction — a dead "
+        "sink (None, NullEventSink, an unbound stand-in) re-drops every trainer-side event "
+        "(periodic_checkpoint_save, trainer_step, aux_chain_loss) in every production run "
+        f"(F-R-P2B-2); got {ast.dump(val)}"
+    )
+
+
+def test_deferred_sink_pre_bind_drops_by_design_and_post_bind_delivers() -> None:
+    """The named limitation F-P4 leaves in place (review SHOULD-4, recorded as deliberate):
+    `_DeferredSink` buffers NOTHING pre-bind — an emission before `bind()` goes to the
+    `NullEventSink` and is GONE. Consequence on the resume path: `init_trainer` runs inside
+    `build_run_collaborators`, before `run_safety.sink` exists, so resume-time warnings
+    (`resume_lr_override_ignored`, `resume_base_default_deferred_to_baked`,
+    `scheduler_state_missing_fresh_start`) do NOT reach the production stream. A pre-bind
+    replay buffer was considered and NOT added here: replayed rows would land ahead of the
+    boot-identity witness and silently break the identity-FIRST stream contract
+    (`test_compose_run_publishes_its_boot_identity_first_through_the_one_authority`) on
+    every resumed run — that trade is design authority, queued for the operator, and this
+    pin is what makes the current drop a DECISION a future reader can find rather than an
+    accident (F-P4/N4)."""
+    mantis_run = mantis.run
+    delivered: list[dict] = []
+    adapter = mantis_run._DeferredSink()
+
+    adapter.emit({"event": "pre_bind_row"})  # must not raise; must not deliver
+    adapter.bind(SimpleNamespace(emit=delivered.append))
+    assert delivered == [], "pre-bind emissions are dropped, not buffered (by design)"
+
+    adapter.emit({"event": "post_bind_row"})
+    assert [e["event"] for e in delivered] == ["post_bind_row"], (
+        "post-bind, the adapter delivers to the bound sink"
+    )
+
+
 # ── STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0) ─────────
 def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer

@@ -474,8 +474,16 @@ def build_run_collaborators(
 
     device = torch.device(config.train.device)
     with _seam("init_trainer"):
+        # F-R-P2B-2: the trainer gets the SAME late-binding adapter shape the WorkerPool
+        # below gets — `sink=None` here meant every trainer-side emission
+        # (`periodic_checkpoint_save`, `trainer_step`, `aux_chain_loss`) was authored,
+        # unit-tested, and DROPPED in every production run (NullEventSink semantics). The
+        # adapter is bound to `run_safety.sink` in `compose_run`, beside the pool's bind;
+        # pre-bind emissions (resume-time events fire in THIS builder) still drop — the
+        # adapter's documented pre-bind semantics, unchanged by this threading.
         trainer = init_trainer(config=config.model_dump(), checkpoint_dir=str(checkpoint_dir),
-                               device=device, sink=None, checkpoint_path=checkpoint_path)
+                               device=device, sink=_DeferredSink(),
+                               checkpoint_path=checkpoint_path)
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
@@ -666,6 +674,19 @@ def compose_run(
     deferred = getattr(pool, "_sink", None)
     if isinstance(deferred, _DeferredSink):
         deferred.bind(run_safety.sink)
+
+    # F-R-P2B-2: bind the TRAINER's `_DeferredSink` the same way — a SEPARATE bind for a
+    # SEPARATE adapter (the R217 pattern: neither bind covers for the other, so neither can
+    # silently unbind the other's surface). The trainer was built at `build_run_collaborators`
+    # BEFORE `run_safety.sink` existed; the first trainer-side emission
+    # (`trainer_step`/`periodic_checkpoint_save`, trainer/core.py) fires inside
+    # `run_training_loop`, AFTER this bind, so in-run events are delivered from the first
+    # step. The `isinstance` guard keeps test harnesses that inject a bare fake trainer
+    # (no `_sink`, or a spy sink) working — production always passes a real `Trainer`
+    # carrying the `_DeferredSink` injected at `build_run_collaborators`.
+    deferred_tr = getattr(trainer, "_sink", None)
+    if isinstance(deferred_tr, _DeferredSink):
+        deferred_tr.bind(run_safety.sink)
 
     # WP12R Step 3 R208 (CARD-PHANTOM-BEAT): bind the pool's `_DeferredHeartbeat` to the
     # real heartbeat fn now that it exists. The adapter was injected at `run.py:381`

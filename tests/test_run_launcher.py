@@ -456,3 +456,80 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
         f"the duplicate-final-artefact window is open; got "
         f"{[row for row in rows if row['event'] == 'shutdown_save']}"
     )
+
+
+# ══ F-R-P2B-2 — the periodic cadence is READABLE from the ONE channel in a COMPOSED run ═══
+@pytest.mark.integration
+def test_a_periodic_cadence_burst_streams_periodic_checkpoint_save(
+    tmp_path, smoke_run_config
+) -> None:
+    """The producer test F-R-P2B-2 names owed: `periodic_checkpoint_save` is authored at the
+    ONE periodic seam (`Trainer._maybe_periodic_checkpoint`, unit-pinned by the OP suite in
+    `tests/train/test_periodic_checkpoint.py` through a SPY sink) but the production
+    composition built the trainer with `sink=None` (`run.py`), so the live burn's stream
+    carried ZERO checkpoint events while the .ckpt files appeared on disk — measured on the
+    box (grep count 0 over seg0001 against a stamped step-25 artefact). LAW-18: the cadence
+    leg must log its own fires IN-RUN, through the composed stream, not only via `ls`.
+
+    O-B1's sibling, not a re-point of it: O-B1 pins the interval-0 posture every config
+    mints (its EXACTLY-ONE clean-stop artefact depends on the periodic leg being silent), so
+    THIS drive is the one place a composed boot runs a NONZERO cadence. Same real boot, one
+    delta: `checkpoint_interval=5` against the 16-step burst — boundaries 5/10/15, chosen so
+    the terminus 16 is NOT a boundary (the leg-1/leg-3 coincidence is OP-8's subject, kept
+    out of this row's way).
+
+    FALSIFYING MUTATION (the F-R-P2B-2 revert): build the trainer with `sink=None` again —
+    the artefacts still land (the WRITE path never was the defect) while the stream loses
+    every `periodic_checkpoint_save`, and the event assertions below RED. The
+    files-vs-events split is asserted in BOTH directions so a fabricated event (emit
+    without write) REDs the same run a dropped event does."""
+    config = smoke_run_config(
+        _SMOKE_CONFIG,
+        train={"max_train_steps": _BURST_STEPS, "checkpoint_interval": 5},
+    )
+    handles = launch_run(config=config, out_dir=tmp_path)
+
+    assert handles.shutdown.running is False and handles.shutdown.abort_rule is None, (
+        "the cadence drive must still be a clean bounded run; got "
+        f"running={handles.shutdown.running!r} abort_rule={handles.shutdown.abort_rule!r}"
+    )
+    assert int(handles.coordinator.trainer.step) == _BURST_STEPS
+
+    rows = [json.loads(line)
+            for segment in sorted((tmp_path / "logs").glob("events_*.jsonl"))
+            for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()]
+    saves = [row for row in rows if row["event"] == "periodic_checkpoint_save"]
+
+    assert {row["step"] for row in saves} == {5, 10, 15}, (
+        "every periodic boundary the run crossed must be readable from the stream — an "
+        "absent event with a present artefact is exactly the composed sink=None drop "
+        f"(F-R-P2B-2); got steps {sorted(row['step'] for row in saves)}"
+    )
+    assert all(row["interval"] == 5 for row in saves)
+    assert len(saves) == 3, f"one event per boundary, no duplicates; got {saves}"
+
+    ckpt_names = {p.name for p in (tmp_path / "checkpoints").glob("*.ckpt")}
+    for row in saves:
+        assert row["path"] is not None and Path(row["path"]).name in ckpt_names, (
+            "the event must carry the WRITER's returned path (LAW-18 post-write emit, "
+            f"OP-9's ordering) and that artefact must exist; got {row}"
+        )
+    # 3 periodic + the R137 clean-completion artefact at the terminus = exactly 4.
+    assert len(ckpt_names) == 4, (
+        "boundaries 5/10/15 plus the clean-stop save at 16 — fewer means a dropped WRITE "
+        "(never this defect's shape), more means a second write authority; got "
+        f"{sorted(ckpt_names)}"
+    )
+
+    # The trainer's OWN per-step diagnostic literal is delivered too — under its own name
+    # (`trainer_step`, NEVER the coordinator's `training_step`; F-P4 review blocker). This
+    # is the runtime producer arm for that literal: one row per learner step, and the same
+    # sink=None revert that kills the periodic assertions above kills this one.
+    trainer_rows = [row for row in rows if row["event"] == "trainer_step"]
+    assert {row["step"] for row in trainer_rows} == set(range(1, _BURST_STEPS + 1)), (
+        "one trainer_step diagnostic row per learner step must ride the composed stream; "
+        f"got steps {sorted({row['step'] for row in trainer_rows})}"
+    )
+    assert all(row["representation"] == "graph" for row in trainer_rows), (
+        "this drive's declared route is graph — the diagnostic row carries its tail"
+    )

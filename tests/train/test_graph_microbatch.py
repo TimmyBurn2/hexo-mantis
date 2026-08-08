@@ -576,7 +576,7 @@ def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> 
     assert r.opt.steps == 1, f"M={m}: {r.opt.steps} optimizer.step calls, want 1 (MB-7)"
     assert r.sched.steps == 1, f"M={m}: {r.sched.steps} scheduler.step calls, want 1"
     assert r.trainer.step - r.before == 1, f"M={m}: trainer.step moved by {r.trainer.step - r.before} (MB-8)"
-    assert len(r.sink.named("training_step")) == 1, f"M={m}: not exactly one training_step event"
+    assert len(r.sink.named("trainer_step")) == 1, f"M={m}: not exactly one trainer_step event"
     assert len(r.ckpts) == 1, (
         f"M={m}: {len(r.ckpts)} .ckpt files at checkpoint_interval=1 — the R173/CS2 periodic "
         "seam must fire ONCE per training step, not once per micro-batch")
@@ -587,7 +587,7 @@ def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> 
             "disarms grad_norm_hard_abort through coordinator/step.py's .get(\"grad_norm\", 0.0)")
     assert set(r.info) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
     assert math.isfinite(r.info["grad_norm"]) or math.isnan(r.info["grad_norm"])
-    assert r.sink.named("training_step")[0]["microbatches"] == m
+    assert r.sink.named("trainer_step")[0]["microbatches"] == m
 
 
 @pytest.mark.parametrize("m", [1, 2, 4])
@@ -653,7 +653,7 @@ def test_of2_5_grad_norm_matches_the_unsplit_steps_norm(tmp_path) -> None:
 
 # ═══ OF2-6 — the LAW-18 counter ══════════════════════════════════════════════════════════
 @pytest.mark.parametrize("m", [1, 2, 4])
-def test_of2_6_graph_training_step_event_carries_the_counter_and_its_caps(tmp_path,
+def test_of2_6_graph_trainer_step_event_carries_the_counter_and_its_caps(tmp_path,
                                                                          m: int) -> None:
     """OF2-6 — LAW-18: the lever logs its own fire-rate in-run, and the CAPS travel beside it.
 
@@ -662,10 +662,10 @@ def test_of2_6_graph_training_step_event_carries_the_counter_and_its_caps(tmp_pa
     computed HERE from the wire's own per-graph counts (MB-11's kill surface: a hard-coded
     `microbatches: 1` in the payload), never read back out of the event."""
     r = _drive_with_spies(tmp_path, m)
-    ev = r.sink.named("training_step")[0]
+    ev = r.sink.named("trainer_step")[0]
     assert ev["representation"] == "graph"
     for key in ("microbatches", "edges", "nodes", "caps_max_edges", "caps_max_nodes"):
-        assert key in ev, f"the graph training_step event omits {key!r} (LAW-18)"
+        assert key in ev, f"the graph trainer_step event omits {key!r} (LAW-18)"
         assert isinstance(ev[key], int) and not isinstance(ev[key], bool)
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(8), 4)
     ec, nc = H.per_graph_counts(replay.wire)
@@ -689,10 +689,10 @@ def test_of2_6_the_dense_event_carries_none_of_the_five_keys(tmp_path) -> None:
     run_declared_train_step(trainer, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
                             recency_weight=0.0, recent_buffer=None,
                             caps_provider=_never_called_provider)
-    ev = sink.named("training_step")[0]
+    ev = sink.named("trainer_step")[0]
     assert ev["representation"] == "grid"
     for key in ("microbatches", "edges", "nodes", "caps_max_edges", "caps_max_nodes"):
-        assert key not in ev, f"the DENSE training_step event carries {key!r} (MB-12)"
+        assert key not in ev, f"the DENSE trainer_step event carries {key!r} (MB-12)"
 
 
 def _never_called_provider() -> MicrobatchCapsSpec:
@@ -752,7 +752,7 @@ def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_pa
     # nothing partial happened
     assert trainer.step == before
     assert spy.steps == 0 and spy.zero_grads == 0
-    assert sink.named("training_step") == []
+    assert sink.named("trainer_step") == []
     assert sorted((tmp_path / "ckpt").glob("*.ckpt")) == []
 
 
@@ -815,7 +815,7 @@ def test_of2_13_a_nonzero_forbidden_weight_raises_before_any_state_moves(tmp_pat
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert trainer.step == before
     assert spy.zero_grads == 0 and spy.steps == 0
-    assert sink.named("training_step") == []
+    assert sink.named("trainer_step") == []
 
 
 # ═══ OF2-15 — the ROUTE-SCOPED resolution ════════════════════════════════════════════════
@@ -954,5 +954,5 @@ def test_of2_16_a_zero_part_step_raises_before_zero_grad(tmp_path) -> None:
             total_edges=0, total_nodes=0, caps_max_edges=1, caps_max_nodes=1)
     assert trainer.step == before
     assert spy.zero_grads == 0 and spy.steps == 0
-    assert sink.named("training_step") == []
+    assert sink.named("trainer_step") == []
     assert sorted((tmp_path / "ckpt").glob("*.ckpt")) == []

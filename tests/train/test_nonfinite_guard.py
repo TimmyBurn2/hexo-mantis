@@ -133,8 +133,8 @@ def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     _graph_step(trainer, H.uniform_graph_buffer())
-    steps = [e for e in sink.events if e.get("event") == "training_step"]
-    assert steps, "no training_step event emitted"
+    steps = [e for e in sink.events if e.get("event") == "trainer_step"]
+    assert steps, "no trainer_step event emitted"
     assert "nonfinite_loss_microbatches" in steps[-1]
     assert "nonfinite_grad_steps" in steps[-1]
 
