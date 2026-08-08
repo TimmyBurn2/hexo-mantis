@@ -248,25 +248,24 @@ class Cadence(StrEnum):
     #: an EARLIEST-POSSIBLE-fire bound wants — the optimistic case — and it is why this is a
     #: reachability floor and not a prediction of when a run would actually abort.
     #:
-    #: DISCLOSED RESIDUAL, and it is a FALSE AFFIRMATIVE rather than a blind spot — the same
-    #: posture `WALL_CLOCK_POLL` states for the seconds axis, stated here for the sharper
-    #: case. `step.py::_sample` trims the gate history to `_GATE_HISTORY_DEPTH` entries while
-    #: `rules.py::check_draw_rate_collapse` refuses on `len(history) < consec`, so a `consec`
-    #: above that depth makes the abort PERMANENTLY unfireable — and this member will still
-    #: compute a finite step for it and PUBLISH that number as though the run could deliver
-    #: it. `train/schema/train.py`'s `consec` field names this exact case the OPEN "fifth
-    #: face" of "armed in the config, absent in effect" and declines to invent an upper bound
-    #: for it; every committed config mints `consec: 3`, far below the depth, so nothing on
-    #: the tree is misreported today.
-    #:
-    #: WHY THE DEPTH IS NOT IMPORTED AND NOT COPIED, which is the whole reason this stays a
-    #: disclosure: `_GATE_HISTORY_DEPTH` is a runtime constant of `mantis.train`, and
-    #: `mantis.config` importing it inverts the import DAG (gate 9) — while re-typing `32`
-    #: here creates precisely the second authority the schema field refused to create, whose
-    #: first divergence would make this member confidently wrong in the OTHER direction. So
-    #: the residual is written down rather than closed with a number this layer cannot own
-    #: (R84's class). Closing it belongs with the schema's fifth face, in one change, not
-    #: half-closed here.
+    #: FORMER DISCLOSED RESIDUAL, CLOSED by ADJ-D36 — and closed by DERIVATION, not by an
+    #: import or a copy. This member used to publish a FALSE AFFIRMATIVE for any `consec`
+    #: above the coordinator's ring depth: `step.py::_sample` trimmed the gate history to a
+    #: literal `_GATE_HISTORY_DEPTH = 32` while `rules.py::check_draw_rate_collapse` refuses
+    #: on `len(history) < consec`, so `consec >= 33` was PERMANENTLY unfireable while this
+    #: arithmetic computed a finite step and published it as though the run could deliver
+    #: it. The literal is DELETED: `_run_hard_abort_gates`'s draw-rate arm now trims its
+    #: ring to `spec.consec` — the SAME minted value this member reads as its `consec` operand
+    #: (`train.draw_rate_abort.consec`) — so a finite answer here is deliverable by
+    #: construction for every schema-legal `consec`. ONE authority on both sides of the
+    #: audit, and NO new DAG edge in either direction: `mantis.config` still imports
+    #: nothing from `mantis.train`, because there is no longer a constant to import, and
+    #: nothing was re-typed here for a first divergence to falsify. The tie between this
+    #: member's published number and the machine's actual fire is DRIVEN, not asserted, by
+    #: `tests/train/test_drawrate_gate_capacity.py::
+    #: test_the_published_earliest_fire_step_is_deliverable_above_the_old_depth`, which
+    #: fires a REAL coordinator at the exact observation count this arithmetic publishes
+    #: for a `consec` the old code could never satisfy.
     GATE_INTERVAL_CONSEC = "gate_interval_consec"
 
     #: `train/coordinator/step.py` D3: the grad-norm gate is evaluated PER TRAINING STEP

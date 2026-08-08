@@ -88,13 +88,20 @@ class DrawRateAbortConfig(StrictModel):
       phase; R92's prereg row NAMES `consec=3` among the values that stand, so authoring it
       preserves that value exactly and moves only WHO says it. `ge=1` because `consec` counts
       consecutive OBSERVATIONS and a rule that needs zero of them is not a rule; there is no
-      "disabled" value, the same posture `min_step` takes. NO upper bound is invented: the
-      only honest one would be the abort history's own depth (`_GATE_HISTORY_DEPTH = 32` in
-      `train/coordinator/step.py`), which is a runtime constant of a module `mantis.config`
-      must not import, and a wrong guess would either reject a legal prereg or admit an
-      unreachable one. DISCLOSED: a `consec` above that depth makes the abort unfireable
-      while it audits ARMED — the fifth face of "armed in the config, absent in effect", left
-      OPEN and written down rather than closed with an invented number (R84's class).
+      "disabled" value, the same posture `min_step` takes. NO upper bound is invented, and
+      since ADJ-D36 none is NEEDED: the gate's history ring is sized BY this very value at
+      the point of use (`train/coordinator/step.py::_run_hard_abort_gates`, whose draw-rate
+      arm trims its ring to `spec.consec` — derive-don't-clip), so every schema-legal
+      `consec` is reachable and
+      the former "fifth face" of "armed in the config, absent in effect" is CLOSED by
+      derivation rather than by a bound. The constant that used to clip it
+      (`_GATE_HISTORY_DEPTH = 32`) is DELETED, not hoisted: a hoisted literal would still be
+      a second authority whose first divergence from the minted value re-opens the face, and
+      an `le=` here would constrain a prereg knob with a number this layer cannot own (R84's
+      class). Driven, not asserted, by `tests/train/test_drawrate_gate_capacity.py::
+      test_a_consec_above_the_old_depth_fires_at_the_consec_th_observation` (REDs on the
+      clipped code) and `::test_the_ring_capacity_is_the_minted_consec_not_a_constant`
+      (REDs on any resurrected literal).
       DISCLOSED (WPMINT DS-VERIFY; RE-POINTED and CORRECTED after R242): `consec` counts
       consecutive OBSERVATIONS, and an observation is ATTEMPTED once per
       `monitor.gate_interval` train steps — NOT `train.log_interval`, which R242 reduced to

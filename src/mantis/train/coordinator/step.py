@@ -96,8 +96,13 @@ _POSITIONS_COUNTER = "positions_generated"
 
 #: Depth of the sealbot-WR ring (old `step_coordinator.py` parity: `pop(0)` past 5).
 WR_HISTORY_DEPTH = 5
-#: Depth of the pool-signal rings the two live-producer gates slide over.
-_GATE_HISTORY_DEPTH = 32
+# The draw-rate ring deliberately has NO depth constant (ADJ-D36): its capacity is the
+# minted `train.draw_rate_abort.consec`, derived at the point of use in
+# `_run_hard_abort_gates`'s draw-rate arm. A constant here was the "fifth face" clip — any
+# schema-legal `consec` above it was armed-in-the-config, permanently-unfireable-in-effect,
+# while gate 12's cadence audit published a fire step the run could not deliver.
+# (Plain `#`, not `#:` — this documents an ABSENCE, and `#:` would attach to whatever
+# assignment follows.)
 
 
 def _snapshot_counter(rstats: Any, name: str) -> int | None:
@@ -881,6 +886,16 @@ class StepCoordinator:
             lambda: pooled_draw_rate(counts_fn(), N_pool_min=spec.N_pool_min),
         ):
             return False
+        # ADJ-D36: the ring's capacity IS the minted `consec` — derived here from the ONE
+        # authority (`train.draw_rate_abort.consec`, the same value `check_draw_rate_collapse`
+        # gates `len(history)` on), so no schema-legal `consec` is unfireable. A literal depth
+        # was the "fifth face" of armed-in-the-config-absent-in-effect: `consec` above it
+        # could never satisfy the length gate while the R251 cadence audit published a fire
+        # step the run structurally could not deliver. The trim sits AFTER a True `_sample`
+        # return (True == exactly one append; the skip arms append nothing and must never
+        # touch the ring — R92/BUG-1), which is the one place `spec` is narrowed and in
+        # scope, so the disarmed arm needs no capacity at all: nothing ever appends there.
+        del self._draw_rate_history[:-spec.consec]
         message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
                                            threshold=spec.threshold,
                                            consec=spec.consec,
@@ -912,6 +927,17 @@ class StepCoordinator:
         skips and neither appends: an unobserved interval must never enter an abort history
         as a number, in either direction. R72: both arms have flip-sets, driven in
         `test_drawrate_gate_branch_flipset.py` (B1/B2 for the first, B5 for the second).
+
+        THE CALLER OWNS THE RING'S CAPACITY (ADJ-D36). A True return means EXACTLY ONE
+        append, and `_run_hard_abort_gates`'s draw-rate arm trims its ring to its own
+        spec's `consec` right after it — this function must never clip the ring itself:
+        the constant it used to hold here silently capped every history that slid through
+        it, which is how a schema-legal `consec` above the cap became armed-in-the-config,
+        absent-in-effect. Prose over a required `capacity` kwarg is DELIBERATE (D36
+        review): there is exactly one appending caller, the trim is reachability-pinned by
+        the flip-set oracle and length-pinned by the capacity oracle, and a signature
+        change would edit the frozen flip-set corpus's direct `_sample` drives to serve a
+        caller that does not exist.
         """
         self._gate_stats[gate]["checks"] += 1
         if producer is None:
@@ -922,7 +948,6 @@ class StepCoordinator:
             self._gate_stats[gate]["skips"] += 1
             return False
         history.append(float(value))
-        del history[:-_GATE_HISTORY_DEPTH]
         return True
 
     def _fire_hard_abort(self, rule: str, message: str | None, step: int | None = None) -> bool:

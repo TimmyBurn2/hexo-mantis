@@ -181,9 +181,14 @@ is also written at the field it belongs to.
   large `min_steps` disarms the gate without touching the threshold. No honest ceiling is
   derivable from either field alone, so none is invented; the gate joins the armed-abort
   manifest as a DEFERRED row instead, whose ceiling is read off `monitor.alert_grad_norm_max`.
-- `train.draw_rate_abort.consec` has an open upper half for the same reason — the only honest
-  ceiling is the abort history's own depth, a runtime constant in a module `mantis.config` must
-  not import. Above that depth the abort is unfireable while it still audits ARMED.
+- `train.draw_rate_abort.consec`'s upper half is CLOSED (ADJ-D36), and closed by derivation
+  rather than by a ceiling: the gate's history ring is sized BY the minted `consec` at the
+  point of use (`_run_hard_abort_gates`'s draw-rate arm trims to `spec.consec`; the literal
+  depth constant is deleted), so every schema-legal value is fireable and "unfireable while
+  it audits ARMED" is no longer a reachable state on this key. Kept in this list as a
+  closure record: this bullet used to call its upper half open "for the same reason" as the
+  grad-norm pair above — that reason still stands for them and no longer stands here. Driven
+  by tests/train/test_drawrate_gate_capacity.py.
 - `train.draw_rate_abort.threshold` still admits a hair-trigger below `1 / N_pool_min`;
   `_one_drawn_game_cannot_fire_the_abort` closes the part of it that matters.
 - `train.bot_batch_share` is half-wired by design: its sibling `bot_corpus_path` was dead and
