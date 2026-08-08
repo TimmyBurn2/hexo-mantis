@@ -76,10 +76,15 @@ def build_resume_config_overrides(
         for key, val in launch_config.items()
         if key not in RESUME_CHECKPOINT_OWNED_KEYS and (val is not None or key in declared)
     }
-    # torch_compile[_mode] always travel with a concrete value on resume (pre-E0 default path).
-    overrides["torch_compile"] = launch_config.get("torch_compile", False)
-    if launch_config.get("torch_compile_mode") is not None:
-        overrides["torch_compile_mode"] = launch_config["torch_compile_mode"]
+    # F-R-P4-1 (J13): the unconditional `torch_compile[_mode]` injection that sat here
+    # ("pre-E0 default path") is DELETED, not conditioned. The knob is a LEGACY training
+    # knob with ZERO consumers on the new side (`TrainHParams.from_config` reads nested
+    # `train.*` only) and no RunConfig key, so injecting it poisoned the carried config on
+    # EVERY production resume: the ONE writer's write-time validation (R1 `extra="forbid"`)
+    # correctly rejected the first post-resume periodic save. A launch config that itself
+    # carries the flat key still travels through the generic loop above; the carried-config
+    # boundary strip in `resume_trainer` (`RESUME_DIRECTIVE_KEYS`, checkpoints.py) keeps
+    # every resume-mechanism key out of the persisted config on both loader surfaces.
     # Scheduler-horizon gate: only --override-scheduler-horizon re-horizons the LR anneal.
     if override_scheduler_horizon:
         if launch_config.get("total_steps") is not None:

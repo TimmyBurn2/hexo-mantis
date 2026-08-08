@@ -830,6 +830,25 @@ def strip_and_restamp(
 
 
 # ── Resume-precedence partners (legacy flat-config shape; §c.2) ────────────────────────
+# Resume-DIRECTIVE keys: consumed BY the resume machinery, never carried (F-R-P4-1).
+# These five travel in `config_overrides` as flat mechanism directives (the legacy launch
+# shape, §c.2): `allow_fresh_scheduler` is read from `config_overrides` at the
+# scheduler-restore branch in `resume_trainer`; `total_steps`/`scheduler_t_max` are the
+# `--override-scheduler-horizon` pair; `torch_compile[_mode]` is the dead pre-E0 pair
+# (zero consumers — `TrainHParams.from_config` reads nested `train.*` only). None is a
+# RunConfig key (pinned disjoint by tests/train/test_resume_carried_config_purity.py), and
+# the carried config is re-validated at the ONE writer on every periodic save (R1
+# `extra="forbid"`, LAW-12/LAW-14) — so `resume_trainer` STRIPS exactly these, its own
+# keys, from the resolved config before the Trainer carries it. Deliberately NOT a general
+# unknown-key filter: an unknown key from anywhere else still reaches the writer and
+# raises there — write-time validation stays the error surface (it did its job on the box;
+# this makes the config it validates honest).
+RESUME_DIRECTIVE_KEYS: frozenset[str] = frozenset({
+    "allow_fresh_scheduler", "scheduler_t_max", "torch_compile", "torch_compile_mode",
+    "total_steps",
+})
+
+
 def apply_config_overrides_f1(
     baked: Mapping[str, Any] | None,
     overrides: Mapping[str, Any],
@@ -851,11 +870,10 @@ def apply_config_overrides_f1(
         return resolved, frozenset()
 
     resolved = dict(baked)
-    _launch_mechanism = (
-        "total_steps", "scheduler_t_max", "torch_compile", "torch_compile_mode",
-        "allow_fresh_scheduler",
-    )
-    declared = frozenset(declared_keys) | {k for k in _launch_mechanism if k in overrides}
+    # The mechanism keys that force-declare themselves into the merge ARE the resume
+    # directives — ONE authority (`RESUME_DIRECTIVE_KEYS`, above), not a second tuple that
+    # drifts from it (R1's duplicated-authority class; F-P4 review SHOULD-3).
+    declared = frozenset(declared_keys) | {k for k in RESUME_DIRECTIVE_KEYS if k in overrides}
     deferred: set[str] = set()
     for key, override_val in overrides.items():
         if key in declared:
@@ -950,7 +968,11 @@ def resume_trainer(
             dict(baked_config) if baked_config else dict(fallback_config or {}),
             frozenset(),
         )
-    config = resolved_config
+    # Carried-config purity (F-R-P4-1): drop the machinery's OWN directive keys — and only
+    # those — before the Trainer carries the config into every future periodic save. Their
+    # consumers read `config_overrides` directly (e.g. `allow_fresh_scheduler` below), never
+    # the carried config; anything else non-schema still reaches the writer and raises there.
+    config = {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS}
     # Pass the DECLARED arch (metadata.arch) so the Trainer stamps the same arch on re-save
     # (never re-derives it); the sink threads through for resume-time events (T-CK-18).
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)
