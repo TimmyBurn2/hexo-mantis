@@ -70,9 +70,10 @@ class StallWatchdog:
         # `save_model` is what makes a stall abort SURVIVABLE. The fire path used to save the
         # replay buffer and nothing else, so a run wedged at step N exited with its positions
         # preserved and its WEIGHTS GONE back to the last periodic checkpoint — and
-        # `train.checkpoint_interval` is 0 in every shipped config, so "the last periodic
-        # checkpoint" is routinely NONE. The buffer is the cheap half to regenerate; the
-        # weights are the expensive half, and they were the half being dropped.
+        # `train.checkpoint_interval` is 0 in most shipped configs (nonzero only on
+        # `shakedown_20260807.yaml`), so "the last periodic checkpoint" is routinely NONE on
+        # the rest. The buffer is the cheap half to regenerate; the weights are the expensive
+        # half, and they were the half being dropped.
         #
         # Optional (`None`) rather than required because the lifecycle ⊕ suite constructs
         # this unit without a trainer; a production wiring that omits it loses the weights

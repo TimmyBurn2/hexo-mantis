@@ -129,10 +129,11 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
     to `train.max_train_steps`, the RUN-LENGTH authority, not to `train.total_steps` … a
     2000-step run with `total_steps: 1000000` blessed a cadence of 999 999". R251's bound
     re-creates that anchor choice, and re-pointing `RUN_LENGTH_PATH` at the scheduler horizon
-    is INVISIBLE on the whole production set: `PRODUCTION_CONFIGS` is run5 alone and run5 is
-    the ONE config where the two keys agree (both 1000000). Every short config is where the
-    substitution bites — and a short run is exactly the regime a large interval bites hardest
-    in, since ADJ-D22's own reproducer was `stop_step=40`.
+    is INVISIBLE on the whole production set: every config currently in `PRODUCTION_CONFIGS`
+    (run5, and `shakedown_20260807.yaml` since F-P2B) is one where the two keys agree (both
+    1000000). Every short config is where the substitution bites — and a short run is exactly
+    the regime a large interval bites hardest in, since ADJ-D22's own reproducer was
+    `stop_step=40`.
 
     Driven rather than asserted by name: this survives a legitimate rename of the key, and it
     fails the moment the bound starts reading a number that is not the run's length.

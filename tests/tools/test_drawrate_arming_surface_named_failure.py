@@ -24,8 +24,8 @@ raises `AttributeError: 'NoneType' object has no attribute 'threshold'` on
 rather than report "disarmed". A `None` met mid-walk must therefore short-circuit to `None`
 while a MISSING attribute still raises. The residual is disclosed by the last arm: a typo
 *after* a legitimately-`None` segment reports "disarmed" rather than raising. It is caught
-where it gates — `PRODUCTION_CONFIGS` is `("configs/run5.yaml",)` and run5 is ARMED, so the
-walk reaches the leaf and the typo raises.
+where it gates — `PRODUCTION_CONFIGS` includes `"configs/run5.yaml"` and run5 is ARMED, so
+the walk reaches the leaf and the typo raises.
 
 Everything below drives `audit_arming`, the walker's only consumer, rather than `_dotted`
 directly: the row identity in the message comes from the row, so pinning `_dotted`'s own
@@ -167,8 +167,8 @@ def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> Non
         "THE DISCLOSED RESIDUAL (§5.5), pinned so it is not rediscovered as a bug: a typo "
         "AFTER a legitimately-None segment reports 'disarmed' rather than raising, because "
         "the walk short-circuits before it can reach the bad segment. It is caught where it "
-        "gates — PRODUCTION_CONFIGS is ('configs/run5.yaml',) and run5 is ARMED, so the walk "
-        "reaches the leaf and the typo raises (the arm above)"
+        "gates — PRODUCTION_CONFIGS includes 'configs/run5.yaml' and run5 is ARMED, so the "
+        "walk reaches the leaf and the typo raises (the arm above)"
     )
 
 
