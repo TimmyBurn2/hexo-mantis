@@ -208,7 +208,16 @@ class _Recorders:
         self.disk_guards: list[_RecordedDiskGuard] = []
 
 
-def _install_recorders(monkeypatch) -> _Recorders:
+def _install_recorders(monkeypatch, request) -> _Recorders:
+    """N4 (dispatcher-ownable backlog): on the COMPLETED compose_run path `close_out` never
+    touches `run_safety.sink` — `run.py:899-920`'s own comment records this as deliberate
+    debt (CARD-PROTOCOL-COMPLETE, R106), bounded in PRODUCTION because both real callers
+    exit the process right after `compose_run` returns. This pytest process does not exit
+    between tests, so a suite of in-process composed drives accumulates open write fds to
+    completed segment files for the rest of the session — harness hygiene, not a production
+    defect. `request.addfinalizer` closes the REAL sink (idempotent, `sink.py:205-206`)
+    after every drive through this recorder, regardless of which teardown path the run
+    itself took or whether the test's own assertions raise."""
     rec = _Recorders()
     real_build = mantis_run.build_run_safety
     _RecordedDiskGuard.instances = rec.disk_guards
@@ -228,6 +237,7 @@ def _install_recorders(monkeypatch) -> _Recorders:
 
         run_safety.watchdog.stop = _stop
         run_safety.sink.close = _close
+        request.addfinalizer(run_safety.sink.close)
         return run_safety
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build)
@@ -310,7 +320,7 @@ def test_the_signal_install_has_exactly_two_call_sites_and_one_of_them_is_the_ro
 
 
 def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D1(c) — the load-bearing half, and the one a "handlers exist" check would miss.
 
@@ -321,7 +331,7 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
 
     MUTATION THAT REDS IT: `install_signal_handlers(ShutdownState())` beside the injected
     one — the F-1 defect's most plausible "fix", and behaviourally invisible."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
     captured: dict[str, Any] = {}
 
     def _capture(step: int) -> None:
@@ -344,7 +354,7 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
 
 
 def test_a_signal_mid_run_saves_then_exits(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D1(a) — LAW-16's headline: one signal -> `running=False` + `shutdown_save=True` ->
     the loop's final `trainer.save_checkpoint` before returning (T-LC-04's law, now reached
@@ -359,7 +369,7 @@ def test_a_signal_mid_run_saves_then_exits(
     and the one that loses the run's work."""
     import os
 
-    _install_recorders(monkeypatch)
+    _install_recorders(monkeypatch, request)
     trainer = _Trainer()
 
     def _signal_at_first_step(step: int) -> None:
@@ -386,7 +396,7 @@ def test_a_signal_mid_run_saves_then_exits(
 
 
 def test_a_second_signal_force_exits(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D1(b) — the second press is the operator's escape hatch: `stop_count >= 2` ->
     force-teardown all children then `os._exit(1)`. Driven by invoking the handler the
@@ -401,7 +411,7 @@ def test_a_second_signal_force_exits(
     teardown_called: list = []
     monkeypatch.setattr(sig_mod, "force_teardown_all", lambda: teardown_called.append(1))
     monkeypatch.setattr(os, "_exit", lambda code=0: (_ for _ in ()).throw(SystemExit(code)))
-    _install_recorders(monkeypatch)
+    _install_recorders(monkeypatch, request)
     mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_Trainer(), pool=_Pool(),
         buffer=mk_graph_buffer(n_records=32),
@@ -416,7 +426,7 @@ def test_a_second_signal_force_exits(
 
 
 def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D1(d) + O-D1(e) — LAW-16's other two legs, both asserted from the run's OWN stream.
 
@@ -428,7 +438,7 @@ def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
     construct the disk guard but never `start()` it (no `disk_free`); or leak it — the
     teardown assertion below is what makes "armed" mean "armed and accounted for", so a
     guard thread outliving its run cannot pass as a green."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
     handles = mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_Trainer(on_step=lambda _s: _sleep_a_beat()),
         pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
@@ -456,7 +466,7 @@ def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
 
 
 def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D1(f) — the window §7 leg 1 DEFINES rather than glosses.
 
@@ -473,7 +483,7 @@ def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
 
     `trainer.step == 0` with `saves` non-empty is the whole signature of the entry-set arm:
     a run that took a step took it AFTER the signal, which is the leak this pins shut."""
-    _install_recorders(monkeypatch)
+    _install_recorders(monkeypatch, request)
     trainer = _Trainer()
 
     def _signal_during_pool_start() -> None:
@@ -503,7 +513,7 @@ class _CoordinatorSeamFailure(RuntimeError):
 
 
 def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-D2 — the RED-TEAM lens, pre-registered: builder N succeeds, builder N+1 raises.
 
@@ -519,7 +529,7 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
     at 0). Chaining the teardown failure as `__context__` rather than replacing the original
     is asserted by TYPE: a caller that sees a teardown error instead of the real one debugs
     the wrong thing."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
 
     def _raising_coordinator(**_kwargs):
         raise _CoordinatorSeamFailure("the coordinator seam refused this composition")
@@ -545,7 +555,7 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
 
 # ══ O-E3 — the resolved-config producer ═══════════════════════════════════════════════
 def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity_witness(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-E3 / §5.4 — LAW-08: `resolve_config` + `to_event_payload` (`config/emit.py:63/:52`)
     have ZERO production call sites at `b482243`. A resolved-config surface with no emitter
@@ -560,7 +570,7 @@ def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity
     before the identity witness; or rebuild the payload inline instead of calling
     `to_event_payload(resolve_config(config))` — the payload equality catches the second
     authority."""
-    _install_recorders(monkeypatch)
+    _install_recorders(monkeypatch, request)
     config = _bounded(smoke_run_config)
     handles = mantis_run.compose_run(
         config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),

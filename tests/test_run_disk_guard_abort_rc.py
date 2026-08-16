@@ -195,13 +195,20 @@ def _write_config(tmp_path: Path, smoke_run_config) -> Path:
     return path
 
 
-def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, *, free_gb: float,
-                wait_for_fire: bool) -> _Drive:
+def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
+                free_gb: float, wait_for_fire: bool) -> _Drive:
     """Run `mantis.run.main(--config … --out-dir …)` over a rigged filesystem.
 
     `wait_for_fire` blocks the fake train step until the guard's latch is set, so the drive
     measures the FIX and never a race: without it a 3-step burst can outrun a 0.02 s poll and
     the run would exit 0 for a reason that has nothing to do with the defect.
+
+    N4 (dispatcher-ownable backlog): on a COMPLETED compose_run `close_out` never touches
+    `run_safety.sink` (`run.py:899-920` — LAW-16 debt CARD-PROTOCOL-COMPLETE, bounded in
+    production because both real callers exit the process right after `compose_run`
+    returns). `request.addfinalizer` closes the REAL sink deterministically (idempotent,
+    `sink.py:205-206`), registered at the sink's own construction rather than after
+    `compose_run` returns, so a drive that raises from inside `compose_run` still closes.
     """
     drive = _Drive()
     tmp_path = Path(tmp_path)
@@ -236,6 +243,15 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, *, fre
                         lambda **_kwargs: collaborators)
     monkeypatch.setattr(mantis_run, "DiskGuard", _RecordedGuard)
 
+    real_build_run_safety = mantis_run.build_run_safety
+
+    def _recording_build_run_safety(**kwargs):
+        run_safety = real_build_run_safety(**kwargs)      # the REAL builder, unmodified
+        request.addfinalizer(run_safety.sink.close)
+        return run_safety
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build_run_safety)
+
     real_compose = mantis_run.compose_run
 
     def _recording_compose(**kwargs):
@@ -265,7 +281,7 @@ def _events(run_safety) -> list[dict]:
 
 # ══ RT-2 — the rc is distinguishable ══════════════════════════════════════════════════
 def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """THE A/B R132 names: same launcher, same config shape, same guard — one rigged volume
     apart — and the two runs must not hand a supervisor the same number.
@@ -278,7 +294,7 @@ def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
     root's transfer. Either restores rc 0 while every other assertion in this file holds.
     """
     fired = _drive_main(tmp_path / "fired", monkeypatch, smoke_run_config, mk_graph_buffer,
-                        free_gb=_CRITICAL_GB, wait_for_fire=True)
+                        request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     state = fired.handles.shutdown
     _await_signal(state)
 
@@ -306,7 +322,7 @@ def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
     )
 
     clean = _drive_main(tmp_path / "clean", monkeypatch, smoke_run_config, mk_graph_buffer,
-                        free_gb=_HEALTHY_GB, wait_for_fire=False)
+                        request, free_gb=_HEALTHY_GB, wait_for_fire=False)
     assert clean.guards and not clean.guards[-1].critical_fired, (
         "premise: a healthy volume never fires the critical arm"
     )
@@ -322,7 +338,7 @@ def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
 
 
 def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """R84's one-authority half. The number must come from the row, not from a second
     literal at the launcher — otherwise moving the row's `exit_code` leaves the process
@@ -332,7 +348,7 @@ def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
     the test above stays green; this one reds, because the rewired manifest moves the
     resolver's answer and a literal cannot follow it."""
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
-                        free_gb=_CRITICAL_GB, wait_for_fire=True)
+                        request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     _await_signal(drive.handles.shutdown)
     row = next(r for r in MANIFEST if r.name == DISK_SPACE_ABORT_RULE)
     assert drive.rc == row.exit_code == exit_code_for_abort(DISK_SPACE_ABORT_RULE), (
@@ -348,7 +364,7 @@ def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
 
 
 def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """THE MUTATION R84's template requires, driven rather than described (R81 under R86: it
     kills the PRODUCTION writer, not a test helper, and its casualty is in-subject).
@@ -360,7 +376,7 @@ def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
     has seen red is not evidence."""
     monkeypatch.setattr(ShutdownState, "record_abort", lambda self, rule: False)
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
-                        free_gb=_CRITICAL_GB, wait_for_fire=True)
+                        request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     state = drive.handles.shutdown
     _await_signal(state)
     assert drive.guards[-1].critical_fired and state.stop_count == 1, (

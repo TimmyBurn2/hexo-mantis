@@ -204,7 +204,17 @@ class _Recorders:
         self.disk_guards: list[_RecordedDiskGuard] = []
 
 
-def _install_recorders(monkeypatch) -> _Recorders:
+def _install_recorders(monkeypatch, request) -> _Recorders:
+    """N4 (dispatcher-ownable backlog): on the COMPLETED compose_run path `close_out` never
+    touches `run_safety.sink` — `run.py:899-920`'s own comment records this as deliberate
+    debt (CARD-PROTOCOL-COMPLETE, R106), bounded in PRODUCTION because both real callers
+    exit the process right after `compose_run` returns. This pytest process does not exit
+    between tests, so a suite of in-process composed drives accumulates open write fds to
+    completed segment files for the rest of the session — harness hygiene, not a production
+    defect (RT-3/RT-4 above already close on the PARTIAL path; RT-7 is the one that completes
+    and, unfixed, leaked). `request.addfinalizer` closes the REAL sink (idempotent,
+    `sink.py:205-206`) after every drive through this recorder, regardless of which teardown
+    path the run itself took or whether the test's own assertions raise."""
     rec = _Recorders()
     real_build = mantis_run.build_run_safety
     _RecordedDiskGuard.instances = rec.disk_guards
@@ -224,6 +234,7 @@ def _install_recorders(monkeypatch) -> _Recorders:
 
         run_safety.watchdog.stop = _stop
         run_safety.sink.close = _close
+        request.addfinalizer(run_safety.sink.close)
         return run_safety
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build)
@@ -255,7 +266,7 @@ def _seam_names(exc: BaseException) -> list[str]:
 
 # ══ RT-3 — a partial `pool.start()` is still torn down ════════════════════════════════
 def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """RT-3. The ladder's own boundary condition, which O-D2 (the coordinator seam, where
     everything is already up) cannot reach.
@@ -272,7 +283,7 @@ def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
 
     The other three halves of the ladder are asserted here too, because a widening of the
     flag that dropped one of them would be a different leak at the same seam."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
     pool = _PartiallyStartingPool()
 
     with pytest.raises(_PartialStartFailure) as wall:
@@ -298,7 +309,7 @@ def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
 
 # ══ RT-4 — the eval-pipeline wall is inside the ladder AND named ══════════════════════
 def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """RT-4. `build_eval_pipeline` is the largest construction step in the composer and the
     one every `eval_enabled: true` config walks into — and it used to sit ABOVE the `try:`,
@@ -318,7 +329,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
     `pool.stop()`, which is the ORIGINAL hazard `_stop_pool_if_start_attempted` guards
     (`InferenceServer.join(timeout=5.0)` raises on a never-started thread). RT-3's widening
     kept it closed and this row is what says so."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
 
     def _raising_eval_pipeline(**_kwargs):
         raise _EvalPipelineWall("the eval pipeline refused this composition")
@@ -352,7 +363,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
 
 # ══ RT-7 — the guard gets the resolver's OWN values, in the resolver's OWN slots ══════
 def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """RT-7 — the DR-11 question at the END of the path nobody reads.
 
@@ -372,7 +383,7 @@ def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
     Asserted against the RESOLVER's output, never against the literals this drive minted: a
     row that restates the test's own input is the self-satisfying species, and it would go
     green again the moment the resolver started lying."""
-    rec = _install_recorders(monkeypatch)
+    rec = _install_recorders(monkeypatch, request)
     config = _bounded(smoke_run_config)
     expected = resolve_disk_guard(config.monitor)
     assert len({expected.interval_sec, expected.warn_gb, expected.fail_gb}) == 3, (

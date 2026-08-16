@@ -396,15 +396,23 @@ def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     return path
 
 
-def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, pipeline: _FakeEvalPipeline,
-                free_gb: float = _HEALTHY_GB, wait_for_fire: bool = False,
-                draw_counts: tuple[int, int] = (0, 0), **train_overrides: Any) -> _Drive:
+def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest,
+                *, pipeline: _FakeEvalPipeline, free_gb: float = _HEALTHY_GB,
+                wait_for_fire: bool = False, draw_counts: tuple[int, int] = (0, 0),
+                **train_overrides: Any) -> _Drive:
     """Run `mantis.run.main(--config … --out-dir …)` end to end with the eval pipeline
     substituted at its construction site.
 
     `wait_for_fire` blocks the fake train step until the disk guard's latch is set, so the
     first-fire-wins arm measures the ORDER and never a race: without it a 3-step burst can
-    outrun a 0.02 s poll and the run would exit for a reason unrelated to the subject."""
+    outrun a 0.02 s poll and the run would exit for a reason unrelated to the subject.
+
+    N4 (dispatcher-ownable backlog): on a COMPLETED compose_run `close_out` never touches
+    `run_safety.sink` (`run.py:899-920` — LAW-16 debt CARD-PROTOCOL-COMPLETE, bounded in
+    production because both real callers exit the process right after `compose_run`
+    returns). `request.addfinalizer` closes the REAL sink deterministically (idempotent,
+    `sink.py:205-206`) so this in-process `main()` drive does not hold the segment file's
+    fd open for the rest of the pytest session."""
     drive = _Drive()
     drive.pipeline = pipeline
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -443,6 +451,20 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, pipeline: _F
     monkeypatch.setattr(mantis_run, "build_run_collaborators", lambda **_kw: collaborators)
     monkeypatch.setattr(mantis_run, "build_eval_pipeline", lambda **_kw: pipeline)
     monkeypatch.setattr(mantis_run, "DiskGuard", _RecordedGuard)
+
+    # The finalizer is registered here, at the SINK'S OWN construction — not after
+    # `compose_run` returns — because O-10's drive raises from INSIDE `compose_run`'s own
+    # body (the re-parse in its teardown), so `real_compose(**kwargs)` never returns for
+    # that row and a post-return registration would silently skip exactly the row this
+    # fix was proven against.
+    real_build_run_safety = mantis_run.build_run_safety
+
+    def _recording_build_run_safety(**kwargs: Any):
+        run_safety = real_build_run_safety(**kwargs)      # the REAL builder, unmodified
+        request.addfinalizer(run_safety.sink.close)
+        return run_safety
+
+    monkeypatch.setattr(mantis_run, "build_run_safety", _recording_build_run_safety)
 
     real_compose = mantis_run.compose_run
 
@@ -593,7 +615,7 @@ def test_neither_mid_run_route_writes_the_terminal_latch(tmp_path, monkeypatch) 
     )
 
 
-def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch) -> None:
+def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch, request) -> None:
     """O-05, node 2 — the same claim at the process boundary, end to end.
 
     A mid-run round breaks; the TERMINAL round is clean. The run must exit 0, and the latch
@@ -606,7 +628,7 @@ def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch)
         terminal_result=_clean_round(), poll_result=_broken_round("result_invalid",
                                                                  round_id="r000001_1", step=1),
     )
-    drive = _drive_main(tmp_path, monkeypatch, pipeline=pipeline)
+    drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
     assert pipeline.terminal_calls == [True], (
         "premise: the terminal battery ran exactly once, with the stride ignored; got "
@@ -761,7 +783,7 @@ def test_the_terminal_latch_has_one_writer_and_the_terminal_route_has_no_third_c
 
 # ══ O-08 — THE kill: a broken terminal round exits 48 ══════════════════════════════════
 @pytest.mark.parametrize("reason", _SEVEN_REASONS)
-def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch) -> None:
+def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch, request) -> None:
     """O-08 — R152's whole point, and the discharge condition for R133's caveat.
 
     Measured at HEAD: the terminal round breaks, `_finalize_round` emits `eval_broken`,
@@ -779,7 +801,7 @@ def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch) -> None
     returns to 0, which is HEAD.
     """
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round(reason))
-    drive = _drive_main(tmp_path, monkeypatch, pipeline=pipeline)
+    drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
     assert pipeline.terminal_calls == [True], (
         f"premise: the terminal battery ran; got {pipeline.terminal_calls}"
@@ -803,7 +825,7 @@ def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch) -> None
     )
 
 
-def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch) -> None:
+def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch, request) -> None:
     """O-08's CONTROL, and the reason it is not optional (R84's template is a DIFFERENCE, not
     a number): an oracle whose control also answered 48 would prove nothing about the seam.
     A latch that fired on EVERY terminal round would pass all seven rows above and ship a run
@@ -812,7 +834,7 @@ def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch) -> None:
     This is the in-file twin of `tests/test_run_launcher.py::…` (integration tier), which
     drives the same claim on a real bounded `launch_run` over `smoke_preflight_armed.yaml`."""
     pipeline = _FakeEvalPipeline(terminal_result=_clean_round())
-    drive = _drive_main(tmp_path, monkeypatch, pipeline=pipeline)
+    drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
     assert pipeline.terminal_calls == [True], "premise: the terminal battery ran"
     assert drive.handles.coordinator.terminal_eval_reason is None, (
@@ -825,7 +847,9 @@ def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch) -> None:
 
 
 # ══ O-09 — first fire wins: the ROOT CAUSE survives ════════════════════════════════════
-def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(tmp_path, monkeypatch) -> None:
+def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(
+    tmp_path, monkeypatch, request
+) -> None:
     """O-09 arm (a). ORDER is the argument, not a convenience.
 
     A full volume kills the run; the terminal battery then breaks BECAUSE the volume is full.
@@ -838,7 +862,7 @@ def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(tmp_path, mon
     below stays green (the draw-rate rule is recorded mid-loop, before either), which is why
     this arm exists separately."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("join_timeout"))
-    drive = _drive_main(tmp_path, monkeypatch, pipeline=pipeline,
+    drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline,
                         free_gb=_CRITICAL_GB, wait_for_fire=True)
     _await_signal(drive.handles.shutdown)
 
@@ -860,7 +884,7 @@ def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(tmp_path, mon
 
 
 def test_a_draw_rate_collapse_that_precedes_a_broken_terminal_round_reports_46(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, request
 ) -> None:
     """O-09 arm (b). The mid-loop fire, which is recorded BEFORE the epilogue runs at all.
 
@@ -871,7 +895,7 @@ def test_a_draw_rate_collapse_that_precedes_a_broken_terminal_round_reports_46(
     MUTATION THAT REDS IT: make `record_abort` last-writer-wins instead of set-once."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("exit_nonzero"))
     drive = _drive_main(
-        tmp_path, monkeypatch, pipeline=pipeline, draw_counts=(50, 50),
+        tmp_path, monkeypatch, request, pipeline=pipeline, draw_counts=(50, 50),
         draw_rate_abort={"threshold": 0.5, "min_step": 1, "N_pool_min": 50, "consec": 1},
     )
 
@@ -888,7 +912,7 @@ def test_a_draw_rate_collapse_that_precedes_a_broken_terminal_round_reports_46(
 
 
 # ══ O-10 — an unregistered spelling is loud at the boundary ════════════════════════════
-def test_an_unregistered_reason_spelling_raises_at_the_root(tmp_path, monkeypatch) -> None:
+def test_an_unregistered_reason_spelling_raises_at_the_root(tmp_path, monkeypatch, request) -> None:
     """O-10 — the RUNTIME half of the unrepresentability claim.
 
     §b.3's three typed chokepoints make a bare string a pyright error, and gate 14 is held at
@@ -903,7 +927,7 @@ def test_an_unregistered_reason_spelling_raises_at_the_root(tmp_path, monkeypatc
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("not_a_registered_reason"))
 
     with pytest.raises(ValueError, match="not_a_registered_reason"):
-        _drive_main(tmp_path, monkeypatch, pipeline=pipeline)
+        _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
 
 # ══ O-32 — terminal vs mid-run is distinguishable IN THE STREAM ════════════════════════

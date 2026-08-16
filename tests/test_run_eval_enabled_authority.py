@@ -120,12 +120,20 @@ class _Trainer:
         return None
 
 
-def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, *, eval_enabled: bool):
+def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
+           eval_enabled: bool):
     """One composed run whose ONLY delta is the config's `eval_enabled` value.
 
     Returns `(handles, wired_sources)` — the declaration `build_run_safety` actually
     received, which is what decides whether the eval stage is watched by the stall watchdog.
-    """
+
+    N4 (dispatcher-ownable backlog): the completed drive leaves `run_safety.watchdog`'s
+    daemon thread running (`close_out` never touches it either, `run.py:899-920` — LAW-16
+    debt CARD-PROTOCOL-COMPLETE, bounded in production because both real callers exit the
+    process right after `compose_run` returns). A live watchdog thread keeps the sink object
+    reachable for the rest of this pytest session, so nothing ever garbage-collects its way
+    to closing the fd. `request.addfinalizer` closes the REAL sink deterministically
+    (idempotent, `sink.py:205-206`) instead of relying on that reachability."""
     declared: dict[str, list[str]] = {}
     real_build = mantis_run.build_run_safety
 
@@ -160,12 +168,13 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, *, eval_ena
         config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
+    request.addfinalizer(handles.run_safety.sink.close)
     return handles, declared["wired_sources"]
 
 
 # ══ O-E1 — the mutation oracle ════════════════════════════════════════════════════════
 def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
-    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
     """O-E1, the liveness half (LAW-08/LAW-07): flip the key in the CONFIG, observe the
     consumer. Two composed runs, one delta.
@@ -176,7 +185,7 @@ def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
     fails to DECLARE the stage gets a loud `heartbeat_source_unwired` instead of stall
     coverage, so the two must move together."""
     on_handles, on_wired = _drive(tmp_path / "on", monkeypatch, smoke_run_config,
-                                  mk_graph_buffer, eval_enabled=True)
+                                  mk_graph_buffer, request, eval_enabled=True)
     assert on_handles.eval_pipeline is not None, (
         "`eval_enabled: true` must build the pipeline — run5 mints True, and a promotion "
         "bar with eval off is unrepresentable as a decision (LAW-15/R120)"
@@ -184,7 +193,7 @@ def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
     assert "eval_round" in on_wired, f"…and DECLARE the stage watched; got {on_wired}"
 
     off_handles, off_wired = _drive(tmp_path / "off", monkeypatch, smoke_run_config,
-                                    mk_graph_buffer, eval_enabled=False)
+                                    mk_graph_buffer, request, eval_enabled=False)
     assert off_handles.eval_pipeline is None, (
         "`eval_enabled: false` must build no pipeline; got "
         f"{off_handles.eval_pipeline!r}"
