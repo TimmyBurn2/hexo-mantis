@@ -777,13 +777,14 @@ impl PyInferenceBatcher {
         // the results below.
         let centers: Vec<(i32, i32)> = graphs.iter().map(|g| g.window_center).collect();
         let graph_q = self.graph.clone();
-        let results: Result<Vec<(LegalSetPolicy, f32)>, String> = py.detach(|| {
-            let mut out = Vec::with_capacity(graphs.len());
-            for g in graphs {
-                out.push(graph_q.submit_graph_and_wait(g)?);
-            }
-            Ok(out)
-        });
+        // ONE batch submit, not a serial loop of blocking submits (Q-FIND-1/R263).
+        // The eval/arena decode shares the self-play dispatch behaviour by
+        // construction — a serial arm here would make the two disagree about
+        // batching, the drift the WP12-R D-22 "ONE authority" note above exists to
+        // prevent. `collect` into a `Result` scans a Vec whose waiters have ALL
+        // already resolved, so the first-`Err` return cannot orphan a tail waiter.
+        let results: Result<Vec<(LegalSetPolicy, f32)>, String> =
+            py.detach(|| graph_q.submit_graphs_and_wait(graphs).into_iter().collect());
         let results = results.map_err(PyValueError::new_err)?;
         let out = results
             .into_iter()
