@@ -213,8 +213,11 @@ def test_the_published_earliest_fire_step_is_deliverable_above_the_old_depth() -
     # hand-copied interval would be that authority forked (the harness pins it to 1 so a
     # direct `_run_hard_abort_gates` call is one boundary).
     interval = h.config.gate_interval
+    # R265 / ADJ-D38: the interval is the row's SAMPLE-CLOCK PERIOD now, not operand 0 — the
+    # same value from the same harness config, passed where the clock supplies it in
+    # production (`SampleClock.GATE_BOUNDARY.period_steps`, off `monitor.gate_interval`).
     published = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
-        (interval, spec.consec, spec.min_step))
+        (spec.consec, spec.min_step), period_steps=interval)
     assert published == float(interval * _ABOVE_OLD_DEPTH), (
         f"cadence arithmetic answered {published!r} for interval={interval}, "
         f"consec={spec.consec}, min_step=0 — expected the consec-th boundary in steps"

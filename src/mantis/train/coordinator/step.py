@@ -46,6 +46,7 @@ import mantis.train.buffer_persist as _buffer_persist
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
+    WR_PEAK_WINDOW_EVALS,
     check_draw_rate_collapse,
     check_sealbot_wr_hard_abort,
     emit_training_step_alerts,
@@ -94,8 +95,14 @@ _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
 )
 _POSITIONS_COUNTER = "positions_generated"
 
-#: Depth of the sealbot-WR ring (old `step_coordinator.py` parity: `pop(0)` past 5).
-WR_HISTORY_DEPTH = 5
+# The sealbot-WR ring deliberately has NO depth constant either (R265 / ADJ-D38, extending
+# ADJ-D36 one gate over). `WR_HISTORY_DEPTH = 5` clipped it while all three WR triggers
+# refuse on `len(history) >= their consec`, so every schema-legal
+# `monitor.wr_collapse_consecutive_evals` or `monitor.wr_rolling_consecutive_evals` >= 6 was
+# armed-in-the-config and permanently unfireable. Its capacity is now derived at the point of
+# use in `on_eval_round_complete` from the minted consec keys AND from rule B's own peak
+# window (`monitor.rules.WR_PEAK_WINDOW_EVALS`) — the one job the deleted literal was ALSO
+# doing, which is why that half is named and preserved rather than derived away.
 # The draw-rate ring deliberately has NO depth constant (ADJ-D36): its capacity is the
 # minted `train.draw_rate_abort.consec`, derived at the point of use in
 # `_run_hard_abort_gates`'s draw-rate arm. A constant here was the "fifth face" clip — any
@@ -1049,7 +1056,17 @@ class StepCoordinator:
         runtime MUST route every completed round here (Appendix B handshake).
 
         `wr_sealbot` absent/None ⇒ ONE `sealbot_wr_gate_skipped` event + skip counter
-        (LAW-18: an inert gate is loud, never silently dead).
+        (LAW-18: an inert gate is loud, never silently dead). That path appends NOTHING and
+        must never trim either: a skipped observation that clipped the ring would let an
+        evidence blackout shorten a tail the config asked for (R92/BUG-1's contract, this
+        axis's version, driven by `tests/train/test_wr_gate_capacity.py`).
+
+        THIS METHOD OWNS THE RING'S CAPACITY (R265 / ADJ-D38), and it derives it — from the
+        two minted consec keys the trajectory rules gate their tails on, and from rule B's
+        own peak window. A literal here made every consec above it unfireable while the
+        abort audited armed; deriving it WITHOUT the window floor would instead have widened
+        rule B's peak with the ring, which is a behavioural change to an armed rule and a
+        ruling rather than a rider.
 
         Disposition (operator G-3): a sustained-collapse trajectory HARD-ABORTS only when
         `monitor_cfg.wr_hard_abort_enabled` is True; the shipped default is False = WARN-ONLY,
@@ -1076,7 +1093,20 @@ class StepCoordinator:
             })
             return
         self._wr_history.append((step, float(wr)))
-        del self._wr_history[:-WR_HISTORY_DEPTH]
+        # R265 / ADJ-D38: the ring's capacity is DERIVED from everything that reads it — the
+        # two minted consec keys (`sealbot_wr_trajectory_alert` refuses each trigger on
+        # `len(history) >= its consec`) and rule B's own peak window. A literal here was the
+        # ADJ-D36 "fifth face" on this axis: any consec above it could never satisfy its
+        # length gate while `monitor.wr_hard_abort_enabled` armed the abort and gate 12's
+        # cadence audit had no row for the axis at all. `max` over the three, so no reader is
+        # starved AND rule B's window is never the thing that shrinks; the peak window's
+        # positive value is also what keeps this `del` slice safe — `[:-0]` deletes NOTHING
+        # in Python, so a capacity that could reach 0 would silently make the ring unbounded
+        # (the same `-0` hair-trigger that makes a consec of 0 read the WHOLE ring).
+        capacity = max(WR_PEAK_WINDOW_EVALS,
+                       int(self.monitor_cfg.wr_collapse_consecutive_evals),
+                       int(self.monitor_cfg.wr_rolling_consecutive_evals))
+        del self._wr_history[:-capacity]
         alert = sealbot_wr_trajectory_alert(self._wr_history, step, self.monitor_cfg)
         if alert is None:
             return

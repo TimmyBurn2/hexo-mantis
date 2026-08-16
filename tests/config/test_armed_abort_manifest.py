@@ -292,10 +292,22 @@ def test_the_manifest_is_not_vacuous() -> None:
     # ("CARD-COORD-KNOBS will feed it rows"), so the machinery kept alive for it now has a
     # SHIPPED subject and the rule below is asserted on the real manifest first. The synthetic
     # probe stays, because it is still the only way to drive a row whose pinned file is ABSENT.
-    assert [row.name for row in _deferred()] == ["grad_norm_hard_abort"], (
-        "the shipped manifest's deferred set is exactly the grad-norm row (WPMINT K-B): a "
-        "live gate whose threshold nobody pre-registered, printed loudly and gating nothing. "
-        f"A row appearing or vanishing here is a mint-visible change; got {_deferred()}"
+    # R265 / ADJ-D38 re-points this a second time and stops TRANSCRIBING the set. It read
+    # `== ["grad_norm_hard_abort"]`; the WR row landed and the tally had to be re-edited for
+    # a change it has no opinion about, which is R192(e)'s derive-or-delete on a test premise
+    # (and the second time this exact line needed editing). What the assertion is FOR is that
+    # the deferred machinery has a SHIPPED subject and that the specific row K-B registered
+    # has not silently become required or vanished — membership, not identity, so a future
+    # deferred row does not red a test about a different row.
+    assert _deferred(), (
+        "the shipped manifest holds NO deferred row, so `_print_deferred_rows` and every "
+        "rule below it are being asserted on an empty list — R81's kept machinery with no "
+        "subject at all"
+    )
+    assert "grad_norm_hard_abort" in [row.name for row in _deferred()], (
+        "the grad-norm row (WPMINT K-B) is a live gate whose threshold nobody pre-registered, "
+        "printed loudly and gating nothing. It vanishing or turning REQUIRED is a "
+        f"mint-visible change; got {[row.name for row in _deferred()]}"
     )
     for shipped in _deferred():
         rel, text = shipped.source_pin
@@ -311,11 +323,15 @@ def test_the_manifest_is_not_vacuous() -> None:
         note="synthetic subject for the deferred-row invariants; not a shipped row.",
     )
     deferred_rows = _deferred((*MANIFEST, probe))
-    assert [row.name for row in deferred_rows] == ["grad_norm_hard_abort", probe.name], (
+    # DERIVED, not transcribed (R265 / ADJ-D38 — the third copy of this tally in this file,
+    # and the second time it needed re-editing for a change it has no opinion about; R192(e)).
+    assert [row.name for row in deferred_rows] == [
+        *[row.name for row in _deferred()], probe.name
+    ], (
         "`_deferred` selects on `status` and nothing else — a selector that branched on a "
-        "row's name or returned a constant is what this arm refuses. It must return BOTH the "
-        "shipped deferred row (grad-norm, WPMINT K-B) and the synthetic one, in manifest "
-        f"order; got {deferred_rows}"
+        "row's name or returned a constant is what this arm refuses. It must return EVERY "
+        "shipped deferred row AND the synthetic one, in manifest order; got "
+        f"{[row.name for row in deferred_rows]}"
     )
     for row in [candidate for candidate in deferred_rows if candidate.name == probe.name]:
         rel, _text = row.source_pin
@@ -442,10 +458,17 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         "a positive threshold arms the row — CONFIG_THRESHOLD_GT_ZERO must be a real "
         "predicate over the value, not a constant"
     )
+    # DERIVED from the manifest the audit was handed, never a transcribed row list (R265 /
+    # ADJ-D38: the shipped deferred set gained a second row and the tally here had to be
+    # re-edited for a change it has no opinion about — R192(e)). The claim is that the
+    # draw-rate flip leaves the deferred list ALONE, which is a statement about `status`
+    # selecting the list, and it is sharper against the real set than against a copy of it.
+    shipped_deferred = [r.name for r in manifest if r.status is Status.DEFERRED]
+    assert shipped_deferred, "no deferred row means this arm has no subject"
     assert ([r.name for r in off.deferred] == [r.name for r in on.deferred]
-            == ["grad_norm_hard_abort"]), (
+            == shipped_deferred), (
         "the draw-rate row's synthetic flip must not disturb the deferred list, which holds "
-        "exactly the shipped grad-norm row (WPMINT K-B): `status` selects the list and it is "
+        "exactly the manifest's own deferred rows: `status` selects the list and it is "
         "DATA — no function may branch on the row's name"
     )
 
