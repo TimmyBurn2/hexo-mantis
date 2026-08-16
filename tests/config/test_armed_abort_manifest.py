@@ -67,13 +67,19 @@ from mantis.config.armed_aborts import (  # RED-at-import anchor: module absent 
     Status,
     audit_arming,
 )
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 MANIFEST_MODULE = REPO_ROOT / "src" / "mantis" / "config" / "armed_aborts.py"
-CONFIG_PATHS = tuple(sorted(p.name for p in (REPO_ROOT / "configs").glob("*.yaml")))
+_CONFIGS_DIR = REPO_ROOT / "configs"
+# N4 (dispatcher-ownable backlog, F-P2B/N4): a flat `*.yaml` glob here is a SECOND answer to
+# "what is a config" — blind to `configs/prod/run6.yaml`, which gate 7 and gate 12 both make
+# legal (`discover_configs`, R71/R75, is the ONE discovery authority both gates consume).
+# Relative-posix, not `.name`: a nested config's path must survive round-tripping back
+# through `REPO_ROOT / "configs" / name` below.
+CONFIG_PATHS = tuple(sorted(p.relative_to(_CONFIGS_DIR).as_posix() for p in discover_configs(_CONFIGS_DIR)))
 
 
 def _load_tool():

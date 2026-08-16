@@ -53,7 +53,7 @@ import torch
 import yaml
 
 import _microbatch_harness as H
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.encoding import lookup
 from mantis.model import CnnArch, build_net
@@ -589,14 +589,15 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
 
 
 def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:
-    """OF2-14 premise — the five above plus the production configs are ALL the configs. A
-    new FLAT `configs/*.yaml` appearing mid-WP would otherwise slip out of this sweep
-    silently (the glob is flat; subdirectory/`.yml` shapes are `discover_configs`' and
-    gate 12's subject, per ADJ-13 F-1/R75).
+    """OF2-14 premise — the five above plus the production configs are ALL the configs.
+    Enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7
+    and 12 consume — a second flat `configs/*.yaml` glob here would be exactly the
+    divergence ADJ-13 F-1 was: a subdirectory/`.yml` shape both gates make legal would
+    slip out of this sweep silently while staying invisible to nobody else (N4, F-P2B/N4).
 
     F-P2B (R259): `shakedown_20260807.yaml` joins run5 on the EXCLUDED side, on run5's own
     grounds — it mints run5's CARD-RUN5-GPU-OOM caps (4500000/170000) at run5's batch_size
     256, and those caps exist BECAUSE they bind on the production GPU. Putting it through
     the "caps do not bind" sweep would assert the opposite of the caps' purpose."""
-    live = sorted(p.name for p in _CONFIGS.glob("*.yaml"))
+    live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
     assert live == sorted((*_NON_RUN5, "run5.yaml", "shakedown_20260807.yaml"))

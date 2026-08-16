@@ -55,7 +55,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
@@ -401,12 +401,12 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     BOTH knobs to 100 — the equal-mint held only because MAIN ratified the ninth delta
     `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
     first mint carried gate_interval alone and this very assertion refused it. The count
-    below ratchets 6 -> 7 so an eighth FLAT `configs/*.yaml` cannot slip past the equality
-    sweep unseen — this file's glob is flat, so subdirectory/`.yml` shapes (legal per
-    ADJ-13 F-1/R75) are the ONE discovery authority's subject (`discover_configs`, consumed
-    by gates 7 and 12), not this sweep's.
+    below ratchets 6 -> 7 so an eighth config cannot slip past the equality sweep unseen —
+    enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7
+    and 12 consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape
+    (legal per ADJ-13 F-1) could escape (N4, F-P2B/N4).
     """
-    configs = sorted((_REPO / "configs").glob("*.yaml"))
+    configs = discover_configs(_REPO / "configs")
     assert len(configs) == 7, f"expected the seven committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
