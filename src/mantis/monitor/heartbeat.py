@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import random
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -198,10 +197,22 @@ def write_heartbeat_file(
     writers on one path race each other's temp file (`os.replace` → `FileNotFoundError` on
     ~30% of writes), which inside the watchdog was `best_effort`-caught and therefore
     invisible (RED-TEAM F17).
+
+    The uniqueness bits come from `os.urandom`, NOT the stdlib `random` module, and that is
+    load-bearing rather than stylistic. This function runs on the watchdog's OWN thread, on a
+    timer, for the life of the process. `random.getrandbits` draws from the PROCESS-GLOBAL
+    stdlib stream, so every beat silently advanced a stream other code seeds and reads —
+    making "how many heartbeats have fired by now" an input to that stream's position. No
+    production consumer was harmed (each seeds its own `random.Random` instance), but the
+    test suite asserts on the global stream, and a beat landing between a `seed()` and a
+    `random()` shifted the read by one draw. A temp-file suffix needs uniqueness, never
+    reproducibility, so it has no business on the seeded stream at all.
     """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f"{target.name}.{os.getpid()}.{random.getrandbits(32):08x}.tmp")
+    tmp = target.with_name(
+        f"{target.name}.{os.getpid()}.{int.from_bytes(os.urandom(4), 'big'):08x}.tmp"
+    )
     text = json.dumps(
         {
             "seq": int(seq),

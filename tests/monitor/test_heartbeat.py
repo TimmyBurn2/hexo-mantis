@@ -16,6 +16,7 @@ test_supervisor.py):
 from __future__ import annotations
 
 import math
+import random
 import threading
 from pathlib import Path
 
@@ -229,3 +230,36 @@ def test_write_heartbeat_file_uses_a_unique_tmp_sibling(tmp_path: Path) -> None:
     assert errors == [], f"concurrent writers must not break each other: {errors[:3]}"
     assert read_heartbeat_file(path) is not None
     assert list(tmp_path.glob("*.tmp")) == [], "no tmp sibling may survive"
+
+
+def test_write_heartbeat_file_does_not_advance_the_global_random_stream(tmp_path: Path) -> None:
+    """The tmp suffix must not draw from the PROCESS-GLOBAL stdlib `random` stream.
+
+    Measured defect: the suffix used `random.getrandbits(32)`, and the watchdog calls this
+    on its OWN thread on a timer for the life of the process. So every beat advanced a
+    stream other code seeds and reads, making "how many heartbeats have fired" an input to
+    that stream's position — a hidden global-state coupling with no owner. It surfaced as a
+    rare full-tier failure of the seeded-reproducibility suite (a beat landing between a
+    `seed()` and a `random()` shifts the read by exactly one draw) and was invisible in
+    isolation, because the leaked watchdog threads only exist once the whole tier has run.
+
+    A temp-file suffix needs UNIQUENESS, never reproducibility, so the correct source is
+    `os.urandom`. This pins the property directly rather than the implementation: seed, draw
+    the reference value, then seed again, write many heartbeats, and require the next draw
+    to be unchanged.
+    """
+    path = tmp_path / "hb.json"
+
+    random.seed(20260816)
+    expected = random.random()
+
+    random.seed(20260816)
+    for seq in range(1, 51):
+        write_heartbeat_file(path, seq=seq, pid=7, ages={"train_step": 0.0}, wall_ts=1.0)
+    actual = random.random()
+
+    assert actual == expected, (
+        "write_heartbeat_file consumed the global stdlib random stream: 50 writes moved the "
+        f"next draw from {expected!r} to {actual!r}. The tmp-name suffix must come from "
+        "os.urandom (or another non-global source), never `random`."
+    )
