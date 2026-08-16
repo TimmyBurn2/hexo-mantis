@@ -89,6 +89,7 @@ from mantis.config.armed_aborts import (
     PRODUCTION_CONFIGS,
     ArmedAbort,
     Mechanism,
+    SampleClockNotDerivableError,
     Status,
     audit_arming,
 )
@@ -1001,16 +1002,39 @@ def test_the_green_audit_PUBLISHES_the_cadence_it_computed(tmp_path) -> None:
 
 class _NeuteredMember:
     """A cadence member whose arithmetic answers a constant — the mutation the self-test
-    exists to catch. A stand-in in a TEST; O-2's ban is on stand-ins in the TOOL."""
+    exists to catch. A stand-in in a TEST; O-2's ban is on stand-ins in the TOOL.
+
+    R265 / ADJ-D38: it accepts the `period_steps` keyword the real members now require, and
+    ANSWERS instead of raising when handed `None` — which is the step-clock fallback arm F
+    exists to refuse, so this one stand-in drives arms A/B/C/D and F at once."""
 
     @staticmethod
-    def earliest_fire_step(values):
+    def earliest_fire_step(values, *, period_steps=None):
+        del values, period_steps
         return 0.0
 
 
 class _NeuteredCadence:
     GATE_INTERVAL_CONSEC = _NeuteredMember
     STEP_LAG_THRESHOLD = _NeuteredMember
+    EVAL_ROUND_CONSEC = _NeuteredMember
+
+
+class _Clock:
+    """One sample-clock member's shape as `_cadence_self_test`'s arm E reads it: a name and a
+    period path. A plain class, so instances stay hashable (arm E keys a dict by member)."""
+
+    def __init__(self, value: str, period_path: str) -> None:
+        self.value = value
+        self.period_path = period_path
+
+
+#: Every sample clock naming ONE period key — the R265 / ADJ-D38 mutation that restores
+#: "every axis is judged in one clock" with every ARITHMETIC arm still green, because the
+#: numbers are all correct and only the KEY they are taken from is wrong. Arm E is the only
+#: thing that can see it.
+_COLLAPSED_CLOCKS = (_Clock("gate_boundary", "monitor.gate_interval"),
+                     _Clock("eval_round", "monitor.gate_interval"))
 
 
 def test_the_TOOLS_OWN_fraction_is_the_one_the_audit_compares(monkeypatch, tmp_path) -> None:
@@ -1094,7 +1118,8 @@ def test_the_self_tests_arm_A_fires_ALONE_when_the_bound_would_refuse_a_healthy_
 
 
 @pytest.mark.parametrize("attribute,value", [("EARLIEST_FIRE_FRACTION", float("inf")),
-                                             ("Cadence", _NeuteredCadence)])
+                                             ("Cadence", _NeuteredCadence),
+                                             ("SampleClock", _COLLAPSED_CLOCKS)])
 def test_neutering_the_cadence_check_REDS_the_gates_own_self_test(
     monkeypatch, attribute, value,
 ) -> None:
@@ -1103,10 +1128,17 @@ def test_neutering_the_cadence_check_REDS_the_gates_own_self_test(
     A gate that publishes a verdict from an instrument nobody watched work is the phantom
     input LAW-07 names, and this check's failure mode is SILENCE: a bound treated as infinite
     or an `earliest_fire_step` collapsed to a constant leaves gate 12 rc 0 on exactly the
-    configs it was built to refuse — which is the state of the tree ADJ-D22 measured. Both
-    mutations are applied to the TOOL MODULE OBJECT in a test (the tool's own source carries
-    no such token, which is what O-2 censuses) and both must reach the process boundary as
-    the named rc 31, not as a quiet green.
+    configs it was built to refuse — which is the state of the tree ADJ-D22 measured.
+
+    R265 / ADJ-D38 adds the THIRD way it can rot, and it is the one the other two cannot see:
+    every sample clock naming the SAME period key. Every number the audit prints stays
+    arithmetically correct under that mutation — the draw-rate row's answer does not move at
+    all — while an axis is once again judged against a cadence key it never reads, which is
+    the D38 defect exactly. Arm E is its only witness.
+
+    All three mutations are applied to the TOOL MODULE OBJECT in a test (the tool's own
+    source carries no such token, which is what O-2 censuses) and all three must reach the
+    process boundary as the named rc 31, not as a quiet green.
     """
     assert not TOOL._cadence_self_test(), (
         "the unmutated self-test must pass, or the mutation below proves nothing"
@@ -1119,6 +1151,33 @@ def test_neutering_the_cadence_check_REDS_the_gates_own_self_test(
     assert TOOL.main(["--audit-only"]) == 31, (
         "…and the gate must refuse to publish a verdict, by name (rc 31), rather than "
         "auditing the tree with a dead check"
+    )
+
+
+def test_an_underivable_sample_clock_is_the_NAMED_rc_31_never_the_tools_rc_1(
+    monkeypatch,
+) -> None:
+    """R265 / ADJ-D38's fail-loud path, at the PROCESS boundary — the arm F-4 taught.
+
+    `SampleClockNotDerivableError` is a manifest defect an operator fixes in one line, and it
+    must arrive as `PreflightManifestError` rc 31 with its message carried through. Without
+    the explicit `except` it falls to `main`'s bare `except Exception` and becomes rc 1
+    `PreflightInternalError` — "the tool broke" — which is the one outcome this tool's own
+    docstring says cannot exist, and which tells an operator nothing about which key to move.
+
+    Driven by making the audit raise, because the schema's `ge=1` on both period keys puts an
+    underivable period out of reach of any config the loader will accept: what is under test
+    here is the tool's HANDLER, not the module's ability to raise (which
+    `tests/config/test_cadence_clock_mutations.py` drives directly).
+    """
+    def _raise(*_args, **_kwargs):
+        raise SampleClockNotDerivableError("synthetic: train.eval_interval resolved to None")
+
+    assert TOOL.main(["--audit-only"]) == 0, "the unmutated gate must be green"
+    monkeypatch.setattr(TOOL, "audit_cadence", _raise)
+    assert TOOL.main(["--audit-only"]) == 31, (
+        "an underivable sample clock must reach the boundary as the NAMED manifest rc 31, "
+        "not as the tool's own unnamed internal error"
     )
 
 
@@ -1224,10 +1283,16 @@ def test_the_deferred_print_carries_the_field(field: str, audit_stdout: str) -> 
     # deliberately: this test hollows the print one field at a time, and a shipped row would
     # make each drop's failure depend on that row's own field values rather than on the
     # print. What is re-pointed is only the premise, which is now the weaker and true one.
-    assert [row.name for row in MANIFEST if row.status.value == "deferred"] == [
-        "grad_norm_hard_abort"
-    ], ("the shipped deferred set is the grad-norm row; the synthetic subject below is "
-        "additional to it, never a stand-in for an empty manifest (WPAX Phase D / R81)")
+    # R265 / ADJ-D38 re-points this premise a second time and DERIVES it instead of
+    # transcribing a row list: the shipped deferred set gained `sealbot_wr_abort`, and the
+    # transcribed `== ["grad_norm_hard_abort"]` was a tally that had to be re-edited for a
+    # change it has no opinion about (R192(e)'s derive-or-delete, on a test premise). What
+    # this test needs is only that the shipped set is NON-EMPTY — so the synthetic subject
+    # below is additional to it and never a stand-in for an empty manifest (WPAX D / R81).
+    assert [row.name for row in MANIFEST if row.status.value == "deferred"], (
+        "the shipped manifest holds NO deferred row, so the synthetic subject below would be "
+        "standing in for an empty manifest rather than adding to a real one (R81)"
+    )
     deferred = [_SYNTHETIC_DEFERRED]
     for row in deferred:
         if field == "owner":
@@ -1321,13 +1386,19 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     _run_tool("--audit-only", "--out-dir", str(tmp_path / "rows"))
     report = json.loads(sorted((tmp_path / "rows").glob("preflight_*.json"))[0].read_text())
     manifest = report["manifest"]
-    assert [row["name"] for row in manifest["deferred"]] == [
-        row.name for row in MANIFEST if row.status.value == "deferred"
-    ] == ["grad_norm_hard_abort"], (
+    shipped_deferred = [row.name for row in MANIFEST if row.status.value == "deferred"]
+    assert [row["name"] for row in manifest["deferred"]] == shipped_deferred, (
         "the report's deferred block must be the SHIPPED manifest's, row for row. WPMINT "
-        "Phase K-B (call K-c) gives it a real subject — the grad-norm row — where WPAX "
-        "Phase D left it empty; the equality is against the manifest either way, so the "
-        f"published block and the audit that produced it cannot disagree; got {manifest['deferred']!r}"
+        "Phase K-B (call K-c) gave it a real subject where WPAX Phase D left it empty and "
+        "R265 / ADJ-D38 added a second (`sealbot_wr_abort`); the equality is against the "
+        "manifest either way, so the published block and the audit that produced it cannot "
+        f"disagree; got {manifest['deferred']!r}"
+    )
+    assert shipped_deferred, (
+        "…and the shipped set must be non-empty, or the equality above is `[] == []` and "
+        "witnesses nothing (LAW-07's vanished-subject species). This assertion is DERIVED, "
+        "not a transcribed row list: the previous `== ['grad_norm_hard_abort']` tally had to "
+        "be re-edited for a change it has no opinion about (R192(e))"
     )
     # …and the field-completeness claim moves onto a manifest that HAS a deferred row. Left
     # against the shipped one it became `all(...)` over an empty list — an assertion whose
@@ -1339,11 +1410,11 @@ def test_the_report_publishes_the_audits_own_deferred_and_required_rows(
     monkeypatch.setitem(audit_arming.__kwdefaults__, "manifest", probe_manifest)
     with_debt = TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
     assert [row["name"] for row in with_debt["deferred"]] == [
-        "grad_norm_hard_abort", _SYNTHETIC_DEFERRED.name
+        *shipped_deferred, _SYNTHETIC_DEFERRED.name
     ], (
         "the published deferred block is read from `AuditResult.deferred`, so a manifest "
-        "carrying debt must publish ALL of it — the shipped grad-norm row (WPMINT K-B) and "
-        f"the probe, in manifest order; got {with_debt['deferred']!r}"
+        "carrying debt must publish ALL of it — every shipped deferred row and the probe, in "
+        f"manifest order; got {with_debt['deferred']!r}"
     )
     assert all(row["note"] and row["owner"] and row["source_pin"]
                for row in with_debt["deferred"]), (

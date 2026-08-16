@@ -31,6 +31,13 @@
 # config and unread in the run. Splitting them would put the row set and the bound its rows
 # are judged against on opposite sides of an import, and the fraction is deliberately here
 # rather than in a schema model so no minted config can relax its own audit.
+# R265 / ADJ-D38 adds `SampleClock` beside `Cadence`, and it is the same argument once more:
+# "when can an armed row fire" is unanswerable without "in WHICH CLOCK does that row's
+# evidence arrive", because the two are different keys on different axes — the draw-rate
+# gate ticks on `monitor.gate_interval`, the sealbot-WR trajectory on `train.eval_interval`.
+# The period belongs to the CLOCK rather than to the row precisely so a row cannot name its
+# own: a row that supplies its own period is a row that can be audited in a clock it never
+# ticks in, which is the D38 defect stated as a shape.
 """The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
 
 ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
@@ -49,9 +56,19 @@ that resolved `parents[3]` to the repo root would be depending on an editable in
 Pinned by `tests/config/test_armed_abort_manifest.py`,
 `test_the_manifest_module_makes_no_filesystem_call`.
 
-`wr_hard_abort_enabled` is ABSENT BY DECISION, not by oversight: it is the sealbot win-rate
-abort, which ships WARN-ONLY by operator ruling G-3, and STATE §6 names the mint-blocking
-pair as "draw-rate + actor-lag". A later reader must not "fix" it in.
+`wr_hard_abort_enabled` is a DEFERRED row since R265 / ADJ-D38, and the sentence this
+paragraph used to carry ("ABSENT BY DECISION, not by oversight … a later reader must not
+'fix' it in") was HALF right and is corrected here rather than deleted. The half that
+stands: the sealbot win-rate abort ships WARN-ONLY by operator ruling G-3, STATE §6 names
+the mint-blocking pair as "draw-rate + actor-lag", and NOTHING here may flip it REQUIRED —
+that would gate every production mint on `monitor.wr_hard_abort_enabled: true`, a value the
+operator deliberately mints false, and moving it is a ruling and not a manifest edit. The
+half that was WRONG: absence from the manifest was read as "the axis needs no row", and
+ADJ-D38 measured what that bought — gate 12's cadence audit could not compute even a FALSE
+affirmative for the WR axis, so the axis sat entirely outside the R251 machinery while its
+own consec knobs were free to go unfireable. A DEFERRED row prints loudly on every gate-12
+run, gates nothing, and makes the flip a one-field data edit (§8.5); that is the posture for
+a live gate whose DISPOSITION is owed, and it is what the row below carries.
 """
 from __future__ import annotations
 
@@ -215,6 +232,158 @@ EARLIEST_FIRE_FRACTION: float = 0.25
 RUN_LENGTH_PATH: str = "train.max_train_steps"
 
 
+class SampleClockNotDerivableError(ValueError):
+    """A row's SAMPLE CLOCK period could not be derived from the config (R265 / ADJ-D38).
+
+    The audit RAISES here instead of falling back to the training-step clock, and that is the
+    whole ruling in one branch: reading an axis in a clock it does not tick in is exactly the
+    defect ADJ-D38 measured. Gate 12 computed every row's fire step in TRAINING STEPS while
+    the sealbot-WR axis's evidence arrives per EVAL ROUND, so a WR row judged that way would
+    be judged against a cadence key it never reads — and it would audit GREEN. A silent
+    fallback would make "one tick is one training step" and "nobody could derive this row's
+    tick" the same observable, which is MF-7's class relocated onto the cadence axis.
+
+    `preflight_mint.py` maps it onto `PreflightManifestError`, rc 31: a manifest defect an
+    operator can fix in one line, never the tool's own unnamed internal error (F-4's class).
+    """
+
+
+class SampleClock(StrEnum):
+    """WHICH CLOCK an axis's samples arrive in, and how long ONE tick of it is in TRAINING
+    STEPS. DATA, and the period is a live config PATH — never a number written here.
+
+    R265 / ADJ-D38. `Cadence` used to answer "when can this row first fire" in the
+    training-step clock for every row, and got away with it because every row it held either
+    ticked in that clock or declared its own period as an operand. The sealbot-WR axis breaks
+    both halves: its samples arrive once per COMPLETED EVAL ROUND
+    (`train/coordinator/step.py::on_eval_round_complete` appends exactly one `(step, wr)` per
+    routed result), so the step clock is the wrong denominator — and nothing would have
+    stopped a WR row DECLARING `monitor.gate_interval` as its interval operand, which is how
+    an axis ends up audited in another axis's clock with every check green.
+
+    So the period is a property of the CLOCK, not of the row. Three consequences, all of them
+    the point: every row on an axis reads the SAME live key; a row cannot supply its own
+    period; and a second row added to an existing axis inherits the right cadence by
+    construction rather than by its author remembering.
+
+    An axis whose period cannot be derived RAISES (`SampleClockNotDerivableError`). There is
+    no default tick anywhere in this class.
+    """
+
+    #: One sample per TRAINING STEP. The period is 1 by the DEFINITION of the clock, not by a
+    #: number this file chose — which is why this member names no config path and why a
+    #: `period_path` of `None` here does not mean "underivable". The grad-norm gate (evaluated
+    #: inside the burst, per step) and the actor-lag invariant tick here.
+    TRAIN_STEP = "train_step"
+
+    #: One sample per hard-abort GATE BOUNDARY. `train/coordinator/step.py::
+    #: _run_gate_interval` runs the live hard-abort gates only when
+    #: `self._train_step % cfg.gate_interval == 0`, and `monitor.gate_interval` is the minted
+    #: key `mantis.run.compose_run` threads into `StepCoordinatorConfig.gate_interval`.
+    GATE_BOUNDARY = "gate_boundary"
+
+    #: One sample per completed EVAL ROUND. `train/coordinator/step.py::_maybe_kick_eval`
+    #: kicks a round only at `self._train_step % cfg.eval_interval == 0` and never at round 0,
+    #: so round `r` lands at training step `r * eval_interval` with `r >= 1`; every routed
+    #: result then appends exactly one WR sample. `train.eval_interval` is the minted key
+    #: `resolve_coordinator_knobs` reads into `StepCoordinatorConfig.eval_interval`.
+    #:
+    #: DISCLOSED, because this clock has a second switch the audit cannot see from one path:
+    #: `eval_enabled` false builds NO eval pipeline, so the axis ticks zero times however
+    #: small the interval is. A row carries ONE `config_path` and the WR row spends it on the
+    #: disposition flag; the eval-enabled half is held by
+    #: `tests/config/test_minted_config_remint.py::
+    #: test_a_minted_config_carries_the_identity_and_eval_leaves`, which asserts it True over
+    #: all six committed configs — the same disposition the `terminal_eval_broken` row takes
+    #: for the same reason.
+    EVAL_ROUND = "eval_round"
+
+    #: NOT step-clocked at all — a wall-clock poll (the disk guard) or a close-out rule (the
+    #: terminal eval). Asking such a row for a period is a category error, and `period_steps`
+    #: RAISES rather than answering 1: answering 1 is precisely the step-clock fallback this
+    #: class exists to make impossible. Such a row is judged by the STEP FLOOR its rule
+    #: imposes instead (`Cadence.step_floor`), which is a derived answer and not an exemption.
+    NO_STEP_CLOCK = "no_step_clock"
+
+    @property
+    def period_path(self) -> str | None:
+        """The live config key ONE tick of this clock is measured by.
+
+        `None` on the two members that have no config period, and the two mean different
+        things — `TRAIN_STEP`'s tick is definitional, `NO_STEP_CLOCK` has no step tick at all
+        — which is why `period_steps` branches on the MEMBER and not on this being `None`.
+        """
+        return {
+            SampleClock.TRAIN_STEP: None,
+            SampleClock.GATE_BOUNDARY: "monitor.gate_interval",
+            SampleClock.EVAL_ROUND: "train.eval_interval",
+            SampleClock.NO_STEP_CLOCK: None,
+        }[self]
+
+    @property
+    def is_step_clocked(self) -> bool:
+        """True iff a training step is a meaningful denominator for this axis at all."""
+        return self is not SampleClock.NO_STEP_CLOCK
+
+    def period_steps(self, config: Any, *, row: str) -> float:
+        """TRAINING STEPS per tick of this clock, DERIVED from `config`. Never a fallback.
+
+        A value that is not a real, finite, non-`bool` number is UNDERIVABLE and raises:
+        `_dotted` short-circuits an explicitly-disarmed block to `None`, and a `None` period
+        read as "1 step" would audit an axis that never ticks as one that ticks every step.
+        A real number BELOW 1 is a different thing — it is derivable and degenerate — and it
+        is passed through so `Cadence.earliest_fire_samples` can answer `math.inf` for it,
+        the fail-toward-visibility currency that axis already speaks (a schema `ge=1` on both
+        period keys makes it unreachable from a validated config either way).
+        """
+        if self is SampleClock.TRAIN_STEP:
+            return 1.0
+        path = self.period_path
+        if path is None:
+            raise SampleClockNotDerivableError(
+                f"armed-abort row {row!r} ticks in {self.value}, which is not a training-step "
+                "clock at all: its rule has no per-step sampling cadence, so asking for one "
+                "is a category error. Judge it by `Cadence.step_floor` instead — forging a "
+                "period here is the step-clock fallback R265 forbids"
+            )
+        value = _dotted(config, path, row=row)
+        if not _is_real_number(value):
+            raise SampleClockNotDerivableError(
+                f"armed-abort row {row!r} ticks in {self.value}, whose period is minted at "
+                f"{path!r} — and that resolves to {value!r}, which is not a number of "
+                "training steps. The audit REFUSES to fall back to the training-step clock: "
+                "an axis judged in a clock it does not tick in audits GREEN on exactly the "
+                "configs it exists to refuse (R265 / ADJ-D38)"
+            )
+        return float(value)
+
+
+def _evals_to_first_fire(consec: float, min_step: float, period: float) -> float:
+    """EVAL ROUNDS before ONE sealbot-WR trigger can first fire (R265 / ADJ-D38).
+
+    Derived from `monitor/rules.py::sealbot_wr_trajectory_alert`, which every trigger routes
+    through, and from nothing else:
+
+    * `len(history) >= n_consec` needs `consec` samples — but `if not wr_history: return
+      None` needs at least ONE regardless, so a `consec` of 0 (the schema's `ge=0` admits it)
+      does NOT let a trigger fire before the first round. `max(consec, 1)`, and that floor is
+      the arithmetic half of the `history[-0:]` hair-trigger ADJ-D38 records as a separate,
+      unruled operator question — 0 arms a weaker-evidence variant, it does not disable a
+      rule;
+    * `current_step > min_step` is STRICT and round `r` lands at `r * period`, so the first
+      round past the floor is `floor(min_step / period) + 1`.
+
+    OPTIMISTIC by construction, exactly as `GATE_INTERVAL_CONSEC`'s BUG-1 note is: it assumes
+    every round yields a WR sample (a round whose result carries no `wr_sealbot` is
+    skip-counted and appends nothing) and, for trigger B, that a positive peak exists. An
+    EARLIEST-POSSIBLE-fire bound wants the optimistic case — this is a reachability floor,
+    not a prediction of when a run would actually abort.
+    """
+    if period < 1.0:
+        return math.inf
+    return max(max(consec, 1.0), float(math.floor(min_step / period)) + 1.0)
+
+
 class Cadence(StrEnum):
     """WHEN a row's abort can FIRST fire, in TRAINING STEPS. DATA, not a branch on `name`.
 
@@ -234,14 +403,26 @@ class Cadence(StrEnum):
     (the ADJ-D22 outcome), and `None` is "NO STEP CADENCE GOVERNS THIS ROW AT ALL" — which is
     a truthful answer for a wall-clock or close-out rule and must never be forged into a
     number, the class R84 refused when it declined to fabricate an exit code.
+
+    R265 / ADJ-D38 SPLITS THAT ANSWER IN TWO, and the split is the ruling. `earliest_fire_
+    samples` answers in the row's OWN sample clock — gate boundaries for the draw-rate gate,
+    EVAL ROUNDS for the sealbot-WR trajectory — and `earliest_fire_step` is that count times
+    the clock's period, which `SampleClock` derives from a live key. No member holds its own
+    period any more: the interval `GATE_INTERVAL_CONSEC` used to take as operand 0 is now
+    read off `SampleClock.GATE_BOUNDARY`, so a row cannot name a cadence key its axis does
+    not tick on, and the audit compares the count against the bound converted into that same
+    clock. For a period of exactly what the row used to declare the published STEP is
+    unchanged to the bit — the D38 change is which rows CAN be judged, not what the judged
+    ones answer.
     """
 
     #: `train/coordinator/step.py::_run_gate_interval` runs the gate only when
-    #: `self._train_step % cfg.gate_interval == 0`, and `monitor/rules.py::
-    #: check_draw_rate_collapse` refuses on `len(history) < consec` and on
-    #: `current_step < min_step`. So the earliest fire is the first gate BOUNDARY that is both
-    #: the `consec`-th observation and at or past `min_step`. Operands, in order:
-    #: (gate-interval path, consec path, min-step path).
+    #: `self._train_step % cfg.gate_interval == 0` — so this member's SAMPLE CLOCK is
+    #: `SampleClock.GATE_BOUNDARY` and the interval is read there, NOT declared here (R265).
+    #: `monitor/rules.py::check_draw_rate_collapse` then refuses on `len(history) < consec`
+    #: and on `current_step < min_step`, so the earliest fire is the first gate BOUNDARY that
+    #: is both the `consec`-th observation and at or past `min_step`. Operands, in order:
+    #: (consec path, min-step path).
     #:
     #: BUG-1: a boundary that yields no observation neither advances NOR resets `consec`
     #: (`_sample`), so `consec * interval` bounds a real fire from BELOW. That is exactly what
@@ -267,6 +448,27 @@ class Cadence(StrEnum):
     #: fires a REAL coordinator at the exact observation count this arithmetic publishes
     #: for a `consec` the old code could never satisfy.
     GATE_INTERVAL_CONSEC = "gate_interval_consec"
+
+    #: R265 / ADJ-D38 — the sealbot-WR trajectory abort, in the EVAL-ROUND clock.
+    #:
+    #: `train/coordinator/step.py::on_eval_round_complete` appends ONE `(step, wr)` sample per
+    #: routed eval-round result, and `monitor/rules.py::sealbot_wr_trajectory_alert` fires on
+    #: whichever of its three triggers is first satisfiable — C early-death, B collapse-from-
+    #: peak, A rolling — each of which needs `len(history) >= its consec` AND
+    #: `current_step > its min_step`. The earliest possible fire is therefore the MINIMUM over
+    #: the three, in ROUNDS, and `SampleClock.EVAL_ROUND` converts a round to training steps
+    #: through `train.eval_interval`. Operands, in the order `_evals_to_first_fire` pairs
+    #: them: (collapse-consec path, early-death-min-step path, collapse-min-step path,
+    #: rolling-consec path, rolling-min-step path) — B and C SHARE
+    #: `monitor.wr_collapse_consecutive_evals`, which is why five paths cover three triggers.
+    #:
+    #: WHY THIS MEMBER EXISTS AT ALL, which is the ruling: judged in the TRAINING-STEP clock
+    #: this axis reads healthy on a config that can never deliver it. An `eval_interval` three
+    #: orders of magnitude past the run produces zero rounds and therefore zero WR samples,
+    #: while `monitor.gate_interval` — the key a step-clock audit would reach for — says
+    #: nothing whatever about it. ADJ-D22's defect, on the axis LAW-15/F-30 names as the one
+    #: that actually kills runs.
+    EVAL_ROUND_CONSEC = "eval_round_consec"
 
     #: `train/coordinator/step.py` D3: the grad-norm gate is evaluated PER TRAINING STEP
     #: inside the burst (its producer is the trainer's own loss dict) and fires when
@@ -301,43 +503,151 @@ class Cadence(StrEnum):
     CLOSE_OUT_TERMINAL = "close_out_terminal"
 
     @property
+    def sample_clock(self) -> SampleClock:
+        """WHICH clock this member's evidence arrives in (R265 / ADJ-D38). DATA, like
+        `arity` — `audit_cadence` reads it off the member and never asks which row it holds.
+
+        This is what makes "no axis is auditable in a clock it doesn't tick in" a structural
+        property rather than an authoring convention: the member that knows the arithmetic
+        also names the clock, and the clock (not the row) owns the period key.
+        """
+        return {
+            Cadence.GATE_INTERVAL_CONSEC: SampleClock.GATE_BOUNDARY,
+            Cadence.EVAL_ROUND_CONSEC: SampleClock.EVAL_ROUND,
+            Cadence.CONSEC_TRAIN_STEPS: SampleClock.TRAIN_STEP,
+            Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
+            Cadence.WALL_CLOCK_POLL: SampleClock.NO_STEP_CLOCK,
+            Cadence.CLOSE_OUT_TERMINAL: SampleClock.NO_STEP_CLOCK,
+        }[self]
+
+    @property
     def arity(self) -> int:
         """How many `cadence_paths` this member CONSUMES. Enforced by `ArmedAbort` in both
         directions, so a path the arithmetic never reads cannot sit on a row pretending to be
-        an input (LAW-07's phantom-input class, the rule `ceiling_path` already gets)."""
+        an input (LAW-07's phantom-input class, the rule `ceiling_path` already gets).
+
+        `GATE_INTERVAL_CONSEC` counts 2 and not 3 since R265: its interval moved off the row
+        and onto `SampleClock.GATE_BOUNDARY`, so a row can no longer declare the key its own
+        axis is sampled by — and the arity rule now REFUSES the row that tries.
+        """
         return {
-            Cadence.GATE_INTERVAL_CONSEC: 3,
+            Cadence.GATE_INTERVAL_CONSEC: 2,
+            Cadence.EVAL_ROUND_CONSEC: 5,
             Cadence.CONSEC_TRAIN_STEPS: 1,
             Cadence.STEP_LAG_THRESHOLD: 1,
             Cadence.WALL_CLOCK_POLL: 0,
             Cadence.CLOSE_OUT_TERMINAL: 0,
         }[self]
 
-    def earliest_fire_step(self, values: tuple[Any, ...]) -> float | None:
-        """The earliest TRAIN STEP at which this cadence can fire, given the row's operands.
+    def step_floor(self) -> float | None:
+        """The earliest TRAINING STEP a NOT-STEP-CLOCKED member's rule imposes (R265).
 
-        A real function of `values` in every step-cadenced member — a constant here would
-        pass or fail every row at once, the warning `is_armed` carries on the sibling axis.
+        Defined only for the two `NO_STEP_CLOCK` members, and it RAISES on the others: a
+        step-clocked row that took an answer from here would be skipping its own clock, which
+        is the fallback this split exists to make unreachable. The two answers are the ones
+        R251 already derived — `0.0` for a wall-clock poll (a daemon thread on a `wait`
+        timeout; no train-step boundary gates it, so the floor is genuinely zero) and `None`
+        for a close-out rule (asking when a close-out rule fires "early" is a category error,
+        and `max_train_steps` would fail every such row forever for a non-defect).
+        """
+        if self.sample_clock.is_step_clocked:
+            raise SampleClockNotDerivableError(
+                f"cadence {self.value} ticks in {self.sample_clock.value}, a real sample "
+                "clock: its earliest fire is a COUNT OF TICKS times a derived period, never "
+                "a bare step floor. Asking for a floor here would answer a step-clock "
+                "question about an axis that has its own clock (R265 / ADJ-D38)"
+            )
+        return None if self is Cadence.CLOSE_OUT_TERMINAL else 0.0
+
+    def earliest_fire_samples(
+        self, values: tuple[Any, ...], *, period_steps: float
+    ) -> float | None:
+        """How many TICKS OF THIS ROW'S OWN SAMPLE CLOCK before it can first fire (R265).
+
+        The unit is the axis's own: gate BOUNDARIES for the draw-rate gate, EVAL ROUNDS for
+        the sealbot-WR trajectory, TRAINING STEPS for the two per-step rules. `period_steps`
+        is how many training steps one of those ticks takes, and it arrives from
+        `SampleClock.period_steps` — never from an operand, so no row can denominate itself.
+
+        A real function of `values` in every member — a constant here would pass or fail every
+        row at once, the warning `is_armed` carries on the sibling axis.
 
         An operand that is not a real, finite, non-`bool` number answers `math.inf`: an
-        unjudgeable rule must fail toward VISIBILITY, never toward silence, and reading a
-        gate that never runs as a gate that fires at step 0 is the exact inversion.
+        unjudgeable rule must fail toward VISIBILITY, never toward silence, and reading a gate
+        that never runs as a gate that fires at tick 0 is the exact inversion. A degenerate
+        period (below one training step) answers `math.inf` for the same reason, which is the
+        answer R251 gave a sub-1 `gate_interval` before the split and gives it still.
         """
-        if self is Cadence.CLOSE_OUT_TERMINAL:
-            return None
-        if self is Cadence.WALL_CLOCK_POLL:
-            return 0.0
+        if not self.sample_clock.is_step_clocked:
+            raise SampleClockNotDerivableError(
+                f"cadence {self.value} ticks in {self.sample_clock.value}, so it has no "
+                "sample count at all: its rule is not sampled on any train-step clock. Ask "
+                "`step_floor` instead — counting ticks of a clock that does not exist is the "
+                "fabricated-number class R84 refused (R265 / ADJ-D38)"
+            )
+        if not _is_real_number(period_steps):
+            raise SampleClockNotDerivableError(
+                f"cadence {self.value} was handed period {period_steps!r}, which is not a "
+                "number of training steps per tick. The period is DERIVED by "
+                "`SampleClock.period_steps` from a live key and a missing one is a loud "
+                "refusal, never a silent 1 (R265 / ADJ-D38)"
+            )
+        period = float(period_steps)
         if not all(_is_real_number(value) for value in values):
             return math.inf
         if self is Cadence.STEP_LAG_THRESHOLD:
             return float(values[0]) + 1.0
         if self is Cadence.CONSEC_TRAIN_STEPS:
             return float(values[0])
-        interval, consec, min_step = (float(value) for value in values)
-        if interval < 1.0 or consec < 1.0:
+        if self is Cadence.EVAL_ROUND_CONSEC:
+            collapse_consec, early_min, collapse_min, rolling_consec, rolling_min = (
+                float(value) for value in values
+            )
+            return min(
+                _evals_to_first_fire(collapse_consec, early_min, period),    # trigger C
+                _evals_to_first_fire(collapse_consec, collapse_min, period),  # trigger B
+                _evals_to_first_fire(rolling_consec, rolling_min, period),   # trigger A
+            )
+        consec, min_step = (float(value) for value in values)
+        if period < 1.0 or consec < 1.0:
             return math.inf
-        boundaries = max(consec, math.ceil(min_step / interval))
-        return interval * float(boundaries)
+        return max(consec, float(math.ceil(min_step / period)))
+
+    def earliest_fire_step(
+        self, values: tuple[Any, ...], *, period_steps: float | None
+    ) -> float | None:
+        """The earliest TRAIN STEP at which this cadence can fire — the SAME three currencies
+        R251 published (a finite step, `math.inf` for "these operands can never fire", `None`
+        for "no step cadence governs this row at all"), now COMPOSED from the split above.
+
+        For a step-clocked member it is `earliest_fire_samples * period_steps`, and
+        `period_steps` is REQUIRED: passing `None` there raises rather than assuming one
+        training step per tick, because that assumption IS the D38 defect. For a
+        `NO_STEP_CLOCK` member it is `step_floor()`, and `period_steps` must be `None` for the
+        mirror-image reason — a period on an axis with no step clock is an operand nobody can
+        have derived.
+        """
+        if not self.sample_clock.is_step_clocked:
+            if period_steps is not None:
+                raise SampleClockNotDerivableError(
+                    f"cadence {self.value} ticks in {self.sample_clock.value} and was handed "
+                    f"a period of {period_steps!r}: no config key measures a tick of a clock "
+                    "this rule does not run on, so that number came from somewhere it could "
+                    "not have been derived (R265 / ADJ-D38)"
+                )
+            return self.step_floor()
+        if period_steps is None:
+            raise SampleClockNotDerivableError(
+                f"cadence {self.value} ticks in {self.sample_clock.value} and was handed no "
+                "period: answering in training steps anyway would be the one-tick-is-one-step "
+                "FALLBACK R265 forbids — the audit fails loud instead (ADJ-D38)"
+            )
+        samples = self.earliest_fire_samples(values, period_steps=period_steps)
+        if samples is None or not math.isfinite(samples):
+            # `math.inf * 0.0` is `nan`, and a nan step would compare False against every
+            # bound and read as WITHIN — the unfireable row auditing green, one multiply late.
+            return samples
+        return samples * float(period_steps)
 
 
 @dataclass(frozen=True)
@@ -459,8 +769,11 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="train.draw_rate_abort.threshold",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
         cadence=Cadence.GATE_INTERVAL_CONSEC,
-        cadence_paths=("monitor.gate_interval", "train.draw_rate_abort.consec",
-                       "train.draw_rate_abort.min_step"),
+        # R265 / ADJ-D38: `monitor.gate_interval` is NO LONGER an operand here. It is the
+        # PERIOD of this row's sample clock, read off `SampleClock.GATE_BOUNDARY` — the same
+        # key, the same value, one authority for every row on the axis, and no row able to
+        # name a cadence key its own axis is not sampled by.
+        cadence_paths=("train.draw_rate_abort.consec", "train.draw_rate_abort.min_step"),
         status=Status.REQUIRED,
         exit_code=DRAW_RATE_COLLAPSE_EXIT_CODE,
         owner=None,
@@ -681,6 +994,86 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "break the R56 scan."
         ),
     ),
+    ArmedAbort(
+        name="sealbot_wr_abort",
+        config_path="monitor.wr_hard_abort_enabled",
+        mechanism=Mechanism.CONFIG_BOOL,
+        # Declared for the reason the grad-norm row above declares one, and for a second
+        # reason that is this row's whole point: the WR axis had NO row at all, so gate 12's
+        # cadence audit could not compute even a FALSE affirmative for it (ADJ-D38). Its live
+        # consumer meanwhile is `preflight_mint.py::_print_deferred_rows`, which prints the
+        # cadence AND the clock it ticks in on every gate run.
+        cadence=Cadence.EVAL_ROUND_CONSEC,
+        cadence_paths=("monitor.wr_collapse_consecutive_evals",
+                       "monitor.wr_early_death_min_step",
+                       "monitor.wr_collapse_min_step",
+                       "monitor.wr_rolling_consecutive_evals",
+                       "monitor.wr_rolling_min_step"),
+        status=Status.DEFERRED,
+        exit_code=None,
+        owner="operator ruling G-3 — the warn-vs-abort DISPOSITION, at run5 mint prereg",
+        source_pin=(
+            "src/mantis/train/coordinator/step.py",
+            'self._fire_hard_abort("sealbot_wr_abort", hard, step=step)',
+        ),
+        note=(
+            "The sealbot win-rate trajectory abort (monitor/rules.py's triggers A/B/C, fired "
+            "from coordinator/step.py::on_eval_round_complete). R265 / ADJ-D38 authors this "
+            "row; before it the axis was OUTSIDE the manifest entirely. "
+            "WHY DEFERRED AND NOT REQUIRED, and this row's answer is the STRONGEST of the "
+            "three deferred cases on record: flipping it REQUIRED would gate every "
+            "production mint on monitor.wr_hard_abort_enabled being true, and every "
+            "committed config mints it FALSE by operator ruling G-3 (warn-only; STATE §6 "
+            "names the mint-blocking pair as draw-rate + actor-lag). So REQUIRED here does "
+            "not demand a value nobody pre-registered — it OVERRULES one the operator "
+            "pre-registered, from a CI gate, which is worse than the class R84 refused. The "
+            "disposition is a ruling; this row is the instrument, not the ruling. "
+            "WHAT THE ROW BUYS WHILE DEFERRED, since a deferred row gates nothing: the axis "
+            "is now VISIBLE. _print_deferred_rows names its arming surface, its cadence "
+            "member, its five operands and the EVAL-ROUND clock they are denominated in, on "
+            "every gate-12 run; and the flip to REQUIRED stays the one-field data edit §8.5 "
+            "claims, so the day G-3 is revisited the audit is already wired. Before this row "
+            "the honest description was that gate 12 had no opinion about the WR axis at "
+            "all — not a wrong one, none. "
+            "WHY THE CADENCE IS EVAL-ROUND AND NOT GATE-INTERVAL, which is R265 itself: WR "
+            "evidence arrives once per COMPLETED EVAL ROUND, so this row's earliest possible "
+            "fire is a count of ROUNDS times train.eval_interval. Judged in the training-step "
+            "clock — the clock every row was judged in before D38 — an eval_interval that "
+            "outruns the run reads perfectly healthy, because monitor.gate_interval says "
+            "nothing whatever about when this rule is evaluated. That is ADJ-D22's defect on "
+            "the axis LAW-15/F-30 names as the one that actually kills runs. "
+            "THE RING BEHIND IT (ADJ-D38's mechanism half, landed with this row): "
+            "step.py::on_eval_round_complete used to trim the WR ring to a literal depth of "
+            "5 while all three triggers refuse on len(history) >= their consec, so every "
+            "schema-legal wr_collapse_consecutive_evals or wr_rolling_consecutive_evals >= 6 "
+            "was armed-in-the-config and permanently unfireable. The literal is DELETED: the "
+            "capacity now derives from the minted consec keys and from rule B's own peak "
+            "window (monitor/rules.py::WR_PEAK_WINDOW_EVALS), which is the ONE thing the "
+            "depth was ALSO a semantic constant of and is therefore preserved exactly rather "
+            "than widened. Driven by tests/train/test_wr_gate_capacity.py; bit-identical for "
+            "every consec <= the old depth, which every committed config mints (2 and 3). "
+            "exit_code is None, truthfully and for the grad-norm row's reason: "
+            "_fire_hard_abort stops the run COOPERATIVELY and R84 authored a code for the "
+            "draw-rate family only. Inventing one for a warn-only rule would be that refused "
+            "class twice over. exit_code_for_abort therefore still answers None for "
+            "'sealbot_wr_abort' — now from the SECOND of its two truthful sources (a "
+            "registered row carrying None) rather than the first (no row at all). "
+            "RESIDUAL, disclosed: the EVAL_ROUND clock has a second switch a single "
+            "config_path cannot cover — eval_enabled false builds no eval pipeline, so the "
+            "axis ticks zero times whatever the interval is. Held by "
+            "test_minted_config_remint.py's per-config eval-leaf assertion, the same "
+            "disposition the terminal_eval_broken row takes for the same reason. "
+            "SECOND RESIDUAL, and it is UNRULED rather than closed: both consec knobs carry "
+            "ge=0, and consec 0 does NOT disable a trigger — history[-0:] is the WHOLE ring "
+            "in Python, so 0 arms a weaker-evidence variant that fires on however many evals "
+            "the ring holds (minimum 1, via the empty-history guard). ADJ-D38 raises 'a rule "
+            "that needs zero observations is not a rule' as an OPERATOR question and R265 "
+            "does not rule it, so no bound was moved here; _evals_to_first_fire's max(consec, "
+            "1) floor is the arithmetic stating the same fact. "
+            "The pin binds the fire site, so deleting the gate, renaming the rule or "
+            "reordering the disposition past it all break the R56 scan."
+        ),
+    ),
 )
 
 #: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them
@@ -877,11 +1270,25 @@ class CadenceVerdict:
     a step, `math.inf` for "these operands can never fire", and `None` for "no step cadence
     governs this row" — because collapsing them here would destroy exactly the distinction
     the operator needs to tell a DEFECT from a rule that is not step-cadenced at all.
+
+    R265 / ADJ-D38 adds the row's OWN CLOCK beside the step answer, and publishes both rather
+    than replacing one with the other. `earliest_samples` / `bound_samples` are the pair the
+    verdict is actually DECIDED on — a count of the axis's own ticks against the bound
+    converted into the same ticks — while `earliest_step` / `bound` stay the currency an
+    operator reads a run in. `period_steps` is what ties them, derived from `clock`'s live
+    key; it is `None` exactly when `clock` is `NO_STEP_CLOCK`, where a period would be a
+    number nobody could have derived and `earliest_step` carries the rule's step FLOOR
+    instead. Publishing both is the anti-vacuity posture the whole cadence block already
+    takes: a reader can see WHICH clock a row was judged in, not just that it passed.
     """
 
     row: ArmedAbort
+    clock: SampleClock
+    period_steps: float | None
+    earliest_samples: float | None
     earliest_step: float | None
     bound: float
+    bound_samples: float | None
     within: bool
     detail: str
 
@@ -913,6 +1320,16 @@ def audit_cadence(
     `Mechanism.is_armed` applies to a missing ceiling: an unjudgeable armed row must fail
     toward visibility, or "nobody declared it" and "it is fine" become one observable.
 
+    R265 / ADJ-D38 — EACH ROW IS JUDGED IN ITS OWN SAMPLE CLOCK. The row's cadence names the
+    clock, the clock derives its period from a live key, and the comparison happens in ticks
+    of that clock: `earliest_fire_samples <= bound / period`. For a fixed period that is the
+    same verdict the step-clock comparison gave (multiply both sides), which is why no
+    committed config changes colour; what changes is that an axis sampled on a DIFFERENT key
+    can now be judged at all, instead of being judged against a key it never reads or — the
+    state ADJ-D38 measured on the WR axis — not being judged at all. A clock whose period
+    cannot be derived RAISES `SampleClockNotDerivableError`; there is no step-clock fallback
+    anywhere on this path.
+
     `manifest` and `fraction` are keywords for the same reason `audit_arming`'s `manifest`
     is: the trigger has to be drivable in both directions, and `fraction` is what the audit's
     own mutation pin neuters to prove the comparison is live rather than decorative.
@@ -930,22 +1347,46 @@ def audit_cadence(
             continue
         if row.cadence is None:
             verdicts.append(CadenceVerdict(
-                row=row, earliest_step=math.inf, bound=bound, within=False,
+                row=row, clock=SampleClock.NO_STEP_CLOCK, period_steps=None,
+                earliest_samples=None, earliest_step=math.inf, bound=bound,
+                bound_samples=None, within=False,
                 detail=("declares no cadence, so the audit cannot compute when it could "
                         "first fire — an unjudgeable armed row gates rather than passes"),
             ))
             continue
+        clock = row.cadence.sample_clock
         values = tuple(_dotted(config, path, row=row.name) for path in row.cadence_paths)
-        earliest = row.cadence.earliest_fire_step(values)
-        within = earliest is None or earliest <= bound
         operands = ", ".join(f"{path}={value!r}"
                              for path, value in zip(row.cadence_paths, values, strict=True))
+        if clock.is_step_clocked:
+            period = clock.period_steps(config, row=row.name)
+            samples = row.cadence.earliest_fire_samples(values, period_steps=period)
+            earliest = row.cadence.earliest_fire_step(values, period_steps=period)
+            # A degenerate period cannot divide the bound, and it must not be read as a
+            # generous one: `-inf` ticks refuses every row whose clock does not advance. Its
+            # `earliest_fire_samples` is already `inf`, so the two agree by construction.
+            bound_samples = bound / period if period >= 1.0 else -math.inf
+            within = samples is None or samples <= bound_samples
+            tick = f"{clock.period_path}={period}"
+            detail = (f"cadence {row.cadence.value} sampled on the {clock.value} clock "
+                      f"(1 tick = {tick} training steps)"
+                      + (f" over {operands}" if operands else "")
+                      + f"; earliest fire {samples} tick(s) = training step {earliest}, "
+                        f"bound {bound_samples} tick(s)")
+        else:
+            period = None
+            samples = None
+            bound_samples = None
+            earliest = row.cadence.earliest_fire_step(values, period_steps=None)
+            within = earliest is None or earliest <= bound
+            detail = (f"cadence {row.cadence.value} on the {clock.value} clock"
+                      + (f" over {operands}" if operands else "")
+                      + ("; not step-cadenced, so the fraction rule does not bind it"
+                         if earliest is None else f"; earliest fire step {earliest}"))
         verdicts.append(CadenceVerdict(
-            row=row, earliest_step=earliest, bound=bound, within=within,
-            detail=(f"cadence {row.cadence.value}"
-                    + (f" over {operands}" if operands else "")
-                    + ("; not step-cadenced, so the fraction rule does not bind it"
-                       if earliest is None else f"; earliest fire step {earliest}")),
+            row=row, clock=clock, period_steps=period, earliest_samples=samples,
+            earliest_step=earliest, bound=bound, bound_samples=bound_samples,
+            within=within, detail=detail,
         ))
     return tuple(verdicts)
 
@@ -967,12 +1408,14 @@ def exit_code_for_abort(
 
     `None` has two distinct and equally truthful sources, and neither is an error:
 
-    * a rule with NO manifest row at all — `grad_norm_hard_abort` and `sealbot_wr_abort`
-      share `_fire_hard_abort` and neither is pre-registered. R84 refused to invent a code
-      for an abort nobody registered, and inventing one HERE would be that same class one
-      layer down;
+    * a rule with NO manifest row at all — R84 refused to invent a code for an abort nobody
+      registered, and inventing one HERE would be that same class one layer down. CORRECTED
+      at R265: this bullet used to name `grad_norm_hard_abort` and `sealbot_wr_abort` as its
+      examples, and BOTH have since gained rows (K-B and ADJ-D38 respectively). They answer
+      `None` through the SECOND source below now, not this one; the class stands and its
+      examples were transcribed, which is why they went stale;
     * a row that is registered but carries `exit_code=None` — the posture the draw-rate row
-      itself held until Phase X.
+      itself held until Phase X, and the posture both DEFERRED rows hold today.
 
     A caller must therefore treat `None` as "this abort has no authored exit code", never as
     "no abort fired" — `ShutdownState.abort_rule is None` is the only thing that means the
@@ -998,6 +1441,8 @@ __all__ = [
     "Cadence",
     "CadenceVerdict",
     "Mechanism",
+    "SampleClock",
+    "SampleClockNotDerivableError",
     "Status",
     "audit_arming",
     "audit_cadence",

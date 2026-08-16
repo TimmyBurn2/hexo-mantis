@@ -240,13 +240,23 @@ def test_the_shipped_manifest_still_audits_green_so_the_rc_31_arm_is_not_vacuous
     # kind of row R81 kept it alive for. The CONTROL's real subject is unchanged: rc 0 above
     # is the whole point, and a DEFERRED row cannot change it because deferred rows print and
     # do not gate. That is asserted directly here rather than inferred from an empty list.
+    # R265 / ADJ-D38 adds `sealbot_wr_abort` to that set and the transcribed row list here
+    # became a tally that had to be re-edited for a change it has no opinion about (R192(e)).
+    # DERIVED now, and stating the claim the control actually rests on: the deferred set is
+    # non-empty (so "deferred rows do not gate" has a subject) and rc 0 above held anyway.
     deferred = [row for row in MANIFEST if row.status is Status.DEFERRED]
-    assert [row.name for row in deferred] == ["grad_norm_hard_abort"], (
-        "…and the deferred set is exactly the grad-norm row, whose presence must not move "
-        f"the rc above: a deferred row prints loudly and gates nothing; got {deferred}"
+    assert deferred, (
+        "…the control needs at least one deferred row, or 'a deferred row prints loudly and "
+        "gates nothing' is being asserted about nothing while rc 0 above proves only that "
+        "the required rows are armed"
+    )
+    deferred_names = {row.name for row in deferred}
+    assert "draw_rate_collapse" not in deferred_names, (
+        "the draw-rate row must NOT be deferred — Phase D flipped it REQUIRED and a quiet "
+        "demotion would stop it gating a production mint while this control stayed green"
     )
     assert all(row.status is Status.REQUIRED for row in MANIFEST
-               if row.name != "grad_norm_hard_abort"), (
-        "every other shipped row must still be REQUIRED — a row quietly demoted to DEFERRED "
-        "would stop gating a production mint while this control stayed green"
+               if row.name not in deferred_names), (
+        "every row outside the declared deferred set must be REQUIRED — `status` is the only "
+        "thing that decides, and there is no third posture"
     )

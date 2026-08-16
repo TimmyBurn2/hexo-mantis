@@ -18,6 +18,9 @@ What each block below is the only witness to (LAW-07):
 * every REQUIRED row declares a cadence and every declared `cadence_paths` entry resolves
   on a REAL `RunConfig` — the phantom-input class `ceiling_path` already gets;
 * `Cadence.earliest_fire_step` is real ARITHMETIC over the row's operands, not a constant;
+* R265 / ADJ-D38 — every row is judged in ITS OWN SAMPLE CLOCK, whose period is derived from
+  a live key the CLOCK names (never one the row declares), and a step-clocked member handed
+  no period RAISES rather than falling back to one-tick-per-training-step;
 * the shipped production config passes with the numbers stated, and a vacuous interval
   FAILS by name;
 * the comparison is LIVE — driving the same config at `fraction=inf` flips the verdict, so
@@ -39,6 +42,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -50,6 +54,8 @@ from mantis.config.armed_aborts import (
     ArmedAbort,
     Cadence,
     Mechanism,
+    SampleClock,
+    SampleClockNotDerivableError,
     Status,
     audit_cadence,
 )
@@ -171,6 +177,25 @@ def test_every_required_row_declares_a_cadence_whose_paths_all_resolve(run5) -> 
                 f"row {row.name!r} names cadence path {path!r}, which resolves to None on "
                 "the shipped production config"
             )
+        # R265 / ADJ-D38: the row's CLOCK must resolve too, and a row may NOT declare its own
+        # period. Both halves matter — an unresolvable clock is a row that cannot be judged
+        # at all, and a period sitting in `cadence_paths` is a row denominating itself, which
+        # is how an axis ends up audited in a clock it does not tick in.
+        clock = row.cadence.sample_clock
+        if clock.period_path is not None:
+            assert clock.period_path not in row.cadence_paths, (
+                f"row {row.name!r} declares its own sample period {clock.period_path!r} as a "
+                "cadence operand: the period belongs to the CLOCK so every row on an axis "
+                "reads one key and no row can name another axis's"
+            )
+            probe: object = run5
+            for part in clock.period_path.split("."):
+                probe = getattr(probe, part)
+            assert isinstance(probe, int) and probe >= 1, (
+                f"row {row.name!r} ticks in {clock.value}, whose period is minted at "
+                f"{clock.period_path!r}; that must be a positive number of training steps on "
+                f"a real RunConfig, got {probe!r}"
+            )
 
 
 def test_the_arity_rule_is_enforced_at_construction_in_both_directions() -> None:
@@ -188,10 +213,23 @@ def test_the_arity_rule_is_enforced_at_construction_in_both_directions() -> None
                    cadence_paths=("monitor.gate_interval",), **common)
     with pytest.raises(ValueError, match="cadence_paths"):
         ArmedAbort(cadence=None, cadence_paths=("monitor.gate_interval",), **common)
+    # R265 / ADJ-D38: the WR member consumes five operands and the draw-rate member two —
+    # the interval that used to be operand 0 is the CLOCK's now, so a row still naming it
+    # is one path over and refused by the same rule.
+    with pytest.raises(ValueError, match="cadence_paths"):
+        ArmedAbort(cadence=Cadence.GATE_INTERVAL_CONSEC,
+                   cadence_paths=("monitor.gate_interval", "train.draw_rate_abort.consec",
+                                  "train.draw_rate_abort.min_step"), **common)
+    with pytest.raises(ValueError, match="cadence_paths"):
+        ArmedAbort(cadence=Cadence.EVAL_ROUND_CONSEC,
+                   cadence_paths=("monitor.wr_collapse_consecutive_evals",), **common)
     # …and the legal shapes construct.
     ArmedAbort(cadence=Cadence.CLOSE_OUT_TERMINAL, cadence_paths=(), **common)
     ArmedAbort(cadence=Cadence.STEP_LAG_THRESHOLD,
                cadence_paths=("monitor.actor_lag_threshold_steps",), **common)
+    ArmedAbort(cadence=Cadence.GATE_INTERVAL_CONSEC,
+               cadence_paths=("train.draw_rate_abort.consec",
+                              "train.draw_rate_abort.min_step"), **common)
 
 
 # ══ the arithmetic is arithmetic ═══════════════════════════════════════════════════════
@@ -206,32 +244,148 @@ def test_the_earliest_fire_step_is_derived_and_never_a_constant() -> None:
     invariant needs the learner one step PAST its threshold.
     """
     gate = Cadence.GATE_INTERVAL_CONSEC
-    assert gate.earliest_fire_step((1000, 3, 25000)) == 25000.0
-    assert gate.earliest_fire_step((1000, 3, 0)) == 3000.0
-    assert gate.earliest_fire_step((10, 3, 10)) == 30.0
-    assert gate.earliest_fire_step((1000, 3, 25001)) == 26000.0, (
+    assert gate.earliest_fire_step((3, 25000), period_steps=1000) == 25000.0
+    assert gate.earliest_fire_step((3, 0), period_steps=1000) == 3000.0
+    assert gate.earliest_fire_step((3, 10), period_steps=10) == 30.0
+    assert gate.earliest_fire_step((3, 25001), period_steps=1000) == 26000.0, (
         "min_step floors the FIRE, and the fire can only land on a boundary — so a min_step "
         "that is not a multiple of the interval rounds UP to the next boundary"
     )
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((3,)) == 3.0
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((7,)) == 7.0
-    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,)) == 101.0
-    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((14,)) == 15.0
-    assert Cadence.WALL_CLOCK_POLL.earliest_fire_step(()) == 0.0
-    assert Cadence.CLOSE_OUT_TERMINAL.earliest_fire_step(()) is None, (
+    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((3,), period_steps=1) == 3.0
+    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((7,), period_steps=1) == 7.0
+    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,), period_steps=1) == 101.0
+    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((14,), period_steps=1) == 15.0
+    assert Cadence.WALL_CLOCK_POLL.earliest_fire_step((), period_steps=None) == 0.0
+    assert Cadence.CLOSE_OUT_TERMINAL.earliest_fire_step((), period_steps=None) is None, (
         "a row that fires at close-out has no in-run step cadence at all; claiming one "
         "would be a fabricated number"
+    )
+    # R265 / ADJ-D38 — the WR member, in EVAL ROUNDS. Trigger C at run5's own shape is the
+    # first satisfiable of the three (16 rounds, against B's 26 and A's 21), and the answer
+    # moves with the eval cadence, which is the whole point of judging it in this clock.
+    wr = Cadence.EVAL_ROUND_CONSEC
+    assert wr.earliest_fire_samples((3, 15000, 25000, 2, 20000), period_steps=1000) == 16.0
+    assert wr.earliest_fire_step((3, 15000, 25000, 2, 20000), period_steps=1000) == 16000.0
+    assert wr.earliest_fire_step((3, 15000, 25000, 2, 20000), period_steps=100) == 15100.0, (
+        "a shorter eval cadence reaches the strict `current_step > min_step` floor sooner — "
+        "round 151 at period 100, not round 16 at period 1000"
+    )
+    assert wr.earliest_fire_samples((7, 0, 0, 9, 0), period_steps=1000) == 7.0, (
+        "with every min_step at 0 the binding constraint is the SMALLEST consec across the "
+        "three triggers, since the abort fires on whichever is first satisfiable"
+    )
+    assert wr.earliest_fire_samples((0, 0, 0, 0, 0), period_steps=1000) == 1.0, (
+        "consec 0 does NOT fire before the first eval round: `if not wr_history: return "
+        "None` needs one sample however weak the evidence bar is (ADJ-D38's hair-trigger "
+        "observation, stated as arithmetic — 0 arms a weaker rule, it disables nothing)"
     )
 
 
 def test_an_unjudgeable_operand_reads_as_UNREACHABLE_never_as_early() -> None:
     """Fail toward visibility, never toward silence — `is_armed`'s ceiling rule, restated
-    on this axis. A gate that never runs must never read as a gate that fires at step 0."""
-    for operands in ((0, 3, 25000), (-1, 3, 25000), (1000, 0, 25000), (None, 3, 25000)):
-        assert Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(operands) == math.inf
-    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((None,)) == math.inf
-    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((True,)) == math.inf, (
+    on this axis. A gate that never runs must never read as a gate that fires at step 0.
+
+    The DEGENERATE-PERIOD arms are R265's: a clock that does not advance by at least one
+    training step per tick is a clock nothing is sampled on, and `math.inf` is the same
+    answer R251 gave a sub-1 `gate_interval` when the interval was still an operand."""
+    for operands in ((0, 25000), (None, 3)):
+        assert Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
+            operands, period_steps=1000) == math.inf
+    for period in (0, -1):
+        assert Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
+            (3, 25000), period_steps=period) == math.inf, (
+            "a degenerate sample period must read UNREACHABLE, never as a fast clock — and "
+            "never as `nan`, which `inf * 0` would produce and every bound would accept"
+        )
+    assert Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
+        (3, 15000, 25000, 2, 20000), period_steps=0) == math.inf
+    assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((None,), period_steps=1) == math.inf
+    assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((True,), period_steps=1) == math.inf, (
         "`bool` on a threshold path is a type confusion, not a threshold"
+    )
+
+
+# ══ R265 / ADJ-D38: the sample clock ═══════════════════════════════════════════════════
+def test_every_axis_names_its_own_clock_and_no_two_clocks_share_a_key() -> None:
+    """The structural half of R265, and the one arm A/B-style value drives cannot see.
+
+    The defect is not "the arithmetic is wrong" — it is "the row is judged against a key its
+    axis is not sampled on", which reads perfectly healthy in every number the audit prints.
+    Two properties make that unreachable: a step-clocked member's period comes from the CLOCK
+    (so a row cannot name it), and no two clocks name the SAME key (so collapsing the period
+    table onto one key — the mutation that would restore "every axis judged in the step
+    clock" — cannot happen silently)."""
+    paths = {clock: clock.period_path for clock in SampleClock
+             if clock.period_path is not None}
+    assert set(paths) == {SampleClock.GATE_BOUNDARY, SampleClock.EVAL_ROUND}, (
+        f"exactly the two config-period clocks may name a key; got {paths}"
+    )
+    assert len(set(paths.values())) == len(paths), (
+        f"two sample clocks share a period key {paths}: one of those axes is being judged in "
+        "the other's clock, which is ADJ-D38 verbatim"
+    )
+    assert SampleClock.TRAIN_STEP.period_path is None
+    assert SampleClock.TRAIN_STEP.is_step_clocked, (
+        "a `None` period path means two different things and they must not collapse: the "
+        "train-step clock's tick is DEFINITIONAL (1), a no-step-clock row has no tick at all"
+    )
+    assert not SampleClock.NO_STEP_CLOCK.is_step_clocked
+    for member in Cadence:
+        assert isinstance(member.sample_clock, SampleClock), (
+            f"cadence {member.value} names no sample clock, so the audit cannot know which "
+            "key its evidence arrives on"
+        )
+
+
+def test_an_underivable_clock_RAISES_and_never_falls_back_to_the_step_clock() -> None:
+    """R265's fail-loud half, in every direction it can rot.
+
+    A silent fallback would make "one tick is one training step" and "nobody could derive
+    this row's tick" the same observable — and the fallback is the FRIENDLY-looking outcome,
+    which is why it has to be a raise and not a warning."""
+    absent = SimpleNamespace(train=SimpleNamespace(eval_interval=None))
+    with pytest.raises(SampleClockNotDerivableError, match="eval_interval"):
+        SampleClock.EVAL_ROUND.period_steps(absent, row="probe")
+    with pytest.raises(SampleClockNotDerivableError, match="not a training-step clock"):
+        SampleClock.NO_STEP_CLOCK.period_steps(SimpleNamespace(), row="probe")
+    with pytest.raises(SampleClockNotDerivableError, match="FALLBACK"):
+        Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step((3, 25000), period_steps=None)
+    with pytest.raises(SampleClockNotDerivableError):
+        Cadence.CLOSE_OUT_TERMINAL.earliest_fire_step((), period_steps=1000)
+    with pytest.raises(SampleClockNotDerivableError):
+        Cadence.WALL_CLOCK_POLL.earliest_fire_samples((), period_steps=1)
+    with pytest.raises(SampleClockNotDerivableError):
+        Cadence.GATE_INTERVAL_CONSEC.step_floor()
+    # …and the derivation itself works, so the invariant is not simply "always raise".
+    assert SampleClock.TRAIN_STEP.period_steps(SimpleNamespace(), row="probe") == 1.0
+    assert SampleClock.EVAL_ROUND.period_steps(
+        SimpleNamespace(train=SimpleNamespace(eval_interval=250)), row="probe") == 250.0
+
+
+def test_the_verdict_publishes_the_clock_it_judged_each_row_in(run5) -> None:
+    """The vacuity half of R265, on the field an operator needs to tell a green row from a
+    row that was green in the wrong units. `within` is decided in the row's OWN ticks, so
+    the published pair must be self-consistent: samples x period == the published step, and
+    bound_samples x period == the published bound."""
+    by_name = {v.row.name: v for v in audit_cadence(run5)}
+    draw = by_name["draw_rate_collapse"]
+    assert draw.clock is SampleClock.GATE_BOUNDARY
+    assert draw.period_steps == float(run5.monitor.gate_interval)
+    assert draw.earliest_samples is not None and draw.earliest_step is not None
+    assert draw.earliest_samples * draw.period_steps == draw.earliest_step
+    assert draw.bound_samples is not None
+    assert draw.bound_samples * draw.period_steps == draw.bound
+    assert draw.within is (draw.earliest_samples <= draw.bound_samples), (
+        "the verdict must be the one the OWN-CLOCK comparison gives, not a step-clock "
+        "comparison that happens to agree"
+    )
+    lag = by_name["actor_lag"]
+    assert lag.clock is SampleClock.TRAIN_STEP and lag.period_steps == 1.0
+    close_out = by_name["terminal_eval_broken"]
+    assert close_out.clock is SampleClock.NO_STEP_CLOCK
+    assert close_out.period_steps is None and close_out.bound_samples is None, (
+        "a row with no step clock must publish NO period and NO tick-bound: a number there "
+        "would be one nobody could have derived"
     )
 
 

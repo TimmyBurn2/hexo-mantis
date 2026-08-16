@@ -189,6 +189,20 @@ is also written at the field it belongs to.
   closure record: this bullet used to call its upper half open "for the same reason" as the
   grad-norm pair above — that reason still stands for them and no longer stands here. Driven
   by tests/train/test_drawrate_gate_capacity.py.
+- `monitor.wr_collapse_consecutive_evals` and `monitor.wr_rolling_consecutive_evals` have
+  their upper halves CLOSED by the same derivation, one gate over (R265 / ADJ-D38): the
+  sealbot-WR ring's capacity is now the max of the two minted consec keys and rule B's own
+  peak window (`mantis.monitor.rules.WR_PEAK_WINDOW_EVALS`), derived at the point of use, so
+  no schema-legal value is armed-in-the-config and unfireable-in-effect. The peak window is
+  NAMED rather than derived away because the deleted ring depth was carrying two jobs at
+  once, and widening rule B's peak with the ring would have moved an armed rule's decision.
+  Driven by tests/train/test_wr_gate_capacity.py, bit-identical below the old depth.
+- Their LOWER halves stay OPEN and are an operator question, not a closed edge: `ge=0` admits
+  `0`, which does not disable a trigger — `history[-0:]` is the whole ring in Python — so `0`
+  arms a weaker-evidence variant that fires on however many evals the ring holds. ADJ-D38
+  raises "a rule that needs zero observations is not a rule" (the posture
+  `train.draw_rate_abort.consec` already takes with `ge=1`) and R265 does not rule it, so no
+  bound moved. Every committed config mints 2 and 3.
 - `train.draw_rate_abort.threshold` still admits a hair-trigger below `1 / N_pool_min`;
   `_one_drawn_game_cannot_fire_the_abort` closes the part of it that matters.
 - `train.bot_batch_share` is half-wired by design: its sibling `bot_corpus_path` was dead and

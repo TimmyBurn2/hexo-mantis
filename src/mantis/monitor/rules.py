@@ -47,6 +47,30 @@ _DEDIAGNOSIS = (
     "(Objective-A) OR strength regression (Objective-B); diagnosis is the operator's"
 )
 
+#: Rule B's PEAK WINDOW, in eval rounds — how many most-recent evals `sealbot_wr_trajectory_
+#: alert` takes its `peak_wr` over (R265 / ADJ-D38).
+#:
+#: THIS NUMBER IS NOT NEW AND ITS MEANING HAS NOT MOVED. It was the sealbot-WR ring's depth
+#: (`step.py::WR_HISTORY_DEPTH = 5`, old `step_coordinator.py`'s `pop(0)` past 5), and rule B
+#: read its peak over the whole ring — so "peak over the last five evals" is what the shipped
+#: instrument has always decided on. What ADJ-D38 found is that ONE literal was carrying TWO
+#: independent jobs: the ring's CAPACITY (how much evidence the trajectory rules can see) and
+#: rule B's peak WINDOW (how far back "peak" reaches). Deriving the capacity from the minted
+#: consec keys — which is what makes every schema-legal consec fireable — would have silently
+#: widened the peak window with it, and a peak taken over more evals is a HIGHER bar for
+#: `wr < peak * ratio`: a behavioural change to an armed rule that no ruling authorizes.
+#:
+#: So the capacity is DERIVED and the window is NAMED, here, beside the predicate that reads
+#: it. Rule B's decision is bit-identical to the pre-D38 instrument for every history the old
+#: ring could hold, and stays bit-identical on a deeper ring because the window does not move
+#: with the ring. Driven by `tests/train/test_wr_gate_capacity.py`.
+#:
+#: NOT a config key and NOT a code-side default (R1): R1 forbids a default DUPLICATING a
+#: schema field's authority, and no schema field has ever expressed this quantity — it is the
+#: semantic of a rule, the way `check_loss_increase_window`'s `<= n` boundary is. Making it a
+#: key would MINT a new armed value, which is precisely what this change may not do.
+WR_PEAK_WINDOW_EVALS: int = 5
+
 # The rule-name tokens the emitted `training_alert` events carry (manifest + gate keys).
 WARN_RULE_NAMES: tuple[str, ...] = (
     "entropy_collapse",
@@ -200,7 +224,10 @@ def sealbot_wr_trajectory_alert(
       C. WR below ``wr_early_death_threshold`` for ``wr_collapse_consecutive_evals``
          consecutive evals past ``wr_early_death_min_step``;
       B. WR below ``peak × wr_collapse_from_peak_ratio`` for the same consecutive count
-         past ``wr_collapse_min_step``;
+         past ``wr_collapse_min_step``, where ``peak`` is the highest WR of the last
+         ``WR_PEAK_WINDOW_EVALS`` evals — rule B's own window, named rather than inherited
+         from the caller's ring depth since R265/ADJ-D38 (the ring is now sized by the
+         minted consec keys, and the peak must not widen with it);
       A. WR below ``wr_rolling_threshold`` for ``wr_rolling_consecutive_evals``
          consecutive evals past ``wr_rolling_min_step``.
     The consecutive-N guards are the §175/L34 asymmetry: a single self-correcting dip once
@@ -219,7 +246,15 @@ def sealbot_wr_trajectory_alert(
 
     history = list(wr_history)
     current_wr = history[-1][1]
-    peak_wr = max(wr for _, wr in history)
+    # R265 / ADJ-D38 — rule B's peak is taken over its own WINDOW, not over whatever the
+    # caller's ring happens to hold. Until D38 those were the same thing by accident: the
+    # ring was clipped to a literal 5 and this read the whole ring. The ring's capacity now
+    # DERIVES from the minted consec keys so no schema-legal consec is unfireable, and a
+    # whole-ring peak would have silently widened this window with it — a higher bar for
+    # `wr < peak * ratio`, i.e. a behavioural change to an armed rule that no ruling
+    # authorizes. The slice is a no-op for every history the old ring could hold, which is
+    # what makes the fix bit-identical for every consec <= the old depth.
+    peak_wr = max(wr for _, wr in history[-WR_PEAK_WINDOW_EVALS:])
     n_consec_collapse = int(cfg.wr_collapse_consecutive_evals)
 
     if (

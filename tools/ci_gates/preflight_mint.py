@@ -61,6 +61,18 @@ run. A large interval is NEVER a sanctioned disarm; the one sanctioned spelling 
 explicit R56-style deferred row with an owner and a source pin. `_cadence_self_test` proves
 the trigger fires in both directions before any verdict of it is published.
 
+R265 / ADJ-D38 GENERALISES THAT HALF: every row is judged IN ITS OWN SAMPLE CLOCK. R251
+computed every earliest-fire in TRAINING STEPS, which is the right clock for the draw-rate
+gate (it ticks on `monitor.gate_interval`) and the wrong one for the sealbot-WR trajectory,
+whose evidence arrives once per EVAL ROUND (`train.eval_interval`). A row's cadence now names
+its `SampleClock`, the CLOCK derives its period from a live key — no row may declare the key
+its own axis is sampled by — and the comparison happens in ticks of that clock. A clock whose
+period cannot be derived is rc 31 by name (`SampleClockNotDerivableError`), never a silent
+fall back to the step clock: an axis judged in a clock it does not tick in audits GREEN on
+exactly the configs it exists to refuse. `sealbot_wr_abort` joins the manifest in the same
+ruling as a DEFERRED row — the axis had no row at all, so gate 12 could not compute even a
+false affirmative for it — and is printed, with its clock, on every run.
+
 Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec`): everything
 AUDIT does, then the REAL `compose_run` boot in production posture, a bounded burst, a
 timeout-bounded join, and assertions (a) sync-cadence and (b) lag-transport over the run's
@@ -220,6 +232,8 @@ from mantis.config.armed_aborts import (
     ArmedAbort,
     ArmingSurfaceMissingError,
     Cadence,
+    SampleClock,
+    SampleClockNotDerivableError,
     Status,
     audit_arming,
     audit_cadence,
@@ -638,6 +652,17 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         cadence = "NOT DECLARED" if row.cadence is None else (
             f"{row.cadence.value} over {list(row.cadence_paths)}")
         print(f"    earliest-fire cadence: {cadence} — judged only once this row is REQUIRED")
+        # R265 / ADJ-D38: the CLOCK is printed beside the cadence for the same reason the
+        # cadence is printed at all — it is the field that says which key the row's evidence
+        # arrives on, and a deferred row whose axis nobody can see is the state ADJ-D38
+        # measured on the WR axis. `period_path` is `None` on the two clocks that have no
+        # config period, and the print says WHICH of the two rather than eliding it.
+        if row.cadence is not None:
+            clock = row.cadence.sample_clock
+            tick = (f"1 tick = {clock.period_path}" if clock.period_path is not None
+                    else ("1 tick = 1 training step, definitional"
+                          if clock.is_step_clocked else "no train-step tick at all"))
+            print(f"    sample clock: {clock.value} ({tick})")
         if row.source_pin is not None:
             rel, text = row.source_pin
             print(f"    pinned to {rel}: {text!r}")
@@ -648,13 +673,23 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         print(f"    why: {row.note}")
 
 
-#: Synthetic operand sets for `_cadence_self_test`, and the run length they are judged
-#: against. HEALTHY is run5's own shape; VACUOUS is ADJ-D22's measured defect — an interval
-#: three orders of magnitude past the whole run — and neither is read from any config, so the
-#: self-test keeps working on a tree whose configs have all moved.
+#: Synthetic operands and PERIODS for `_cadence_self_test`, and the run length they are
+#: judged against. HEALTHY is run5's own shape; VACUOUS is ADJ-D22's measured defect — a
+#: sampling period three orders of magnitude past the whole run — and none of it is read from
+#: any config, so the self-test keeps working on a tree whose configs have all moved.
+#:
+#: R265 / ADJ-D38 splits the period OUT of the operand tuple, because that is exactly what the
+#: ruling did to the rows: a period is a property of the axis's SAMPLE CLOCK, not an operand a
+#: row supplies. The same two periods then drive both clocks, which is what makes arm D a
+#: statement about the WR axis rather than a second copy of arm B.
 _SELF_TEST_RUN_LENGTH = 1_000_000
-_SELF_TEST_HEALTHY = (1_000, 3, 25_000)
-_SELF_TEST_VACUOUS = (1_000_000_000, 3, 25_000)
+_SELF_TEST_HEALTHY_PERIOD = 1_000
+_SELF_TEST_VACUOUS_PERIOD = 1_000_000_000
+#: (consec, min_step) on the gate-boundary clock — run5's draw-rate shape.
+_SELF_TEST_HEALTHY = (3, 25_000)
+#: (collapse_consec, early_death_min_step, collapse_min_step, rolling_consec,
+#: rolling_min_step) on the eval-round clock — run5's own sealbot-WR shape.
+_SELF_TEST_WR = (3, 15_000, 25_000, 2, 20_000)
 
 
 def _cadence_self_test() -> list[str]:
@@ -669,10 +704,19 @@ def _cadence_self_test() -> list[str]:
     measured. Both mutations are caught here: an infinite (or absent) bound loses arm B, and a
     constant computation cannot satisfy A and B at once.
 
+    R265 / ADJ-D38 adds three arms, and they cover the failure mode ADJ-D38 measured rather
+    than ADJ-D22's. Arm D drives the WR axis in the EVAL-ROUND clock in both directions — the
+    axis that had no arm at all before, on the gate LAW-15/F-30 says actually kills runs. Arm
+    E refuses a period table that has collapsed onto one key, which is the mutation that would
+    re-create "every axis audited in one clock" with arms A-D still green. Arm F refuses the
+    step-clock FALLBACK by name: a step-clocked member handed no period must RAISE, because an
+    answer there is the D38 defect in one call.
+
     Deliberately PURE ARITHMETIC over synthetic operands. It builds no config and no
     collaborator: O-2 bans a stand-in for a production object inside this tool, and the audit's
     WIRING to real configs is driven end-to-end elsewhere (the mini-tree rig), not simulated
-    here.
+    here. Arm E and arm F respect that too — they read the clock TABLE and the members' own
+    refusals, never a config object.
     """
     failures: list[str] = []
     if not (0.0 < EARLIEST_FIRE_FRACTION <= 1.0):
@@ -682,23 +726,61 @@ def _cadence_self_test() -> list[str]:
         )
         return failures
     bound = EARLIEST_FIRE_FRACTION * _SELF_TEST_RUN_LENGTH
-    healthy = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(_SELF_TEST_HEALTHY)
-    vacuous = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(_SELF_TEST_VACUOUS)
-    lag = Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,))
+    healthy = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
+        _SELF_TEST_HEALTHY, period_steps=_SELF_TEST_HEALTHY_PERIOD)
+    vacuous = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
+        _SELF_TEST_HEALTHY, period_steps=_SELF_TEST_VACUOUS_PERIOD)
+    lag = Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,), period_steps=1)
+    wr_healthy = Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
+        _SELF_TEST_WR, period_steps=_SELF_TEST_HEALTHY_PERIOD)
+    wr_vacuous = Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
+        _SELF_TEST_WR, period_steps=_SELF_TEST_VACUOUS_PERIOD)
     if healthy is None or healthy > bound:
         failures.append(
-            f"    arm A: operands {_SELF_TEST_HEALTHY} computed {healthy!r}, which does not "
-            f"clear the bound {bound} — the check would refuse a healthy production config"
+            f"    arm A: operands {_SELF_TEST_HEALTHY} at period "
+            f"{_SELF_TEST_HEALTHY_PERIOD} computed {healthy!r}, which does not clear the "
+            f"bound {bound} — the check would refuse a healthy production config"
         )
     if vacuous is None or vacuous <= bound:
         failures.append(
-            f"    arm B: operands {_SELF_TEST_VACUOUS} computed {vacuous!r}, which the bound "
-            f"{bound} ACCEPTS — the ADJ-D22 config would audit ARMED all over again"
+            f"    arm B: operands {_SELF_TEST_HEALTHY} at period "
+            f"{_SELF_TEST_VACUOUS_PERIOD} computed {vacuous!r}, which the bound {bound} "
+            "ACCEPTS — the ADJ-D22 config would audit ARMED all over again"
         )
     if lag is None or lag != 101.0:
         failures.append(
             f"    arm C: the lag cadence computed {lag!r} for a threshold of 100, not 101 — "
             "member dispatch has collapsed and every row is being judged by one arithmetic"
+        )
+    if (wr_healthy is None or wr_healthy > bound
+            or wr_vacuous is None or wr_vacuous <= bound):
+        failures.append(
+            f"    arm D: the EVAL-ROUND cadence computed {wr_healthy!r} at period "
+            f"{_SELF_TEST_HEALTHY_PERIOD} and {wr_vacuous!r} at period "
+            f"{_SELF_TEST_VACUOUS_PERIOD} against the bound {bound} — the sealbot-WR axis "
+            "must clear a healthy eval cadence and FAIL one that outruns the run, or gate 12 "
+            "is back to having no opinion about the axis at all (R265 / ADJ-D38)"
+        )
+    periods = {clock: clock.period_path for clock in SampleClock
+               if clock.period_path is not None}
+    if len(set(periods.values())) != len(periods):
+        failures.append(
+            f"    arm E: the sample clocks name overlapping period keys {periods} — two axes "
+            "sharing one cadence key IS the D38 defect: one of them is being judged in a "
+            "clock it does not tick in, with every other arm green"
+        )
+    refused_the_fallback = False
+    try:
+        answered = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
+            _SELF_TEST_HEALTHY, period_steps=None)
+    except SampleClockNotDerivableError:
+        refused_the_fallback = True
+        answered = None
+    if not refused_the_fallback:
+        failures.append(
+            f"    arm F: a step-clocked cadence handed NO period answered {answered!r} "
+            "instead of raising — the one-tick-is-one-training-step FALLBACK is back, and "
+            "every axis is auditable in the step clock again (R265 / ADJ-D38)"
         )
     return failures
 
@@ -782,6 +864,14 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             raise PreflightManifestError(
                 f"an armed-abort row's arming surface does not resolve on {path.name}: {exc}"
             ) from exc
+        except SampleClockNotDerivableError as exc:
+            # R265 / ADJ-D38, mapped to its class exactly as F-4's failure is one line up.
+            # An underivable sample clock must reach the operator as a NAMED manifest defect
+            # (rc 31) and never as the tool's own rc 1 internal error — and never, ever as a
+            # quiet fall back to the training-step clock, which is the whole ruling.
+            raise PreflightManifestError(
+                f"an armed-abort row's SAMPLE CLOCK does not resolve on {path.name}: {exc}"
+            ) from exc
         for row in audit.disarmed:
             disarmed.append(f"{path.name}: {row.name} ({row.config_path})")
         for verdict in verdicts:
@@ -789,6 +879,16 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
                 "config": path.name, "name": verdict.row.name,
                 "cadence": None if verdict.row.cadence is None else verdict.row.cadence.value,
                 "cadence_paths": list(verdict.row.cadence_paths),
+                # R265 / ADJ-D38: the CLOCK the row was judged in, the live key its period
+                # came from and the period itself are published beside the step answer. The
+                # vacuity argument the whole block already makes, one axis further: a reader
+                # must be able to see WHICH clock a row cleared its bound in, because "judged
+                # in the wrong clock" and "judged" were the same observable before this.
+                "sample_clock": verdict.clock.value,
+                "clock_period_path": verdict.clock.period_path,
+                "clock_period_steps": verdict.period_steps,
+                "earliest_fire_samples": verdict.earliest_samples,
+                "bound_samples": verdict.bound_samples,
                 "earliest_fire_step": verdict.earliest_step,
                 "bound": verdict.bound, "within": verdict.within,
                 "detail": verdict.detail,
@@ -811,8 +911,10 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
         # an abort that cannot fire is not armed in any sense that protects the run (R251).
         raise PreflightArmingAuditError(
             "a REQUIRED armed-abort row is ARMED but CADENCE-DISARMED on a production config "
-            "— its own cadence keys put its earliest possible fire step outside "
-            f"{EARLIEST_FIRE_FRACTION} of {RUN_LENGTH_PATH}, so minting this config ships an "
+            "— its own cadence keys, in its own SAMPLE CLOCK (R265: the clock its evidence "
+            "actually arrives in, named per row and derived from a live key), put its "
+            f"earliest possible fire step outside {EARLIEST_FIRE_FRACTION} of "
+            f"{RUN_LENGTH_PATH}, so minting this config ships an "
             "abort that cannot fire in time to catch what it exists to catch (R251/ADJ-D22). "
             "A large interval is NEVER a sanctioned disarm: the one sanctioned spelling is "
             f"the explicit R56-style deferred row with an owner and a source pin. "
