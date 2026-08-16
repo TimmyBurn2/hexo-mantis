@@ -73,6 +73,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from mantis.config.loader import discover_configs
+
 _REPO = Path(__file__).resolve().parents[2]
 _LIVE = _REPO / "configs"
 _BASELINE = _REPO / "tests" / "fixtures" / "wpmain" / "config_baseline_b482243"
@@ -263,9 +265,17 @@ def test_the_committed_baseline_covers_every_minted_config() -> None:
     """Premise — an oracle whose golden is missing is an oracle that passes vacuously. The
     fixtures manifest holds the sha256 of each of these six (added_by = "WPMAIN"), so a
     baseline edited to make a diff go away is caught by `test_fixtures_manifest.py`, not by
-    nobody."""
+    nobody.
+
+    `_LIVE` (`configs/`) is swept through `discover_configs` (R71/R75), the ONE discovery
+    authority gates 7 and 12 both consume — a second flat `*.yaml` glob there would be
+    exactly the divergence ADJ-13 F-1 was: a subdirectory/`.yml` shape both gates make
+    legal could join `configs/` and slip past this sweep unseen (N4, F-P2B/N4). `_BASELINE`
+    stays a flat glob deliberately: it is a frozen fixture snapshot pinned by
+    `tests/fixtures/manifest.toml`, not the live directory this row exists to police —
+    a file added there needs its own manifest row regardless of how it is discovered."""
     assert sorted(path.name for path in _BASELINE.glob("*.yaml")) == sorted(_CONFIGS)
-    assert sorted(path.name for path in _LIVE.glob("*.yaml")) == sorted(
+    assert sorted(path.name for path in discover_configs(_LIVE)) == sorted(
         (*_CONFIGS, *[name for name, _template in _POST_BASELINE_MINTS])), (
         "the live set must be the six this WP re-mints plus exactly the DECLARED "
         "post-baseline mints (`_POST_BASELINE_MINTS`) — a config appearing mid-WP needs its "
