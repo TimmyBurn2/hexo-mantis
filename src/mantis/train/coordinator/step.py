@@ -69,6 +69,8 @@ from mantis.train.events import (
     emit_axis_distribution,
     emit_iteration_complete_event,
     emit_training_step_event,
+    is_graph_run,
+    symmetry_draw_block,
 )
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
@@ -736,12 +738,20 @@ class StepCoordinator:
         `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated,
         and after R242 it is one of the three things that still are — narration is all
         `log_interval` decides now."""
+        # R266/F-P1/N1: `self.buffer` is the ONE buffer instance present on both the
+        # straight-self-play and the mixed dense arms (`pretrained_buffer`/`bot_buffer` are
+        # mixing-cfg-optional); `symmetry_draw_block` itself no-ops on the graph arm, where
+        # the mechanism has no subject.
+        symmetry_draws = symmetry_draw_block(
+            self.buffer, graph_run=is_graph_run(self.full_config)
+        )
         payload = emit_training_step_event(
             self._train_step, loss_info,
             # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
             # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
             # as a real measurement ("quiescence never fires") — a miniature F-10.
             None, sink,
+            symmetry_draws=symmetry_draws,
         )
         return payload
 

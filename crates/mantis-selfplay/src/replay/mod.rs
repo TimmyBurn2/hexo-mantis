@@ -117,6 +117,18 @@ pub struct ReplayBuffer {
 
     /// Lock-free weight histogram for O(1) dashboard stats.
     pub weight_buckets: [AtomicU64; 3],
+
+    /// R266/F-P1/N1 — the LAW-18 fire-rate counters for the R245(c) per-record
+    /// compact/spread symmetry gate (fdc6f09). Ticked in `sample_batch_core` /
+    /// `sample_batch_with_pos_core` at the exact `draw_record_sym` call, and
+    /// ONLY when `augment=true` — an unaugmented draw never consults `compact`
+    /// at all (`sym_idx` is unconditionally 0), so counting it would fabricate
+    /// a reading for a draw that never exercised the lever. `compact_draws` is
+    /// the count of records sampled from the full 12-element group;
+    /// `spread_draws` the count restricted to `sym::WINDOW_PRESERVING_SYMS`.
+    /// Cumulative since construction, read via the bridge getters.
+    pub compact_draws: AtomicU64,
+    pub spread_draws: AtomicU64,
 }
 
 impl ReplayBuffer {
@@ -156,6 +168,8 @@ impl ReplayBuffer {
             next_game_id: 0,
             rng,
             weight_buckets: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+            compact_draws: AtomicU64::new(0),
+            spread_draws: AtomicU64::new(0),
         }
     }
 

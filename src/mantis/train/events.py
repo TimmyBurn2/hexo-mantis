@@ -162,6 +162,55 @@ K_CLUSTER_HISTOGRAM_KEY = "k_cluster_histogram"
 #: spelling authority, exactly as for the K histogram above.
 UNCOVERED_FORCED_WIN_KEY = "uncovered_forced_win"
 
+#: The `training_step` key the R266 compact/spread symmetry-draw counter travels under.
+#: One spelling authority, exactly as for the two keys above.
+SYMMETRY_DRAW_KEY = "symmetry_draws"
+
+
+def symmetry_draw_block(buffer: Any, *, graph_run: bool) -> dict[str, Any]:
+    """R266/F-P1/N1 (fdc6f09/R245(c)) — the LAW-18 fire-rate log for the per-record
+    compact/spread symmetry gate: `ReplayBuffer::sample_batch_core` /
+    `sample_batch_with_pos_core` draws the FULL 12-element D6 group for a record that is
+    window-lossless under every element, and restricts to `sym::WINDOW_PRESERVING_SYMS`
+    (4 elements) for one that is not — a silent restriction otherwise, with no in-run
+    reading of how often each arm actually fires.
+
+    DENSE-ONLY mechanism, the K-histogram's gate (item 10(b)) NOT inverted: the graph arm
+    has no window (`sym.rs::WINDOW_PRESERVING_SYMS`'s own doc — "restricting it would
+    discard 8/12 of the graph arm's augmentation for no correctness gain"), so it keeps
+    the full group UNCONDITIONALLY and this counter has no subject there. Keyed on the
+    SAME `is_graph_run` authority as the other `graph_run`-gated blocks so two
+    subtractions on the same grounds cannot disagree about the arm.
+
+    Producer: `ReplayBuffer.compact_draws` / `.spread_draws` (the bridge getters over the
+    Rust atomics `sample.rs::record_symmetry_draw` ticks — the ONE call site both sample
+    cores route through). Ticked ONLY on an `augment=True` draw: an unaugmented draw never
+    consults the `compact` flag at all (`sym_idx` is unconditionally 0), so counting it
+    would fabricate a reading for a draw that never exercised the lever.
+
+    Three arms:
+      GRAPH run — the key is OMITTED (the mechanism does not exist on this arm; a keyed
+        `None` or a `{..: 0}` would both read as "measured" to a stream consumer).
+      NO PRODUCER — keyed `None` (an engine build predating the getters; the
+        event_manifest unproduced-field convention).
+      DENSE run — cumulative `{"compact", "spread", "compact_fraction"}`: the two raw
+        counts (truthful at 0 — the R249 distinction) and the fraction compact, `None`
+        when neither arm has fired yet (a rate over zero samples is not a measurement,
+        R249/b349ec4).
+    """
+    if graph_run:
+        return {}
+    compact = getattr(buffer, "compact_draws", None)
+    if compact is None:
+        return {SYMMETRY_DRAW_KEY: None}
+    spread = int(buffer.spread_draws)
+    compact = int(compact)
+    total = compact + spread
+    return {SYMMETRY_DRAW_KEY: {
+        "compact": compact, "spread": spread,
+        "compact_fraction": (compact / total) if total else None,
+    }}
+
 
 def uncovered_forced_win_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
     """R256/ADJ-D37 — the LAW-18 fire-rate log for the forced-win coverage clip.
@@ -359,6 +408,7 @@ def emit_training_step_event(
     early_game_probe: Any | None = None,
     trainer_model: Any | None = None,
     solver_deltas: dict[str, Any] | None = None,
+    symmetry_draws: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build + emit the `training_step` event (WP13-A §c.4) and RETURN its payload.
 
@@ -368,6 +418,10 @@ def emit_training_step_event(
     actually emitted, so a rule can never fire on a shape the event stream does not carry
     (LAW-07 — the alert and its producer are the same object). Stays `log_interval`-gated
     at the coordinator call site (R210: "training_step alerting stays gated").
+
+    `symmetry_draws` (R266/F-P1/N1) — the caller's pre-built `symmetry_draw_block(...)`,
+    keyed in exactly like `solver_deltas` and unrelated to it (a SEPARATE debt, its own
+    parameter rather than an overload of a legacy, byte-frozen-elsewhere one).
     """
     policy_entropy = float(loss_info.get("policy_entropy", 0.0))
     value_accuracy = float(loss_info.get("value_accuracy", 0.0))
@@ -418,6 +472,8 @@ def emit_training_step_event(
         training_step_event.update(probe_metrics)
     if solver_deltas:
         training_step_event.update(solver_deltas)
+    if symmetry_draws:
+        training_step_event.update(symmetry_draws)
     emit_via(sink, training_step_event)
     return training_step_event
 

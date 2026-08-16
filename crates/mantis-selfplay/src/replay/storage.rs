@@ -21,6 +21,22 @@ impl ReplayBuffer {
         (self.size, self.capacity, histogram)
     }
 
+    /// R266/F-P1/N1 — cumulative count of sampled records drawn from the FULL
+    /// 12-element D6 group (the record was window-lossless under every
+    /// element). See `ReplayBuffer::compact_draws`'s field doc.
+    #[must_use]
+    pub fn compact_draws(&self) -> u64 {
+        self.compact_draws.load(Ordering::Relaxed)
+    }
+
+    /// R266/F-P1/N1 — cumulative count of sampled records restricted to
+    /// `sym::WINDOW_PRESERVING_SYMS`. See `ReplayBuffer::spread_draws`'s field
+    /// doc.
+    #[must_use]
+    pub fn spread_draws(&self) -> u64 {
+        self.spread_draws.load(Ordering::Relaxed)
+    }
+
     /// Return a fresh position ID and advance the internal counter.
     pub fn next_game_id(&mut self) -> i64 {
         let id = self.next_game_id;
