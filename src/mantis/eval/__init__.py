@@ -4,6 +4,7 @@ Public API surface: `build_eval_pipeline`/`EvalPipeline`/`DrainCaps` (pipeline.p
 `apply_gate_decision`/`DeployTagHooks` (promote.py), `LadderState` (ladder.py),
 `fit_bt`/`predict_p` (bt.py), `aggregate_gate`/`aggregate_rung`/`gate_promotion_decision`/
 `should_escalate` (aggregate.py), `build_round_result`/`resolve_ladder_rungs` (rounds.py),
+`evaluate_strength_floor`/`probe_measurements`/`StrengthFloorVerdict` (floor_gate.py),
 the error taxonomy (errors.py), and the snapshot write/load pair (snapshot.py).
 """
 from __future__ import annotations
@@ -26,6 +27,11 @@ from mantis.eval.errors import (
     ResultContractError,
     RungUnresolvable,
 )
+from mantis.eval.floor_gate import (
+    StrengthFloorVerdict,
+    evaluate_strength_floor,
+    probe_measurements,
+)
 from mantis.eval.ladder import LadderState
 from mantis.eval.pipeline import DrainCaps, EvalPipeline, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
@@ -46,16 +52,19 @@ __all__ = [
     "RoundSpec",
     "RungAggregate",
     "RungUnresolvable",
+    "StrengthFloorVerdict",
     "aggregate_gate",
     "aggregate_rung",
     "apply_gate_decision",
     "build_eval_pipeline",
     "build_round_result",
+    "evaluate_strength_floor",
     "fit_bt",
     "gate_promotion_decision",
     "load_model_snapshot",
     "pair_bootstrap_wr_ci",
     "predict_p",
+    "probe_measurements",
     "resolve_ladder_rungs",
     "should_escalate",
     "write_model_snapshot",

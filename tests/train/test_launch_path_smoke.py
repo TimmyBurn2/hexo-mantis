@@ -46,6 +46,7 @@ def _eval_block():
         "random_model_sims": 1, "sealbot_model_sims": 1, "kraken_model_sims": 1,
         "strix_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
+        "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
             "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
             "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",

@@ -60,6 +60,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
+        ply_cap_adjudication=None, strength_floor=None,
     )
 
 

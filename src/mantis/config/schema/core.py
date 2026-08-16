@@ -186,6 +186,92 @@ class LadderConfig(StrictModel):
         return self
 
 
+class PlyCapAdjudicationConfig(StrictModel):
+    """How a PLY-CAPPED eval game is resolved — ONE block, ONE fact (F-R-P2B-5 companion).
+
+    The fact under single authority is *"is ply-cap adjudication armed, and on what
+    criterion"*. `null` is ARMED=NO, explicitly, and it is the posture every shipped config
+    takes: with the block absent the arena's legacy arm runs and a capped game is a draw,
+    byte-for-byte the pre-existing behaviour. A block is ARMED=YES on its own terms. The two
+    are disjoint TYPES rather than two regions of one range, the shape `DrawRateAbortConfig`
+    established under R79 — a boolean beside the criterion could contradict it, a criterion
+    with no margin could not be evaluated, so the terms arrive together or not at all.
+
+    WHY THE FACT NEEDS AN AUTHORITY AT ALL. The eval arena caps a game at
+    `mantis.arena.match._DEFAULT_MAX_PLIES` because the board is unbounded, and until now
+    every capped game scored `"draw"` — the same label a finished, genuinely balanced game
+    gets. On the live shakedown burn that collapse consumed the whole outcome channel:
+    `draw_rate` measured 1.0 with `avg_game_length` at the 128-move cap, so at early strength
+    the promotion instrument's only reading was a constant. This block does not decide what
+    the replacement reading should be; it makes the decision REPRESENTABLE and leaves the
+    values to mint prereg.
+
+    * `criterion` — the CLOSED set `mantis.arena.adjudicate.PLY_CAP_CRITERIA`, and the schema
+      `Literal` is the same two names so a criterion the adjudicator cannot implement is a
+      config-load error rather than a round-time refusal. `longest_run_margin` is a property
+      of the placed stones and is seat-neutral; `immediate_win_margin` counts completing
+      moves and is NOT seat-neutral (at the cap one side never moves again). That difference
+      is the choice, and it is the operator's.
+    * `min_margin` — `ge=1` bounds the MECHANISM, not the policy: the margin is a signed
+      difference between two equally-measured sides, so a margin of 0 means "measured equal"
+      and a rule that awarded a game on it would not be a margin rule at all. No upper bound
+      is invented — the reachable maximum depends on the criterion and the position, and a
+      ceiling this layer cannot derive is a number it may not own (R84's class). The VALUE is
+      a mint-prereg row: this schema names no default and there is none anywhere in code (R1).
+
+    Read by exactly one path: `mantis.config.resolve.eval_posture.resolve_ply_cap_adjudication`.
+    """
+
+    criterion: Literal["longest_run_margin", "immediate_win_margin"]
+    min_margin: int = Field(ge=1)
+
+
+class StrengthFloorConfig(StrictModel):
+    """The cheap probe that gates the EXPENSIVE ladder — ONE block, ONE fact (F-R-P2B-5).
+
+    The fact under single authority is *"is the ladder gated on a strength floor, and on what
+    terms"*. `null` is ARMED=NO and is the posture every shipped config takes: no probe is
+    played, no phase is reordered, and the round runs the gate block -> rungs -> random floor
+    exactly as before. The R79 disjoint-types shape again, for the same reason.
+
+    THE MEASURED PROBLEM THIS EXISTS FOR. A terminal eval round at step 33 spent its full
+    `monitor.drain.terminal_eval_hard_cap_sec` budget and completed ZERO of its spec'd games
+    while the worker was healthy and computing throughout (F-R-P2B-5). The round's own
+    ordering is why nothing survived: the gate block runs FIRST and is the most expensive
+    phase in it, so a candidate too weak to finish games burns the whole budget before the
+    cheapest opponent it has is ever reached. An armed floor plays that cheapest opponent
+    first, on a bounded number of games, and refuses the rest of the round with a truthful
+    event rather than a four-hour silence.
+
+    THE TERMS TRAVEL TOGETHER (R80's reason, on this fact). A probe size without a bar
+    measures nothing; a bar without a probe size is a bar on an unknown n; and the two bars
+    below answer DIFFERENT halves of the measurement, so neither substitutes for the other.
+
+    * `probe_games` — `ge=1`, the probe's whole budget, denominated in GAMES rather than
+      seconds on purpose. LAW-15 is explicit that a strength bar must be a reproducible
+      instrument and names the incident where a wall-clock bar flipped a verdict a
+      fixed-depth bar reversed; a timeout field here would re-create exactly that, so there
+      is none. Termination is guaranteed structurally instead — every arena game ends at
+      the ply cap if it ends no earlier.
+    * `min_decisive_rate` — the fraction of probe games that must end DECISIVELY (a real win
+      or loss, not a ply-cap non-result). This is the axis the burn actually measured: at
+      `draw_rate` 1.0 every game was a cap non-result, so a WR bar alone would have read a
+      healthy-looking 0.5 off a round with no information in it. Domain `[0,1]` because it
+      is a fraction of the probe.
+    * `min_winrate` — the draw-aware win rate against the same cheapest opponent, domain
+      `[0,1]`. A value of `0.0` makes this conjunct vacuous, and that is a LEGAL and
+      EXPLICIT posture rather than a silently-disabled lever: the operator who wants the
+      decisiveness bar alone says so in the config, where it is readable, instead of the
+      absence of a key saying it for them.
+
+    Read by exactly one path: `mantis.config.resolve.eval_posture.resolve_strength_floor`.
+    """
+
+    probe_games: int = Field(ge=1)
+    min_decisive_rate: float = Field(ge=0, le=1)
+    min_winrate: float = Field(ge=0, le=1)
+
+
 class EvalConfig(StrictModel):
     """Eval opponent simulation counts (resolve_eval_model_sims reads these — no code default).
 
@@ -218,6 +304,14 @@ class EvalConfig(StrictModel):
     worker_device: Literal["cuda", "cpu"]
     round_timeout_sec: float = Field(gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
     worker_kill_grace_sec: float = Field(ge=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
+    #: `default=...` is this schema's own no-terminal-default idiom (the shape
+    #: `train.scheduler_t_max` / `train.draw_rate_abort` already carry): the key is REQUIRED
+    #: and an absent one is an error naming it, while `None` is a real, explicit posture the
+    #: config must state. Both blocks below ship `null` in every committed config, which is
+    #: the identity value — the run behaves exactly as it did before the blocks existed —
+    #: and arming either one is a mint event, never an IMPL edit (R1).
+    ply_cap_adjudication: PlyCapAdjudicationConfig | None = Field(default=...)
+    strength_floor: StrengthFloorConfig | None = Field(default=...)
     gate: GateConfig
     ladder: LadderConfig
 

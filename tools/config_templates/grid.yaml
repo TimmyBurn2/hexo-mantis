@@ -19,6 +19,16 @@ eval:
   worker_device: cuda
   round_timeout_sec: 3600.0
   worker_kill_grace_sec: 10.0
+  # F-R-P2B-5 early-strength eval posture. Both blocks ship DISARMED (`null`), which is the
+  # IDENTITY posture: a ply-capped game stays a draw and the ladder runs ungated, exactly as
+  # before the keys existed. `null` is not a placeholder value — it is the explicit statement
+  # that the posture is off, the same shape `train.draw_rate_abort` uses (R79), and arming
+  # either one is a mint-prereg event with operator-owned values, never an IMPL edit.
+  # Armed shapes, for the operator writing the `--set`:
+  #   ply_cap_adjudication: {criterion: longest_run_margin, min_margin: <int >=1>}
+  #   strength_floor: {probe_games: <int >=1>, min_decisive_rate: <0..1>, min_winrate: <0..1>}
+  ply_cap_adjudication: null
+  strength_floor: null
   gate:
     stride: 1
     screen_games: 80

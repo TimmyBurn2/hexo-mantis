@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis.bots.protocol import RungUnresolvable
+from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthFloorSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
 __all__ = [
@@ -45,6 +46,19 @@ def resolve_ladder_rungs(
 
 
 # ── the worker round spec (JSON-(de)serializable; paths + primitives only) ─────────────
+def _rehydrate(cls: Any, payload: Any) -> Any:
+    """Rebuild an optional posture spec from its JSON mapping; `None` stays `None`.
+
+    Already-typed values pass through unchanged so a spec built in-process (the terminal
+    round never round-trips through JSON on the parent side) and one read back from the
+    worker's spec file take the same path — the alternative, two construction routes, is how
+    a field ends up meaning one thing in-process and another across the seam.
+    """
+    if payload is None or isinstance(payload, cls):
+        return payload
+    return cls(**payload)
+
+
 @dataclass(frozen=True)
 class RungJob:
     name: str
@@ -102,6 +116,14 @@ class RoundSpec:
     ladder_bootstrap_resamples: int
     ladder_bootstrap_ci_level: float
     ladder_bootstrap_seed: int
+    #: The two early-strength eval postures (F-R-P2B-5), resolved ONCE in the parent by
+    #: `mantis.config.resolve.eval_posture` and carried across the process seam as plain
+    #: dataclasses — paths-and-primitives still holds, since both are frozen records of
+    #: scalars that `dataclasses.asdict`/`from_dict` round-trip without a schema import in
+    #: the child. `None` is the ARMED=NO posture every committed config mints, and on that
+    #: arm neither the arena loop nor `run_round` takes a new branch.
+    ply_cap_adjudication: PlyCapAdjudicationSpec | None
+    strength_floor: StrengthFloorSpec | None
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -111,6 +133,10 @@ class RoundSpec:
         payload = dict(payload)
         payload["gate"] = GateSpec(**payload["gate"])
         payload["rung_jobs"] = [RungJob(**job) for job in payload["rung_jobs"]]
+        payload["ply_cap_adjudication"] = _rehydrate(
+            PlyCapAdjudicationSpec, payload["ply_cap_adjudication"]
+        )
+        payload["strength_floor"] = _rehydrate(StrengthFloorSpec, payload["strength_floor"])
         return cls(**payload)
 
 

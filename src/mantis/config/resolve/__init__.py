@@ -32,6 +32,12 @@ from mantis.config.resolve.encoding import (
     normalize_stamp,
     reconcile_encoding,
 )
+from mantis.config.resolve.eval_posture import (
+    PlyCapAdjudicationSpec,
+    StrengthFloorSpec,
+    resolve_ply_cap_adjudication,
+    resolve_strength_floor,
+)
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.config.resolve.run_length import resolve_max_train_steps
@@ -44,7 +50,9 @@ __all__ = [
     "DrawRateAbortSpec",
     "EncodingConflictError",
     "EncodingResolution",
+    "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
+    "StrengthFloorSpec",
     "UnvalidatedConfigError",
     "normalize_declared",
     "normalize_stamp",
@@ -58,4 +66,6 @@ __all__ = [
     "resolve_eval_model_sims",
     "resolve_max_train_steps",
     "resolve_monitor_config",
+    "resolve_ply_cap_adjudication",
+    "resolve_strength_floor",
 ]

@@ -13,7 +13,9 @@ from mantis.config.schema.core import (
     IdentityConfig,
     LadderConfig,
     LadderRung,
+    PlyCapAdjudicationConfig,
     RunConfig,
+    StrengthFloorConfig,
     StrictModel,
 )
 from mantis.config.schema.monitor import (
@@ -42,8 +44,10 @@ __all__ = [
     "MctsConfig",
     "MonitorSchemaConfig",
     "PlayoutCapConfig",
+    "PlyCapAdjudicationConfig",
     "RunConfig",
     "SelfplayConfig",
+    "StrengthFloorConfig",
     "StrictModel",
     "TrainConfig",
     "_EVAL_TIMEOUT_CEILING_SEC",

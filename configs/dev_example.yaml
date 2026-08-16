@@ -17,6 +17,8 @@ eval:
   worker_device: cuda
   round_timeout_sec: 3600.0
   worker_kill_grace_sec: 10.0
+  ply_cap_adjudication: null
+  strength_floor: null
   gate:
     stride: 1
     screen_games: 80

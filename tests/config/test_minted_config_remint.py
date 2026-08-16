@@ -125,6 +125,18 @@ _ADDED_LEAVES = {
     # stride is a mint-prereg row. `smoke_preflight_armed.yaml` additionally gains ONE
     # `# delta:` HEADER line (`monitor.gate_interval: 1000 -> 10`), which is an insertion too.
     "monitor.gate_interval",
+    # The eval-posture bundle (F-R-P2B-5): two REQUIRED schema blocks, so every config
+    # necessarily gains both, and both are minted `null` — the DISARMED posture, which is
+    # also the identity value. TWO leaves and not five, because `_leaves` stops at a `None`
+    # (a null block has no inner keys in the FILE); the schema-side walker descends the
+    # blocks and sees five, and the two counts differ for that reason alone. Each config
+    # gains exactly two body lines and NO `# delta:` header line — the template value and the
+    # config value are the same `null` everywhere, so there is no delta to stamp and the
+    # textual half stays purely insert-only. No VALUE is pinned here: arming either block is
+    # a mint-prereg row, and this instrument is the thing that would catch an arming that
+    # arrived without one.
+    "eval.ply_cap_adjudication",
+    "eval.strength_floor",
 }
 
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted

@@ -88,6 +88,7 @@ def _eval_cfg() -> EvalConfig:
         random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
         strix_model_sims=128, random_floor_games=4, worker_device="cpu",
         round_timeout_sec=5.0, worker_kill_grace_sec=1.0, gate=gate, ladder=ladder,
+        ply_cap_adjudication=None, strength_floor=None,
     )
 
 
