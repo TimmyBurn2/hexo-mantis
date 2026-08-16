@@ -1,10 +1,12 @@
 """mantis.eval.worker — CHILD-ONLY module (design §a.3 worker.py).
 
 Entry: `python -m mantis.eval.worker <spec.json> <result.json>` / spawn target
-`worker_main`. Loads snapshots, builds nets on `spec.worker_device`, plays: (1) the gate
-block (candidate vs the best anchor, deploy-matched, screen -> confirm escalation), (2)
-resolved ladder-rung blocks (`RungUnresolvable` per rung is RECORDED, never fatal), (3)
-the random floor. Writes the sidecar result JSON ATOMICALLY (tmp + os.replace). Imports
+`worker_main`. Loads snapshots, builds nets on `spec.worker_device`, plays: (0) the strength
+floor probe, ONLY when `eval.strength_floor` is armed — a failing probe returns the round
+here, before any expensive phase; (1) the gate block (candidate vs the best anchor,
+deploy-matched, screen -> confirm escalation), (2) resolved ladder-rung blocks
+(`RungUnresolvable` per rung is RECORDED, never fatal), (3) the random floor. Writes the
+sidecar result JSON ATOMICALLY (tmp + os.replace). Imports
 `mantis.selfplay.inference_local` for leaf inference — the ONE parent-side-excepted
 inference surface (isolation law 1: this module is the out-of-process leg).
 
@@ -27,6 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mantis.arena.adjudicate import PlyCapAdjudicator
 from mantis.arena.books import paired_openings
 from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.arena.match import play_paired_match
@@ -36,6 +39,7 @@ from mantis.bots.resolve import resolve_bot
 from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
 from mantis.eval.aggregate import aggregate_gate, aggregate_rung
 from mantis.eval.errors import EvalDecodeUnsupportedError
+from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
 from mantis.eval.rounds import RoundSpec, RungJob
 from mantis.eval.snapshot import load_model_snapshot
 from mantis.selfplay.inference_local import LocalInferenceEngine
@@ -179,12 +183,61 @@ def _build_candidate_player(
     )
 
 
+def _build_adjudicator(spec: RoundSpec) -> PlyCapAdjudicator | None:
+    """The round's ONE ply-cap adjudicator, or None on the disarmed posture.
+
+    Built once and shared by every phase so the LAW-18 fire tally covers the whole round
+    rather than one block of it. `None` is what every committed config produces
+    (`eval.ply_cap_adjudication: null`), and on that arm `play_paired_match` takes the same
+    branch it took before this parameter existed.
+    """
+    posture = spec.ply_cap_adjudication
+    if posture is None:
+        return None
+    return PlyCapAdjudicator(posture.criterion, posture.min_margin)
+
+
+def _play_floor_probe(
+    spec: RoundSpec, probe_games: int, candidate_engine: LocalInferenceEngine, board_factory,
+    *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
+) -> list:
+    """Play the strength-floor probe: `probe_games` games against the CHEAPEST opponent.
+
+    Same opponent kind, sims and book as the random floor — the point of the probe is that it
+    is the cheapest measurement already in the round's vocabulary, not a new regime. Its
+    `RegimeKey.variant` is `FLOOR_PROBE_VARIANT` rather than the floor's `"raw"` so the two
+    sets can never pool through `aggregate_rung`'s single-regime rule.
+
+    Returns arena `GameRecord`s, NOT `_agg_record` dicts: the floor's decisiveness bar reads
+    `GameRecord.terminal`, which the aggregate convention does not carry.
+    """
+    bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
+    opponent = bot_factory(seed=spec.seed_base)
+    candidate = _build_candidate_player(
+        candidate_engine, spec.random_model_sims, spec=encoding_spec
+    )
+    regime_key = RegimeKey(
+        bot="random", variant=FLOOR_PROBE_VARIANT, model_sims=spec.random_model_sims,
+        opponent_spec="random:uniform", opening_book=spec.gate.opening_book,
+        deploy_matched=True, encoding=spec.encoding,
+    )
+    openings = paired_openings(
+        spec.gate.opening_book, n_pairs=max(probe_games // 2, 1), seed=spec.seed_base,
+    )
+    records = play_paired_match(
+        candidate, opponent, openings, regime_key=regime_key,
+        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+    )
+    return list(records[:probe_games])
+
+
 def _play_gate_block(
     spec: RoundSpec,
     candidate_engine: LocalInferenceEngine,
     board_factory,
     *,
     encoding_spec: EncodingSpec,
+    adjudicator: PlyCapAdjudicator | None,
 ) -> dict | None:
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
@@ -216,7 +269,7 @@ def _play_gate_block(
         )
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
-            board_factory=board_factory, record_sink=None,
+            board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
         )
         screen_agg = [_agg_record(r) for r in screen_records]
 
@@ -230,7 +283,7 @@ def _play_gate_block(
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
-                board_factory=board_factory, record_sink=None,
+                board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
             )
             confirm_agg = [_agg_record(r) for r in confirm_records]
         return {"screen": screen_agg, "confirm": confirm_agg}
@@ -248,7 +301,7 @@ def _draw_aware_wr(records: list[dict[str, Any]]) -> float | None:
 
 def _play_rung_block(
     spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory,
-    *, encoding_spec: EncodingSpec,
+    *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
@@ -273,14 +326,14 @@ def _play_rung_block(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=None,
+        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 
 
 def _play_random_floor(
     spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory,
-    *, encoding_spec: EncodingSpec,
+    *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
 ) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
@@ -301,7 +354,7 @@ def _play_random_floor(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=None,
+        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
     )
     return [_agg_record(r) for r in records[: spec.random_floor_games]]
 
@@ -310,6 +363,38 @@ def _device(name: str):
     import torch
 
     return torch.device(name)
+
+
+def _round_result(
+    spec: RoundSpec, *, gate_result: dict | None, rungs_result: dict[str, Any],
+    skipped_rungs: list[dict[str, str]], random_result: dict[str, Any],
+    floor_payload: dict[str, Any] | None, adjudicator: PlyCapAdjudicator | None,
+) -> dict[str, Any]:
+    """THE sidecar result builder — one shape, one place, both exit paths.
+
+    The six `_REQUIRED_RESULT_KEYS` are unconditional. The two posture keys are attached IFF
+    their posture was armed, which is the discipline `_broken_result`'s `detail` /
+    `exception_class` extras already follow and it is what makes the disarmed run's result
+    JSON byte-identical to the pre-change tree — not merely equivalent, identical, including
+    the key set a future consumer might iterate.
+    """
+    result: dict[str, Any] = {
+        "step": spec.step,
+        "gate": gate_result,
+        "rungs": rungs_result,
+        "skipped_rungs": skipped_rungs,
+        "random": random_result,
+        "worker_pid": os.getpid(),
+    }
+    if floor_payload is not None:
+        result["strength_floor"] = floor_payload
+    if adjudicator is not None:
+        result["ply_cap_adjudication"] = {
+            "criterion": adjudicator.criterion,
+            "min_margin": adjudicator.min_margin,
+            **adjudicator.tally(),
+        }
+    return result
 
 
 def run_round(spec: RoundSpec) -> dict[str, Any]:
@@ -334,9 +419,36 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         candidate_model, _device(spec.worker_device), encoding_spec=enc_spec
     )
 
+    adjudicator = _build_adjudicator(spec)
+
     try:
+        # PHASE 0 — the strength floor. It runs BEFORE the gate block because the gate block
+        # is the round's most expensive phase and the whole point of the floor is not to
+        # spend it (F-R-P2B-5: 0 games in a full 4 h cap, gate-block-first). On the disarmed
+        # posture — every committed config — this branch is not taken and the round begins at
+        # the gate block exactly as it did before, same phase order, same seeds, same games.
+        floor_payload: dict[str, Any] | None = None
+        if spec.strength_floor is not None:
+            probe_records = _play_floor_probe(
+                spec, spec.strength_floor.probe_games, candidate_engine, board_factory,
+                encoding_spec=enc_spec, adjudicator=adjudicator,
+            )
+            verdict = evaluate_strength_floor(probe_records, spec.strength_floor)
+            floor_payload = verdict.as_payload()
+            if not verdict.passed:
+                # The round STOPS here, and says so. Nothing is fabricated: no gate result,
+                # no rung results, no random-floor number — the absence of a gate result is
+                # what keeps `promote.apply_gate_decision` from promoting, by the same
+                # `gate_result is None` route a round with no anchor already takes.
+                return _round_result(
+                    spec, gate_result=None, rungs_result={}, skipped_rungs=[],
+                    random_result={"games": 0, "wr": None},
+                    floor_payload=floor_payload, adjudicator=adjudicator,
+                )
+
         gate_records = _play_gate_block(
-            spec, candidate_engine, board_factory, encoding_spec=enc_spec
+            spec, candidate_engine, board_factory, encoding_spec=enc_spec,
+            adjudicator=adjudicator,
         )
         gate_result: dict | None = None
         if gate_records is not None:
@@ -357,7 +469,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 continue
             try:
                 records = _play_rung_block(
-                    spec, rung_job, candidate_engine, board_factory, encoding_spec=enc_spec
+                    spec, rung_job, candidate_engine, board_factory, encoding_spec=enc_spec,
+                    adjudicator=adjudicator,
                 )
             except RungUnresolvable as exc:
                 skipped_rungs.append({"rung": rung_job.name, "reason": exc.reason})
@@ -378,7 +491,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             }
 
         random_records = _play_random_floor(
-            spec, candidate_engine, board_factory, encoding_spec=enc_spec
+            spec, candidate_engine, board_factory, encoding_spec=enc_spec,
+            adjudicator=adjudicator,
         )
         random_agg = (
             aggregate_rung(
@@ -396,14 +510,11 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             else {"games": random_agg.games, "wr": random_agg.wr}
         )
 
-        return {
-            "step": spec.step,
-            "gate": gate_result,
-            "rungs": rungs_result,
-            "skipped_rungs": skipped_rungs,
-            "random": random_result,
-            "worker_pid": os.getpid(),
-        }
+        return _round_result(
+            spec, gate_result=gate_result, rungs_result=rungs_result,
+            skipped_rungs=skipped_rungs, random_result=random_result,
+            floor_payload=floor_payload, adjudicator=adjudicator,
+        )
     finally:
         candidate_engine.close()
 

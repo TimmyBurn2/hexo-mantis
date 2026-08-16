@@ -30,6 +30,10 @@ from typing import Any
 import numpy as np
 
 from mantis.bots.resolve import SKIP_REASON_MARKERS
+from mantis.config.resolve.eval_posture import (
+    resolve_ply_cap_adjudication,
+    resolve_strength_floor,
+)
 from mantis.eval.bt import fit_bt, predict_p
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
@@ -151,6 +155,48 @@ def emit_round_complete(
 
 def emit_round_skipped_busy(sink: Any, *, step: int, in_flight_round_id: str) -> dict[str, Any]:
     payload = {"event": "eval_round_skipped_busy", "step": step, "in_flight_round_id": in_flight_round_id}
+    _emit(sink, payload)
+    return payload
+
+
+def emit_strength_floor(
+    sink: Any, *, round_id: str, step: int, floor: Mapping[str, Any],
+    checked_total: int, skipped_total: int,
+) -> dict[str, Any]:
+    """The strength floor's ONE event — the probe's verdict AND its in-run fire rate.
+
+    One event rather than a pass channel and a separate skip channel, because they are one
+    fact ("what did this round's floor probe decide") and two channels for one fact is how
+    the two drift. LAW-18 wants a FIRE RATE and not a flag, so both running totals ride the
+    payload: `checked_total` is every armed round that probed, `skipped_total` the subset
+    that short-circuited. A reader with only the second cannot tell a floor that never fires
+    from a floor that never ran.
+
+    Emitted ONLY on an armed round — the disarmed posture produces no `strength_floor` key on
+    the worker result, so this builder is never reached and the stream is byte-unchanged.
+    """
+    payload = {
+        "event": "eval_strength_floor", "round_id": round_id, "step": step,
+        **dict(floor), "checked_total": checked_total, "skipped_total": skipped_total,
+    }
+    _emit(sink, payload)
+    return payload
+
+
+def emit_ply_cap_adjudication(
+    sink: Any, *, round_id: str, step: int, adjudication: Mapping[str, Any],
+) -> dict[str, Any]:
+    """The ply-cap criterion's in-run fire rate (LAW-18), one event per armed round.
+
+    The tally is the ADJUDICATOR's own count of the capped games it saw and how it resolved
+    them, carried up from the worker rather than re-derived from the aggregates — the
+    aggregates record a winner, not whether a rule or a criterion produced it. Emitted only
+    on an armed round, for the same reason as the floor event above.
+    """
+    payload = {
+        "event": "eval_ply_cap_adjudication", "round_id": round_id, "step": step,
+        **dict(adjudication),
+    }
     _emit(sink, payload)
     return payload
 
@@ -280,6 +326,15 @@ class EvalPipeline:
         #: loop and a drain both reached the same in-flight round — see the guard in
         #: `_finalize_round` for why that double-counts a promotion (LAW-18).
         self._double_finalize_suppressed = 0
+        #: The strength floor's LAW-18 fire rate, as a pair rather than a single count:
+        #: `checked` is every armed round that probed, `skipped` the subset the probe
+        #: short-circuited. Both stay 0 for the whole life of a pipeline whose config mints
+        #: `eval.strength_floor: null`, because the worker result then carries no floor key
+        #: at all. A skip count without its denominator cannot tell "the floor never fires"
+        #: from "the floor never ran", which is precisely the distinction LAW-18 was written
+        #: about.
+        self._floor_checked_total = 0
+        self._floor_skipped_total = 0
 
         # LAZY: the ladder state is only ever needed once a round is actually kicked
         # (`_build_round_spec`/`_success_result`) — deferring construction means a
@@ -430,6 +485,10 @@ class EvalPipeline:
             ladder_bootstrap_resamples=cfg.ladder.bootstrap_resamples,
             ladder_bootstrap_ci_level=cfg.ladder.bootstrap_ci_level,
             ladder_bootstrap_seed=cfg.ladder.bootstrap_seed,
+            # The two early-strength postures, resolved through their ONE read path (R1/LAW-08)
+            # and carried to the child. Both are `None` for every committed config.
+            ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
+            strength_floor=resolve_strength_floor(cfg),
         )
         return spec, dict(alloc), run_gate, candidate_path
 
@@ -703,7 +762,32 @@ class EvalPipeline:
             games_total=games_total, promoted=result["promoted"], wr_sealbot=result["wr_sealbot"],
         )
         emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
+        self._emit_posture_events(inflight, raw)
         return result
+
+    def _emit_posture_events(self, inflight: dict[str, Any], raw: Mapping[str, Any]) -> None:
+        """The two armed-posture channels, driven by the worker payload's OWN key set.
+
+        Presence of the key IS the arming evidence, and it comes from the child that actually
+        played the round — not from the parent's config read, which would report "armed" for
+        a round the worker never applied it to. On a disarmed run neither key exists, neither
+        counter moves and neither event is emitted, so the stream is byte-identical.
+        """
+        floor = raw.get("strength_floor")
+        if floor is not None:
+            self._floor_checked_total += 1
+            if not floor.get("passed", False):
+                self._floor_skipped_total += 1
+            emit_strength_floor(
+                self._sink, round_id=inflight["round_id"], step=inflight["step"], floor=floor,
+                checked_total=self._floor_checked_total, skipped_total=self._floor_skipped_total,
+            )
+        adjudication = raw.get("ply_cap_adjudication")
+        if adjudication is not None:
+            emit_ply_cap_adjudication(
+                self._sink, round_id=inflight["round_id"], step=inflight["step"],
+                adjudication=adjudication,
+            )
 
     # ── terminal (synchronous, ignore_stride) ───────────────────────────────────────────
     def _run_terminal_sync(
@@ -791,9 +875,11 @@ __all__ = [
     "build_eval_pipeline",
     "drain_budget_sec",
     "drain_or_kill",
+    "emit_ply_cap_adjudication",
     "emit_round_complete",
     "emit_round_skipped_busy",
     "emit_round_started",
     "emit_rung_skip_events",
+    "emit_strength_floor",
     "SKIP_REASON_CLASSES",
 ]

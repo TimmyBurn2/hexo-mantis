@@ -1,10 +1,14 @@
 # >300 justify (R8). Pre-existing gap, closed
-# by WPMINT Phase W. The file is a per-FIELD bounds census over the `eval` section's 30 leaves:
-# each field contributes a parametrized out-of-domain rejection and an in-domain boundary
-# acceptance, so the length tracks the section's field count rather than any logic. Splitting it
-# by sub-model would put `EvalConfig`, `GateConfig` and `LadderConfig` bounds in three files
-# while the defect class (a silently-loaded out-of-domain value) is one class with one triage
-# protocol; the census reads as a census only while it is whole.
+# by WPMINT Phase W. The file is a per-FIELD bounds census over the `eval` section's
+# ALWAYS-PRESENT leaves: each field contributes a parametrized out-of-domain rejection and an
+# in-domain boundary acceptance, so the length tracks the section's field count rather than any
+# logic. Splitting it by sub-model would put `EvalConfig`, `GateConfig` and `LadderConfig`
+# bounds in three files while the defect class (a silently-loaded out-of-domain value) is one
+# class with one triage protocol; the census reads as a census only while it is whole.
+# NOT covered here, and named so the census's edge is legible rather than assumed: the two
+# `Block | None` postures `eval.ply_cap_adjudication` / `eval.strength_floor`, whose fields do
+# not exist on a disarmed payload and whose bounds therefore need an ARMED fixture. Their
+# census is tests/config/test_eval_posture_schema.py.
 """RED-TEAM-FIX WP11-A F2 (MAJOR) — numeric-bounds validation on eval/gate/ladder schema
 fields (mantis-migration/wp/WP11A/RED_TEAM.md Finding F2).
 
@@ -152,6 +156,7 @@ def _payload(**eval_overrides: Any) -> dict:
         random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
         strix_model_sims=128, random_floor_games=4, worker_device="cuda",
         round_timeout_sec=3600.0, worker_kill_grace_sec=10.0, gate=_gate(), ladder=_ladder(),
+        ply_cap_adjudication=None, strength_floor=None,
     )
     eval_block.update(eval_overrides)
     return {

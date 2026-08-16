@@ -524,7 +524,8 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                           bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234)
     eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
                           strix_model_sims=128, random_floor_games=4, worker_device="cpu",
-                          round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate,
+                          round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
+                          ply_cap_adjudication=None, strength_floor=None, gate=gate,
                           ladder=ladder)
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,5 @@
 """>300 justify (R8): it is mostly DATA — the
-SECOND copy of the 177-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+SECOND copy of the 182-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
 WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
 `monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved the registry
@@ -67,6 +67,21 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "eval.worker_device": "build_eval_pipeline child-process device",
     "eval.round_timeout_sec": "pipeline.py mid-round subprocess join bound",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",
+    "eval.ply_cap_adjudication.criterion":
+        "resolve_ply_cap_adjudication -> RoundSpec.ply_cap_adjudication -> worker.py "
+        "_build_adjudicator -> arena/adjudicate.py PlyCapAdjudicator.measure",
+    "eval.ply_cap_adjudication.min_margin":
+        "resolve_ply_cap_adjudication -> RoundSpec.ply_cap_adjudication -> worker.py "
+        "_build_adjudicator -> arena/adjudicate.py PlyCapAdjudicator.adjudicate award test",
+    "eval.strength_floor.probe_games":
+        "resolve_strength_floor -> RoundSpec.strength_floor -> worker.py _play_floor_probe "
+        "game count",
+    "eval.strength_floor.min_decisive_rate":
+        "resolve_strength_floor -> RoundSpec.strength_floor -> floor_gate.py "
+        "evaluate_strength_floor decisive-rate bar",
+    "eval.strength_floor.min_winrate":
+        "resolve_strength_floor -> RoundSpec.strength_floor -> floor_gate.py "
+        "evaluate_strength_floor win-rate bar",
     "eval.gate.stride": "pipeline.py promotion-capable round stride",
     "eval.gate.screen_games": "worker.py gate screen block",
     "eval.gate.confirm_games": "worker.py gate confirm block",
@@ -386,8 +401,17 @@ def test_registry_matches_the_live_leaf_count():
     # (a third enumerated drop in `resolve_monitor_config`, beside `drain` and
     # `disk_guard`), so the runtime `MonitorConfig` field count does not move with it.
     # 176 + 1 = 177.
-    assert len(CONSUMER_REGISTRY) == 177
-    assert len(_leaf_paths(RunConfig)) == 177
+    # The eval-posture bundle (F-R-P2B-5) ADDS 5: `eval.ply_cap_adjudication.{criterion,
+    # min_margin}` and `eval.strength_floor.{probe_games, min_decisive_rate, min_winrate}` —
+    # TWO `Block | None` blocks, both minted `null` in every committed config. The walker
+    # DESCENDS optional blocks (WPMINT DR-6/R93), so all five inner leaves surface here while
+    # each YAML file carries exactly one line per block; the count below is the SCHEMA's, not
+    # the YAML's, and the two differ by design. This also RETIRES the line above that called
+    # `train.draw_rate_abort` the only `Block | None` field in `RunConfig` — it was true when
+    # written and is not any more; the sentence is corrected here rather than left to be read
+    # as evidence (R192(e)). 177 + 5 = 182.
+    assert len(CONSUMER_REGISTRY) == 182
+    assert len(_leaf_paths(RunConfig)) == 182
 
 
 def test_bijection_bites_on_a_real_schema_mutation():
