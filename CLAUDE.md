@@ -119,8 +119,9 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 6. Artifact rejection (tools/ci_gates/artifact_gate.py): artifact dirs, >1 MB adds,
    >10 MB fixture adds, stray `*.jsonl`.
 7. Every configs/ file schema-validates (tools/ci_gates/validate_configs.py; empty = fail).
-8. Registry sha handshake + audit (tools/ci_gates/registry_gate.sh — auto-arming stub
-   until the registry ports; its trigger is self-tested).
+8. Registry sha handshake + audit (tools/ci_gates/registry_gate.sh — the handshake
+   sub-check is LIVE and ARMED with its own LAW-07 mutation self-test; only the audit
+   exit-0 sub-check is deferred, to the cutover battery).
 9. Import-DAG check (tools/check_import_dag.py — no top-level cycles).
 10. No Makefile/doc reference to untracked paths (tools/ci_gates/check_tracked_refs.py).
 11. No silent encoding-fallback arms (tools/ci_gates/silent_encoding_gate.py) — an absent

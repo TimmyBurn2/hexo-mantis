@@ -672,8 +672,9 @@ class Trainer:
         R173: the interval read and the periodic write live here and nowhere else, so the
         dense step and the graph step share ONE authority for the cadence rather than each
         carrying its own (`R1`: two independently-editable readers of one key is the
-        duplicated-authority class). `0` disables — the value every config mints today
-        (`config/schema/train.py:231`, `ge=0`); a positive `N` fires at `N, 2N, 3N, …`
+        duplicated-authority class). `0` disables — the value most shipped configs still
+        mint (`config/schema/train.py:231`, `ge=0`); `shakedown_20260807.yaml` is the first
+        production config to mint a nonzero value. A positive `N` fires at `N, 2N, 3N, …`
         against `self.step`, which is the POST-increment step number in both callers
         (the dense tail and the graph tail), so the boundary is the step whose gradient
         update the artefact contains.
