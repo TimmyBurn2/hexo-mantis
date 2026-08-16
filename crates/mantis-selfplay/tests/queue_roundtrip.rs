@@ -10,10 +10,17 @@
 //! reason-travels guarantee (inference failure, `fail_remaining`, AND the
 //! build-side reason now travels) with no orphaned waiter, plus the disjoint-pool
 //! invariant (the graph batcher never touches the dense queue).
+//!
+//! The Q-FIND-1 batch-submit arms ride the SAME mock producer: one
+//! `submit_graphs_and_wait` puts a whole leaf batch in flight, so a single pop
+//! serves it, the collector's saturation threshold becomes reachable, submission
+//! order survives an out-of-order producer, and neither a rejected graph nor a
+//! mid-batch producer failure can orphan a waiter.
 
 use std::ops::Range;
 use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use fxhash::FxHashMap;
 use mantis_graph::BUILDER_IMPL_NATIVE;
@@ -291,6 +298,260 @@ fn graph_closed_before_submit_is_loud() {
     let q = GraphQueue::new();
     q.close();
     assert_eq!(q.submit_graph_and_wait(valid_leaf()).unwrap_err(), "graph batcher is closed");
+}
+
+// ── Q-FIND-1 batch submit: the whole leaf batch in flight at once ─────────────
+
+/// ONE pop, bounded: retry an empty pop (the submitter thread may not have pushed
+/// yet) but never merge two pops — the width of the FIRST non-empty pop is the
+/// property under test.
+fn one_pop(q: &GraphQueue, cap: usize) -> Vec<(u64, mantis_graph::AxisGraph)> {
+    for _ in 0..20 {
+        let popped = q.pop_graph_batch(cap, 500);
+        if !popped.is_empty() {
+            return popped;
+        }
+    }
+    Vec::new()
+}
+
+fn ok_results(popped: &[(u64, mantis_graph::AxisGraph)]) -> Vec<Result<(LegalSetPolicy, f32), String>> {
+    popped
+        .iter()
+        .map(|(_, g)| Ok((mock_ls(g.legal_node_gather.len()), 0.5f32)))
+        .collect()
+}
+
+#[test]
+fn batch_submit_puts_the_whole_leaf_batch_in_flight_before_any_wait() {
+    // The property that makes the collector threshold reachable at all: ONE
+    // submit_graphs_and_wait leaves N graphs queued simultaneously, so a single pop
+    // of capacity >= N serves the whole leaf batch in ONE forward. The serial
+    // per-graph submit this replaces could never put more than 1 in the queue.
+    let q = GraphQueue::new();
+    let n = 8usize;
+    let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
+
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
+
+    let popped = one_pop(&q, n);
+    assert_eq!(
+        popped.len(),
+        n,
+        "ONE pop must serve the whole leaf batch, not {} of {n}",
+        popped.len()
+    );
+
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    q.submit_graph_results(&ids, ok_results(&popped));
+
+    let out = handle.join().unwrap();
+    assert_eq!(out.len(), n, "one result per submitted graph, in submission order");
+    assert!(out.iter().all(Result::is_ok));
+}
+
+#[test]
+fn a_pop_capacity_below_the_leaf_batch_clears_in_exactly_ceil_n_over_cap_pops() {
+    // ceil(N/cap) is the CONTRACT, not an accident. N=8 at cap=3 clears in 3 pops and
+    // never more; a regression to per-graph dispatch would need 8.
+    let q = GraphQueue::new();
+    let (n, cap) = (8usize, 3usize);
+    let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
+
+    let mut pops = 0usize;
+    let mut served = 0usize;
+    for _ in 0..(4 * n) {
+        if served >= n {
+            break;
+        }
+        let popped = q.pop_graph_batch(cap, 500);
+        if popped.is_empty() {
+            continue; // deadline expiry before the submitter's push landed
+        }
+        pops += 1;
+        assert!(popped.len() <= cap);
+        let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+        q.submit_graph_results(&ids, ok_results(&popped));
+        served += popped.len();
+    }
+    assert_eq!(served, n);
+    assert_eq!(pops, n.div_ceil(cap), "must clear in ceil(N/cap) pops, got {pops}");
+    assert!(handle.join().unwrap().iter().all(Result::is_ok));
+}
+
+#[test]
+fn a_rejected_graph_never_enters_the_queue_and_leaves_no_orphan_waiter() {
+    // The pre-pass handshakes must still run BEFORE any enqueue. A batch carrying one
+    // non-native tag must not half-enqueue: the surviving waiters would block forever
+    // behind a caller that has already been handed a reason (DESIGN §3 A.5).
+    let q = GraphQueue::new();
+    let mut bad = valid_leaf();
+    bad.builder_impl = 0;
+    let graphs = vec![valid_leaf(), bad, valid_leaf()];
+
+    let out = q.submit_graphs_and_wait(graphs);
+    assert_eq!(out.len(), 3);
+    assert_eq!(
+        out[1].as_ref().unwrap_err(),
+        "submit_graph_and_wait: non-native builder_impl (NonNativeSampleBuilder handshake)",
+        "the handshake reason travels VERBATIM (D6), per-graph"
+    );
+    // The clean graphs are refused too, naming the offender — never half-enqueued.
+    for i in [0usize, 2] {
+        assert!(
+            out[i].as_ref().unwrap_err().contains("graph 1"),
+            "slot {i} must name the offending graph, got {:?}",
+            out[i]
+        );
+    }
+    assert!(
+        q.pop_graph_batch(8, 5).is_empty(),
+        "a rejected batch never touches the queue"
+    );
+}
+
+#[test]
+fn batch_submit_preserves_submission_order_through_the_fuse() {
+    // `expand_and_backup_ls_at` consumes aggregated_ls / aggregated_values / centers
+    // INDEX-ALIGNED with `leaves`. A map-keyed or reordered return would silently
+    // misalign every leaf's expand frame (the class the always-on trunk assert in
+    // search_drive guards). Position-encoded values make a permutation visible.
+    let q = GraphQueue::new();
+    let n = 5usize;
+    let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
+
+    let popped = one_pop(&q, n);
+    assert_eq!(popped.len(), n, "the whole batch must be in flight before any reply");
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    // Reply in REVERSE order with position-encoded values.
+    for pos in (0..n).rev() {
+        let g = &popped[pos].1;
+        q.submit_graph_results(
+            &[ids[pos]],
+            vec![Ok((mock_ls(g.legal_node_gather.len()), pos as f32))],
+        );
+    }
+    let out = handle.join().unwrap();
+    for (i, r) in out.iter().enumerate() {
+        let (_ls, v) = r.as_ref().expect("all ok");
+        assert_eq!(*v as usize, i, "result {i} carries another graph's value — order broke");
+    }
+}
+
+#[test]
+fn a_reachable_threshold_returns_before_the_deadline() {
+    // With supply >= threshold the pop returns ON the threshold, not on max_wait_ms.
+    // Deliberately generous slack (500 ms deadline, asserted < 250 ms) so this pins
+    // the mechanism, not the box's scheduler.
+    let q = GraphQueue::new();
+    let graphs: Vec<mantis_graph::AxisGraph> = (0..8).map(|_| valid_leaf()).collect();
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
+
+    let t0 = Instant::now();
+    let popped = q.pop_graph_batch(8, 500); // batch_size 8 -> threshold 4, supply 8
+    let elapsed = t0.elapsed();
+    assert_eq!(popped.len(), 8);
+    assert!(
+        elapsed < Duration::from_millis(250),
+        "pop took {elapsed:?}; a reachable threshold must not run to the deadline"
+    );
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    q.submit_graph_results(&ids, ok_results(&popped));
+    handle.join().unwrap();
+}
+
+#[test]
+fn an_unreachable_threshold_still_serves_on_the_deadline() {
+    // The pre-fix behaviour must NOT be deleted: a starved queue still serves what it
+    // has when the deadline expires. Losing this would turn a slow run into a hung one.
+    let q = GraphQueue::new();
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(vec![valid_leaf()]));
+    let popped = one_pop(&q, 64); // threshold 32, supply 1
+    assert_eq!(popped.len(), 1, "deadline expiry serves the single queued graph");
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    q.submit_graph_results(&ids, ok_results(&popped));
+    assert!(handle.join().unwrap()[0].is_ok());
+}
+
+#[test]
+fn concurrent_batch_submitters_each_receive_only_their_own_results() {
+    // Models n_workers > 1: several threads each batch-submit their own leaf batch
+    // into ONE shared queue and every caller must get back exactly its own graphs'
+    // payloads. `graph_fail_remaining_orphans_none` proves nobody hangs; this proves
+    // nobody gets crossed.
+    let q = GraphQueue::new();
+    let (workers, per_worker) = (4usize, 3usize);
+    let mut handles = Vec::new();
+    for w in 0..workers {
+        let qc = q.clone();
+        handles.push(thread::spawn(move || {
+            let graphs: Vec<mantis_graph::AxisGraph> =
+                (0..per_worker).map(|_| valid_leaf()).collect();
+            (w, qc.submit_graphs_and_wait(graphs))
+        }));
+    }
+
+    let total = workers * per_worker;
+    let popped = drain_graph(&q, total);
+    assert_eq!(
+        popped.len(),
+        total,
+        "every worker's whole leaf batch must be in flight simultaneously"
+    );
+
+    // Encode the id itself in the value so a crossed wire is arithmetically visible.
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    let results: Vec<Result<(LegalSetPolicy, f32), String>> = popped
+        .iter()
+        .map(|(id, g)| Ok((mock_ls(g.legal_node_gather.len()), *id as f32)))
+        .collect();
+    q.submit_graph_results(&ids, results);
+
+    let mut seen: Vec<f32> = Vec::new();
+    for h in handles {
+        let (_w, out) = h.join().unwrap();
+        assert_eq!(out.len(), per_worker);
+        for r in out {
+            seen.push(r.expect("every waiter resolves Ok").1);
+        }
+    }
+    seen.sort_by(f32::total_cmp);
+    let mut expected: Vec<f32> = ids.iter().map(|&id| id as f32).collect();
+    expected.sort_by(f32::total_cmp);
+    assert_eq!(seen, expected, "every id delivered exactly once, to exactly one waiter");
+}
+
+#[test]
+fn a_mid_batch_producer_failure_wakes_every_waiter_with_the_reason() {
+    // Under batch submit ALL N are already enqueued, so a failure partway through the
+    // producer's walk must not orphan the tail. `fail_remaining` is the vehicle and
+    // its reason travels verbatim (D6).
+    let q = GraphQueue::new();
+    let n = 6usize;
+    let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
+    let qc = q.clone();
+    let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
+
+    let popped = one_pop(&q, n);
+    assert_eq!(popped.len(), n, "the whole batch must be in flight before the failure");
+    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
+    let n_legal = popped[0].1.legal_node_gather.len();
+    q.submit_graph_results(&ids[..2], vec![Ok((mock_ls(n_legal), 0.5)); 2]);
+    q.fail_remaining(&ids[2..], "forward blew up mid-batch");
+
+    let out = handle.join().unwrap();
+    assert_eq!(out.len(), n, "the caller returns only after EVERY waiter resolved");
+    assert!(out[0].is_ok() && out[1].is_ok());
+    for r in &out[2..] {
+        assert_eq!(r.as_ref().unwrap_err(), "forward blew up mid-batch");
+    }
 }
 
 // ── cross-queue disjointness + F-19 build-once structural note ────────────────

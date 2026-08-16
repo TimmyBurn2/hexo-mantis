@@ -148,25 +148,8 @@ impl GraphQueue {
     /// inference for this leaf failed (the reason set by the producer via
     /// `submit_graph_results` / `fail_remaining`).
     pub fn submit_graph_and_wait(&self, graph: AxisGraph) -> Result<(LegalSetPolicy, f32), String> {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            return Err("graph batcher is closed".to_string());
-        }
-        // Batch-level contract-version handshake (frozen `inference_bridge.rs:425`):
-        // a batcher speaking a non-1 `graph_contract_version` rejects loud, BEFORE the
-        // per-graph builder_impl check — the whole submit never touches the queue.
-        if self.inner.contract_version != 1 {
-            return Err(format!(
-                "submit_graph_and_wait: unsupported graph_contract_version {} (expected 1)",
-                self.inner.contract_version
-            ));
-        }
-        // Handshake pre-pass (N5, `inference_bridge.rs:425`): a non-native tag
-        // never reaches the queue.
-        if graph.builder_impl != BUILDER_IMPL_NATIVE {
-            return Err(
-                "submit_graph_and_wait: non-native builder_impl (NonNativeSampleBuilder handshake)"
-                    .to_string(),
-            );
+        if let Some(reason) = self.handshake_reject_reason(&graph) {
+            return Err(reason);
         }
 
         let id = self.inner.next_id.fetch_add(1, Ordering::SeqCst);
@@ -187,11 +170,130 @@ impl GraphQueue {
             self.inner.queue_cv.notify_all();
         }
 
+        self.wait_for(&waiter)
+    }
+
+    /// CONSUMER (worker): enqueue a WHOLE leaf batch in one shot, then block on
+    /// every waiter in submission order. Returns one result per submitted graph,
+    /// `Vec`-indexed by SUBMISSION ORDER — the index alignment
+    /// `expand_and_backup_ls_at` requires against `centers` / `leaves`. A map-keyed
+    /// return would not carry it.
+    ///
+    /// Why this exists (Q-FIND-1 / R263): the per-graph `submit_graph_and_wait` puts
+    /// exactly ONE graph in flight per worker, so the collector's saturation
+    /// threshold (`pop_graph_batch_blocking`'s `batch_size / 2`) can never be
+    /// reached and every forward runs to its `max_wait_ms` deadline carrying a
+    /// single leaf. Here all N are enqueued under ONE queue-lock hold and announced
+    /// by ONE `notify_all`, so the collector wakes once and re-evaluates
+    /// `queue.len()` seeing all N rather than being woken N times and seeing 1 each
+    /// time. One notify per push would restore the starved read.
+    ///
+    /// The three handshakes (`closed`, non-1 `contract_version`, non-native
+    /// `builder_impl`) run as a PRE-PASS over the whole batch, before ANY enqueue.
+    /// A rejected graph never touches the queue, and the batch is rejected WHOLE:
+    /// half-enqueuing would strand the surviving waiters behind a caller that has
+    /// already been handed a reason. The offending graph's slot carries its own
+    /// frozen reason VERBATIM (D6); the rest name the offender.
+    ///
+    /// COLLECT-ALL-THEN-DECIDE: unlike the serial caller this replaces, every graph
+    /// is already enqueued when the first wait begins, so this returns only after
+    /// EVERY waiter has resolved. Bailing on the first `Err` would drop a waiter
+    /// `Arc` while the producer still holds its id — survivable (the producer
+    /// tolerantly drops an unknown id) but it voids the no-orphan invariant
+    /// `fail_remaining` is built on. Callers scan the returned `Vec` AFTER it lands.
+    #[must_use]
+    pub fn submit_graphs_and_wait(&self, graphs: Vec<AxisGraph>) -> Vec<GraphWaiterPayload> {
+        let n = graphs.len();
+
+        // Phase 1a — handshake pre-pass over the WHOLE batch, before any enqueue.
+        let rejections: Vec<Option<String>> = graphs
+            .iter()
+            .map(|g| self.handshake_reject_reason(g))
+            .collect();
+        if let Some(first) = rejections.iter().position(Option::is_some) {
+            let culprit = rejections[first]
+                .clone()
+                .expect("position() found the reason");
+            return rejections
+                .into_iter()
+                .map(|reason| {
+                    Err(reason.unwrap_or_else(|| {
+                        format!(
+                            "submit_graphs_and_wait: batch rejected before enqueue \
+                             — graph {first}: {culprit}"
+                        )
+                    }))
+                })
+                .collect();
+        }
+
+        // Phase 1b — allocate every id + waiter, register the waiters BEFORE any
+        // enqueue (the ordering the per-graph path relies on so a producer that pops
+        // an id can never miss its waiter), then push all N and notify ONCE.
+        let mut waiters: Vec<Arc<GraphWaiter>> = Vec::with_capacity(n);
+        let mut requests: Vec<PendingGraphRequest> = Vec::with_capacity(n);
+        for graph in graphs {
+            let id = self.inner.next_id.fetch_add(1, Ordering::SeqCst);
+            waiters.push(Arc::new(GraphWaiter::default()));
+            requests.push(PendingGraphRequest { id, graph });
+        }
+        if requests.is_empty() {
+            return Vec::new();
+        }
+        {
+            let mut wmap = self
+                .inner
+                .waiters
+                .lock()
+                .expect("graph waiter map lock poisoned");
+            for (waiter, req) in waiters.iter().zip(requests.iter()) {
+                wmap.insert(req.id, waiter.clone());
+            }
+        }
+        {
+            let mut queue = self.inner.queue.lock().expect("graph queue lock poisoned");
+            for req in requests {
+                queue.push_back(req);
+            }
+            // ONE notify for N pushes — see the doc comment.
+            self.inner.queue_cv.notify_all();
+        }
+
+        // Phase 2 — collect ALL, in submission order.
+        waiters.iter().map(|w| self.wait_for(w)).collect()
+    }
+
+    /// The pre-enqueue handshake pre-pass, ONE authority for both submit paths:
+    /// closed queue, non-1 `graph_contract_version` (frozen `inference_bridge.rs:425`
+    /// — a batcher speaking a non-1 version rejects loud, BEFORE the per-graph
+    /// `builder_impl` check), and the N5 non-native `builder_impl` tag. `None` ⇒ the
+    /// graph may be enqueued. The reason strings are the frozen ones, verbatim.
+    fn handshake_reject_reason(&self, graph: &AxisGraph) -> Option<String> {
+        if self.inner.closed.load(Ordering::SeqCst) {
+            return Some("graph batcher is closed".to_string());
+        }
+        if self.inner.contract_version != 1 {
+            return Some(format!(
+                "submit_graph_and_wait: unsupported graph_contract_version {} (expected 1)",
+                self.inner.contract_version
+            ));
+        }
+        if graph.builder_impl != BUILDER_IMPL_NATIVE {
+            return Some(
+                "submit_graph_and_wait: non-native builder_impl (NonNativeSampleBuilder handshake)"
+                    .to_string(),
+            );
+        }
+        None
+    }
+
+    /// Block on one registered waiter until its payload lands. Spurious wakeups and
+    /// close are re-checked on EVERY wake; the payload is a single read via
+    /// `guard.take()` (`inference_bridge.rs:447`) and the reason travels (D6).
+    fn wait_for(&self, waiter: &Arc<GraphWaiter>) -> GraphWaiterPayload {
         let mut guard = waiter.result.lock().expect("graph waiter lock poisoned");
         loop {
             if let Some(res) = guard.take() {
-                // Single-read via `guard.take()` (`inference_bridge.rs:447`); the
-                // reason travels (D6).
                 return res;
             }
             if self.inner.closed.load(Ordering::SeqCst) {

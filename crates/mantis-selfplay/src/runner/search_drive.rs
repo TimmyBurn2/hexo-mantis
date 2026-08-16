@@ -385,8 +385,9 @@ fn infer_and_expand(
 }
 
 /// GNN counterpart of `infer_and_expand` (frozen `inner.rs:893`). Builds ONE axis
-/// graph per evaluated leaf, submits each through the parallel graph queue
-/// (per-leaf submit-and-wait, D4), and expands via `expand_and_backup_ls_at`
+/// graph per evaluated leaf (F-19 build-once-per-leaf: no reuse, no patching),
+/// submits the whole batch through the parallel graph queue in ONE
+/// `submit_graphs_and_wait` (D4), and expands via `expand_and_backup_ls_at`
 /// against the BUILDER's per-leaf `window_center`. Rotation-free at inference (v1
 /// coord pre-rotation is WP5 sample-time aug). Returns 0 (skip the batch) on a
 /// build-guard trip or a graph-inference failure.
@@ -432,13 +433,21 @@ fn infer_and_expand_graph(
         }
     }
 
-    // Submit each built graph and block on its assembled `(LegalSetPolicy, value)`.
-    // The waiter's `Err(reason)` travels back verbatim (D6), collapsed to a
+    // Submit the WHOLE leaf batch in one shot and block on the assembled
+    // `(LegalSetPolicy, value)` of each. Q-FIND-1/R263: submitting one graph at a
+    // time put exactly one leaf in flight per worker, so the collector's saturation
+    // threshold was structurally unreachable and every forward carried a single
+    // graph. The returned `Vec` is indexed by SUBMISSION ORDER — the same order as
+    // `leaves` and `centers`, which `expand_and_backup_ls_at` below requires.
+    let results = infer.graph_queue.submit_graphs_and_wait(graphs);
+    // COLLECT-ALL-THEN-DECIDE: every waiter has already resolved by the time this
+    // Vec exists, so the skip-the-batch degrade below cannot orphan one. The
+    // waiter's `Err(reason)` travels back verbatim (D6) and is collapsed to a
     // batch-skip like the dense path.
-    let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(graphs.len());
-    let mut aggregated_values: Vec<f32> = Vec::with_capacity(graphs.len());
-    for g in graphs {
-        match infer.graph_queue.submit_graph_and_wait(g) {
+    let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(results.len());
+    let mut aggregated_values: Vec<f32> = Vec::with_capacity(results.len());
+    for res in results {
+        match res {
             Ok((ls, v)) => {
                 aggregated_ls.push(ls);
                 aggregated_values.push(v);

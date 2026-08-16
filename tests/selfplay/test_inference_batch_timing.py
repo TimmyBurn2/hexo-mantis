@@ -389,6 +389,56 @@ def test_batch_fill_pct_reaches_the_sink_from_the_live_inference_counters(
     )
 
 
+def test_the_occupancy_histogram_leaves_the_one_bucket_under_a_batched_submit(
+    device, monkeypatch
+) -> None:
+    """Q-FIND-1 — the post-fix contract on the LIVE instrument: no forward serves a
+    single graph.
+
+    The pre-fix run5 shape is `histogram == {"1": N}`, `mean == 1.0`, `max == 1` — the
+    reading Q-FIND-1b pre-registered at 1.5625% fill, and the shape
+    `test_an_occupancy_histogram_separates_always_one_from_a_mixed_load` above holds as
+    the *starved* reference. This is its complement: the shape a whole-leaf-batch submit
+    must produce on the same producer chain.
+
+    SCOPE, stated so it is not over-read: the counts are SCRIPTED by the fake batcher, so
+    this pins what the instrument reports for a batched arrival — it does not itself
+    exercise the Rust dispatch. The dispatch claim is pinned queue-side
+    (`crates/mantis-selfplay/tests/queue_roundtrip.rs`) and cross-FFI
+    (`tests/bridge/test_graph_batch_dispatch_parity.py`).
+    """
+    server = _run_graph_server(device, monkeypatch, [8, 8, 7, 8, 6], batch_size=8)
+    occ = server.batch_timing_snapshot()["occupancy"]
+
+    assert occ["histogram"].get("1", 0) == 0, "no forward may serve a single graph"
+    assert occ["max"] == 8
+    assert occ["mean"] > 1.0
+    # Absolute counts are the primary reading; fill_pct is knob-relative (a mean
+    # occupancy of ~6 reads as ~75% at batch_size 8 and ~9.4% at 64, same physics).
+    assert occ["fill_pct_mean"] == pytest.approx(occ["mean"] / 8 * 100.0, rel=1e-6)
+
+
+def test_batch_fill_pct_and_the_occupancy_block_agree_on_the_same_forwards(
+    device, monkeypatch
+) -> None:
+    """Q-FIND-1 — the two published instruments may not disagree.
+
+    `batch_fill_pct` (`pool_hooks.batch_fill_pct`) and `inference_batching.occupancy`
+    (`InferenceServer.batch_timing_snapshot`) are computed from DIFFERENT accumulators
+    over the same loop, so a drift between them means one of the two counters stopped
+    being fed — which is exactly how a starved-queue reading would go quiet after the
+    dispatch change.
+    """
+    server = _run_graph_server(device, monkeypatch, [8, 4, 8], batch_size=8)
+    occ = server.batch_timing_snapshot()["occupancy"]
+
+    assert batch_fill_pct(_TelemetryPool(server)) == pytest.approx(
+        occ["fill_pct_mean"], rel=1e-6
+    )
+    assert occ["total"] == server.total_requests
+    assert occ["count"] == server.forward_count
+
+
 def test_a_telemetry_source_without_the_producer_publishes_none_never_zero() -> None:
     """Q3-07 — the key is always present and carries `None` when the source produces
     nothing for it. A consumer must read `None` as "no producer", never as zero."""
