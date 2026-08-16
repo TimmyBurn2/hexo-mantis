@@ -608,6 +608,13 @@ class ReplayBuffer:
     def capacity(self) -> int: ...
     @property
     def encoding(self) -> RegistrySpec: ...
+    # R266/F-P1/N1: the LAW-18 fire-rate counters for the R245(c) per-record
+    # compact/spread symmetry gate. Cumulative since construction; ticked ONLY
+    # on an augmented sample draw.
+    @property
+    def compact_draws(self) -> int: ...
+    @property
+    def spread_draws(self) -> int: ...
 
 # --------------------------------------------------------------------------- #
 # HexgBuffer (HEXG graph replay) + GraphTargets

@@ -59,6 +59,13 @@ class TrainerLike(Protocol):
 class ReplayBufferLike(Protocol):
     size: int
     capacity: int
+    # R266/F-P1/N1 (LAW-18): the R245(c) compact/spread symmetry-draw counters,
+    # read by `mantis.train.events.symmetry_draw_block` via `getattr(buffer, …, None)`
+    # (a defensive wheel-compat probe for an engine build predating the getters, the
+    # k_cluster_histogram/uncovered_forced_win posture) — declared here as plain `int`
+    # because the concrete `ReplayBuffer` this protocol describes always carries them.
+    compact_draws: int
+    spread_draws: int
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...

@@ -87,6 +87,19 @@ impl PyReplayBuffer {
         self.inner.get_buffer_stats()
     }
 
+    /// R266/F-P1/N1 — the LAW-18 fire-rate counters for the R245(c) per-record
+    /// compact/spread symmetry gate. Cumulative since construction; ticked ONLY
+    /// on an augmented (`augment=True`) sample draw (`sample.rs::record_symmetry_draw`).
+    #[getter]
+    pub fn compact_draws(&self) -> u64 {
+        self.inner.compact_draws()
+    }
+
+    #[getter]
+    pub fn spread_draws(&self) -> u64 {
+        self.inner.spread_draws()
+    }
+
     /// Fresh monotonic position id.
     pub fn next_game_id(&mut self) -> i64 {
         self.inner.next_game_id()

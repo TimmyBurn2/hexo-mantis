@@ -12,6 +12,7 @@
 //! the pin is meaningless split from the structs it pins.
 
 use std::collections::HashSet;
+use std::sync::atomic::Ordering;
 
 use half::f16;
 use rand::RngExt;
@@ -337,6 +338,18 @@ impl ReplayBuffer {
         indices
     }
 
+    /// R266/F-P1/N1 — the LAW-18 fire-rate tick for the R245(c) per-record
+    /// compact/spread symmetry gate. The ONE call site both sample cores route
+    /// through, so the draw and its counter cannot drift apart (the be0637a
+    /// precedent: the instrument attaches to the mechanism's measured live
+    /// path, here `draw_record_sym`'s own call sites, not the encoding family
+    /// the gate was first described under).
+    #[inline]
+    fn record_symmetry_draw(&self, compact: bool) {
+        let counter = if compact { &self.compact_draws } else { &self.spread_draws };
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Apply symmetry `sym_idx` to one (state, chain, policy, ownership,
     /// winning_line) sample. Aux planes reuse the same scatter table as state.
     #[inline]
@@ -406,7 +419,17 @@ impl ReplayBuffer {
         let mut out_value_valid = vec![0u8; batch_size];
 
         for (b, &idx) in indices.iter().enumerate() {
-            let sym_idx = if augment { draw_record_sym(&mut self.rng, self.compact[idx] != 0) } else { 0 };
+            // R266/F-P1/N1: ticked ONLY under `augment` — an unaugmented draw never
+            // consults `compact` (`sym_idx` is unconditionally 0 below), so counting it
+            // would fabricate a reading for a draw that never exercised the lever. The
+            // pinned draw call below (`dense_sites_restricted_and_graph_site_keeps_the_
+            // full_group`, sym.rs) stays byte-identical; the tick is a separate statement.
+            let sym_idx = if augment {
+                self.record_symmetry_draw(self.compact[idx] != 0);
+                draw_record_sym(&mut self.rng, self.compact[idx] != 0)
+            } else {
+                0
+            };
 
             let src_state = &self.states[idx * state_stride..(idx + 1) * state_stride];
             let src_chain = &self.chain_planes[idx * chain_stride..(idx + 1) * chain_stride];
@@ -477,7 +500,17 @@ impl ReplayBuffer {
         let mut out_value_valid = vec![0u8; batch_size];
 
         for (b, &idx) in indices.iter().enumerate() {
-            let sym_idx = if augment { draw_record_sym(&mut self.rng, self.compact[idx] != 0) } else { 0 };
+            // R266/F-P1/N1: ticked ONLY under `augment` — an unaugmented draw never
+            // consults `compact` (`sym_idx` is unconditionally 0 below), so counting it
+            // would fabricate a reading for a draw that never exercised the lever. The
+            // pinned draw call below (`dense_sites_restricted_and_graph_site_keeps_the_
+            // full_group`, sym.rs) stays byte-identical; the tick is a separate statement.
+            let sym_idx = if augment {
+                self.record_symmetry_draw(self.compact[idx] != 0);
+                draw_record_sym(&mut self.rng, self.compact[idx] != 0)
+            } else {
+                0
+            };
 
             let src_state = &self.states[idx * state_stride..(idx + 1) * state_stride];
             let src_chain = &self.chain_planes[idx * chain_stride..(idx + 1) * chain_stride];

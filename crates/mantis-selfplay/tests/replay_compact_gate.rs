@@ -540,6 +540,13 @@ fn a_compact_only_buffer_draws_the_full_group() {
         (0..N_SYMS).collect::<HashSet<usize>>(),
         "a compact record must recover the FULL 12-element group"
     );
+    // R266/F-P1/N1 — the LAW-18 fire-rate counter, driven by the SAME 512 draws above.
+    // MUTATION THAT REDS IT: delete the `record_symmetry_draw` call at either
+    // `sample.rs` call site (the counter goes dark while the draw keeps drawing), or
+    // swap the `compact`/`spread` counters (a compact-only buffer would then read
+    // `spread_draws() == 512`).
+    assert_eq!(buf.compact_draws(), 512, "every draw from an all-compact buffer must tick compact_draws");
+    assert_eq!(buf.spread_draws(), 0, "…and never spread_draws");
 }
 
 #[test]
@@ -561,6 +568,51 @@ fn a_spread_only_buffer_draws_exactly_the_window_preserving_subgroup() {
         "a spread record must draw EXACTLY the window-preserving subgroup — support \
          exact in both directions (nothing missing, nothing extra)"
     );
+    // R266/F-P1/N1 — the LAW-18 fire-rate counter, driven by the SAME 512 draws above.
+    // MUTATION THAT REDS IT: same as the compact-only twin above, inverted.
+    assert_eq!(buf.spread_draws(), 512, "every draw from an all-spread buffer must tick spread_draws");
+    assert_eq!(buf.compact_draws(), 0, "…and never compact_draws");
+}
+
+#[test]
+fn augment_false_ticks_neither_counter() {
+    // R266/F-P1/N1 — the disarmed-lever direction (the b349ec4/R249 precedent, ported to
+    // this gate): `augment=false` never consults `compact` at all (`sym_idx` is
+    // unconditionally 0 in `sample.rs`), so nothing was exercised and nothing may be
+    // counted. MUTATION THAT REDS IT: hoist the tick above the `if augment` branch.
+    let mut buf = ReplayBuffer::new(1, ENC);
+    buf.rng = StdRng::seed_from_u64(0xA5A5_0000);
+    let n_cells = buf.sym_tables.n_cells;
+    let row = discriminating_row(0..n_cells); // spread — would tick spread_draws if counted
+    buf.push_impl(row.push_config(0.0)).unwrap();
+
+    for _ in 0..64 {
+        buf.sample_batch_core(1, false).unwrap();
+    }
+    assert_eq!(buf.compact_draws(), 0, "an unaugmented draw must not tick compact_draws");
+    assert_eq!(buf.spread_draws(), 0, "…nor spread_draws — the lever was never exercised");
+}
+
+#[test]
+fn sample_batch_with_pos_core_ticks_the_same_counters() {
+    // R266/F-P1/N1 — the counted helper is the ONE call site both sample cores route
+    // through (`sample.rs::record_symmetry_draw`), so `sample_batch_with_pos_core` must
+    // tick the SAME atomics as `sample_batch_core`, not a second, independent pair.
+    // MUTATION THAT REDS IT: give the pos-variant its own uncounted `draw_record_sym` call.
+    let mut buf = ReplayBuffer::new(1, ENC);
+    buf.rng = StdRng::seed_from_u64(0x905E_C0DE);
+    let n_cells = buf.sym_tables.n_cells;
+    let dropped: HashSet<usize> =
+        buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();
+    let row = discriminating_row((0..n_cells).filter(|c| !dropped.contains(c)));
+    buf.push_impl(row.push_config(0.0)).unwrap();
+    assert_eq!(buf.compact_at(0), 1, "test setup: the row must be compact");
+
+    for _ in 0..32 {
+        buf.sample_batch_with_pos_core(1, true).unwrap();
+    }
+    assert_eq!(buf.compact_draws(), 32, "the pos-variant must tick the SHARED counter");
+    assert_eq!(buf.spread_draws(), 0);
 }
 
 // ── operator pin 3: no clipped copy is ever emitted ────────────────────────────

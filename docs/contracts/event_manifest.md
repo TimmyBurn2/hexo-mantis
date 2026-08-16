@@ -365,6 +365,28 @@ is silently disabled.
     queue disclosure, not an oversight.
   - **No producer** (an engine build predating the getter) — keyed, carrying `None`, per
     the unproduced-field convention.
+- **(4) R266/F-P1/N1 (fdc6f09/R245(c)): `training_step.symmetry_draws`.** The LAW-18
+  fire-rate log for the per-record compact/spread symmetry gate: a record that is
+  window-lossless under every D6 element draws from the FULL 12-element group, one that
+  is not draws only from `sym::WINDOW_PRESERVING_SYMS` (4 elements) — previously a silent
+  restriction with no in-run reading of how often each arm fires. Producer: the ONE
+  counted call site both sample cores route through
+  (`crates/mantis-selfplay/src/replay/sample.rs::record_symmetry_draw`; producer +
+  mutation self-tests in `crates/mantis-selfplay/tests/replay_compact_gate.rs`, Python
+  seam pins in `tests/train/test_symmetry_draws.py`). Ticked ONLY on an `augment=True`
+  draw (the b349ec4/R249 disarmed-lever posture: an unaugmented draw never consults
+  `compact`, so counting it would fabricate a reading for a lever never exercised). Three
+  arms — the K histogram's gate (item (2)), NOT inverted (this mechanism, like the K
+  histogram, is DENSE-only — the graph arm has no window and keeps the full group
+  unconditionally, `sym::WINDOW_PRESERVING_SYMS`'s own doc):
+  - **DENSE (grid) representation** — cumulative `{"compact", "spread", "compact_fraction"}`;
+    the two raw counts are truthful at 0 (R249); `compact_fraction` is `None` until at
+    least one augmented draw has landed (a rate over zero samples is not a measurement).
+  - **GRAPH representation** — the key is OMITTED. The mechanism has no subject there
+    (publishing a keyed zero or `None` would both read as "measured" to a stream
+    consumer, the same D37/10(b) arm-(i) trap).
+  - **No producer** (an engine build predating the getters) — keyed, carrying `None`, per
+    the unproduced-field convention.
 - Known counter overlap (debt **R-QUARANTINE-COUNTER**): `checkpoints.persist_errors_total`
   is incremented BOTH by a fatal write failure and by a deliberately survivable quarantine
   write (`checkpoints.py::_write_quarantine`, the §6/R3 survive-run clause). Under the
