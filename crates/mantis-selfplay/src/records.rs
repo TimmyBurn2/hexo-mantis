@@ -14,7 +14,7 @@
 
 use fxhash::FxHashMap;
 use mantis_core::{Board, Cell};
-use mantis_search::LegalSetPolicy;
+use mantis_search::{LegalSetPolicy, MCTSTree};
 use rand::{rng, RngExt};
 
 /// Fuse K cluster-local policies into one global policy in the main board's
@@ -467,11 +467,20 @@ pub fn assemble_ls_from_gnn_probs(
 
 /// Typed target-integrity refusal (WP12-R Phase T, DESIGN_T §3.3/§3.4; LAW-14).
 ///
-/// Scope: the GRAPH record constructor only — [`record_position_graph`] is the
-/// single graph-record constructor, and these tripwires make the degenerate
-/// target class UNCONSTRUCTIBLE there. The dense fast-game zero-policy arm
-/// (`runner/record.rs:67-78`) is a deliberate value-only sentinel on the DENSE
-/// recorder and never reaches this constructor.
+/// Scope, in two parts since R275(b) widened it:
+///
+/// * `MassNotUnity` / `EmptyTarget` / `VisitSlotsExceeded` — the GRAPH record
+///   constructor only. [`record_position_graph`] is the single graph-record
+///   constructor, and these tripwires make the degenerate target class
+///   UNCONSTRUCTIBLE there. The dense fast-game zero-policy arm
+///   (`runner/record.rs`) is a deliberate value-only sentinel on the DENSE
+///   recorder and never reaches this constructor.
+/// * `ZeroVisitSearch` — the TARGET-EXPORT boundary, on BOTH arms
+///   ([`refuse_zero_visit_export`], called from `search_drive::play_one_move`
+///   before any exporter runs). It is arm-independent on purpose: the graph arm's
+///   zero-visit export is a prior dump, the dense arm's is an all-zero row that
+///   the dense recorder cannot distinguish from its legitimate fast-game
+///   sentinel, and only one of those two would ever have been caught downstream.
 ///
 /// `Display` carries every field and leads with the variant name so the name
 /// survives verbatim through the runner fatal-defect latch to the supervisor.
@@ -488,6 +497,10 @@ pub enum TargetIntegrityError {
     /// silent top-k truncation's typed replacement. `max` is the composed
     /// `visit_capacity` (R255: derived from the sims regime, never a literal).
     VisitSlotsExceeded { n: usize, max: usize, ply_index: u16 },
+    /// R275(b) EXPORTER conjunct (F-816-9) — the search backed up ZERO child
+    /// visits, so there is no visit distribution to export and every exporter
+    /// would ship the prior fallback instead. See [`refuse_zero_visit_export`].
+    ZeroVisitSearch { ply_index: u16, n_children: usize },
 }
 
 impl std::fmt::Display for TargetIntegrityError {
@@ -514,6 +527,15 @@ impl std::fmt::Display for TargetIntegrityError {
                  admits is a defect upstream — silent truncation is deleted (LAW-14: \
                  run-fatal, never recorded)"
             ),
+            TargetIntegrityError::ZeroVisitSearch { ply_index, n_children } => write!(
+                f,
+                "ZeroVisitSearch: the search at ply_index={ply_index} backed up ZERO visits \
+                 across its {n_children} root children, so there is no visit distribution to \
+                 export — every exporter falls back to the (noise-mixed) priors and the \
+                 result is indistinguishable in the buffer from a real target. A target \
+                 cannot be built from a search that did not run (R275(b) exporter conjunct; \
+                 LAW-14: run-fatal, never recorded)"
+            ),
         }
     }
 }
@@ -529,6 +551,56 @@ impl std::error::Error for TargetIntegrityError {}
 /// `pub` so the bridge push face (the second public constructor, F-RT-2)
 /// refuses with the SAME window.
 pub const TARGET_MASS_TOL: f64 = 1e-4;
+
+/// R275(b) EXPORTER conjunct (F-816-9) — refuse to build a training target out of a
+/// search that backed up nothing. Returns the backed-up root-child visit total.
+///
+/// THE CLASS, in one sentence: *a search that did not run is exported as if it had.*
+/// The seam conjunct (`search_drive::InferenceSeamFailure`) stops the usual CAUSE; this
+/// stops the CONSEQUENCE, and either alone would have stopped F-816-9. They are pinned
+/// separately on purpose — the seam cannot see a zero-visit search that arose without a
+/// failure (a `sims == 1` regime reaches this state with every inference healthy), and
+/// this pin cannot name the failure that produced one.
+///
+/// WHY HERE AND NOT BY DELETING THE PRIOR FALLBACK. The LAW-08 consumer check the packet
+/// required was run and is reported in full with the packet exit; its result:
+/// `completed_q::prior_fallback_masses` has NO consumer outside self-play target
+/// construction. `get_policy` (dense) has no fallback arm at all — it returns an all-zero
+/// vector — and the arena's `deploy_head` reads `get_root_children_info`, not an exporter.
+/// So deleting the fallback would not have been blocked by a consumer. It would still have
+/// been the WRONG fix: it swaps a prior dump for an all-zero target, which the graph arm
+/// catches as `EmptyTarget` and the DENSE recorder does not catch at all (a zero policy row
+/// there is the legitimate fast-game value-only sentinel). Refusing at the boundary kills
+/// the class on BOTH arms and makes the fallback unreachable from the target path rather
+/// than merely absent from it.
+///
+/// SCOPE (R275(a)): this pin, its sibling at the seam, and R255's capacity formula are all
+/// derived from the CURRENT visit-limited target construction. If completed-Q-on-graph is
+/// adopted at prereg, the capacity AND both pins re-derive from the new construction — a
+/// completed-Q export puts mass on every child, so its support is child-count-wide and not
+/// sims-bounded (LAW-02: re-derive, never carry the prior across).
+///
+/// # Errors
+/// [`TargetIntegrityError::ZeroVisitSearch`] when the root is unexpanded, has no children,
+/// or every child carries `n_visits == 0`. The caller latches it run-fatal (LAW-14).
+pub fn refuse_zero_visit_export(
+    tree: &MCTSTree,
+    ply_index: u16,
+) -> Result<u32, TargetIntegrityError> {
+    let root = &tree.pool[0];
+    let n_children = if root.is_expanded() { root.n_children as usize } else { 0 };
+    let first = root.first_child as usize;
+    // Root visits are NOT the subject: the root's own expansion backs up one visit to
+    // itself, which is exactly the state F-816-9 died in. The exporters normalize over the
+    // CHILDREN, so the children are what must have been visited.
+    let backed_up: u32 = (first..first + n_children)
+        .map(|i| tree.pool[i].n_visits)
+        .sum();
+    if backed_up == 0 {
+        return Err(TargetIntegrityError::ZeroVisitSearch { ply_index, n_children });
+    }
+    Ok(backed_up)
+}
 
 /// GNN-integration WP-5a (§1.2) — build the ONE compact graph-position record
 /// from the search-root board + the assembled ragged `LegalSetPolicy`.

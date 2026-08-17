@@ -82,6 +82,14 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 /// (through the bridge twin `derived_hexg_visit_capacity`) and the
 /// `SelfPlayRunner` boot guard — so the two cannot drift onto second formulas.
 ///
+/// SCOPE (R275(a)): this formula is derived from the CURRENT visit-limited target
+/// construction, and so are the two F-816-9 pins that sit downstream of it
+/// (`records::refuse_zero_visit_export` and `search_drive::InferenceSeamFailure`). If
+/// completed-Q-on-graph is adopted at prereg, the capacity AND both pins re-derive from
+/// the new construction — a completed-Q export is child-count-wide, not sims-bounded, which
+/// is exactly what the second error arm below refuses today (LAW-02: re-derive, never carry
+/// the prior across a regime change).
+///
 /// # Errors
 /// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`] — no slot sizing
 ///   can honor the regime; the schema twin makes this a MINT-time error, and

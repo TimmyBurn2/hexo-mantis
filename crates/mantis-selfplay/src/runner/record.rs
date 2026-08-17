@@ -374,4 +374,46 @@ mod k_histogram_tests {
              that arm, and a count here would make the emitted absence a fabrication"
         );
     }
+
+    /// F-816-9 Phase C (R275(b)) — the dispatch FORWARDS the constructor's Err and pushes
+    /// nothing.
+    ///
+    /// WHY THIS EXISTS AS AN IN-SRC ORACLE. `target_latch_propagation.rs` used to drive this
+    /// Err end-to-end through a real worker, using the zero-visit prior dump as its source.
+    /// The EXPORTER conjunct now refuses that search upstream, and no OTHER production drive
+    /// can reach a `TargetIntegrityError` here: with visits > 0 the exported support is
+    /// bounded by the sims actually backed up and R255 derives capacity to cover exactly
+    /// that. So the constructor's guards became defense-in-depth — required to stay
+    /// (R274(c)), unfireable in the current visit-limited construction, and load-bearing
+    /// again only under R275(a)'s retirement clause. This oracle keeps the FORWARDING half
+    /// of that edge honest: `record_position_graph_dispatch` must not swallow an Err it is
+    /// handed, and must not leave a half-built record behind when it returns one. The
+    /// remaining half — the caller latching what it is handed — has no killer left, and that
+    /// is stated in `target_latch_propagation.rs` rather than papered over.
+    #[test]
+    fn graph_dispatch_forwards_the_typed_error_and_pushes_nothing() {
+        let b = board_with_groups(1);
+        // Half mass: the constructor's `MassNotUnity` arm, reached by construction.
+        let ls = MovePolicy::Ls(LegalSetPolicy {
+            dense: {
+                let legal = b.legal_moves();
+                let mut d = vec![0.0f32; 362];
+                d[b.window_flat_idx(legal[0].0, legal[0].1)] = 0.5;
+                d
+            },
+            overflow: FxHashMap::default(),
+        });
+        let mut graph_records: Vec<GraphRecord> = Vec::new();
+        let err = record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128)
+            .expect_err("a Σ=0.5 target must not be constructible");
+        assert!(
+            format!("{err}").starts_with("MassNotUnity"),
+            "the typed variant must be forwarded verbatim, not collapsed: {err}"
+        );
+        assert!(
+            graph_records.is_empty(),
+            "a refused record must leave the buffer untouched ({} pushed)",
+            graph_records.len()
+        );
+    }
 }

@@ -847,6 +847,16 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
 
+    // ── R275(b) EXPORTER conjunct: no visits, no target ──
+    // BEFORE any exporter runs, and arm-independent — `records::refuse_zero_visit_export`
+    // is the one place that decides a search is exportable. `policy` below feeds BOTH the
+    // recorded target and the move actually played, so a zero-visit search would otherwise
+    // also sample its move from the prior fallback.
+    if let Err(err) = records::refuse_zero_visit_export(tree, board.ply.index() as u16) {
+        fatal_latch.store(err.to_string());
+        return MoveOutcome::Break;
+    }
+
     // ── MCTS Policy with cosine-annealed temperature schedule ──
     let compound_move = ply_to_compound_move(board.ply.index() as usize);
     let temperature = if ctx.is_fast_game {
