@@ -36,7 +36,11 @@ import mantis.selfplay.graph_collate as collate_mod
 from mantis._engine import InferenceBatcher
 from mantis.encoding import lookup
 from mantis.model import CnnArch, RepresentationMismatch, amp_dtype_for, build_net
-from mantis.selfplay.graph_collate import GraphBatch, graph_wire_from_rust
+from mantis.selfplay.graph_collate import (
+    GraphBatch,
+    GraphWirePayload,
+    graph_wire_from_rust,
+)
 from mantis.selfplay.inference_server import InferenceServer
 
 _GRID_SPEC = lookup("v6")
@@ -99,6 +103,12 @@ def _cfg(**over: Any) -> dict[str, Any]:
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        # F-816-10 (R276(f)): the GRAPH arm resolves `inference.fused_graph_caps`
+        # EAGERLY at construction, so every graph-route site built from this base needs
+        # it. The pair is the template's NON-BINDING-BY-CONSTRUCTION value — nothing in
+        # this file splits, and the split's own coverage lives in the F-816-10 oracles
+        # where its M is asserted. Inert on the grid route, which never reads the block.
+        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
     return {"inference": base, "encoding": "v6", "train": {"amp_dtype": "fp16"}}
@@ -263,6 +273,37 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         n_stones=torch.ones(n_graphs, dtype=torch.int64),
         n_graphs=n_graphs,
         device="cpu",
+    )
+
+
+def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
+              ) -> GraphWirePayload:
+    """A REAL `GraphWirePayload` whose CSR offsets match `_hand_built_batch`'s shape.
+
+    F-816-10: `_run_graph_loop` reads the wire's own offsets ONCE per pop to PLAN its bounded
+    forwards, before any collate runs, so an opaque `object()` sentinel no longer reaches the
+    loop. The collate itself stays monkeypatched in the rows below — those rows are about the
+    call's kwargs, the finiteness gate and the heartbeat, not about the wire contract, which
+    has its own suites. Only the offsets have to be real, and the caps these servers carry are
+    non-binding, so every drive here is the M == 1 path.
+    """
+    nodes = n_graphs * nodes_per_graph
+    return GraphWirePayload(
+        contract_version=1, builder_impl=1, n_graphs=n_graphs,
+        node_feat=np.zeros(nodes * 11, dtype=np.float32),
+        node_coords=np.zeros(nodes * 2, dtype=np.int64),
+        edge_index=np.zeros(0, dtype=np.int64),
+        edge_attr=np.zeros(0, dtype=np.float32),
+        node_offsets=np.arange(0, nodes + 1, nodes_per_graph, dtype=np.int64),
+        edge_offsets=np.zeros(n_graphs + 1, dtype=np.int64),
+        legal_offsets=np.arange(0, n_graphs * legal_per_graph + 1, legal_per_graph,
+                                dtype=np.int64),
+        legal_node_gather=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        policy_dst_slot=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        n_nodes_checksum=np.full(n_graphs, nodes_per_graph, dtype=np.int64),
+        n_stones=np.ones(n_graphs, dtype=np.int64),
+        window_center=np.zeros(n_graphs * 2, dtype=np.int64),
+        current_player=np.ones(n_graphs, dtype=np.int64),
     )
 
 
@@ -626,7 +667,7 @@ def test_representation_dispatch_arms(device, model) -> None:
     assert grid._shape == (BOARD_CHANNELS, BOARD_SIZE, BOARD_SIZE)
     grid.stop()
 
-    batcher = _FakeGraphBatcher(object(), n_batches=0)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
     graph = _graph_server(device, batcher)
     assert graph._is_graph is True
     assert graph._shape is None
@@ -635,7 +676,7 @@ def test_representation_dispatch_arms(device, model) -> None:
 
 
 def test_run_dispatches_to_the_graph_loop_for_a_graph_spec(device) -> None:
-    batcher = _FakeGraphBatcher(object(), n_batches=0)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
     server = _graph_server(device, batcher)
     called: list[str] = []
     server._run_graph_loop = lambda: called.append("graph")  # type: ignore[method-assign]
@@ -688,7 +729,7 @@ def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
     for amp_knob in ("fp16", "bf16"):
         cfg = _cfg()
         cfg["train"] = {"amp_dtype": amp_knob}
-        batcher = _FakeGraphBatcher(object(), n_batches=0)
+        batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
         server = InferenceServer(
             _FiniteGraphNet(), device, cfg,
             batcher=batcher, encoding_spec=_GRAPH_SPEC,
@@ -736,7 +777,7 @@ def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
     batch = _hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
 
-    batcher = _FakeGraphBatcher(object(), n_batches=1)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=1)
     server = _graph_server(device, batcher, model=_FiniteGraphNet(nonfinite=True))
     server.run()
 
@@ -755,7 +796,7 @@ def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
     batch = _hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
 
-    batcher = _FakeGraphBatcher(object(), n_batches=1)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=1)
     server = _graph_server(device, batcher)
     server.run()
 
@@ -780,7 +821,7 @@ def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
 
     beats: list[str] = []
-    batcher = _FakeGraphBatcher(object(), n_batches=3)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=3)
     server = _graph_server(device, batcher, heartbeat=beats.append)
     server.run()
 
@@ -791,7 +832,7 @@ def test_graph_loop_default_heartbeat_none_emits_nothing(device, monkeypatch) ->
     batch = _hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
 
-    batcher = _FakeGraphBatcher(object(), n_batches=2)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=2)
     server = _graph_server(device, batcher)
     assert server._heartbeat is None
     server.run()  # must not raise — the default sink is a true no-op
@@ -834,7 +875,7 @@ def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
 
     monkeypatch.setattr(collate_mod, "collate_graph_batch", _boom)
     beats: list[str] = []
-    batcher = _FakeGraphBatcher(object(), n_batches=1)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=1)
     server = _graph_server(device, batcher, heartbeat=beats.append)
     server.run()
 
@@ -941,7 +982,7 @@ def _run_graph_loop_with_spy(
     monkeypatch.setattr(collate_mod, "collate_graph_batch", spy)
     monkeypatch.setattr(collate_mod, "reset_semantic_canary", lambda: resets.append(1))
 
-    batcher = _FakeGraphBatcher(object(), n_batches=n_batches)
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=n_batches)
     server = _graph_server(device, batcher, batch_size=batch_size)
     # Post-ctor spec swap: the ctor only accepts a real registry spec, and the loop binds
     # `spec = self.encoding_spec` at loop entry, reading the four dims inline at each

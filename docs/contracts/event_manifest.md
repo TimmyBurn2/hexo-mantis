@@ -239,7 +239,24 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   INTERVAL mean; min/max are run-cumulative extremes and do not difference. **Graph path
   only** — the dense loop is not instrumented, so a grid run's block carries `None` for
   every derived reading (the unproduced-field convention below, applied), while
-  `empty_polls` stays VISIBLE at 0 on the producing path. `graph_build_time` is
+  `empty_polls` stays VISIBLE at 0 on the producing path.
+  The block carries a `fusion` SUB-BLOCK (F-816-10, LAW-18/R164) — the graph inference
+  forward's memory bound reporting its own fire rate in-run: `caps` (the two minted members
+  of `inference.fused_graph_caps`), `fusion_parts` (GPU forwards actually run),
+  `fusion_splits` (**pops that split** — the lever's own fire rate, not a cut count),
+  `fusion_bound_hits` (`{edges, nodes}`: which member forced each cut, so the reading says
+  which member to re-fit) and `fused_batch_nodes`/`fused_batch_edges` (count/total/mean plus
+  min/max and a power-of-two-lower-bound histogram). **The unit is the PART, not the pop** —
+  the part is what the GPU sees and what the cap bounds, and a pop's total is recoverable as
+  the sum over its parts while the reverse is not. Two adjacent readings move as this lands,
+  both intended: `collate.count` becomes the part count (`sum(M)`) where it previously
+  equalled `queue_wait.count`, and `batch_fill_pct`'s denominator `_forward_count` stays ONE
+  PER POP, because that metric is an occupancy (requests per pop against
+  `inference_batch_size`) and not a GPU-forward count. **`fusion` is `None` on a grid run**,
+  key present and value null: the dense batch is a fixed-shape tensor already bounded by
+  `inference_batch_size`, so the grid path never reads the caps and never plans a split — a
+  zeroed block would read as "the lever ran and never fired", which is the opposite
+  statement (the unproduced-field convention below, applied). `graph_build_time` is
   deliberately NOT built: it lives per-leaf in Rust (`mantis-graph::build_axis_graph`) and
   would be a LAW-09 hot-path change owing re-run parity oracles and an IQR-gated bench.
   Registration follows the `target_integrity_counters` precedent (R164) rather than the

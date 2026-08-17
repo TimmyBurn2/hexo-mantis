@@ -124,6 +124,27 @@ armed, `buffer_size` 0, killed at the timeout, parent rc **40** — but the CHIL
 WPMAIN installed LAW-16's handlers (dead in every composed run before it), so the child
 save-then-exits instead of dying on the signal.
 
+SECOND CORRECTION, measured 2026-08-17 (F-816-10 / R276(f)), and it EXPIRES the (ii) above
+for as long as the production configs carry the R119 placeholder. `configs/run5.yaml` — and
+therefore its minted CPU twin, which differs from it in `run_id` and `train.device` alone —
+now mints `inference.fused_graph_caps: {max_fused_edges: null, max_fused_nodes: null}`. That
+is the fused graph inference forward's memory bound, and `null` is NOT an off state: it is the
+placeholder, schema-VALID so the repo ships a complete config and gate 7 stays green, and
+runtime-REFUSED so an uncalibrated production config CANNOT CONSTRUCT ITS GRAPH INFERENCE
+SERVER. The twin's boot therefore stops at the `WorkerPool` composition seam with
+`UncalibratedFusedGraphCapsError` naming the member, the calibration entry point
+(`python -m mantis.diagnostics.fusion_calibrate`) and the `--set` line that fixes it: parent
+rc **33** `PreflightBootFailedError`, child rc 1, seconds.
+
+**THIS IS THE DESIGNED BEHAVIOUR AND IT IS ALSO A REAL LOSS, and both halves belong here.**
+It is designed: an unbounded fused inference forward is the defect F-816-10 exists to make
+unconstructible, and a run that boots on a cap nobody measured is exactly the silently-usable
+guess the packet forbids. It is a loss: the clean-boot / both-watchdogs-armed / rc-40 evidence
+recorded in (ii) is UNAVAILABLE from this tool until the operator calibrates at the box and
+mints the pair. The armed-abort manifest carries `fused_graph_caps_calibrated` as a DEFERRED
+row so every gate-12 run says so out loud, and closing that row is what restores this
+paragraph. Until then, a reader must not take (ii) for the current tree.
+
 **CARD-TRAINSTEP-ADAPTER (TD-1) IS DEAD (WPTS, R102).** The straight self-play arm no longer
 calls a `train_step` that does not exist: `step.py::_run_training_step` routes through the
 DECLARED dispatcher (`coordinator/dispatch.py::run_declared_train_step`), keyed on the

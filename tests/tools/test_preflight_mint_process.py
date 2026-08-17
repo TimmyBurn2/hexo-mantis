@@ -81,6 +81,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from mantis.config.armed_aborts import (
     EARLIEST_FIRE_FRACTION,
@@ -152,6 +153,15 @@ def _cuda_is_available() -> bool:
 _CUDA_BOX = _cuda_is_available()
 
 
+def _yaml_scalar(value: object) -> str:
+    """A Python scalar as the YAML token `mint_config.py --set` will parse back to it.
+
+    Only `None` needs the translation (`str(None)` is `"None"`, which YAML reads as the STRING
+    "None" and the schema then rejects), but the helper is written over the general case so a
+    future delta reading a bool off a config does not hit the same trap one type later."""
+    return "null" if value is None else str(value)
+
+
 def _flat_leaves(config) -> dict[str, object]:
     """A validated config's leaves as dotted paths — the same shape gate 13's walker uses."""
     def walk(node, prefix: str) -> dict[str, object]:
@@ -166,7 +176,38 @@ def _flat_leaves(config) -> dict[str, object]:
     return walk(config.model_dump(), "")
 
 
-def _mint_run5_cpu_twin(out_dir: Path) -> Path:
+def _mint_run5_cpu_bootable_twin(out_dir: Path) -> Path:
+    """run5's CPU twin PLUS a valued fused-graph cap — the LAUNCH-SURFACE row's target only.
+
+    A SECOND twin, deliberately distinct from `_mint_run5_cpu_twin`, and the difference is the
+    point. `_mint_run5_cpu_twin` is run5 with the device and NOTHING else, because the three
+    boot-mechanics rows above are evidence about run5's own boot and a third differing leaf
+    would end that. Since F-816-10 that twin carries run5's R119 `inference.fused_graph_caps`
+    PLACEHOLDER (`null`/`null`), so it refuses at the `WorkerPool` seam by design and never
+    publishes `run_boot_identity`.
+
+    The row below is not about run5's boot. Its subject is R75 — *a run may be launched from a
+    path of ANY SHAPE* — and its witness is the boot-identity event, so it needs a config that
+    actually BOOTS and that says cpu itself (R126). This twin is therefore run5 + `train.device`
+    + the template's own NON-BINDING-BY-CONSTRUCTION cap pair: it is not a calibrated value and
+    is not pretending to be one, it is the same "large enough that nothing here splits" pair
+    every smoke config mints, minted so the launch surface can be exercised at all.
+
+    Reading the pair OFF THE TEMPLATE rather than restating it keeps the one rule this file
+    lives by: the day the template's non-binding derivation moves, this twin moves with it.
+    """
+    template = yaml.safe_load(
+        (REPO_ROOT / "tools" / "config_templates" / "dev.yaml").read_text(encoding="utf-8")
+    )["inference"]["fused_graph_caps"]
+    dest = _mint_run5_cpu_twin(out_dir, name="run5_cpu_bootable", extra_deltas=[
+        (f"inference.fused_graph_caps={{max_fused_edges: {template['max_fused_edges']}, "
+         f"max_fused_nodes: {template['max_fused_nodes']}}}"),
+    ])
+    return dest
+
+
+def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
+                        extra_deltas: list[str] | None = None) -> Path:
     """MINT (never hand-vary) run5's CPU twin — R130's re-point target, the R103 pattern.
 
     The three real-boot drives below exist to measure the TOOL's boot mechanics — where the
@@ -192,7 +233,7 @@ def _mint_run5_cpu_twin(out_dir: Path) -> Path:
     run5 = load_config(RUN5)
     draw = run5.train.draw_rate_abort
     assert draw is not None, "premise: run5 arms the draw-rate abort (the tier-full floor row)"
-    dest = out_dir / "run5_cpu_boot.yaml"
+    dest = out_dir / f"{name}.yaml"
     deltas = [
         "run_id=run5_cpu_boot",
         f"seed={run5.seed}",
@@ -208,7 +249,19 @@ def _mint_run5_cpu_twin(out_dir: Path) -> Path:
         # stale on any new delta — deriving it is a separate change with its own census.)
         (f"train.microbatch_caps={{max_edges: {run5.train.microbatch_caps.max_edges}, "
          f"max_nodes: {run5.train.microbatch_caps.max_nodes}}}"),
+        # F-816-10: run5 overrides `inference.fused_graph_caps` too — to the R119 `null`
+        # PLACEHOLDER, which is the whole posture: schema-valid so the repo ships a complete
+        # config, runtime-refused so an uncalibrated production config cannot construct its
+        # graph inference server. The twin must carry it for the same reason it carries the
+        # caps above: without it, this drive boots a config that differs from run5 in a
+        # memory bound and stops being evidence about run5's own boot. Read OFF run5, never
+        # transcribed — including the `null`, so the day the operator mints a real pair this
+        # delta follows without an edit here.
+        (f"inference.fused_graph_caps={{"
+         f"max_fused_edges: {_yaml_scalar(run5.inference.fused_graph_caps.max_fused_edges)}, "
+         f"max_fused_nodes: {_yaml_scalar(run5.inference.fused_graph_caps.max_fused_nodes)}}}"),
         "train.device=cpu",
+        *(extra_deltas or ()),
     ]
     argv = [sys.executable, str(REPO_ROOT / "tools" / "mint_config.py"),
             "--template", "dev", "--out", str(dest)]
@@ -223,6 +276,11 @@ def _mint_run5_cpu_twin(out_dir: Path) -> Path:
     base, other = _flat_leaves(run5), _flat_leaves(twin)
     assert base.keys() == other.keys(), "same template, same key set"
     differing = {key for key in base if base[key] != other[key]}
+    if extra_deltas:
+        # A NAMED variant (`_mint_run5_cpu_bootable_twin`) states its own extra leaves; the
+        # two-leaf guarantee below is what makes the UNNAMED twin evidence about run5, so it
+        # binds that twin alone rather than being relaxed for both.
+        return dest
     assert differing == {"run_id", "train.device"}, (
         "the twin must be run5 WITH THE DEVICE THIS BOX HAS and nothing else — anything more "
         "and these drives stop being evidence about run5's own boot. Differing leaves: "
@@ -530,41 +588,56 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     CARD-TRAINSTEP-ADAPTER (TD-1, `step.py:640`, still live) is never REACHED here. This is
     a box-conditional result; the training box is the binding measurement.
 
-    The timeout is short deliberately: the subject is "does the boot clear TD-4 and reach a
-    running loop", which is decided within seconds. Waiting out a 240 s window bought nothing
-    but integration-tier wall-clock once the outcome stopped being a fast failure.
+    RE-POINTED AGAIN by F-816-10 (R276(f)), and this one moves the OUTCOME rather than the
+    config. run5 — and therefore its twin, which differs from it in `run_id` and
+    `train.device` alone — now mints `inference.fused_graph_caps` as the R119 PLACEHOLDER
+    (`null`/`null`): the fused graph inference forward's memory bound, schema-VALID so the
+    repo ships a complete config and runtime-REFUSED so an uncalibrated production config
+    CANNOT CONSTRUCT ITS GRAPH INFERENCE SERVER. So the boot no longer runs to the timeout;
+    it stops at the `WorkerPool` composition seam, by name, in seconds.
+
+    WHAT THIS ROW NOW PROVES, AND WHAT IT STOPPED PROVING — stated because the second half is
+    a real loss and a green test must not hide it. It PROVES the refusal is reached through
+    the SHIPPED process on the REAL production config, at construction, before a training step
+    exists, with a message that names the member, the calibration entry point and the mint
+    line — the end-to-end witness for the whole packet, which no in-process oracle can give.
+    It NO LONGER PROVES the clean-boot / both-watchdogs-armed / rc-40 result WPBRIDGE and
+    WPMAIN measured; that evidence is unavailable from this row until the operator calibrates
+    at the box and mints the pair. `fused_graph_caps_calibrated` is the DEFERRED armed-abort
+    row that says so on every gate-12 run, and closing it is what restores the old assertion.
+
+    The timeout is short deliberately: the subject is decided within seconds either way.
     """
     out_dir = tmp_path / "boot"
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "45")
-    assert result.returncode == 40, (
-        "post-TD-4 the boot runs until the timeout kills it: rc 40 PreflightTimeoutError. "
+    assert result.returncode == 33, (
+        "run5 mints the R119 fused-graph-caps placeholder, so the boot must die LOUD at the "
+        "composition seam: rc 33 PreflightBootFailedError. "
         f"got {result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
     report = json.loads(reports[0].read_text())
-    assert report["failure"] == "PreflightTimeoutError"
-    assert report["child"]["timed_out"] is True
-    assert "MissingEncodingError" not in report["child"]["stderr_tail"], (
+    assert report["failure"] == "PreflightBootFailedError"
+    assert report["child"]["timed_out"] is False, (
+        "the child did not run out its window — it refused. A timed-out child here means the "
+        "cap was resolved from somewhere, which is the silent default the resolver forbids."
+    )
+    tail = report["child"]["stderr_tail"]
+    assert "UncalibratedFusedGraphCapsError" in tail, (
+        "the boot must die on the NAMED refusal, not on a bare TypeError or an AttributeError "
+        f"three frames later. got tail {tail[-600:]!r}"
+    )
+    for needle in ("inference.fused_graph_caps", "fusion_calibrate", "mint_config"):
+        assert needle in tail, (
+            f"the refusal that reaches an operator through this tool omits {needle!r} — the "
+            f"whole remedy is which key, measured how, minted with what. got {tail[-900:]!r}"
+        )
+    assert "MissingEncodingError" not in tail, (
         "CARD-POOL-ENCODING-BRIDGE has landed; the pool resolves `identity.encoding` through "
-        "the ONE resolver. A MissingEncodingError here is that card regressing. got tail "
-        f"{report['child']['stderr_tail'][-600:]!r}"
-    )
-    assert "train_step" not in report["child"]["stderr_tail"], (
-        "TD-1 is not reached on a CPU box — it sits BEHIND the warmup gate, and the buffer "
-        "never fills. If this ever fires, the box got far enough to need "
-        "CARD-TRAINSTEP-ADAPTER, which would be news worth reading."
-    )
-    # The positive half: the child did not merely fail to crash, it ran. The run's own
-    # segment is the witness (LAW-18 in-run observability), not the tool's say-so.
-    segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
-    assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
-    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
-    assert {"run_segment_started", "heartbeat_watchdog_armed",
-            "selfplay_stall_watchdog_armed"} <= events, (
-        f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
+        f"the ONE resolver. A MissingEncodingError here is that card regressing. got {tail[-600:]!r}"
     )
 
 
@@ -2172,11 +2245,20 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
 
     BOUNDED, and that is what keeps it in the default tier (measured ~3 s per arm on this
     box): the drive stops the run the moment the identity witness lands, which is before the
-    burst matters. The target is the MINTED CPU TWIN of run5 (`_mint_run5_cpu_twin`) so the
-    row asserts the same thing on a CUDA box and on a CPU box — R126 made the device a config
-    fact, so a launch drive that wants to be host-independent must say cpu in the config.
+    burst matters. The target is a MINTED CPU TWIN of run5 so the row asserts the same thing
+    on a CUDA box and on a CPU box — R126 made the device a config fact, so a launch drive
+    that wants to be host-independent must say cpu in the config.
+
+    RE-POINTED by F-816-10 onto `_mint_run5_cpu_bootable_twin`, which is the plain CPU twin
+    plus the template's non-binding fused-graph cap pair. run5 mints that cap as the R119
+    `null` PLACEHOLDER, so the plain twin now REFUSES at the `WorkerPool` seam and publishes
+    no boot identity at all — and this row's witness IS the boot identity. The subject here is
+    the LAUNCH SURFACE (a path of any shape boots), not run5's own boot evidence, so a third
+    differing leaf is admissible where it is not admissible for the three boot-mechanics rows
+    above; the helper says so in its own docstring rather than leaving the difference to be
+    inferred from two similar names.
     """
-    canonical = _mint_run5_cpu_twin(tmp_path)
+    canonical = _mint_run5_cpu_bootable_twin(tmp_path)
     odd = tmp_path / "run6.txt"
     odd.write_bytes(canonical.read_bytes())
     identity = config_identity_sha256(load_config(odd))
@@ -2778,9 +2860,14 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     # this row exists: a run that spawned a child must not carry the NOT_BOOTED disclaimer,
     # whatever the child then did — which is why the child's rc is read off the report and
     # never restated (WPMAIN moved it from -15 to 0 by installing LAW-16's handlers).
-    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
+    # RE-POINTED AGAIN by F-816-10: run5 mints the R119 fused-graph-caps placeholder, so the
+    # child now REFUSES at the composition seam (rc 33 / child rc 1) instead of running out
+    # its window. The SUBJECT is untouched and this is exactly the case it was written for —
+    # a boot WAS spawned, so the NOT_BOOTED disclaimer must not appear "whatever the child
+    # then did", including dying by name two seconds in.
+    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
     report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
-    assert report["child"] is not None and report["child"]["timed_out"] is True
+    assert report["child"] is not None and report["child"]["timed_out"] is False
     for name in ("a_sync", "b_lag"):
         reason = report["assertions"][name]["reason"]
         assert TOOL.BOOTED_REASON in reason and TOOL.NOT_BOOTED_REASON not in reason, (
@@ -3911,7 +3998,12 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "45")
-    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
+    # RE-POINTED by F-816-10: the twin now refuses at the composition seam on run5's R119
+    # fused-graph-caps placeholder (rc 33), where it used to run out its window (rc 40). The
+    # TIER ARITHMETIC is what this row is about and it does not move with the outcome — the
+    # tier block is published on every terminating preflight, which is the property being
+    # pinned, and a run that proved LESS must still say what it did not prove.
+    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     block = report["tier"]
     assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST

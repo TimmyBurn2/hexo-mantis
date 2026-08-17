@@ -116,7 +116,8 @@ def test_a_graph_model_bound_to_a_dense_spec_fails_loud_not_silent():
     graph_net = build_net(arch_from_spec_and_config(graph_spec, {}))
 
     # The dense spec is stated, not inherited from a default: there is no default.
-    engine = LocalInferenceEngine(graph_net, torch.device("cpu"), encoding_spec=lookup("v6"))
+    engine = LocalInferenceEngine(graph_net, torch.device("cpu"),
+                                  encoding_spec=lookup("v6"), fused_graph_caps=None)
     try:
         # It is bound to a dense spec, so it takes the dense arm despite a graph net.
         assert engine.encoding_spec.name == "v6"

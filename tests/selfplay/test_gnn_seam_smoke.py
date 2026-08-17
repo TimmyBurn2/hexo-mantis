@@ -72,6 +72,10 @@ def test_gnn_inference_seam_end_to_end_smoke() -> None:
             "trace_inference": True, "compile_inference": False,
             "compile_inference_mode": "default", "compile_inference_dynamic": True,
             "perf_timing": False, "perf_sync_cuda": False,
+            # F-816-10: the graph arm resolves the fused-forward memory bound at
+            # construction. Non-binding by construction here, so this end-to-end smoke
+            # exercises the M == 1 path production takes when the caps do not bind.
+            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
         }, "train": {"amp_dtype": "bf16"}},
         batcher=batcher, encoding_spec=_SPEC,
     )

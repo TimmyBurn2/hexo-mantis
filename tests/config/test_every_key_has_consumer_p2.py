@@ -1,5 +1,5 @@
 """>300 justify (R8): it is mostly DATA — the
-SECOND copy of the 182-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
+SECOND copy of the 184-entry `CONSUMER_REGISTRY`, deliberately duplicated so the two copies must
 agree, plus the same walker. It crossed the cap at WPMINT Phase K-B, which added 20 leaves;
 WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
 `monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved the registry
@@ -281,6 +281,17 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "inference.compile_inference_dynamic": "InferenceHParams.compile_inference_dynamic -> inference_server.py:74 ctor",
     "inference.perf_timing": "InferenceHParams.perf_timing -> inference_server.py:74 ctor (diagnostics ns)",
     "inference.perf_sync_cuda": "InferenceHParams.perf_sync_cuda -> inference_server.py:74 ctor (diagnostics ns)",
+    # F-816-10 (R276(f)): the GRAPH inference forward's memory bound — this copy states
+    # the chain independently of its twin (two independently-maintained registries by
+    # design). Route-scoped: the resolve happens inside the graph branch of the ctor.
+    "inference.fused_graph_caps.max_fused_edges":
+        "FusedGraphCapsSpec.max_fused_edges (resolve_fused_graph_caps) -> the graph arm of"
+        " InferenceServer.__init__ -> _run_graph_loop plan_fused_forwards edge bound; and"
+        " RoundSpec.fused_graph_caps -> LocalInferenceEngine in the eval subprocess",
+    "inference.fused_graph_caps.max_fused_nodes":
+        "FusedGraphCapsSpec.max_fused_nodes (resolve_fused_graph_caps) -> the graph arm of"
+        " InferenceServer.__init__ -> _run_graph_loop plan_fused_forwards node bound; and"
+        " RoundSpec.fused_graph_caps -> LocalInferenceEngine in the eval subprocess",
     # ── monitor.* (27; resolve_monitor_config -> MonitorConfig, DESIGN_P2.md §4.2) ───────
     # ── monitor.gate_interval (R242 / ADJ-D12) — schema-only, like `drain`/`disk_guard`:
     # named directly by compose_run (one leaf, no shape to resolve) and threaded into
@@ -410,8 +421,15 @@ def test_registry_matches_the_live_leaf_count():
     # `train.draw_rate_abort` the only `Block | None` field in `RunConfig` — it was true when
     # written and is not any more; the sentence is corrected here rather than left to be read
     # as evidence (R192(e)). 177 + 5 = 182.
-    assert len(CONSUMER_REGISTRY) == 182
-    assert len(_leaf_paths(RunConfig)) == 182
+    # F-816-10 (R276(f)) ADDS 2: `inference.fused_graph_caps.{max_fused_edges,
+    # max_fused_nodes}` — ONE block, ONE fact ("how big may one fused inference forward
+    # be"), sized TOGETHER from one measured fit against one budget, and the training cap's
+    # partner over the same card. Members are NOT spelled `max_edges`/`max_nodes`: the
+    # train-side OF2-9 census freezes those names and distinct names keep the two budgets
+    # unconfusable. Shipped `null` in both production configs — the R119 placeholder, which
+    # is schema-valid and runtime-REFUSED, never an off state. 182 + 2 = 184.
+    assert len(CONSUMER_REGISTRY) == 184
+    assert len(_leaf_paths(RunConfig)) == 184
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

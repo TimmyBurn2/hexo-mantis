@@ -16,6 +16,7 @@ from typing import Any
 
 from mantis.bots.protocol import RungUnresolvable
 from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthFloorSpec
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
 __all__ = [
@@ -57,6 +58,18 @@ def _rehydrate(cls: Any, payload: Any) -> Any:
     if payload is None or isinstance(payload, cls):
         return payload
     return cls(**payload)
+
+
+#: The optional resolver-produced specs `from_dict` must REHYDRATE, as DATA rather than as
+#: three transcribed statements. One loop over one table is what keeps the set closed: a field
+#: added to `RoundSpec` and forgotten here arrives in the child as a raw mapping and fails at
+#: the child's first attribute read — which, on `fused_graph_caps`, would be at the moment it
+#: tries to bound a forward, in a subprocess whose stderr nobody is reading.
+_REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
+    ("ply_cap_adjudication", PlyCapAdjudicationSpec),
+    ("strength_floor", StrengthFloorSpec),
+    ("fused_graph_caps", FusedGraphCapsSpec),
+)
 
 
 @dataclass(frozen=True)
@@ -124,6 +137,16 @@ class RoundSpec:
     #: arm neither the arena loop nor `run_round` takes a new branch.
     ply_cap_adjudication: PlyCapAdjudicationSpec | None
     strength_floor: StrengthFloorSpec | None
+    #: The graph inference forward's memory bound (F-816-10, D-1), in the SAME shape and for
+    #: the same reason as the two postures above: resolved ONCE in the parent by
+    #: `mantis.config.resolve.fused_graph_caps` and carried across the process seam as a plain
+    #: frozen dataclass. It is here because the eval worker is a SECOND allocator on the same
+    #: card — `eval.worker_device: cuda` plus a spawn-context subprocess — that no in-process
+    #: bound can see, and its `LocalInferenceEngine` builds its graph server from a hand-made
+    #: dict with no `RunConfig` to resolve against. `None` is the GRID arm: a grid eval round
+    #: has no fused graph forward to bound, and `None` must round-trip as `None` rather than
+    #: as a rehydration failure.
+    fused_graph_caps: FusedGraphCapsSpec | None
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -133,10 +156,8 @@ class RoundSpec:
         payload = dict(payload)
         payload["gate"] = GateSpec(**payload["gate"])
         payload["rung_jobs"] = [RungJob(**job) for job in payload["rung_jobs"]]
-        payload["ply_cap_adjudication"] = _rehydrate(
-            PlyCapAdjudicationSpec, payload["ply_cap_adjudication"]
-        )
-        payload["strength_floor"] = _rehydrate(StrengthFloorSpec, payload["strength_floor"])
+        for field, spec_cls in _REHYDRATED_SPEC_FIELDS:
+            payload[field] = _rehydrate(spec_cls, payload[field])
         return cls(**payload)
 
 

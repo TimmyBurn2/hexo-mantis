@@ -502,6 +502,25 @@ class Cadence(StrEnum):
     #: would fail every such row forever for a reason that is not a defect.
     CLOSE_OUT_TERMINAL = "close_out_terminal"
 
+    #: F-816-10 (R276(f)). The rule is evaluated when the object it guards is CONSTRUCTED —
+    #: `mantis.config.resolve.fused_graph_caps.resolve_fused_graph_caps`, called eagerly from
+    #: the graph branch of `InferenceServer.__init__`, which refuses an uncalibrated cap before
+    #: a single training step or self-play game exists. It has no in-run step cadence to speak
+    #: of, so it ticks in `SampleClock.NO_STEP_CLOCK` and consumes no operands.
+    #:
+    #: WHY IT IS A NEW MEMBER AND NOT `CLOSE_OUT_TERMINAL` OR `WALL_CLOCK_POLL`, both of which
+    #: also carry no step clock: their `step_floor` answers say different things, and the
+    #: difference is the whole content of this axis. `CLOSE_OUT_TERMINAL` answers `None` —
+    #: "asking when this fires early is a category error" — which is FALSE here; this rule
+    #: fires at the earliest moment there is. `WALL_CLOCK_POLL` answers `0.0` for a daemon
+    #: thread that could fire at any wall-clock instant, which is the RIGHT number for the
+    #: wrong reason. This member answers `0.0` because the rule is evaluated BEFORE step 0 and
+    #: cannot be reached later at all: an uncalibrated config never gets a run to fire during.
+    #: Reusing either sibling would put a true number under a false mechanism, which is the
+    #: `Mechanism` lesson (a predicate that reads right for the wrong reason) on the sibling
+    #: axis.
+    CONSTRUCTION_TIME = "construction_time"
+
     @property
     def sample_clock(self) -> SampleClock:
         """WHICH clock this member's evidence arrives in (R265 / ADJ-D38). DATA, like
@@ -518,6 +537,7 @@ class Cadence(StrEnum):
             Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
             Cadence.WALL_CLOCK_POLL: SampleClock.NO_STEP_CLOCK,
             Cadence.CLOSE_OUT_TERMINAL: SampleClock.NO_STEP_CLOCK,
+            Cadence.CONSTRUCTION_TIME: SampleClock.NO_STEP_CLOCK,
         }[self]
 
     @property
@@ -537,6 +557,7 @@ class Cadence(StrEnum):
             Cadence.STEP_LAG_THRESHOLD: 1,
             Cadence.WALL_CLOCK_POLL: 0,
             Cadence.CLOSE_OUT_TERMINAL: 0,
+            Cadence.CONSTRUCTION_TIME: 0,
         }[self]
 
     def step_floor(self) -> float | None:
@@ -549,6 +570,13 @@ class Cadence(StrEnum):
         timeout; no train-step boundary gates it, so the floor is genuinely zero) and `None`
         for a close-out rule (asking when a close-out rule fires "early" is a category error,
         and `max_train_steps` would fail every such row forever for a non-defect).
+
+        F-816-10 adds a THIRD, and it takes the `0.0` answer on its own grounds rather than by
+        falling into the else-branch: a `CONSTRUCTION_TIME` rule is evaluated before training
+        step 0 exists, so `0.0` is not "could fire any time" (the wall-clock reading) but "has
+        already fired or will never get the chance". Same number, different statement, and the
+        member docstring is where the difference is recorded so a reader is not left to infer
+        it from a shared branch.
         """
         if self.sample_clock.is_step_clocked:
             raise SampleClockNotDerivableError(
@@ -1072,6 +1100,60 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "1) floor is the arithmetic stating the same fact. "
             "The pin binds the fire site, so deleting the gate, renaming the rule or "
             "reordering the disposition past it all break the R56 scan."
+        ),
+    ),
+    ArmedAbort(
+        name="fused_graph_caps_calibrated",
+        config_path="inference.fused_graph_caps.max_fused_edges",
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays
+        # the ONE-FIELD data edit §8.5 claims it is — and it has a live consumer meanwhile:
+        # `preflight_mint.py::_print_deferred_rows` prints it on every gate run. The rule runs
+        # at CONSTRUCTION (the resolver is called eagerly from the graph branch of
+        # `InferenceServer.__init__`), so it consumes no operands: there is no threshold to
+        # accumulate and no window to fill, only a value that is present or is `null`.
+        cadence=Cadence.CONSTRUCTION_TIME,
+        cadence_paths=(),
+        status=Status.DEFERRED,
+        exit_code=None,
+        owner="F-816-10 box sitting — the operator, at run5 mint prereg",
+        source_pin=(
+            "src/mantis/config/resolve/fused_graph_caps.py",
+            "raise UncalibratedFusedGraphCapsError(",
+        ),
+        note=(
+            "EVERY PRODUCTION CONFIG'S `inference.fused_graph_caps` IS VALUED (NOT NULL). The "
+            "graph inference forward's memory bound (F-816-10, R276(f)) is the training cap's "
+            "partner over one card: `inference_batch_size` bounds the number of GRAPHS in a "
+            "fused pop and bounds neither quantity that drives memory, so before this block "
+            "the fuse had no bound at all — and `train.microbatch_caps` was fitted against a "
+            "self-play term measured when the inference forward carried ONE graph. "
+            "WHY DEFERRED AND NOT REQUIRED: the VALUE is a MEASUREMENT the operator takes at "
+            "the box with `python -m mantis.diagnostics.fusion_calibrate`, and R119 makes it "
+            "their act. Flipping this REQUIRED now would gate run5's mint on a number this "
+            "repo would have to invent — the class R84 refused when it ratified "
+            "exit_code=None rather than fabricating a 46, and the same class the grad-norm "
+            "row above is deferred for. A DEFERRED row prints loudly on every gate-12 run and "
+            "gates nothing, which is exactly the posture for a live refusal whose value is "
+            "owed. "
+            "WHY THE ROW EXISTS AT ALL, given the refusal is already run-fatal: the refusal "
+            "fires when a graph run STARTS, and gate 12 runs on every push. The row is what "
+            "makes an uncalibrated production config AUDIBLE in CI instead of discovered by a "
+            "boot three weeks later. `CONFIG_THRESHOLD_GT_ZERO` reads the R119 `null` "
+            "placeholder as DISARMED, which is the truth: `_is_real_number` rejects None, and "
+            "the schema's `ge=1` closes the low end so any minted value arms. Only the edges "
+            "member is named because the two are minted in ONE act from one fit against one "
+            "budget — a half-minted block is a state the calibration cannot produce, and a "
+            "second row would be a second authority over one byte budget. "
+            "exit_code is None, truthfully: this is a CONSTRUCTION-TIME refusal on the "
+            "`MissingEncodingError` shape, not a `_fire_hard_abort` rule, so it exits through "
+            "whatever the composer does with a raise and R84's draw-rate codes do not apply. "
+            "TO CLOSE THIS ROW: run the calibration at the box, mint what it reports into "
+            "`configs/run5.yaml` and `configs/shakedown_20260807.yaml`, and flip status to "
+            "REQUIRED — the one-field data edit §8.5 claims it is. The pin binds the "
+            "resolver's own refusal, so deleting it, renaming the error or softening the null "
+            "check to a default all break the R56 scan rather than the cap silently becoming "
+            "absent-and-unbounded while still reporting as present."
         ),
     ),
 )

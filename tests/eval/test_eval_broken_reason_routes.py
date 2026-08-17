@@ -254,6 +254,11 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
         ),
         encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json",
+        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in the
+        # parent and carries it to every `RoundSpec` — the eval child is a SECOND
+        # allocator on the same card that no in-process bound can see. `None` is the
+        # GRID arm, written out rather than omitted.
+        fused_graph_caps=None,
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt", run_id="oracle_test_run",

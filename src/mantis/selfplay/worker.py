@@ -114,6 +114,13 @@ class SelfPlayWorker:
         # global-policy vector from `spec.policy_logit_count`.
         self._engine = LocalInferenceEngine(
             model, device, encoding_spec=self.encoding_spec,
+            # EXPLICIT `None`, and it is UNCONDITIONALLY correct here rather than a default
+            # this site happens to get away with: the graph representation is REFUSED by name
+            # above (`NotImplementedError`, D-18 of R138's census), so this constructor cannot
+            # be reached with a graph spec and the engine it builds is always the dense one,
+            # which has no fused graph forward to bound. Written out so a reader sees the
+            # decision instead of a silence (F-816-10 D-1).
+            fused_graph_caps=None,
         )
         self.tree = MCTSTree(c_puct=self.c_puct)
 

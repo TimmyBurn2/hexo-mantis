@@ -120,6 +120,66 @@ class SelfplayConfig(StrictModel):
     playout_cap: PlayoutCapConfig
 
 
+class FusedGraphCapsConfig(StrictModel):
+    """The GRAPH inference forward's memory bound — ONE block, ONE fact (F-816-10, R276(f);
+    `MicrobatchCapsConfig`'s shape applied to the other consumer of the same card).
+
+    The fact is "how big may ONE fused inference forward be", and it has TWO INSEPARABLE
+    components, which is why this is a nested block and not two flat keys: the members are
+    sized TOGETHER from ONE measured cost model against ONE budget (`peak ~ a + b*E + c*N`,
+    so `a + b*max_fused_edges + c*max_fused_nodes <= budget`), and two independent keys would
+    give two authorities over one byte budget and let an operator mint one and forget the
+    other.
+
+    `inference.inference_batch_size` bounds the number of GRAPHS in a pop; it bounds neither
+    quantity that drives memory. E and N are SUMS over the fused graphs, and Design A raised
+    the fuse to `n_workers x leaf_batch_size` / `inference_batch_size` graphs without
+    re-fitting the partner term of the budget the training cap was sized against — the
+    inference term has no bound at all today, so any change that raises it invalidates the
+    train-side fit. Both caps divide ONE card and must be re-fitted together.
+
+    BOTH MEMBERS, because N is unbounded off-distribution by the builder's own arithmetic:
+    two dummy edges per real node force `E >= 2(N-1)`, so an edge-only cap `C` admits
+    `N <= C/2 + 1` — and at the measured per-node byte cost that unbounded member's worst
+    case EXCEEDS the bounded member's. One member bounds neither term of `peak ~ a + b*E +
+    c*N`.
+
+    `ge=1` on the int arm and NO "uncapped" sentinel: the off state is deliberately
+    unrepresentable, because an unbounded fused forward is the defect this block exists to
+    make unconstructible and a disable sentinel would be a switch for turning the fix off
+    (R79, `MicrobatchCapsConfig`'s recorded refusal). The bound is the mechanism's own range:
+    a fused forward of zero edges is not a fused forward.
+
+    `null` IS NOT AN OFF STATE. It is the R119 placeholder: schema-VALID, so gate 7 stays
+    green and the repo ships a complete config, and runtime-REFUSED, so a graph run on an
+    uncalibrated production config CANNOT CONSTRUCT ITS INFERENCE SERVER.
+    `UncalibratedFusedGraphCapsError` names the member, the calibration entry point that
+    produces the value and the `tools/mint_config.py --set` line that mints it. The value is
+    the operator's act at the box sitting, from `python -m mantis.diagnostics.
+    fusion_calibrate` — never a dispatcher's number on a mint-critical card. The in-repo
+    precedent for a schema-valid, production-illegal placeholder awaiting an operator mint is
+    `train.checkpoint_interval: 0` (R137) and `eval.random_floor_games: 0` (R147/R272(d));
+    the difference — and it is an improvement on both — is that this one RAISES instead of
+    running.
+
+    GRAPH-ROUTE ONLY: the dense batch is a fixed-shape tensor already bounded by
+    `inference_batch_size`, so there is no unbounded quantity there for a cap to bound. The
+    five non-production configs mint values that are NON-BINDING BY CONSTRUCTION (derived
+    from each template's own `max_game_moves` and the registry's widest legal-move radius,
+    never chosen), because a smoke config whose cap bound would make CI exercise a split by
+    accident and the split's coverage must come from the oracles.
+
+    Read by ONE path: `mantis.config.resolve.fused_graph_caps.resolve_fused_graph_caps` ->
+    `InferenceServer.__init__` (the GRAPH branch only, EAGERLY at construction) ->
+    `_run_graph_loop`'s `plan_fused_forwards` partition. Eager and not lazy because `__init__`
+    already branches on the representation, so the read is naturally route-scoped, and
+    failing a mis-minted run in the first second beats failing it three hours in.
+    """
+
+    max_fused_edges: int | None = Field(ge=1)
+    max_fused_nodes: int | None = Field(ge=1)
+
+
 class InferenceConfig(StrictModel):
     """Inference-server knobs (`InferenceHParams`'s R1-exception, closed by SC-A2).
 
@@ -137,3 +197,4 @@ class InferenceConfig(StrictModel):
     compile_inference_dynamic: bool
     perf_timing: bool
     perf_sync_cuda: bool
+    fused_graph_caps: FusedGraphCapsConfig

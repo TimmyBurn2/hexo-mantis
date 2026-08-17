@@ -1,5 +1,5 @@
 """>300 justify (R8): it is mostly DATA — the
-182-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
+184-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
 splitting it would create a second registry copy to keep in sync (there is already exactly one
 deliberate duplicate, `test_every_key_has_consumer_p2.py`). The five tests below are short by
 comparison. WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
@@ -288,6 +288,19 @@ CONSUMER_REGISTRY = {
     "inference.compile_inference_dynamic": "InferenceHParams.from_config -> inference_server compile dynamic",
     "inference.perf_timing": "InferenceHParams.from_config -> perf timing diagnostics",
     "inference.perf_sync_cuda": "InferenceHParams.from_config -> perf CUDA-sync diagnostics",
+    # F-816-10 (R276(f)): the GRAPH inference forward's memory bound. GRAPH-ROUTE-SCOPED,
+    # and the rows say so: the resolver is called from the graph branch of
+    # `InferenceServer.__init__` alone, so a grid run structurally cannot reach either key.
+    "inference.fused_graph_caps.max_fused_edges":
+        "resolve_fused_graph_caps -> FusedGraphCapsSpec.max_fused_edges ->"
+        " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
+        " plan_fused_forwards edge-term partition; also threaded parent-side into"
+        " RoundSpec.fused_graph_caps -> the eval child's LocalInferenceEngine",
+    "inference.fused_graph_caps.max_fused_nodes":
+        "resolve_fused_graph_caps -> FusedGraphCapsSpec.max_fused_nodes ->"
+        " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
+        " plan_fused_forwards node-term partition; also threaded parent-side into"
+        " RoundSpec.fused_graph_caps -> the eval child's LocalInferenceEngine",
     # WPSC Phase 2 SC-A3 (R-MONITORCONFIG-SCHEMA closure): every MonitorSchemaConfig leaf's
     # live consumer is resolve_monitor_config (mantis.config.resolve.monitor), the pure 1:1
     # field-copy onto mantis.monitor.config.MonitorConfig; the 4 monitor.drain.* leaves feed
@@ -458,8 +471,15 @@ def test_registry_matches_the_live_leaf_count():
     # `train.draw_rate_abort` the only `Block | None` field in `RunConfig` — it was true when
     # written and is not any more; the sentence is corrected here rather than left to be read
     # as evidence (R192(e)). 177 + 5 = 182.
-    assert len(CONSUMER_REGISTRY) == 182
-    assert len(_leaf_paths(RunConfig)) == 182
+    # F-816-10 (R276(f)) ADDS 2: `inference.fused_graph_caps.{max_fused_edges,
+    # max_fused_nodes}` — ONE block, ONE fact ("how big may one fused inference forward
+    # be"), sized TOGETHER from one measured fit against one budget, and the training cap's
+    # partner over the same card. Members are NOT spelled `max_edges`/`max_nodes`: the
+    # train-side OF2-9 census freezes those names and distinct names keep the two budgets
+    # unconfusable. Shipped `null` in both production configs — the R119 placeholder, which
+    # is schema-valid and runtime-REFUSED, never an off state. 182 + 2 = 184.
+    assert len(CONSUMER_REGISTRY) == 184
+    assert len(_leaf_paths(RunConfig)) == 184
 
 
 def test_no_forward_reference_strings_in_registry():

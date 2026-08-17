@@ -248,7 +248,11 @@ def _play_gate_block(
 
     best_model = load_model_snapshot(spec.best_snapshot, device=spec.worker_device)
     best_engine = LocalInferenceEngine(
-        best_model, _device(spec.worker_device), encoding_spec=encoding_spec
+        best_model, _device(spec.worker_device), encoding_spec=encoding_spec,
+        # The parent's resolved bound, carried across the process seam on the spec (D-1).
+        # This child has its OWN CUDA context and its own allocator, so the in-process bound
+        # the parent's server carries is blind to it — this is how the cap gets here.
+        fused_graph_caps=spec.fused_graph_caps,
     )
     try:
         candidate = _build_candidate_player(
@@ -416,7 +420,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
     candidate_model = load_model_snapshot(spec.candidate_snapshot, device=spec.worker_device)
     candidate_engine = LocalInferenceEngine(
-        candidate_model, _device(spec.worker_device), encoding_spec=enc_spec
+        candidate_model, _device(spec.worker_device), encoding_spec=enc_spec,
+        fused_graph_caps=spec.fused_graph_caps,
     )
 
     adjudicator = _build_adjudicator(spec)

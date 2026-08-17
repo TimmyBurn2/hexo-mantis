@@ -87,6 +87,10 @@ def test_poller_thread_beats_eval_round() -> None:
         run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test",
         ladder_state_path="/tmp/mantis-eval-heartbeat-test/ladder.json",
         promotion=object(), sink=None, heartbeat=_spy_beat,
+        # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec. This
+        # drive never builds an engine, so the value is inert here — but the parameter
+        # carries no default, so the decision is written rather than omitted.
+        fused_graph_caps=None,
     )
     try:
         import time

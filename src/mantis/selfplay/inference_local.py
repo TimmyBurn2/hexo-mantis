@@ -41,6 +41,7 @@ import torch
 from torch.amp.autocast_mode import autocast
 
 from mantis._engine import Board
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import EncodingSpec
 from mantis.env.game_state import GameState
 from mantis.selfplay.hparams import is_graph_representation
@@ -68,6 +69,16 @@ class LocalInferenceEngine:
     required parameter makes absent UNCONSTRUCTIBLE, which pyright catches before a
     worker ever spawns. Handing a graph-built model a dense spec (or the inverse) is a
     wiring error and fails loudly rather than decoding garbage.
+
+    `fused_graph_caps` is REQUIRED and keyword-only on exactly that precedent (F-816-10 D-1).
+    This class hand-builds its `InferenceServer` config from a dict literal with no
+    `RunConfig`, so it is the ONE graph-server construction site that cannot resolve the
+    memory bound from a config — and a default here would be the R1 defect in its purest form:
+    a value nobody minted, on the one path that has no config to mint it from. The spec is
+    RESOLVED ONCE IN THE PARENT and threaded in, the way `RoundSpec` already carries
+    `ply_cap_adjudication`/`strength_floor` across the eval process seam. GRID callers pass
+    `None` EXPLICITLY — it means "this route has no fused graph forward to bound", and it is
+    written at the call site so a reader sees the decision rather than a silence.
     """
 
     def __init__(
@@ -76,6 +87,7 @@ class LocalInferenceEngine:
         device: torch.device,
         *,
         encoding_spec: EncodingSpec,
+        fused_graph_caps: FusedGraphCapsSpec | None,
     ) -> None:
         self.model = model
         self.device = device
@@ -111,6 +123,13 @@ class LocalInferenceEngine:
                 # branch is always graph, LAW-06 bf16-pinned regardless of the value).
                 }, "train": {"amp_dtype": "bf16"}},
                 batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
+                # F-816-10 D-1: THREADED, never hardcoded. This dict literal has no
+                # `fused_graph_caps` key and must not grow one — a cap written here would be a
+                # SECOND authority over one byte budget, on the one construction path with no
+                # config to be the first, and this arm runs in the eval child on
+                # `eval.worker_device: cuda` with its OWN allocator, so a wrong value here is
+                # unbounded in practice on the very arm that OOM'd.
+                fused_graph_caps=fused_graph_caps,
             )
             self._graph_server.start()
 

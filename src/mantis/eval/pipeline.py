@@ -34,6 +34,7 @@ from mantis.config.resolve.eval_posture import (
     resolve_ply_cap_adjudication,
     resolve_strength_floor,
 )
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.eval.bt import fit_bt, predict_p
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
@@ -288,6 +289,7 @@ class EvalPipeline:
         eval_cfg: Any,
         caps: DrainCaps,
         encoding: str,
+        fused_graph_caps: FusedGraphCapsSpec | None,
         run_id: str,
         spool_dir: str | Path,
         ladder_state_path: str | Path,
@@ -300,6 +302,13 @@ class EvalPipeline:
         self._eval_cfg = eval_cfg
         self._caps = caps
         self._encoding = encoding
+        #: The graph inference forward's memory bound (F-816-10 D-1), resolved ONCE in the
+        #: PARENT through its one read path and carried to every round's `RoundSpec`. REQUIRED
+        #: and keyword-only, with no default, because the eval child is a SECOND allocator on
+        #: the same card that no in-process bound can see: a default here would be a value
+        #: nobody minted, standing in for the one the operator measured. `None` is the GRID
+        #: arm, where there is no fused graph forward to bound.
+        self._fused_graph_caps = fused_graph_caps
         self._run_id = run_id
         self._spool_dir = Path(spool_dir)
         self._spool_dir.mkdir(parents=True, exist_ok=True)
@@ -489,6 +498,10 @@ class EvalPipeline:
             # and carried to the child. Both are `None` for every committed config.
             ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
             strength_floor=resolve_strength_floor(cfg),
+            # Resolved once in the parent (F-816-10 D-1), not re-read here: the child has no
+            # `RunConfig` and its `LocalInferenceEngine` builds its graph server from a
+            # hand-made dict, so this is the only way the bound reaches the second allocator.
+            fused_graph_caps=self._fused_graph_caps,
         )
         return spec, dict(alloc), run_gate, candidate_path
 
@@ -850,6 +863,7 @@ def build_eval_pipeline(
     eval_cfg: Any,
     coordinator_cfg_caps: DrainCaps,
     encoding: str,
+    fused_graph_caps: FusedGraphCapsSpec | None,
     run_id: str,
     spool_dir: str | Path,
     ladder_state_path: str | Path,
@@ -863,7 +877,8 @@ def build_eval_pipeline(
     in-process CUDA eval path is unrepresentable; models arrive only through
     `run_evaluation`'s protocol args and are IMMEDIATELY serialized-and-dropped)."""
     return EvalPipeline(
-        eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding, run_id=run_id,
+        eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
+        fused_graph_caps=fused_graph_caps, run_id=run_id,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,
     )

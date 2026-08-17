@@ -38,6 +38,12 @@ from mantis.config.resolve.eval_posture import (
     resolve_ply_cap_adjudication,
     resolve_strength_floor,
 )
+from mantis.config.resolve.fused_graph_caps import (
+    FusedGraphCapsSpec,
+    MissingFusedGraphCapsError,
+    UncalibratedFusedGraphCapsError,
+    resolve_fused_graph_caps,
+)
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.config.resolve.run_length import resolve_max_train_steps
@@ -50,9 +56,12 @@ __all__ = [
     "DrawRateAbortSpec",
     "EncodingConflictError",
     "EncodingResolution",
+    "FusedGraphCapsSpec",
+    "MissingFusedGraphCapsError",
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
+    "UncalibratedFusedGraphCapsError",
     "UnvalidatedConfigError",
     "normalize_declared",
     "normalize_stamp",
@@ -64,6 +73,7 @@ __all__ = [
     "resolve_drain_caps",
     "resolve_draw_rate_abort",
     "resolve_eval_model_sims",
+    "resolve_fused_graph_caps",
     "resolve_max_train_steps",
     "resolve_monitor_config",
     "resolve_ply_cap_adjudication",

@@ -29,6 +29,7 @@ import torch
 from mantis._engine import Board
 from mantis.encoding import lookup
 from mantis.model import CnnArch, GnnArch, build_net
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _GRID_SPEC = lookup("v6")
@@ -38,6 +39,13 @@ _BOARD_SIZE = _GRID_SPEC.board_size
 _N_ACTIONS = _GRID_SPEC.policy_logit_count
 _HALF = (_BOARD_SIZE - 1) // 2
 _CPU = torch.device("cpu")
+#: F-816-10 D-1: `fused_graph_caps` is REQUIRED and keyword-only on this class — it
+#: hand-builds its `InferenceServer` config with no `RunConfig`, so the bound is
+#: THREADED from a parent resolver and never hardcoded at the site. The graph engines
+#: below get a NON-BINDING pair (nothing here splits); the grid ones pass `None`
+#: explicitly, which is what "this route has no fused graph forward" looks like
+#: written down rather than omitted.
+_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 
 
 # ── boards ───────────────────────────────────────────────────────────────────────
@@ -137,7 +145,8 @@ class _ArchTrappingNet(torch.nn.Module):
 
 
 def _engine_with(model: torch.nn.Module) -> LocalInferenceEngine:
-    return LocalInferenceEngine(model, _CPU, encoding_spec=_GRID_SPEC)
+    return LocalInferenceEngine(model, _CPU, encoding_spec=_GRID_SPEC,
+                                fused_graph_caps=None)
 
 
 def _graph_engine() -> LocalInferenceEngine:
@@ -153,7 +162,8 @@ def _graph_engine() -> LocalInferenceEngine:
         )
     ).to(_CPU)
     net.eval()
-    return LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC)
+    return LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC,
+                                fused_graph_caps=_CAPS)
 
 
 # ══ I-01 — the four dense-decode invariants, numerically ═════════════════════════
@@ -343,7 +353,8 @@ def test_dense_engine_constructs_no_graph_server() -> None:
         CnnArch(board_size=_BOARD_SIZE, in_channels=_GRID_SPEC.n_planes, filters=8,
                 res_blocks=1)
     )
-    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC)
+    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
+                                  fused_graph_caps=None)
     try:
         assert engine._is_graph is False
         assert engine._graph_server is None
@@ -388,7 +399,8 @@ def test_engine_reads_no_arch_attributes_off_the_model() -> None:
     probs = np.zeros((2, _N_ACTIONS), dtype=np.float64)
     probs[:, 0] = 1.0
     net = _ArchTrappingNet(probs, np.array([0.0, 0.0]))
-    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC)
+    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
+                                  fused_graph_caps=None)
     engine.infer_batch([board])
     engine.infer_batch_per_cluster([board])
     assert net.sniffed == [], f"arch attributes were read off the model: {net.sniffed}"
@@ -405,7 +417,8 @@ def test_graph_model_with_dense_spec_fails_loud() -> None:
     )
     engine = None
     try:
-        engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC)
+        engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
+                                  fused_graph_caps=None)
         with pytest.raises(Exception) as err:
             engine.infer_batch([Board()])
         assert not isinstance(err.value, AssertionError)
@@ -420,7 +433,8 @@ def test_dense_model_with_graph_spec_fails_loud() -> None:
         CnnArch(board_size=_BOARD_SIZE, in_channels=_GRID_SPEC.n_planes, filters=8,
                 res_blocks=1)
     )
-    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC)
+    engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC,
+                                  fused_graph_caps=_CAPS)
     try:
         board = Board()
         board.apply_move(0, 0)

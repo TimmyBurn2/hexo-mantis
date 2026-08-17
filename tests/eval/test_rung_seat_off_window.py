@@ -38,11 +38,17 @@ import torch
 
 from mantis._engine import Board
 from mantis.bots.random_bot import RandomBot
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _ENC = "gnn_axis_v1"
+#: F-816-10 D-1: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED
+#: keyword — it hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is
+#: THREADED from a parent resolver and never hardcoded at the site. Non-binding by
+#: construction here: nothing in this file exercises a split.
+_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
 )
@@ -84,7 +90,8 @@ def graph_engine():
     spec = lookup(_ENC)
     net = _RuleNet()
     net.eval()
-    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec)
+    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
+                                  fused_graph_caps=_CAPS)
     try:
         yield engine, spec
     finally:

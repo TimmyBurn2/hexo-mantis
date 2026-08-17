@@ -64,6 +64,10 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
         "inference_batch_size": 4, "trace_inference": False, "inference_max_wait_ms": 10,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+            # F-816-10 (R276(f)): the graph arm resolves the fused-forward memory bound at
+        # construction. NON-BINDING BY CONSTRUCTION here — this fixture is about wiring, and
+        # a cap that bound would make it exercise a split with nothing asserting the M.
+        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     # WPSC Phase 3 SC-B3: InferenceServer (via WorkerPool) now hard-reads
     # config["train"]["amp_dtype"] unconditionally (R30b, no fallback).

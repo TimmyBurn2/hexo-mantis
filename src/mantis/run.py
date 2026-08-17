@@ -88,6 +88,7 @@ from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coor
 from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
+from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
@@ -808,6 +809,17 @@ def compose_run(
                         terminal_eval_hard_cap_sec=step_coordinator_cfg.terminal_eval_hard_cap_sec,
                     ),
                     encoding=config.identity.encoding,
+                    # F-816-10 D-1: the fused-forward memory bound, resolved through its ONE
+                    # read path HERE (the parent) and carried to every round's `RoundSpec`.
+                    # Resolved only on the GRAPH route — the grid branch never reads the block
+                    # (the dense batch is a fixed-shape tensor already bounded by
+                    # `inference_batch_size`), and reading it on a grid run would make a
+                    # graph-only key a grid dependency.
+                    fused_graph_caps=(
+                        resolve_fused_graph_caps(config.model_dump())
+                        if config.identity.representation == "graph"
+                        else None
+                    ),
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(

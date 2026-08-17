@@ -37,6 +37,10 @@ import numpy as np
 import torch
 
 from mantis._engine import InferenceBatcher
+from mantis.config.resolve.fused_graph_caps import (
+    FusedGraphCapsSpec,
+    resolve_fused_graph_caps,
+)
 from mantis.encoding import EncodingSpec as RegistrySpec
 from mantis.encoding import resolve_from_config
 from mantis.model import amp_dtype_for
@@ -72,6 +76,75 @@ def _timing_agg(
         "min_ms": None if min_s is None else round(min_s * 1e3, 6),
         "max_ms": None if max_s is None else round(max_s * 1e3, 6),
     }
+
+
+def _pow2_bucket(n: int) -> int:
+    """The power-of-two LOWER bound of `n`'s histogram bucket (`1`, `2`, `4`, …).
+
+    Extracted so the occupancy histogram and the fused-part histograms cannot drift apart:
+    two transcriptions of one bucketing rule would put two different keys on the same reading
+    and neither event would say which one it used.
+    """
+    return 1 << (n.bit_length() - 1) if n > 0 else 0
+
+
+def _size_agg(
+    count: int, total: int, min_n: int | None, max_n: int | None, hist: dict[int, int]
+) -> dict[str, Any] | None:
+    """One per-part size distribution (fused nodes or fused edges), or `None` at zero samples.
+
+    DISTRIBUTION AND NOT A MEAN, for `_occupancy_agg`'s recorded reason applied to memory: a
+    mean fused-E of 400 k with a max of 9 M is a run that OOMs, and the two readings agree on
+    the mean. For a memory bound the TAIL is the question, so `max` and the histogram travel
+    with it — `max` is what an operator reads at the box to decide whether the cap held.
+
+    `None` at zero samples is the unproduced-field convention: before the first part runs there
+    is no producer, and a zeroed histogram would read as "parts ran and were empty".
+    """
+    if count == 0:
+        return None
+    return {
+        "count": count,
+        "total": total,
+        "mean": round(total / count, 6),
+        "min": min_n,
+        "max": max_n,
+        "histogram": {str(k): v for k, v in sorted(hist.items())},
+    }
+
+
+def _fusion_bound_hits(
+    plan: tuple[tuple[int, int], ...],
+    edge_counts: np.ndarray,
+    node_counts: np.ndarray,
+    caps: FusedGraphCapsSpec,
+) -> tuple[int, int]:
+    """`(edge-forced cuts, node-forced cuts)` for one plan — the ATTRIBUTION half of the bound.
+
+    A cut sits between part `m` and part `m+1`, and it happened because adding part `m+1`'s
+    FIRST graph to part `m` would have breached a member. Which member is the whole question an
+    operator asks at the box: an instrument that only counts cuts says the cap bound and cannot
+    say WHICH cap to re-fit, and re-fitting the wrong one moves no peak.
+
+    Edges are tested first, matching the planner's own evaluation order, so a cut that breaches
+    both members is attributed to the same member the planner would name.
+    """
+    edges = nodes = 0
+    for (g0, g1), (next_g0, _next_g1) in zip(plan, plan[1:], strict=False):
+        acc_e = int(edge_counts[g0:g1].sum())
+        acc_n = int(node_counts[g0:g1].sum())
+        if acc_e + int(edge_counts[next_g0]) > caps.max_fused_edges:
+            edges += 1
+        elif acc_n + int(node_counts[next_g0]) > caps.max_fused_nodes:
+            nodes += 1
+        else:  # pragma: no cover — a cut the planner could not have made
+            raise RuntimeError(
+                f"InferenceServer: plan cut at graph {next_g0} breaches neither member of "
+                f"inference.fused_graph_caps — the instrument and the planner disagree about "
+                f"the same partition, and a counter that cannot be attributed is worse than "
+                f"no counter (plan={plan})"
+            )
+    return edges, nodes
 
 
 def _occupancy_agg(
@@ -115,6 +188,7 @@ class InferenceServer(threading.Thread):
         *,
         heartbeat: Callable[[str], None] | None = None,
         sink: EventSink | None = None,
+        fused_graph_caps: FusedGraphCapsSpec | None = None,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
@@ -174,7 +248,41 @@ class InferenceServer(threading.Thread):
         self._occupancy_hist: dict[int, int] = {}
         self._empty_polls = 0
 
+        # ── fused-forward instrumentation (LAW-18 / R164) ────────────────────────────
+        # The lever's OWN fire rate, in-run. Written ONLY by `_run_graph_loop`; measured PER
+        # PART, because the part is what the GPU sees and what the cap bounds — a pop's total
+        # is recoverable as the sum over its parts and the reverse is not. `fusion_splits` and
+        # `fusion_bound_hits` stay VISIBLE at 0 on the producing path (the `empty_polls`
+        # posture): an idle lever must be distinguishable from a missing one, because §11's
+        # falsifier ("`fusion_splits == 0` across a burst that reaches ply > 120") can only
+        # fire if the zero is published.
+        self._fusion_parts = 0
+        self._fusion_splits = 0
+        self._fusion_bound_hits = {"edges": 0, "nodes": 0}
+        self._fused_edges_count = 0
+        self._fused_edges_total = 0
+        self._fused_edges_min: int | None = None
+        self._fused_edges_max: int | None = None
+        self._fused_edges_hist: dict[int, int] = {}
+        self._fused_nodes_count = 0
+        self._fused_nodes_total = 0
+        self._fused_nodes_min: int | None = None
+        self._fused_nodes_max: int | None = None
+        self._fused_nodes_hist: dict[int, int] = {}
+        self._fused_caps: FusedGraphCapsSpec | None = None
+
         if self._is_graph:
+            # The fused-forward memory bound, resolved ONCE and EAGERLY on the route that has
+            # one (F-816-10). Eager, not lazy: `__init__` already branches on the
+            # representation, so the read is naturally route-scoped and failing a mis-minted
+            # run in the first second beats failing it three hours in. An explicit spec WINS
+            # over the config and skips the read entirely — that is the D-1 threading arm, for
+            # the standalone callers that have no `RunConfig` to mint a value against and must
+            # NOT grow a second authority by hardcoding one.
+            if fused_graph_caps is None:
+                self._fused_caps = resolve_fused_graph_caps(config)
+            else:
+                self._fused_caps = fused_graph_caps
             # Graph mode: the model is a `GnnNet` consuming block-diagonal graph tensors,
             # not a CNN. No H2D staging, no trace, no (C,H,W) shape.
             self._feature_len = 0
@@ -429,7 +537,7 @@ class InferenceServer(threading.Thread):
             self._occupancy_min = n_requests
         if self._occupancy_max is None or n_requests > self._occupancy_max:
             self._occupancy_max = n_requests
-        bucket = 1 << (n_requests.bit_length() - 1) if n_requests > 0 else 0
+        bucket = _pow2_bucket(n_requests)
         self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
 
     def _record_collate(self, collate_s: float) -> None:
@@ -442,6 +550,78 @@ class InferenceServer(threading.Thread):
             self._collate_min_s = collate_s
         if self._collate_max_s is None or collate_s > self._collate_max_s:
             self._collate_max_s = collate_s
+
+    def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
+        """Accumulate ONE plan: whether the lever fired, and which member forced each cut.
+
+        `fusion_splits` counts POPS THAT SPLIT, not cuts — it is the LEVER'S OWN FIRE RATE,
+        which is what LAW-18 asks a lever under test to log. The cut count is
+        `fusion_parts - fusion_splits`-shaped information and is carried instead by
+        `fusion_bound_hits`, whose whole job is ATTRIBUTION: an instrument that cannot say
+        which member forced the cut cannot tell the operator which member to re-fit at the box.
+        """
+        if n_parts > 1:
+            self._fusion_splits += 1
+        self._fusion_bound_hits["edges"] += edge_hits
+        self._fusion_bound_hits["nodes"] += node_hits
+
+    def _record_fusion_part(self, n_nodes: int, n_edges: int) -> None:
+        """Accumulate ONE bounded forward's `(N, E)`. Per PART, never per pop.
+
+        This is the reading the cap is denominated in, so it is measured where the cap applies.
+        `_forward_count` deliberately does NOT move here: it is `batch_fill_pct`'s denominator
+        and means *requests per POP against `inference_batch_size`* — an occupancy, not a
+        GPU-forward count — and it is banked on both sides of the R274(d) bench.
+        """
+        self._fusion_parts += 1
+        self._fused_edges_count += 1
+        self._fused_edges_total += n_edges
+        if self._fused_edges_min is None or n_edges < self._fused_edges_min:
+            self._fused_edges_min = n_edges
+        if self._fused_edges_max is None or n_edges > self._fused_edges_max:
+            self._fused_edges_max = n_edges
+        bucket_e = _pow2_bucket(n_edges)
+        self._fused_edges_hist[bucket_e] = self._fused_edges_hist.get(bucket_e, 0) + 1
+        self._fused_nodes_count += 1
+        self._fused_nodes_total += n_nodes
+        if self._fused_nodes_min is None or n_nodes < self._fused_nodes_min:
+            self._fused_nodes_min = n_nodes
+        if self._fused_nodes_max is None or n_nodes > self._fused_nodes_max:
+            self._fused_nodes_max = n_nodes
+        bucket_n = _pow2_bucket(n_nodes)
+        self._fused_nodes_hist[bucket_n] = self._fused_nodes_hist.get(bucket_n, 0) + 1
+
+    def _fusion_snapshot(self) -> dict[str, Any] | None:
+        """The `fusion` sub-block, or `None` on a GRID run.
+
+        `None` and not a zeroed block: the grid branch never reads the caps and never plans a
+        split, so it has NO PRODUCER here, and a zeroed block would read as "the fusion lever
+        ran and never fired" — the opposite statement, and the F-10 class in miniature.
+
+        `caps` travels WITH the distributions for the same reason `batch_size`/`max_wait_ms`
+        already ride the block: a histogram whose maximum is 4.4 M edges says nothing until the
+        cap beside it says 4.5 M or 9 M.
+        """
+        caps = self._fused_caps
+        if not self._is_graph or caps is None:
+            return None
+        return {
+            "caps": {
+                "max_fused_edges": caps.max_fused_edges,
+                "max_fused_nodes": caps.max_fused_nodes,
+            },
+            "fusion_parts": self._fusion_parts,
+            "fusion_splits": self._fusion_splits,
+            "fusion_bound_hits": dict(self._fusion_bound_hits),
+            "fused_batch_nodes": _size_agg(
+                self._fused_nodes_count, self._fused_nodes_total,
+                self._fused_nodes_min, self._fused_nodes_max, self._fused_nodes_hist,
+            ),
+            "fused_batch_edges": _size_agg(
+                self._fused_edges_count, self._fused_edges_total,
+                self._fused_edges_min, self._fused_edges_max, self._fused_edges_hist,
+            ),
+        }
 
     def batch_timing_snapshot(self) -> dict[str, Any]:
         """Cumulative-since-start snapshot of the graph loop's batching instrument.
@@ -475,6 +655,10 @@ class InferenceServer(threading.Thread):
             # An idle counter stays VISIBLE at 0 on the producing path (the
             # `target_integrity_defects` posture); `None` on the path with no producer.
             "empty_polls": self._empty_polls if self._is_graph else None,
+            # The memory bound's own in-run instrument (F-816-10, LAW-18/R164). PRESENT with a
+            # `None` value on a grid run, never absent: an absent key and a null one are the
+            # same statement here only if the key is always there to carry it.
+            "fusion": self._fusion_snapshot(),
         }
 
     # ── Thread body ─────────────────────────────────────────────────────────────
@@ -538,22 +722,60 @@ class InferenceServer(threading.Thread):
                 )
 
     def _run_graph_loop(self) -> None:
-        """Ragged axis-graph inference loop.
+        """Ragged axis-graph inference loop, MEMORY-BOUNDED (F-816-10, verdict V-A).
 
-        Pull a block-diagonal graph wire from Rust, run the single `collate_graph_batch`
-        resolver, forward the `GnnNet` (bf16 autocast on CUDA — LAW-06), segment-softmax
-        per graph's legal nodes, and submit the flat ragged probs back; the Rust side
-        assembles each leaf's legal-set policy, never a dense scatter. Any resolver or
-        forward exception dies loud via `submit_graph_inference_failure` — the graph queue
-        has no dense interpretation, so there is no silent fallback.
+        Pull a block-diagonal graph wire from Rust, convert it to a payload ONCE, partition
+        that payload at GRAPH boundaries under `inference.fused_graph_caps`, and run one
+        `collate_graph_batch` + `GnnNet.forward_batch` (bf16 autocast on CUDA — LAW-06) +
+        segment-softmax per PART, freeing each part before the next so only one part's tensors
+        are ever resident. The parts' probs and values are concatenated in plan order and
+        submitted in ONE call against the UNSLICED `legal_offsets`; the Rust side assembles
+        each leaf's legal-set policy, never a dense scatter.
+
+        THE SPLIT IS PRE-COLLATE, and that seam is the whole design. A post-collate split
+        materialises the full-E tensors first, and a design whose first allocation is
+        proportional to the uncapped quantity cannot meet a bound.
+
+        THE COPY-OUT TRAP IS ALREADY PAID. `PyGraphWire`'s getters COPY into fresh numpy
+        arrays, so reading them per part would copy every array M times.
+        `graph_wire_from_rust` reads each getter exactly ONCE — the same count HEAD's single
+        `collate_graph_batch` did — and the parts are numpy views of that payload. Do not
+        "optimise" this back into per-part getter reads.
+
+        ONE SUBMIT, AFTER EVERY PART HAS RUN. The FFI checks `(ids, probs, legal_offsets,
+        values)` for self-consistency on entry, and the one submit satisfies it with the
+        payload's own unsliced offsets. It also means a mid-plan failure has submitted NOTHING,
+        so every id fails uniformly and there is no partial-success bookkeeping to get wrong.
+
+        Any planner refusal, resolver error or forward exception — including a real
+        `OutOfMemoryError` — dies loud through the SAME `except` via
+        `submit_graph_inference_failure`. The graph queue has no dense interpretation, so there
+        is no silent fallback, and there is deliberately no OOM handler: the only reason to
+        catch a memory failure specifically is to retry, and a retry is the silent
+        catch-and-retry R276(f) forbids by name.
         """
         from mantis.selfplay.graph_collate import (
             collate_graph_batch,
+            graph_wire_from_rust,
             reset_semantic_canary,
             segment_softmax,
             stone_mask_from_batch,
         )
+        from mantis.selfplay.graph_wire_split import (
+            plan_fused_forwards,
+            slice_graph_wire,
+        )
 
+        caps = self._fused_caps
+        if caps is None:
+            # Unreachable by construction: the graph branch of `__init__` resolves or is
+            # handed the caps before this thread can start. A None here is a wiring break, and
+            # running unbounded is the one outcome that must not be available.
+            raise RuntimeError(
+                "InferenceServer graph loop: no fused-graph caps resolved — the graph branch "
+                "of __init__ must produce them before the loop runs (inference.fused_graph_"
+                "caps)."
+            )
         spec = self.encoding_spec
         # A graph spec carries all three graph fields; None means a grid spec routed here.
         win_length = spec.win_length
@@ -595,68 +817,111 @@ class InferenceServer(threading.Thread):
                             })
                     self._total_requests += len(request_ids)
                     try:
-                        _t_collate_start = time.perf_counter()
-                        batch = collate_graph_batch(
-                            wire,
-                            expected_version=1,
-                            trunk_size=spec.trunk_size,
-                            win_length=win_length,
-                            node_feat_dim=node_feat_dim,
-                            edge_feat_dim=edge_feat_dim,
-                            device=str(self.device),
-                            semantic="canary",
-                            canary_period=canary_period,
+                        # ONE read of each Rust getter, then pure-numpy views per part.
+                        payload = graph_wire_from_rust(wire)
+                        edge_counts = np.diff(
+                            np.asarray(payload.edge_offsets, dtype=np.int64)
                         )
-                        self._record_collate(time.perf_counter() - _t_collate_start)
-                        stone_mask = stone_mask_from_batch(batch)
-                        if self._forward_count == 0:
-                            assert not self.model.training, (
-                                "InferenceServer(graph) model entered hot loop in "
-                                "train() mode; eval() should be set at __init__"
+                        node_counts = np.diff(
+                            np.asarray(payload.node_offsets, dtype=np.int64)
+                        )
+                        plan = plan_fused_forwards(
+                            payload.edge_offsets, payload.node_offsets, caps,
+                        )
+                        self._record_fusion_plan(
+                            len(plan),
+                            *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
+                        )
+                        probs_parts: list[np.ndarray] = []
+                        values_parts: list[np.ndarray] = []
+                        for g0, g1 in plan:
+                            sub = slice_graph_wire(payload, g0, g1)
+                            _t_collate_start = time.perf_counter()
+                            batch = collate_graph_batch(
+                                sub,
+                                expected_version=1,
+                                trunk_size=spec.trunk_size,
+                                win_length=win_length,
+                                node_feat_dim=node_feat_dim,
+                                edge_feat_dim=edge_feat_dim,
+                                device=str(self.device),
+                                semantic="canary",
+                                canary_period=canary_period,
                             )
-                        with self._weights_lock, torch.inference_mode():
-                            with torch.autocast(
-                                device_type=self.device.type,
-                                dtype=self._amp_dtype,
-                                enabled=self.device.type == "cuda",
-                            ):
-                                # nn.Module.__getattr__ types dynamic attrs as
-                                # Tensor | Module; `forward_batch` is GnnNet's real method.
-                                policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                                    batch.x,
-                                    batch.edge_index,
-                                    batch.edge_attr,
-                                    batch.legal_mask,
-                                    stone_mask,
-                                    batch.node_offsets,
+                            # Per PART, not per pop: `collate.count == sum(M)` where it used to
+                            # equal `queue_wait.count`. The asymmetry is intended and recorded
+                            # so it is not read as a leak.
+                            self._record_collate(time.perf_counter() - _t_collate_start)
+                            stone_mask = stone_mask_from_batch(batch)
+                            if self._forward_count == 0:
+                                assert not self.model.training, (
+                                    "InferenceServer(graph) model entered hot loop in "
+                                    "train() mode; eval() should be set at __init__"
                                 )
-                        # Segment-softmax in float32 (corrects reduced-precision drift,
-                        # exactly like the dense path re-normalizes exp()).
-                        probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
-                        # Always-on finiteness gate: a NaN/Inf model output otherwise
-                        # reaches backup() and poisons the tree SILENTLY, and the
-                        # downstream numeric debug asserts are compiled out of release
-                        # builds.
-                        if not bool(torch.isfinite(probs).all()) or not bool(
-                            torch.isfinite(value).all()
-                        ):
-                            raise RuntimeError(
-                                "NonFiniteModelOutput: graph forward produced NaN/Inf "
-                                f"(probs finite={bool(torch.isfinite(probs).all())}, "
-                                f"values finite={bool(torch.isfinite(value).all())})"
+                            with self._weights_lock, torch.inference_mode():
+                                with torch.autocast(
+                                    device_type=self.device.type,
+                                    dtype=self._amp_dtype,
+                                    enabled=self.device.type == "cuda",
+                                ):
+                                    # nn.Module.__getattr__ types dynamic attrs as
+                                    # Tensor | Module; `forward_batch` is GnnNet's real method.
+                                    policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                                        batch.x,
+                                        batch.edge_index,
+                                        batch.edge_attr,
+                                        batch.legal_mask,
+                                        stone_mask,
+                                        batch.node_offsets,
+                                    )
+                            # Segment-softmax in float32 (corrects reduced-precision drift,
+                            # exactly like the dense path re-normalizes exp()). Segment-LOCAL
+                            # by construction, so a part's softmax is the un-split forward's
+                            # softmax for those graphs.
+                            probs = segment_softmax(
+                                policy_logits.float(), batch.legal_offsets
                             )
-                        probs_np = np.ascontiguousarray(
-                            probs.detach().cpu().numpy(), dtype=np.float32
-                        )
-                        legal_offsets_np = np.ascontiguousarray(
-                            batch.legal_offsets.detach().cpu().numpy(), dtype=np.int64
-                        )
-                        values_np = np.ascontiguousarray(
-                            value.detach().float().cpu().numpy().reshape(-1),
-                            dtype=np.float32,
-                        )
+                            # Always-on finiteness gate: a NaN/Inf model output otherwise
+                            # reaches backup() and poisons the tree SILENTLY, and the
+                            # downstream numeric debug asserts are compiled out of release
+                            # builds.
+                            if not bool(torch.isfinite(probs).all()) or not bool(
+                                torch.isfinite(value).all()
+                            ):
+                                raise RuntimeError(
+                                    "NonFiniteModelOutput: graph forward produced NaN/Inf "
+                                    f"(probs finite={bool(torch.isfinite(probs).all())}, "
+                                    f"values finite={bool(torch.isfinite(value).all())})"
+                                )
+                            probs_parts.append(np.ascontiguousarray(
+                                probs.detach().cpu().numpy(), dtype=np.float32
+                            ))
+                            values_parts.append(np.ascontiguousarray(
+                                value.detach().float().cpu().numpy().reshape(-1),
+                                dtype=np.float32,
+                            ))
+                            self._record_fusion_part(
+                                int(node_counts[g0:g1].sum()),
+                                int(edge_counts[g0:g1].sum()),
+                            )
+                            # One part resident at a time — the bound is on the PEAK, so the
+                            # previous part's device tensors must be gone before the next
+                            # part's are built.
+                            del sub, batch, stone_mask, policy_logits, value, probs
+                        # ONE submit per pop, against the payload's own UNSLICED offsets: the
+                        # parts' offsets are re-based and would segment the concatenation
+                        # wrongly from the first part onward.
                         self._batcher.submit_graph_inference_results(
-                            request_ids, probs_np, legal_offsets_np, values_np,
+                            request_ids,
+                            np.ascontiguousarray(
+                                np.concatenate(probs_parts), dtype=np.float32
+                            ),
+                            np.ascontiguousarray(
+                                np.asarray(payload.legal_offsets), dtype=np.int64
+                            ),
+                            np.ascontiguousarray(
+                                np.concatenate(values_parts), dtype=np.float32
+                            ),
                         )
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
                         error_msg = f"Graph inference failed: {exc}"

@@ -31,7 +31,7 @@ import torch
 
 import mantis.selfplay.graph_collate as collate_mod
 from mantis.encoding import lookup
-from mantis.selfplay.graph_collate import GraphBatch
+from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.pool_hooks import batch_fill_pct, inference_batch_timing
 from mantis.train.events import emit_iteration_complete_event
@@ -51,9 +51,44 @@ def _cfg(**over: Any) -> dict[str, Any]:
         "trace_inference": False, "compile_inference": False,
         "compile_inference_mode": "default", "compile_inference_dynamic": True,
         "perf_timing": False, "perf_sync_cuda": False,
+        # F-816-10: the graph arm resolves the fused-forward memory bound at
+        # construction. NON-BINDING here on purpose — the rows in this file are
+        # about the WAIT and OCCUPANCY instruments, which are measured at the POP
+        # and are blind to the split by construction; a cap that bound would put a
+        # split into rows that assert nothing about it.
+        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
     return {"inference": base, "encoding": "v6", "train": {"amp_dtype": "fp16"}}
+
+
+def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
+              ) -> GraphWirePayload:
+    """A REAL `GraphWirePayload` matching `_hand_built_batch`'s shape.
+
+    F-816-10: `_run_graph_loop` now reads the wire's own CSR offsets ONCE per pop to plan its
+    bounded forwards, so an opaque `object()` sentinel no longer reaches the collate — the
+    plan is computed BEFORE it. The collate stays monkeypatched (these rows are about the
+    timing instrument, not the wire contract); only the offsets have to be real.
+    """
+    nodes = n_graphs * nodes_per_graph
+    return GraphWirePayload(
+        contract_version=1, builder_impl=1, n_graphs=n_graphs,
+        node_feat=np.zeros(nodes * 11, dtype=np.float32),
+        node_coords=np.zeros(nodes * 2, dtype=np.int64),
+        edge_index=np.zeros(0, dtype=np.int64),
+        edge_attr=np.zeros(0, dtype=np.float32),
+        node_offsets=np.arange(0, nodes + 1, nodes_per_graph, dtype=np.int64),
+        edge_offsets=np.zeros(n_graphs + 1, dtype=np.int64),
+        legal_offsets=np.arange(0, n_graphs * legal_per_graph + 1, legal_per_graph,
+                                dtype=np.int64),
+        legal_node_gather=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        policy_dst_slot=np.zeros(n_graphs * legal_per_graph, dtype=np.int64),
+        n_nodes_checksum=np.full(n_graphs, nodes_per_graph, dtype=np.int64),
+        n_stones=np.ones(n_graphs, dtype=np.int64),
+        window_center=np.zeros(n_graphs * 2, dtype=np.int64),
+        current_player=np.ones(n_graphs, dtype=np.int64),
+    )
 
 
 class _FakeGraphBatcher:
@@ -199,7 +234,7 @@ def _run_graph_server(
         return batch
 
     monkeypatch.setattr(collate_mod, "collate_graph_batch", _collate)
-    batcher = _FakeGraphBatcher(object(), counts, wait_s=wait_s)
+    batcher = _FakeGraphBatcher(_wire_for(), counts, wait_s=wait_s)
     server = InferenceServer(
         _FiniteGraphNet(), device, _cfg(inference_batch_size=batch_size),
         batcher=batcher, encoding_spec=_GRAPH_SPEC,
@@ -290,7 +325,7 @@ def test_the_instrument_is_defined_before_the_first_forward(device, monkeypatch)
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: None)
     server = InferenceServer(
         _FiniteGraphNet(), device, _cfg(inference_batch_size=64),
-        batcher=_FakeGraphBatcher(object(), []), encoding_spec=_GRAPH_SPEC,
+        batcher=_FakeGraphBatcher(_wire_for(), []), encoding_spec=_GRAPH_SPEC,
     )
     snap = server.batch_timing_snapshot()
     assert (snap["queue_wait"], snap["collate"], snap["occupancy"]) == (None, None, None)

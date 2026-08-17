@@ -318,6 +318,24 @@ gates:
       for every derived reading — no producer, never a fabricated 0. `empty_polls` is the
       one counter that stays VISIBLE at 0 on the producing path (the
       `target_integrity_defects` posture) and `None` on the path with no producer.
+      `fusion` is the memory bound's own in-run instrument (F-816-10, LAW-18/R164), and it
+      is itemized here for the same documentation reason the sub-fields above are: `caps`
+      (the two minted members, travelling WITH the distributions because a fused-size
+      histogram is unreadable without the bound it was measured against, the same reason
+      `batch_size`/`max_wait_ms` ride this block), `fusion_parts` (GPU forwards actually
+      run), `fusion_splits` (POPS THAT SPLIT — the lever's OWN fire rate, LAW-18's subject,
+      NOT a cut count), `fusion_bound_hits` (which member forced each cut, so an operator
+      knows which member to re-fit) and `fused_batch_nodes`/`fused_batch_edges` (per-PART
+      size distributions with power-of-two lower-bound histogram keys). MEASURED PER PART,
+      not per pop, because the part is what the GPU sees and what the cap bounds — a pop's
+      total is recoverable as the sum over its parts and the reverse is not. Two readings
+      change meaning as this lands and neither is drift: `collate.count` is now the part
+      count (`sum(M)`) where it used to equal `queue_wait.count`, and `_forward_count`
+      DELIBERATELY stays one per POP, because it is `batch_fill_pct`'s denominator and that
+      metric means requests-per-pop, not GPU forwards. The whole `fusion` block is `None` on
+      a grid run — the dense batch is a fixed-shape tensor already bounded by
+      `inference_batch_size`, so there is no producer there and a zeroed block would read as
+      "the lever ran and never fired".
       NOT BUILT, deliberately: `graph_build_time`. It lives in Rust
       (`mantis-graph::build_axis_graph`, per LEAF), so instrumenting it means a counter
       threaded selfplay -> bridge -> Python, a maturin rebuild and a timing call inside the

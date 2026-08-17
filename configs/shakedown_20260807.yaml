@@ -9,6 +9,7 @@
 # delta: train.checkpoint_interval: 0 -> 25
 # delta: monitor.gate_interval: 1000 -> 100
 # delta: train.log_interval: 1000 -> 100
+# delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: null, max_fused_nodes: null}
 schema_version: 1
 run_id: shakedown-20260807
 seed: 20260807
@@ -210,6 +211,9 @@ inference:
   compile_inference_dynamic: true
   perf_timing: false
   perf_sync_cuda: false
+  fused_graph_caps:
+    max_fused_edges: null
+    max_fused_nodes: null
 monitor:
   gate_interval: 100
   alert_entropy_min: 1.0

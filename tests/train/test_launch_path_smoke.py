@@ -107,6 +107,8 @@ def _inference_block():
         "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        # F-816-10: the REQUIRED fused-forward memory bound, non-binding by construction.
+        "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
 
 

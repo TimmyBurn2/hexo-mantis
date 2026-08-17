@@ -35,6 +35,21 @@ class _LoaderReached(RuntimeError):
     """Sentinel: `load_model_snapshot` was entered. Named, so no unrelated raise passes."""
 
 
+def _caps_for(enc_name: str):
+    """The fused-forward memory bound this encoding's route needs (F-816-10 D-1).
+
+    Derived from the encoding, not chosen per call site: the graph route resolves the bound
+    EAGERLY when its `InferenceServer` is constructed, and the grid route never reads it. The
+    value is the template's NON-BINDING-BY-CONSTRUCTION pair, so no round here splits.
+    """
+    from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+    from mantis.encoding import lookup
+
+    if lookup(enc_name).representation != "graph":
+        return None
+    return FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
+
+
 def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
     """A real `RoundSpec`. The snapshot paths deliberately do NOT exist — every arm below
     replaces the loader, and a round that reaches the filesystem has already lost."""
@@ -61,6 +76,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
         ply_cap_adjudication=None, strength_floor=None,
+        fused_graph_caps=_caps_for(enc_name),
     )
 
 

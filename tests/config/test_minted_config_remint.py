@@ -139,6 +139,21 @@ _ADDED_LEAVES = {
     # arrived without one.
     "eval.ply_cap_adjudication",
     "eval.strength_floor",
+    # F-816-10 (R276(f)): `inference.fused_graph_caps` is a REQUIRED schema block, so every
+    # config necessarily gains both leaves and the re-mint stays purely ADDITIVE — the textual
+    # half is still insert-only. TWO leaves and not one, because the block is minted as a
+    # MAPPING everywhere (unlike the eval-posture blocks, whose `null` value stops `_leaves`
+    # at the block): the five non-production configs carry derived non-binding ints and the
+    # two production configs carry `{max_fused_edges: null, max_fused_nodes: null}`, which is
+    # a mapping with two null members, not a null block. That difference is deliberate — a
+    # null BLOCK would be an off state, and the off state for this bound is unrepresentable.
+    # `run5.yaml` and `shakedown_20260807.yaml` additionally gain ONE `# delta:` HEADER line
+    # each, which is an insertion too. No VALUE is pinned here: the production pair is the
+    # operator's measurement at the box (R119), and `tests/config/
+    # test_fused_graph_caps_authority.py` is where the `null` placeholder and the derived
+    # non-binding values are each asserted on their own terms.
+    "inference.fused_graph_caps.max_fused_edges",
+    "inference.fused_graph_caps.max_fused_nodes",
 }
 
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted

@@ -102,6 +102,8 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: "EvalConfig | None" = None, **
         ),
         encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json", promotion=_promotion_hooks(tmp_path),
+        # F-816-10 D-1: the GRID arm (`v6_live2_ls`), stated because there is no default.
+        fused_graph_caps=None,
     )
     kwargs.update(overrides)
     return kwargs

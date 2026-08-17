@@ -63,12 +63,18 @@ import torch
 from mantis._engine import Board, MCTSTree
 from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.bots.random_bot import RandomBot
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _ENC = "gnn_axis_v1"
+#: F-816-10 D-1: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED
+#: keyword — it hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is
+#: THREADED from a parent resolver and never hardcoded at the site. Non-binding by
+#: construction here: nothing in this file exercises a split.
+_CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity"
 _P1_FIXTURE = _FIXTURES / "child_parity_v1.json"
 _P2_FIXTURE = _FIXTURES / "dispersed_r6_v1.json"
@@ -157,7 +163,8 @@ def graph_engine():
     spec = lookup(_ENC)
     net = _RuleNet()
     net.eval()
-    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec)
+    engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
+                                  fused_graph_caps=_CAPS)
     try:
         yield engine, spec
     finally:
@@ -569,7 +576,8 @@ def test_infer_batch_ls_refuses_a_dense_spec() -> None:
     rather than an `AttributeError` two lines down. The refusal reads the BOUND SPEC, never
     the live model object — which is why the model handed in below is an `Identity`."""
     engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6")
+        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
+        fused_graph_caps=None,
     )
     try:
         with pytest.raises(NotImplementedError):
@@ -593,7 +601,8 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
 
     spec = _SpecWithRepresentation(lookup("v6"), "quantum")
     engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6")
+        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
+        fused_graph_caps=None,
     )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
@@ -621,7 +630,8 @@ def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) 
     assert result == ([0.0], [], 0.0, (0, 0)), "infer_ls did not project the batch result"
 
     dense_engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6")
+        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
+        fused_graph_caps=None,
     )
     try:
         with pytest.raises(NotImplementedError) as single:

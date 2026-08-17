@@ -100,8 +100,20 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
       ("graph_collate.py", "stone_mask_from_batch")], (0, 0, 0)),
     ("InferenceServer.run (dense loop)",
      [("inference_server.py", "InferenceServer.run")], (0, 1, 0)),
+    # F-816-10 (R276(f)) moves this row's `for` count 0 -> 1, and the movement is RULED, not
+    # absorbed. The ban this row enforces is on a PER-ITEM Python loop: the hot paths are
+    # vectorized numpy/torch and a loop that touches one graph, one node or one edge at a time
+    # re-introduces exactly the per-item overhead the port exists to keep out. The new `for`
+    # is a loop over the PARTS OF ONE MEMORY-BOUNDED PLAN — `M` iterations where `M = 1`
+    # whenever the caps do not bind, which is every config CI runs (their caps are non-binding
+    # by construction) — and each iteration performs one WHOLE vectorized collate + forward +
+    # segment-softmax over its part. Its count is a function of the minted cap, not of the
+    # batch's item count, so the quantity the ban is about does not move.
+    # It is also not optional: the bound this packet ships is a bound on the PEAK, so the
+    # parts must run one at a time with the previous part's tensors freed. A vectorized
+    # "all parts at once" is the un-split forward, i.e. the defect.
     ("InferenceServer._run_graph_loop",
-     [("inference_server.py", "InferenceServer._run_graph_loop")], (0, 1, 0)),
+     [("inference_server.py", "InferenceServer._run_graph_loop")], (1, 1, 0)),
     ("InferenceServer.submit_and_wait / load_state_dict_safe",
      [("inference_server.py", "InferenceServer.submit_and_wait"),
       ("inference_server.py", "InferenceServer.load_state_dict_safe")], (0, 0, 0)),

@@ -778,6 +778,11 @@ def strip_and_restamp(
             "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
             "compile_inference": False, "compile_inference_mode": "default",
             "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+            # F-816-10: `inference.fused_graph_caps` is a new REQUIRED nested block.
+            # Placeholder pair, same posture as the rest of this synthetic payload — it is
+            # a weights-strip fixture, not a run, and nothing here builds an inference
+            # server. Non-binding by construction so it can never read as a real cap.
+            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
         },
         # WPSC Phase 2 SC-A3: `monitor:` is now a required RunConfig section — placeholder
         # values, same posture as the eval/train/selfplay blocks above (DESIGN_P2.md §4.2).
