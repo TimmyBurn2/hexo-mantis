@@ -176,6 +176,64 @@ def test_fg3_02_each_graphs_value_survives_the_split_in_its_own_slot(monkeypatch
             "search would back up another position's evaluation")
 
 
+# ═══ FG3-08 — the EQUAL-LENGTH shape, where every length check is blind ══════════════════
+#: Two graphs with the SAME legal-node count, and a third of a different count so the split
+#: is forced between them. `_RAGGED_LEGAL` is deliberately all-distinct, which is the right
+#: default for most rows and the exact blind spot for this one.
+_EQUAL_LEGAL = [3, 5, 5]
+
+
+def test_fg3_08_two_graphs_of_EQUAL_legal_count_cannot_be_transposed(monkeypatch) -> None:
+    """FG3-08 — the transposition that every length check in the stack is blind to.
+
+    WHY THIS ROW EXISTS, AND WHY THE REST OF THE FILE DOES NOT COVER IT. The FFI's only
+    per-id defence against a mis-assigned policy is
+    `meta.policy_dst_slot.len() != leaf_probs.len()` (`crates/mantis-bridge/src/inference.rs`),
+    which is defeated outright when two graphs carry the SAME legal-node count — and there is
+    no per-id check on `values[i]` ordering at all (REVIEW-design Finding 9, D-3). Every other
+    payload in this file uses mutually distinct legal counts, so a swap of two parts is caught
+    by a length mismatch rather than by the ordering assertion, and the ordering assertion is
+    the thing this file exists to make. RED-TEAM proved the gap was real rather than
+    theoretical: it injected a swap of two same-length parts into `_run_graph_loop` and the
+    whole 69-row fused-forward family stayed GREEN while a genuine per-graph transposition
+    occurred (F816_10_REDTEAM.md, H4).
+
+    So: equal legal counts on graphs 1 and 2, a split forced between them, and BOTH axes
+    compared positionally against the un-split reference. Under the injected swap this row is
+    the one that reds.
+    """
+    payload = H.build_payload(_EQUAL_LEGAL)
+    ec, nc = H.per_graph_counts(payload)
+    assert nc[1] == nc[2] and ec[1] == ec[2], (
+        "the premise of this row is two graphs the length checks cannot tell apart; got "
+        f"nodes {nc.tolist()} edges {ec.tolist()}")
+
+    whole, whole_server = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
+    split, split_server = _drive(monkeypatch, payload, int(ec.max()), int(nc.max()))
+
+    assert whole_server.batch_timing_snapshot()["fusion"]["fusion_parts"] == 1, (
+        "the reference drive split too; it is no longer the un-split reference")
+    parts = split_server.batch_timing_snapshot()["fusion"]["fusion_parts"]
+    assert parts == len(_EQUAL_LEGAL), (
+        f"one graph per forward is what puts the two equal-length graphs in ADJACENT parts, "
+        f"which is where a same-length swap lives; got {parts} parts")
+
+    assert_positional_round_trip(whole, split)
+
+    # The value axis again, explicitly and per-slot: `assert_positional_round_trip` compares
+    # the arrays, but a reader of this row must see that the EQUAL-LENGTH pair specifically
+    # kept its own sentinels, because that is the pair no length check protects.
+    values_whole, values_split = whole[3], split[3]
+    for i in (1, 2):
+        assert values_whole[i] == pytest.approx(values_split[i], rel=1e-6, abs=1e-7), (
+            f"graph {i} is one of the two EQUAL-legal-count graphs and its value moved "
+            f"({values_whole[i]} -> {values_split[i]}) — a transposition no length check in "
+            "the FFI or the collate can see")
+    assert values_whole[1] != pytest.approx(values_whole[2], rel=1e-9, abs=1e-12), (
+        "the two equal-length graphs must carry DISTINGUISHABLE value sentinels or this row "
+        "is green under a swap by construction")
+
+
 # ═══ FG3-03 — one submit, unsliced offsets ═══════════════════════════════════════════════
 def test_fg3_03_one_submit_per_pop_against_the_unsliced_legal_offsets(monkeypatch) -> None:
     """FG3-03 — the FFI's four self-consistency checks are satisfied by the ONE submit.
