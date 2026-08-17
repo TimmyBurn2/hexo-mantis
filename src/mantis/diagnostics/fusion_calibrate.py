@@ -435,6 +435,21 @@ def _recommend(
         )
     nodes = int(usable // per_node)
     edges = int(nodes * ratio)
+    # The OUTPUT condition, checked separately from the input one above. `usable > 0` admits
+    # a `usable` so small that the floor division lands on ZERO, and `int(0 * ratio)` is zero
+    # too — so the input guard alone lets the refusal's own sentence ("a non-positive cap is
+    # not a cap") be violated by the branch that skipped it. A zero pair is refused by the
+    # schema's `ge=1` downstream, but by then the operator has been handed a mint line for a
+    # cap this tool never measured, and the error they see names pydantic instead of naming
+    # this. Caught by RED-TEAM H4's sibling H1.
+    if nodes < 1 or edges < 1:
+        raise CalibrationRefusal(
+            f"{_TOOL}: the fit's usable budget ({usable:.0f} B after the {margin} margin and "
+            f"the {fit['a_bytes']:.0f} B fixed term) buys {nodes} nodes / {edges} edges — "
+            "not a cap. A pair with a non-positive member would be refused by the schema's "
+            "`ge=1` anyway; it is refused HERE so the message names the budget that produced "
+            "it. Raise --budget-bytes, or re-fit: no pair and no mint line are emitted."
+        )
     largest_nodes = max(p["largest_graph_nodes"] for p in points)
     largest_edges = max(p["largest_graph_edges"] for p in points)
     return {
