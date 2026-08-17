@@ -642,6 +642,61 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
 
 
 @pytest.mark.integration
+def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_path) -> None:
+    """The tool's SUCCESS path, restored after F-816-10 forced the row above onto a refusal.
+
+    The row above is the only place the real external preflight child is driven to completion,
+    and until F-816-10 it carried BOTH halves: the refusal path and the clean-boot /
+    both-watchdogs-armed / rc-40 result. run5 now mints the R119 placeholder, so that row can
+    only witness the refusal — and the success half would otherwise be left covered by nothing
+    that drives THIS tool. `tests/test_run_launcher.py` proves a graph config can boot to an
+    armed loop, but in-process through `launch_run()`: a different mechanism, which exercises
+    neither the subprocess seam, nor the rc classification, nor the JSON evidence report.
+
+    So this row restores the success half against the CALIBRATED twin
+    (`_mint_run5_cpu_bootable_twin` — run5 plus `train.device` plus the template's own
+    NON-BINDING-BY-CONSTRUCTION cap pair, read off the template at test time so the day that
+    derivation moves, this moves with it). What it deliberately does NOT do is put a number in
+    this file: the pair is not calibrated and is not pretending to be, it is the same "large
+    enough that nothing here splits" pair every smoke config mints (R119 — no armed value is
+    chosen by a test).
+
+    The split between the two rows is the point. Above: the SHIPPED production config refuses,
+    by name, at construction. Here: an otherwise-identical config that HAS a cap boots clean
+    and arms both watchdogs. Together they say the refusal is caused by the missing value and
+    by nothing else — which neither row can say alone.
+    """
+    out_dir = tmp_path / "boot_calibrated"
+    result = _run_tool("--config", str(_mint_run5_cpu_bootable_twin(tmp_path)),
+                       "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+    assert result.returncode == 40, (
+        "with the cap VALUED the boot runs until the timeout kills it: rc 40 "
+        "PreflightTimeoutError. An rc 33 here means the caps are refused even when present, "
+        f"i.e. the resolver reads something other than the config. got {result.returncode}\n"
+        f"{(result.stdout + result.stderr)[-3000:]}"
+    )
+    reports = sorted(out_dir.glob("preflight_*.json"))
+    assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
+    report = json.loads(reports[0].read_text())
+    assert report["failure"] == "PreflightTimeoutError"
+    assert report["child"]["timed_out"] is True
+    assert "UncalibratedFusedGraphCapsError" not in report["child"]["stderr_tail"], (
+        "a VALUED cap must not refuse. This firing means the resolver rejects a legal pair — "
+        f"got tail {report['child']['stderr_tail'][-600:]!r}"
+    )
+    # The positive half: the child did not merely fail to crash, it ran. The run's own
+    # segment is the witness (LAW-18 in-run observability), not the tool's say-so.
+    segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
+    assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
+    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
+    assert {"run_segment_started", "heartbeat_watchdog_armed",
+            "selfplay_stall_watchdog_armed"} <= events, (
+        f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
+    )
+
+
+@pytest.mark.integration
 @pytest.mark.skipif(
     _CUDA_BOX,
     reason="asserts what a CUDA-MINTED run5 does on a NON-CUDA host; this box has CUDA, so "
