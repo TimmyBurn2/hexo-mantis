@@ -77,9 +77,6 @@ _KEY = "inference.fused_graph_caps"
 #: WRITES them into a report and a mint line, so it spells them from here rather than as
 #: constant subscripts that would read, to that census, exactly like a second authority.
 _MEMBER_NAMES = ("max_fused_edges", "max_fused_nodes")
-#: The registry's own per-node edge ceiling, used only to LABEL a sweep point's regime; every
-#: reported (N, E) is read off the real wire, never from this constant.
-_EDGES_PER_NODE_CEILING = 32
 
 
 class CalibrationRefusal(Exception):
