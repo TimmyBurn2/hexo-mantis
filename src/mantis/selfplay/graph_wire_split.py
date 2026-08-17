@@ -155,18 +155,20 @@ def plan_microbatches(
     # Out of domain FIRST, before any packing: a single graph over either member has no split
     # that rescues it, and a bound that admits one over-bound part is not a bound.
     for i in range(b):
-        if int(ec[i]) > max_edges:
+        # BOTH members are tested before raising, and every one that is breached is named.
+        # Two sequential `if ... raise` statements report only the first: an operator whose
+        # graph breaks both caps fixes the member they were told about, re-runs, and meets
+        # the second as an apparently-new surprise. The single-member message is byte-identical
+        # to what it has always been; only the both-breached case gained a second clause
+        # (RED-TEAM H2).
+        breaches = [(m, cap) for m, cap, count in
+                    ((members[0], max_edges, int(ec[i])), (members[1], max_nodes, int(nc[i])))
+                    if count > cap]
+        if breaches:
+            exceeds = " AND ".join(f"{m}={cap} ({key}.{m})" for m, cap in breaches)
             raise GraphMicroBatchOverCap(
                 f"graph {i} needs {int(ec[i])} edges and {int(nc[i])} nodes on its own, which "
-                f"exceeds {members[0]}={max_edges} ({key}.{members[0]}). Micro-batching "
-                "partitions at GRAPH boundaries, so a single graph is the atom and no split "
-                "reduces it — this is out of the domain the caps were sized for. Never a "
-                "silent truncation and never a silent drop (R114)."
-            )
-        if int(nc[i]) > max_nodes:
-            raise GraphMicroBatchOverCap(
-                f"graph {i} needs {int(ec[i])} edges and {int(nc[i])} nodes on its own, which "
-                f"exceeds {members[1]}={max_nodes} ({key}.{members[1]}). Micro-batching "
+                f"exceeds {exceeds}. Micro-batching "
                 "partitions at GRAPH boundaries, so a single graph is the atom and no split "
                 "reduces it — this is out of the domain the caps were sized for. Never a "
                 "silent truncation and never a silent drop (R114)."
