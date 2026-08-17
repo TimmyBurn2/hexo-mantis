@@ -557,10 +557,19 @@ pub const TARGET_MASS_TOL: f64 = 1e-4;
 ///
 /// THE CLASS, in one sentence: *a search that did not run is exported as if it had.*
 /// The seam conjunct (`search_drive::InferenceSeamFailure`) stops the usual CAUSE; this
-/// stops the CONSEQUENCE, and either alone would have stopped F-816-9. They are pinned
-/// separately on purpose — the seam cannot see a zero-visit search that arose without a
-/// failure (a `sims == 1` regime reaches this state with every inference healthy), and
-/// this pin cannot name the failure that produced one.
+/// stops the CONSEQUENCE.
+///
+/// HOW MUCH EACH PIN COVERS, stated precisely because the loose version is wrong (found by
+/// cross-model RED-TEAM, measured by isolation). Either pin alone would have stopped
+/// F-816-9's OBSERVED death: its signature was a 192-cell prior dump, which is the FULL
+/// child set, which only a zero-visit root can produce — so the failure had to land on the
+/// first post-root batch, and this pin catches that with no help. It does NOT follow that
+/// either pin alone covers the class. A failure landing LATER leaves a TRUNCATED search —
+/// say 6 of 50 sims backed up — which has nonzero visits, passes this pin, and is exported
+/// as though it were a full search. Only the seam pin catches that. So the seam is the
+/// primary and this is the backstop; they are pinned separately because each sees a
+/// population the other cannot (this one also catches a zero-visit search with every
+/// inference healthy, which a `sims == 1` regime reaches).
 ///
 /// WHY HERE AND NOT BY DELETING THE PRIOR FALLBACK. The LAW-08 consumer check the packet
 /// required was run and is reported in full with the packet exit; its result:

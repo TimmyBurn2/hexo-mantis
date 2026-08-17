@@ -1,3 +1,8 @@
+// R8 justify: one pin, and the legs only mean anything together — the direct call proves it
+// bites, the positive control proves it does not bite everything, and the two end-to-end
+// drives prove the SAME predicate holds on both record arms. Split them and a reader can
+// green the refusal while its positive control lives in another file; the arm pair in
+// particular is one claim ("arm-independent") that reads as two half-claims apart.
 //! ⊕ F-816-9 Phase C — the EXPORTER conjunct pin (R275(b) conjunct 2, LAW-14).
 //!
 //! Subject: `records::refuse_zero_visit_export`. A search that backed up ZERO child visits
@@ -14,10 +19,18 @@
 //!
 //! PIN INDEPENDENCE, without a scratch build. `sims = 1` reaches the zero-visit state with
 //! every inference HEALTHY: the single sim is consumed by the root expansion and no child
-//! is ever visited. The end-to-end leg drives exactly that and asserts the run dies with
+//! is ever visited. The end-to-end legs drive exactly that and assert the run dies with
 //! `target_integrity_defects == 1` and `inference_failures_total == 0` — the seam never
 //! fired, so the exporter pin is the only thing that stopped it. Its mirror image lives in
 //! `search_seam_fatal.rs`, where the seam fires and the target counter stays 0.
+//!
+//! WHAT THAT DOES **NOT** SHOW (cross-model RED-TEAM correction, kept because the loose
+//! claim is the tempting one): independence is not equivalence. Either pin alone stops
+//! F-816-9's OBSERVED death — a 192-cell prior dump is the full child set, so the failure
+//! had to land on the first post-root batch and leave zero visits. A failure landing LATER
+//! leaves a TRUNCATED search with nonzero visits, which passes this pin and is caught only
+//! at the seam. The seam is the primary; this is the backstop. See `records.rs`'s
+//! `refuse_zero_visit_export` doc for the same statement at the fix site.
 //!
 //! FLIP-SET (d) — the capacity boundary — is deliberately NOT re-tested here. It is owned
 //! by the frozen `target_integrity_postfix.rs::s2b_admits_exactly_128_mass_cells` /
@@ -41,7 +54,7 @@ use mantis_core::board::{Board, BoardGeometry};
 use mantis_core::{Cell, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
-use mantis_selfplay::queues::GraphQueue;
+use mantis_selfplay::queues::{DenseQueue, GraphQueue};
 use mantis_selfplay::records::{assemble_ls_from_gnn_probs, refuse_zero_visit_export, TargetIntegrityError};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -295,4 +308,87 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         "{} record(s) reached the buffer from a search that visited nothing",
         drained.len()
     );
+}
+
+/// Dense mock producer: uniform policy rows, always healthy.
+fn spawn_healthy_dense_producer(
+    queue: DenseQueue,
+    stride: usize,
+    served: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        let batch = queue.pop_batch(4, 5);
+        if batch.is_empty() {
+            if queue.is_closed() {
+                break;
+            }
+            continue;
+        }
+        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
+        let mut flat: Vec<f32> = Vec::with_capacity(ids.len() * stride);
+        let mut ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(ids.len());
+        let mut values: Vec<f32> = Vec::with_capacity(ids.len());
+        for _ in &ids {
+            let start = flat.len();
+            flat.extend(std::iter::repeat_n(1.0f32 / stride as f32, stride));
+            ranges.push(start..flat.len());
+            values.push(0.0);
+        }
+        served.fetch_add(ids.len(), Ordering::Relaxed);
+        queue.submit_results(&ids, &Arc::new(flat), &ranges, &values);
+    })
+}
+
+#[test]
+fn the_exporter_pin_stops_a_zero_visit_run_on_the_DENSE_arm_too() {
+    // The pin's doc claims it is arm-independent, and the call site in `play_one_move` is
+    // genuinely ungated — but until this leg that claim was ASSERTED, not driven (cross-model
+    // review, NON-BLOCKING 1). The dense arm is the one where a zero-visit export is WORSE:
+    // `get_policy` has no prior fallback, so it ships an all-zero row that the dense recorder
+    // cannot tell from its legitimate fast-game value-only sentinel. Nothing downstream would
+    // ever have caught it.
+    let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
+        n_workers: 1,
+        max_moves_per_game: 20,
+        n_simulations: 1,
+        leaf_batch_size: 1,
+        standard_sims: 0,
+        dirichlet_enabled: false,
+        quiescence_enabled: false,
+        random_opening_plies: 0,
+        encoding_name: Some("v6".to_string()),
+        ..Default::default()
+    })
+    .expect("v6 runner constructs");
+    assert_eq!(runner.stats_snapshot().target_integrity_defects, 0);
+
+    let served = Arc::new(AtomicUsize::new(0));
+    let producer =
+        spawn_healthy_dense_producer(runner.dense_producer(), runner.policy_len(), served.clone());
+
+    runner.start();
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let mut defect: Option<String> = None;
+    while Instant::now() < deadline {
+        defect = runner.fatal_defect();
+        if defect.is_some() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let halted = !runner.is_running();
+    let snap = runner.stats_snapshot();
+    runner.stop();
+    producer.join().expect("producer exits");
+
+    assert!(served.load(Ordering::Relaxed) > 0, "no dense inference served — vacuous drive");
+    let msg = defect.expect(
+        "a zero-visit search was exported on the DENSE arm — an all-zero policy row went \
+         into the buffer as a value-only sentinel and nothing downstream can distinguish it \
+         from a real one",
+    );
+    assert!(msg.contains("ZeroVisitSearch"), "the variant name must reach the drain face: {msg}");
+    assert!(halted, "store-then-halt (LAW-14)");
+    assert_eq!(snap.target_integrity_defects, 1, "the exporter pin's own counter must fire");
+    assert_eq!(snap.inference_failures_total, 0, "the seam never fired on a healthy drive");
 }

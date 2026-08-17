@@ -131,7 +131,7 @@ def _snapshot_counter(rstats: Any, name: str) -> int | None:
     — graded instance FOUR of this phase's weak axis, and the first instance in shipped code
     rather than in an instrument). An earlier version of this docstring spent eleven lines on
     what `None` MEANS in the event stream without checking what can REACH it. Measured:
-    `pool_hooks.RunnerStats` declares all three counters `int = 0` and `runner_stats()`
+    `pool_hooks.RunnerStats` declares every counter in the block `int = 0` and `runner_stats()`
     supplies every field explicitly, so a real snapshot ALWAYS carries the attribute —
     `getattr(rstats, name, None)` never returns `None` on any production path, and no oracle
     drives that arm (O-23's `None` is reached through the OTHER condition, a zero
@@ -797,7 +797,8 @@ class StepCoordinator:
         self._last_iter_games = self._games_played
 
     def _target_integrity_report(self) -> tuple[dict[str, Any], Any]:
-        """The three Phase-T target-integrity counters as an `iteration_complete` block
+        """The Phase-T target-integrity counters (+ R275(b)'s seam counter, same block)
+        as an `iteration_complete` block
         (WP12-R Phase O, R164 / LAW-18), and the `RunnerStats` snapshot they were built from.
 
         `PREREG_T §0b` names `export_offwindow_mass_moves` as THE in-run witness attributing

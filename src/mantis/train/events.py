@@ -553,7 +553,8 @@ def emit_iteration_complete_event(
         # convention), never a fabricated zero block.
         "inference_batching": getattr(pool, "inference_batch_timing", None),
         "mcts_mean_depth": rstats.mcts_mean_depth,
-        # WP12-R Phase O (R164/LAW-18): the three Phase-T target-integrity counters reach
+        # WP12-R Phase O (R164/LAW-18): the three Phase-T target-integrity counters — plus
+        # R275(b)'s `inference_failures_total`, the SEAM conjunct of the same class — reach
         # the ONE channel here, each as {total, delta, per_position} beside the
         # `positions_delta` denominator the rate is taken over. Nested so the three travel
         # together and cannot crosswire; built by the coordinator, which owns the previous

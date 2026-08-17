@@ -383,3 +383,54 @@ fn dense_drain_shutdown_is_not_an_inference_failure() {
     );
     assert!(runner.fatal_defect().is_none(), "a clean stop latched a fatal defect");
 }
+
+// ── The discriminator reads the RIGHT queue (RED-TEAM M-RT-1) ────────────────────────
+
+#[test]
+fn the_dense_arm_classifies_on_its_own_queue_not_the_graph_queue() {
+    // WHY THIS EXISTS. Cross-model RED-TEAM found that pointing the DENSE arm's
+    // `is_closed()` check at `infer.graph_queue` instead of `infer.dense_queue` — the
+    // obvious copy-paste error in a file built entirely out of dense/graph twins — left the
+    // WHOLE crate suite green. Every other drive here closes both queues together (that is
+    // all `stop()` can do), so nothing pinned WHICH queue the discriminator reads.
+    //
+    // The drive closes ONE queue and leaves its sibling open, which `stop()` cannot do but a
+    // producer handle can. On a DENSE runner the graph queue is never used and stays open,
+    // so a wrongly-pointed check sees `is_closed() == false` and reports the resulting
+    // Err-on-close as a run-fatal inference failure. Correct code sees its own queue closed
+    // and treats it as the shutdown it is.
+    let runner = dense_runner();
+    let queue = runner.dense_producer();
+    let served = Arc::new(AtomicUsize::new(0));
+    let parked = Arc::new(AtomicBool::new(false));
+    let producer = spawn_dense_producer(
+        queue.clone(),
+        runner.policy_len(),
+        served.clone(),
+        ThenDo::ParkHoldingTheBatch,
+        parked.clone(),
+    );
+
+    runner.start();
+    let blocked = wait_for(120, || parked.load(Ordering::SeqCst));
+    // Close ONLY the dense queue. The graph queue stays open for the whole drive.
+    queue.close();
+    // Give the woken waiter time to classify before the counter is read.
+    let _ = wait_for(5, || false);
+    let snap = runner.stats_snapshot();
+    let defect = runner.fatal_defect();
+    runner.stop();
+    producer.join().expect("producer exits");
+
+    assert!(blocked, "vacuous drive: the producer never parked holding a batch");
+    assert_eq!(
+        snap.inference_failures_total, 0,
+        "closing the DENSE queue was classified as an inference failure — the dense arm is \
+         reading the wrong queue's `is_closed()` (M-RT-1). Under it, the graph queue's state \
+         decides whether a dense shutdown is a defect"
+    );
+    assert!(
+        defect.is_none() || !defect.as_deref().unwrap_or("").contains("InferenceSeamFailure"),
+        "a dense-queue close latched a seam failure: {defect:?}"
+    );
+}

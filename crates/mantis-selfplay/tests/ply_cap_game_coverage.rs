@@ -146,11 +146,18 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     // drain of 2 games). Only FINALIZED games reach this queue — an in-progress game's rows
     // live in the worker's local vec — so the accumulated length is always a whole number of
     // games.
+    // Wait for a game that reached the CAP, not merely for a game. The 120-ply random
+    // opening is unseeded, so a spontaneous six-in-a-row or colony during it would end a
+    // game early; waiting on the deepest recorded ply makes such a game a non-event instead
+    // of a flake (cross-model RED-TEAM, hole 4). The deadline is the only failure mode.
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = Vec::new();
     while Instant::now() < deadline {
         records.extend(runner.drain_graph_records());
-        if records.len() >= SEARCHED_PLIES || runner.fatal_defect().is_some() {
+        let reached_cap = records
+            .iter()
+            .any(|r| usize::from(r.ply_index) + 1 == PROD_PLY_CAP);
+        if reached_cap || runner.fatal_defect().is_some() {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -168,10 +175,9 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
          game and could not speak about the ply-cap regime at all"
     );
     assert!(
-        !records.is_empty() && records.len() % SEARCHED_PLIES == 0,
-        "one recorded position per SEARCHED ply is the production record path's contract, so \
-         the drain must carry a whole number of finalized games' rows ({SEARCHED_PLIES} \
-         each); got {}",
+        records.len() >= SEARCHED_PLIES,
+        "the drain carried {} rows; a game that ran the accelerator to the cap contributes \
+         {SEARCHED_PLIES}",
         records.len()
     );
 
