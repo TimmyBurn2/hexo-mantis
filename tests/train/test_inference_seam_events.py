@@ -79,6 +79,7 @@ class _Pool:
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
+    draw_rate = 0.05  # F-816-2: the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9

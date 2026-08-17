@@ -62,7 +62,11 @@ class PoolTelemetryLike(Protocol):
     avg_game_length: float
     x_winrate: float
     o_winrate: float
-    draws: int
+    # F-816-2: was `draws: int`. The raw count is no longer reached from here — the payload
+    # reads the SHARE, computed by the pool under its own lock against the same
+    # `games_completed` the two win rates use. Declaring the count while consuming a
+    # coordinator-side denominator is what let the two drift into a fraction above 1.
+    draw_rate: float
     sims_per_sec: float
     batch_fill_pct: float
     # Q3 (LAW-18): the batching instrument behind `batch_fill_pct`'s single ratio.
@@ -529,7 +533,12 @@ def emit_iteration_complete_event(
         "avg_game_length": round(avg_gl, 1),
         "win_rate_p0": round(float(pool.x_winrate), 4),
         "win_rate_p1": round(float(pool.o_winrate), 4),
-        "draw_rate": round(float(pool.draws / games_played), 4) if games_played > 0 else 0.0,
+        # F-816-2: read the SHARE off the pool, not `pool.draws / games_played`. The old
+        # form paired a live numerator with `_games_played`, a snapshot frozen near the top
+        # of `step()` while the feeder kept draining, and emitted 1.3333 / 1.5 / 1.125 on the
+        # shakedown burn — a fraction above 1. Same straddle class as R218 rider 1, one
+        # payload over. The three outcome shares now share a denominator and sum to 1.
+        "draw_rate": round(float(pool.draw_rate), 4),
         "sims_per_sec": pool.sims_per_sec or 0.0,
         "buffer_size": buffer.size,
         "buffer_capacity": buffer.capacity,

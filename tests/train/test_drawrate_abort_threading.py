@@ -104,6 +104,7 @@ class _Pool:
         self.gumbel_mcts = True
         self.avg_game_length = 20.0
         self.x_winrate, self.o_winrate, self.draws = 0.5, 0.45, 1
+        self.draw_rate = 0.05  # F-816-2: the third outcome share.
         self.sims_per_sec, self.batch_fill_pct = 100.0, 0.9
         self.recent_move_histories: list = []
         self.started = self.stopped = False

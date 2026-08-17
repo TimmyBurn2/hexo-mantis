@@ -209,6 +209,33 @@ class WorkerPool:
             return (self.o_wins / total) if total > 0 else 0.0
 
     @property
+    def draw_rate(self) -> float:
+        """The pool's draw SHARE — `draws / games_completed`, a fraction in [0, 1].
+
+        F-816-2: the third outcome share had no property and `iteration_complete` built it
+        by hand as `pool.draws / games_played`, pairing a LIVE numerator with the
+        coordinator's `_games_played` — a snapshot taken near the top of `step()` and frozen
+        while the feeder thread kept draining. On the shakedown burn, where every game is a
+        draw, that emitted 1.3333, 1.5, 1.125, 1.2222 and 1.0909 at steps 2, 3, 5, 6 and 7:
+        values a fraction cannot take, and a metric whose definition is wrong even where its
+        value is harmless.
+
+        Reading both counters under `_lock`, off the SAME drain-consistent update
+        (`pool_drain` writes all four together), is what makes the value a fraction. It is
+        the same shape as `x_winrate`/`o_winrate` above, which never had the defect for
+        exactly this reason — and now the three shares share a denominator, so they sum to 1
+        instead of being three incommensurable numbers printed side by side.
+
+        NOT the armed abort's statistic, and the distinction matters: `draw_rate_collapse`
+        reads `pooled_draw_rate(pool.pooled_draw_counts(), …)`, a `Sum/Sum` over per-worker
+        0/1 windows that is structurally incapable of exceeding 1. This property is
+        telemetry.
+        """
+        with self._lock:
+            total = self.games_completed
+            return (self.draws / total) if total > 0 else 0.0
+
+    @property
     def sims_per_sec(self) -> float:
         return self._sims_per_sec
 

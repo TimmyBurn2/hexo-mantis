@@ -1,3 +1,9 @@
+# R8 justify: the four `monitor.drain.*` keys are ONE claim under R93 — a citation is
+# verified by MUTATION, never by grep — and each oracle is the SAME drive (real
+# `compose_run`, real minted config, one key distinguishable) with a different key set.
+# They share the composition harness and the spied `build_eval_pipeline`; split across
+# files, the shared drive would be copied four times and the R93 condition would be
+# restated four times instead of held in one place.
 """`monitor.drain.*` reaches the consumer its registry entry NAMES — proved by MUTATION.
 
 WPMINT Phase K-A, ruling R93, closing the DR-11 finding.
@@ -81,6 +87,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
+        self.draw_rate = 0.05  # F-816-2: the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9

@@ -63,6 +63,10 @@ EXPECTED_COMPOSITION = {
 FROZEN_ATTRS = ("games_completed", "draws", "n_workers", "recent_buffer", "encoding_spec")
 FROZEN_PROPERTIES = (
     "recent_move_histories", "avg_game_length", "gumbel_mcts", "x_winrate", "o_winrate",
+    # F-816-2: the THIRD outcome share, and a property for the same reason its two siblings
+    # are — the denominator belongs to the pool. `iteration_complete` used to divide the raw
+    # `draws` attribute by the coordinator's stale game count and emitted values above 1.
+    "draw_rate",
     "sims_per_sec", "batch_fill_pct", "instrumentation_enabled",
 )
 FROZEN_METHODS = (

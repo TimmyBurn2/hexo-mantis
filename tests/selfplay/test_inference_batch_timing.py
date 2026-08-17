@@ -317,6 +317,7 @@ class _TelemetryPool:
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4
+    draw_rate = 0.1  # F-816-2: the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     recent_move_histories: list[list[tuple[int, int]]] = []
@@ -451,6 +452,7 @@ def test_a_telemetry_source_without_the_producer_publishes_none_never_zero() -> 
         avg_game_length = 12.0
         x_winrate = 0.5
         o_winrate = 0.4
+        draw_rate = 0.1  # F-816-2: the third outcome share.
         draws = 1
         sims_per_sec = 100.0
         batch_fill_pct = 0.0
