@@ -215,6 +215,17 @@ gates:
       because its latch is run-fatal — that permanent zero is the posture, not an
       unproduced field); a decrease is emitted AS MEASURED, never clamped, because the
       atomics are monotonic and a negative delta is therefore a wiring bug.
+      R275(b) adds a FOURTH counter to the same block, inference_failures_total — not a
+      Phase-T counter but the SEAM conjunct of the same defect class (F-816-9: a search
+      that did not run exported as if it had). It counts leaf inferences that FAILED on an
+      OPEN queue; a drain shutdown closes both queues first and does not count. Its
+      producer is crates/mantis-selfplay/src/runner/search_drive.rs (the two
+      infer_and_expand arms -> FatalDefectLatch::store_inference_failure), pinned by
+      crates/mantis-selfplay/tests/search_seam_fatal.rs, and it reaches this block through
+      the same two symbols as the other three. It rides HERE rather than in a block of its
+      own because the two conjuncts are only useful read together: advanced with
+      target_integrity_defects at 0 means the run died at the seam before any target was
+      built.
     producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
 
   - id: k_cluster_histogram

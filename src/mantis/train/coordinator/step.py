@@ -88,12 +88,21 @@ GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
 )
 
-#: The three WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
+#: The WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
 #: `IMPL_NOTES_T §3.6` names them, and the RECORDED-POSITION counter their fire rate is
 #: taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
 #: once per `iteration_complete`, so nothing here opens a second reader of the pool.
+#:
+#: `inference_failures_total` joins them at R275(b) and is NOT a fourth Phase-T counter:
+#: it is the SEAM conjunct of the same defect class (F-816-9 — "a search that did not run
+#: is exported as if it had"), and it rides this block because the two conjuncts are only
+#: useful read together. A run that dies with `inference_failures_total` advanced and
+#: `target_integrity_defects` at 0 was killed at the seam BEFORE any target was built; the
+#: reverse ordering says the seam held and the exporter caught something else. Splitting
+#: them across two blocks would make that read a join across events.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "gridls_zero_policy_rows", "target_integrity_defects",
+    "inference_failures_total",
 )
 _POSITIONS_COUNTER = "positions_generated"
 

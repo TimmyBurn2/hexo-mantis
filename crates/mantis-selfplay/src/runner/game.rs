@@ -173,7 +173,13 @@ pub(crate) fn run_worker_thread(
         uncovered_forced_win,
         k_cluster_histogram,
     } = stats;
-    let WorkerAtomics { running, model_version, fatal_defect, target_integrity_defects } = atomics;
+    let WorkerAtomics {
+        running,
+        model_version,
+        fatal_defect,
+        target_integrity_defects,
+        inference_failures_total,
+    } = atomics;
     let WorkerChannels {
         dense_queue,
         graph_queue,
@@ -272,6 +278,7 @@ pub(crate) fn run_worker_thread(
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,
         fires: &target_integrity_defects,
+        inference_failures: &inference_failures_total,
         running: &running,
     };
     let solver_counters = SolverCounters {

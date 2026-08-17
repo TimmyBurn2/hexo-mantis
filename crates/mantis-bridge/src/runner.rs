@@ -336,6 +336,20 @@ impl PySelfPlayRunnerConfig {
     }
 }
 
+/// The ONE supervisor-facing wording for a latched run-fatal self-play defect.
+///
+/// R275(b) widened the latch's population: it carried only `TargetIntegrityError`
+/// (record-dispatch refusals), and now also carries `InferenceSeamFailure` (a leaf
+/// inference that failed on an open queue). The old text hard-coded
+/// "target-integrity defect", which would have mislabelled every seam failure as a
+/// target defect — the same class-confusion that cost F-816-9 its diagnosis. The
+/// prefix now names the LAW, and the stored message leads with the variant name,
+/// which is the stable grep anchor (`VisitSlotsExceeded`, `MassNotUnity`,
+/// `EmptyTarget`, `ZeroVisitSearch`, `InferenceSeamFailure`).
+fn fatal_defect_message(msg: &str) -> String {
+    format!("self-play run-fatal defect (LAW-14): {msg}")
+}
+
 /// Pure-Rust self-play runner exposed to Python. Arc-based (`Send + Sync`); the
 /// bridge holds an `Arc<SelfPlayRunner>` and a runner-linked `InferenceBatcher`.
 #[pyclass(name = "SelfPlayRunner", module = "mantis._engine")]
@@ -390,7 +404,21 @@ impl PySelfPlayRunner {
 
     /// Drain all buffered training rows and marshal them into the 10-numpy-array
     /// `collect_data` tuple (shapes spec-derived). N = 0 → zero-row arrays.
+    ///
+    /// R275(b): raises the runner's stored fatal defect, the same as
+    /// `collect_graph_data`. Phase T scoped the latch to the graph record
+    /// constructor, so the dense drain face had nothing to raise and needed no
+    /// leg. The SEAM conjunct fires on BOTH `infer_and_expand` arms, so a dense
+    /// run can now latch — and without this leg it would latch, halt, and report
+    /// nothing to Python but a runner that quietly stopped producing, which is
+    /// the exact silence LAW-14 forbids.
+    ///
+    /// # Errors
+    /// `RuntimeError` when the runner's fatal-defect latch is set.
     pub fn collect_data<'py>(&self, py: Python<'py>) -> PyResult<CollectDataOut<'py>> {
+        if let Some(msg) = self.inner.fatal_defect() {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(fatal_defect_message(&msg)));
+        }
         let feat_len = self.spec.state_stride();
         let n_cells = self.spec.n_cells();
         let chain_len = 6 * n_cells;
@@ -453,9 +481,7 @@ impl PySelfPlayRunner {
     /// `RuntimeError` when the runner's fatal-defect latch is set.
     pub fn collect_graph_data(&self) -> PyResult<Vec<GraphRecordRow>> {
         if let Some(msg) = self.inner.fatal_defect() {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "self-play target-integrity defect (run-fatal, LAW-14): {msg}"
-            )));
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(fatal_defect_message(&msg)));
         }
         Ok(self
             .inner
@@ -623,6 +649,20 @@ impl PySelfPlayRunner {
     #[getter]
     pub fn target_integrity_defects(&self) -> u64 {
         self.snapshot().target_integrity_defects
+    }
+
+    /// R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and
+    /// halted the run. Reads 0 in a healthy run, and a drain shutdown does NOT
+    /// count: `stop()` closes both queues, and a failure arm reached with the
+    /// queue closed is the §P22 skip, not a defect.
+    ///
+    /// Published on EVERY encoding (R250 absence does not apply, R256 mapping
+    /// re-derived from code): both `infer_and_expand` arms — dense queue and
+    /// graph queue — carry a failure leg, so the mechanism is live wherever
+    /// self-play runs.
+    #[getter]
+    pub fn inference_failures_total(&self) -> u64 {
+        self.snapshot().inference_failures_total
     }
 
     /// Item 10(b) / R250 — the in-run K histogram from the DENSE record path.

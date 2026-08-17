@@ -84,6 +84,10 @@ RUNNER_STATS_FIELDS = {
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
     "export_offwindow_mass_moves", "gridls_zero_policy_rows",
     "target_integrity_defects",
+    # R275(b): the SEAM conjunct of the same class the three above guard — a leaf
+    # inference that FAILED, counted separately from the record-dispatch refusals so the
+    # two conjuncts stay distinguishable. Pin: tests/selfplay/test_inference_seam_counter.py.
+    "inference_failures_total",
     # Item 10(b) / R250: the DENSE record path's K distribution — the LAW-18 fire-rate
     # log for the K-cluster lever. A THIRD family again: not a Phase-T latch and not a
     # lifecycle counter but a per-encoding instrument, `None` where no producer exists

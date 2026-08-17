@@ -111,6 +111,13 @@ pub struct RunnerStatsSnapshot {
     pub k_cluster_histogram: [u64; record::K_CLUSTER_HISTOGRAM_BUCKETS],
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
+    /// R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and
+    /// halted the run (must read 0 in a healthy run; a drain shutdown does NOT
+    /// count here, `search_drive::InferenceSeamFailure`). Encoding-INDEPENDENT
+    /// (R250/R256 mapping re-derived from code): both `infer_and_expand` arms —
+    /// the dense queue and the graph queue — have a failure leg, so the mechanism
+    /// is live on every arm and the counter is published on every arm.
+    pub inference_failures_total: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
     pub worker_panics: u64,
 }
@@ -195,6 +202,8 @@ pub struct SelfPlayRunner {
     /// Item 10(b) — the K histogram's live atomics (see the snapshot field).
     k_cluster_histogram: Arc<[AtomicU64; record::K_CLUSTER_HISTOGRAM_BUCKETS]>,
     target_integrity_defects: Arc<AtomicU64>,
+    /// R275(b) SEAM conjunct fire count (see the snapshot field).
+    inference_failures_total: Arc<AtomicU64>,
     /// The fatal-defect latch (DESIGN_T §3.4): a worker panic is NOT loud —
     /// `stop()` swallows join results — so a `TargetIntegrityError` at the
     /// record dispatch stores its message here (store-then-`running=false`)
@@ -350,6 +359,7 @@ impl SelfPlayRunner {
             gridls_zero_policy_rows: Arc::new(AtomicU64::new(0)),
             k_cluster_histogram: Arc::new(std::array::from_fn(|_| AtomicU64::new(0))),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
+            inference_failures_total: Arc::new(AtomicU64::new(0)),
             fatal_defect: Arc::new(Mutex::new(None)),
         })
     }
@@ -503,6 +513,7 @@ impl SelfPlayRunner {
                 self.k_cluster_histogram[i].load(Ordering::Relaxed)
             }),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
+            inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
         }
     }
@@ -747,6 +758,7 @@ mod seam_roundtrip {
         r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
+        r.inference_failures_total.store(36, Ordering::Relaxed);
         // Item 10(b): DISTINCT per bucket (26..=34) — an array read back with a
         // transposed or constant index would pass an all-equal seeding.
         for (i, slot) in r.k_cluster_histogram.iter().enumerate() {
@@ -780,6 +792,7 @@ mod seam_roundtrip {
             gridls_zero_policy_rows: 23,
             k_cluster_histogram: std::array::from_fn(|i| 26 + i as u64),
             target_integrity_defects: 24,
+            inference_failures_total: 36,
             worker_panics: 25,
         };
         assert_eq!(

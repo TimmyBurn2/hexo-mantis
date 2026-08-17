@@ -19,4 +19,9 @@ pub(crate) struct WorkerAtomics {
     /// then flips `running=false` (store-then-halt; LAW-14).
     pub(crate) fatal_defect: Arc<Mutex<Option<String>>>,
     pub(crate) target_integrity_defects: Arc<AtomicU64>,
+    /// R275(b) SEAM conjunct fire count: leaf inferences that FAILED on an open
+    /// queue (LAW-18). Shares `fatal_defect`'s slot and store-then-halt ordering,
+    /// keeps its OWN count so the two conjuncts of the F-816-9 class stay
+    /// distinguishable in the event stream.
+    pub(crate) inference_failures_total: Arc<AtomicU64>,
 }

@@ -127,22 +127,40 @@ pub(crate) struct MoveAccumulators<'a> {
 /// typed message (first defect wins), count the fire, THEN flip `running=false`
 /// (store-then-halt) — a worker panic is NOT loud (`stop()` swallows joins), so
 /// this is what makes the typed raise reach the supervisor via the drain face.
+///
+/// TWO counters, ONE slot (R275(b)): the message channel is shared because there
+/// is one supervisor-facing halt reason, but the fire counts stay separate —
+/// `fires` counts target-integrity refusals at the record dispatch, and
+/// `inference_failures` counts seam failures. Folding them would make the two
+/// conjuncts of the F-816-9 class indistinguishable in the event stream, which is
+/// the one thing the in-run instrument exists to prevent (LAW-18).
 #[derive(Clone, Copy)]
 pub(crate) struct FatalDefectLatch<'a> {
     pub(crate) slot: &'a std::sync::Mutex<Option<String>>,
     pub(crate) fires: &'a AtomicU64,
+    pub(crate) inference_failures: &'a AtomicU64,
     pub(crate) running: &'a AtomicBool,
 }
 
 impl FatalDefectLatch<'_> {
     pub(crate) fn store(&self, msg: String) {
+        self.store_counted(msg, self.fires);
+    }
+
+    /// R275(b) SEAM conjunct: latch a named inference failure. Same store-then-halt
+    /// ordering, its OWN counter.
+    pub(crate) fn store_inference_failure(&self, msg: String) {
+        self.store_counted(msg, self.inference_failures);
+    }
+
+    fn store_counted(&self, msg: String, counter: &AtomicU64) {
         {
             let mut slot = self.slot.lock().expect("fatal_defect lock poisoned");
             if slot.is_none() {
                 *slot = Some(msg);
             }
         }
-        self.fires.fetch_add(1, Ordering::SeqCst);
+        counter.fetch_add(1, Ordering::SeqCst);
         self.running.store(false, Ordering::SeqCst);
     }
 }
@@ -240,6 +258,72 @@ pub(crate) enum MoveOutcome {
 enum McTSSearchResult {
     Completed(Option<GumbelSearchState>),
     RootExpansionFailed,
+    /// R275(b) SEAM conjunct: a leaf inference FAILED. The search is abandoned
+    /// here and never reports `Completed` — see [`InferenceSeamFailure`].
+    InferenceFailed(InferenceSeamFailure),
+}
+
+/// R275(b) SEAM conjunct — a leaf inference that FAILED, as distinct from a
+/// shutdown (F-816-9 Phase A §4 links 1-3, §7.3).
+///
+/// Pre-fix every failure arm of `infer_and_expand{,_graph}` collapsed to
+/// `return 0`: the reason string travelled back from the waiter verbatim and was
+/// dropped on the floor, the sim loop `break`ed on `n == 0`, and
+/// `run_mcts_search` still returned `Completed`. A search that backed up ZERO
+/// visits then reached the target exporter, which manufactured a policy target
+/// out of the ε-noise-mixed priors — and the failure resurfaced 100+ plies later
+/// as a target-integrity refusal naming neither the failure nor the leaf. The
+/// silent degradation is the crime: LAW-14 makes a failed inference run-fatal and
+/// NAMED, at the seam, with the reason carried.
+///
+/// **A DRAIN SHUTDOWN IS NOT A FAILURE.** `stop()` flips `running=false` and then
+/// closes both queues, waking every in-flight waiter with `Err`
+/// (`runner/mod.rs::stop`); the §P22/D12 drain-shutdown path depends on those
+/// `Err`s being a skip, not a defect. The discriminator is read from LIVE STATE
+/// (`queue.is_closed()`), never from the reason text — a string match on
+/// "closed" would be one upstream re-word away from turning every clean stop into
+/// a run-fatal defect. A genuine failure racing a concurrent close classifies as
+/// a shutdown; that is conservative in the safe direction (the run is ending
+/// anyway) and the EXPORTER conjunct independently refuses any target the
+/// degraded search could still produce.
+pub(crate) struct InferenceSeamFailure {
+    arm: &'static str,
+    stage: &'static str,
+    reason: String,
+}
+
+impl InferenceSeamFailure {
+    fn new(arm: &'static str, stage: &'static str, reason: impl Into<String>) -> Self {
+        Self { arm, stage, reason: reason.into() }
+    }
+}
+
+impl std::fmt::Display for InferenceSeamFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "InferenceSeamFailure: {} leaf inference failed at {} — the batch backed up \
+             nothing, so this search cannot be exported as if it had run (R275(b) seam \
+             conjunct; LAW-14: run-fatal, never silently degraded). The queue was OPEN, so \
+             this is not a drain shutdown. reason={}",
+            self.arm, self.stage, self.reason
+        )
+    }
+}
+
+/// Classify one inference-failure arm: a CLOSED queue is the drain-shutdown skip
+/// (`Ok(0)`), an OPEN one is the named run-fatal seam failure.
+fn seam_or_shutdown(
+    queue_closed: bool,
+    arm: &'static str,
+    stage: &'static str,
+    reason: impl Into<String>,
+) -> Result<usize, InferenceSeamFailure> {
+    if queue_closed {
+        Ok(0)
+    } else {
+        Err(InferenceSeamFailure::new(arm, stage, reason))
+    }
 }
 
 // ── Inference + expansion (HOT path) ────────────────────────────────────────
@@ -248,6 +332,12 @@ enum McTSSearchResult {
 /// queue, forward/inverse-scatters under the per-game symmetry, accumulates I2
 /// cluster-variance metrics, aggregates per-leaf policies, and runs
 /// `expand_and_backup`. Frozen `inner.rs:742`.
+///
+/// # Errors
+/// R275(b) SEAM conjunct: [`InferenceSeamFailure`] when a leaf inference FAILS on
+/// an OPEN queue. An empty leaf set is `Ok(0)` — that is search exhaustion, not a
+/// failure — and so is any failure arm reached with the queue already closed (the
+/// drain-shutdown path).
 #[inline]
 #[allow(clippy::too_many_arguments)]
 fn infer_and_expand(
@@ -261,7 +351,7 @@ fn infer_and_expand(
     legal_set: bool,
     infer: InferContext,
     variance: ClusterVarianceAtomics,
-) -> usize {
+) -> Result<usize, InferenceSeamFailure> {
     // Graph-seam dispatch hoisted at the worker boundary (NOT per-sim). The graph
     // fn is `#[cold]`/`#[inline(never)]` so it never bloats the inlined dense path.
     if infer.is_graph {
@@ -270,7 +360,7 @@ fn infer_and_expand(
 
     let leaves = tree.select_leaves(batch_size);
     if leaves.is_empty() {
-        return 0;
+        return Ok(0);
     }
 
     let mut all_batch_features: Vec<Vec<f32>> = Vec::new();
@@ -293,7 +383,7 @@ fn infer_and_expand(
         }
     }
     if all_batch_features.is_empty() {
-        return 0;
+        return Ok(0);
     }
 
     let total_clusters: usize = leaf_metadata.iter().map(|(k, _)| *k).sum();
@@ -312,12 +402,32 @@ fn infer_and_expand(
             }
             (ps, vs)
         }
-        // Dense skip-on-Err (reason NOT consumed, D6): skip the batch.
-        Err(()) => return 0,
+        // R275(b): was "dense skip-on-Err (reason NOT consumed, D6): skip the
+        // batch". The frozen dense surface collapses the waiter's reason to `()`
+        // before it ever reaches here, so the arm and stage are all this leg can
+        // name — which is precisely why it must be loud rather than silent.
+        Err(()) => {
+            return seam_or_shutdown(
+                infer.dense_queue.is_closed(),
+                "dense",
+                "submit_batch_and_wait",
+                "the dense queue surface collapses the waiter reason to `()` (D6); \
+                 causes are a producer-submitted inference failure or a feature-length \
+                 mismatch",
+            )
+        }
     };
 
     if all_policies.len() < total_clusters {
-        return 0;
+        return seam_or_shutdown(
+            infer.dense_queue.is_closed(),
+            "dense",
+            "result-count",
+            format!(
+                "inference returned {} policies for {total_clusters} cluster requests",
+                all_policies.len()
+            ),
+        );
     }
 
     // One arm allocates, the other is an empty `Vec::new()` — one policy_pool per run.
@@ -381,7 +491,7 @@ fn infer_and_expand(
     } else {
         tree.expand_and_backup(&aggregated_policies, &aggregated_values);
     }
-    n
+    Ok(n)
 }
 
 /// GNN counterpart of `infer_and_expand` (frozen `inner.rs:893`). Builds ONE axis
@@ -389,8 +499,13 @@ fn infer_and_expand(
 /// submits the whole batch through the parallel graph queue in ONE
 /// `submit_graphs_and_wait` (D4), and expands via `expand_and_backup_ls_at`
 /// against the BUILDER's per-leaf `window_center`. Rotation-free at inference (v1
-/// coord pre-rotation is WP5 sample-time aug). Returns 0 (skip the batch) on a
-/// build-guard trip or a graph-inference failure.
+/// coord pre-rotation is WP5 sample-time aug).
+///
+/// # Errors
+/// R275(b) SEAM conjunct: a build-guard trip or a graph-inference failure is a
+/// named [`InferenceSeamFailure`], NOT the pre-fix silent `return 0`. This is the
+/// exact leg F-816-9 died on — the graph waiter's `Err(reason)` travelled back
+/// verbatim (D6) and was then discarded.
 #[cold]
 #[inline(never)]
 fn infer_and_expand_graph(
@@ -398,10 +513,10 @@ fn infer_and_expand_graph(
     batch_size: usize,
     agg_trunk_sz: i32,
     infer: InferContext,
-) -> usize {
+) -> Result<usize, InferenceSeamFailure> {
     let leaves = tree.select_leaves(batch_size);
     if leaves.is_empty() {
-        return 0;
+        return Ok(0);
     }
 
     // Graph-build geometry from the resolved spec (graph specs define these).
@@ -424,12 +539,17 @@ fn infer_and_expand_graph(
                 centers.push(g.window_center);
                 graphs.push(g);
             }
-            // Seam guard tripped (unreachable for a valid self-play board). Degrade
-            // like a dense inference failure: skip the whole batch. D6: the reason
-            // String is available (build_leaf_graph returns Result) but the frozen
-            // skip-on-build-failure is the behaviour-exact response — nothing was
-            // enqueued, so there is no waiter to carry it to.
-            Err(_) => return 0,
+            // Seam guard tripped (unreachable for a valid self-play board). R275(b):
+            // the pre-fix response was a silent batch-skip, argued from D6 —
+            // "nothing was enqueued, so there is no waiter to carry the reason to".
+            // That argues only that the reason cannot travel the QUEUE; it never
+            // argued for discarding it. The reason is right here, and a guard the
+            // board cannot legitimately trip is a defect, not a degrade. NOT routed
+            // through `seam_or_shutdown`: a build guard is a pure function of the
+            // board, so a closed queue cannot cause it and cannot excuse it.
+            Err(reason) => {
+                return Err(InferenceSeamFailure::new("graph", "build_leaf_graph", reason))
+            }
         }
     }
 
@@ -441,9 +561,12 @@ fn infer_and_expand_graph(
     // `leaves` and `centers`, which `expand_and_backup_ls_at` below requires.
     let results = infer.graph_queue.submit_graphs_and_wait(graphs);
     // COLLECT-ALL-THEN-DECIDE: every waiter has already resolved by the time this
-    // Vec exists, so the skip-the-batch degrade below cannot orphan one. The
-    // waiter's `Err(reason)` travels back verbatim (D6) and is collapsed to a
-    // batch-skip like the dense path.
+    // Vec exists, so the refusal below cannot orphan one. The waiter's
+    // `Err(reason)` travels back verbatim (D6) — R275(b) stops it being collapsed
+    // to a batch-skip and carries it into the named failure instead. This is the
+    // line F-816-9 died at: `graph_inference_forward_failed` on the box became
+    // `return 0` here, and the run's only symptom was a target-integrity refusal
+    // 100+ plies later.
     let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(results.len());
     let mut aggregated_values: Vec<f32> = Vec::with_capacity(results.len());
     for res in results {
@@ -452,11 +575,27 @@ fn infer_and_expand_graph(
                 aggregated_ls.push(ls);
                 aggregated_values.push(v);
             }
-            Err(_) => return 0,
+            Err(reason) => {
+                return seam_or_shutdown(
+                    infer.graph_queue.is_closed(),
+                    "graph",
+                    "submit_graphs_and_wait",
+                    reason,
+                )
+            }
         }
     }
     if aggregated_ls.len() < leaves.len() {
-        return 0;
+        return seam_or_shutdown(
+            infer.graph_queue.is_closed(),
+            "graph",
+            "result-count",
+            format!(
+                "inference returned {} payloads for {} submitted graphs",
+                aggregated_ls.len(),
+                leaves.len()
+            ),
+        );
     }
 
     let n = leaves.len();
@@ -472,7 +611,7 @@ fn infer_and_expand_graph(
         "graph trunk mismatch: spec agg_trunk_sz vs spec graph trunk_size"
     );
     tree.expand_and_backup_ls_at(&aggregated_ls, &aggregated_values, &centers, agg_trunk_sz);
-    n
+    Ok(n)
 }
 
 // ── MCTS search dispatch (HOT path) ─────────────────────────────────────────
@@ -509,9 +648,12 @@ fn run_mcts_search(
 
     if gumbel_mcts {
         // ── Gumbel MCTS with Sequential Halving ──
-        let root_sims = infer_and_expand(
+        let root_sims = match infer_and_expand(
             tree, 1, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
-        );
+        ) {
+            Ok(n) => n,
+            Err(e) => return McTSSearchResult::InferenceFailed(e),
+        };
         if root_sims == 0 || !tree.pool[0].is_expanded() {
             return McTSSearchResult::RootExpansionFailed;
         }
@@ -525,9 +667,12 @@ fn run_mcts_search(
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                let n = infer_and_expand(
+                let n = match infer_and_expand(
                     tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
-                );
+                ) {
+                    Ok(n) => n,
+                    Err(e) => return McTSSearchResult::InferenceFailed(e),
+                };
                 if n == 0 {
                     break;
                 }
@@ -567,9 +712,15 @@ fn run_mcts_search(
                         // Cap batch to this candidate's remaining budget so we don't
                         // overshoot `sims_per`.
                         let batch = leaf_batch_size.min(sims_per.saturating_sub(cand_sims));
-                        let n = infer_and_expand(
+                        let n = match infer_and_expand(
                             tree, batch.max(1), kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
-                        );
+                        ) {
+                            Ok(n) => n,
+                            Err(e) => {
+                                tree.set_forced_root_child(None);
+                                return McTSSearchResult::InferenceFailed(e);
+                            }
+                        };
                         if n == 0 {
                             break;
                         }
@@ -589,9 +740,12 @@ fn run_mcts_search(
         }
     } else {
         // ── Standard PUCT search with Dirichlet root noise ──
-        let root_n = infer_and_expand(
+        let root_n = match infer_and_expand(
             tree, 1, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
-        );
+        ) {
+            Ok(n) => n,
+            Err(e) => return McTSSearchResult::InferenceFailed(e),
+        };
         if root_n == 0 {
             return McTSSearchResult::RootExpansionFailed;
         }
@@ -610,9 +764,12 @@ fn run_mcts_search(
             if !running.load(Ordering::Relaxed) {
                 break;
             }
-            let n = infer_and_expand(
+            let n = match infer_and_expand(
                 tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
-            );
+            ) {
+                Ok(n) => n,
+                Err(e) => return McTSSearchResult::InferenceFailed(e),
+            };
             if n == 0 {
                 break;
             }
@@ -676,6 +833,14 @@ pub(crate) fn play_one_move(
     ) {
         McTSSearchResult::Completed(gs) => gs,
         McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
+        // R275(b) SEAM conjunct: LAW-14 store-then-halt on its OWN counter. The
+        // message rides the shared latch slot to the drain face, so the supervisor
+        // reads the inference failure that killed the run instead of a
+        // target-integrity refusal a hundred plies downstream.
+        McTSSearchResult::InferenceFailed(err) => {
+            fatal_latch.store_inference_failure(err.to_string());
+            return MoveOutcome::Break;
+        }
     };
 
     if !running.load(Ordering::Relaxed) {

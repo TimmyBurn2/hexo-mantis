@@ -202,8 +202,8 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   from a composition wall (`Q-RT-RC1-COLLISION`).
 - `iteration_complete.target_integrity` carries the three WP12-R Phase-T target-integrity
   counters IN-RUN (R164 / LAW-18): `export_offwindow_mass_moves`, `gridls_zero_policy_rows`
-  and `target_integrity_defects`, each `{total, delta, per_position}`, beside the
-  `positions_delta` denominator. `PREREG_T §0b` names the first as THE in-run witness
+  and `target_integrity_defects` — plus, from R275(b), `inference_failures_total` — each
+  `{total, delta, per_position}`, beside the `positions_delta` denominator. `PREREG_T §0b` names the first as THE in-run witness
   attributing the expected game-shape drift, and until Phase O it was readable only by a test
   calling `runner_stats(pool)` — a witness a live run cannot read is not a witness, and
   LAW-18's own text is that a post-hoc offline probe cannot distinguish "starved" from
@@ -214,7 +214,14 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   from this payload. `per_position` is `None`, never a fabricated `0.0`, when no position was
   recorded in the interval (the convention below, applied). An IDLE lever stays VISIBLE at 0:
   `target_integrity_defects` reads 0 in every run that survives to emit, because its latch is
-  run-fatal — that permanent zero is the posture, not an unproduced field. A DECREASE is
+  run-fatal — that permanent zero is the posture, not an unproduced field.
+  `inference_failures_total` (R275(b)) shares that posture and that latch: it counts leaf
+  inferences that FAILED on an OPEN queue, and a drain shutdown — which closes both queues
+  before the waiters wake — does NOT count. It is the SEAM conjunct of the class the other
+  three guard at the exporter, and the two are meant to be read together: advanced with
+  `target_integrity_defects` at 0 says the run died at the seam before any target was built.
+  It is published on EVERY encoding — both `infer_and_expand` arms carry a failure leg, so
+  the R250 absence rule does not apply (mapping re-derived from code, R256). A DECREASE is
   emitted as measured and never clamped: the atomics are monotonic, so a negative delta is a
   wiring bug and a `max(0, …)` would hide it (the `actor_lag_negative` precedent below).
 - `iteration_complete.inference_batching` is the Q3 in-run batching instrument (LAW-18),

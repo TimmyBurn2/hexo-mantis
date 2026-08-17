@@ -151,6 +151,14 @@ class RunnerStats:
     export_offwindow_mass_moves: int = 0
     gridls_zero_policy_rows: int = 0
     target_integrity_defects: int = 0
+    # R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and halted the
+    # run. Same family and same posture as `target_integrity_defects`: run-fatal, so it
+    # reads 0 in every run that survives to emit, and that permanent zero is the posture,
+    # not an unproduced field. `int = 0` rather than the `None` wheel-compat default,
+    # deliberately: the value is a COUNT that a live engine always supplies, and the
+    # `_snapshot_counter` docstring's "the None arm cannot fire in production" claim
+    # depends on every counter in that block being declared this way.
+    inference_failures_total: int = 0
     # Item 10(b) / R250: the DENSE record path's K histogram, bucket `i` counting
     # recorded positions with `K == i + 1` and the LAST bucket guarding every K outside
     # that range. `None` = NO PRODUCER, and it is the wheel-compat default for the same
@@ -248,6 +256,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
+        inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
         k_cluster_histogram=_k_histogram(getattr(r, "k_cluster_histogram", None)),
         uncovered_forced_win=(
             None

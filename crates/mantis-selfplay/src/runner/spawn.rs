@@ -153,6 +153,7 @@ impl SelfPlayRunner {
             model_version: self.model_version.clone(),
             fatal_defect: self.fatal_defect.clone(),
             target_integrity_defects: self.target_integrity_defects.clone(),
+            inference_failures_total: self.inference_failures_total.clone(),
         };
         let channels_proto = WorkerChannels {
             dense_queue: self.dense_queue.clone(),
