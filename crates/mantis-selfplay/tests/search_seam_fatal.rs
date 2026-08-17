@@ -384,28 +384,31 @@ fn dense_drain_shutdown_is_not_an_inference_failure() {
     assert!(runner.fatal_defect().is_none(), "a clean stop latched a fatal defect");
 }
 
-// ── The discriminator reads the RIGHT queue (RED-TEAM M-RT-1) ────────────────────────
+// ── The discriminator: a queue closed by ANYTHING BUT our own stop (R276(a)) ─────────
 
 #[test]
-fn the_dense_arm_classifies_on_its_own_queue_not_the_graph_queue() {
-    // WHY THIS EXISTS. Cross-model RED-TEAM found that pointing the DENSE arm's
-    // `is_closed()` check at `infer.graph_queue` instead of `infer.dense_queue` — the
-    // obvious copy-paste error in a file built entirely out of dense/graph twins — left the
-    // WHOLE crate suite green. Every other drive here closes both queues together (that is
-    // all `stop()` can do), so nothing pinned WHICH queue the discriminator reads.
+fn an_inference_server_death_that_closes_the_queue_is_a_failure_not_a_shutdown() {
+    // THE MERGE-GATE SCENARIO (R276(a)), and the temporal sibling of the red-team's
+    // wrong-queue hole. `close()` carries NO reason: it is a bare `AtomicBool` and the
+    // Python inference server closes the batcher from a `finally` on ANY loop exit —
+    // `inference_server.py`'s own comment reads "Release blocked Rust waiters even if this
+    // thread exits unexpectedly." So a DYING server closes the queue, in-flight failures
+    // observe `closed`, and under an `is_closed()` discriminator every one of them
+    // re-enters through the shutdown door as a silent batch-skip: the exact degrade this
+    // pin exists to kill, arriving by the door the pin holds open.
     //
-    // The drive closes ONE queue and leaves its sibling open, which `stop()` cannot do but a
-    // producer handle can. On a DENSE runner the graph queue is never used and stays open,
-    // so a wrongly-pointed check sees `is_closed() == false` and reports the resulting
-    // Err-on-close as a run-fatal inference failure. Correct code sees its own queue closed
-    // and treats it as the shutdown it is.
-    let runner = dense_runner();
-    let queue = runner.dense_producer();
+    // The drive closes a queue WITHOUT stopping the runner — which is what a server death
+    // looks like from the worker's side, and which `stop()` can never produce because it
+    // stores `running=false` first (`SelfPlayRunner::stop`; `WorkerPool.stop` calls
+    // `_runner.stop()` at pool.py:393 before `_inference_server.stop()` at :394).
+    let runner = graph_runner();
+    let queue = runner.graph_producer();
     let served = Arc::new(AtomicUsize::new(0));
     let parked = Arc::new(AtomicBool::new(false));
-    let producer = spawn_dense_producer(
+    let spec = lookup_or_panic("gnn_axis_v1");
+    let producer = spawn_graph_producer(
         queue.clone(),
-        runner.policy_len(),
+        spec.policy_logit_count,
         served.clone(),
         ThenDo::ParkHoldingTheBatch,
         parked.clone(),
@@ -413,24 +416,20 @@ fn the_dense_arm_classifies_on_its_own_queue_not_the_graph_queue() {
 
     runner.start();
     let blocked = wait_for(120, || parked.load(Ordering::SeqCst));
-    // Close ONLY the dense queue. The graph queue stays open for the whole drive.
+    // The server "dies": the queue closes while the runner is still RUNNING.
     queue.close();
-    // Give the woken waiter time to classify before the counter is read.
-    let _ = wait_for(5, || false);
+    let msg = wait_for_defect(&runner, 120);
     let snap = runner.stats_snapshot();
-    let defect = runner.fatal_defect();
     runner.stop();
     producer.join().expect("producer exits");
 
     assert!(blocked, "vacuous drive: the producer never parked holding a batch");
-    assert_eq!(
-        snap.inference_failures_total, 0,
-        "closing the DENSE queue was classified as an inference failure — the dense arm is \
-         reading the wrong queue's `is_closed()` (M-RT-1). Under it, the graph queue's state \
-         decides whether a dense shutdown is a defect"
+    let msg = msg.expect(
+        "a queue closed by something other than `stop()` was treated as a clean shutdown —          a dying inference server can therefore park every worker in a silent batch-skip          forever, with `running` still true and nothing raised. This is the F-816-9 degrade          re-entering through the shutdown door (R276(a))",
     );
-    assert!(
-        defect.is_none() || !defect.as_deref().unwrap_or("").contains("InferenceSeamFailure"),
-        "a dense-queue close latched a seam failure: {defect:?}"
+    assert!(msg.contains("InferenceSeamFailure"), "variant name must ride: {msg}");
+    assert_eq!(
+        snap.inference_failures_total, 1,
+        "the seam counter must count a server-death failure like any other"
     );
 }

@@ -459,6 +459,7 @@ fn run_one_game(
         is_graph,
         spec: registry_spec,
         model_version,
+        running,
     };
     let play_ctx = MovePlayContext {
         leaf_batch_size,

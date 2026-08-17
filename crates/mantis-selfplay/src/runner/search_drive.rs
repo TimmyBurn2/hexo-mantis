@@ -87,6 +87,9 @@ pub(crate) struct InferContext<'a> {
     /// `batcher.current_model_version()`). Read once per move and dedup-pushed into
     /// `version_seen`. Default 0 (no-NN) until WP7 wires the real setter.
     pub(crate) model_version: &'a AtomicU64,
+    /// R276(a): the runner's kill switch, read by `seam_or_shutdown` to tell OUR stop
+    /// from a queue closed by anything else (a dying inference server, above all).
+    pub(crate) running: &'a AtomicBool,
 }
 
 /// I2 cluster-variance accumulator triplet (frozen `:82`).
@@ -276,16 +279,25 @@ enum McTSSearchResult {
 /// silent degradation is the crime: LAW-14 makes a failed inference run-fatal and
 /// NAMED, at the seam, with the reason carried.
 ///
-/// **A DRAIN SHUTDOWN IS NOT A FAILURE.** `stop()` flips `running=false` and then
-/// closes both queues, waking every in-flight waiter with `Err`
-/// (`runner/mod.rs::stop`); the §P22/D12 drain-shutdown path depends on those
-/// `Err`s being a skip, not a defect. The discriminator is read from LIVE STATE
-/// (`queue.is_closed()`), never from the reason text — a string match on
-/// "closed" would be one upstream re-word away from turning every clean stop into
-/// a run-fatal defect. A genuine failure racing a concurrent close classifies as
-/// a shutdown; that is conservative in the safe direction (the run is ending
-/// anyway) and the EXPORTER conjunct independently refuses any target the
-/// degraded search could still produce.
+/// **A DRAIN SHUTDOWN IS NOT A FAILURE, AND `is_closed()` IS THE WRONG WAY TO SAY
+/// SO** (R276(a) merge-gate finding). `stop()` flips `running=false` and then closes
+/// both queues, waking every in-flight waiter with `Err` (`runner/mod.rs::stop`);
+/// the §P22/D12 drain-shutdown path depends on those `Err`s being a skip, not a
+/// defect. The first shipped discriminator asked `queue.is_closed()`, and that
+/// reads a state whose CAUSE is untyped: `close()` takes no reason, and the Python
+/// inference server closes the batcher from a `finally` on ANY loop exit —
+/// `inference_server.py`'s own comment says "Release blocked Rust waiters even if
+/// this thread exits unexpectedly." So an inference-server DEATH closed the queue,
+/// every in-flight failure then observed `closed`, and the failure re-entered
+/// through the shutdown door: exactly the silent degrade this pin exists to kill.
+///
+/// The discriminator is therefore the RUNNER'S OWN KILL SWITCH, not the queue's
+/// state. `SelfPlayRunner::stop()` stores `running=false` BEFORE either
+/// `close()`, and `WorkerPool.stop()` calls `self._runner.stop()` (pool.py:393)
+/// before `self._inference_server.stop()` (:394) — so on every clean stop the flag
+/// is already false when the waiter wakes, and on a server death it is still true.
+/// No queue is read at all, which also retires the wrong-queue hole
+/// (`dense_queue` vs `graph_queue`) by construction rather than by oracle.
 pub(crate) struct InferenceSeamFailure {
     arm: &'static str,
     stage: &'static str,
@@ -304,25 +316,32 @@ impl std::fmt::Display for InferenceSeamFailure {
             f,
             "InferenceSeamFailure: {} leaf inference failed at {} — the batch backed up \
              nothing, so this search cannot be exported as if it had run (R275(b) seam \
-             conjunct; LAW-14: run-fatal, never silently degraded). The queue was OPEN, so \
-             this is not a drain shutdown. reason={}",
+             conjunct; LAW-14: run-fatal, never silently degraded). The runner was NOT \
+             stopping, so this is not a drain shutdown — if the queue is closed, something \
+             other than `stop()` closed it. reason={}",
             self.arm, self.stage, self.reason
         )
     }
 }
 
-/// Classify one inference-failure arm: a CLOSED queue is the drain-shutdown skip
-/// (`Ok(0)`), an OPEN one is the named run-fatal seam failure.
+/// Classify one inference-failure arm. `running == false` means OUR OWN `stop()` is
+/// under way, which is the drain-shutdown skip (`Ok(0)`); anything else — including a
+/// queue closed by a dying inference server — is the named run-fatal seam failure.
+///
+/// `SeqCst` matches the store side (`SelfPlayRunner::stop` and
+/// `FatalDefectLatch::store_counted` both use `SeqCst`), so the flag a waking waiter
+/// reads is ordered against the close that woke it. This is a cold path; the ordering
+/// costs nothing and a weaker one would make the argument above unprovable.
 fn seam_or_shutdown(
-    queue_closed: bool,
+    running: &AtomicBool,
     arm: &'static str,
     stage: &'static str,
     reason: impl Into<String>,
 ) -> Result<usize, InferenceSeamFailure> {
-    if queue_closed {
-        Ok(0)
-    } else {
+    if running.load(Ordering::SeqCst) {
         Err(InferenceSeamFailure::new(arm, stage, reason))
+    } else {
+        Ok(0)
     }
 }
 
@@ -408,7 +427,7 @@ fn infer_and_expand(
         // name — which is precisely why it must be loud rather than silent.
         Err(()) => {
             return seam_or_shutdown(
-                infer.dense_queue.is_closed(),
+                infer.running,
                 "dense",
                 "submit_batch_and_wait",
                 "the dense queue surface collapses the waiter reason to `()` (D6); \
@@ -420,7 +439,7 @@ fn infer_and_expand(
 
     if all_policies.len() < total_clusters {
         return seam_or_shutdown(
-            infer.dense_queue.is_closed(),
+            infer.running,
             "dense",
             "result-count",
             format!(
@@ -577,7 +596,7 @@ fn infer_and_expand_graph(
             }
             Err(reason) => {
                 return seam_or_shutdown(
-                    infer.graph_queue.is_closed(),
+                    infer.running,
                     "graph",
                     "submit_graphs_and_wait",
                     reason,
@@ -587,7 +606,7 @@ fn infer_and_expand_graph(
     }
     if aggregated_ls.len() < leaves.len() {
         return seam_or_shutdown(
-            infer.graph_queue.is_closed(),
+            infer.running,
             "graph",
             "result-count",
             format!(
