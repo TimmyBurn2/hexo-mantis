@@ -329,7 +329,7 @@ def _measure_point(
             device_type="cuda", dtype=torch.bfloat16, enabled=True,
         ):
             policy_logits, value, _bins = net.forward_batch(
-                batch.x, batch.edge_index, batch.edge_attr, batch.legal_mask,
+                batch.x, batch.edge_index, batch.edge_attr, batch.legal_node_gather,
                 stone_mask, batch.node_offsets,
             )
         probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
