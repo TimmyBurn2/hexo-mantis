@@ -606,39 +606,117 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     at the box and mints the pair. `fused_graph_caps_calibrated` is the DEFERRED armed-abort
     row that says so on every gate-12 run, and closing it is what restores the old assertion.
 
+    RE-POINTED AGAIN, 2026-08-18, by the F-816-10/-12 BOX SITTING — and this is the re-point
+    the paragraph above predicted in its own words: *"that evidence is unavailable from this
+    row until the operator calibrates at the box and mints the pair … closing it is what
+    restores the old assertion."* The pair was calibrated at the box and minted
+    (`inference.fused_graph_caps = {1708894, 77781}`, `hexo-mantis@9af610e`), the
+    `fused_graph_caps_calibrated` row flipped DEFERRED → REQUIRED in the same commit, and the
+    clean-boot / both-watchdogs-armed / rc-40 assertion is therefore restored here verbatim.
+
+    **This row is now STRONGER than either version before it**, and that is worth stating
+    rather than leaving for a reader to notice: the twin it drives is run5 plus `train.device`
+    and nothing else, so the config booting clean to an armed loop carries run5's OWN minted
+    production cap pair — not a placeholder, and not the template's non-binding stand-in that
+    `test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config` has to use.
+
+    **The refusal witness is NOT lost with the re-point**, which would have been the real cost:
+    `test_an_UNCALIBRATED_twin_refuses_at_the_composition_seam` below takes it over, minting a
+    twin whose caps are explicitly `null`. That is the stronger form anyway — it drives the
+    refusal rather than depending on the shipped config still being unminted, so it keeps its
+    meaning across every future re-mint instead of quietly becoming a test of nothing.
+
     The timeout is short deliberately: the subject is decided within seconds either way.
     """
     out_dir = tmp_path / "boot"
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "45")
-    assert result.returncode == 33, (
-        "run5 mints the R119 fused-graph-caps placeholder, so the boot must die LOUD at the "
-        "composition seam: rc 33 PreflightBootFailedError. "
+    assert result.returncode == 40, (
+        "post-TD-4, and post-mint, the boot runs until the timeout kills it: rc 40 "
+        "PreflightTimeoutError. An rc 33 here means run5's minted caps stopped resolving. "
         f"got {result.returncode}\n{(result.stdout + result.stderr)[-3000:]}"
     )
     reports = sorted(out_dir.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
     report = json.loads(reports[0].read_text())
-    assert report["failure"] == "PreflightBootFailedError"
-    assert report["child"]["timed_out"] is False, (
-        "the child did not run out its window — it refused. A timed-out child here means the "
-        "cap was resolved from somewhere, which is the silent default the resolver forbids."
-    )
+    assert report["failure"] == "PreflightTimeoutError"
+    assert report["child"]["timed_out"] is True
     tail = report["child"]["stderr_tail"]
-    assert "UncalibratedFusedGraphCapsError" in tail, (
-        "the boot must die on the NAMED refusal, not on a bare TypeError or an AttributeError "
-        f"three frames later. got tail {tail[-600:]!r}"
+    assert "UncalibratedFusedGraphCapsError" not in tail, (
+        "run5 is CALIBRATED since 2026-08-18; a refusal here means the minted pair stopped "
+        f"reaching the resolver. got tail {tail[-600:]!r}"
     )
-    for needle in ("inference.fused_graph_caps", "fusion_calibrate", "mint_config"):
-        assert needle in tail, (
-            f"the refusal that reaches an operator through this tool omits {needle!r} — the "
-            f"whole remedy is which key, measured how, minted with what. got {tail[-900:]!r}"
-        )
     assert "MissingEncodingError" not in tail, (
         "CARD-POOL-ENCODING-BRIDGE has landed; the pool resolves `identity.encoding` through "
         f"the ONE resolver. A MissingEncodingError here is that card regressing. got {tail[-600:]!r}"
     )
+    assert "train_step" not in tail, (
+        "TD-1 is not reached on a CPU box — it sits BEHIND the warmup gate, and the buffer "
+        "never fills. If this ever fires, the box got far enough to need "
+        "CARD-TRAINSTEP-ADAPTER, which would be news worth reading."
+    )
+    # The positive half: the child did not merely fail to crash, it ran. The run's own
+    # segment is the witness (LAW-18 in-run observability), not the tool's say-so.
+    segments = sorted((out_dir / "logs").glob("events_*.jsonl"))
+    assert segments, f"a booted run writes its own segment; found {list(out_dir.rglob('*'))}"
+    events = {json.loads(line)["event"] for line in segments[0].read_text().splitlines() if line}
+    assert {"run_segment_started", "heartbeat_watchdog_armed",
+            "selfplay_stall_watchdog_armed"} <= events, (
+        f"the boot must reach an ARMED training loop, not just construct objects; saw {events}"
+    )
+
+
+@pytest.mark.integration
+def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(tmp_path) -> None:
+    """What an uncalibrated production config does through this tool AFTER the 2026-08-18 flip.
+
+    MEASURED, and it is not what this row was first written to assert. The intent was to keep
+    the end-to-end composition-seam witness (rc 33 / `UncalibratedFusedGraphCapsError`) alive on
+    a deliberately-nulled twin once run5 stopped being uncalibrated. The drive says otherwise:
+    **the boot never happens.** `fused_graph_caps_calibrated` flipped DEFERRED → REQUIRED in the
+    mint commit, the arming audit runs BEFORE the child is spawned, and a REQUIRED row disarmed
+    on a production config is rc 30 `PreflightArmingAuditError`. The audit SHADOWS the seam.
+
+    That is a better outcome and a real loss at the same time, and both halves are recorded
+    because a green row that hides either is worse than no row:
+
+    - BETTER: the failure is caught earlier, more cheaply, and by name, without spawning a
+      child or importing torch — and it names the config, the row and the key.
+    - LOST: no drive through this tool can reach `UncalibratedFusedGraphCapsError` any more, so
+      the end-to-end witness for the CONSTRUCTION-time refusal is gone from the preflight path.
+      It is not gone from the repo: `tests/config/test_fused_graph_caps_authority.py`'s FG5-05
+      drives the real `InferenceServer.__init__` on run5's own dump with the caps nulled, and
+      FG5-03 drives the resolver directly. What no longer exists anywhere is the SHIPPED-PROCESS
+      end-to-end version of it.
+
+    The shadowing is a property of the flip, not of this test, so the row asserts what the tool
+    now does and names what it stopped being able to prove."""
+    out_dir = tmp_path / "boot_uncalibrated"
+    twin = _mint_run5_cpu_twin(tmp_path, name="run5_cpu_uncalibrated", extra_deltas=[
+        "inference.fused_graph_caps={max_fused_edges: null, max_fused_nodes: null}",
+    ])
+    result = _run_tool("--config", str(twin), "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+    assert result.returncode == 30, (
+        "an UNCALIBRATED production config must be refused by the ARMING AUDIT before any "
+        f"boot: rc 30 PreflightArmingAuditError. got {result.returncode}\n"
+        f"{(result.stdout + result.stderr)[-3000:]}"
+    )
+    blob = result.stdout + result.stderr
+    assert "PreflightArmingAuditError" in blob and "fused_graph_caps_calibrated" in blob, (
+        "the refusal must name the ROW, or an operator cannot tell which of the required "
+        f"aborts is disarmed. got {blob[-1500:]!r}"
+    )
+    assert "inference.fused_graph_caps.max_fused_edges" in blob, (
+        f"…and the KEY, which is the thing they have to mint. got {blob[-1500:]!r}"
+    )
+    reports = sorted(out_dir.glob("preflight_*.json"))
+    assert len(reports) == 1, f"the evidence report is written ALWAYS (§9.1); found {reports}"
+    report = json.loads(reports[0].read_text())
+    assert report["child"] is None, (
+        "rc 30 is decided BEFORE the child is spawned; a child block here means the audit "
+        "stopped running first, which is the ordering the cheap failure depends on")
 
 
 @pytest.mark.integration
@@ -2920,9 +2998,14 @@ def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path)
     # its window. The SUBJECT is untouched and this is exactly the case it was written for —
     # a boot WAS spawned, so the NOT_BOOTED disclaimer must not appear "whatever the child
     # then did", including dying by name two seconds in.
-    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
+    # RE-POINTED BACK, 2026-08-18, by the F-816-10/-12 box sitting: the operator's measurement
+    # was taken and `inference.fused_graph_caps` is MINTED on run5, so the placeholder is gone
+    # and the child runs out its window again — rc 40, `timed_out` True. This row has now been
+    # re-pointed three times without its subject moving once, which is the property that makes
+    # it worth keeping: what the child DID is read off the report, never restated here.
+    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(sorted(out.glob("preflight_*.json"))[0].read_text())
-    assert report["child"] is not None and report["child"]["timed_out"] is False
+    assert report["child"] is not None and report["child"]["timed_out"] is True
     for name in ("a_sync", "b_lag"):
         reason = report["assertions"][name]["reason"]
         assert TOOL.BOOTED_REASON in reason and TOOL.NOT_BOOTED_REASON not in reason, (
@@ -4058,7 +4141,10 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     # TIER ARITHMETIC is what this row is about and it does not move with the outcome — the
     # tier block is published on every terminating preflight, which is the property being
     # pinned, and a run that proved LESS must still say what it did not prove.
-    assert result.returncode == 33, (result.stdout + result.stderr)[-3000:]
+    # RE-POINTED BACK, 2026-08-18, by the F-816-10/-12 box sitting: the caps are MINTED on
+    # run5, the placeholder is gone, and the twin runs out its window again — rc 40. The
+    # subject did not move for either re-point, which is the whole claim above.
+    assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     block = report["tier"]
     assert block["tier"] == TOOL.TIER_FULL and block["burst_steps"] == _RUN5_BURST
