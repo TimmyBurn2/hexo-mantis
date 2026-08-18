@@ -260,19 +260,54 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
 
 
 # ── leg 2: the box ────────────────────────────────────────────────────────────────────────
-#: **THE SIZING PASS'S BUDGET, in GiB, with its derivation** — `plan/RUN5_MINT_PREREG.md`'s
-#: EDGE-CAP row, itself from `wp/WP12R/MEASUREMENT_SIZING.md` (RTX 5080, torch 2.11.0+cu128,
-#: two live `python -m mantis.run` boots at `528eb37`, ratified R193):
+#: **THE SIZING PASS'S BUDGET, in GiB, with its derivation.** RE-FITTED at the F-816-10/-12
+#: box sitting (R281(d), R282(b), R283) against terms measured THAT sitting. Every term below
+#: carries **the sha it was measured at and the regime it was measured in** — R281(d)(ii)'s
+#: dated-premise convention, adopted because the superseded derivation (kept below) read as a
+#: current measurement for as long as it did precisely by carrying neither tag.
 #:
-#:     15.479 GiB usable card
-#:   -  0.330      CUDA context (read from three OOM messages)
-#:   -  1.287      self-play cache, measured live, byte-identical across both legs
-#:   = 13.862      reserved
-#:   / 1.2493      measured fragmentation ratio
-#:   = 11.096      allocatable
-#:   * 0.85        margin, sized for two NAMED unknowns (a measured >1 GiB fragmentation
-#:                 swing; the eval child on `worker_device: cuda`, absent from every number)
-#:   = 9.431 GiB   BUDGET
+#: **A term with no sha and no regime tag is UNMEASURED, not inherited.**
+#:
+#:     15.479 GiB usable card   [measured 24ae93e, POST-Design-A, torch.cuda.mem_get_info]
+#:   -  0.261      CUDA context [measured 24ae93e, POST-Design-A, total-free on an idle card]
+#:   -  2.244      SELF-PLAY/INFERENCE RESIDENT SHARE at the minted `inference.fused_graph_caps`
+#:                 [measured 24ae93e, POST-Design-A, fused batch up to
+#:                  n_workers x leaf_batch_size = 160 — this SUPERSEDES the 1.287 GiB figure
+#:                  measured at 528eb37, which was taken when `submit_graph_and_wait` put
+#:                  exactly ONE graph in flight per worker]
+#:   -  0.881      eval child on `worker_device: cuda`
+#:                 [measured 24ae93e, POST-Design-A, peak over one live eval round]
+#:   = 12.094      device left to the trainer
+#:   / 1.2278      measured fragmentation ratio
+#:                 [measured 24ae93e, POST-Design-A, DEFAULT allocator posture]
+#:   = 9.850 GiB   allocatable
+#:
+#: **THE RE-FIT CONFIRMS THIS CONSTANT RATHER THAN MOVING IT.** 9.431 sits 0.419 GiB under the
+#: 9.850 the measured terms now admit, so the trainer's half of the partition is unchanged and
+#: `train.microbatch_caps` does not move. What changed is that the two terms the old derivation
+#: could not see are now SUBTRACTED EXPLICITLY instead of being hidden inside a margin: the
+#: eval child is measured, and the self-play term is measured WITH fusion active at the caps
+#: actually minted.
+#:
+#: **On the old 0.85 margin, which is no longer applied here.** It was sized for two NAMED
+#: unknowns. One — the eval child — is now a measured, subtracted term. The other — a
+#: fragmentation swing — is what the partition's remaining headroom covers, and it is the
+#: named residual risk of this sizing: at the minted pair the WHOLE partition declares
+#: 14.965 GiB against a 15.479 GiB card (+0.514 GiB), so a fragmentation ratio above ~1.30
+#: would close it. The live pre-mint validation run peaked at 12.05 GiB of card, 3.87 GiB
+#: below the wall, because the trainer does not reach this ceiling in practice (its measured
+#: peak that sitting was 7.447 GiB at 84.6% of `max_edges`).
+#:
+#: THE SUPERSEDED DERIVATION, kept verbatim because R281(d) is a ruling about how this comment
+#: is written and deleting the evidence would delete the lesson (`wp/WP12R/MEASUREMENT_SIZING.md`,
+#: RTX 5080, torch 2.11.0+cu128, two live boots at `528eb37`, ratified R193):
+#:
+#:     15.479 - 0.330 (CUDA context) - 1.287 (self-play cache) = 13.862 reserved
+#:     / 1.2493 = 11.096 allocatable * 0.85 margin = 9.431 GiB
+#:
+#: The 1.287 GiB line is the F-816-12 defect itself: one member of a partition moved by a large
+#: factor and its partner kept the value fitted before the move, while the oracle below — which
+#: measures the trainer ALONE — stayed green through it.
 #:
 #: Transcribed ONCE, here, with the arithmetic beside it so a reader can re-derive it rather
 #: than trust it. If the operator re-sizes, this constant and the EDGE-CAP row move together.

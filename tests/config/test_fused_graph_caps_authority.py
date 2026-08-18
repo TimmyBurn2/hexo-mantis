@@ -108,18 +108,58 @@ def test_fg5_01_every_config_mints_the_block_through_the_real_loader(name: str) 
 
 
 @pytest.mark.parametrize("name", _PRODUCTION)
-def test_fg5_02_the_production_configs_ship_the_uncalibrated_placeholder(name: str) -> None:
-    """FG5-02 — R119: this packet ships the KEY, the MECHANISM, the TOOL and the PROCEDURE,
-    and NEVER the value. A number in either of these two files would be a cap nobody measured.
+def test_fg5_02_the_production_configs_ship_the_minted_pair(name: str) -> None:
+    """FG5-02, AS MINTED — 2026-08-18, the F-816-10/-12 box sitting.
 
-    Both members are `null` TOGETHER: they are sized from ONE fit against ONE budget, so a
-    half-minted block is a state the operator's own act cannot produce."""
+    **This row used to assert the opposite**, and the change of direction is the point, so it
+    is recorded rather than quietly swapped. Until the sitting it read
+    `test_fg5_02_the_production_configs_ship_the_uncalibrated_placeholder` and asserted both
+    members were `null`: the packet shipped the KEY, the MECHANISM, the TOOL and the
+    PROCEDURE, and R119 reserved the VALUE for the operator's measurement at the box. That
+    measurement has now been taken — `fusion_calibrate` on the box at `24ae93e`, against a
+    budget whose four terms were each measured that sitting — and minted under R282(b)'s
+    pre-registered acceptance, so the guard flips from "no number" to "a number, and BOTH
+    members of it".
+
+    What the row still guards, and why it is not weaker than the one it replaces:
+
+    - **Both members are VALUED TOGETHER.** They are sized from ONE fit against ONE budget,
+      so a half-minted block is a state the operator's own act cannot produce. That sentence
+      is unchanged from the placeholder era; only the polarity of "valued" moved.
+    - **The two production configs carry the SAME pair.** One fit, one card, one partition
+      (R281(d)) — two production configs disagreeing about the bound would mean one of them
+      was hand-edited, which is precisely what R1's minted-never-hand-varied rule forbids.
+    - **A dispatcher-chosen number is still forbidden.** What licenses THIS number is not
+      that a test now permits one; it is R282(b)'s acceptance (calibration falsifier PASS,
+      partition inequality holds, pair in the tool's recommended form), all three recorded in
+      `mantis-migration/plan/F816_10_SITTING_RECORD.md`.
+    """
     block = load_config(_CONFIGS / name).inference.fused_graph_caps
-    assert block.max_fused_edges is None and block.max_fused_nodes is None, (
-        f"{name} ships a MINTED fused-graph cap ({block.max_fused_edges}, "
-        f"{block.max_fused_nodes}). The value is the operator's, from the calibration tool "
-        "at the box sitting (R119) — a dispatcher-chosen number on a mint-critical card is "
-        "exactly what this packet may not do.")
+    assert block.max_fused_edges is not None and block.max_fused_nodes is not None, (
+        f"{name} ships an UNCALIBRATED fused-graph cap ({block.max_fused_edges}, "
+        f"{block.max_fused_nodes}). Since the 2026-08-18 mint both members are valued; a "
+        "`null` here now means a re-mint dropped the measured pair, and the run will refuse "
+        "at inference-server construction (UncalibratedFusedGraphCapsError).")
+    assert block.max_fused_edges >= 1 and block.max_fused_nodes >= 1
+
+
+def test_fg5_02_both_production_configs_carry_the_SAME_minted_pair() -> None:
+    """ONE fit, ONE card, ONE partition (R281(d)) — so one pair, in both files.
+
+    MUTATION THAT REDS IT: re-minting one production config against a new calibration and
+    leaving the other on the old pair. Each file alone would still look correctly valued;
+    only the comparison sees it."""
+    pairs = {
+        name: (
+            load_config(_CONFIGS / name).inference.fused_graph_caps.max_fused_edges,
+            load_config(_CONFIGS / name).inference.fused_graph_caps.max_fused_nodes,
+        )
+        for name in _PRODUCTION
+    }
+    assert len(set(pairs.values())) == 1, (
+        f"the production configs disagree about the fused-graph bound: {pairs}. They "
+        "partition the SAME card from the SAME fit; a divergence means one was minted "
+        "without the other, which R281(d) rules is not a legal posture.")
 
 
 def test_fg5_02_the_placeholder_is_schema_valid_so_gate_7_stays_green() -> None:
@@ -209,15 +249,40 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
     resolution would read `train` on BOTH routes and a grid `full_config` may carry no `train`
     section; here `__init__` ALREADY branches on `self._is_graph`, so the resolution is
     naturally route-scoped and there is nothing to buy by deferring it. Failing a mis-minted
-    run in the first second instead of three hours in is the whole value of the placeholder."""
+    run in the first second instead of three hours in is the whole value of the refusal.
+
+    **The caps are NULLED IN THE DUMP rather than read as null from the file** — changed at
+    the 2026-08-18 mint, when run5 stopped being uncalibrated and this row stopped being able
+    to source its own precondition from the config. Nulling the dump is the stronger form: it
+    tests the REFUSAL, not the current mint state, so the row keeps its meaning across every
+    future re-mint instead of silently becoming a test of nothing."""
     cfg = load_config(_CONFIGS / "run5.yaml")
     assert cfg.identity.representation == "graph", (
         "run5 no longer declares the graph representation — this row's premise is gone")
+    dump = cfg.model_dump()
+    dump["inference"]["fused_graph_caps"] = {"max_fused_edges": None, "max_fused_nodes": None}
     with pytest.raises(UncalibratedFusedGraphCapsError):
         InferenceServer(
-            torch.nn.Linear(1, 1), torch.device("cpu"), cfg.model_dump(),
+            torch.nn.Linear(1, 1), torch.device("cpu"), dump,
             batcher=_DummyBatcher(), encoding_spec=lookup(cfg.identity.encoding),
         )
+
+
+def test_fg5_05b_the_minted_production_config_DOES_build_its_graph_server() -> None:
+    """The other direction, and it is the one the 2026-08-18 mint had to earn: run5's config
+    AS COMMITTED now constructs an `InferenceServer` instead of refusing.
+
+    Without this, FG5-05 above could pass forever on a config that had quietly regressed to
+    `null` — the refusal test cannot tell "correctly refuses a nulled dump" from "the shipped
+    config is still uncalibrated". This row is what makes the pair complete.
+
+    MUTATION THAT REDS IT: re-minting run5 back to the `null` placeholder."""
+    cfg = load_config(_CONFIGS / "run5.yaml")
+    server = InferenceServer(
+        torch.nn.Linear(1, 1), torch.device("cpu"), cfg.model_dump(),
+        batcher=_DummyBatcher(), encoding_spec=lookup(cfg.identity.encoding),
+    )
+    assert server is not None
 
 
 # ═══ FG5-06 — one read path, no defaulting read ══════════════════════════════════════════

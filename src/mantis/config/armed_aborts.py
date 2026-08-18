@@ -1114,23 +1114,37 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         # accumulate and no window to fill, only a value that is present or is `null`.
         cadence=Cadence.CONSTRUCTION_TIME,
         cadence_paths=(),
-        status=Status.DEFERRED,
+        status=Status.REQUIRED,
         exit_code=None,
-        owner="F-816-10 box sitting — the operator, at run5 mint prereg",
+        owner=None,
         source_pin=(
             "src/mantis/config/resolve/fused_graph_caps.py",
             "raise UncalibratedFusedGraphCapsError(",
         ),
         note=(
+            "FLIPPED DEFERRED -> REQUIRED at the F-816-10/-12 box sitting, 2026-08-18, in the "
+            "SAME COMMIT as the minted pair (R282(b)'s pre-registered acceptance; R283). The "
+            "row was deferred for exactly one reason -- the value was a measurement nobody had "
+            "taken -- and that reason is discharged: both production configs now carry "
+            "`{max_fused_edges: 1708894, max_fused_nodes: 77781}`, fitted by "
+            "`python -m mantis.diagnostics.fusion_calibrate` against a budget whose four terms "
+            "were each measured at 24ae93e and tagged with sha + regime (R281(d)(ii)). `owner` "
+            "is DROPPED because the dataclass forbids it on a REQUIRED row -- a required row "
+            "carrying an owner reads as already-excused; the `source_pin` STAYS, which a "
+            "REQUIRED row may do and which is this row's tamper-evidence. Auditing the flip's "
+            "cost: it is TWO field edits (status, and the removal of `owner`), not the ONE the "
+            "note below predicted. "
             "EVERY PRODUCTION CONFIG'S `inference.fused_graph_caps` IS VALUED (NOT NULL). The "
             "graph inference forward's memory bound (F-816-10, R276(f)) is the training cap's "
             "partner over one card: `inference_batch_size` bounds the number of GRAPHS in a "
             "fused pop and bounds neither quantity that drives memory, so before this block "
             "the fuse had no bound at all — and `train.microbatch_caps` was fitted against a "
             "self-play term measured when the inference forward carried ONE graph. "
-            "WHY DEFERRED AND NOT REQUIRED: the VALUE is a MEASUREMENT the operator takes at "
+            "WHY IT WAS DEFERRED UNTIL 2026-08-18 -- kept verbatim, because this reasoning is what "
+            "the flip had to discharge, and deleting it would delete the standard: the "
+            "VALUE is a MEASUREMENT the operator takes at "
             "the box with `python -m mantis.diagnostics.fusion_calibrate`, and R119 makes it "
-            "their act. Flipping this REQUIRED now would gate run5's mint on a number this "
+            "their act. Flipping this REQUIRED THEN would have gated run5's mint on a number this "
             "repo would have to invent — the class R84 refused when it ratified "
             "exit_code=None rather than fabricating a 46, and the same class the grad-norm "
             "row above is deferred for. A DEFERRED row prints loudly on every gate-12 run and "

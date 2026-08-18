@@ -440,6 +440,18 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         return SimpleNamespace(
             monitor=SimpleNamespace(actor_lag_abort_enabled=True,
                                     disk_guard=SimpleNamespace(fail_gb=5.0)),
+            # F-816-10/-12 box sitting, 2026-08-18: the manifest gained a FIFTH REQUIRED row
+            # when `fused_graph_caps_calibrated` flipped DEFERRED -> REQUIRED in the same
+            # commit as the minted pair, and its arming surface is
+            # `inference.fused_graph_caps.max_fused_edges`. Same maintenance RT-2/R132 and
+            # WP12-R Phase O did, for the same reason and with the same consequence: a stub
+            # omitting a REQUIRED row's surface raises `ArmingSurfaceMissingError`, which is
+            # the phantom-input guard working. The value is the minted 1708894 and it is
+            # ARMED, so the row never enters `disarmed` and this test's subject (the
+            # draw-rate flip) is unchanged. NOTE that this maintenance is itself evidence for
+            # the claim the test makes: the flip needed a fixture surface, not a code change.
+            inference=SimpleNamespace(
+                fused_graph_caps=SimpleNamespace(max_fused_edges=1708894)),
             train=SimpleNamespace(
                 # WP12-R Phase O adds a FOURTH REQUIRED row whose arming surface is
                 # `train.terminal_eval_enabled`; a stub that omits a REQUIRED row's surface
