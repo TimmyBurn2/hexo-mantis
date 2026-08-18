@@ -165,19 +165,52 @@ MIN_FULL_TREE_FILES = 400
 _COMPILED: list[tuple[str, re.Pattern[str], str]] | None = None
 
 
+def load_local_terms(path: Path) -> list[tuple[str, re.Pattern[str], str]]:
+    """Compile the untracked supplement at `path`. Absent file = no terms, never an error.
+
+    Takes the path as an ARGUMENT so the self-test can drive this loader against a planted
+    supplement without needing the operator's real one -- which is absent in CI by design, and
+    is exactly the condition under which an unexercised loader would rot unnoticed.
+    """
+    if not path.is_file():
+        return []
+    out: list[tuple[str, re.Pattern[str], str]] = []
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        term = line.strip()
+        if term and not term.startswith("#"):
+            try:
+                rx = re.compile(term)
+            except re.error as exc:
+                # NAMED, and by LINE NUMBER ONLY -- echoing the term would print the
+                # operator-identifying string this file exists to keep out of the output.
+                raise SystemExit(
+                    f"gate 17: {path.name} line {i} is not a valid regex ({exc.msg}). "
+                    f"The term itself is not echoed -- open the file at that line."
+                ) from None
+            out.append((f"local:{path.name}:{i}", rx, "local term"))
+    return out
+
+
 def _compiled() -> list[tuple[str, re.Pattern[str], str]]:
     """The register plus any untracked local supplement, compiled ONCE per process."""
     global _COMPILED
     if _COMPILED is not None:
         return _COMPILED
     out = [(name, re.compile(pat), why) for name, (pat, why) in PATTERNS.items()]
-    if LOCAL_TERMS.is_file():
-        for i, line in enumerate(LOCAL_TERMS.read_text(encoding="utf-8").splitlines(), 1):
-            term = line.strip()
-            if term and not term.startswith("#"):
-                out.append((f"local:{LOCAL_TERMS.name}:{i}", re.compile(term), "local term"))
+    out.extend(load_local_terms(LOCAL_TERMS))
     _COMPILED = out
     return out
+
+
+def local_class_count() -> int:
+    """How many local terms are live. A COUNT, never the terms -- printing one would leak it.
+
+    R283(f). The green line used to print `len(PATTERNS)` alone, so a run with the supplement
+    loaded and a run without it printed the same sentence: the reader could not tell whether
+    the scan had been run at its declared strength. That is the false-clean class this gate was
+    adopted to stop, one level down -- the gate reporting a scan it did not perform.
+    """
+    return len(_compiled()) - len(PATTERNS)
 
 
 def _justified(lines: list[str], lineno: int) -> bool:
@@ -292,9 +325,48 @@ def self_test() -> bool:
         print(f"gate 17 SELF-TEST FAIL: registered pattern(s) with no planted proof: "
               f"{sorted(uncovered)}")
         ok = False
+    if not _local_arm_fires():
+        ok = False
     if ok:
         print(f"gate 17 self-test: all {len(PATTERNS)} registered pattern classes fire, "
-              f"5 controls clean")
+              f"5 controls clean, local-supplement arm wired "
+              f"({local_class_count()} local term(s) live)")
+    return ok
+
+
+def _local_arm_fires() -> bool:
+    """LAW-07 for the UNTRACKED half: prove the supplement is WIRED, not merely parseable.
+
+    R283(f). The operator's real supplement is `.gitignore`d, so in CI there is nothing to
+    exercise and the loader would be dead code that still reports a count. This arm plants a
+    synthetic supplement, points the module at it, and drives the REAL decision function
+    (`scan_text`) -- the same thing the tracked arm does, one file down. It restores the module
+    state in `finally`, and it prints COUNTS and fixture names only, never a local term's text.
+    """
+    global _COMPILED, LOCAL_TERMS
+    probe, saved_path, saved_cache = "zzplantedlocaltermzz", LOCAL_TERMS, _COMPILED
+    ok = True
+    with tempfile.TemporaryDirectory() as td:
+        planted_file = Path(td) / "rule7_local_terms.txt"
+        # A comment and a blank line ride along: both must be ignored, or a `#` note in the
+        # operator's file would compile into a regex that matches nearly everything.
+        planted_file.write_text(f"# note\n\n{probe}\n", encoding="utf-8")
+        try:
+            LOCAL_TERMS, _COMPILED = planted_file, None
+            if local_class_count() != 1:
+                print("gate 17 SELF-TEST FAIL: local supplement did not compile to exactly "
+                      f"one term (comments/blank lines leaked?): got {local_class_count()}")
+                ok = False
+            hits = scan_text("planted.txt", f"value = {probe}\n")
+            if not any(h[2].startswith("local:") for h in hits):
+                print("gate 17 SELF-TEST FAIL: a local supplement term did not fire through "
+                      "scan_text -- the untracked half is NOT wired into the decision")
+                ok = False
+            if scan_text("planted.txt", f"value = {probe}  {ESCAPE} fixture\n"):
+                print("gate 17 SELF-TEST FAIL: escape hatch did not suppress a local term")
+                ok = False
+        finally:
+            LOCAL_TERMS, _COMPILED = saved_path, saved_cache
     return ok
 
 
@@ -372,7 +444,8 @@ def main() -> int:
         where = "tracked tree" if args.full_tree else f"files changed vs {args.base}"
         print(
             f"gate 17: no host content in the {where} ({scanned} text file(s); "
-            f"{len(PATTERNS)} pattern class(es); {len(EXEMPT)} registered exemption(s); "
+            f"{len(PATTERNS)} tracked + {local_class_count()} local pattern class(es); "
+            f"{len(EXEMPT)} registered exemption(s); "
             f"{len(file_hatched)} file-level hatch(es): {sorted(file_hatched)})"
         )
     return rc

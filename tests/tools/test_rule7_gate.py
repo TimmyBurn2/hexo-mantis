@@ -175,3 +175,87 @@ def test_full_tree_floor_is_below_the_live_count() -> None:
         f"count {live} — the gate would refuse itself"
     )
     assert GATE.MIN_FULL_TREE_FILES >= 100
+
+
+# ── the UNTRACKED supplement's arm (R283(f)) ──────────────────────────────────────────
+# The operator's real supplement is `.gitignore`d, so in CI there is nothing to load. That is
+# precisely why these exist: without them the loader is dead code in the only environment that
+# gates, and a count printed from dead code reads exactly like a count printed from live code.
+def test_local_terms_loader_ignores_comments_and_blank_lines(tmp_path: Path) -> None:
+    """A `#` note compiling into a regex would match nearly everything and red the whole tree —
+    so the operator's own annotations must never become patterns."""
+    f = tmp_path / "rule7_local_terms.txt"
+    f.write_text("# a note\n\n   \nplantedlocalterm\n", encoding="utf-8")
+    loaded = GATE.load_local_terms(f)
+    assert len(loaded) == 1, f"expected exactly one compiled term, got {len(loaded)}"
+    name, rx, why = loaded[0]
+    assert name == "local:rule7_local_terms.txt:4", "the name must cite the term's LINE number"
+    assert rx.search("value = plantedlocalterm") and why == "local term"
+
+
+def test_local_terms_loader_is_silent_when_the_file_is_absent(tmp_path: Path) -> None:
+    """CI's condition. An absent supplement is the normal case, never an error."""
+    assert GATE.load_local_terms(tmp_path / "nope.txt") == []
+
+
+def test_local_supplement_is_wired_into_the_decision(monkeypatch, tmp_path: Path) -> None:
+    """THE ARM THAT MATTERS: a local term must reach `scan_text`, not merely compile.
+
+    Drives the same decision function the tracked classes go through. If someone ever removes
+    the `out.extend(load_local_terms(...))` line, the loader and its tests stay green and only
+    this test — and the gate's own self-test — go red.
+    """
+    f = tmp_path / "rule7_local_terms.txt"
+    f.write_text("plantedlocalterm\n", encoding="utf-8")
+    monkeypatch.setattr(GATE, "LOCAL_TERMS", f)
+    monkeypatch.setattr(GATE, "_COMPILED", None)
+    try:
+        hits = GATE.scan_text("probe.txt", "value = plantedlocalterm\n")
+        assert any(name.startswith("local:") for _rel, _ln, name, _m, _why in hits), (
+            "a local supplement term did not fire through scan_text — the untracked half is "
+            "not wired into the decision"
+        )
+        assert GATE.local_class_count() == 1
+        assert GATE.scan_text("probe.txt", f"value = plantedlocalterm  {GATE.ESCAPE} f\n") == []
+    finally:
+        GATE._COMPILED = None  # the cache is module state; leaving it set poisons later tests
+
+
+def test_local_class_count_is_a_count_never_the_terms(monkeypatch, tmp_path: Path) -> None:
+    """R283(f)'s "counts, never contents". The gate's own output is a rule-7 surface: printing
+    a local term would leak the operator-identifying string the supplement exists to catch."""
+    f = tmp_path / "rule7_local_terms.txt"
+    f.write_text("plantedlocalterm\nsecondplantedterm\n", encoding="utf-8")
+    monkeypatch.setattr(GATE, "LOCAL_TERMS", f)
+    monkeypatch.setattr(GATE, "_COMPILED", None)
+    try:
+        count = GATE.local_class_count()
+        assert count == 2 and isinstance(count, int)
+    finally:
+        GATE._COMPILED = None
+
+
+def test_invalid_local_term_fails_named_and_without_echoing_the_term(tmp_path: Path) -> None:
+    """An untracked file the operator edits by hand will eventually hold a bad regex. It must
+    fail CLOSED with a line number — and must not print the term, which would defeat the point
+    of keeping it untracked."""
+    f = tmp_path / "rule7_local_terms.txt"
+    f.write_text("# note\nunclosed(group\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        GATE.load_local_terms(f)
+    message = str(exc.value)
+    assert "line 2" in message, "the failure must name the offending line"
+    assert "unclosed(group" not in message, "the term must NOT be echoed into the output"
+
+
+def test_self_test_covers_the_local_arm_even_with_no_supplement_present(monkeypatch) -> None:
+    """The gate's in-process self-test must exercise the untracked half in CI, where the real
+    supplement is absent — it plants its own. Pointing the module at a nonexistent path is the
+    CI condition exactly."""
+    monkeypatch.setattr(GATE, "LOCAL_TERMS", REPO_ROOT / "does_not_exist_rule7_local_terms.txt")
+    monkeypatch.setattr(GATE, "_COMPILED", None)
+    try:
+        assert GATE._local_arm_fires() is True
+        assert GATE.self_test() is True
+    finally:
+        GATE._COMPILED = None
