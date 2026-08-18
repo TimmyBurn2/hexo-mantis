@@ -15,9 +15,16 @@ torch import at module scope.
 
 It (1) asserts `contract_version == 1`; (2) asserts the native-builder handshake
 (`builder_impl == 1`) on any training/self-play path unless
-`MANTIS_ALLOW_ORACLE_BUILDER=1`; (3) runs the 18-assertion set (13 structural, always full;
-4 semantic/geometric, full on the trainer path / canary on the hot path); (4) builds
-block-diagonal torch tensors. There is NO silent fixed-width fallback anywhere — every
+`MANTIS_ALLOW_ORACLE_BUILDER=1`; (3) runs the 19-assertion set (13 structural, always full;
+4 semantic/geometric, full on the trainer path / canary on the hot path; plus the 2
+handshakes above); (4) builds block-diagonal torch tensors.
+
+The count above was 18 / "13 structural" before R284's P-MASK work, and the second half of
+that was already wrong: HEAD carried TWELVE numbered structural checks (1-12) with numbering
+slot 13 vacant, so the docstring asserted a total the file did not hold. Check 13
+(`GatherNotStrictlyIncreasing`) now occupies the vacant slot and the counts are re-derived
+here rather than carried — that the new count matches the old claim is a coincidence and is
+recorded as one, not as evidence the claim was right. There is NO silent fixed-width fallback anywhere — every
 mismatch raises a NAMED error (the F1 silent-corruption class this contract exists to kill).
 
 The OUTPUT is NOT a dense-`[B,362]` scatter: `collate_graph_batch` produces only the INPUT
@@ -108,6 +115,18 @@ class ScatterSlotOutOfBounds(GraphContractError):
 
 class ScatterSlotAliasing(GraphContractError):
     pass
+
+
+class GatherNotStrictlyIncreasing(GraphContractError):
+    """`legal_node_gather` is not strictly ascending (check 13).
+
+    The gather is the CONTRACT ORDER of every per-legal-node quantity: `policy_dst_slot[i]`,
+    `segment_softmax`'s segment `i`, and the Rust-side `assemble_ls_from_gnn_probs` all read
+    position `i` as gather position `i`. A boolean-mask gather (`emb[legal_mask]`) instead
+    returns rows in ASCENDING ROW INDEX, so the two orders coincide exactly while this holds
+    and silently mispair priors to cells when it does not. Unchecked until R284's P-MASK
+    design derived it as load-bearing — for the mask formulation too, not only the index one.
+    """
 
 
 class EmptyLegalSet(GraphContractError):
@@ -506,6 +525,20 @@ def _check_structural(
     if np.any(np.diff(legal_offsets) == 0):
         raise EmptyLegalSet("a graph has an empty legal set")
 
+    # 13. GatherNotStrictlyIncreasing — ascending, hence unique, hence order-equivalent to the
+    # boolean mask built from it two steps below. The native builder emits `n_stones + j` for
+    # j in [0, n_legal) per graph and the fuse adds a non-decreasing `node_off`, so this holds
+    # by construction; it is asserted rather than trusted because it is the invariant the
+    # per-legal-node output ORDER rests on and nothing else in the 18 covers it (check 9
+    # constrains WHICH graph a row points into, check 11 constrains slot aliasing, neither
+    # constrains order). O(Lg) beside the existing O(E) checks.
+    if Lg > 1 and np.any(np.diff(legal_node_gather) <= 0):
+        first = int(np.argmin(np.diff(legal_node_gather) > 0))
+        raise GatherNotStrictlyIncreasing(
+            f"legal_node_gather not strictly increasing at i={first + 1}: "
+            f"{int(legal_node_gather[first])} -> {int(legal_node_gather[first + 1])}"
+        )
+
 
 def _require_dtype(arr: np.ndarray, want, name: str) -> None:
     if arr.dtype != np.dtype(want):
@@ -669,6 +702,7 @@ __all__ = [
     "EdgeIndexOutOfBounds",
     "EmptyLegalSet",
     "GatherNotLegalNode",
+    "GatherNotStrictlyIncreasing",
     "GraphBatch",
     "GraphContractError",
     "GraphContractVersionMismatch",

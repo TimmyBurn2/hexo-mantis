@@ -88,6 +88,14 @@ Build-side (`build_leaf_graph`, reasons now travel — D6):
 5. `graph request: stone player {p} out of range (expected +1 / -1)`.
 6. `graph request: non-native builder_impl (NonNativeSampleBuilder handshake)` — build-side handshake.
 
+Consumer-side structural (`graph_collate.py::_check_structural`, the Python resolver):
+0. `GatherNotStrictlyIncreasing` (check 13) — `legal_node_gather` is not strictly ascending.
+   Added under R284's P-MASK design: the gather is the contract ORDER of every per-legal-node
+   output, while a boolean-mask gather (`emb[legal_mask]`) returns rows in ascending ROW INDEX.
+   The two coincide exactly while this holds, so an out-of-order gather silently mispairs priors
+   to cells — for the mask formulation as well as the index one. Checks 9 and 11 do not cover
+   it (which graph a row points into; slot aliasing) and nothing else did.
+
 Consumer-side (`GraphQueue::submit_graph_and_wait`):
 7. `graph batcher is closed` — closed before submit.
 8. `submit_graph_and_wait: non-native builder_impl (NonNativeSampleBuilder handshake)` — pre-pass handshake.
@@ -111,6 +119,7 @@ which wakes every still-pending waiter with that reason so none is orphaned.
 | block-diagonal offsets are running prefix sums (`node/edge/legal_offsets`) | `queues/wire.rs::from_axis_graphs` (frozen `:1257-1260`) | queue_fuse_pin.rs |
 | `edge_index` = `[src_global (E) ‖ dst_global (E)]`, each = local + `node_off` | `queues/wire.rs::from_axis_graphs` (frozen `:1238-1243`) | queue_fuse_pin.rs |
 | `legal_node_gather` global = local + `node_off` | `queues/wire.rs::from_axis_graphs` (frozen `:1244-1246`) | queue_fuse_pin.rs |
+| `legal_node_gather` is STRICTLY ASCENDING over the whole fused wire — the ORDER every per-legal-node output is paired by (`policy_dst_slot[i]`, `segment_softmax` segment `i`, `assemble_ls_from_gnn_probs` position `i`) | producer: `mantis_graph::build` (`n_stones + j`, ascending per graph) × `queues/wire.rs::from_axis_graphs` (non-decreasing `node_off`). CONSUMER-side check 13 `GatherNotStrictlyIncreasing` in `graph_collate.py::_check_structural` | tests/selfplay/test_graph_collate_gather_order.py |
 | `policy_dst_slot` verbatim concat incl. `-1` off-window sentinel; NO fixed-width fallback | `queues/wire.rs::from_axis_graphs` (frozen `:1247`) | queue_fuse_pin.rs |
 | single graph ⇒ `node_off == 0` ⇒ local == global (O-24 degenerate) | `queues/wire.rs::from_axis_graphs` | queue_fuse_pin.rs |
 | single-read: `take()` yields all arrays exactly once; second read = `WireAlreadyConsumed` | `queues/wire.rs::take` | queue_fuse_pin.rs |
