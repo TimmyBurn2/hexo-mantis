@@ -1,5 +1,9 @@
 """CI gate 17's producer test (LAW-07): the rule-7 host-content detector must BITE.
 
+rule7-gate: file-ok -- THIS FILE IS THE ORACLE. Every host-shaped literal below is a planted
+fixture (RFC 5737 / RFC 2606 reserved), never a real machine; the set of files allowed to say
+this is pinned by `test_file_level_hatch_is_confined_to_the_two_pattern_files` below.
+
 The gate exists because rule 7 was enforced by memory alone until the R280(c) scan ran it
 against `origin/dev` and found 101 absolute box paths already committed in a fixture. So the
 first half of this file proves the detector fires on each registered class.
@@ -138,6 +142,28 @@ def test_exempt_register_ships_empty() -> None:
     for path, sub, sha, grounds in GATE.EXEMPT:
         assert path and sub and grounds, "an exemption needs a path, a substring and grounds"
         assert len(sha) == 64, f"exemption for {path} must pin the blob sha256"
+
+
+def test_file_level_hatch_is_confined_to_the_two_pattern_files() -> None:
+    """THE GUARD ON THE BIG HAMMER. `rule7-gate: file-ok` silences a WHOLE file, so exactly two
+    files may carry it: this gate's pattern register and this oracle. Both are made of planted
+    literals by construction. Any third file acquiring one reds HERE — which is the only thing
+    standing between a convenience marker and a silently-disabled gate.
+
+    This test is also why the first draft was caught: the gate's own first full-tree run
+    reported a clean tree while both of these files were still UNTRACKED, so `git ls-files`
+    never handed them to the scan. A green run that scanned nothing is the failure this repo
+    keeps re-finding, and the non-vacuity floor below is the other half of the answer.
+    """
+    allowed = {"tools/ci_gates/rule7_gate.py", "tests/tools/test_rule7_gate.py"}
+    carrying = {
+        rel for rel in GATE.target_files(None)
+        if (t := GATE._read_text(REPO_ROOT / rel)) is not None and GATE.has_file_escape(t)
+    }
+    assert carrying == allowed, (
+        f"file-level hatch set drifted — unexpected: {sorted(carrying - allowed)}; "
+        f"missing: {sorted(allowed - carrying)}"
+    )
 
 
 def test_full_tree_floor_is_below_the_live_count() -> None:

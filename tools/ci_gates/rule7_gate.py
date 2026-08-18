@@ -6,6 +6,10 @@
 # reviewable side by side, because every carve-out exists to keep one named pattern honest.
 """CI gate 17 (R281(c)): no host content in the tracked tree (rule 7).
 
+rule7-gate: file-ok -- THIS FILE IS THE PATTERN REGISTER. Every host-shaped literal below is a
+regex or a self-test fixture, never a real machine; the set of files allowed to say this is
+pinned by tests/tools/test_rule7_gate.py.
+
 Rule 7 says box specifics live in the migration workspace, never in this repo. It was enforced
 by hand -- a grep the dispatcher remembered to run -- until the R280(c) scan ran it against
 `origin/dev` itself and found the rule already broken:
@@ -68,6 +72,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ESCAPE = "rule7-gate: ok --"
+
+#: FILE-LEVEL hatch, for a file that is definitionally made of patterns: this gate's own
+#: register and its producer test. Declared in the first `FILE_ESCAPE_SCAN_LINES` lines.
+#:
+#: Why a file-level form exists at all: a per-line hatch on ~20 consecutive register entries is
+#: noise that teaches a reader to add hatches reflexively, which is how an escape hatch stops
+#: meaning anything. Why it is nonetheless DANGEROUS and therefore PINNED: it hides a real leak
+#: in the file that carries it. So the gate REPORTS the count in its green line, and
+#: `tests/tools/test_rule7_gate.py` asserts the EXACT set of files allowed to carry one --
+#: a third file acquiring one reds that test rather than silently widening the hole.
+FILE_ESCAPE = "rule7-gate: file-ok --"
+FILE_ESCAPE_SCAN_LINES = 40
 
 #: Untracked local supplement: one regex per line, `#` comments ignored. Operator-identifying
 #: terms (name, handle, email, host aliases) belong HERE and never in this file. Absent in CI
@@ -176,11 +192,18 @@ def _justified(lines: list[str], lineno: int) -> bool:
     return False
 
 
+def has_file_escape(text: str) -> bool:
+    """True if the file declares the file-level hatch in its opening lines."""
+    return any(FILE_ESCAPE in ln for ln in text.splitlines()[:FILE_ESCAPE_SCAN_LINES])
+
+
 def scan_text(rel: str, text: str) -> list[tuple[str, int, str, str, str]]:
     """THE DECISION. Both the scan and the LAW-07 self-test go through this one function.
 
     Returns (rel, lineno, pattern_name, matched_text, why) per unjustified hit.
     """
+    if has_file_escape(text):
+        return []
     lines = text.splitlines()
     hits: list[tuple[str, int, str, str, str]] = []
     for name, rx, why in _compiled():
@@ -288,6 +311,7 @@ def main() -> int:
     files = target_files(None if args.full_tree else args.base)
     violations: list[tuple[str, int, str, str, str]] = []
     scanned = 0
+    file_hatched: list[str] = []
     matched_exempt: set[int] = set()
 
     for rel in files:
@@ -295,6 +319,9 @@ def main() -> int:
         if text is None:
             continue
         scanned += 1
+        if has_file_escape(text):
+            file_hatched.append(rel)
+            continue
         file_hits = scan_text(rel, text)
         # One `hash-object` per FILE, and only when the register is non-empty.
         blob = _git("hash-object", rel).strip() if (EXEMPT and file_hits) else ""
@@ -345,7 +372,8 @@ def main() -> int:
         where = "tracked tree" if args.full_tree else f"files changed vs {args.base}"
         print(
             f"gate 17: no host content in the {where} ({scanned} text file(s); "
-            f"{len(PATTERNS)} pattern class(es); {len(EXEMPT)} registered exemption(s))"
+            f"{len(PATTERNS)} pattern class(es); {len(EXEMPT)} registered exemption(s); "
+            f"{len(file_hatched)} file-level hatch(es): {sorted(file_hatched)})"
         )
     return rc
 
