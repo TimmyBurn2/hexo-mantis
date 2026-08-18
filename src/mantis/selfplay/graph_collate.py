@@ -531,12 +531,19 @@ def _check_structural(
         # RANGE FIRST. `node_graph[legal_node_gather]` below is numpy fancy indexing, which
         # WRAPS a negative row silently (−1 reads the last node of the last graph) and raises a
         # bare `IndexError` — outside the GraphContractError family, so outside every die-loud
-        # catch site — for a row >= N. Neither is a contract verdict. The guard is O(1) because
-        # check 13 has already established the array is ascending, so the extremes are the ends.
-        if int(legal_node_gather[0]) < 0 or int(legal_node_gather[-1]) >= N:
+        # catch site — for a row >= N. Neither is a contract verdict.
+        #
+        # `min`/`max` over the WHOLE array, NOT the two endpoints. The first version of this
+        # guard read `legal_node_gather[0]` and `[-1]` and justified it as O(1) "because check 13
+        # has already established the array is ascending". **That was false and the review caught
+        # it: check 13 is the LAST check in this function and check 9 is the ninth.** Nothing has
+        # established ascent here, so a rogue row in the MIDDLE went straight through to the
+        # fancy index — the exact defect this guard exists to close, still reachable, behind a
+        # comment claiming otherwise. O(Lg) is free beside the O(N) `_graph_of` on the next line.
+        lo_row, hi_row = int(legal_node_gather.min()), int(legal_node_gather.max())
+        if lo_row < 0 or hi_row >= N:
             raise ScatterGatherCrossesGraph(
-                f"legal_node_gather outside [0,{N}): "
-                f"[{int(legal_node_gather[0])}, {int(legal_node_gather[-1])}] — a row that is "
+                f"legal_node_gather outside [0,{N}): [{lo_row}, {hi_row}] — a row that is "
                 "in no graph at all, not merely in the wrong one"
             )
         node_graph = _graph_of(node_offsets, N)

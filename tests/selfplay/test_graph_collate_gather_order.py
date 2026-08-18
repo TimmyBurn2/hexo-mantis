@@ -98,8 +98,10 @@ def test_clean_twin_every_collatable_payload_still_collates(payload_fields, stem
 
 @pytest.mark.parametrize(
     "row,where",
-    [(-1, "first"), (-100000, "first"), (10**9, "last")],
-    ids=["negative-one", "large-negative", "far-past-N"],
+    [(-1, "first"), (-100000, "first"), (10**9, "last"),
+     (-1, "middle"), (10**9, "middle"), (None, "middle-at-N")],
+    ids=["negative-one", "large-negative", "far-past-N",
+         "negative-in-the-MIDDLE", "far-past-N-in-the-MIDDLE", "exactly-N-in-the-MIDDLE"],
 )
 def test_a_gather_row_outside_0_N_dies_NAMED_and_not_by_numpy(payload_fields, row, where) -> None:
     """The range hole check 13 exposed and did not itself close (isolated review, finding 2).
@@ -110,12 +112,22 @@ def test_a_gather_row_outside_0_N_dies_NAMED_and_not_by_numpy(payload_fields, ro
     and for a row >= N raises a bare `IndexError`, which is not a `GraphContractError` and so
     escapes every die-loud catch site in the tree.
 
-    Both are now refused by name, BEFORE the fancy index. Ascending order is preserved by each
-    corruption so the row is reached through check 13 rather than short-circuited by it — the
-    negative rows go at the front, the huge one at the back."""
+    Both are now refused by name, BEFORE the fancy index.
+
+    THE `middle` ROWS ARE THE ONES THAT MATTER, and they exist because the first version of this
+    file did not have them. That version placed every corruption at index 0 or −1 — precisely the
+    two positions the first version of the GUARD inspected — so it was green against a guard that
+    read only the endpoints while justifying itself with "check 13 has already established the
+    array is ascending". Check 13 is the LAST check in `_check_structural`; check 9 is the ninth.
+    A rogue row in the MIDDLE reached the fancy index and died as a bare `IndexError`, outside
+    the `GraphContractError` family and therefore outside every die-loud catch site in the tree.
+    A flip-set that only probes the positions the implementation happens to look at is not a
+    flip-set."""
     fields = payload_fields("b6")
     g = fields["legal_node_gather"]
-    g[0 if where == "first" else -1] = row
+    n_nodes = int(fields["node_offsets"][-1])
+    idx = {"first": 0, "last": len(g) - 1, "middle": len(g) // 2, "middle-at-N": len(g) // 2}[where]
+    g[idx] = n_nodes if row is None else row       # `None` means "exactly N", the boundary
     with pytest.raises(GraphContractError) as err:
         _collate(fields)
     assert not isinstance(err.value, GatherNotStrictlyIncreasing), (
