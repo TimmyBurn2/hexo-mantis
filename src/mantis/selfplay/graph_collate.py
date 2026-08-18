@@ -497,6 +497,17 @@ def _check_structural(
 
     # 9. ScatterGatherCrossesGraph
     if Lg > 0:
+        # RANGE FIRST. `node_graph[legal_node_gather]` below is numpy fancy indexing, which
+        # WRAPS a negative row silently (−1 reads the last node of the last graph) and raises a
+        # bare `IndexError` — outside the GraphContractError family, so outside every die-loud
+        # catch site — for a row >= N. Neither is a contract verdict. The guard is O(1) because
+        # check 13 has already established the array is ascending, so the extremes are the ends.
+        if int(legal_node_gather[0]) < 0 or int(legal_node_gather[-1]) >= N:
+            raise ScatterGatherCrossesGraph(
+                f"legal_node_gather outside [0,{N}): "
+                f"[{int(legal_node_gather[0])}, {int(legal_node_gather[-1])}] — a row that is "
+                "in no graph at all, not merely in the wrong one"
+            )
         node_graph = _graph_of(node_offsets, N)
         legal_graph = _graph_of(legal_offsets, Lg)
         gather_g = node_graph[legal_node_gather]

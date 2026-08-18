@@ -96,6 +96,34 @@ def test_clean_twin_every_collatable_payload_still_collates(payload_fields, stem
     assert int(batch.legal_offsets[-1]) == g.size
 
 
+@pytest.mark.parametrize(
+    "row,where",
+    [(-1, "first"), (-100000, "first"), (10**9, "last")],
+    ids=["negative-one", "large-negative", "far-past-N"],
+)
+def test_a_gather_row_outside_0_N_dies_NAMED_and_not_by_numpy(payload_fields, row, where) -> None:
+    """The range hole check 13 exposed and did not itself close (isolated review, finding 2).
+
+    `_check_structural`'s check 9 reads `node_graph[legal_node_gather]` — numpy FANCY INDEXING,
+    which for a negative row WRAPS silently (−1 reads the last node of the last graph, and the
+    old boolean-mask formulation then gathered that row and placed it LAST: a silent mispairing)
+    and for a row >= N raises a bare `IndexError`, which is not a `GraphContractError` and so
+    escapes every die-loud catch site in the tree.
+
+    Both are now refused by name, BEFORE the fancy index. Ascending order is preserved by each
+    corruption so the row is reached through check 13 rather than short-circuited by it — the
+    negative rows go at the front, the huge one at the back."""
+    fields = payload_fields("b6")
+    g = fields["legal_node_gather"]
+    g[0 if where == "first" else -1] = row
+    with pytest.raises(GraphContractError) as err:
+        _collate(fields)
+    assert not isinstance(err.value, GatherNotStrictlyIncreasing), (
+        "the corruption must be reached as a RANGE failure, not short-circuited as an order one"
+    )
+    assert "outside [0," in str(err.value)
+
+
 def test_the_Lg_le_1_boundary_cannot_raise(payload_fields) -> None:
     """The guard's other conjunct: `Lg > 1`. `b0` carries `Lg == 0` and collates clean, which
     pins the short-circuit at zero.
