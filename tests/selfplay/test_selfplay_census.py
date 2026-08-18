@@ -101,7 +101,10 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
     ("InferenceServer.run (dense loop)",
      [("inference_server.py", "InferenceServer.run")], (0, 1, 0)),
     # F-816-10 (R276(f)) moves this row's `for` count 0 -> 1, and the movement is RULED, not
-    # absorbed. The ban this row enforces is on a PER-ITEM Python loop: the hot paths are
+    # absorbed. The R43 frozen-table edit was DISCLOSED and queued the same event as
+    # ADJUDICATION_QUEUE F-816-13, and GRANTED by R281(e) on the reasoning below — the
+    # R276(c) shape, per-event, NEVER precedent. Cite the queue row, not this comment, for
+    # the grant's scope. The ban this row enforces is on a PER-ITEM Python loop: the hot paths are
     # vectorized numpy/torch and a loop that touches one graph, one node or one edge at a time
     # re-introduces exactly the per-item overhead the port exists to keep out. The new `for`
     # is a loop over the PARTS OF ONE MEMORY-BOUNDED PLAN — `M` iterations where `M = 1`
