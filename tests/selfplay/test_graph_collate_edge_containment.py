@@ -86,22 +86,66 @@ def test_an_edge_inside_the_GLOBAL_range_but_outside_ITS_graph_is_caught(payload
         _collate(fields)
 
 
-def test_a_graph_with_ZERO_edges_does_not_break_the_segmentation(payload_fields) -> None:
-    """The dropped-empty-segment path. `reduceat` REJECTS a start index equal to the array
-    length, so an empty trailing segment is not merely inefficient — it raises. Empty segments
-    are dropped instead, and this row proves the drop preserves the partition rather than
-    silently skipping a real graph's edges.
+def test_a_graph_with_ZERO_edges_still_makes_its_stolen_edges_cross(payload_fields) -> None:
+    """Moving graph 0's edges into graph 1 at the OFFSET level: graph 0 keeps its nodes and legal
+    set (so checks 4/5/6/12 stay satisfied) and simply owns no edges. Its former edges now belong
+    to graph 1 — which makes them cross-graph — so the corruption must STILL be caught, and
+    caught for the containment reason rather than by an index error.
 
-    Built by moving graph 0's edges into graph 1 at the OFFSET level: graph 0 keeps its nodes
-    and legal set (so checks 4/5/6/12 stay satisfied) and simply owns no edges. Its former edges
-    now belong to graph 1 — which makes them cross-graph — so the corruption must STILL be
-    caught, and caught for the containment reason rather than by an index error."""
+    RENAMED (R73). Its first name claimed it proved "the segmentation does not break on an empty
+    edge segment", and its docstring described a mode it did not construct — it spoke of a
+    TRAILING empty segment, whose start equals the array length and which `reduceat` genuinely
+    rejects, while building a LEADING one, whose start is 0 and which `reduceat` accepts happily.
+    It also could not discriminate: it asserts a RAISE, and the two mutants of the empty-segment
+    handling raise the same error on it. The row that actually guards the drop is the CLEAN one
+    below."""
     fields = payload_fields("b6")
     eo = np.asarray(fields["edge_offsets"]).copy()
     eo[1] = 0                              # graph 0: [0, 0) -> zero edges
     fields["edge_offsets"] = eo
     with pytest.raises(EdgeCrossesGraphBoundary):
         _collate(fields)
+
+
+@pytest.mark.parametrize("position", ["leading", "middle", "trailing"])
+def test_a_CLEAN_payload_carrying_an_empty_edge_segment_still_collates(
+    payload_fields, position
+) -> None:
+    """THE row that guards the empty-segment drop, and the only one that does.
+
+    The mutation table the review built against the shipped check 8 is the reason this exists:
+    every mutant of the four conjuncts, of `>=` vs `>`, of segmented vs whole-array, and of
+    deleting check 8 outright, was caught by some row. **Two were caught by nothing** — removing
+    the `nonempty` filter, and truncating `seg_lo`/`seg_hi` positionally instead of filtering
+    them by the same mask. Both are silent on every corrupted payload and both fire on a CLEAN
+    one, which is exactly the shape no `pytest.raises` row can see.
+
+    The three positions are not decoration. `reduceat` rejects a start index equal to the array
+    length, so only the TRAILING case reaches that mode — it is the one that turns a dropped
+    filter into an `IndexError` rather than a wrong verdict — while leading and middle catch the
+    bounds-misalignment mutant. A payload whose edges are all moved into one graph is legal by
+    every other check, so a correct implementation must call it CLEAN.
+    """
+    fields = payload_fields("b6")
+    eo = np.asarray(fields["edge_offsets"]).copy()
+    ei = np.asarray(fields["edge_index"])
+    no = np.asarray(fields["node_offsets"])
+    E = int(eo[-1])
+    B = len(eo) - 1
+    assert B >= 3, "this row needs three graphs to place an empty segment in the middle"
+    # Give EVERY edge to one graph, and point every endpoint inside that graph's node range so
+    # the payload stays legal. The other graphs then own zero edges.
+    g = {"leading": B - 1, "middle": 0, "trailing": 0}[position]
+    if position == "middle":
+        g = 1
+    eo[:] = 0
+    eo[g + 1:] = E
+    lo, hi = int(no[g]), int(no[g + 1])
+    ei2 = ei.reshape(2, E).copy()
+    ei2[:] = lo + (ei2 % max(hi - lo, 1))
+    fields["edge_offsets"] = eo
+    fields["edge_index"] = ei2.reshape(-1)
+    _collate(fields)   # must NOT raise
 
 
 def test_the_clean_twin_still_collates(payload_fields) -> None:
