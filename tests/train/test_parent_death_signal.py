@@ -55,7 +55,7 @@ def test_arming_reports_true_on_linux_and_false_elsewhere(tmp_path) -> None:
     with `PR_SET_PDEATHSIG = SIGKILL` and never disarmed it. Measured A/B by the review, same
     launcher, same suite, only this call differing: without it, `2 passed`; with it, the whole
     tier was SIGKILLed the instant the launcher exited — one test, no summary, no completion
-    marker. Any detached tier (`nohup … pytest &` then logout, a CI helper that starts pytest and
+    marker. Any detached tier (one started in the background and then disowned, a CI helper that starts pytest and
     exits, any wrapper that hands off) would die mid-run. This suite has a history of unattended
     burns, so that is a live failure mode, not a theoretical one."""
     probe = tmp_path / "probe.py"
