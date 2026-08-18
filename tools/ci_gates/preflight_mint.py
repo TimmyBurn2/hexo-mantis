@@ -1124,7 +1124,19 @@ def _boot_main(args) -> int:
     invocation can no longer false-clear a cuda-minted run's memory wall (the WPBOX 16 GiB
     OOM; LAW-03's instrument-that-cannot-false-clear corollary). The EVAL posture is the
     config's own too (`eval_enabled`, R120): the child passes nothing and CAN pass nothing.
+
+    F-816-14 (R284(f)): this child is spawned with `start_new_session=True`, which is what lets
+    the parent's timeout `killpg` reach it AND every grandchild in one act — and is also what
+    makes it unreachable by any signal aimed at the parent. Its death therefore depends entirely
+    on the parent living long enough to run its `except TimeoutExpired` block. MEASURED on the
+    local host 2026-08-18: one of these was found at PPID 1, **4 h 06 m old at 682% CPU against
+    its own `--timeout-sec 45.0`**, because its parent had been killed. The first thing the child
+    now does is ask the KERNEL to end it when its parent dies.
     """
+    from mantis.train.lifecycle.signals import arm_parent_death_signal
+
+    arm_parent_death_signal()
+
     config = _load(_resolve_config_path(args.config))
     booted = _apply_burst_override(config, args.burst_steps)
     from mantis.run import build_run_collaborators, compose_run

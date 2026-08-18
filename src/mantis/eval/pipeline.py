@@ -274,7 +274,17 @@ def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink:
 def _worker_entry(spec_path: str, result_path: str) -> None:
     """The spawn-ctx `Process` target (module-level so spawn can pickle-by-reference).
     Torch/worker imports stay LAZY — this function body is the only place the parent
-    process's import of `mantis.eval.pipeline` ever touches `mantis.eval.worker`."""
+    process's import of `mantis.eval.pipeline` ever touches `mantis.eval.worker`.
+
+    F-816-14 (R284(f)): the FIRST thing it does is ask the kernel to kill it when its parent
+    dies. `daemon=True` and the `stop()` teardown below both cover the paths where the parent
+    RUNS; this covers the path where the parent is killed outright, which is the one that left a
+    child holding 458 MiB of the card after a SIGTERM. Armed before the torch import so the
+    window in which this process is both heavy and unreapable is as short as it can be."""
+    from mantis.train.lifecycle.signals import arm_parent_death_signal
+
+    arm_parent_death_signal()
+
     from mantis.eval.worker import worker_main
 
     worker_main(spec_path, result_path)

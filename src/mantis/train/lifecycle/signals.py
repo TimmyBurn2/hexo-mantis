@@ -10,12 +10,19 @@ child processes (terminate → bounded join → kill) before ``os._exit(1)`` —
 ``sys.exit(1)`` raised ``SystemExit`` which could propagate out of ``finally`` blocks and
 leave the eval pipeline's spawn-child orphaned (PPID=1, CPU-pinned). The eval pipeline
 registers its spawn child via ``register_child``/``unregister_child``.
+
+F-816-14 (R284(f)): R230's teardown, and every other teardown in this tree, requires THE PARENT
+TO RUN. ``arm_parent_death_signal`` is the half that does not — the child asks the kernel to
+signal it when its parent dies, so a parent that is killed outright still takes its children
+with it. It is a belt beside R230's braces, not a replacement for them: the cooperative path
+remains the one that saves state.
 """
 from __future__ import annotations
 
 import logging
 import os
 import signal
+import sys
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -28,6 +35,71 @@ _FORCE_TEARDOWN_GRACE_SEC = 3.0
 
 _child_lock = threading.Lock()
 _children: set[Any] = set()
+
+
+#: `PR_SET_PDEATHSIG` (linux/prctl.h). Asks the KERNEL to signal this process when its parent
+#: THREAD dies — the one teardown that does not require the parent to execute anything.
+_PR_SET_PDEATHSIG = 1
+
+
+def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
+    """Called IN A CHILD at startup: ask the kernel to `sig` us when our parent dies.
+
+    THE DEFECT THIS CLOSES (F-816-14, R284(f)). Every teardown this module already has —
+    `force_teardown_all`, the eval pipeline's `terminate → join → kill`, the preflight tool's
+    `os.killpg` — has one thing in common: **the parent must run code**. When the parent is
+    killed outright (a harness timeout, an OOM kill, `kill -9`, an interrupted session) none of
+    them execute, and a child in its own session receives nothing, because a new session is
+    precisely what puts it out of reach of signals aimed at the parent's group. The kernel then
+    reparents it to init and it runs without bound.
+
+    That is not a hypothesis. MEASURED on the local host 2026-08-18: a `preflight_mint.py`
+    `--_boot` child spawned by a test with `--timeout-sec 45.0` was found at **PPID 1, 4 h 06 m
+    old, 682% CPU, `VmHWM` 13.8 GB** — and it reproduced immediately when a pytest tier carrying
+    a preflight row was killed. On the migration box the same class held **458 MiB of a GPU**
+    whose partition has 0.514 GiB of headroom, which is what R284(f) calls partition-threatening.
+    `PR_SET_PDEATHSIG` is the only one of the three candidate shapes that survives its parent
+    being killed, and that is the whole reason it is the one chosen.
+
+    THE DEFAULT IS `SIGKILL`, AND THAT IS A MEASURED CHOICE, NOT A BLUNT ONE. The first version
+    of this function defaulted to `SIGTERM`, on the reasoning that LAW-16 says signals
+    save-then-exit. Driven end to end against a real `preflight_mint.py --_boot` child whose
+    parent was SIGKILLed, it **did not work**: the signal was delivered, but that child installs
+    the cooperative handler, so `SIGTERM` means *"finish the step and save"* — it flipped
+    `running=False` and PARKED (measured: `%CPU` decaying 408 → 133 over two minutes in state
+    `Ssl`, still alive). A death signal a process can convert into a park is not a death signal.
+
+    `SIGKILL` is correct for THIS path specifically, because of what the path's premise is: the
+    parent is ALREADY DEAD. The child's stdout/stderr pipes are closed, nobody will `wait()` for
+    it, its report has no reader, and its result cannot be routed anywhere. LAW-16's
+    save-then-exit governs a signal sent to a run whose parent is alive and wants a checkpoint;
+    it is untouched, and that path still runs through `install_signal_handlers` exactly as
+    before. `sig` stays a parameter so a caller with a genuine save obligation can choose
+    otherwise, but it must then answer the question this default already answers: save to whom?
+
+    Returns True iff the signal is armed. Best-effort by construction and NEVER fatal: this is a
+    belt beside existing braces, and a child that refuses to start because a defence-in-depth
+    teardown is unavailable would be a worse failure than the one it prevents. Non-Linux hosts
+    and kernels without prctl simply return False.
+    """
+    if not sys.platform.startswith("linux"):
+        return False
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        if libc.prctl(_PR_SET_PDEATHSIG, int(sig), 0, 0, 0) != 0:
+            return False
+    except Exception:  # noqa: BLE001 — see the docstring: never fatal, never re-raised
+        _LOG.debug("arm_parent_death_signal: prctl unavailable", exc_info=True)
+        return False
+    # THE RACE, closed. If the parent died between our fork and the line above, the death
+    # signal was already delivered-and-missed and we would inherit the immortality this
+    # function exists to prevent. `getppid() == 1` says exactly that happened.
+    if os.getppid() == 1:
+        _LOG.warning("arm_parent_death_signal: parent already gone at arm time; exiting")
+        os._exit(0)
+    return True
 
 
 def register_child(proc: Any) -> None:
