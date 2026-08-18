@@ -41,6 +41,11 @@ _children: set[Any] = set()
 #: THREAD dies — the one teardown that does not require the parent to execute anything.
 _PR_SET_PDEATHSIG = 1
 
+#: Exit code for "my parent vanished while I was arming". NOT 0: an exit that did none of the
+#: work it was started for is not a success, and a waiter reading 0 would record a completed
+#: child. Distinct from the run's own abort codes so it cannot be confused with one.
+PARENT_VANISHED_EXIT_CODE = 71
+
 
 def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     """Called IN A CHILD at startup: ask the kernel to `sig` us when our parent dies.
@@ -84,21 +89,39 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     """
     if not sys.platform.startswith("linux"):
         return False
+    # CAPTURED BEFORE THE PRCTL, and this is the whole of the race check. Comparing against the
+    # captured value is the ONLY correct form; two earlier shapes were both wrong and both were
+    # caught by review rather than by running:
+    #
+    #   * `getppid() == 1` is a FALSE NEGATIVE under a subreaper. On this very development host
+    #     an orphan reparents to `systemd --user` (PID 1237, `PR_SET_CHILD_SUBREAPER`), never to
+    #     PID 1 — so the check would have been inert on the exact machine where F-816-14 was
+    #     found. Docker `--init` / tini behave the same way.
+    #   * `getppid() == 1` is also a FALSE POSITIVE inside a PID namespace whose shell IS PID 1
+    #     (`docker run img sh -c ...`, many CI images, `kubectl exec`). There the parent is alive
+    #     and well, and the earlier version exited the process anyway — with rc 0.
+    ppid_before = os.getppid()
     try:
         import ctypes
 
         libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        libc.prctl.argtypes = [ctypes.c_int] * 5
+        libc.prctl.restype = ctypes.c_int
         if libc.prctl(_PR_SET_PDEATHSIG, int(sig), 0, 0, 0) != 0:
+            _LOG.debug("arm_parent_death_signal: prctl failed errno=%d", ctypes.get_errno())
             return False
     except Exception:  # noqa: BLE001 — see the docstring: never fatal, never re-raised
         _LOG.debug("arm_parent_death_signal: prctl unavailable", exc_info=True)
         return False
-    # THE RACE, closed. If the parent died between our fork and the line above, the death
-    # signal was already delivered-and-missed and we would inherit the immortality this
-    # function exists to prevent. `getppid() == 1` says exactly that happened.
-    if os.getppid() == 1:
-        _LOG.warning("arm_parent_death_signal: parent already gone at arm time; exiting")
-        os._exit(0)
+    # THE RACE, closed. If the parent died between our fork and the prctl above, the death signal
+    # was already delivered-and-missed and we would inherit the immortality this function exists
+    # to prevent. A CHANGED ppid says exactly that happened, on every host and in every namespace.
+    if os.getppid() != ppid_before:
+        _LOG.warning(
+            "arm_parent_death_signal: parent %d vanished during arming (now %d); exiting %d",
+            ppid_before, os.getppid(), PARENT_VANISHED_EXIT_CODE,
+        )
+        os._exit(PARENT_VANISHED_EXIT_CODE)
     return True
 
 

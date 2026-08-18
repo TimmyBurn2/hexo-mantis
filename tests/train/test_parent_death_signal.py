@@ -31,8 +31,6 @@ import time
 
 import pytest
 
-from mantis.train.lifecycle.signals import arm_parent_death_signal
-
 _LINUX = sys.platform.startswith("linux")
 _DEADLINE_SEC = 20.0
 
@@ -48,10 +46,28 @@ def _alive(pid: int) -> bool:
         return False
 
 
-def test_arming_reports_true_on_linux_and_false_elsewhere() -> None:
+def test_arming_reports_true_on_linux_and_false_elsewhere(tmp_path) -> None:
     """The contract of the return value, so a caller can log it truthfully (R169: a liveness
-    claim ties to its instrument)."""
-    assert arm_parent_death_signal() is _LINUX
+    claim ties to its instrument).
+
+    RUN IN A SUBPROCESS, and that is not fastidiousness. The first version called
+    `arm_parent_death_signal()` **in the pytest process**, which permanently armed the RUNNER
+    with `PR_SET_PDEATHSIG = SIGKILL` and never disarmed it. Measured A/B by the review, same
+    launcher, same suite, only this call differing: without it, `2 passed`; with it, the whole
+    tier was SIGKILLed the instant the launcher exited — one test, no summary, no completion
+    marker. Any detached tier (`nohup … pytest &` then logout, a CI helper that starts pytest and
+    exits, any wrapper that hands off) would die mid-run. This suite has a history of unattended
+    burns, so that is a live failure mode, not a theoretical one."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "from mantis.train.lifecycle.signals import arm_parent_death_signal\n"
+        "print(int(arm_parent_death_signal()))\n",
+        encoding="utf-8",
+    )
+    out = subprocess.run([sys.executable, str(probe)], cwd=os.getcwd(),
+                         capture_output=True, text=True, timeout=_DEADLINE_SEC)
+    assert out.returncode == 0, out.stderr
+    assert bool(int(out.stdout.strip())) is _LINUX
 
 
 def _write_scripts(tmp_path, marker, *, arm: bool, cooperative_sigterm: bool = False):
@@ -72,7 +88,14 @@ def _write_scripts(tmp_path, marker, *, arm: bool, cooperative_sigterm: bool = F
         + ("from mantis.train.lifecycle.signals import arm_parent_death_signal\n"
            "arm_parent_death_signal()\n" if arm else "")
         + f"open({str(marker)!r}, 'w', encoding='utf-8').write(str(os.getpid()))\n"
-        "while True:\n    time.sleep(0.2)\n",
+        # SELF-LIMITED, deliberately. The unarmed row below MUST produce a process that outlives
+        # its parent — that is the negative control — and its only reaper is that test's
+        # `finally`. If the pytest process itself dies first, the survivor is permanent: this
+        # file would then manufacture the very defect it exists to detect. The review observed
+        # exactly that (PID 780150, PPID 1237, sleeping forever) after the runner was killed by
+        # the arming defect fixed above. A bounded sleep is longer than any assertion here needs
+        # and short enough that the worst case is litter with an expiry.
+        "time.sleep(90)\n",
         encoding="utf-8",
     )
     parent = tmp_path / ("parent_armed.py" if arm else "parent_unarmed.py")
