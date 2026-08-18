@@ -149,6 +149,14 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
     themselves); ZERO at MODULE scope in tests/ (a module-scope failure is collection-fatal
     and takes down the whole tier). Binary mode is correctly exempt; exemptions are
     self-expiring. Function-scope tests/ sites are a registered backlog, not a rule.
+17. Rule-7 host content (tools/ci_gates/rule7_gate.py) — box specifics live in the migration
+    workspace, never here. Absolute home paths, ssh invocation/config, `user@host`, IPv4,
+    detached-run and provider names, over files added/modified vs `--base` (plus `--full-tree`).
+    Rule 7 was memory-enforced until a scan found 101 committed box paths in a fixture that had
+    been public since it landed. Operator-identifying terms are DELIBERATELY not in the tracked
+    register — that would make the gate the leak; they go in an untracked local supplement, so
+    the tracked half is a floor, not a ceiling. RFC-reserved domains and loopback/unspecified
+    IPv4 are carved out IN the patterns; exemptions carry grounds + a blob sha and self-expire.
 
 Every gate's check logic is a repo-local script or make target under tools/ — nothing
 lives only in workflow YAML.

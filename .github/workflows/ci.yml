@@ -106,3 +106,11 @@ jobs:
         run: python3 tools/ci_gates/artifact_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
       - name: "gate 10: no Makefile/doc reference to untracked paths"
         run: python3 tools/ci_gates/check_tracked_refs.py
+      # Gate 17 (R281(c)): rule 7 was enforced by memory alone until the R280(c) scan ran it
+      # against origin/dev and found 101 absolute box paths already committed in a fixture --
+      # public since it landed, invisible to CI. --base is the mode R281(c) specifies (the
+      # added/modified delta); the one full-tree baseline ran at adoption, over a tree
+      # sanitized in the preceding commit, so the gate has never been green over a dirty
+      # baseline (R98). The LAW-07 self-test runs inside every invocation.
+      - name: "gate 17: no host content in the tree (rule 7)"
+        run: python3 tools/ci_gates/rule7_gate.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"

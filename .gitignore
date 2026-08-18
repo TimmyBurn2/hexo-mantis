@@ -22,3 +22,10 @@ __pycache__/
 /benchmarks/
 # scratch/audit workspace — never tracked
 /tmp/
+
+# Gate 17's untracked local term supplement (R281(c)). Operator-identifying terms — name,
+# handle, email, host aliases — belong here and NEVER in the tracked pattern register, where
+# the gate file would itself become the disclosure it exists to prevent. WP0's untracked
+# coupling_terms.txt is the precedent. Absent in CI by construction, so the tracked half of
+# the gate must stand on its own.
+tools/ci_gates/rule7_local_terms.txt
