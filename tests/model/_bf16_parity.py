@@ -55,7 +55,7 @@ NULLDIST_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "bf16_nulldist"
     / "measurement_raw_R181_NULLDIST.json"
 )
-NULLDIST_SHA256 = "431ccf2846615fa6ac06d073af008dcee6969a4286139aea4cebe316ddf5b740"
+NULLDIST_SHA256 = "b149659d1d423a05caf55a86371183e51dbe3d7b8a5d4249494b809d19dc72fb"
 
 
 class NullDistArtifactError(Exception):

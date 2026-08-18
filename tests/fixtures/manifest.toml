@@ -394,7 +394,13 @@ added_by = "WP12-R"
 # tests/model/_bf16_parity.py already sha-verifies on EVERY read, which is tighter than this
 # manifest's once-per-tier check — the gap this row closes is "what fixture data does the
 # repo carry", not protection. 976 398 B, inside R7's 10 MB fixture ceiling (9.8 % of it).
+# HOST PATHS NORMALIZED under R281(b) (rule 7): the capture wrote the box's absolute
+# superuser home prefix into provenance.repo_path_on_box, provenance.invocations.*,
+# provenance.box_raw_bundle.path and every raw_env_blocks.*.gine_path / argv entry — 101
+# occurrences, rewritten to `/host/...`. The prefix is the ONLY delta (proved by exact
+# round-trip to the pre-edit sha 431ccf28…), it is byte-length-neutral, and no consumer
+# asserts on a path-carrying key. sha256 below is the post-normalization pin.
 [[required]]
 path = "bf16_nulldist/measurement_raw_R181_NULLDIST.json"
-sha256 = "431ccf2846615fa6ac06d073af008dcee6969a4286139aea4cebe316ddf5b740"
+sha256 = "b149659d1d423a05caf55a86371183e51dbe3d7b8a5d4249494b809d19dc72fb"
 added_by = "WP12-R R181"
