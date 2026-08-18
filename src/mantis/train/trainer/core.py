@@ -568,7 +568,7 @@ class Trainer:
                 # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
                 # `forward_batch` is GnnNet's real method.
                 policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                    inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_mask,
+                    inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
                     inputs.stone_mask, node_offsets=inputs.node_offsets)
                 if int(bin_logits.shape[0]) != int(inputs.n_graphs):
                     raise ValueError(

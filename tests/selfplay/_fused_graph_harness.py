@@ -194,14 +194,14 @@ class SentinelGraphNet(torch.nn.Module):
         self.calls: list[tuple[int, int]] = []
         self._oom_on_call = oom_on_call
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
         self.calls.append((int(x.shape[0]), int(edge_index.shape[1])))
         if self._oom_on_call is not None and len(self.calls) == self._oom_on_call:
             raise torch.cuda.OutOfMemoryError(
                 "CUDA out of memory. Tried to allocate 1.72 GiB (simulated)"
             )
         uids = x[:, 0].to(torch.float64)
-        legal_uids = uids[legal_mask]
+        legal_uids = uids.index_select(0, legal_index)  # R284 P-MASK: the wire's gather
         logits = 0.31 * ((legal_uids * 13.0 + 5.0) % 17.0)
         b = int(node_offsets.shape[0]) - 1
         first = uids[node_offsets[:-1].to(torch.long)]

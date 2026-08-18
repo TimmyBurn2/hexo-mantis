@@ -71,12 +71,17 @@ def _rule_logit(i: int) -> float:
 class _RuleNet(torch.nn.Module):
     """`GnnNet.forward_batch`'s contract with a deterministic policy head."""
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
         n_graphs = int(node_offsets.shape[0]) - 1
         logits: list[float] = []
         for g in range(n_graphs):
             lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            n_legal = int(legal_mask[lo:hi].sum().item())
+            # `legal_index` is the wire's `legal_node_gather` (R284 P-MASK): the ROWS of the
+            # legal nodes, not a dense mask. Counting index entries that fall in this graph's
+            # `[lo, hi)` row range is the same count as summing the mask's bits over it, for
+            # every payload the contract admits — the gather is strictly ascending, hence
+            # unique (wire check 13). The stub's OUTPUT is unchanged; nothing it asserts moves.
+            n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
             logits.extend(_rule_logit(i) for i in range(n_legal))
         return (
             torch.tensor(logits, dtype=torch.float32),

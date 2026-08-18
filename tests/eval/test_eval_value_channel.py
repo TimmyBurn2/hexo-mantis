@@ -114,13 +114,18 @@ class _ValueVisibleNet(torch.nn.Module):
         super().__init__()
         self.sign = float(sign)
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
         n_graphs = int(node_offsets.shape[0]) - 1
         logits: list[float] = []
         values: list[float] = []
         for g in range(n_graphs):
             lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            n_legal = int(legal_mask[lo:hi].sum().item())
+            # `legal_index` is the wire's `legal_node_gather` (R284 P-MASK): the ROWS of the
+            # legal nodes, not a dense mask. Counting index entries that fall in this graph's
+            # `[lo, hi)` row range is the same count as summing the mask's bits over it, for
+            # every payload the contract admits — the gather is strictly ascending, hence
+            # unique (wire check 13). The stub's OUTPUT is unchanged; nothing it asserts moves.
+            n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
             logits.extend(((i * 37) % 101) / 20.0 for i in range(n_legal))
             key = (hi - lo) * 31 + n_legal
             values.append(self.sign * (((key * 7919) % 2001) - 1000) / 1000.0)

@@ -421,7 +421,7 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
                        "total_nodes", "caps_max_edges", "caps_max_nodes"}
     assert len(kw["parts"]) >= 1
     inputs = kw["parts"][0]()
-    for name in ("x", "edge_index", "edge_attr", "legal_mask", "stone_mask",
+    for name in ("x", "edge_index", "edge_attr", "legal_index", "stone_mask",
                  "node_offsets", "legal_offsets", "policy_target", "outcomes",
                  "value_valid", "is_full_search"):
         assert getattr(inputs, name, None) is not None, (

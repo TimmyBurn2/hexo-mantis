@@ -106,10 +106,10 @@ def cuda_warmup(inf_model: torch.nn.Module, device: torch.device, arch: InfModel
     with torch.no_grad(), torch.autocast(device_type="cuda",
                                          dtype=amp_dtype_for(representation, arch.amp_dtype)):
         if representation == "graph":
-            x, ei, ea, legal_mask, stone_mask, node_offsets = _synthetic_graph_warmup(arch, device)
+            x, ei, ea, legal_index, stone_mask, node_offsets = _synthetic_graph_warmup(arch, device)
             # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
             # `forward_batch` is GnnNet's real method.
-            inf_model.forward_batch(x, ei, ea, legal_mask, stone_mask, node_offsets=node_offsets)  # pyright: ignore[reportCallIssue]
+            inf_model.forward_batch(x, ei, ea, legal_index, stone_mask, node_offsets=node_offsets)  # pyright: ignore[reportCallIssue]
         else:
             base = getattr(inf_model, "_orig_mod", inf_model)
             ch = int(getattr(base, "in_channels", 8))
@@ -127,10 +127,12 @@ def _synthetic_graph_warmup(arch: InfModelArch, device: torch.device):
     x = torch.zeros(2, in_dim, device=device)
     edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long, device=device)
     edge_attr = torch.zeros(2, edge_dim, device=device)
-    legal_mask = torch.tensor([False, True], dtype=torch.bool, device=device)
+    # The gather form of "node 1 is the only legal node" — `forward_batch` takes the
+    # contract's `legal_node_gather` rows, not a dense mask (R284 P-MASK).
+    legal_index = torch.tensor([1], dtype=torch.long, device=device)
     stone_mask = torch.tensor([True, False], dtype=torch.bool, device=device)
     node_offsets = torch.tensor([0, 2], dtype=torch.long, device=device)
-    return x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets
+    return x, edge_index, edge_attr, legal_index, stone_mask, node_offsets
 
 
 # ── WP13-A run-safety composition root ───────────────────────────────────────────────

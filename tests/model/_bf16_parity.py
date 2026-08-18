@@ -145,7 +145,7 @@ class Batch:
     x: torch.Tensor
     edge_index: torch.Tensor
     edge_attr: torch.Tensor
-    legal_mask: torch.Tensor
+    legal_index: torch.Tensor
     stone_mask: torch.Tensor
     node_offsets: torch.Tensor
     legal_offsets: torch.Tensor
@@ -207,7 +207,11 @@ def build_batch(arch: GnnArch) -> Batch:
         x=torch.cat(xs),
         edge_index=edge_index,
         edge_attr=torch.cat(attrs),
-        legal_mask=torch.cat(legal),
+        # The wire's `legal_node_gather` shape (R284 P-MASK): the ROWS of the legal nodes,
+        # strictly ascending, which is what `forward_batch` gathers with. Derived from the
+        # per-graph masks this builder already makes, so the SET is unchanged and the LAW-06
+        # arms compare the same graphs they compared before.
+        legal_index=torch.nonzero(torch.cat(legal), as_tuple=False).reshape(-1),
         stone_mask=torch.cat(stone),
         node_offsets=torch.tensor(node_offsets, dtype=torch.long),
         legal_offsets=torch.tensor(legal_offsets, dtype=torch.long),
@@ -243,7 +247,7 @@ def run_arm(net: GnnNet, batch: Batch, *, autocast_enabled: bool,
     params = [p for p in net.parameters() if p.requires_grad]
     with torch.autocast(device_type=device, dtype=dtype, enabled=autocast_enabled):
         policy_logits, _value, bin_logits = net.forward_batch(
-            batch.x, batch.edge_index, batch.edge_attr, batch.legal_mask,
+            batch.x, batch.edge_index, batch.edge_attr, batch.legal_index,
             batch.stone_mask, node_offsets=batch.node_offsets,
         )
         policy_loss = ragged_policy_ce(

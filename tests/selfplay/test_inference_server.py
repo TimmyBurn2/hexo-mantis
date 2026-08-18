@@ -236,9 +236,9 @@ class _FiniteGraphNet(torch.nn.Module):
         self.nonfinite = nonfinite
         self.calls: list[tuple[int, ...]] = []
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets):
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
         self.calls.append(tuple(x.shape))
-        n_legal = int(legal_mask.sum().item())
+        n_legal = int(legal_index.numel())  # R284 P-MASK: rows, not a dense mask
         b = int(node_offsets.shape[0]) - 1
         logits = torch.zeros(n_legal, dtype=torch.float32)
         value = torch.zeros(b, 1, dtype=torch.float32)

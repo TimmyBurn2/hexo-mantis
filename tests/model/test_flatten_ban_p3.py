@@ -66,15 +66,15 @@ def test_forward_batch_policy_logits_are_unpadded_ungrouped() -> None:
     x = torch.randn(n_total, _IN_DIM)
     edge_index = torch.zeros((2, 0), dtype=torch.long)
     edge_attr = torch.zeros((0, _EDGE_DIM), dtype=torch.float32)
-    legal_mask = torch.zeros(n_total, dtype=torch.bool)
-    legal_mask[[0, 1, 2]] = True          # 3 of graph 0's 4 nodes
-    legal_mask[[4, 5, 6, 7, 8]] = True    # 5 of graph 1's 6 nodes
+    # The wire's `legal_node_gather` (R284 P-MASK): ascending ROWS, not a dense mask.
+    # 3 of graph 0's 4 nodes, then 5 of graph 1's 6.
+    legal_index = torch.tensor([0, 1, 2, 4, 5, 6, 7, 8], dtype=torch.long)
     stone_mask = torch.zeros(n_total, dtype=torch.bool)
     node_offsets = torch.tensor([0, 4, 10], dtype=torch.long)
 
     with torch.no_grad():
         policy_logits, value, bin_logits = net.forward_batch(
-            x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets=node_offsets,
+            x, edge_index, edge_attr, legal_index, stone_mask, node_offsets=node_offsets,
         )
     assert policy_logits.shape == (8,)
     assert value.shape == (2, 1)

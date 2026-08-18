@@ -121,7 +121,7 @@ class GnnNet(nn.Module):
         x: Tensor,
         edge_index: Tensor,
         edge_attr: Tensor,
-        legal_mask: Tensor,
+        legal_index: Tensor,
         stone_mask: Tensor,
         node_offsets: Tensor | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
@@ -132,16 +132,22 @@ class GnnNet(nn.Module):
             x:            (N_total, in_dim) node features (all graphs concatenated).
             edge_index:   (2, E_total) int64, per-graph node offsets already applied.
             edge_attr:    (E_total, edge_dim) edge features.
-            legal_mask:   (N_total,) bool — True on legal-move (empty) nodes.
+            legal_index:  (Lg,) int64 — the contract's `legal_node_gather`: the ROWS of the
+                          legal-move (empty) nodes, strictly ascending (wire contract check
+                          13). This is the gather the ragged output is paired by; passing the
+                          `(N_total,) bool` mask here is a TypeError, not a slow path.
             stone_mask:   (N_total,) bool — True on stone nodes (for value pooling).
             node_offsets: (B+1,) int64 non-decreasing ptr array, `[0]=0`, `[B]=N_total`.
                           `None` == single graph (B=1): treated as `[0, N_total]`.
         Returns:
-            policy_logits: (num_legal_total,) per-legal-node logits, in node order.
+            policy_logits: (num_legal_total,) per-legal-node logits, in gather order.
             value:        (B, 1) decoded value per graph, in [-1, 1].
             bin_logits:   (B, n_value_bins) raw dist65 bin logits per graph.
         """
-        assert legal_mask.dtype == torch.bool, f"legal_mask must be bool, got {legal_mask.dtype}"
+        assert legal_index.dtype == torch.long, (
+            f"legal_index must be int64 rows (the contract's legal_node_gather), got "
+            f"{legal_index.dtype} — a bool mask here is the pre-R284 call shape"
+        )
         assert stone_mask.dtype == torch.bool, f"stone_mask must be bool, got {stone_mask.dtype}"
         n_total = x.shape[0]
         device = x.device
@@ -150,7 +156,16 @@ class GnnNet(nn.Module):
         num_graphs = node_offsets.shape[0] - 1
 
         emb = self.representation(x, edge_index, edge_attr)
-        legal_emb = emb[legal_mask]
+        # SYNC-FREE GATHER (R284(b), P-MASK). `emb[bool_mask]` decomposes into
+        # `aten::nonzero` + `aten::index`, and `nonzero` must report a data-dependent output
+        # length to the host — torch's own doc: "When input is on CUDA, torch.nonzero() causes
+        # host-device synchronization." In a fixed-worker serve loop that sync is pure latency:
+        # the policy/value kernels cannot enqueue until the trunk drains. `index_select` knows
+        # its output length from `legal_index.numel()` and needs no round trip.
+        # BYTE-IDENTICAL, not approximately so: both forms are pure row copies and the wire's
+        # gather is strictly ascending (check 13), which is exactly when mask order and gather
+        # order coincide. Pinned by tests/model/test_pmask_gather_parity.py, mutation included.
+        legal_emb = emb.index_select(0, legal_index)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 
         batch_vec = _node_offsets_to_batch_vec(node_offsets)

@@ -870,7 +870,7 @@ class InferenceServer(threading.Thread):
                                         batch.x,
                                         batch.edge_index,
                                         batch.edge_attr,
-                                        batch.legal_mask,
+                                        batch.legal_node_gather,
                                         stone_mask,
                                         batch.node_offsets,
                                     )

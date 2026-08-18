@@ -166,8 +166,8 @@ class _FiniteGraphNet(torch.nn.Module):
         super().__init__()
         self.dummy = torch.nn.Parameter(torch.zeros(1))
 
-    def forward_batch(self, x, edge_index, edge_attr, legal_mask, stone_mask, node_offsets):
-        n_legal = int(legal_mask.sum().item())
+    def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
+        n_legal = int(legal_index.numel())  # R284 P-MASK: rows, not a dense mask
         b = int(node_offsets.shape[0]) - 1
         return (
             torch.zeros(n_legal, dtype=torch.float32),

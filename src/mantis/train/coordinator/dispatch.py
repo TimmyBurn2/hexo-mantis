@@ -46,7 +46,7 @@ class GraphStepInputs:
     x: Any
     edge_index: Any
     edge_attr: Any
-    legal_mask: Any
+    legal_index: Any
     stone_mask: Any
     node_offsets: Any
     legal_offsets: Any
@@ -204,7 +204,7 @@ def _graph_step(
             )
             return GraphStepInputs(
                 x=batch.x, edge_index=batch.edge_index, edge_attr=batch.edge_attr,
-                legal_mask=batch.legal_mask, stone_mask=stone_mask_from_batch(batch),
+                legal_index=batch.legal_node_gather, stone_mask=stone_mask_from_batch(batch),
                 node_offsets=batch.node_offsets, legal_offsets=batch.legal_offsets,
                 policy_target=torch.from_numpy(
                     np.asarray(tsl.policy_target, dtype=np.float32)).to(device),
