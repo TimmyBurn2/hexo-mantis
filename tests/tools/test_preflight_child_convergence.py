@@ -64,15 +64,16 @@ _COMPOSER_EVENTS = ("run_boot_identity", "resolved_config")
 
 
 @pytest.fixture(scope="module")
-def preflight_child(tmp_path_factory):
-    """ONE real preflight spawn, shared by every assertion below (a second ~30 s boot to
-    re-assert the same process would be waste, not independence)."""
+def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ceiling_sec):
+    """ONE real preflight spawn, shared by every assertion below (a second boot to re-assert the
+    same process would be waste, not independence). Budget from `conftest.PREFLIGHT_BUDGET_SEC`."""
     out_dir = tmp_path_factory.mktemp("preflight_convergence")
     proc = subprocess.run(
         [sys.executable, str(_TOOL), "--config", str(_CONFIG),
          "--burst-steps", str(_BURST_STEPS), "--out-dir", str(out_dir),
-         "--timeout-sec", "400"],
-        cwd=str(_REPO), capture_output=True, text=True, timeout=500,
+         "--timeout-sec", str(preflight_budget_sec)],
+        cwd=str(_REPO), capture_output=True, text=True,
+        timeout=preflight_harness_ceiling_sec,
     )
     return proc, out_dir
 

@@ -80,6 +80,55 @@ def _sweep() -> None:
             ) from exc
 
 
+# ── the ONE preflight wall-clock budget (R46 loop, R284(f)) ───────────────────────────
+#
+# THREE tests drove the real preflight tool with three separately-transcribed `--timeout-sec`
+# constants — 300, 400, 400 — and a fourth number (`subprocess.run(timeout=500)`) coupled to one
+# of them. Four authorities for one quantity, none of them derived from anything, all of them
+# silently host-dependent: the budget bounds a REAL boot + burst + terminal eval, so what it
+# actually encodes is "how fast is the machine", which is not a property any test can transcribe.
+#
+# The 300 went red on the migration box (`ADJUDICATION_QUEUE.md`: rc 40, the tool's own timeout,
+# child rc 48). MEASURED HERE, 2026-08-18, on a 16-core host:
+#
+#     the same row, ALONE on an idle host          161.6 s   (passed)
+#     the same row, under 698% synthetic CPU load  200.1 s   (passed)
+#
+# So this host does NOT reproduce the failure, with or without load — which means the box's
+# >300 s is HARDWARE, not contention, and no amount of deflaking here can find it. The one
+# number that IS a measurement of the slow host is the sitting record's completed drive: the
+# same command, given 900 s, exited rc 0 in **447 s**.
+#
+# The budget is therefore set to cover the SLOWEST MEASURED HOST with margin, in one place, with
+# its grounds beside it. It is NOT a speedup and does not pretend to be: it is the honest
+# statement that a fixed wall-clock bar on a real boot must clear the slowest machine that runs
+# it, and 300 did not. Raising it costs nothing on a passing run (this host exits at ~162 s) and
+# buys a longer wait only on a genuinely hung one.
+#
+# LAW-15's shape, one level down: a bar must be a reproducible instrument, and a bar that passes
+# on one host and fails on another is measuring the host.
+PREFLIGHT_BUDGET_SEC = 900.0
+
+#: The harness ceiling that must always exceed the tool's own budget, DERIVED rather than
+#: transcribed — if `subprocess.run(timeout=...)` fires first, the tool never gets to write the
+#: rc-40 report the tests read, and the failure is reported as a harness timeout instead of as
+#: the tool's verdict.
+PREFLIGHT_HARNESS_CEILING_SEC = PREFLIGHT_BUDGET_SEC + 120.0
+
+
+@pytest.fixture(scope="session")
+def preflight_budget_sec() -> float:
+    """THE preflight wall-clock budget. A fixture and not an import: R5 bars cross-test imports,
+    and a conftest fixture is the sanctioned way to share one value across sibling test modules."""
+    return PREFLIGHT_BUDGET_SEC
+
+
+@pytest.fixture(scope="session")
+def preflight_harness_ceiling_sec() -> float:
+    """The harness ceiling, always > the tool budget (derived above, never transcribed)."""
+    return PREFLIGHT_HARNESS_CEILING_SEC
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _preflight_probe_path_is_not_left_in_the_tree():
     """Swept BEFORE as well as after: a poisoned tree left by an earlier session must not

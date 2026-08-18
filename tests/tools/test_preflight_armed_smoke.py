@@ -41,12 +41,15 @@ CONFIG = REPO_ROOT / "configs" / "smoke_preflight_armed.yaml"
 BURST_STEPS = 16
 
 
-def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight(tmp_path):
+def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight(
+    tmp_path, preflight_budget_sec, preflight_harness_ceiling_sec
+):
     proc = subprocess.run(
         [sys.executable, str(TOOL), "--config", str(CONFIG),
          "--burst-steps", str(BURST_STEPS), "--out-dir", str(tmp_path),
-         "--timeout-sec", "400"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=500,
+         "--timeout-sec", str(preflight_budget_sec)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True,
+        timeout=preflight_harness_ceiling_sec,
     )
     tail = (proc.stdout + proc.stderr)[-3000:]
     assert proc.returncode == 0, f"preflight not green (rc {proc.returncode}):\n{tail}"

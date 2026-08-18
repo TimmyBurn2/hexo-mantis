@@ -61,15 +61,20 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
 
 
 @pytest.mark.integration
-def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path):
+def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_budget_sec):
     """The discriminating negative: the refusal is scoped to THIS run_id's segments —
     foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
-    rc 0, exactly as on a clean dir)."""
+    rc 0, exactly as on a clean dir).
+
+    The budget comes from `conftest.PREFLIGHT_BUDGET_SEC` (R46 loop under R284(f)) rather than
+    from a literal here. It used to read `300`, which passes on this host with ~46% margin and
+    went red on the migration box — the grounds, and the three measurements behind the value,
+    are in the conftest beside the constant."""
     out = tmp_path / "littered"
     (out / "logs").mkdir(parents=True)
     (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n')
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", "300")
+                    "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec))
     assert res.returncode == 0, res.stdout + res.stderr
 
 
