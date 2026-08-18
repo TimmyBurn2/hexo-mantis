@@ -167,7 +167,10 @@ def test_forward_single_is_the_independent_cross_formulation_reference(payload_f
     [
         (lambda g: torch.flip(g, dims=(0,)), "reversed"),
         (lambda g: torch.roll(g, 1, dims=0), "rolled-by-one"),
-        (lambda g: torch.cat([g[:-1], g[:1]]), "last-row-duplicated"),
+        # R73 name-truth: the label says exactly what the lambda does. Written as
+        # `[g[:-1], g[:1]]` — the FIRST row replacing the last. The obvious-looking
+        # `[g[:-1], g[-1:]]` is the IDENTITY and would be a mutation that can never fail.
+        (lambda g: torch.cat([g[:-1], g[:1]]), "last-row-replaced-by-the-first"),
     ],
 )
 def test_a_wrong_gather_is_SEEN_by_this_oracle(payload_fields, corrupt, label) -> None:

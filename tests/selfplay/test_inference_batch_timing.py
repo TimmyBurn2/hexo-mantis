@@ -204,7 +204,14 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
         legal_mask=legal_mask,
         legal_offsets=torch.arange(0, 2 * n_graphs + 1, 2, dtype=torch.int64),
-        legal_node_gather=torch.zeros(2 * n_graphs, dtype=torch.int64),
+        # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending
+        # across the fuse (wire check 13). It used to be all zeros, which worked only
+        # because the stub reads `.numel()` — a stub that counted PER GRAPH would have
+        # put every legal node in graph 0 and the fixture would not have said so.
+        legal_node_gather=torch.tensor(
+            [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
+            dtype=torch.int64,
+        ),
         policy_dst_slot=torch.zeros(2 * n_graphs, dtype=torch.int64),
         node_offsets=node_offsets,
         node_coords=torch.zeros((n, 2), dtype=torch.int64),

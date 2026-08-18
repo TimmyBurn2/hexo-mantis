@@ -134,8 +134,11 @@ class GnnNet(nn.Module):
             edge_attr:    (E_total, edge_dim) edge features.
             legal_index:  (Lg,) int64 — the contract's `legal_node_gather`: the ROWS of the
                           legal-move (empty) nodes, strictly ascending (wire contract check
-                          13). This is the gather the ragged output is paired by; passing the
-                          `(N_total,) bool` mask here is a TypeError, not a slow path.
+                          13). This is the gather the ragged output is paired by. Passing the
+                          `(N_total,) bool` mask here FAILS CLOSED — `AssertionError` from the
+                          dtype guard below, or (under `python -O`, where asserts vanish) a
+                          `RuntimeError` from `index_select`. Never a slow path, and never a
+                          silent one.
             stone_mask:   (N_total,) bool — True on stone nodes (for value pooling).
             node_offsets: (B+1,) int64 non-decreasing ptr array, `[0]=0`, `[B]=N_total`.
                           `None` == single graph (B=1): treated as `[0, N_total]`.
