@@ -133,6 +133,20 @@ PARENT_DEATH_PPID_ENV: str = "MANTIS_PARENT_DEATH_PPID"
 #: there is relocating the `prctl` primitive to `mantis.util`.)
 PARENT_DEATH_ARM_EXEC_MODULE: str = "mantis.train.lifecycle.arm_exec"
 
+#: "My parent vanished while I was arming" — the child never began the work it was started for.
+#: NOT 0: a waiter reading 0 would record a completed child. It sits OUTSIDE the reserved 42–48
+#: band deliberately, because that band is the run's own diagnosis of its own work and 71 says
+#: the run never began. (It is also `EX_OSERR` in `sysexits.h`; cosmetic, no collision.)
+#:
+#: DEFINED HERE and imported by `train/lifecycle/signals.py`, which is the only process that
+#: ever exits with it. F-816-19 put an `os._exit(71)` inside `mantis.run.main`'s arming gate,
+#: which made 71 a code the SUPERVISOR reads — and `monitor -> train` is an illegal edge, so a
+#: code both sides must name has to sit below the cut, exactly like the two constants above and
+#: like the rest of the exit-code family in this file. `supervise._on_child_exit` names it in
+#: its own arm: propagated, never relaunched — a child whose supervisor was already gone has
+#: nothing to be relaunched into.
+PARENT_VANISHED_EXIT_CODE: int = 71
+
 
 @dataclass(frozen=True)
 class HeartbeatFileState:

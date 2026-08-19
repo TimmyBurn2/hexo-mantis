@@ -40,7 +40,7 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-from mantis.monitor.heartbeat import PARENT_DEATH_PPID_ENV
+from mantis.monitor.heartbeat import PARENT_DEATH_PPID_ENV, PARENT_VANISHED_EXIT_CODE
 
 _LOG = logging.getLogger(__name__)
 
@@ -56,10 +56,55 @@ _children: set[Any] = set()
 #: THREAD dies — the one teardown that does not require the parent to execute anything.
 _PR_SET_PDEATHSIG = 1
 
-#: Exit code for "my parent vanished while I was arming". NOT 0: an exit that did none of the
-#: work it was started for is not a success, and a waiter reading 0 would record a completed
-#: child. Distinct from the run's own abort codes so it cannot be confused with one.
-PARENT_VANISHED_EXIT_CODE = 71
+#: `PARENT_VANISHED_EXIT_CODE` (71) is DEFINED IN `monitor/heartbeat.py` and imported above, and
+#: that is the point rather than an accident: 42/43/45/46/47/48 all live there, and since
+#: F-816-19 put an `os._exit(71)` inside `mantis.run.main`'s arming gate it became a code the
+#: SUPERVISOR reads — so it needs ONE spelling that `monitor/**` can name without importing
+#: `train/**`, which is an illegal edge.
+
+
+@dataclass(frozen=True)
+class ParentDeathDecision:
+    """WHAT the arming gate decided, and WHY — the record LAW-18 needs the run to publish.
+
+    A process has exactly ONE arming decision, taken at its entry point before any sink,
+    config or run id exists, so the decision has to be CARRIED to the composition root rather
+    than returned to it. `reason` is a closed vocabulary, one member per branch of the gate:
+    `supervised`, `wrapper_armed_by_trampoline`, `not_supervised`, `malformed_stamp`,
+    `wrapper_chain_too_deep`, `ancestry_unreadable`, `unsupported_platform`.
+    """
+
+    armed: bool
+    reason: str
+    supervisor_pid: int | None
+    ppid: int
+    chain_depth: int | None
+    signal_name: str | None
+
+
+#: The carrier. Set ONCE by the gate and never cleared: module scope IS the lifetime of "this
+#: process's arming decision", and `signals.py` already holds process-scoped state for the same
+#: subsystem (`_children`, `_child_lock`). A latch and not a signature change on purpose — the
+#: alternative threads the decision through `launch_run`, whose caller is a FROZEN oracle.
+_LAST_DECISION: ParentDeathDecision | None = None
+
+
+def last_parent_death_decision() -> ParentDeathDecision | None:
+    """The arming decision this process took, or None if the gate never ran.
+
+    None is meaningful and must stay reachable: `launch_run` is called in-process by tests that
+    never go through `main`, and a composition that manufactured an `armed=false` record for
+    those would be a SECOND authority for a decision only the gate can take (LAW-07).
+    """
+    return _LAST_DECISION
+
+
+def _record(decision: ParentDeathDecision) -> bool:
+    """Latch the gate's decision (set-once) and return `decision.armed`."""
+    global _LAST_DECISION
+    if _LAST_DECISION is None:
+        _LAST_DECISION = decision
+    return decision.armed
 
 
 def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
@@ -252,6 +297,14 @@ def arm_parent_death_if_supervised() -> bool:
 
     Never fatal, inheriting `arm_parent_death_signal`'s contract unchanged: off Linux, or on a
     kernel without prctl, it returns False and the run proceeds.
+
+    EVERY BRANCH RECORDS ITS DECISION through `_record` (LAW-18). The gate runs before any sink
+    exists, so the composition root reads the latch back through `last_parent_death_decision()`
+    and publishes `parent_death_signal_armed` into the run's own event stream — unconditionally,
+    armed or not, in the shape the two watchdogs' arm-logs already set. Before that, the ONLY
+    record of this decision was a log line on the run's inherited stderr, i.e. the SUPERVISOR's
+    stderr: the stream that dies with the supervisor. After a real orphan, no artifact anywhere
+    said whether the run had ever been armed.
     """
     raw = os.environ.get(PARENT_DEATH_PPID_ENV)
     if raw is None:
@@ -259,7 +312,10 @@ def arm_parent_death_if_supervised() -> bool:
             "parent_death_signal armed=false reason=not_supervised (%s unset)",
             PARENT_DEATH_PPID_ENV,
         )
-        return False
+        return _record(ParentDeathDecision(
+            armed=False, reason="not_supervised", supervisor_pid=None, ppid=os.getppid(),
+            chain_depth=None, signal_name=None,
+        ))
     try:
         stamped = int(raw)
     except ValueError:
@@ -267,7 +323,10 @@ def arm_parent_death_if_supervised() -> bool:
             "parent_death_signal armed=false reason=malformed_stamp %s=%r",
             PARENT_DEATH_PPID_ENV, raw,
         )
-        return False
+        return _record(ParentDeathDecision(
+            armed=False, reason="malformed_stamp", supervisor_pid=None, ppid=os.getppid(),
+            chain_depth=None, signal_name=None,
+        ))
 
     actual = os.getppid()
     if stamped == actual:
@@ -278,7 +337,11 @@ def arm_parent_death_if_supervised() -> bool:
             "supervised" if armed else "unsupported_platform",
             stamped,
         )
-        return armed
+        return _record(ParentDeathDecision(
+            armed=armed, reason="supervised" if armed else "unsupported_platform",
+            supervisor_pid=stamped, ppid=actual, chain_depth=1,
+            signal_name="SIGKILL" if armed else None,
+        ))
 
     try:
         os.kill(stamped, 0)
@@ -305,7 +368,12 @@ def arm_parent_death_if_supervised() -> bool:
             "wrapper_armed_by_trampoline" if armed else "unsupported_platform",
             stamped, actual,
         )
-        return armed
+        return _record(ParentDeathDecision(
+            armed=armed,
+            reason="wrapper_armed_by_trampoline" if armed else "unsupported_platform",
+            supervisor_pid=stamped, ppid=actual, chain_depth=2,
+            signal_name="SIGKILL" if armed else None,
+        ))
 
     if depth is None:
         _LOG.warning(
@@ -314,7 +382,10 @@ def arm_parent_death_if_supervised() -> bool:
             "process's ancestry, so there is no parent whose death this run may be tied to",
             stamped, actual,
         )
-        return False
+        return _record(ParentDeathDecision(
+            armed=False, reason="ancestry_unreadable", supervisor_pid=stamped, ppid=actual,
+            chain_depth=None, signal_name=None,
+        ))
 
     _LOG.error(
         "parent_death_signal armed=false reason=wrapper_chain_too_deep supervisor_pid=%d "
@@ -323,7 +394,10 @@ def arm_parent_death_if_supervised() -> bool:
         "SUPERVISOR and must be reaped by hand if the supervisor is killed outright",
         stamped, actual, depth,
     )
-    return False
+    return _record(ParentDeathDecision(
+        armed=False, reason="wrapper_chain_too_deep", supervisor_pid=stamped, ppid=actual,
+        chain_depth=depth, signal_name=None,
+    ))
 
 
 def register_child(proc: Any) -> None:

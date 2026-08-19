@@ -46,6 +46,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (
     PARENT_DEATH_ARM_EXEC_MODULE,
     PARENT_DEATH_PPID_ENV,
+    PARENT_VANISHED_EXIT_CODE,
     PERSIST_FATAL_EXIT_CODE,
     WATCHDOG_STALL_EXIT_CODE,
     read_heartbeat_file,
@@ -195,6 +196,16 @@ class Supervisor:
         self._emit("child_exited", code=code)
         if code == 0:
             return 0
+        if code == PARENT_VANISHED_EXIT_CODE:
+            # The child's own arming gate found the pid that stamped it already gone — this
+            # supervisor died between its `Popen` and the child's entry point, and what is
+            # reading this is a RELAUNCHED or otherwise later supervisor. Named rather than
+            # swallowed into the catch-all below: it is the one rc that says the child never
+            # began, so there is nothing to relaunch it INTO and a crash-loop would be the only
+            # possible outcome. This arm is also the only artifact the exit-71 path can leave
+            # anywhere — the run had no sink, no out-dir and no run id when it took it.
+            self._emit("supervisor_stop", reason="child_parent_vanished", code=code)
+            return PARENT_VANISHED_EXIT_CODE
         if code == PERSIST_FATAL_EXIT_CODE:
             # A persistence fault is NOT transient — relaunching just loops the failure.
             self._emit("supervisor_stop", reason="persist_fatal", code=code)

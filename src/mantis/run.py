@@ -107,9 +107,11 @@ from mantis.train.determinism import seed_everything
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import (
+    ParentDeathDecision,
     ShutdownState,
     arm_parent_death_if_supervised,
     install_signal_handlers,
+    last_parent_death_decision,
 )
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
@@ -578,6 +580,45 @@ def _step_coordinator_config(
     )
 
 
+def _parent_death_event(decision: ParentDeathDecision | None) -> dict[str, Any] | None:
+    """The LAW-18 payload for the parent-death arming decision — or None if there is none.
+
+    THE DEFECT THIS CLOSES (Q3 red-team A6). The arming is a LEVER, and its only record used to
+    be a log line on the run's INHERITED stderr — which is the SUPERVISOR's stderr, the stream
+    that dies with the supervisor. After a real orphan no artifact anywhere said whether the run
+    had ever been armed, which is precisely the case where the answer matters.
+
+    THE PAYLOAD IS BUILT FROM THE GATE'S OWN RECORD and never re-derived. The gate runs at
+    `main`'s first statement, long before a sink, an out-dir or a run id exists, so it latches
+    its decision and the composition root reads that latch back. A hand-assembled copy here
+    would be a second authority for a decision only the gate can take.
+
+    `None` IN MEANS `None` OUT, and that is the LAW-07 half. A None latch means the gate never
+    ran — this composition was entered directly rather than through `main`, which is what
+    happens in `tests/test_run_launcher.py`'s five in-process boots — and manufacturing a
+    comfortable `armed=false` for that case would be the emitter inventing its own producer.
+    Absence is the honest record of "nobody decided".
+
+    UNCONDITIONAL otherwise, `armed=false` included. That is the sibling pattern verbatim:
+    `HeartbeatWatchdog.arm` and `StallWatchdog.arm` both log on every branch so that a disabled
+    or misconfigured watchdog is VISIBLE rather than silent. A lever that announced itself only
+    when it fired would leave the wrapper case — the one that matters — invisible.
+    """
+    if decision is None:
+        return None
+    return {
+        "event": "parent_death_signal_armed",
+        "armed": decision.armed,
+        "reason": decision.reason,
+        "supervisor_pid": decision.supervisor_pid,
+        "ppid": decision.ppid,
+        "chain_depth": decision.chain_depth,
+        "signal": decision.signal_name,
+        # The sibling watchdogs' own field name for "this lever CAN fire".
+        "enabled": decision.armed,
+    }
+
+
 def compose_run(
     *,
     config: RunConfig | Any,
@@ -761,6 +802,13 @@ def compose_run(
             # hand-assembled copy would be a second authority for the run's resolved
             # posture. Producer-manifest row: `resolved_config`.
             emit_via(run_safety.sink, resolve_config(config).to_event_payload())
+
+        with _seam("parent_death_signal_armed emit"):
+            # LAW-18 (Q3 red-team A6): the arming lever announces itself in the run's OWN
+            # stream. Payload and None-guard both live in `_parent_death_event` — see there.
+            parent_death_event = _parent_death_event(last_parent_death_decision())
+            if parent_death_event is not None:
+                emit_via(run_safety.sink, parent_death_event)
 
         # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
         # or eval state may make actor sync conditional (pinned by
