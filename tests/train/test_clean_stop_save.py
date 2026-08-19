@@ -721,6 +721,17 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
 
     NOT asserted, deliberately: that the presence of this checkpoint proves the run was clean.
     It does not (Class B, OC-5's docstring). Cleanliness is `abort_rule`, asserted separately.
+
+    **DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort`.** The override below sets it to
+    `None` for THIS test's config only — `configs/` is untouched, gate 12's manifest row is
+    untouched, and the rule's producer stays live in the four other real+armed drives. Grounds:
+    the runner's fire was a TRUE positive of the rule as configured and a FALSE positive of its
+    intent. A 50-step drive is below this rule's jurisdiction — run5's own minted `min_step` is
+    25 000, and the armed smoke's `min_step: 10` is a preflight reachability prop, not a safety
+    judgement — so on a slow host the early 100%-ply-cap-draw regime (an UNTRAINED net, not a
+    collapsed one) crosses the evidence bar and aborts a healthy run. The schema permits no
+    armed-but-unfireable posture, so this is the only legal spelling of "below jurisdiction".
+    Frozen-oracle edit, R43-disclosed and GRANTED diff-scoped by **R288(c)**; queue row F-816-23.
     """
     minted = smoke_run_config(_SMOKE_CONFIG)
     assert int(minted.train.max_train_steps) == _MINTED_BOUND, (
@@ -728,7 +739,9 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
         "a wall-clock one and nothing else. If the mint moves this number, M-0 must be "
         f"re-measured — not this assertion re-aimed; got {minted.train.max_train_steps!r}"
     )
-    config = smoke_run_config(_SMOKE_CONFIG, train={"max_train_steps": _OC7_BOUND})
+    config = smoke_run_config(
+        _SMOKE_CONFIG, train={"max_train_steps": _OC7_BOUND, "draw_rate_abort": None}
+    )
     assert int(config.train.max_train_steps) == _OC7_BOUND, (
         "premise: the M-0 bound really reached the coordinator's `stop_step` authority — a "
         f"section override that silently failed would drive 200 and blow the tier; got "
