@@ -271,6 +271,57 @@ def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink:
         })
 
 
+def _result_tmp_path(result_path: str) -> Path:
+    """The `.tmp` the worker writes for `result_path`, derived the way the worker derives it.
+
+    `worker.py` spells it `target.with_suffix(target.suffix + ".tmp")`, which for a
+    `…_result.json` target is exactly `str(target) + ".tmp"`. Two derivations of one fact in
+    two files is a drift risk, so the two spellings are pinned against each other by a producer
+    row rather than trusted — the cutover battery is going to edit the worker's write lines.
+    """
+    return Path(result_path + ".tmp")
+
+
+def _remove_result_tmp(result_path: str) -> None:
+    """Delete THIS round's `<result>.json.tmp` once its writer is gone (F-816-20 item 3a).
+
+    THE LITTER. The worker writes `tmp.write_text(...)` then `tmp.replace(target)`. A kill
+    between those two lines leaves the `.tmp` on disk FOREVER: round ids are unique, so nothing
+    ever writes that name again. Atomicity is intact — a reader sees the complete old file or
+    nothing — so this is litter, never corruption, but litter with no expiry.
+
+    It only ever removes the `.tmp`, NEVER the target, so the worker's tmp+replace stays
+    exactly as atomic as it was. Callers guard on the child being confirmed dead: unlinking a
+    tmp a LIVE writer is about to `replace()` would turn litter into a failed round, which is
+    the fix being worse than the defect.
+
+    NEVER FATAL, and that is load-bearing rather than polite: this runs in `_finalize_round`'s
+    un-caught prologue, outside the catch-all that converts anything to
+    `eval_broken(round_completion_error)`. A round is not broken by a file we could not delete,
+    and an exception escaping here would kill the poller thread silently.
+    """
+    try:
+        _result_tmp_path(result_path).unlink(missing_ok=True)
+    except OSError:
+        _LOG.debug("stale eval result tmp not removed: %s.tmp", result_path, exc_info=True)
+
+
+def _drop_result_tmp_if_writer_gone(inflight: dict[str, Any]) -> None:
+    """Remove one round's `.tmp` iff its worker is confirmed dead. The ONE decision, shared by
+    the two teardown routes that reach it (`_finalize_round` and `stop()`).
+
+    `spec` is read through `.get` and checked FIRST so the liveness call is short-circuited
+    when a record carries no spec: both call sites sit in un-caught prologues, and a `KeyError`
+    or `AttributeError` there would kill the poller thread — the silent-thread-death class the
+    catch-all further down exists to prevent, and which it cannot reach from here.
+    """
+    spec = inflight.get("spec")
+    proc = inflight.get("proc")
+    if spec is None or proc is None or proc.is_alive():
+        return
+    _remove_result_tmp(spec.result_path)
+
+
 def _worker_entry(spec_path: str, result_path: str) -> None:
     """The spawn-ctx `Process` target (module-level so spawn can pickle-by-reference).
     Torch/worker imports stay LAZY — this function body is the only place the parent
@@ -347,6 +398,21 @@ class EvalPipeline:
         # every file under spool_dir and torch.load()s it).
         self._work_dir = self._spool_dir.parent / f"{self._spool_dir.name}.work"
         self._work_dir.mkdir(parents=True, exist_ok=True)
+        # F-816-20 item 3a, the sweep. This is the ONLY handle the "the run itself was
+        # SIGKILLed" case has: no code ran in that process, so the only thing that can ever
+        # clean its litter is a LATER pipeline over the same work dir — which is exactly what
+        # a `--resume-from` relaunch into the same `--out-dir` is. The precondition is that at
+        # CONSTRUCTION this pipeline has no live writer, and a second pipeline over one work
+        # dir is already impossible: `build_eval_pipeline` has one call site, once per
+        # process, and the dir is derived from `--out-dir`. Only the `.tmp` suffix is in
+        # scope — results, specs, progress sidecars and snapshots are never touched. No age
+        # threshold: that would be an unmeasured constant bought to solve a race the
+        # precondition already excludes.
+        for stale in self._work_dir.glob("*_result.json.tmp"):
+            try:
+                stale.unlink(missing_ok=True)
+            except OSError:
+                _LOG.debug("stale eval result tmp not swept: %s", stale, exc_info=True)
         self._ladder_state_path = Path(ladder_state_path)
         self._promotion = promotion
         self._sink = sink
@@ -624,6 +690,12 @@ class EvalPipeline:
         proc = inflight["proc"]
         from mantis.train.lifecycle.signals import unregister_child
         unregister_child(proc)
+        # F-816-20 item 3a, case 1 — the child died, the run lives. Every finalising route
+        # (`_poll_loop`, `_escalate_and_finalize`, `drain_pending`, `_run_terminal_sync`)
+        # converges here, so one guarded unlink at this point covers all four. It is placed in
+        # this un-caught prologue deliberately: it has been made non-raising by construction,
+        # and a deletion failure must never manufacture a broken round.
+        _drop_result_tmp_if_writer_gone(inflight)
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
         exit_code = getattr(proc, "exitcode", None)
 
@@ -901,6 +973,14 @@ class EvalPipeline:
                 if proc.is_alive():
                     proc.kill()
                     proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
+            # F-816-20 item 3a on the teardown route (review RC-2). This method NEVER calls
+            # `_finalize_round` — it runs its own terminate -> join -> kill -> join — and it is
+            # called unconditionally from `compose_run`'s teardown on EVERY run exit. A round
+            # in flight at ordinary shutdown is routine, not pathological, so without this line
+            # the commonest producer of the litter is the one route the per-round unlink does
+            # not reach. Same guard, same decision function: a writer that survived the kill
+            # keeps its tmp.
+            _drop_result_tmp_if_writer_gone(inflight)
 
 
 def build_eval_pipeline(
