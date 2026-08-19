@@ -495,14 +495,34 @@ def _die_of(signum: int) -> None:
     os._exit(128 + int(signum))   # pragma: no cover — only if the signal is blocked
 
 
-def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
-    """The stop path: cooperative ladder, then the rc decision (fix-design §2.4).
+#: The two signals `stop_child_cooperatively`'s own ladder can put in the child's `wait()`
+#: code (as `-signum`) — it sends nothing else, ever (see that function). A negative code
+#: outside this set was NOT caused by our escalation and is a genuine child diagnosis.
+_LADDER_SIGNALS: frozenset[int] = frozenset({int(signal.SIGTERM), int(signal.SIGKILL)})
 
-    THE CHILD'S DIAGNOSIS OUTRANKS THE STOP GESTURE. A disk-guard 47 or a terminal-eval-broken
-    48 recorded during the drain must not be erased by the fact that an operator also pressed
-    Ctrl-C, so a nonzero child code is propagated exactly as `_on_child_exit` would propagate
-    it, with the relaunch suppressed (a stop is a stop). A 0 or an unreapable child leaves
-    nothing to report but the gesture itself, and we die of it.
+
+def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
+    """The stop path: cooperative ladder, then the rc decision (fix-design §2.4, RED-TEAM
+    addendum 2 fix).
+
+    THE CHILD'S DIAGNOSIS OUTRANKS THE STOP GESTURE — but only a genuine one. A disk-guard 47
+    or a terminal-eval-broken 48 recorded during the drain must not be erased by the fact that
+    an operator also pressed Ctrl-C, so a positive child code is propagated exactly as
+    `_on_child_exit` would propagate it, with the relaunch suppressed (a stop is a stop).
+
+    A NEGATIVE code is `Popen.wait()`'s "died of signal N" shape, and `stop_child_cooperatively`
+    ONLY EVER sends SIGTERM then, on escalation, SIGKILL — so `-SIGTERM`/`-SIGKILL` here is our
+    OWN stop gesture landing back on the child, not a diagnosis. Propagating it as `child_error`
+    made `main` return e.g. `-9`, and `SystemExit(-9)` is exit status 247 — on the grace-timeout
+    and third-press paths, the common ones under the shipped 30 s grace, defeating `_die_of`'s
+    own contract that the waiter sees "died of SIGTERM" (RED-TEAM addendum 2, BROKE-IT). Those
+    two codes fall through to the die-of-signal path below instead.
+
+    A negative code OUTSIDE `_LADDER_SIGNALS` (e.g. `-11` for a child that SIGSEGVs on its own,
+    mid-drain, independent of anything this ladder sent) is still a genuine diagnosis and stays
+    `child_error` with its real code named — never relabelled as "died of the stop gesture",
+    and never routed through `_die_of` to mint an unrelated 128+n. A 0 or an unreapable child
+    (`code is None`) leaves nothing to report but the gesture itself, and we die of it.
     """
     child = supervisor.child
     code: int | None = None
@@ -510,7 +530,7 @@ def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
         code = stop_child_cooperatively(
             child, grace_sec=supervisor._kill_grace, emit=supervisor._emit,
         )
-    if code is not None and code != 0:
+    if code is not None and (code > 0 or (code < 0 and -code not in _LADDER_SIGNALS)):
         supervisor._emit("supervisor_stop", reason="child_error", code=int(code),
                          signum=stop.signum)
         return int(code)

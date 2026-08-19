@@ -24,6 +24,13 @@ exactly as before this packet. Residual 2 is therefore UNCHANGED for the wrapped
 the trampoline gives that case instead is the death of the WRAPPER, which is what makes the
 run's own depth-2 arming fire once it is armed.
 
+That residual's harm is BOUNDED, not silent: a supervisor that dies inside the unarmed window
+does not orphan the run unnoticed — when `arm_parent_death_if_supervised()` does run, its own
+check finds the stamped ppid already gone and exits `PARENT_VANISHED_EXIT_CODE` (71) at the
+gate rather than proceeding armed against a parent that no longer exists (see
+`train/lifecycle/signals.py`). The exposure is the window itself, never a leaf that runs on
+forever believing it is supervised when it is not.
+
 It lives in `mantis.train.lifecycle` and not in `mantis.monitor` because it must import the ONE
 authority for the mechanism (`arm_parent_death_signal`, this package) and `monitor -> train` is
 an illegal edge. The supervisor names it by the CONTRACT CONSTANT in `monitor/heartbeat.py` — a

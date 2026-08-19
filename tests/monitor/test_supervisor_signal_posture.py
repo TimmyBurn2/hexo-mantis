@@ -215,7 +215,13 @@ def test_the_supervisor_waits_for_a_child_that_takes_most_of_the_grace(tmp_path)
 @_LINUX_ONLY
 def test_a_child_that_ignores_SIGTERM_is_SIGKILLED_after_the_grace_and_reaped(tmp_path) -> None:
     """The bound. A child that swallows SIGTERM must be SIGKILLed once the grace expires and
-    the supervisor must LEAVE — an unbounded wait is a hang this ladder must not introduce."""
+    the supervisor must LEAVE — an unbounded wait is a hang this ladder must not introduce.
+
+    THE RC ROW (RED-TEAM addendum 2, BROKE-IT). This is the grace-timeout escalation path, and
+    the child's `wait()` code here is `-9` — this supervisor's OWN SIGKILL, not a diagnosis.
+    Before the fix that `-9` was propagated as `reason="child_error"`, so `main` returned `-9`
+    and `SystemExit(-9)` became exit status 247. The supervisor must still die OF the SIGTERM
+    the operator sent IT, and say so honestly: `reason="signal"`, never `child_error`."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=0.0, swallow=True)
     sup = _spawn_supervisor(tmp_path, child, err, kill_grace_sec=2.0)
@@ -233,6 +239,14 @@ def test_a_child_that_ignores_SIGTERM_is_SIGKILLED_after_the_grace_and_reaped(tm
             time.sleep(0.05)
         assert pid is None or not _alive(pid), "the SIGKILLed child was never reaped"
         assert not marker.exists(), "a swallowing child must not have reached its drain marker"
+        assert sup.returncode == -int(signal.SIGTERM), (
+            "the supervisor must die OF the SIGTERM it was sent, not return the child's own "
+            f"-SIGKILL as a diagnosis (SystemExit(-9) is exit status 247); rc={sup.returncode}"
+        )
+        stops = [row for row in _events(err) if row.get("event") == "supervisor_stop"]
+        assert stops and stops[-1].get("reason") == "signal", (
+            f"a self-inflicted SIGKILL must not be mislabelled child_error; got {stops}"
+        )
     finally:
         _reap(sup, *(p for p in (pid,) if p is not None))
 
@@ -290,6 +304,50 @@ def test_a_second_signal_force_stops_and_the_supervisor_still_exits(tmp_path) ->
         while pid is not None and _alive(pid) and time.monotonic() < deadline:
             time.sleep(0.05)
         assert pid is None or not _alive(pid), "the child outlived a force-stopped supervisor"
+    finally:
+        _reap(sup, *(p for p in (pid,) if p is not None))
+
+
+@_LINUX_ONLY
+def test_a_third_signal_force_kills_without_waiting_out_the_grace(tmp_path) -> None:
+    """The THIRD press: `presses >= 3` short-circuits straight to SIGKILL instead of waiting out
+    the (here, generous) grace — the operator's escalation must not be made to wait on it.
+
+    THE RC ROW (RED-TEAM addendum 2, BROKE-IT). This is the second site of the same defect as
+    the grace-timeout row above: the reaped child's code is `-9`, this supervisor's OWN SIGKILL,
+    and must not be relabelled as the child's diagnosis. The supervisor still dies OF the
+    SIGTERM the operator sent it on the FIRST press — the one that unwound the poll loop —
+    regardless of how many further presses followed."""
+    log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
+    child = _write_child(tmp_path, log, marker, drain_sec=0.0, swallow=True)
+    sup = _spawn_supervisor(tmp_path, child, err, kill_grace_sec=90.0)
+    pid = None
+    try:
+        _await_line(log, "READY")
+        pid = _child_pid(log)
+        sup.send_signal(signal.SIGTERM)
+        time.sleep(0.3)
+        sup.send_signal(signal.SIGTERM)
+        time.sleep(0.3)
+        sup.send_signal(signal.SIGTERM)
+        sup.wait(timeout=_DEADLINE_SEC)
+        assert "supervisor_force_kill" in _names(err), (
+            f"the third press must force-kill without waiting out the grace; "
+            f"events={_names(err)}"
+        )
+        deadline = time.monotonic() + 10.0
+        while pid is not None and _alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert pid is None or not _alive(pid), "the third-press SIGKILL was never reaped"
+        assert sup.returncode == -int(signal.SIGTERM), (
+            "the supervisor must die OF the SIGTERM from the first press, not the child's own "
+            f"-SIGKILL relabelled as a diagnosis (SystemExit(-9) is exit status 247); "
+            f"rc={sup.returncode}"
+        )
+        stops = [row for row in _events(err) if row.get("event") == "supervisor_stop"]
+        assert stops and stops[-1].get("reason") == "signal", (
+            f"a third-press SIGKILL must not be mislabelled child_error; got {stops}"
+        )
     finally:
         _reap(sup, *(p for p in (pid,) if p is not None))
 
