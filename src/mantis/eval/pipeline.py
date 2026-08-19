@@ -516,6 +516,22 @@ class EvalPipeline:
         return spec, dict(alloc), run_gate, candidate_path
 
     def _spawn_worker(self, spec: RoundSpec) -> Any:
+        # F-816-20 item 1. THE FIRST STATEMENT, ahead of the spec write: the single choke
+        # point both callers pass through, so the invariant lives in one place rather than in
+        # two copies free to drift.
+        if threading.current_thread() is not threading.main_thread():
+            raise RuntimeError(
+                "eval worker spawn attempted from thread "
+                f"{threading.current_thread().name!r}, not the main thread. `_worker_entry` "
+                "arms PR_SET_PDEATHSIG (F-816-14) and the kernel tracks the CREATING THREAD, "
+                "so a child spawned from a short-lived thread is SIGKILLed the moment that "
+                "thread returns — a premature kill of a LIVE eval round, which is strictly "
+                "worse than the orphan the arming prevents. Both call sites "
+                "(`run_evaluation`, `_run_terminal_sync`) are reached inline from "
+                "`run_training_loop` under `compose_run`, which is main-thread-only because "
+                "it calls `signal.signal`. If the eval kick ever moves onto the poller "
+                "thread, the arming in `_worker_entry` must be re-derived FIRST."
+            )
         spec_path = self._work_dir / f"{spec.round_id}_spec.json"
         spec_path.write_text(json.dumps(spec.to_dict()))
         ctx = multiprocessing.get_context(self._mp_ctx_name)
