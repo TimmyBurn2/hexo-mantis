@@ -107,14 +107,3 @@ def resolve_ema_config(config: dict[str, Any]) -> tuple[bool, float, int]:
     if update_every < 1:
         raise ValueError(f"ema.update_every must be >= 1; got {update_every}")
     return enabled, decay, update_every
-
-
-def _ema_avg_fn(decay: float):
-    """Pure `avg_fn`-style helper retained so EMA semantics stay pinnable in isolation."""
-    if not (0.0 <= decay < 1.0):
-        raise ValueError(f"EMA decay must be in [0, 1); got {decay}")
-
-    def fn(avg_p: torch.Tensor, cur_p: torch.Tensor, _num_averaged: torch.Tensor) -> torch.Tensor:
-        return avg_p + (1.0 - decay) * (cur_p - avg_p)
-
-    return fn

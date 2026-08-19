@@ -38,24 +38,6 @@ _HEX_AXES: tuple[tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
 _CHAIN_CAP: int = 6  # win target; also the saturation cap per the literature review
 
 
-def _shift_zero_pad(arr: np.ndarray, dq: int, dr: int) -> np.ndarray:
-    """Translate a (H,W) array by (dq,dr) with zero padding. NOT np.roll — no wrap.
-
-    Window edges behave as opaque: cells translated off-grid become 0, which
-    terminates any run counting walk that reaches them (Q13 spec §"opaque edges").
-    """
-    H, W = arr.shape
-    out = np.zeros_like(arr)
-    qs, qe = max(0, dq), min(H, H + dq)
-    rs, re = max(0, dr), min(W, W + dr)
-    if qs >= qe or rs >= re:
-        return out
-    src_qs, src_qe = qs - dq, qe - dq
-    src_rs, src_re = rs - dr, re - dr
-    out[qs:qe, rs:re] = arr[src_qs:src_qe, src_rs:src_re]
-    return out
-
-
 def _run_batched(
     stones: np.ndarray, dq: int, dr: int, scratch: np.ndarray
 ) -> np.ndarray:
@@ -87,41 +69,6 @@ def _run_batched(
         alive &= scratch
         out += alive
     return out
-
-
-def _chain_plane_for_axis(
-    own: np.ndarray,
-    opp: np.ndarray,
-    dq: int,
-    dr: int,
-    scratch: np.ndarray | None = None,
-) -> np.ndarray:
-    """Compute one chain-length plane for a single (axis, player) combination.
-
-    Retained as a standalone helper for unit tests; production path goes
-    through the batched `_compute_chain_planes`. See docstring there.
-
-    Shape-generic: H, W derived from `own` / `opp` shapes — works at v6
-    (19×19) and v6w25 (25×25) board sizes uniformly.
-    """
-    H, W = own.shape
-    if scratch is None:
-        scratch = np.empty((2, H, W), dtype=bool)
-    stones = np.empty((2, H, W), dtype=bool)
-    stones[0] = own > 0
-    stones[1] = opp > 0
-
-    pos_run = _run_batched(stones, dq, dr, scratch)
-    neg_run = _run_batched(stones, -dq, -dr, scratch)
-
-    # We only need layer 0 (own) here.
-    total = pos_run[0] + neg_run[0]
-    value = total.copy()
-    eligible = stones[0] | (total > 0)
-    value[eligible] += 1
-    np.minimum(value, np.int8(_CHAIN_CAP), out=value)
-    value[stones[1]] = 0
-    return value
 
 
 def _compute_chain_planes(
