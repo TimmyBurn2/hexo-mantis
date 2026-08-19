@@ -737,6 +737,38 @@ class.** Recorded here rather than left as silent drift (R9).
   | 47 | `DISK_SPACE_EXHAUSTED_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 48 | `TERMINAL_EVAL_BROKEN_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
 
+  Codes OUTSIDE the reserved band that a supervisor may nonetheless read from its child. They
+  are not run-outcome diagnoses — the 42–48 band stays reserved for those — and none is minted
+  here: each is either a pre-existing lifecycle constant or a POSIX convention.
+
+  | rc | constant | authority | delivery |
+  |---|---|---|---|
+  | 71 | `PARENT_VANISHED_EXIT_CODE` | `monitor/heartbeat.py` | `os._exit` from `train/lifecycle/signals.py`'s entry-point arming gate (and from `arm_parent_death_signal`'s captured-ppid race check) |
+  | 127 | `EXEC_FAILED_EXIT_CODE` (POSIX "command not found") | `train/lifecycle/arm_exec.py` | `os._exit` when the arming trampoline cannot `execvp` the child command |
+
+  71 predates F-816-19 (`eae0fc4`) but was reachable only from an mp eval worker and the
+  preflight boot child; F-816-19 put an `os._exit(71)` inside `mantis.run.main`'s arming gate,
+  which makes it a code the SUPERVISOR reads. It lands in `_on_child_exit`'s named
+  `child_parent_vanished` arm: propagated, never relaunched — a child whose supervisor was
+  already gone has nothing to be relaunched into. It sits outside 42–48 deliberately: the band
+  is the run's own diagnosis of its own work, and 71 says the run never began. (It is also
+  `EX_OSERR` in `sysexits.h`; cosmetic, no collision.) Its constant is DEFINED in
+  `monitor/heartbeat.py`, beside the rest of the family, and imported by
+  `train/lifecycle/signals.py` — a code that both the supervisor and the run must name has to
+  sit below the `monitor -> train` cut, for the same reason the parent-death env stamp does.
+
+  A supervisor stopped by a signal it CAUGHT appears in neither table, and that is a decision
+  rather than an omission: it forwards SIGTERM, waits `supervisor_kill_grace_sec`, escalates,
+  and then dies OF that signal (`SIG_DFL` + re-raise) unless the child's own rc carries a
+  diagnosis, in which case that rc is propagated. Its waiter therefore reads "terminated by
+  SIGTERM", which is the truth and needs no number. The run itself still resolves to 0 on such
+  a stop, exactly as the paragraph below already states.
+
+  Neither table is read by any CI gate — gate 13's `DEFAULT_DOC` is `run_config_schema.md` and
+  nothing else — so `tests/test_exit_code_table_census.py` derives the constant set from the
+  source by AST and compares it against the tables in BOTH directions. Derived, never
+  transcribed (R192(e)/G-DFIX-4), and carrying its own mutation self-test.
+
   46 (WPMINT Phase X, CARD-ABORT-EXIT / R84) deviates from the family on DELIVERY, and the
   deviation is the point. The draw-rate collapse abort stops the run by
   `StepCoordinator._fire_hard_abort` setting `shutdown.running = False` and RETURNING, so the
