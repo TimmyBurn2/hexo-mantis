@@ -16,8 +16,6 @@ from typing import TypedDict
 
 import numpy as np
 
-from mantis.util.constants import HISTORY_LEN  # training/selfplay hyperparam (not registry)
-
 # Mirrors env.game_state._HEX_AXES — do not reorder.
 _AXES = ((1, 0), (0, 1), (1, -1))
 AXIS_LABELS = ("axis_q", "axis_r", "axis_s")
@@ -69,61 +67,6 @@ def compute_axis_fractions(games: Sequence[list[tuple[int, int]]]) -> AxisFracti
 
     fracs = [s / t if t > 0 else 0.0 for s, t in zip(same, total, strict=True)]
     max_idx = int(np.argmax(fracs)) if any(t > 0 for t in total) else 0
-    return {
-        "axis_q": fracs[0],
-        "axis_r": fracs[1],
-        "axis_s": fracs[2],
-        "axis_max": AXIS_LABELS[max_idx],
-    }
-
-
-def compute_axis_fractions_from_states(states: np.ndarray) -> AxisFractions:
-    """Compute axis fractions from a corpus state array.
-
-    Args:
-        states: (N, >=9, H, W) array. Plane 0 = current player stones, plane HISTORY_LEN =
-                opponent stones (the fixed source-plane contract). Accepts float16 or float32.
-    """
-    cur = (states[:, 0] > 0).astype(np.uint8)
-    opp = (states[:, HISTORY_LEN] > 0).astype(np.uint8)
-    H, W = cur.shape[1], cur.shape[2]
-
-    fracs: list[float] = []
-    for dq, dr in _AXES:
-        if dq > 0:
-            q_a: slice = slice(0, H - dq)
-            q_b: slice = slice(dq, H)
-        elif dq < 0:
-            q_a = slice(-dq, H)
-            q_b = slice(0, H + dq)
-        else:
-            q_a = q_b = slice(None)
-
-        if dr > 0:
-            r_a: slice = slice(0, W - dr)
-            r_b: slice = slice(dr, W)
-        elif dr < 0:
-            r_a = slice(-dr, W)
-            r_b = slice(0, W + dr)
-        else:
-            r_a = r_b = slice(None)
-
-        cur_a = cur[:, q_a, r_a]
-        cur_b = cur[:, q_b, r_b]
-        opp_a = opp[:, q_a, r_a]
-        opp_b = opp[:, q_b, r_b]
-
-        has_pair = ((cur_a | opp_a) & (cur_b | opp_b)).astype(bool)
-        is_same = (
-            (cur_a.astype(bool) & cur_b.astype(bool))
-            | (opp_a.astype(bool) & opp_b.astype(bool))
-        )
-
-        t = int(has_pair.sum())
-        s = int((has_pair & is_same).sum())
-        fracs.append(s / t if t > 0 else 0.0)
-
-    max_idx = int(np.argmax(fracs))
     return {
         "axis_q": fracs[0],
         "axis_r": fracs[1],

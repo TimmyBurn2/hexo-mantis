@@ -21,10 +21,8 @@ Phase PC, R106).
 """
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from mantis.train.axis_distribution import compute_axis_fractions
@@ -299,43 +297,6 @@ def k_cluster_histogram_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]
         return {K_CLUSTER_HISTOGRAM_KEY: {}}
     labels = [str(i + 1) for i in range(len(counts) - 1)] + [f">{len(counts) - 1}"]
     return {K_CLUSTER_HISTOGRAM_KEY: dict(zip(labels, counts, strict=True))}
-
-
-def replay_pretrain_events(log_dir: str | Path, sink: EventSink) -> None:
-    """Replay up to 500 pretrain `training_step` events into the sink on resume."""
-    pretrain_log = Path(log_dir) / "pretrain.jsonl"
-    if not pretrain_log.exists():
-        return
-    replay_evs: list[dict] = []
-    try:
-        with open(pretrain_log) as f:
-            for line in f:
-                try:
-                    d = json.loads(line)
-                    if d.get("event") == "train_step" and d.get("phase") == "pretrain":
-                        replay_evs.append({
-                            "event": "training_step",
-                            "step": d.get("step"),
-                            "loss_total": d.get("loss"),
-                            "loss_policy": d.get("policy_loss"),
-                            "loss_value": d.get("value_loss"),
-                            "loss_aux": d.get("aux_opp_reply_loss"),
-                            "policy_entropy": d.get("policy_entropy"),
-                            "value_accuracy": d.get("value_accuracy"),
-                            "lr": d.get("lr"),
-                            "grad_norm": d.get("grad_norm"),
-                            "corpus_mix": d.get("corpus_mix", {"pretrain": 1.0, "self_play": 0.0}),
-                            "phase": "pretrain",
-                        })
-                except Exception:  # noqa: BLE001 — a malformed line must not abort replay
-                    pass
-    except Exception as e:  # noqa: BLE001
-        _LOG.warning("pretrain_replay_failed: %s", e)
-        return
-    if replay_evs:
-        _LOG.info("replaying_pretrain_events: count=%d", len(replay_evs[-500:]))
-        for ev in replay_evs[-500:]:
-            emit_via(sink, ev)
 
 
 def emit_axis_distribution(

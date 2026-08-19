@@ -2,8 +2,8 @@
 
 The PURE loader-adjacent config-dict functions land in Slice 1 (T-CK-14/15/17 import
 `RESUME_CHECKPOINT_OWNED_KEYS` + `build_resume_config_overrides` from here): the frozen
-`RESUME_CHECKPOINT_OWNED_KEYS` set, the launch-wins override builder, and the
-operator-declaration classifier. `init_trainer` (fresh-vs-resume dispatch) also lives here
+`RESUME_CHECKPOINT_OWNED_KEYS` set and the launch-wins override builder.
+`init_trainer` (fresh-vs-resume dispatch) also lives here
 but LAZILY imports `Trainer` (Slice 2) inside its body — no top-level `orchestrator → trainer`
 edge, so this module imports clean at Slice 1.
 
@@ -29,24 +29,6 @@ RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
     # optimizer / scheduler / step state
     "total_steps", "scheduler_t_max", "eta_min", "min_lr", "lr", "weight_decay", "lr_schedule",
 })
-
-
-def compute_declared_keys(layers: list[dict] | None) -> frozenset[str]:
-    """Top-level keys the OPERATOR declared in a `config`/`variant` layer (CONFRES F1/B3).
-
-    A key present in a `config`/`variant` layer is a DECLARATION (incl. an explicit
-    `key: null`); a key present only in a `base` layer is INHERITED and DEFERS to a
-    checkpoint-baked value on resume. `None`/empty → empty set.
-    """
-    if not layers:
-        return frozenset()
-    declared: set[str] = set()
-    for layer in layers:
-        if isinstance(layer, dict) and layer.get("kind") in ("config", "variant"):
-            raw = layer.get("raw") or {}
-            if isinstance(raw, dict):
-                declared.update(raw.keys())
-    return frozenset(declared)
 
 
 def build_resume_config_overrides(
