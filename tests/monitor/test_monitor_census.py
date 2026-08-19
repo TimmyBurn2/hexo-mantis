@@ -8,7 +8,8 @@ files are RED-at-import. Each checker carries a LAW-07 mutation self-test provin
   O-18 / P-18 — `import mantis.monitor` + a walk of every submodule succeeds under a meta-path
     torch blocker (rc 0); zero `torch` import tokens in `monitor/**` (§2 L94 headless law).
   O-19 / P-19 — `monitor/**` mantis-imports ⊆ {util, encoding, monitor}; train files importing
-    `mantis.monitor` are EXACTLY {coordinator/step.py, subsystems.py, lifecycle/heartbeat_watchdog.py}.
+    `mantis.monitor` are EXACTLY the set pinned in `_EXPECTED_TRAIN_MONITOR_SITES` below (the
+    ONE authority — a second copy of the list here goes stale the first time a seam is added).
   O-20 / P-20 — zero `except …: pass` swallow sites in `monitor/**`, NO allowlist; a planted
     swallow ⇒ detected (the J-04 pattern, reused).
   O-15 / P-15 — zero `draw_target_fraction` references in `monitor/**` + `train/coordinator/**`
@@ -38,6 +39,14 @@ _EXPECTED_TRAIN_MONITOR_SITES = {
     # `except Exception: pass`. This is the declared seam being used by one more lifecycle
     # unit, not a new kind of edge.
     "train/lifecycle/watchdog.py",
+    # F-816-19 (R285(h)), disclosed in the same commit that creates the edge. `signals.py`
+    # top-level imports `PARENT_DEATH_PPID_ENV` from `monitor.heartbeat` — the supervisor
+    # stamps its pid into the child's environment under that name and the run's arming gate
+    # reads it, so the two sides must key off ONE constant. That constant lives below the DAG
+    # cut with the exit codes for exactly the reason its siblings do (`monitor -> train` is
+    # the illegal direction; `train -> monitor` is this legal one), so this is one more
+    # lifecycle unit reading the declared contract module, not a new kind of edge.
+    "train/lifecycle/signals.py",
 }
 
 
@@ -132,8 +141,8 @@ def test_monitor_mantis_imports_are_within_the_allowed_set() -> None:
 
 
 def test_train_to_monitor_import_sites_are_exactly_the_pinned_set() -> None:
-    """O-19 / P-19 — the ONLY train files that top-level import `mantis.monitor` are the four
-    declared seams. Any extra edge (or a missing one) is DAG drift. NOTE for IMPL: the existing
+    """O-19 / P-19 — the ONLY train files that top-level import `mantis.monitor` are the
+    declared seams pinned below. Any extra edge (or a missing one) is DAG drift. NOTE for IMPL: the existing
     `tests/train/test_train_import_dag.py` FORBIDDEN set must drop `mantis.monitor` — this
     census with its exact allowlist takes over policing that edge (ORACLE_NOTES)."""
     sites: set[str] = set()
@@ -144,7 +153,8 @@ def test_train_to_monitor_import_sites_are_exactly_the_pinned_set() -> None:
                 sites.add(str(path.relative_to(_TRAIN.parent)))
                 break
     assert sites == _EXPECTED_TRAIN_MONITOR_SITES, (
-        f"train→monitor import sites must be exactly the pinned three; got {sorted(sites)}"
+        f"train→monitor import sites must be exactly the pinned set "
+        f"{sorted(_EXPECTED_TRAIN_MONITOR_SITES)}; got {sorted(sites)}"
     )
 
 

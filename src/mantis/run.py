@@ -106,7 +106,11 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.determinism import seed_everything
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
-from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
+from mantis.train.lifecycle.signals import (
+    ShutdownState,
+    arm_parent_death_if_supervised,
+    install_signal_handlers,
+)
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
 from mantis.train.subsystems import build_run_safety
@@ -1078,6 +1082,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     same class one layer up — so this paragraph is the disclosure, and the decision is queued
     (`Q-RT-RC1-COLLISION`), not taken.
     """
+    # F-816-19 (R285(h)). THE FIRST STATEMENT, before argparse and before any collaborator
+    # exists: the window this closes is exactly "the supervisor was killed while the run was
+    # still coming up", and everything after this line either allocates the GPU or starts a
+    # thread. It is a NO-OP unless a mantis supervisor stamped its pid in the environment —
+    # an unconditional arm here would SIGKILL every unattended run the moment its launching
+    # shell exited, and would arm the pytest process through this function's in-process
+    # callers. Never at import time, for the same reason, categorically.
+    arm_parent_death_if_supervised()
     parser = argparse.ArgumentParser(
         prog="python -m mantis.run",
         description="Launch a run from a minted config (the ONE composition authority).",

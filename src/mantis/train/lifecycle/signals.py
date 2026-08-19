@@ -16,6 +16,19 @@ TO RUN. ``arm_parent_death_signal`` is the half that does not — the child asks
 signal it when its parent dies, so a parent that is killed outright still takes its children
 with it. It is a belt beside R230's braces, not a replacement for them: the cooperative path
 remains the one that saves state.
+
+F-816-19 (R285(h)): ``arm_parent_death_if_supervised`` applies that same mechanism ONE LAYER
+UP, at a run's own entry point, gated on an env-carried supervisor pid. The gate is what makes
+it safe there — an unconditional arm on a top-level process kills every unattended run whose
+launching shell exits, which this repo has already measured from the pytest side.
+
+>300 justify (R8): ONE subject — how this process is asked to STOP — and its three halves are
+inseparable by construction: the cooperative handler pair writes the shutdown state, the child
+registry is what the SECOND signal tears down before ``os._exit``, and the parent-death arming
+is the same teardown expressed as a kernel promise for the case where this process runs
+nothing at all. The three share ``ShutdownState``, the registry lock and one exit-code
+vocabulary; splitting them would put a teardown in one file and the thing it tears down in
+another, and the handler would have to import the registry back across the split.
 """
 from __future__ import annotations
 
@@ -26,6 +39,8 @@ import sys
 import threading
 from dataclasses import dataclass
 from typing import Any
+
+from mantis.monitor.heartbeat import PARENT_DEATH_PPID_ENV
 
 _LOG = logging.getLogger(__name__)
 
@@ -123,6 +138,103 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
         )
         os._exit(PARENT_VANISHED_EXIT_CODE)
     return True
+
+
+def arm_parent_death_if_supervised() -> bool:
+    """Called at the TOP of a run's own entry point: arm `PR_SET_PDEATHSIG` iff a mantis
+    supervisor spawned us. Returns True iff armed. Never raises.
+
+    THE DEFECT (F-816-19, R285(h)). `mantis.monitor.supervise` launched the run with a plain
+    `Popen` and no arming at all, so a supervisor killed outright left the run — the process
+    that holds the GPU, the trainer, the worker pool and the replay buffer — running with
+    nobody watching it. `arm_parent_death_signal` above is the mechanism that closes it; this
+    is the GATE that makes applying the mechanism HERE safe.
+
+    THE GATE IS THE LOAD-BEARING HALF, and it is not caution — it is a measured constraint.
+    `PR_SET_PDEATHSIG` on a TOP-LEVEL process ties that process's life to whatever launched
+    it, so an unconditional arm at a launcher's entry ends every unattended burn whose
+    launching shell exits after handing off. This repo has measured that exact failure from
+    the other side: arming the pytest process SIGKILLed the whole tier the instant its
+    launcher exited (`tests/train/test_parent_death_signal.py`, the subprocess-probe docstring
+    added by eae0fc4). A run launched DIRECTLY is therefore still orphanable, deliberately:
+    that is the operator's own choice of detachment and nothing here overrides it.
+
+    The predicate, in order:
+
+      * no stamp                     -> not supervised; no arming, no side effect. This is the
+                                        arm pytest and every direct launch take.
+      * a stamp that is not an int   -> malformed input is never silently read as "supervised";
+                                        WARN and do not arm.
+      * stamp == `os.getppid()`      -> the supervised case; delegate to
+                                        `arm_parent_death_signal`, which performs the prctl AND
+                                        its own captured-ppid re-check.
+      * stamp != ppid, stamp GONE    -> the supervisor died between its `Popen` and this line.
+                                        Nothing has been built and nothing can be saved, and no
+                                        supervisor is left to relaunch or to watch — exit
+                                        `PARENT_VANISHED_EXIT_CODE`, the eae0fc4 posture one
+                                        layer up.
+      * stamp != ppid, stamp ALIVE   -> we are a GRAND-child through a non-exec wrapper
+                                        (`-- sh -c "python -m mantis.run …"`). Arming would tie
+                                        the run's life to the wrapper, which nobody asked for.
+                                        WARN loudly and run on, unarmed.
+
+    PID REUSE, disclosed rather than defended: a pid recycled in the microseconds between the
+    supervisor's `Popen` and this check would downgrade an exit-`PARENT_VANISHED_EXIT_CODE`
+    into a warning. The consequence is a log line and one unarmed boot — today's status quo —
+    never a wrong kill.
+
+    Never fatal, inheriting `arm_parent_death_signal`'s contract unchanged: off Linux, or on a
+    kernel without prctl, it returns False and the run proceeds.
+    """
+    raw = os.environ.get(PARENT_DEATH_PPID_ENV)
+    if raw is None:
+        _LOG.debug(
+            "parent_death_signal armed=false reason=not_supervised (%s unset)",
+            PARENT_DEATH_PPID_ENV,
+        )
+        return False
+    try:
+        stamped = int(raw)
+    except ValueError:
+        _LOG.warning(
+            "parent_death_signal armed=false reason=malformed_stamp %s=%r",
+            PARENT_DEATH_PPID_ENV, raw,
+        )
+        return False
+
+    actual = os.getppid()
+    if stamped == actual:
+        armed = arm_parent_death_signal()
+        _LOG.info(
+            "parent_death_signal armed=%s reason=%s supervisor_pid=%d",
+            str(armed).lower(),
+            "supervised" if armed else "unsupported_platform",
+            stamped,
+        )
+        return armed
+
+    try:
+        os.kill(stamped, 0)
+    except ProcessLookupError:
+        _LOG.warning(
+            "parent_death_signal armed=false reason=supervisor_vanished supervisor_pid=%d "
+            "ppid=%d; exiting %d — the supervisor died before this run reached its entry "
+            "point, so nothing is built, nothing can be saved and nobody is left to watch",
+            stamped, actual, PARENT_VANISHED_EXIT_CODE,
+        )
+        os._exit(PARENT_VANISHED_EXIT_CODE)
+    except (PermissionError, OSError):
+        # The pid exists but is not ours to signal — alive for the purpose of this check.
+        pass
+
+    _LOG.warning(
+        "parent_death_signal armed=false reason=wrapper_between_supervisor_and_run "
+        "supervisor_pid=%d ppid=%d — this run's real parent is not the process that stamped "
+        "it, so an intermediate wrapper is in the chain; arming would tie the run's life to "
+        "the WRAPPER, so it stays unarmed and unsupervised for death-signal purposes",
+        stamped, actual,
+    )
+    return False
 
 
 def register_child(proc: Any) -> None:

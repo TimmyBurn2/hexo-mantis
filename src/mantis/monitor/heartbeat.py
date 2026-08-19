@@ -13,6 +13,12 @@ Two levels, one contract:
 
 Staleness is measured on an INJECTED monotonic clock only: a wall-clock/NTP jump can
 neither hide a stall nor invent one.
+
+>300 justify (R8): the supervisor<->child CONTRACT is ONE unit — the heartbeat file codec,
+the source-name pins, the exit-code authority and the parent-death env key are all read from
+BOTH sides of an illegal-edge boundary (`monitor -> train` is banned, so `train` reads them
+here and `monitor` reads them here). A split would put half of one contract above the DAG cut
+and half below it, and the first disagreement between the halves would be silent.
 """
 from __future__ import annotations
 
@@ -94,6 +100,22 @@ DISK_SPACE_EXHAUSTED_EXIT_CODE: int = 47
 # root records (`ShutdownState.abort_rule` -> `armed_aborts.exit_code_for_abort`), never
 # from a second literal.
 TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
+
+#: F-816-19 (R285(h)) — the supervisor stamps its OWN pid here in the CHILD's environment, and
+#: the child arms `PR_SET_PDEATHSIG` only if this names its real parent. It lives HERE, beside
+#: the exit codes, for the reason this module's docstring already gives: the supervisor and the
+#: child share a contract and `monitor -> train` is an illegal edge, so the contract's one
+#: authority has to sit below the cut where both sides can read it.
+#:
+#: It is NOT a config key and R1 does not reach it: a supervisor's pid is a property of ONE
+#: invocation, carried by the launcher, exactly as `run.py`'s `--resume-from` paragraph argues
+#: for a resume target. The precedent for an env-carried process fact is
+#: `mantis.util.cpu_budget`'s `MANTIS_THREAD_BUDGET` pair.
+#:
+#: WHY ENV AND NOT AN INJECTED FLAG: `spawn_child`'s documented contract is "the child command
+#: is the verbatim argv after `--`". A flag would break that deliberately-stated property and
+#: would change the run's argv, which appears in provenance. Env leaves argv untouched.
+PARENT_DEATH_PPID_ENV: str = "MANTIS_PARENT_DEATH_PPID"
 
 
 @dataclass(frozen=True)

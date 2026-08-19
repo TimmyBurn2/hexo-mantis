@@ -16,14 +16,23 @@ Two liveness inputs, deliberately distinct:
 Host-neutral by construction: the child command is the verbatim argv after ``--``; no
 default paths, no provider names, no baked launcher (§7). Torch-free (O-18) — a liveness
 babysitter must not need seconds and gigabytes to load on a box whose GPU just wedged.
+
+>300 justify (R8): ONE subject — the out-of-process babysitter — and its three inseparable
+halves: the staleness core it decides FROM, the exit-code table it decides BY, and the real
+`Popen`/signal collaborators `main` binds INTO it. Splitting would put the decision in one
+file and its premise in another, and the whole unit has a second, file-scoped property that a
+split would make unverifiable: it must stay torch-free (O-18), which is a claim about this
+file as a unit, not about any one of its parts.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -31,6 +40,7 @@ from typing import Any, TextIO
 
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (
+    PARENT_DEATH_PPID_ENV,
     PERSIST_FATAL_EXIT_CODE,
     WATCHDOG_STALL_EXIT_CODE,
     read_heartbeat_file,
@@ -238,8 +248,39 @@ class Supervisor:
 
 # ── real collaborators + CLI ─────────────────────────────────────────────────────────
 def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
-    """Launch the child verbatim — no shell, no injected flags, no baked path."""
-    return subprocess.Popen(list(child_argv))
+    """Launch the child verbatim — no shell, no injected flags, no baked path.
+
+    ONE thing is injected and it is NOT argv: the child's ENVIRONMENT carries this
+    supervisor's pid under `PARENT_DEATH_PPID_ENV`, which is how a mantis run learns it is
+    supervised and may arm `PR_SET_PDEATHSIG` (F-816-19). Until this existed, a supervisor
+    killed outright — `kill -9`, an OOM kill, a dropped session — ORPHANED the run: the
+    process holding the GPU, the trainer, the worker pool and the buffer kept running with
+    nobody watching it.
+
+    A COPY of the environment is built and passed; `os.environ` is NEVER mutated, and that is
+    not tidiness. A mutation would leak the stamp to every LATER child of this process — in a
+    test session, to children that are not runs at all — and each of them would then read a
+    stamp naming a parent that is merely "some ancestor", which is the exact confusion the
+    child's gate exists to refuse.
+
+    MAIN-THREAD CALL, and it is a real precondition rather than a nicety: `PR_SET_PDEATHSIG`
+    fires when the parent THREAD dies, so a child spawned from a worker thread here would be
+    SIGKILLed the moment that thread returned — a premature kill of a healthy run, strictly
+    worse than the orphan the arming prevents. The supervisor is single-threaded today; this
+    refusal is what makes that fact fail LOUD instead of silently arming a premature kill.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError(
+            "spawn_child was called from thread "
+            f"{threading.current_thread().name!r}, not the main thread. The child is stamped "
+            f"with {PARENT_DEATH_PPID_ENV} so it may arm PR_SET_PDEATHSIG, and the kernel "
+            "signals on the death of the CREATING THREAD — a child spawned from a worker "
+            "thread is SIGKILLed as soon as that thread returns, killing a healthy run. If "
+            "the supervisor ever needs to spawn off its main thread, the child's arming gate "
+            "must be re-derived against a thread identity FIRST."
+        )
+    env = {**os.environ, PARENT_DEATH_PPID_ENV: str(os.getpid())}
+    return subprocess.Popen(list(child_argv), env=env)
 
 
 def signal_child(child: Any, sig: int) -> None:
