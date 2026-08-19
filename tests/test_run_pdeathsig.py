@@ -490,3 +490,78 @@ def test_calling_main_in_this_process_does_not_arm_the_test_runner(
         "calling main() mutated the process environment; a leaked parent-death stamp arms "
         "every later child of this process"
     )
+
+
+def test_importing_mantis_run_as_mp_main_never_arms_or_exits_71(tmp_path) -> None:
+    """`multiprocessing`'s spawn start method RE-IMPORTS the parent's main module under
+    `__mp_main__`. If the arming ever moves to module scope, that re-import runs the gate in
+    every mp child — and this repo already runs eval workers that way.
+
+    THE KILL SIGNAL IS MADE UNAMBIGUOUS BY THE ENVIRONMENT: the stamp names a VERIFIED-DEAD
+    pid, so any execution of the gate at all takes the `supervisor_vanished` branch and exits
+    71. rc 0 therefore means the gate did not run; a red here reds with an rc that names its
+    own cause.
+
+    `run_name='__mp_main__'` and deliberately NOT `'__main__'`: under `__main__` the
+    `if __name__ == "__main__": sys.exit(main())` guard fires and a real run starts. The claim
+    is about IMPORT semantics, not about booting."""
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait(timeout=_DEADLINE_SEC)
+    dead_pid = dead.pid
+    try:
+        os.kill(dead_pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        pytest.skip(f"pid {dead_pid} was recycled before it could be used as a dead stamp")
+
+    probe = tmp_path / "mp_main_probe.py"
+    probe.write_text(
+        "import runpy\n"
+        "runpy.run_module('mantis.run', run_name='__mp_main__')\n",
+        encoding="utf-8",
+    )
+    env = {**os.environ, PARENT_DEATH_PPID_ENV: str(dead_pid)}
+    out = subprocess.run([sys.executable, str(probe)], cwd=os.getcwd(), env=env,
+                         capture_output=True, text=True, timeout=90.0)
+    assert out.returncode == 0, (
+        f"importing mantis.run under __mp_main__ exited {out.returncode} — "
+        f"{PARENT_VANISHED_EXIT_CODE} means the arming gate RAN AT IMPORT TIME and every "
+        f"multiprocessing child would take it too; stderr:\n{out.stderr[-2000:]}"
+    )
+
+
+def test_the_arming_call_appears_only_inside_main() -> None:
+    """The static half of the row above, and it kills the mutation the dynamic one could miss:
+    an import-time call made CONDITIONAL would leave the probe green while the window is open
+    again. Every call to the gate in `run.py` must have `main` as its nearest enclosing scope,
+    and none may sit at module level."""
+    import ast
+    import inspect
+
+    import mantis.run as mantis_run
+
+    tree = ast.parse(inspect.getsource(mantis_run))
+    enclosing: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            for inner in ast.walk(node):
+                if (isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+                        and inner.func.id == "arm_parent_death_if_supervised"):
+                    # ast.walk descends, so the LAST (innermost) writer wins per call site.
+                    enclosing[inner.lineno] = node.name
+
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and n.func.id == "arm_parent_death_if_supervised"]
+    assert calls, "the arming call vanished from run.py entirely"
+    orphaned = [n.lineno for n in calls if n.lineno not in enclosing]
+    assert not orphaned, (
+        f"arming call(s) at module scope in run.py, lines {orphaned} — every import of this "
+        "module, including multiprocessing's re-import, would arm or exit"
+    )
+    wrong = {line: name for line, name in enclosing.items() if name != "main"}
+    assert not wrong, (
+        f"the arming must be called only from `main`; found {wrong}. Anywhere else and it is "
+        "reachable from an in-process caller that is not a launch"
+    )
