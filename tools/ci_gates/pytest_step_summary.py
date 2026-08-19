@@ -11,6 +11,14 @@ Reads one junit xml (pytest --junitxml), writes: failed/errored test ids with th
 lines of their message, pass/fail/skip counts, and the slowest cases. Exit code is ALWAYS 0
 unless the xml itself is unreadable — this tool reports on a gate, it is not the gate
 (the pytest step's own exit code remains the verdict; R4/LAW-07 unaffected).
+
+Second surface, added after the first digest run: the job summary itself turned out to be
+session-gated for anonymous readers (the summary_partial route 404s without a logged-in
+session), while check-run ANNOTATIONS are verifiably public — the first red's two
+annotations were read anonymously via the check-runs API. So the tool also prints
+`::error`/`::notice` workflow commands to stdout; Actions converts those into check-run
+annotations (capped ~10 per level per step, so failures are truncated to the first 8 and
+the counts always ride the one notice).
 """
 from __future__ import annotations
 
@@ -78,6 +86,30 @@ def main() -> int:
 
     if out is not sys.stdout:
         out.close()
+
+    # Public-annotation surface: workflow commands on stdout. Newlines inside a command's
+    # message must be %0A-encoded or Actions truncates at the first newline.
+    def _cmd_escape(text: str) -> str:
+        return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+    slow3 = "; ".join(
+        f"{float(c.get('time', 0) or 0):.0f}s {c.get('name', '')}" for c in timed[:3])
+    print(f"::notice title={args.title}::"
+          + _cmd_escape(f"{totals['tests']} tests, {totals['failures']} failed, "
+                        f"{totals['errors']} errored, {totals['skipped']} skipped. "
+                        f"slowest: {slow3}"))
+    for case, kind in bad[:8]:
+        node = case.find(kind)
+        if node is None:
+            continue
+        msg = (node.get("message") or (node.text or "")).strip()
+        test_id = f"{case.get('classname', '')}::{case.get('name', '')}"
+        print(f"::error title={args.title} {kind}::"
+              + _cmd_escape(f"{test_id} ({float(case.get('time', 0) or 0):.1f}s): "
+                            + "\n".join(msg.splitlines()[:4])))
+    if len(bad) > 8:
+        print(f"::error title={args.title}::" + _cmd_escape(
+            f"...and {len(bad) - 8} more failed/errored cases; see the job summary."))
     return 0
 
 
