@@ -108,18 +108,17 @@ def _sweep() -> None:
 # LAW-15's shape, one level down: a bar must be a reproducible instrument, and a bar that passes
 # on one host and fails on another is measuring the host.
 #
-# 2026-08-19: the slowest host that runs this tier is now the GitHub CI runner, and 900 is
+# 2026-08-19: the slowest host that runs this tier is now the GitHub CI runner, and 900 was
 # measured RED there — three budget rows truncated at 915.4 s by the tool's own rc 40 (run
-# 32214255298, public check-run annotations), while the SAME 16-step burst that takes ~155 s
-# here completed on that runner in 1190 s and 1198 s (the two run-launcher rows in the same
-# run's digest — the only budget-shaped workloads that finished there). True budget-row
-# duration on the runner is therefore ~1200 s, and the prior 900 was a sub-measurement guess.
-# THIS VALUE IS A MEASUREMENT POSTURE: 3000 is deliberately high so the next CI run measures
-# every budget row's true runner duration through the public digest instead of truncating it
-# at the bar; the follow-up commit derives the final budget from those readings (slowest
-# measured row, with margin), closing the guess-the-host-speed loop that produced both the
-# 300 -> 900 move and this one.
-PREFLIGHT_BUDGET_SEC = 3000.0
+# 32214255298, public check-run annotations). A one-run MEASUREMENT POSTURE at 3000 then let
+# every budget row complete instead of truncating: the slowest budget-governed row measured
+# **1205 s** (`test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight`,
+# run 32232355679 on the ci-repair branch; the other two budget rows finished below it — the
+# run's public slowest-list ranks them under 1205). 1800 covers that slowest measured row at
+# ~1.5x, the same shape as the 447 s -> 900 move above: a bar derived FROM a completed drive
+# on the slowest host that runs it, never from a ratio guess. Three hosts now attest this ONE
+# number: dev host ~162 s, migration box 447 s, CI runner 1205 s.
+PREFLIGHT_BUDGET_SEC = 1800.0
 
 #: The harness ceiling that must always exceed the tool's own budget, DERIVED rather than
 #: transcribed — if `subprocess.run(timeout=...)` fires first, the tool never gets to write the
