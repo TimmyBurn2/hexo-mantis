@@ -268,6 +268,25 @@ def _git(*args: str) -> str:
     ).stdout
 
 
+def resolve_base(candidate: str | None) -> str | None:
+    """A usable base ref, or None meaning: scan the FULL TREE.
+
+    The first push of a new branch hands CI the all-zeros sha as `github.event.before`,
+    and 2026-08-19 that reached `git diff` verbatim and crashed the gate (rc 1 by
+    traceback — neither a verdict nor a fail-closed). For a LEAK gate the safe fallback
+    direction is WIDE, so an empty / all-zeros / unresolvable base degrades to the
+    full-tree scan — the opposite of artifact_gate's HEAD~1 narrowing, deliberately:
+    over-scanning costs seconds, under-scanning ships a host path.
+    """
+    if not candidate or set(candidate) == {"0"}:
+        return None
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+    )
+    return candidate if probe.returncode == 0 else None
+
+
 def target_files(base: str | None) -> list[str]:
     """Tracked text files to scan: the whole tree, or those added/modified vs `base`."""
     if base is None:
@@ -325,6 +344,17 @@ def self_test() -> bool:
         print(f"gate 17 SELF-TEST FAIL: registered pattern(s) with no planted proof: "
               f"{sorted(uncovered)}")
         ok = False
+    # The base-resolver arm: every degraded shape must resolve to full-tree (None), and a
+    # real ref must survive. A resolver that narrows instead of widening re-opens the
+    # first-branch-push crash as a silent under-scan, which is worse.
+    for degraded in (None, "", "0" * 40, "no-such-ref-xyzzy"):
+        if resolve_base(degraded) is not None:
+            print(f"gate 17 SELF-TEST FAIL: degraded base {degraded!r} did not widen to full-tree")
+            ok = False
+    if resolve_base("HEAD") != "HEAD":
+        print("gate 17 SELF-TEST FAIL: a resolvable ref must be scanned as itself, not widened")
+        ok = False
+
     if not _local_arm_fires():
         ok = False
     if ok:
@@ -380,7 +410,12 @@ def main() -> int:
     if not self_test():
         return 2
 
-    files = target_files(None if args.full_tree else args.base)
+    base = None if args.full_tree else resolve_base(args.base)
+    if not args.full_tree and base is None:
+        print(f"gate 17: base {args.base!r} is absent or unresolvable -- "
+              "degrading WIDE to the full-tree scan (leak gates fail toward over-scanning)")
+        args.full_tree = True
+    files = target_files(base)
     violations: list[tuple[str, int, str, str, str]] = []
     scanned = 0
     file_hatched: list[str] = []
