@@ -66,35 +66,53 @@ def _alive(pid: int) -> bool:
         return False
 
 
-def _write_two_generation_harness(tmp_path, marker, *, stamp: str | None,
-                                  cooperative_sigterm: bool = False):
-    """Write the parent + grandchild scripts and return the parent script path.
+def _reason_log(marker):
+    """Where the leaf's own gate decision is recorded, beside its marker.
 
-    The grandchild calls the PRODUCTION `arm_parent_death_if_supervised()` — never a
-    hand-rolled prctl, which would test the test rather than the fix. It is started with a NEW
-    SESSION, so nothing aimed at the parent's process group can reach it: whatever kills it has
-    to be the kernel acting on the parent-death signal, which is the only thing that makes the
-    negative control below mean anything.
-
-    `stamp` is what the parent writes into the grandchild's environment under
-    `PARENT_DEATH_PPID_ENV`: `"self"` means "the parent's own pid" (the supervised case) and
-    `None` means the variable is absent (the direct-launch case).
+    The gate reports its REASON only through the logger, so the leaf configures logging to a
+    file before it calls the production function. Reading that file is how a row asserts WHICH
+    branch was taken, rather than only whether the boolean came back false — two different
+    branches return False for two very different reasons, and only one of them is a residual.
     """
-    child = tmp_path / f"child_{marker.stem}.py"
-    child.write_text(
-        "import os, signal, time\n"
+    return marker.parent / (marker.name + ".reasons")
+
+
+def _write_leaf(tmp_path, marker, *, cooperative_sigterm: bool = False):
+    """The leaf script: call the PRODUCTION gate, record pid + armed + reason, then sleep.
+
+    Never a hand-rolled prctl, which would test the test rather than the fix. Self-limited by a
+    bounded sleep: the unstamped rows MUST produce a process that outlives its parent — that is
+    the negative control — and their only reaper is the row's own `finally`.
+    """
+    leaf = tmp_path / f"child_{marker.stem}.py"
+    leaf.write_text(
+        "import logging, os, signal, time\n"
+        f"logging.basicConfig(filename={str(_reason_log(marker))!r}, level=logging.DEBUG,\n"
+        "                    force=True)\n"
         + ("signal.signal(signal.SIGTERM, lambda *a: None)\n" if cooperative_sigterm else "")
         + "from mantis.train.lifecycle.signals import arm_parent_death_if_supervised\n"
         "armed = arm_parent_death_if_supervised()\n"
         f"open({str(marker)!r}, 'w', encoding='utf-8').write("
         "str(os.getpid()) + ' ' + str(int(armed)))\n"
-        # SELF-LIMITED, deliberately. The unstamped row MUST produce a process that outlives
-        # its parent — that is the negative control — and its only reaper is that row's
-        # `finally`. A bounded sleep is longer than any assertion here needs and short enough
-        # that the worst case is litter with an expiry.
         "time.sleep(90)\n",
         encoding="utf-8",
     )
+    return leaf
+
+
+def _write_two_generation_harness(tmp_path, marker, *, stamp: str | None,
+                                  cooperative_sigterm: bool = False):
+    """Write the parent + grandchild scripts and return the parent script path.
+
+    The grandchild is started with a NEW SESSION, so nothing aimed at the parent's process
+    group can reach it: whatever kills it has to be the kernel acting on the parent-death
+    signal, which is the only thing that makes the negative control below mean anything.
+
+    `stamp` is what the parent writes into the grandchild's environment under
+    `PARENT_DEATH_PPID_ENV`: `"self"` means "the parent's own pid" (the supervised case) and
+    `None` means the variable is absent (the direct-launch case).
+    """
+    child = _write_leaf(tmp_path, marker, cooperative_sigterm=cooperative_sigterm)
     stamp_line = (
         f"env[{PARENT_DEATH_PPID_ENV!r}] = str(os.getpid())\n" if stamp == "self"
         else (f"env[{PARENT_DEATH_PPID_ENV!r}] = {stamp!r}\n" if stamp is not None
@@ -106,6 +124,36 @@ def _write_two_generation_harness(tmp_path, marker, *, stamp: str | None,
         "env = dict(os.environ)\n"
         + stamp_line
         + f"subprocess.Popen([sys.executable, {str(child)!r}], env=env, "
+        "start_new_session=True)\n"
+        "time.sleep(600)\n",
+        encoding="utf-8",
+    )
+    return parent
+
+
+def _write_three_generation_harness(tmp_path, marker, *, stamp: str):
+    """parent -> middle -> leaf, so a stamp can name an ancestor THREE hops up.
+
+    This is the depth-≥3 shape the ancestry gate must REFUSE to arm: two non-exec wrappers
+    stand between the stamping supervisor and the run, and there is an unarmed process between
+    the run and whichever process the trampoline armed.
+    """
+    leaf = _write_leaf(tmp_path, marker)
+    middle = tmp_path / f"middle_{marker.stem}.py"
+    middle.write_text(
+        "import os, subprocess, sys, time\n"
+        f"subprocess.Popen([sys.executable, {str(leaf)!r}], env=dict(os.environ))\n"
+        # Bounded like the leaf: this middle wrapper is the one process in the file that
+        # NOTHING kills by mechanism (that is the residual), so it must expire on its own.
+        "time.sleep(90)\n",
+        encoding="utf-8",
+    )
+    parent = tmp_path / f"parent_{marker.stem}.py"
+    parent.write_text(
+        "import os, subprocess, sys, time\n"
+        "env = dict(os.environ)\n"
+        f"env[{PARENT_DEATH_PPID_ENV!r}] = {stamp!r}\n"
+        f"subprocess.Popen([sys.executable, {str(middle)!r}], env=env, "
         "start_new_session=True)\n"
         "time.sleep(600)\n",
         encoding="utf-8",
@@ -127,12 +175,26 @@ def _kill_parent_and_wait(parent: subprocess.Popen[bytes]) -> None:
     parent.wait(timeout=_DEADLINE_SEC)
 
 
-def _reap(parent: subprocess.Popen[bytes], gc_pid: int | None) -> None:
+def _ppid_of_pid(pid: int) -> int | None:
+    """The parent of `pid`, read straight from `/proc` — used only to REAP an intermediate
+    wrapper that, by the very residual a row is measuring, nothing else will take down."""
+    try:
+        with open(f"/proc/{pid}/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("PPid:"):
+                    return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _reap(parent: subprocess.Popen[bytes], *pids: int | None) -> None:
     if parent.poll() is None:
         parent.kill()
         parent.wait(timeout=_DEADLINE_SEC)
-    if gc_pid is not None and _alive(gc_pid):
-        os.kill(gc_pid, signal.SIGKILL)
+    for pid in pids:
+        if pid is not None and _alive(pid):
+            os.kill(pid, signal.SIGKILL)
 
 
 # ── the arming half ──────────────────────────────────────────────────────────────────────
@@ -199,33 +261,97 @@ def test_an_UNSTAMPED_run_entry_SURVIVES_the_same_kill(tmp_path) -> None:
 
 
 @_LINUX_ONLY
-def test_a_stamp_naming_a_LIVE_non_parent_does_not_arm(tmp_path) -> None:
-    """The wrapper case: a stamp that names a LIVE process which is not our parent (this is
-    what an operator-supplied `-- sh -c "python -m mantis.run …"` produces). Arming there would
-    tie the run's life to the WRAPPER, which nobody asked for.
+def test_a_stamp_naming_a_LIVE_NON_ANCESTOR_does_not_arm(tmp_path) -> None:
+    """A stamp that names a LIVE process which is not in our ancestry AT ALL. There is no
+    parent whose death this run may be tied to, so it must not arm — `ancestry_unreadable`.
+
+    RENAMED AND RE-AIMED (Q3 A4b, was `…_LIVE_non_parent_does_not_arm`). It used to stamp the
+    pytest pid, which in this harness is the grandchild's GRANDPARENT — depth 2 — and depth 2
+    is now the case that DOES arm, against the process the supervisor's trampoline armed. The
+    claim "a live non-parent never arms" was true of the old flat predicate and is false of the
+    ancestry one, so the row now uses a live SIBLING pid, which is what "not an ancestor" needs
+    to mean for the claim to be checkable. The depth-2 case gets its own row below.
 
     BOTH halves are asserted, and the second is why this row runs a real process rather than
     calling the function in-process: (i) the gate reports not-armed, and (ii) the grandchild
-    SURVIVES its parent's SIGKILL — which is positive evidence that no `prctl` happened, where
-    a bare return-value check would only show what the function said about itself. The stamp
-    used is the pytest process's own pid, which is alive throughout and is the grandchild's
-    grandparent, never its parent."""
-    marker = tmp_path / "wrapper.pid"
+    SURVIVES its parent's SIGKILL — positive evidence that no `prctl` happened, where a bare
+    return-value check would only show what the function said about itself."""
+    sibling = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    marker = tmp_path / "nonancestor.pid"
+    parent_script = _write_two_generation_harness(tmp_path, marker, stamp=str(sibling.pid))
+    parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())
+    gc_pid = None
+    try:
+        gc_pid, armed = _await_marker(marker)
+        assert not armed, "a stamp naming a live NON-ANCESTOR must not arm"
+        assert "ancestry_unreadable" in _reason_log(marker).read_text(encoding="utf-8"), (
+            "the refusal must NAME its branch: a stamp outside our ancestry is not the same "
+            "residual as a chain that is merely too deep"
+        )
+        _kill_parent_and_wait(parent)
+        time.sleep(2.0)
+        assert _alive(gc_pid), (
+            "the grandchild died although its stamp named a live non-ancestor — the gate armed "
+            "on mere PRESENCE of the variable, which ties a run's life to any process at all"
+        )
+    finally:
+        sibling.kill()
+        sibling.wait(timeout=_DEADLINE_SEC)
+        _reap(parent, gc_pid)
+
+
+@_LINUX_ONLY
+def test_a_stamp_naming_a_GRANDparent_arms_against_the_direct_parent(tmp_path) -> None:
+    """THE DEPTH-2 ARM (Q3 A4b, mechanism (i)). The stamp names our GRANDparent — which is what
+    `supervisor -> [trampoline execs into] uv -> run` produces — so our direct parent is the
+    process the supervisor's trampoline armed, and tying our life to it is the cascade.
+
+    Asserted as a real kill and not as a return value: the direct parent is SIGKILLed and the
+    leaf must be GONE. A gate that returned True without performing the `prctl` would pass a
+    boolean check and leave the GPU holder running, which is the whole defect."""
+    marker = tmp_path / "grandparent.pid"
     parent_script = _write_two_generation_harness(tmp_path, marker, stamp=str(os.getpid()))
     parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())
     gc_pid = None
     try:
         gc_pid, armed = _await_marker(marker)
-        assert not armed, "a stamp naming a live NON-parent must not arm"
+        assert armed, (
+            "a stamp naming a live GRANDparent must arm against the direct parent — without "
+            "it the wrapper dies with the supervisor and the run is left reparented and alive"
+        )
+        assert "wrapper_armed_by_trampoline" in _reason_log(marker).read_text(encoding="utf-8")
         _kill_parent_and_wait(parent)
-        time.sleep(2.0)
-        assert _alive(gc_pid), (
-            "the grandchild died although its stamp named a live non-parent — the gate armed "
-            "on mere PRESENCE of the variable, which ties a run's life to any wrapper in the "
-            "chain"
+        deadline = time.monotonic() + _DEADLINE_SEC
+        while _alive(gc_pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _alive(gc_pid), (
+            f"leaf {gc_pid} survived the death of the parent it was armed against; the "
+            "depth-2 arm reported True but performed no prctl"
         )
     finally:
         _reap(parent, gc_pid)
+
+
+@_LINUX_ONLY
+def test_a_stamp_three_levels_up_does_not_arm(tmp_path) -> None:
+    """THE DISCLOSED RESIDUAL, measured rather than assumed. Two stacked non-exec wrappers put
+    an UNARMED process between the run and whatever the trampoline armed, so there is no death
+    the kernel can propagate; arming against the nearer wrapper would tie the run to a process
+    nobody promised to kill. The gate must refuse AND say which residual this is."""
+    marker = tmp_path / "deep.pid"
+    parent_script = _write_three_generation_harness(tmp_path, marker, stamp=str(os.getpid()))
+    parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())
+    gc_pid = None
+    try:
+        gc_pid, armed = _await_marker(marker)
+        assert not armed, "a stamp three hops up must NOT arm"
+        assert "wrapper_chain_too_deep" in _reason_log(marker).read_text(encoding="utf-8"), (
+            "the residual must be NAMED — an unnamed refusal is the A6 finding all over again"
+        )
+    finally:
+        # The middle wrapper is reaped EXPLICITLY: it is the process the residual leaves
+        # standing, so nothing else in this file will take it down.
+        _reap(parent, gc_pid, _ppid_of_pid(gc_pid) if gc_pid is not None else None)
 
 
 @_LINUX_ONLY

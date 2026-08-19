@@ -13,8 +13,10 @@ Two liveness inputs, deliberately distinct:
     never file mtime, never wall clock (mtime-forgery and NTP-skew immune, O-13); a ``pid``
     change resets the baseline, because a legitimate restart is not a stall.
 
-Host-neutral by construction: the child command is the verbatim argv after ``--``; no
-default paths, no provider names, no baked launcher (§7). Torch-free (O-18) — a liveness
+Host-neutral by construction: the child PROGRAM sees the verbatim argv after ``--`` as its own
+``sys.argv``; no default paths, no provider names, no baked launcher (§7). The ``Popen``-level
+argv now carries one prefix — the arming trampoline, which `execvp`s into the given command and
+so is gone by the time that command runs (see `spawn_child`). Torch-free (O-18) — a liveness
 babysitter must not need seconds and gigabytes to load on a box whose GPU just wedged.
 
 >300 justify (R8): ONE subject — the out-of-process babysitter — and its three inseparable
@@ -29,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -41,6 +44,7 @@ from typing import Any, TextIO
 from mantis.monitor.best_effort import BestEffortCounters, best_effort
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (
+    PARENT_DEATH_ARM_EXEC_MODULE,
     PARENT_DEATH_PPID_ENV,
     PERSIST_FATAL_EXIT_CODE,
     WATCHDOG_STALL_EXIT_CODE,
@@ -254,9 +258,25 @@ class Supervisor:
 
 # ── real collaborators + CLI ─────────────────────────────────────────────────────────
 def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
-    """Launch the child verbatim — no shell, no injected flags, no baked path.
+    """Launch the child through the arming trampoline — no shell, no baked path.
 
-    ONE thing is injected and it is NOT argv: the child's ENVIRONMENT carries this
+    THE ARGV CONTRACT, AT THE LEVEL IT ACTUALLY HOLDS. The child PROGRAM's own `sys.argv` is
+    byte-for-byte the argv given after `--`; the `Popen`-level argv carries exactly one prefix,
+    `python -m PARENT_DEATH_ARM_EXEC_MODULE --`, and that prefix `execvp`s itself out of
+    existence before the child program's first instruction. Nothing the run records — argv in
+    provenance included — sees it. Saying "verbatim" without naming the level would be the kind
+    of stale claim the R8 header rules exist to prevent.
+
+    WHY THE TRAMPOLINE (Q3 A4b). `PR_SET_PDEATHSIG` is cleared across `fork` and preserved
+    across `execve`. `uv run` — this repo's own idiom — does NOT exec, so under a plain `Popen`
+    the supervisor's DIRECT child was the wrapper and the run was a grandchild nobody had
+    promised to kill: measured, `kill -9` on the supervisor left a running GPU holder behind.
+    The trampoline arms and then becomes the wrapper, so the wrapper dies with the supervisor;
+    the run's own gate arms against its direct parent when that parent is the trampoline's
+    process, and the two together take the whole chain down. Either half ALONE is inert, which
+    is why they land together.
+
+    ONE thing is injected and it is NOT the child's argv: the child's ENVIRONMENT carries this
     supervisor's pid under `PARENT_DEATH_PPID_ENV`, which is how a mantis run learns it is
     supervised and may arm `PR_SET_PDEATHSIG` (F-816-19). Until this existed, a supervisor
     killed outright — `kill -9`, an OOM kill, a dropped session — ORPHANED the run: the
@@ -301,8 +321,27 @@ def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
             "the supervisor ever needs to spawn off its main thread, the child's arming gate "
             "must be re-derived against a thread identity FIRST."
         )
+    # THE REFUSALS ARE MANDATORY, not tidiness. With the trampoline in front, a bad child
+    # command would make `Popen` SUCCEED and move the failure into the child — turning a
+    # launcher typo into a `child_error` rc the supervisor reads as the run's own diagnosis.
+    # Resolving the program here keeps both failures exactly where they were before the
+    # trampoline existed: loud, in the supervisor, before anything is spawned.
+    argv = list(child_argv)
+    if not argv or not str(argv[0]):
+        raise ValueError(
+            "spawn_child requires a non-empty program as the first element of the child argv"
+        )
+    if shutil.which(argv[0]) is None:
+        raise FileNotFoundError(
+            f"the child program {argv[0]!r} is not resolvable on this host; the supervisor "
+            "refuses to spawn it rather than let the arming trampoline fail as the child"
+        )
     env = {**os.environ, PARENT_DEATH_PPID_ENV: str(os.getpid())}
-    return subprocess.Popen(list(child_argv), env=env, start_new_session=True)
+    return subprocess.Popen(
+        [sys.executable, "-m", PARENT_DEATH_ARM_EXEC_MODULE, "--", *argv],
+        env=env,
+        start_new_session=True,
+    )
 
 
 def signal_child(child: Any, sig: int) -> None:

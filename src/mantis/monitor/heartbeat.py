@@ -117,6 +117,22 @@ TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
 #: would change the run's argv, which appears in provenance. Env leaves argv untouched.
 PARENT_DEATH_PPID_ENV: str = "MANTIS_PARENT_DEATH_PPID"
 
+#: Q3 A4b — the arming TRAMPOLINE the supervisor launches its child THROUGH:
+#: `python -m mantis.train.lifecycle.arm_exec -- CHILD_ARGV…`. It arms `PR_SET_PDEATHSIG` and
+#: then `execvp`s the child; the arming survives `execve` (and is cleared across `fork`), which
+#: is the only way to arm a wrapper this repo does not own. Measured: `uv run` does NOT exec,
+#: so under a plain `Popen` the supervisor's direct child was the WRAPPER and the run was an
+#: unarmed GRANDCHILD that outlived a `kill -9` on the supervisor still holding the GPU.
+#:
+#: A STRING AND NEVER AN IMPORT, for the same reason `PARENT_DEATH_PPID_ENV` lives here:
+#: `monitor -> train` is an illegal edge, and the trampoline has to live in `train.lifecycle`
+#: because it must import the ONE authority for the mechanism (`arm_parent_death_signal`). The
+#: contract's single spelling therefore sits below the cut, beside the env stamp, where both
+#: sides read it and neither imports the other. (RQ-11 asks whether naming a `train` module by
+#: string constant from `monitor` is an acceptable coupling at all; the alternative recorded
+#: there is relocating the `prctl` primitive to `mantis.util`.)
+PARENT_DEATH_ARM_EXEC_MODULE: str = "mantis.train.lifecycle.arm_exec"
+
 
 @dataclass(frozen=True)
 class HeartbeatFileState:

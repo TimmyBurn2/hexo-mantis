@@ -140,6 +140,48 @@ def arm_parent_death_signal(sig: int = signal.SIGKILL) -> bool:
     return True
 
 
+#: Hop ceiling for the ancestry walk below. A bound and not a `while True`: `/proc` is a live
+#: filesystem and a walk over it is not atomic, so the loop must terminate on a pathological
+#: tree as surely as on a normal one. 64 is far past any real launcher chain.
+_MAX_ANCESTRY_HOPS = 64
+
+
+def _ppid_of(pid: int) -> int | None:
+    """The `PPid` line of `/proc/<pid>/status`; None if unreadable (exited, or not Linux).
+
+    None is "do not know", never "no parent" — the caller must not arm on a guess.
+    """
+    try:
+        with open(f"/proc/{pid}/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("PPid:"):
+                    return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _ancestry_depth_of(stamped: int) -> int | None:
+    """Hops from THIS process up to `stamped`: 1 = direct parent, 2 = one wrapper between us.
+
+    None means "not found, or the walk could not be completed" — an ancestor that exits
+    mid-walk, a `/proc` that cannot be read, or a chain that reaches init without matching.
+    Both cases must resolve to "do not arm", which is today's status quo rather than a new
+    kill; a WRONG arm at depth ≥ 3 is the outcome this function exists to make impossible.
+    """
+    pid = os.getpid()
+    for depth in range(1, _MAX_ANCESTRY_HOPS + 1):
+        parent = _ppid_of(pid)
+        if parent is None:
+            return None
+        if parent == stamped:
+            return depth
+        if parent <= 1:
+            return None
+        pid = parent
+    return None
+
+
 def arm_parent_death_if_supervised() -> bool:
     """Called at the TOP of a run's own entry point: arm `PR_SET_PDEATHSIG` iff a mantis
     supervisor spawned us. Returns True iff armed. Never raises.
@@ -173,10 +215,35 @@ def arm_parent_death_if_supervised() -> bool:
                                         supervisor is left to relaunch or to watch — exit
                                         `PARENT_VANISHED_EXIT_CODE`, the eae0fc4 posture one
                                         layer up.
-      * stamp != ppid, stamp ALIVE   -> we are a GRAND-child through a non-exec wrapper
-                                        (`-- sh -c "python -m mantis.run …"`). Arming would tie
-                                        the run's life to the wrapper, which nobody asked for.
-                                        WARN loudly and run on, unarmed.
+      * stamp != ppid, stamp ALIVE   -> a wrapper is in the chain; the DEPTH decides, by a
+                                        bounded `/proc` ancestry walk (Q3 A4b):
+                                          depth 2  -> ARM against the DIRECT parent. Our parent
+                                                      IS the supervisor's direct child, i.e.
+                                                      the process the supervisor's arming
+                                                      trampoline armed, so tying our life to
+                                                      it is exactly the cascade that takes the
+                                                      whole chain down.
+                                          depth ≥3 -> DO NOT ARM (`wrapper_chain_too_deep`).
+                                                      Two stacked non-exec wrappers defeat the
+                                                      chain: measured, and the disclosed
+                                                      residual. Escalating this to a boot-time
+                                                      REFUSAL needs an rc, and minting one
+                                                      inside a fix packet is the drift the
+                                                      red-team is raising — queued as RQ-9.
+                                          unknown  -> DO NOT ARM (`ancestry_unreadable`).
+
+    WHY DEPTH 2 IS SAFE TO ARM AND DEPTH 3 IS NOT. The predicate is exactly "is my parent the
+    process the trampoline armed?", and it is derivable from `/proc` alone — which matters,
+    because `PR_GET_PDEATHSIG` is self-only and a process cannot ask whether its parent is
+    armed. At depth 2 the answer is yes by construction of the supervisor's own spawn; at
+    depth ≥ 3 there is an unarmed process between us and the armed one, and arming would tie
+    the run to a wrapper whose death nobody has promised.
+
+    THE HAZARD THAT IS NOT NEW, disclosed: a wrapper that ABANDONS its child (exits while the
+    run continues) would now take the run down with it. Such a wrapper already breaks the
+    supervisor's exit-code contract — the supervisor reads the wrapper's exit as the child's
+    and may relaunch a SECOND run into the same out-dir — so killing the abandoned run is the
+    correct disposition, not a premature kill.
 
     PID REUSE, disclosed rather than defended: a pid recycled in the microseconds between the
     supervisor's `Popen` and this check would downgrade an exit-`PARENT_VANISHED_EXIT_CODE`
@@ -227,12 +294,34 @@ def arm_parent_death_if_supervised() -> bool:
         # The pid exists but is not ours to signal — alive for the purpose of this check.
         pass
 
-    _LOG.warning(
-        "parent_death_signal armed=false reason=wrapper_between_supervisor_and_run "
-        "supervisor_pid=%d ppid=%d — this run's real parent is not the process that stamped "
-        "it, so an intermediate wrapper is in the chain; arming would tie the run's life to "
-        "the WRAPPER, so it stays unarmed and unsupervised for death-signal purposes",
-        stamped, actual,
+    depth = _ancestry_depth_of(stamped)
+    if depth == 2:
+        armed = arm_parent_death_signal()
+        _LOG.info(
+            "parent_death_signal armed=%s reason=%s supervisor_pid=%d ppid=%d chain_depth=2 — "
+            "the stamping supervisor is our GRANDparent, so our direct parent is the process "
+            "its arming trampoline armed; tying our life to that parent is the cascade",
+            str(armed).lower(),
+            "wrapper_armed_by_trampoline" if armed else "unsupported_platform",
+            stamped, actual,
+        )
+        return armed
+
+    if depth is None:
+        _LOG.warning(
+            "parent_death_signal armed=false reason=ancestry_unreadable supervisor_pid=%d "
+            "ppid=%d — the stamped supervisor is alive but could not be located in this "
+            "process's ancestry, so there is no parent whose death this run may be tied to",
+            stamped, actual,
+        )
+        return False
+
+    _LOG.error(
+        "parent_death_signal armed=false reason=wrapper_chain_too_deep supervisor_pid=%d "
+        "ppid=%d chain_depth=%d — two or more non-exec wrappers stand between the supervisor "
+        "and this run, so the death cascade cannot reach it: THIS RUN WILL SURVIVE ITS "
+        "SUPERVISOR and must be reaped by hand if the supervisor is killed outright",
+        stamped, actual, depth,
     )
     return False
 
