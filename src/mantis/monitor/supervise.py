@@ -38,6 +38,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
+from mantis.monitor.best_effort import BestEffortCounters, best_effort
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (
     PARENT_DEATH_PPID_ENV,
@@ -149,6 +150,10 @@ class Supervisor:
         self._tracker = LivenessTracker(stale_after_sec=stale_after_sec)
         self.relaunches = 0
         self.spawns = 0
+        # The LIVE child handle, published so the module-level stop ladder can reach it when a
+        # signal or an escaping exception unwinds `run()`. Additive and externally inert: the
+        # loop never reads it, and nothing in the frozen fake-driven oracle knows it exists.
+        self.child: Any = None
 
     # ── the loop ─────────────────────────────────────────────────────────────────────
     def run(self) -> int:
@@ -200,6 +205,7 @@ class Supervisor:
     # ── collaborators ────────────────────────────────────────────────────────────────
     def _spawn(self) -> Any:
         child = self._spawn_fn(list(self._child_argv))
+        self.child = child
         self.spawns += 1
         self._tracker.reset(now=self._clock())
         self._emit("child_spawned", pid=getattr(child, "pid", None), spawns=self.spawns)
@@ -268,6 +274,22 @@ def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
     SIGKILLed the moment that thread returned — a premature kill of a healthy run, strictly
     worse than the orphan the arming prevents. The supervisor is single-threaded today; this
     refusal is what makes that fact fail LOUD instead of silently arming a premature kill.
+    The MIRROR case is the same hazard read from the other end and is why this guard has to
+    stay: a supervisor that grew a NON-DAEMON thread outliving its main thread would arm the
+    child against a thread that returns while the supervisor is still alive and working, and
+    the kernel would SIGKILL a healthy run under a supervisor that never asked for it.
+
+    NEW SESSION, and it is the second half of the signal posture rather than a spawn detail.
+    Without it the child shares the terminal's process group, so a `Ctrl-C` is delivered to the
+    RUN by the tty AND forwarded to it by this supervisor's own stop ladder — two deliveries
+    the run cannot tell apart from an operator's deliberate second press, which is LAW-16's
+    force-exit: `os._exit(1)` mid-save. With it, every signal the child receives comes from
+    this supervisor, exactly once, and `stop_count` counts presses instead of routes. In-tree
+    precedent for the same reasoning: `tools/ci_gates/preflight_mint.py`'s `--_boot` child.
+    The cost is disclosed: `kill -INT -<pgid>` no longer reaches the run directly (a directed
+    `kill <run-pid>` still does), and the run has no controlling terminal — nothing in
+    `src/mantis/` reads one. `PR_SET_PDEATHSIG` is session-independent, so the arming is
+    unaffected.
     """
     if threading.current_thread() is not threading.main_thread():
         raise RuntimeError(
@@ -280,11 +302,212 @@ def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
             "must be re-derived against a thread identity FIRST."
         )
     env = {**os.environ, PARENT_DEATH_PPID_ENV: str(os.getpid())}
-    return subprocess.Popen(list(child_argv), env=env)
+    return subprocess.Popen(list(child_argv), env=env, start_new_session=True)
 
 
 def signal_child(child: Any, sig: int) -> None:
     child.send_signal(sig)
+
+
+# ── the supervisor's own signal posture ──────────────────────────────────────────────
+class _SupervisorStop(BaseException):
+    """Raised FROM the stop handler to unwind `Supervisor.run`'s poll sleep.
+
+    `BaseException` and not `Exception` on purpose: it must not be swallowed by an
+    `except Exception` anywhere it passes through. It is a control-flow token for a stop the
+    operator asked for — the same family as `KeyboardInterrupt`, which is exactly what CPython
+    raises for the identical event when the default handler is left in place.
+    """
+
+    def __init__(self, signum: int, press: int) -> None:
+        super().__init__(signum)
+        self.signum = int(signum)
+        self.press = int(press)
+
+
+#: Press counter for LAW-16's second-signal affordance, mirrored at the supervisor. A list and
+#: not an `int` because the handler must mutate it without a `global`; process-scoped, which is
+#: exactly the lifetime of "how many times has the operator asked this supervisor to stop".
+_PRESSES: list[int] = [0]
+
+#: Failures of the emergency-stop path itself. `monitor/**` allows NO `except …: pass` (O-20,
+#: censused): an optional effect is either counted through `best_effort` or fails loud, and the
+#: stop path's own emits are the textbook optional effect — the commonest reason to be on that
+#: path at all is that the stream they write to has died.
+_STOP_COUNTERS = BestEffortCounters()
+
+
+def _on_stop_signal(signum: int, _frame: Any) -> None:
+    _PRESSES[0] += 1
+    raise _SupervisorStop(signum, _PRESSES[0])
+
+
+def _install_stop_handlers() -> None:
+    """Install the stop handler for SIGINT, SIGTERM and SIGHUP. Called by `main`, NEVER at
+    import: `signal.signal` at module scope would install handlers in every process that so
+    much as imports this module, pytest included.
+
+    SIGHUP is in the set deliberately and is not scope creep. `spawn_child` puts the child in
+    its own session, so on a terminal close the SUPERVISOR is the only process that receives
+    SIGHUP, and its default disposition is to terminate — after which the run's armed
+    `PR_SET_PDEATHSIG` SIGKILLs it, unsaved. Omitting SIGHUP would have this module CREATE that
+    hole on the "close the terminal" gesture; with the handler it is a cooperative save.
+    """
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _on_stop_signal)
+
+
+def stop_child_cooperatively(
+    child: Any,
+    *,
+    grace_sec: float,
+    emit: Callable[..., None],
+    send: Callable[[Any, int], None] = signal_child,
+) -> int | None:
+    """SIGTERM → bounded wait → SIGKILL → bounded reap, on a REAL child handle.
+
+    THIS IS THE LADDER `Supervisor._kill` CANNOT BECOME, and the reason is mechanical rather
+    than stylistic: `_kill` is driven by a frozen oracle whose `FakeChild` exposes `.pid` and
+    `.poll()` and nothing else, so a `wait()` there is an `AttributeError` in a HELD test. Kept
+    as a module-level function over the real `Popen`, it can use `wait(timeout=…)` — which is
+    what makes the wait BOUNDED AND EARLY-RETURNING instead of `_kill`'s unconditional
+    `sleep(grace)`, i.e. what lets a healthy child actually finish its save.
+
+    ALWAYS SIGTERM OUTBOUND, whatever signal this supervisor received: the run registers one
+    handler for SIGINT and SIGTERM alike, the child has no controlling terminal, and one
+    outbound vocabulary is one thing to reason about.
+
+    THE BOUND IS `grace_sec` AND THERE IS NO SECOND AUTHORITY FOR IT — it is
+    `MonitorConfig.supervisor_kill_grace_sec` arriving through `main`'s `--kill-grace-sec`.
+    Whether that value is ADEQUATE against a measured >320 s cooperative drain is a prereg/mint
+    question (RQ-7) and is deliberately NOT answered here; this function is written so that
+    answering it is a change to one number in one place.
+
+    LAW-16 mirrored, not reimplemented: a further signal arriving while we wait lands as
+    `_SupervisorStop` INSIDE the wait. The second re-forwards SIGTERM — which is the run's OWN
+    second press, so the run's `force_teardown_all` still tears down its registered mp children
+    rather than leaving them to the kernel — and the third stops waiting and SIGKILLs.
+
+    Returns the child's exit code, or None if it could not be reaped inside the bound. The
+    supervisor NEVER blocks forever: an unreapable child is a `D`-state pathology and the
+    correct posture is to say so and leave.
+    """
+    pid = getattr(child, "pid", None)
+    grace = float(grace_sec)
+    emit("supervisor_forwarding_stop", signum=int(signal.SIGTERM), child_pid=pid,
+         grace_sec=grace)
+    send(child, signal.SIGTERM)
+    presses = 1
+    while True:
+        try:
+            code = child.wait(timeout=grace)
+        except subprocess.TimeoutExpired:
+            emit("supervisor_child_stop_timeout", child_pid=pid, grace_sec=grace)
+            break
+        except _SupervisorStop as stop:
+            presses += 1
+            if presses >= 3:
+                emit("supervisor_force_kill", signum=stop.signum, press=presses, child_pid=pid)
+                break
+            emit("supervisor_force_stop", signum=stop.signum, press=presses, child_pid=pid)
+            send(child, signal.SIGTERM)
+            continue
+        else:
+            emit("supervisor_child_stopped", code=int(code), child_pid=pid)
+            return int(code)
+
+    send(child, signal.SIGKILL)
+    # The same event name `_kill` already emits, so an existing reader needs no new vocabulary.
+    emit("child_sigkilled", pid=pid)
+    try:
+        code = child.wait(timeout=grace)
+    except (subprocess.TimeoutExpired, _SupervisorStop):
+        emit("supervisor_child_unreaped", child_pid=pid)
+        return None
+    emit("supervisor_child_stopped", code=int(code), child_pid=pid)
+    return int(code)
+
+
+def _die_of(signum: int) -> None:
+    """Die OF the signal we were asked to die of: restore the default disposition and re-raise
+    it at ourselves. NO NUMBER IS MINTED — the waiter (a shell, `systemd`, a job scheduler) sees
+    "terminated by SIGTERM", which is the truth and what `systemctl stop` expects, and
+    `repo_design.md`'s rule that a signal-caused clean stop resolves to 0 at the RUN stays true
+    end to end.
+
+    The trailing `os._exit` is reached only if the signal was blocked or ignored upstream of
+    this process, in which case 128+n is the shell's own long-standing encoding of "died of
+    signal n" rather than a code this repo authored.
+    """
+    sys.stderr.flush()
+    signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
+    os._exit(128 + int(signum))   # pragma: no cover — only if the signal is blocked
+
+
+def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
+    """The stop path: cooperative ladder, then the rc decision (fix-design §2.4).
+
+    THE CHILD'S DIAGNOSIS OUTRANKS THE STOP GESTURE. A disk-guard 47 or a terminal-eval-broken
+    48 recorded during the drain must not be erased by the fact that an operator also pressed
+    Ctrl-C, so a nonzero child code is propagated exactly as `_on_child_exit` would propagate
+    it, with the relaunch suppressed (a stop is a stop). A 0 or an unreapable child leaves
+    nothing to report but the gesture itself, and we die of it.
+    """
+    child = supervisor.child
+    code: int | None = None
+    if child is not None:
+        code = stop_child_cooperatively(
+            child, grace_sec=supervisor._kill_grace, emit=supervisor._emit,
+        )
+    if code is not None and code != 0:
+        supervisor._emit("supervisor_stop", reason="child_error", code=int(code),
+                         signum=stop.signum)
+        return int(code)
+    supervisor._emit("supervisor_stop", reason="signal", signum=stop.signum, child_code=code)
+    _die_of(stop.signum)
+    return 0   # pragma: no cover — `_die_of` does not return
+
+
+def _best_effort_stop(supervisor: Supervisor) -> None:
+    """Stop the child cooperatively on the way out of an escaping exception, then let that
+    exception continue unchanged.
+
+    `_emit` writes to stderr on every spawn/exit/stale event, so a `BrokenPipeError` (the log
+    consumer went away) or a `MemoryError` here used to unwind the supervisor's main thread in
+    milliseconds — and with the run now armed against this process, the KERNEL would SIGKILL a
+    healthy run mid-save. Nothing is swallowed but a failure of the stop itself: the original
+    exception is re-raised by the caller, so the supervisor still dies loud with its own
+    traceback.
+
+    THE LADDER GETS A TOLERANT EMIT HERE, and that is the whole reason this wrapper exists
+    rather than a direct call. The commonest way to reach this path is that the SINK ITSELF
+    died, so a ladder whose first act is an `_emit` would raise again before it ever sent the
+    SIGTERM — the child would then be killed by the kernel exactly as before the fix, and the
+    row that proves otherwise would be green for the wrong reason. Losing the stop-path events
+    on a dead stream is the correct trade: they had no reader anyway.
+    """
+    child = getattr(supervisor, "child", None)
+    if child is None:
+        return
+
+    def _tolerant(event: str, **fields: Any) -> None:
+        best_effort("supervisor_stop_emit", lambda: supervisor._emit(event, **fields),
+                    counters=_STOP_COUNTERS)
+
+    try:
+        best_effort(
+            "supervisor_stop_child",
+            lambda: stop_child_cooperatively(
+                child, grace_sec=supervisor._kill_grace, emit=_tolerant,
+            ),
+            counters=_STOP_COUNTERS,
+        )
+    except _SupervisorStop:
+        # An operator signalled us DURING the emergency stop. The child already has its
+        # SIGTERM; counting this is the honest record, and re-raising would replace the
+        # original failure — the one the operator needs to read — with the gesture.
+        _STOP_COUNTERS.increment("supervisor_stop_interrupted")
 
 
 def _split_argv(argv: Sequence[str]) -> tuple[list[str], list[str]]:
@@ -303,7 +526,21 @@ def _split_argv(argv: Sequence[str]) -> tuple[list[str], list[str]]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry: flag defaults are the `MonitorConfig` fields (single authority)."""
+    """CLI entry: flag defaults are the `MonitorConfig` fields (single authority).
+
+    THE SIGNAL POSTURE IS INSTALLED HERE AND NOWHERE ELSE. Until this existed the supervisor
+    had NO handlers at all, so its own catchable death — an operator's `kill`, a terminal
+    close, a `BrokenPipeError` out of `_emit` — killed it instantly and, with the child now
+    armed against it, had the KERNEL SIGKILL a healthy run mid-save. The run's own
+    save-then-exit path (LAW-16) was reachable only by signalling the run directly, which is
+    not what an operator supervising a run does.
+
+    Three exits, and none of them invents a number:
+      * a caught stop  -> the cooperative ladder, then die OF that signal (`_stop_and_exit`);
+      * an escaping exception -> stop the child cooperatively FIRST, then re-raise unchanged,
+        so the supervisor still dies loud with its own traceback;
+      * everything else -> `Supervisor.run`'s existing exit-code contract, untouched.
+    """
     defaults = MonitorConfig()
     flags, child_argv = _split_argv(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
@@ -331,7 +568,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         kill_fn=signal_child,
         clock=time.monotonic,
     )
-    return supervisor.run()
+    _install_stop_handlers()
+    try:
+        return supervisor.run()
+    except _SupervisorStop as stop:
+        return _stop_and_exit(supervisor, stop)
+    except BaseException:
+        _best_effort_stop(supervisor)
+        raise
 
 
 if __name__ == "__main__":  # pragma: no cover — process entry point
