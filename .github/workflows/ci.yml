@@ -7,6 +7,11 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    # The 2026-08-19 python job ran 2h11m to a red; without a ceiling a genuine hang burns
+    # GitHub's 6h default. These are generous ceilings over observed runner timings (rust
+    # 30m, python 2h11m including four ~900s budget-governed real-boot rows), not budgets:
+    # the per-test authority stays tests/tools/conftest.py (R98 — one authority per number).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5          # libpython for `cargo test` linking pyo3
@@ -34,6 +39,7 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@v4
       # Same single-source rule as the rust job: the compiler comes from
@@ -49,10 +55,20 @@ jobs:
         run: uv sync --locked
       - name: "gate 1: fresh-clone uv sync builds the extension"
         run: bash tools/ci_gates/gate_01_fresh_sync.sh
+      # --junitxml + the always() digest below exist because this repo's step logs are
+      # admin-gated: the 2026-08-19 gate-3b red was unreadable from outside (annotations
+      # said only "exit code 1"). Job summaries render on the PUBLIC run page. The digest
+      # tool reports on the gate and never gates itself — pytest's own rc is the verdict.
       - name: "gate 3a: pytest default tier"
-        run: uv run pytest -m "not integration and not slow"
+        run: uv run pytest -m "not integration and not slow" --junitxml=/tmp/junit-default.xml
+      - name: "summary: default tier digest (public)"
+        if: always()
+        run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-default.xml --title "gate 3a default tier"
       - name: "gate 3b: pytest integration tier"
-        run: uv run pytest -m integration
+        run: uv run pytest -m integration --junitxml=/tmp/junit-integration.xml
+      - name: "summary: integration tier digest (public)"
+        if: always()
+        run: uv run python tools/ci_gates/pytest_step_summary.py /tmp/junit-integration.xml --title "gate 3b integration tier"
       - name: "gate 3c: collected-test count non-decreasing"
         run: bash tools/ci_gates/test_count_gate.sh
       - name: "gate 7: every configs/ file schema-validates"
@@ -99,6 +115,7 @@ jobs:
 
   hygiene:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
