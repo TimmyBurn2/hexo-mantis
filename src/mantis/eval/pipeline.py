@@ -309,6 +309,25 @@ class EvalPipeline:
         clock: Callable[[], float] = time.monotonic,
         mp_ctx_name: str = "spawn",
     ) -> None:
+        # F-816-20 item 2. A WHITELIST equality on the NAME STRING, checked at construction
+        # and BEFORE any directory is made: a round is a long way into a run, so a refusal
+        # that arrives thirty minutes in is a worse instrument than one that arrives at boot,
+        # and a pipeline that is going to be refused should not leave a work dir behind.
+        # Keyed on the name and never on the context OBJECT, deliberately: five suites
+        # monkeypatch `multiprocessing.get_context` and take this default, so a check that
+        # inspected the returned context would red every one of them.
+        if mp_ctx_name != "spawn":
+            raise ValueError(
+                f"mp_ctx_name={mp_ctx_name!r} is refused; only 'spawn' is supported. TWO "
+                "independent reasons, both structural: (1) the worker needs its OWN CUDA "
+                "context (this module's docstring) and a forked child inherits a poisoned "
+                "one; (2) `_worker_entry` arms PR_SET_PDEATHSIG (F-816-14) and the kernel "
+                "signals on the death of the thread that CREATED the child — under "
+                "'forkserver' that is a thread of the forkserver process, not the trainer, "
+                "so the arming would track the wrong process and either fire early or never. "
+                "This is not a permanent bar: a future caller with a real need may lift it, "
+                "but must re-derive the arming's parent identity first and say so here."
+            )
         self._eval_cfg = eval_cfg
         self._caps = caps
         self._encoding = encoding
