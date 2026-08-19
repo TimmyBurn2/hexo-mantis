@@ -1,7 +1,10 @@
 name: ci
 on:
   push:
-    branches: [dev, main]
+    # ci-repair/** exists because a runner-class failure cannot be validated locally
+    # (six shaping probes green while the runner reds — the differential is the runner):
+    # a repair branch must run REAL CI before dev moves. Removed when unused.
+    branches: [dev, main, 'ci-repair/**']
   pull_request:
 
 jobs:
@@ -39,7 +42,10 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
-    timeout-minutes: 200
+    # 240 not 200: the harness ceiling must exceed the sum of the tier's worst case with
+    # the tool-budget rows at their bound, or the job kill pre-empts the tools' own rc-40
+    # verdicts and the digest that names them (the triple-hang case).
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
       # Same single-source rule as the rust job: the compiler comes from

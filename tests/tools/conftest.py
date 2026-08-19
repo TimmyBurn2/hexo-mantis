@@ -107,7 +107,19 @@ def _sweep() -> None:
 #
 # LAW-15's shape, one level down: a bar must be a reproducible instrument, and a bar that passes
 # on one host and fails on another is measuring the host.
-PREFLIGHT_BUDGET_SEC = 900.0
+#
+# 2026-08-19: the slowest host that runs this tier is now the GitHub CI runner, and 900 is
+# measured RED there — three budget rows truncated at 915.4 s by the tool's own rc 40 (run
+# 32214255298, public check-run annotations), while the SAME 16-step burst that takes ~155 s
+# here completed on that runner in 1190 s and 1198 s (the two run-launcher rows in the same
+# run's digest — the only budget-shaped workloads that finished there). True budget-row
+# duration on the runner is therefore ~1200 s, and the prior 900 was a sub-measurement guess.
+# THIS VALUE IS A MEASUREMENT POSTURE: 3000 is deliberately high so the next CI run measures
+# every budget row's true runner duration through the public digest instead of truncating it
+# at the bar; the follow-up commit derives the final budget from those readings (slowest
+# measured row, with margin), closing the guess-the-host-speed loop that produced both the
+# 300 -> 900 move and this one.
+PREFLIGHT_BUDGET_SEC = 3000.0
 
 #: The harness ceiling that must always exceed the tool's own budget, DERIVED rather than
 #: transcribed — if `subprocess.run(timeout=...)` fires first, the tool never gets to write the
