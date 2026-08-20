@@ -325,10 +325,18 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "monitor.heartbeat_fire_effect_timeout_sec": "resolve_monitor_config -> heartbeat fire-path effect timeout",
     "monitor.actor_lag_threshold_steps": "resolve_monitor_config -> build_run_safety -> ActorLagSpec.threshold_steps (WP-UNFREEZE K2)",
     "monitor.actor_lag_abort_enabled": "resolve_monitor_config -> build_run_safety -> ActorLagSpec.abort_enabled (WP-UNFREEZE K3)",
-    "monitor.supervisor_stale_after_sec": "resolve_monitor_config -> monitor/supervise.py staleness flag",
-    "monitor.supervisor_poll_interval_sec": "resolve_monitor_config -> monitor/supervise.py poll cadence",
-    "monitor.supervisor_kill_grace_sec": "resolve_monitor_config -> monitor/supervise.py kill grace",
-    "monitor.supervisor_max_relaunches": "resolve_monitor_config -> monitor/supervise.py relaunch cap",
+    "monitor.supervisor_stale_after_sec":
+        "monitor/supervise.py::main --config -> load_config"
+        " -> resolve_monitor_config -> Supervisor(stale_after_sec=) -> LivenessTracker staleness deadline",
+    "monitor.supervisor_poll_interval_sec":
+        "monitor/supervise.py::main --config -> load_config"
+        " -> resolve_monitor_config -> Supervisor(poll_interval_sec=) -> the watch loop's sleep",
+    "monitor.supervisor_kill_grace_sec":
+        "monitor/supervise.py::main --config -> load_config"
+        " -> resolve_monitor_config -> Supervisor(kill_grace_sec=) -> stop_child_cooperatively grace_sec",
+    "monitor.supervisor_max_relaunches":
+        "monitor/supervise.py::main --config -> load_config"
+        " -> resolve_monitor_config -> Supervisor(max_relaunches=) -> the relaunch budget",
     # ── monitor.drain.* (4; DrainCapsConfig, DESIGN_P2.md §4.3) ──────────────────────────
     # WPMINT Phase K-A (R93): these four citations were FALSE until this phase — the block
     # was popped by resolve_monitor_config and never reached the functions named below, which
