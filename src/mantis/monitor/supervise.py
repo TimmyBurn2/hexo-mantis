@@ -42,7 +42,6 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from mantis.monitor.best_effort import BestEffortCounters, best_effort
-from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import (
     PARENT_DEATH_ARM_EXEC_MODULE,
     PARENT_DEATH_PPID_ENV,
@@ -427,11 +426,16 @@ def stop_child_cooperatively(
     handler for SIGINT and SIGTERM alike, the child has no controlling terminal, and one
     outbound vocabulary is one thing to reason about.
 
-    THE BOUND IS `grace_sec` AND THERE IS NO SECOND AUTHORITY FOR IT — it is
-    `MonitorConfig.supervisor_kill_grace_sec` arriving through `main`'s `--kill-grace-sec`.
-    Whether that value is ADEQUATE against a measured >320 s cooperative drain is a prereg/mint
-    question (RQ-7) and is deliberately NOT answered here; this function is written so that
-    answering it is a change to one number in one place.
+    THE BOUND IS `grace_sec` AND THERE IS NO SECOND AUTHORITY FOR IT — it is the MINTED
+    `monitor.supervisor_kill_grace_sec`, loaded from the run's own config by `main` and resolved
+    through `resolve_monitor_config`. (This sentence used to name `main`'s `--kill-grace-sec`
+    flag as the arrival route, and until F-816-24 that route began at a bare dataclass default,
+    so the claim of a single authority was the thing it denied: the minted key reached nothing.
+    The flag survives as an OVERRIDE, and one that is published in `supervisor_boot_identity`
+    rather than applied silently.) Whether the value is ADEQUATE against a measured >320 s
+    cooperative drain is a prereg/mint question (RQ-7, prereg row 19) and is deliberately NOT
+    answered here; this function is written so that answering it is a change to one number in
+    one config.
 
     LAW-16 mirrored, not reimplemented: a further signal arriving while we wait lands as
     `_SupervisorStop` INSIDE the wait. The second re-forwards SIGTERM — which is the run's OWN
@@ -595,8 +599,52 @@ def _split_argv(argv: Sequence[str]) -> tuple[list[str], list[str]]:
     return args[:cut], child
 
 
+#: The named refusal for a missing `--config`. R1/LAW-11: absent is an error, never a default.
+#: It names the missing input AND where a minted one comes from — argparse's own "the following
+#: arguments are required: --config" names the flag and no remedy, which tells an operator
+#: nothing about what a config is.
+_CONFIG_REFUSAL = (
+    "usage: python -m mantis.monitor.supervise --config PATH --heartbeat-file PATH [flags] "
+    "-- CHILD_ARGV...\n"
+    "--config is REQUIRED and has no default. The supervisor's thresholds ARE the minted "
+    "monitor.supervisor_* keys; a supervisor that invented them would wait a kill grace no "
+    "config records, which is the defect this flag exists to close (F-816-24). Pass the same "
+    "minted config the run is launched with — mint one with tools/mint_config.py, or use one "
+    "of the committed configs under configs/."
+)
+
+#: `(argparse dest, MonitorConfig field)` for every threshold a flag may override. The flags
+#: carry NO code-side default (R1: a default lives only in the schema field) — `None` means
+#: "not supplied", the config supplies the value, and anything actually supplied is PUBLISHED
+#: in the boot event rather than silently replacing a minted number.
+_OVERRIDABLE: tuple[tuple[str, str], ...] = (
+    ("stale_after_sec", "supervisor_stale_after_sec"),
+    ("poll_interval_sec", "supervisor_poll_interval_sec"),
+    ("kill_grace_sec", "supervisor_kill_grace_sec"),
+    ("max_relaunches", "supervisor_max_relaunches"),
+)
+
+
+def _require_config(flags: Sequence[str]) -> None:
+    """Refuse a missing `--config` BY NAME, before argparse can pre-empt the message.
+
+    The ordering is the whole point. With `required=True` set, `parse_args` exits with
+    argparse's generic line the instant the flag is absent, so a named check written after it is
+    unreachable. This pre-scans raw flags exactly as `_split_argv` pre-scans raw argv, and
+    `required=True` stays below as a backstop that in practice never fires.
+    """
+    if not any(flag == "--config" or flag.startswith("--config=") for flag in flags):
+        raise SystemExit(_CONFIG_REFUSAL)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry: flag defaults are the `MonitorConfig` fields (single authority).
+    """CLI entry: the MINTED config is the threshold authority; a flag overrides and SAYS SO.
+
+    F-816-24. Until this existed, `main` built a bare `MonitorConfig()` and used its dataclass
+    literals as the argparse defaults, so the four minted `monitor.supervisor_*` keys reached no
+    process: a `supervisor_kill_grace_sec` written into `configs/` changed nothing about the
+    grace this program actually waits. The config is now REQUIRED, read through the ONE loader,
+    and resolved through the ONE resolver.
 
     THE SIGNAL POSTURE IS INSTALLED HERE AND NOWHERE ELSE. Until this existed the supervisor
     had NO handlers at all, so its own catchable death — an operator's `kill`, a terminal
@@ -611,32 +659,76 @@ def main(argv: Sequence[str] | None = None) -> int:
         so the supervisor still dies loud with its own traceback;
       * everything else -> `Supervisor.run`'s existing exit-code contract, untouched.
     """
-    defaults = MonitorConfig()
+    # LAZY BY NECESSITY, NOT BY TASTE — and gate 9's own rule is "top-level imports only; lazy
+    # imports need a stated reason", so here is the reason. A top-level `mantis.config` import
+    # in this module closes a condensed-subpackage cycle, because `config/resolve/monitor.py`
+    # imports `mantis.monitor.config`. Measured, by moving the import up and running the gate:
+    # `CYCLE: mantis.config -> mantis.monitor -> mantis.config`. Deferring it here also keeps
+    # `import mantis.monitor.supervise` as cheap as it was — but note that makes the IMPORT-time
+    # O-18 check trivially true, so the load-bearing torch check is the RUN-time one, taken from
+    # inside a process that has actually executed this function.
+    from mantis.config.loader import config_identity_sha256, load_config
+    from mantis.config.resolve.monitor import resolve_monitor_config
+
     flags, child_argv = _split_argv(sys.argv[1:] if argv is None else argv)
+    _require_config(flags)
     parser = argparse.ArgumentParser(
         prog="python -m mantis.monitor.supervise",
         description="Host-neutral liveness supervisor for a mantis run.",
     )
+    parser.add_argument("--config", required=True)
     parser.add_argument("--heartbeat-file", required=True)
-    parser.add_argument("--stale-after-sec", type=float,
-                        default=defaults.supervisor_stale_after_sec)
-    parser.add_argument("--poll-interval-sec", type=float,
-                        default=defaults.supervisor_poll_interval_sec)
-    parser.add_argument("--kill-grace-sec", type=float,
-                        default=defaults.supervisor_kill_grace_sec)
-    parser.add_argument("--max-relaunches", type=int,
-                        default=defaults.supervisor_max_relaunches)
+    parser.add_argument("--stale-after-sec", type=float, default=None)
+    parser.add_argument("--poll-interval-sec", type=float, default=None)
+    parser.add_argument("--kill-grace-sec", type=float, default=None)
+    parser.add_argument("--max-relaunches", type=int, default=None)
     args = parser.parse_args(flags)
+
+    # HOST-NEUTRALITY IS INTACT (§7): the operator supplies the path, exactly as they already
+    # supply --heartbeat-file and the whole child argv. Nothing is discovered, nothing is baked,
+    # no path is defaulted — a *defaulted* config path is what would breach it, not a required one.
+    config = load_config(args.config)
+    thresholds = resolve_monitor_config(config.monitor)
+    supplied = {dest: getattr(args, dest) for dest, _ in _OVERRIDABLE}
+    overrides = {dest: value for dest, value in supplied.items() if value is not None}
+    effective = {
+        dest: (supplied[dest] if supplied[dest] is not None else getattr(thresholds, field))
+        for dest, field in _OVERRIDABLE
+    }
+
     supervisor = Supervisor(
         child_argv=child_argv,
         heartbeat_file=Path(args.heartbeat_file),
-        stale_after_sec=args.stale_after_sec,
-        poll_interval_sec=args.poll_interval_sec,
-        kill_grace_sec=args.kill_grace_sec,
-        max_relaunches=args.max_relaunches,
         spawn_fn=spawn_child,
         kill_fn=signal_child,
         clock=time.monotonic,
+        **effective,
+    )
+    # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published FIRST, before anything can wedge —
+    # the same posture and the same one authority (`config_identity_sha256`) as the run's own
+    # `run_boot_identity`. Once this program reads a config, parent and child read config files
+    # INDEPENDENTLY and nothing makes them the same file; publishing the parent's identity is what
+    # makes a divergence visible instead of invisible. It is PUBLISH, not COMPARE: learning the
+    # child's config would mean parsing the verbatim child argv, which `spawn_child`'s contract
+    # forbids (an env-channel handshake that breaches nothing is possible and is filed as
+    # F-816-26, but its half lives in the child).
+    #
+    # The effective bounds are read back OFF THE LIVE OBJECT, never off the args namespace: the
+    # defect being closed here is precisely that a config and a process disagreed, so the record
+    # names what this supervisor will actually do. `overrides` names any flag an operator
+    # supplied, so a hand-variation of a minted safety bound is an event in the record rather
+    # than a silent substitution.
+    supervisor._emit(
+        "supervisor_boot_identity",
+        config=str(args.config),
+        config_sha256=config_identity_sha256(config),
+        effective={
+            "stale_after_sec": supervisor._tracker.stale_after_sec,
+            "poll_interval_sec": supervisor._poll_interval,
+            "kill_grace_sec": supervisor._kill_grace,
+            "max_relaunches": supervisor._max_relaunches,
+        },
+        overrides=overrides,
     )
     _install_stop_handlers()
     try:

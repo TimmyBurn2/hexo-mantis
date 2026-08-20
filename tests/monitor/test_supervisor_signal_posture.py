@@ -38,6 +38,14 @@ import sys
 import time
 from pathlib import Path
 
+#: F-816-24 made `--config` REQUIRED: the supervisor's thresholds are the minted
+#: `monitor.supervisor_*` keys, so a supervisor with no config now refuses to start. These drives
+#: are about the STOP LADDER and override every threshold on the command line anyway, so they take
+#: a committed config for the load alone rather than minting one per drive — the config PATH is
+#: `tests/monitor/test_supervisor_config_witness.py`'s subject, not this file's. This is the only
+#: change this suite needed; its expectations are untouched.
+_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
+
 import pytest
 
 _LINUX = sys.platform.startswith("linux")
@@ -90,6 +98,7 @@ def _spawn_supervisor(tmp_path: Path, child_script: Path, err: Path, *,
     else — least of all the pytest process that sent it."""
     argv = [
         sys.executable, "-m", "mantis.monitor.supervise",
+        "--config", str(_CONFIG),
         "--heartbeat-file", str(tmp_path / "hb.json"),
         "--stale-after-sec", str(stale_after_sec),
         "--poll-interval-sec", "0.1",
@@ -414,6 +423,7 @@ def test_an_exception_escaping_the_loop_stops_the_child_cooperatively(tmp_path) 
     read_fd, write_fd = os.pipe()
     argv = [
         sys.executable, "-m", "mantis.monitor.supervise",
+        "--config", str(_CONFIG),
         "--heartbeat-file", str(tmp_path / "hb.json"),
         "--stale-after-sec", "3", "--poll-interval-sec", "0.1",
         "--kill-grace-sec", "10", "--max-relaunches", "0",
