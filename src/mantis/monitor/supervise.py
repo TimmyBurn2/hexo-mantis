@@ -633,8 +633,18 @@ def _require_config(flags: Sequence[str]) -> None:
     unreachable. This pre-scans raw flags exactly as `_split_argv` pre-scans raw argv, and
     `required=True` stays below as a backstop that in practice never fires.
     """
-    if not any(flag == "--config" or flag.startswith("--config=") for flag in flags):
-        raise SystemExit(_CONFIG_REFUSAL)
+    for index, flag in enumerate(flags):
+        if flag.startswith("--config="):
+            return
+        if flag == "--config":
+            # PRESENT IS NOT THE SAME AS SUPPLIED. A trailing `--config` with nothing after it
+            # satisfies a presence test and then falls through to argparse's "expected one
+            # argument" — a stock message with no remedy in it, which is the half this refusal
+            # exists to add (REVIEW(impl) #3).
+            if index + 1 < len(flags) and not flags[index + 1].startswith("-"):
+                return
+            raise SystemExit(_CONFIG_REFUSAL)
+    raise SystemExit(_CONFIG_REFUSAL)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -704,9 +714,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         clock=time.monotonic,
         **effective,
     )
-    # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published FIRST, before anything can wedge —
-    # the same posture and the same one authority (`config_identity_sha256`) as the run's own
-    # `run_boot_identity`. Once this program reads a config, parent and child read config files
+    _install_stop_handlers()
+    # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published as the first EVENT —
+    # the same one authority (`config_identity_sha256`) as the run's own `run_boot_identity`.
+    #
+    # HANDLERS ARE INSTALLED BEFORE THIS EMIT, matching `run.py`, whose signal handlers are
+    # hoisted above its own identity publication. An earlier draft published first and called
+    # itself "the parent-side twin" while inverting the twin's order (REVIEW(impl) #1); the
+    # window was benign — no child exists until `run()` — but it had grown to cover `load_config`
+    # and schema validation, which is real file I/O the old in-memory path did not do, and a
+    # deviation nobody wrote down is one nobody can weigh later. Once this program reads a config, parent and child read config files
     # INDEPENDENTLY and nothing makes them the same file; publishing the parent's identity is what
     # makes a divergence visible instead of invisible. It is PUBLISH, not COMPARE: learning the
     # child's config would mean parsing the verbatim child argv, which `spawn_child`'s contract
@@ -730,7 +747,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         overrides=overrides,
     )
-    _install_stop_handlers()
     try:
         return supervisor.run()
     except _SupervisorStop as stop:

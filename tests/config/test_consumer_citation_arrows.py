@@ -11,7 +11,12 @@ F-816-24's second evidence leg, and it is the SECOND instance of this class in t
 
 THE DISCRIMINATOR, AND WHY IT IS THIS ONE. The naive check — "the cited file must reference the
 cited symbol" — was tried first and MEASURED: it flags 17 of the 21 citations that name a file,
-and 17 of those are TRUTHFUL. `resolve_monitor_config -> monitor/rules.py` is correct precisely
+of which **4 are the real defect and 13 are TRUTHFUL arrows**. (An earlier draft of this
+paragraph said all 17 were truthful, which was wrong in the direction that flatters the argument
+— and writing a wrong number into prose that no test derives is this file's own subject. It is
+corrected rather than deleted, because the corrected figure is still decisive: a rule whose
+failures are wrong three times in four teaches its own suppression.)
+`resolve_monitor_config -> monitor/rules.py` is correct precisely
 because rules.py does NOT import the resolver: the run process builds a `MonitorConfig` and
 PASSES it in. A multi-hop data-flow arrow is the normal shape here, so a check that treats every
 hop as an import edge is a false-positive generator, and a check whose failures are usually
@@ -100,6 +105,20 @@ def _cited_symbols(citation: str, cited_file: str) -> list[str]:
     return sorted({tok for tok in _TOKEN_RE.findall(remainder) if tok in _symbol_index()})
 
 
+def _unresolvable_citations(registry: dict[str, str]) -> list[str]:
+    """Cited paths that match no file, or more than one. A checker that cannot resolve its own
+    input must SAY SO: skipping them silently would report green over a citation nobody checked,
+    which is the phantom class this file exists to close, reappearing inside the closer
+    (REVIEW(impl) #2)."""
+    bad: list[str] = []
+    for key, citation in sorted(registry.items()):
+        for rel in _FILE_RE.findall(citation):
+            hits = [k for k in _files_by_suffix() if k == rel or k.endswith("/" + rel)]
+            if len(hits) != 1:
+                bad.append(f"{key}: cited path {rel!r} resolves to {len(hits)} files: {hits}")
+    return bad
+
+
 def _arrow_violations(registry: dict[str, str]) -> list[str]:
     """Every (key, file, missing symbols) where an entry-point file cannot see its own arrow."""
     bad: list[str] = []
@@ -124,6 +143,40 @@ def test_no_citation_sends_a_value_into_a_separate_process_that_cannot_see_it():
             "references, so the value cannot reach it — the F-816-24 class:\n  "
             + "\n  ".join(violations)
         )
+
+
+def test_every_cited_path_resolves_to_exactly_one_file():
+    """The checker's own precondition, asserted rather than assumed.
+
+    `_resolve_cited_file` returns `None` for a path matching zero files or several, and the arrow
+    loop treats `None` the same as "not an entry point" — it moves on. That is correct control
+    flow and a silent hole: an ambiguous citation would be reported as checked-and-clean when it
+    was never checked at all. This test makes the unresolvable case LOUD, so the arrow rule's
+    green means "every cited path was examined" rather than "every cited path I could find was".
+    """
+    for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
+        unresolvable = _unresolvable_citations(_load_registry(name))
+        assert not unresolvable, (
+            f"{name}: a consumer citation names a path the tree cannot resolve uniquely, so the "
+            "arrow rule silently skipped it:\n  " + "\n  ".join(unresolvable)
+        )
+
+
+def test_the_resolution_check_bites_on_a_path_the_tree_cannot_resolve():
+    """LAW-07 self-test for the precondition above.
+
+    The planted path names no file, which is the ZERO half of `len(hits) != 1`; the MANY half
+    (an ambiguous suffix) shares the same branch and has no collision in the tree today to plant,
+    which is itself worth recording — the hole is currently unreachable, and the test exists so
+    that it stays reported rather than becoming reachable unnoticed. A single-segment path is
+    deliberately not used: `_FILE_RE` requires a directory segment, so `config.py` alone is never
+    even recognised as a cited path and would test the regex rather than the resolver.
+    """
+    planted = {"planted.key": "resolve_monitor_config -> monitor/no_such_module.py something"}
+    assert _unresolvable_citations(planted), (
+        "a cited path matching no file was treated as resolved; the precondition test above is "
+        "inert and an unchecked citation would read as a checked one"
+    )
 
 
 def test_the_arrow_check_bites_on_a_planted_false_arrow():
