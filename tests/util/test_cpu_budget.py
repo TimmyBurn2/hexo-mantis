@@ -1,4 +1,8 @@
-"""Smoke net for mantis.util.cpu_budget (net addition — the module had no old test).
+"""Smoke net for the thread-budget helper (net addition — the module had no old test).
+
+The subject relocated from `mantis.util.cpu_budget` to `tests/util/_cpu_budget.py` under
+R289(q); it is imported as a tests/ helper (the `_value_health` / `_microbatch_harness`
+convention), not from `mantis`.
 
 Pins the stdlib-only thread-budget contract: detection returns a sane int, the
 per-lib heuristic matches its documented examples, and `apply_auto_thread_budget`
@@ -13,8 +17,8 @@ import os
 
 import pytest
 
-from mantis.util import cpu_budget
-from mantis.util.cpu_budget import (
+import _cpu_budget as cpu_budget
+from _cpu_budget import (
     _THREAD_ENV_VARS,
     apply_auto_thread_budget,
     derive_per_lib,

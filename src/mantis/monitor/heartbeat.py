@@ -109,8 +109,10 @@ TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
 #:
 #: It is NOT a config key and R1 does not reach it: a supervisor's pid is a property of ONE
 #: invocation, carried by the launcher, exactly as `run.py`'s `--resume-from` paragraph argues
-#: for a resume target. The precedent for an env-carried process fact is
-#: `mantis.util.cpu_budget`'s `MANTIS_THREAD_BUDGET` pair.
+#: for a resume target. The precedent for an env-carried process fact is the
+#: `MANTIS_THREAD_BUDGET` / `_MANTIS_THREAD_BUDGET_APPLIED` pair (the value plus its
+#: applied-once guard) — a shape, not an import: its module relocated to `tests/` under
+#: R289(q), and the argument here rests on the shape, which is why it survives the move.
 #:
 #: WHY ENV AND NOT AN INJECTED FLAG: `spawn_child`'s documented contract is "the child command
 #: is the verbatim argv after `--`". A flag would break that deliberately-stated property and

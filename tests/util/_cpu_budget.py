@@ -1,9 +1,27 @@
-"""CPU thread budget detection + per-library env defaults.
+"""CPU thread budget detection + per-library env defaults — TEST-TREE, NOT WIRED.
 
-Imported VERY early — before numpy / torch / any BLAS-using library — by the
-training / self-play / benchmark entry points. Stdlib-only so the import-order
-constraint is trivially satisfied; the package-level ``mantis.util.__init__``
-is also kept torch-free for the same reason.
+RELOCATED from ``src/mantis/util/cpu_budget.py`` under **R289(q)**, which gave this module
+two futures — *"relocates under tests/ or names a live consumer"* — and this is the first.
+
+WHY IT MOVED, and what the move does NOT mean. An AST census over ``src/``, ``tools/`` and
+``tests/`` found **zero** consumers outside this module and its own test: the four ``src/``
+hits were docstring and comment prose, which is why a grep-level check reports the opposite.
+The paragraph below used to open *"Imported VERY early ... by the training / self-play /
+benchmark entry points"* — a statement about wiring that had stopped being true, and a
+docstring asserting a contract nothing honours is the SF-7 class this repo has been burned by.
+The code is preserved verbatim BECAUSE the failure mode it addresses is real and measured; it
+is the wiring that is absent, not the reasoning.
+
+WHY IT WAS NOT WIRED INSTEAD, stated so the choice is re-openable rather than silent. Wiring
+``apply_auto_thread_budget`` into an entry point sets ``OMP_NUM_THREADS`` and its siblings
+process-wide, which moves **every timing measurement on this machine**. The perf lane's
+before-side is banked at a specific ``dev`` head and its re-bench is vested and unrun; changing
+thread budgets between the banked before-side and the after-side would confound the whole lane.
+That is a scheduling reason, not a verdict on the design — **wire-vs-keep-here is re-openable
+after the re-bench readout lands**, and this docstring is where a future reader should start.
+
+Stdlib-only, so the import-order constraint it was written for is trivially satisfied wherever
+it ends up living.
 
 PyTorch / NumPy / OpenBLAS / MKL all read OMP_NUM_THREADS (and sibling
 vars) at native-runtime initialisation, which happens during their

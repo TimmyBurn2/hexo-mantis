@@ -918,6 +918,17 @@ def compose_run(
             )
             disk_guard.start()
 
+        # ── RESERVED, NOT DEAD: the mixed-batch / pretrained-buffer path (R289(q)) ──────────
+        # `pretrained_buffer`, `recent_buffer` and `bufs` are passed None here, so the
+        # mixed-batch assembly in `train/batch_assembly.py` contributes nothing at run5 while
+        # its config keys and resolver stamps stay live. That is a WIRING gap, not dead code.
+        #
+        # **This path MUST NOT be deleted.** R289(q) rules it RESERVED: it is the corpus-mix
+        # candidate MECHANISM of the bootstrap prereg row (`RUN5_MINT_PREREG.md` row 18,
+        # BOOTSTRAP-CORPUS posture — BC pretrain / corpus-mix vs no warm start, an
+        # operator-owed, MINT-CRITICAL decision). Deleting it as "unreferenced" would remove
+        # one of the two arms the mint is still choosing between, and would do it on a hygiene
+        # mandate rather than a design one. Queue: RQ-19.
         with _seam("StepCoordinator"):
             coordinator = StepCoordinator(
                 trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,

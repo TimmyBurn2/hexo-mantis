@@ -9,6 +9,15 @@ _compute_chain_planes`, `mantis.encoding` slot/pin helpers, `mantis.data.corpus_
 and `mantis._engine` (`ReplayBuffer`, `apply_symmetries_batch`) — the self-play buffer sampling is
 the injected engine seam. train → data / env / encoding are all DAG-legal.
 
+RESERVED, NOT DEAD (R289(q)). At run5 this module's mixing arms receive nothing: `run.py`
+passes `pretrained_buffer=None`, `recent_buffer=None` and `bufs=None` into `StepCoordinator`,
+so the corpus/bot/recent slots are empty and only the self-play rows flow. The config keys and
+resolver stamps that feed those slots ARE live, which is what makes the gap look like dead code
+to a census. **It MUST NOT be deleted:** this is the corpus-mix candidate mechanism of the
+BOOTSTRAP-CORPUS prereg row (an operator-owed, mint-critical choice between BC pretrain /
+corpus-mix and no warm start), so removing it would delete one arm of a decision that has not
+been taken. Queue row RQ-19; wire-or-retire is a pre-mint design question, not hygiene.
+
 Scope note (DESIGN deviation, documented): the bot-corpus ATOMIC-SWAP machinery
 (`swap_bot_corpus_atomic` / `BotCorpusSwapError` / `load_bot_corpus_buffer`) is bot-refresh-
 adjacent (the KILLED `bot_refresh` subprocess family swaps the bot NPZ) — it is NOT ported. The
