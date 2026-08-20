@@ -747,6 +747,13 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
         f"section override that silently failed would drive 200 and blow the tier; got "
         f"{config.train.max_train_steps!r}"
     )
+    assert config.train.draw_rate_abort is None, (
+        "premise: the disarm above really REACHED the coordinator — the same section-merge "
+        "check the bound gets, on the other override. A silently-failed merge would leave the "
+        "rule armed and this drive would red on a slow host with rule='draw_rate_collapse', "
+        "which is the exact failure this test's disclosure block exists to prevent being read "
+        f"as a real collapse; got {config.train.draw_rate_abort!r} (RQ-20 / R288(c) grant)"
+    )
 
     handles = launch_run(config=config, out_dir=tmp_path)
 
