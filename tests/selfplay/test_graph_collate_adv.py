@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from _retired_batch_fields import RETIRED_BATCH_FIELDS
 import pytest
 
 from mantis.selfplay.graph_collate import (
@@ -122,6 +123,12 @@ def test_clean_capture_collates_full_semantic(payload_fields, collate_expectatio
     assert int(batch.n_graphs) == golden["n_graphs"] == 6
     assert str(batch.device) == golden["device"] == "cpu"
     for field, meta in golden["tensors"].items():
+        if field in RETIRED_BATCH_FIELDS:
+            # RQ-16 / R297(c): the expectations file still records this field and is
+            # NOT rewritten. Asserted ABSENT rather than skipped — a silent continue
+            # over an unmatched golden key is a check that passes by not checking.
+            assert not hasattr(batch, field), f"{field}: retired, yet produced"
+            continue
         tensor = getattr(batch, field)
         assert list(tensor.shape) == meta["shape"], f"{field}: shape drift"
         assert str(tensor.dtype) == meta["torch_dtype"], f"{field}: torch dtype drift"
@@ -155,6 +162,12 @@ def test_single_graph_batch_clean(payload_fields, collate_expectations):
     golden = collate_expectations["collated"]["b1"]
     assert int(batch.n_graphs) == golden["n_graphs"] == 1
     for field, meta in golden["tensors"].items():
+        if field in RETIRED_BATCH_FIELDS:
+            # RQ-16 / R297(c): the expectations file still records this field and is
+            # NOT rewritten. Asserted ABSENT rather than skipped — a silent continue
+            # over an unmatched golden key is a check that passes by not checking.
+            assert not hasattr(batch, field), f"{field}: retired, yet produced"
+            continue
         assert list(getattr(batch, field).shape) == meta["shape"], f"{field}: shape drift"
 
 
@@ -171,6 +184,12 @@ def test_empty_batch_pinned_to_old(payload_fields, collate_expectations):
                          semantic=semantic)
         assert int(batch.n_graphs) == 0, f"semantic={semantic}: n_graphs must be 0"
         for field, meta in golden["tensors"].items():
+            if field in RETIRED_BATCH_FIELDS:
+                # RQ-16 / R297(c): the expectations file still records this field and is
+                # NOT rewritten. Asserted ABSENT rather than skipped — a silent continue
+                # over an unmatched golden key is a check that passes by not checking.
+                assert not hasattr(batch, field), f"{field}: retired, yet produced"
+                continue
             assert list(getattr(batch, field).shape) == meta["shape"], (
                 f"semantic={semantic}, {field}: empty-batch shape drift"
             )

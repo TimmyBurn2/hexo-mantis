@@ -161,9 +161,6 @@ def collate_from_payload(wire: Any, *_a: Any, **_kw: Any) -> GraphBatch:
             np.ascontiguousarray(wire.policy_dst_slot, dtype=np.int64)
         ),
         node_offsets=torch.from_numpy(no.copy()),
-        node_coords=torch.from_numpy(
-            np.ascontiguousarray(wire.node_coords, dtype=np.int64).reshape(n_total, 2)
-        ),
         window_center=torch.from_numpy(
             np.ascontiguousarray(wire.window_center, dtype=np.int64).reshape(b, 2)
         ),

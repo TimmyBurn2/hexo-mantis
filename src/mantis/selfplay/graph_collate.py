@@ -182,7 +182,15 @@ class GraphWirePayload:
 class GraphBatch:
     """Collated block-diagonal torch tensors. `x`/`edge_index`/`edge_attr`/
     `legal_mask` feed `GnnNet.forward_batch`; the remaining fields support the
-    ragged OUTPUT assemble and stay on device."""
+    ragged OUTPUT assemble and stay on device.
+
+    `node_coords` was RETIRED here by R297(c) on the RQ-16 per-tensor census: the DEVICE tensor
+    had zero reads anywhere in the tree, so it was an H2D transfer per part that nothing read.
+    The WIRE array of the same name is untouched and is not dead — `_check_semantic` reshapes it
+    for checks 16/17, `verify_edge_geometry` reads the raw flat array zero-copy, and the bridge's
+    assemble path reads `graph.node_coords` directly. Two same-named things; one was measured.
+    Pinned by `tests/selfplay/test_graph_batch_dead_transfer_retired.py`, whose negative control
+    is the wire field."""
 
     x: Any  # torch.Tensor (N, 11) float
     edge_index: Any  # (2, E) int64
@@ -192,7 +200,6 @@ class GraphBatch:
     legal_node_gather: Any  # (Lg,) int64 (global rows)
     policy_dst_slot: Any  # (Lg,) int64 (per-graph slot; -1 off-window)
     node_offsets: Any  # (B+1,) int64
-    node_coords: Any  # (N, 2) int64
     window_center: Any  # (B, 2) int64
     current_player: Any  # (B,) int8→int64
     n_stones: Any  # (B,) int64
@@ -382,9 +389,6 @@ def collate_graph_batch(
         node_offsets=torch.from_numpy(
             np.ascontiguousarray(node_offsets, dtype=np.int64)
         ).to(device),
-        node_coords=torch.from_numpy(
-            np.ascontiguousarray(node_coords, dtype=np.int64)
-        ).reshape(N, 2).to(device),
         window_center=torch.from_numpy(
             np.ascontiguousarray(window_center, dtype=np.int64)
         ).reshape(B, 2).to(device),

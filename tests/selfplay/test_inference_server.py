@@ -274,7 +274,6 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         ),
         policy_dst_slot=torch.zeros(2 * n_graphs, dtype=torch.int64),
         node_offsets=node_offsets,
-        node_coords=torch.zeros((n, 2), dtype=torch.int64),
         window_center=torch.zeros((n_graphs, 2), dtype=torch.int64),
         current_player=torch.ones(n_graphs, dtype=torch.int64),
         n_stones=torch.ones(n_graphs, dtype=torch.int64),

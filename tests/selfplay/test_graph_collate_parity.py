@@ -17,6 +17,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+from _retired_batch_fields import RETIRED_BATCH_FIELDS
 import pytest
 import torch
 
@@ -49,8 +50,24 @@ def _collate(fields: dict[str, Any], **kw: Any):
     return collate_graph_batch(GraphWirePayload(**fields), **kw)
 
 
+#: The ONE authority lives in `_retired_batch_fields`; a second copy here is the class this
+#: mission keeps paying for. The capture `.npz` is NOT regenerated to drop retired keys — a
+#: byte-parity capture whose bytes get rewritten when the code changes has stopped being a
+#: capture. The extra key stays as evidence, and the retirement is asserted POSITIVELY below
+#: rather than skipped, because a silent `continue` over an unmatched golden key is a check that
+#: passes because it stopped checking.
+_RETIRED_FIELDS = RETIRED_BATCH_FIELDS
+
+
 def _assert_tensor_parity(batch, golden: dict[str, np.ndarray], label: str) -> None:
     for field, expected in golden.items():
+        if field in _RETIRED_FIELDS:
+            assert not hasattr(batch, field), (
+                f"{label}.{field}: the batch produces a field this capture records as RETIRED. "
+                "Either the retirement was reverted without updating this list, or a field was "
+                "re-added under a retired name — both need saying out loud, not passing quietly"
+            )
+            continue
         actual = getattr(batch, field).detach().cpu().numpy()
         assert actual.shape == expected.shape, (
             f"{label}.{field}: shape {actual.shape} != {expected.shape}"
