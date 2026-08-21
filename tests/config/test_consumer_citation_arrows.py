@@ -141,20 +141,23 @@ def _referenced_names(path: Path) -> frozenset[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Name):
+        # LOAD CONTEXT ONLY. A binding is not a reference: `resolve_drain_caps = None` is a
+        # STORE, and counting it made the checker verify an arrow into a module that receives
+        # nothing — RED-TEAM's bypass, and it revived this file's own historical false arrow
+        # while staying ruff-clean, so nothing else in CI would have caught it. An unused
+        # `import` is likewise not a delivery, and dropping the import special-case is what
+        # makes it not count: only a name the module actually READS survives this filter.
+        #
+        # THE LIMIT OF THIS RULE, STATED RATHER THAN LEFT TO BE FOUND. A Load inside code that
+        # never executes — `if False: resolve_drain_caps()` — is still a Load, so it counts.
+        # That is a real residual and it is accepted rather than chased: reachability analysis is
+        # a different instrument, and the two shapes that reach it (an undefined name, an unused
+        # import) are already caught by ruff F821/F401 at gate 14. The bare assignment was the
+        # one variant with NO second line of defence, which is why it is the one closed here.
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
-        elif isinstance(node, ast.Attribute):
+        elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
             names.add(node.attr)
-        elif isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                names.add(alias.name)
-                if alias.asname:
-                    names.add(alias.asname)
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                names.update(alias.name.split("."))
-                if alias.asname:
-                    names.add(alias.asname)
     return frozenset(names)
 
 
@@ -272,6 +275,26 @@ def test_a_symbol_mentioned_only_in_PROSE_is_not_accepted_as_a_reference():
     source = (SRC / "monitor" / "supervise.py").read_text(encoding="utf-8")
     assert "force_teardown_all" in source, "the premise moved; pick another prose-only symbol"
     assert "force_teardown_all" not in _referenced_names(SRC / "monitor" / "supervise.py")
+
+
+def test_a_bare_BINDING_is_not_accepted_as_a_reference(tmp_path):
+    """RED-TEAM's bypass of the AST rule, kept as a regression.
+
+    A module-level `resolve_drain_caps = None` — no import, no call, nothing delivered — made the
+    checker verify the exact planted arrow its own self-test uses to prove it still bites. The
+    variant is invisible to ruff (unlike an unused import, F401, or a dead call, F821), so it was
+    the one shape with no second line of defence. A binding is not a reference.
+    """
+    mutated = tmp_path / "supervise.py"
+    mutated.write_text(
+        (SRC / "monitor" / "supervise.py").read_text(encoding="utf-8")
+        + "\nresolve_drain_caps = None  # a binding, not a delivery\n",
+        encoding="utf-8",
+    )
+    assert "resolve_drain_caps" not in _referenced_names(mutated), (
+        "a name bound but never read counts as a reference again; the checker is back to "
+        "accepting the appearance of a symbol as evidence that a value arrives"
+    )
 
 
 def test_a_citation_naming_NO_symbol_does_not_pass_vacuously():
