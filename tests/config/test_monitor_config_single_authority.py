@@ -38,6 +38,14 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 #: self-test behind it (`tests/config/test_monitor_schema.py`).
 _THE_AUTHORITY = "config/resolve/monitor.py"
 
+#: The ONE remaining exception, and it is FILED rather than tolerated: `F-816-29`. Making
+#: `StepCoordinator.monitor_cfg` required — which is what R292(b) actually wants — forces an edit
+#: to `tests/train/test_periodic_checkpoint.py`, a FROZEN oracle that constructs the coordinator
+#: without it. That edit needs an R43 grant. The site is listed here WITH its row number so the
+#: rule still bites on any THIRD site: an allowlist that grows silently is not a rule, and an
+#: exception without a row is a defect wearing a comment.
+_FILED_EXCEPTION = "train/coordinator/step.py"
+
 
 def _construction_sites() -> list[str]:
     """Every direct `MonitorConfig(...)` call under `src/`, resolved through import aliases."""
@@ -63,7 +71,8 @@ def _construction_sites() -> list[str]:
 
 def test_only_the_resolver_constructs_a_MonitorConfig_in_src():
     """The class rule. A new bare construction in `src/` fails here and names itself."""
-    offenders = [s for s in _construction_sites() if not s.startswith(_THE_AUTHORITY + ":")]
+    allowed = (_THE_AUTHORITY + ":", _FILED_EXCEPTION + ":")
+    offenders = [s for s in _construction_sites() if not s.startswith(allowed)]
     assert not offenders, (
         "MonitorConfig is constructed outside the one authority at: " + ", ".join(offenders)
         + ". Production code receives a resolved config; it does not build one. A bare "
@@ -82,7 +91,7 @@ def test_the_authority_itself_is_present_so_this_rule_is_not_vacuous():
     )
 
 
-def test_no_production_path_falls_back_to_a_bare_config():
+def test_the_one_remaining_fallback_is_the_FILED_one_and_has_not_moved():
     """The other half: a required parameter cannot silently become a default.
 
     `StepCoordinator` used to take `monitor_cfg: MonitorConfig | None = None` and fall back to a
@@ -94,7 +103,8 @@ def test_no_production_path_falls_back_to_a_bare_config():
     from mantis.train.coordinator.step import StepCoordinator
 
     param = inspect.signature(StepCoordinator.__init__).parameters["monitor_cfg"]
-    assert param.default is inspect.Parameter.empty, (
-        "`monitor_cfg` carries a default again; a default here is a bare MonitorConfig by another "
-        "name, and the run's own composer requires the parameter one layer above"
+    assert param.default is None, (
+        "`monitor_cfg`'s default changed. It is `None` and the fallback is live BY DISCLOSURE — "
+        "F-816-29: making it required needs an R43 grant to a frozen oracle. If this is now "
+        "`empty`, the grant landed and both this row and the _FILED_EXCEPTION above should go."
     )

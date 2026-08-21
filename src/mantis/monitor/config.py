@@ -31,9 +31,15 @@ The rule exists because a bare construction is not obviously wrong at the call s
 complete, valid-looking object with every field populated. What it actually does is substitute
 these code-side literals for whatever the operator minted — armed in the config, absent in
 effect, which is precisely how `monitor.supervisor_kill_grace_sec` reached no process for the
-whole of F-816-24. The last silent fallback in the chain (`StepCoordinator`'s
-`monitor_cfg=None` default) was removed with this rule; `build_run_safety` already required the
-parameter one layer above.
+whole of F-816-24.
+
+ONE EXCEPTION REMAINS AND IT IS FILED, NOT TOLERATED: `StepCoordinator`'s `monitor_cfg=None`
+fallback, the last silent default in a chain whose next layer up (`build_run_safety`) already
+requires the parameter. Making it required was implemented and REVERTED, because exactly one
+caller cannot pass it — a FROZEN oracle constructs the coordinator without it, and editing a
+frozen file needs an R43 grant, which is requested and never self-issued. `F-816-29` carries it.
+The guard lists that site explicitly with its row number, so a THIRD site still fails: an
+allowlist that grows silently is not a rule.
 
 TESTS MAY CONSTRUCT ONE DIRECTLY, and that is deliberate rather than an exemption. In tests the
 thresholds are the SUBJECT — `monitor/rules.py`'s fire/no-fire rows need values they chose — and
