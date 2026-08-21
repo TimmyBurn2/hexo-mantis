@@ -202,10 +202,7 @@ class GraphBatch:
     edge_attr: Any  # (E, 5) float
     legal_offsets: Any  # (B+1,) int64
     legal_node_gather: Any  # (Lg,) int64 (global rows)
-    policy_dst_slot: Any  # (Lg,) int64 (per-graph slot; -1 off-window)
     node_offsets: Any  # (B+1,) int64
-    window_center: Any  # (B, 2) int64
-    current_player: Any  # (B,) int8→int64
     n_stones: Any  # (B,) int64
     n_graphs: int = 0
     device: str = "cpu"
@@ -383,17 +380,8 @@ def collate_graph_batch(
         legal_node_gather=torch.from_numpy(
             np.ascontiguousarray(legal_node_gather, dtype=np.int64)
         ).to(device),
-        policy_dst_slot=torch.from_numpy(
-            np.ascontiguousarray(policy_dst_slot, dtype=np.int64)
-        ).to(device),
         node_offsets=torch.from_numpy(
             np.ascontiguousarray(node_offsets, dtype=np.int64)
-        ).to(device),
-        window_center=torch.from_numpy(
-            np.ascontiguousarray(window_center, dtype=np.int64)
-        ).reshape(B, 2).to(device),
-        current_player=torch.from_numpy(
-            np.ascontiguousarray(current_player, dtype=np.int64)
         ).to(device),
         n_stones=torch.from_numpy(
             np.ascontiguousarray(n_stones, dtype=np.int64)

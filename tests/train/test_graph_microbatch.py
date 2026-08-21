@@ -277,10 +277,20 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
             assert torch.equal(part.legal_offsets, full.legal_offsets[g0:g1 + 1] - l0)
             assert torch.equal(part.legal_node_gather,
                                full.legal_node_gather[l0:l1] - n0)
-            assert torch.equal(part.policy_dst_slot, full.policy_dst_slot[l0:l1])
+            # (was: `part.policy_dst_slot == full.policy_dst_slot[l0:l1]`.) Retired from the
+            # batch by RQ-16 / R297(c) and re-expressed on the WIRE, which is where the bridge
+            # reads it from (`meta.policy_dst_slot`) — the split is `slice_graph_wire`'s job and
+            # the wire is where its correctness is consumed.
+            assert np.array_equal(np.asarray(sub.policy_dst_slot),
+                                  np.asarray(payload.policy_dst_slot)[l0:l1])
             assert torch.equal(part.n_stones, full.n_stones[g0:g1])
-            assert torch.equal(part.current_player, full.current_player[g0:g1])
-            assert torch.equal(part.window_center, full.window_center[g0:g1])
+            # (was: the same two rows on `part.current_player` / `part.window_center`.) Both
+            # retired from the batch by RQ-16 / R297(c) and re-expressed on the WIRE, for the
+            # same reason: `verify_edge_geometry` and the assemble path read the flat arrays.
+            assert np.array_equal(np.asarray(sub.current_player),
+                                  np.asarray(payload.current_player)[g0:g1])
+            assert np.array_equal(np.asarray(sub.window_center),
+                                  np.asarray(payload.window_center)[g0 * 2:g1 * 2])
             assert part.n_graphs == g1 - g0
             # the four target arrays and the argmax-cell sequence (MB-20's kill surface)
             assert np.array_equal(np.asarray(tsl.policy_target),

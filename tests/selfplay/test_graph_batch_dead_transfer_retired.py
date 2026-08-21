@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from _retired_batch_fields import RETIRED_BATCH_FIELDS
 from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 
 #: Retired by R297(c) on the census's GENUINELY-DEAD verdict.
@@ -32,7 +33,8 @@ _RETIRED_2 = "legal_mask"
 
 #: Still carried, and each still under its own R297(c) disposition (TEST-ONLY LAW-08 findings
 #: resolved one commit per field). Listed so retiring one silently does not pass this file.
-_STILL_CARRIED = ("policy_dst_slot", "window_center", "current_player")
+_STILL_CARRIED = ("x", "edge_index", "edge_attr", "legal_offsets",
+                  "legal_node_gather", "node_offsets", "n_stones")
 
 
 def _batch_fields() -> set[str]:
@@ -41,7 +43,7 @@ def _batch_fields() -> set[str]:
 
 def test_the_dead_device_tensor_is_gone_from_the_batch():
     """Derived from the dataclass, never from the module text (R296(f))."""
-    for name in (_RETIRED, _RETIRED_2):
+    for name in RETIRED_BATCH_FIELDS:
         assert name not in _batch_fields(), f"GraphBatch still carries {name!r}"
     assert _RETIRED not in _batch_fields(), (
         f"GraphBatch still carries {_RETIRED!r}; the census found zero reads of it anywhere and "

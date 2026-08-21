@@ -156,16 +156,7 @@ def collate_from_payload(wire: Any, *_a: Any, **_kw: Any) -> GraphBatch:
         ),
         legal_offsets=torch.from_numpy(lo.copy()),
         legal_node_gather=torch.from_numpy(gather.copy()),
-        policy_dst_slot=torch.from_numpy(
-            np.ascontiguousarray(wire.policy_dst_slot, dtype=np.int64)
-        ),
         node_offsets=torch.from_numpy(no.copy()),
-        window_center=torch.from_numpy(
-            np.ascontiguousarray(wire.window_center, dtype=np.int64).reshape(b, 2)
-        ),
-        current_player=torch.from_numpy(
-            np.ascontiguousarray(wire.current_player, dtype=np.int64)
-        ),
         n_stones=torch.from_numpy(np.ascontiguousarray(wire.n_stones, dtype=np.int64)),
         n_graphs=b,
         device="cpu",

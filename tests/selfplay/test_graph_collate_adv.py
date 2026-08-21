@@ -150,9 +150,16 @@ def test_off_window_sentinel_survives_collate(payload_fields, collate_expectatio
     fields = payload_fields("b6")
     assert int((fields["policy_dst_slot"] == -1).sum()) == expected == 1800
 
-    batch = _collate(fields, expected_version=1, device="cpu", semantic="full")
-    assert int((batch.policy_dst_slot == -1).sum()) == expected, (
-        "off-window sentinel count changed across collate"
+    _collate(fields, expected_version=1, device="cpu", semantic="full")
+    # (was: the same count on `batch.policy_dst_slot`.) That device tensor is retired by RQ-16 /
+    # R297(c) — collate carried it and nothing read it. The sentinel still matters, but on the
+    # path that actually consumes it: the WIRE array, which the bridge reads as
+    # `meta.policy_dst_slot` off the queue. So the claim becomes the one still worth making —
+    # collate VALIDATES that array (`_require_dtype`) and must not MUTATE it. The arrays here are
+    # the caller's own objects, passed by reference into the payload, so this bites for real.
+    assert int((fields["policy_dst_slot"] == -1).sum()) == expected, (
+        "collate mutated the caller's policy_dst_slot — the off-window sentinels it is supposed "
+        "to validate did not survive the call that validated them"
     )
 
 
