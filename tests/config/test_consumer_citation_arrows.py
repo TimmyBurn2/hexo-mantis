@@ -1,4 +1,12 @@
-"""LAW-08 citation arrows are checked BY SYMBOL REFERENCE, never by prose (R291(c), R244).
+""">300 justify (R8): ONE rule and the evidence that it is the RIGHT rule. The discriminator
+below was chosen over a simpler one only because the simpler one was measured and found to be a
+false-positive generator, and the tests that record that measurement — the in-process negative
+control, the two prose/vacuity attacks, the resolution precondition and its self-test — are what
+stop the rule being "simplified" back into the version that does not work. Split, the rule would
+live in one file and the reason it is shaped that way in another, and the second file is the one
+that gets deleted.
+
+LAW-08 citation arrows are checked BY SYMBOL REFERENCE, never by prose (R291(c), R244).
 
 WHAT WENT WRONG, AND WHY NOTHING CAUGHT IT. All four `monitor.supervisor_*` keys were cited as
 `"resolve_monitor_config -> monitor/supervise.py <flag>"`. `resolve_monitor_config` runs in the
@@ -119,6 +127,37 @@ def _unresolvable_citations(registry: dict[str, str]) -> list[str]:
     return bad
 
 
+@lru_cache(maxsize=None)
+def _referenced_names(path: Path) -> frozenset[str]:
+    """Names this module actually REFERENCES in code — imports, calls, attributes, plain loads.
+
+    Derived from the AST, never from the file's text. An earlier version asked `symbol in
+    source`, which is a substring test over the WHOLE FILE — comments and docstrings included.
+    RED-TEAM defeated it with a citation naming `force_teardown_all`, a real top-level function
+    from an unrelated module that appears in `supervise.py` only inside an English sentence in a
+    docstring: a wholly false arrow, verified clean. A rule that accepts prose as evidence of
+    delivery is the very thing R291(c) ordered replaced, rebuilt inside its replacement.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                names.add(alias.name)
+                if alias.asname:
+                    names.add(alias.asname)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                names.update(alias.name.split("."))
+                if alias.asname:
+                    names.add(alias.asname)
+    return frozenset(names)
+
+
 def _arrow_violations(registry: dict[str, str]) -> list[str]:
     """Every (key, file, missing symbols) where an entry-point file cannot see its own arrow."""
     bad: list[str] = []
@@ -127,8 +166,19 @@ def _arrow_violations(registry: dict[str, str]) -> list[str]:
             path = _resolve_cited_file(rel)
             if path is None or not _is_process_entry_point(path):
                 continue
-            source = path.read_text(encoding="utf-8")
-            missing = [s for s in _cited_symbols(citation, rel) if s not in source]
+            cited = _cited_symbols(citation, rel)
+            if not cited:
+                # A CITATION WITH NOTHING VERIFIABLE IN IT IS NOT A PASS. Naming an entry point
+                # as a destination while naming no symbol that carries the value there asserts a
+                # delivery and offers no way to check it — it passed VACUOUSLY before, which is
+                # the phantom class stated as an absence rather than as a lie (RED-TEAM #2).
+                bad.append(
+                    f"{key}: {rel} is its own process and the citation names no symbol at all, "
+                    "so the arrow asserts a delivery nothing can verify"
+                )
+                continue
+            referenced = _referenced_names(path)
+            missing = [s for s in cited if s not in referenced]
             if missing:
                 bad.append(f"{key}: {rel} is its own process and references none of {missing}")
     return bad
@@ -200,6 +250,36 @@ def test_the_arrow_check_bites_on_a_planted_false_arrow():
         "a planted false arrow into an entry point was NOT detected — either supervise.py "
         "stopped being a process entry point, or the symbol index stopped resolving "
         "resolve_drain_caps, and in either case the check above has stopped meaning anything"
+    )
+
+
+def test_a_symbol_mentioned_only_in_PROSE_is_not_accepted_as_a_reference():
+    """RED-TEAM #2's attack, kept as a regression.
+
+    `force_teardown_all` is a real top-level function in `train/lifecycle/signals.py` and it
+    appears in `monitor/supervise.py` exactly once — inside an English sentence in
+    `stop_child_cooperatively`'s docstring. It is never imported and never called there. Under
+    the old substring rule this wholly false arrow into an entry point verified CLEAN.
+    """
+    planted = {
+        "planted.prose_only": "force_teardown_all -> monitor/supervise.py stop ladder",
+    }
+    assert _arrow_violations(planted), (
+        "a symbol appearing only in a docstring was accepted as evidence of delivery; the check "
+        "has gone back to reading prose, which is the defect R291(c) ordered fixed"
+    )
+    # ...and the mention really is prose-only, so the test is testing what it says it is.
+    source = (SRC / "monitor" / "supervise.py").read_text(encoding="utf-8")
+    assert "force_teardown_all" in source, "the premise moved; pick another prose-only symbol"
+    assert "force_teardown_all" not in _referenced_names(SRC / "monitor" / "supervise.py")
+
+
+def test_a_citation_naming_NO_symbol_does_not_pass_vacuously():
+    """RED-TEAM #2's second half: an assertion with nothing in it to check is not a passing one."""
+    planted = {"planted.no_symbol": "monitor/supervise.py somehow delivers this via magic"}
+    assert _arrow_violations(planted), (
+        "a citation naming an entry point and no symbol was treated as verified; an arrow that "
+        "cannot be checked must be reported, not counted as clean"
     )
 
 

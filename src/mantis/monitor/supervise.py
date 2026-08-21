@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import signal
@@ -701,6 +702,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     thresholds = resolve_monitor_config(config.monitor)
     supplied = {dest: getattr(args, dest) for dest, _ in _OVERRIDABLE}
     overrides = {dest: value for dest, value in supplied.items() if value is not None}
+    # A NON-FINITE OR NEGATIVE BOUND IS MALFORMED, AND REFUSING IT IS NOT AUTHORING A VALUE.
+    # D2's rule is that this mechanism publishes and does not JUDGE — it takes no view on
+    # whether 5 s or 500 s is the right grace, because that is an operator's to mint (R119).
+    # Well-formedness is a different question. `--kill-grace-sec=nan` was driven end to end by
+    # RED-TEAM: `Popen.wait(timeout=nan)` never raises `TimeoutExpired`, so the ladder's
+    # automatic SIGTERM -> grace -> SIGKILL escalation silently stops escalating and only the
+    # operator's second and third signal recover the child. That converts a LAW-16 bounded stop
+    # into an unbounded one through an input nothing validated. The schema already refuses these
+    # values for the minted keys (`Field(ge=0)`); the flags had no such guard, which is the
+    # duplicate-authority asymmetry this packet exists to close, pointing the other way.
+    malformed = sorted(
+        dest for dest, value in overrides.items()
+        if not math.isfinite(float(value)) or float(value) < 0
+    )
+    if malformed:
+        raise SystemExit(
+            f"{', '.join(f'--{d.replace(chr(95), chr(45))}' for d in malformed)}: a supervisor "
+            "bound must be finite and non-negative. The minted keys are schema-bounded the same "
+            "way (ge=0); a NaN or negative grace does not loosen the stop ladder, it disables "
+            "its automatic escalation entirely."
+        )
     effective = {
         dest: (supplied[dest] if supplied[dest] is not None else getattr(thresholds, field))
         for dest, field in _OVERRIDABLE
@@ -715,39 +737,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         **effective,
     )
     _install_stop_handlers()
-    # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published as the first EVENT —
-    # the same one authority (`config_identity_sha256`) as the run's own `run_boot_identity`.
-    #
-    # HANDLERS ARE INSTALLED BEFORE THIS EMIT, matching `run.py`, whose signal handlers are
-    # hoisted above its own identity publication. An earlier draft published first and called
-    # itself "the parent-side twin" while inverting the twin's order (REVIEW(impl) #1); the
-    # window was benign — no child exists until `run()` — but it had grown to cover `load_config`
-    # and schema validation, which is real file I/O the old in-memory path did not do, and a
-    # deviation nobody wrote down is one nobody can weigh later. Once this program reads a config, parent and child read config files
-    # INDEPENDENTLY and nothing makes them the same file; publishing the parent's identity is what
-    # makes a divergence visible instead of invisible. It is PUBLISH, not COMPARE: learning the
-    # child's config would mean parsing the verbatim child argv, which `spawn_child`'s contract
-    # forbids (an env-channel handshake that breaches nothing is possible and is filed as
-    # F-816-26, but its half lives in the child).
-    #
-    # The effective bounds are read back OFF THE LIVE OBJECT, never off the args namespace: the
-    # defect being closed here is precisely that a config and a process disagreed, so the record
-    # names what this supervisor will actually do. `overrides` names any flag an operator
-    # supplied, so a hand-variation of a minted safety bound is an event in the record rather
-    # than a silent substitution.
-    supervisor._emit(
-        "supervisor_boot_identity",
-        config=str(args.config),
-        config_sha256=config_identity_sha256(config),
-        effective={
-            "stale_after_sec": supervisor._tracker.stale_after_sec,
-            "poll_interval_sec": supervisor._poll_interval,
-            "kill_grace_sec": supervisor._kill_grace,
-            "max_relaunches": supervisor._max_relaunches,
-        },
-        overrides=overrides,
-    )
     try:
+        # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published as the first EVENT —
+        # the same one authority (`config_identity_sha256`) as the run's own `run_boot_identity`.
+        #
+        # HANDLERS ARE INSTALLED BEFORE THIS EMIT, matching `run.py`, whose signal handlers are
+        # hoisted above its own identity publication. An earlier draft published first and called
+        # itself "the parent-side twin" while inverting the twin's order (REVIEW(impl) #1); the
+        # window was benign — no child exists until `run()` — but it had grown to cover `load_config`
+        # and schema validation, which is real file I/O the old in-memory path did not do, and a
+        # deviation nobody wrote down is one nobody can weigh later.
+        #
+        # IT IS ALSO INSIDE THE `try`, and that is the second half of the same argument. `main`'s
+        # docstring promises three exits, and all three are scoped to this block; an earlier draft
+        # emitted ABOVE it, so a signal landing during the emit — the statement immediately after
+        # the handlers arm, i.e. reachable — escaped as a raw `_SupervisorStop` traceback, taking
+        # none of the three documented paths and bypassing `_die_of`'s "died of signal N"
+        # convention (RED-TEAM #4, driven). Nothing is orphaned either way, because no child
+        # exists until `run()`; what was wrong was that the contract had a hole in it. Once this program reads a config, parent and child read config files
+        # INDEPENDENTLY and nothing makes them the same file; publishing the parent's identity is what
+        # makes a divergence visible instead of invisible. It is PUBLISH, not COMPARE: learning the
+        # child's config would mean parsing the verbatim child argv, which `spawn_child`'s contract
+        # forbids (an env-channel handshake that breaches nothing is possible and is filed as
+        # F-816-26, but its half lives in the child).
+        #
+        # The effective bounds are read back OFF THE LIVE OBJECT, never off the args namespace: the
+        # defect being closed here is precisely that a config and a process disagreed, so the record
+        # names what this supervisor will actually do. `overrides` names any flag an operator
+        # supplied, so a hand-variation of a minted safety bound is an event in the record rather
+        # than a silent substitution.
+        supervisor._emit(
+            "supervisor_boot_identity",
+            config=str(args.config),
+            config_sha256=config_identity_sha256(config),
+            effective={
+                "stale_after_sec": supervisor._tracker.stale_after_sec,
+                "poll_interval_sec": supervisor._poll_interval,
+                "kill_grace_sec": supervisor._kill_grace,
+                "max_relaunches": supervisor._max_relaunches,
+            },
+            overrides=overrides,
+        )
         return supervisor.run()
     except _SupervisorStop as stop:
         return _stop_and_exit(supervisor, stop)

@@ -37,6 +37,8 @@ from pathlib import Path
 
 import pytest
 
+from mantis.monitor.supervise import RELAUNCH_BUDGET_EXIT_CODE
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINT = REPO_ROOT / "tools" / "mint_config.py"
 SUPERVISE_SRC = REPO_ROOT / "src" / "mantis" / "monitor" / "supervise.py"
@@ -50,6 +52,23 @@ _GRACE_OVERRIDE = 4.25
 #: Also minted, and also distinctive: the drives need a sub-second cadence, and taking it from
 #: the config rather than a flag means a SECOND minted key must reach the process.
 _POLL = 0.075
+#: ALL FOUR subject keys are minted distinctively, and all four are asserted. RED-TEAM broke
+#: `stale_after_sec` and `max_relaunches` back to their dataclass literals (900.0 / 5) inside
+#: `main` and the whole suite stayed green — 40/40 — because nothing here looked at them. The
+#: packet's subject is FOUR keys and §7's promise is that the witness "would fail without the
+#: fix"; that promise held for two of them. A witness that covers half its subject is the
+#: coverage half of the phantom class: real, passing, and silent about what it never checked.
+#: Deliberately LARGE so the staleness rule cannot fire during a drive whose subject is the stop
+#: ladder — the child never writes a heartbeat file, so a small value here would kill and relaunch
+#: it mid-test and quietly change what the other assertions are measuring.
+_STALE = 611.25
+_RELAUNCHES = 3
+#: Small, distinctive, and used ONLY by the staleness witness below, which needs the rule to fire.
+_STALE_FAST = 0.625
+#: The staleness drive is bounded by the MINTED deadline plus slack, not by the generic deadline:
+#: a supervisor waiting the dataclass 900.0 must be reported as a wrong bound within seconds
+#: rather than surfacing as a minute-long `TimeoutExpired` from inside `subprocess`.
+_STALE_DEADLINE_SEC = 20.0
 
 _DEADLINE_SEC = 60.0
 #: A refusal is a decision taken before anything is spawned, so it is fast or it is not a
@@ -184,7 +203,9 @@ def test_minted_kill_grace_reaches_the_running_supervisors_stop_ladder(tmp_path)
     phantom class.
     """
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
-                   monitor__supervisor_poll_interval_sec=_POLL)
+                   monitor__supervisor_poll_interval_sec=_POLL,
+                   monitor__supervisor_stale_after_sec=_STALE,
+                   monitor__supervisor_max_relaunches=_RELAUNCHES)
     events = _drive(tmp_path, config=config)
 
     forwarding = [e for e in events if e.get("event") == "supervisor_forwarding_stop"]
@@ -206,15 +227,25 @@ def test_boot_identity_publishes_the_config_sha_and_the_effective_bounds(tmp_pat
     from mantis.config.loader import config_identity_sha256, load_config
 
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
-                   monitor__supervisor_poll_interval_sec=_POLL)
+                   monitor__supervisor_poll_interval_sec=_POLL,
+                   monitor__supervisor_stale_after_sec=_STALE,
+                   monitor__supervisor_max_relaunches=_RELAUNCHES)
     events = _drive(tmp_path, config=config)
 
     boot = [e for e in events if e.get("event") == "supervisor_boot_identity"]
     assert boot, f"the supervisor published no boot identity: {[e.get('event') for e in events]}"
     assert boot[0]["config_sha256"] == config_identity_sha256(load_config(config))
     assert boot[0]["effective"]["kill_grace_sec"] == pytest.approx(_GRACE)
-    assert boot[0]["effective"]["poll_interval_sec"] == pytest.approx(_POLL), (
-        "a second minted key must reach the process too — one key arriving could be a special case"
+    assert boot[0]["effective"] == {
+        "stale_after_sec": pytest.approx(_STALE),
+        "poll_interval_sec": pytest.approx(_POLL),
+        "kill_grace_sec": pytest.approx(_GRACE),
+        "max_relaunches": _RELAUNCHES,
+    }, (
+        "ALL FOUR minted keys must reach the process. Asserted as a whole-dict equality rather "
+        "than key by key, so a fifth published bound or a renamed one is a failure too — a "
+        "subset assertion is what let two of these four go unchecked (RED-TEAM #1). Each value "
+        "is read off the LIVE Supervisor at the attribute its own consumer uses."
     )
     assert boot[0]["overrides"] == {}, "no flag was passed; nothing may be reported as overridden"
     assert events.index(boot[0]) == 0, "the identity must be the FIRST thing published"
@@ -230,7 +261,9 @@ def test_a_command_line_override_is_published_and_is_the_effective_bound(tmp_pat
     phantom-producer class the packet exists to close.
     """
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
-                   monitor__supervisor_poll_interval_sec=_POLL)
+                   monitor__supervisor_poll_interval_sec=_POLL,
+                   monitor__supervisor_stale_after_sec=_STALE,
+                   monitor__supervisor_max_relaunches=_RELAUNCHES)
     events = _drive(tmp_path, config=config,
                     extra=["--kill-grace-sec", str(_GRACE_OVERRIDE)])
 
@@ -243,6 +276,65 @@ def test_a_command_line_override_is_published_and_is_the_effective_bound(tmp_pat
     assert forwarding[0]["grace_sec"] == pytest.approx(_GRACE_OVERRIDE), (
         "the override must reach the ladder too — a published override that the ladder ignored "
         "would be a different lie from the one this packet fixes, not an improvement"
+    )
+
+
+@pytest.mark.integration
+def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_path):
+    """A SECOND behavioural witness, on a second key, at its own consumption site.
+
+    RED-TEAM broke `stale_after_sec` back to its dataclass literal and every test still passed,
+    because the only key observed behaviourally was the grace. Published bounds are read off the
+    live object and that is strong; but two of the four keys had no observation that survives
+    someone deciding the boot event should report the args namespace instead.
+
+    So this drive lets the rule FIRE. The child never writes a heartbeat file, the minted
+    `_STALE_FAST` elapses, and the supervisor emits `child_heartbeat_file_never_written` carrying
+    `stale_after_sec=self._tracker.stale_after_sec` — the tracker's own copy, at the moment the
+    tracker acted on it. `max_relaunches` is minted to 0 here so the budget is spent by that first
+    kill and the drive terminates on `RELAUNCH_BUDGET_EXIT_CODE` instead of looping: that exit is
+    itself the fourth key being consumed, so one drive observes both remaining keys behaving.
+    """
+    config = _mint(tmp_path, monitor__supervisor_stale_after_sec=_STALE_FAST,
+                   monitor__supervisor_poll_interval_sec=_POLL,
+                   monitor__supervisor_kill_grace_sec=_GRACE,
+                   monitor__supervisor_max_relaunches=0)
+    log, err = tmp_path / "child.log", tmp_path / "supervisor.err"
+    child = _child_script(tmp_path, log)
+    proc = _spawn_supervisor(tmp_path, child, err, config=config)
+    timed_out = False
+    try:
+        proc.wait(timeout=_STALE_DEADLINE_SEC)
+    except subprocess.TimeoutExpired:
+        # NAME THE LIKELY CAUSE INSTEAD OF REPORTING A CLOCK. A supervisor that outlives this
+        # bound is almost always one whose staleness deadline is NOT the minted one — the
+        # dataclass literal is 900.0, which is what a broken delivery would leave here, so the
+        # symptom of the defect under test is "this never finished". Reported as that, not as a
+        # bare TimeoutExpired from deep inside subprocess.
+        timed_out = True
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=10)
+
+    events = _events(err)
+    assert not timed_out, (
+        f"the supervisor outlived a minted staleness bound of {_STALE_FAST}s by "
+        f"{_STALE_DEADLINE_SEC}s — the deadline it acted on is not the one the config supplied "
+        f"(the dataclass literal is 900.0). Events seen: {[e.get('event') for e in events]}"
+    )
+    stale = [e for e in events if e.get("event") == "child_heartbeat_file_never_written"]
+    assert stale, (
+        "the staleness rule never fired, so the minted bound was never exercised: "
+        f"{[e.get('event') for e in events]}"
+    )
+    assert stale[0]["stale_after_sec"] == pytest.approx(_STALE_FAST), (
+        "the liveness tracker acted on a deadline the minted config did not supply: "
+        f"{stale[0]}"
+    )
+    assert proc.returncode == RELAUNCH_BUDGET_EXIT_CODE, (
+        "a minted max_relaunches of 0 must spend the budget on the first kill; the supervisor "
+        f"exited {proc.returncode} instead, so the fourth key did not reach the budget check"
     )
 
 
@@ -275,6 +367,41 @@ def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
     )
 
 
+def test_a_malformed_override_is_refused_but_a_legitimate_zero_is_not(tmp_path):
+    """Well-formedness is refused; POLICY is not (D2). The two must not be confused.
+
+    RED-TEAM drove `--kill-grace-sec=nan` end to end: `Popen.wait(timeout=nan)` never raises
+    `TimeoutExpired`, so the ladder's automatic SIGTERM -> grace -> SIGKILL escalation stopped
+    escalating and only the operator's second and third signal recovered the child. A LAW-16
+    bounded stop became an unbounded one through an input nothing validated — while the MINTED
+    key for the same bound is schema-refused (`Field(ge=0)`).
+
+    `0` is the control, and it is the one that matters: it is falsy, legitimate, and a naive
+    truthiness check would silently drop it from `overrides` and from `effective`.
+    """
+    config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE)
+    child = _child_script(tmp_path, tmp_path / "child.log")
+    for bad in ("nan", "inf", "-1"):
+        proc = subprocess.run(
+            [sys.executable, "-m", "mantis.monitor.supervise", "--config", str(config),
+             "--kill-grace-sec", bad, "--heartbeat-file", str(tmp_path / "hb.json"),
+             "--", sys.executable, str(child)],
+            capture_output=True, text=True, check=False, timeout=_REFUSAL_DEADLINE_SEC,
+        )
+        assert proc.returncode != 0, f"--kill-grace-sec {bad} was accepted"
+        assert "finite and non-negative" in proc.stderr + proc.stdout, (
+            f"the refusal for {bad!r} must name the property that failed: {proc.stderr[-300:]!r}"
+        )
+
+    events = _drive(tmp_path, config=config, extra=["--max-relaunches", "0"])
+    boot = [e for e in events if e.get("event") == "supervisor_boot_identity"]
+    assert boot and boot[0]["overrides"] == {"max_relaunches": 0}, (
+        "a legitimate zero override was dropped — `0` is falsy, and a truthiness test here would "
+        f"lose it from the record while it still governed the run: {boot}"
+    )
+    assert boot[0]["effective"]["max_relaunches"] == 0
+
+
 # ── T4: O-18, on the path that is actually RUN ──────────────────────────────────────────
 def test_importing_the_supervisor_does_not_import_torch():
     """O-18, import-time half. In a SUBPROCESS: in-process is polluted by pytest's own imports."""
@@ -298,7 +425,9 @@ def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
     process, so the observation is of the path that ran, not of a proxy for it.
     """
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
-                   monitor__supervisor_poll_interval_sec=_POLL)
+                   monitor__supervisor_poll_interval_sec=_POLL,
+                   monitor__supervisor_stale_after_sec=_STALE,
+                   monitor__supervisor_max_relaunches=_RELAUNCHES)
     marker = tmp_path / "the_child_ran"
     touch = tmp_path / "touch.py"
     touch.write_text(f"open({str(marker)!r}, 'w', encoding='utf-8').close()\n", encoding="utf-8")
