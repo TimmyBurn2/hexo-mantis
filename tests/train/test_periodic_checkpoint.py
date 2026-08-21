@@ -78,6 +78,7 @@ import numpy as np
 import pytest
 import torch
 
+from mantis.monitor.config import MonitorConfig
 from mantis._engine import HexgBuffer, ReplayBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
@@ -522,6 +523,7 @@ def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
     trainer = _graph_trainer(tmp_path, full_config, full_train_hparams(checkpoint_interval=4),
                              spy_sink)
     coord = StepCoordinator(
+        monitor_cfg=MonitorConfig(),
         trainer=trainer, buffer=_graph_buffer(), pretrained_buffer=None, recent_buffer=None,
         pool=_Pool(), eval_pipeline=None, subsystems=None, anchor_state=None,
         shutdown=ShutdownState(), eval_model=None, bufs=None, config=_coord_cfg(),

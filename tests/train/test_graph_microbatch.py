@@ -90,6 +90,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
+from mantis.monitor.config import MonitorConfig
 from mantis._engine import ReplayBuffer
 from mantis.config.resolve.microbatch import (
     MicrobatchCapsSpec,
@@ -842,6 +843,7 @@ def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinato
     `coordinator/config.py:283`). `_run_training_step` reads only `batch_size`, `augment` and
     `recency_weight` off it, and none of the three is this row's subject."""
     return StepCoordinator(
+        monitor_cfg=MonitorConfig(),
         trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
         pool=None, eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=None,
         eval_model=None, bufs=None,

@@ -19,6 +19,27 @@ DESIGN_P2.md §4.3, WPSC Phase 2 REVIEW MUST-FIX #2; R-STRIDE5-ORPHAN-KNOBS is d
 
 R1b honesty: the `wr_*` values are old-lineage (dense) calibrations carried verbatim and
 are flagged for re-anchor at the run5 mint; the criterion STRUCTURE is the law.
+
+CONSTRUCTION AUTHORITY (R292(b), the class-wide half of F-816-24). Inside `src/`, exactly ONE
+place may construct this dataclass: `mantis.config.resolve.monitor.resolve_monitor_config`, a
+pure 1:1 field copy off a VALIDATED `MonitorSchemaConfig`. Every other production consumer
+RECEIVES one. The rule is mechanical, not advisory — `tests/config/test_monitor_config_single_
+authority.py` walks `src/` by AST (aliases and attribute calls included) and fails on any second
+site, and it carries a positive control so an empty census cannot pass for "clean".
+
+The rule exists because a bare construction is not obviously wrong at the call site: it yields a
+complete, valid-looking object with every field populated. What it actually does is substitute
+these code-side literals for whatever the operator minted — armed in the config, absent in
+effect, which is precisely how `monitor.supervisor_kill_grace_sec` reached no process for the
+whole of F-816-24. The last silent fallback in the chain (`StepCoordinator`'s
+`monitor_cfg=None` default) was removed with this rule; `build_run_safety` already required the
+parameter one layer above.
+
+TESTS MAY CONSTRUCT ONE DIRECTLY, and that is deliberate rather than an exemption. In tests the
+thresholds are the SUBJECT — `monitor/rules.py`'s fire/no-fire rows need values they chose — and
+routing them through a schema and a resolver would test the resolver instead. What a test may not
+do is depend on a PRODUCTION path defaulting; that path no longer exists. So: `src/` constructs
+once, tests construct freely, production never defaults — and the first and third are enforced.
 """
 from __future__ import annotations
 

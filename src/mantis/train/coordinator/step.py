@@ -208,7 +208,7 @@ class StepCoordinator:
         bot_buffer: Any | None = None,
         exit_fn: Callable[[int], None] = os._exit,
         heartbeat: Callable[[str], None] | None = None,
-        monitor_cfg: Any = None,
+        monitor_cfg: MonitorConfig,
         heartbeat_watchdog: Any = None,
         actor_sync: Any = None,
     ) -> None:
@@ -237,7 +237,12 @@ class StepCoordinator:
         # WP13-A run-safety seams: the heartbeat fn (the watchdog's `train_step` source),
         # the monitor thresholds and the independent watchdog `close_out` disarms.
         self._heartbeat = heartbeat
-        self.monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+        # REQUIRED, no fallback (R292(b) class-wide half of F-816-24). This used to be
+        # `monitor_cfg if monitor_cfg is not None else MonitorConfig()` — the last silent default
+        # in the chain, with `build_run_safety` already requiring the parameter one layer up. A
+        # bare fallback substitutes the dataclass literals for whatever the operator minted,
+        # which is exactly the defect the supervisor fix closed at its own site.
+        self.monitor_cfg = monitor_cfg
         self.heartbeat_watchdog = heartbeat_watchdog
         # R137/CARD-CLEANSTOP-SAVE: the clean-completion latch. A plain bool, PUBLIC because
         # `train/loop.py`'s post-loop guard is its one consumer (`_clean_stop_already_saved`)
