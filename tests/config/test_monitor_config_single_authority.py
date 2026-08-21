@@ -69,8 +69,14 @@ def _construction_sites() -> list[str]:
     return sites
 
 
-def test_only_the_resolver_constructs_a_MonitorConfig_in_src():
-    """The class rule. A new bare construction in `src/` fails here and names itself."""
+def test_no_construction_site_in_src_beyond_the_resolver_and_the_filed_one():
+    """The class rule. A new bare construction in `src/` fails here and names itself.
+
+    The name says "beyond the resolver AND THE FILED ONE" rather than "only the resolver",
+    because the assertion allows two sites and a name that claimed one would be the overclaiming
+    class this repo keeps finding. When `F-816-29`'s grant lands, the exception goes and the name
+    should shrink with it.
+    """
     allowed = (_THE_AUTHORITY + ":", _FILED_EXCEPTION + ":")
     offenders = [s for s in _construction_sites() if not s.startswith(allowed)]
     assert not offenders, (
@@ -107,4 +113,30 @@ def test_the_one_remaining_fallback_is_the_FILED_one_and_has_not_moved():
         "`monitor_cfg`'s default changed. It is `None` and the fallback is live BY DISCLOSURE — "
         "F-816-29: making it required needs an R43 grant to a frozen oracle. If this is now "
         "`empty`, the grant landed and both this row and the _FILED_EXCEPTION above should go."
+    )
+
+
+def test_the_rule_BITES_on_a_third_construction_site(tmp_path):
+    """LAW-07 self-test. The claim "a third site still fails" is worth exactly as much as a
+    demonstration of it — an allowlist rule that has never been shown to reject anything is
+    indistinguishable from a rule that accepts everything.
+    """
+    planted = tmp_path / "mantis"
+    (planted / "somewhere").mkdir(parents=True)
+    (planted / "somewhere" / "new_consumer.py").write_text(
+        "from mantis.monitor.config import MonitorConfig\n"
+        "cfg = MonitorConfig()\n", encoding="utf-8",
+    )
+    import test_monitor_config_single_authority as mod  # self-import: reuse the real walker
+
+    original, mod.SRC = mod.SRC, planted
+    try:
+        offenders = [
+            s for s in mod._construction_sites()
+            if not s.startswith((mod._THE_AUTHORITY + ":", mod._FILED_EXCEPTION + ":"))
+        ]
+    finally:
+        mod.SRC = original
+    assert offenders == ["somewhere/new_consumer.py:2"], (
+        f"a planted third construction site was not rejected: {offenders}"
     )
