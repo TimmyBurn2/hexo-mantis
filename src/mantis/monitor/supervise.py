@@ -703,6 +703,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     supplied = {dest: getattr(args, dest) for dest, _ in _OVERRIDABLE}
     overrides = {dest: value for dest, value in supplied.items() if value is not None}
     # A NON-FINITE OR NEGATIVE BOUND IS MALFORMED, AND REFUSING IT IS NOT AUTHORING A VALUE.
+    #
+    # WHAT THIS DOES NOT DO, STATED BECAUSE AN EARLIER COMMENT HERE OVERCLAIMED IT. This refuses
+    # MALFORMED values. It does NOT bound the grace. `--kill-grace-sec 1e308` is finite and
+    # non-negative, passes this check, and then produces exactly the NaN failure — driven:
+    # `wait(timeout=1e308)` never fires, so the automatic escalation never runs and only the
+    # operator's second and third signal recover the child. And the hazard is NOT specific to
+    # the override path: `MonitorSchemaConfig.supervisor_kill_grace_sec` carries `Field(ge=0)`
+    # and nothing else, so the same value is MINTABLE. Closing the class needs an upper bound,
+    # i.e. a number — which is an operator/architect value under R119, on a key whose derivation
+    # is already prereg row 19's. Filed as `F-816-27`; deliberately not decided here.
     # D2's rule is that this mechanism publishes and does not JUDGE — it takes no view on
     # whether 5 s or 500 s is the right grace, because that is an operator's to mint (R119).
     # Well-formedness is a different question. `--kill-grace-sec=nan` was driven end to end by
