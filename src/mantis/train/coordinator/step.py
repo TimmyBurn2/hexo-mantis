@@ -208,7 +208,7 @@ class StepCoordinator:
         bot_buffer: Any | None = None,
         exit_fn: Callable[[int], None] = os._exit,
         heartbeat: Callable[[str], None] | None = None,
-        monitor_cfg: MonitorConfig | None = None,
+        monitor_cfg: MonitorConfig,
         heartbeat_watchdog: Any = None,
         actor_sync: Any = None,
     ) -> None:
@@ -237,15 +237,13 @@ class StepCoordinator:
         # WP13-A run-safety seams: the heartbeat fn (the watchdog's `train_step` source),
         # the monitor thresholds and the independent watchdog `close_out` disarms.
         self._heartbeat = heartbeat
-        # THE LAST SILENT DEFAULT IN THE CHAIN, and it is still here ON PURPOSE — see F-816-29.
-        # R292(b)'s class-wide half wants this parameter REQUIRED: `build_run_safety` already
-        # requires it one layer up, and a bare fallback substitutes 29 dataclass literals for
-        # whatever the operator minted, which is F-816-24's defect at a second site. Making it
-        # required was implemented and then REVERTED, because exactly one caller cannot pass it:
-        # `tests/train/test_periodic_checkpoint.py` is a FROZEN oracle that constructs
-        # `StepCoordinator` without it. Editing a frozen file needs an R43 grant, and a grant is
-        # requested, never self-issued — so the change waits for the grant rather than taking it.
-        self.monitor_cfg = monitor_cfg if monitor_cfg is not None else MonitorConfig()
+        # REQUIRED, no fallback — R292(b)'s class-wide half, completed under the R43 grant
+        # F-816-29 (R299(b), diff-scoped, same-act re-pin, per-event and NOT precedent). This was
+        # the last silent default in the chain: `build_run_safety` already required the parameter
+        # one layer up, and a bare fallback substitutes 29 dataclass literals for whatever the
+        # operator minted — F-816-24's defect at a second site. `MonitorConfig` is no longer
+        # constructible from this module, which is what the single-authority guard now asserts.
+        self.monitor_cfg = monitor_cfg
         self.heartbeat_watchdog = heartbeat_watchdog
         # R137/CARD-CLEANSTOP-SAVE: the clean-completion latch. A plain bool, PUBLIC because
         # `train/loop.py`'s post-loop guard is its one consumer (`_clean_stop_already_saved`)

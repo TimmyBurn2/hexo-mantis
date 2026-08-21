@@ -33,13 +33,11 @@ these code-side literals for whatever the operator minted — armed in the confi
 effect, which is precisely how `monitor.supervisor_kill_grace_sec` reached no process for the
 whole of F-816-24.
 
-ONE EXCEPTION REMAINS AND IT IS FILED, NOT TOLERATED: `StepCoordinator`'s `monitor_cfg=None`
-fallback, the last silent default in a chain whose next layer up (`build_run_safety`) already
-requires the parameter. Making it required was implemented and REVERTED, because exactly one
-caller cannot pass it — a FROZEN oracle constructs the coordinator without it, and editing a
-frozen file needs an R43 grant, which is requested and never self-issued. `F-816-29` carries it.
-The guard lists that site explicitly with its row number, so a THIRD site still fails: an
-allowlist that grows silently is not a rule.
+NO EXCEPTION REMAINS. `StepCoordinator`'s `monitor_cfg=None` fallback — the last silent default in
+a chain whose next layer up (`build_run_safety`) already required the parameter — is gone, closed
+under the R43 grant `F-816-29` (R299(b): diff-scoped to one keyword argument, same-act re-pin as a
+term, per-event and explicitly not precedent). The guard's allowlist is back to a single entry and
+its name says so again.
 
 TESTS MAY CONSTRUCT ONE DIRECTLY, and that is deliberate rather than an exemption. In tests the
 thresholds are the SUBJECT — `monitor/rules.py`'s fire/no-fire rows need values they chose — and
