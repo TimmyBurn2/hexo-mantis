@@ -27,10 +27,12 @@ from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 
 #: Retired by R297(c) on the census's GENUINELY-DEAD verdict.
 _RETIRED = "node_coords"
+#: Retired in its own commit (R298(d)) after the A4 rows were re-expressed against the gather.
+_RETIRED_2 = "legal_mask"
 
 #: Still carried, and each still under its own R297(c) disposition (TEST-ONLY LAW-08 findings
 #: resolved one commit per field). Listed so retiring one silently does not pass this file.
-_STILL_CARRIED = ("legal_mask", "policy_dst_slot", "window_center", "current_player")
+_STILL_CARRIED = ("policy_dst_slot", "window_center", "current_player")
 
 
 def _batch_fields() -> set[str]:
@@ -39,6 +41,8 @@ def _batch_fields() -> set[str]:
 
 def test_the_dead_device_tensor_is_gone_from_the_batch():
     """Derived from the dataclass, never from the module text (R296(f))."""
+    for name in (_RETIRED, _RETIRED_2):
+        assert name not in _batch_fields(), f"GraphBatch still carries {name!r}"
     assert _RETIRED not in _batch_fields(), (
         f"GraphBatch still carries {_RETIRED!r}; the census found zero reads of it anywhere and "
         "the field costs an H2D transfer per part on every serve"

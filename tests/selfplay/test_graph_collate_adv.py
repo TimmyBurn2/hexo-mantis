@@ -134,8 +134,12 @@ def test_clean_capture_collates_full_semantic(payload_fields, collate_expectatio
         assert str(tensor.dtype) == meta["torch_dtype"], f"{field}: torch dtype drift"
 
     scalars = collate_expectations["b6_scalars"]
-    assert int(batch.legal_mask.sum()) == scalars["legal_mask_sum"] == scalars["Lg"], (
-        "legal_mask must mark exactly one legal node per gather row (captured 2088)"
+    # Re-expressed against the gather (RQ-16 / R297(c)); the CAPTURED scalar is untouched.
+    # `legal_mask.sum()` counted DISTINCT legal nodes, because the mask was a scatter and a
+    # repeated gather row would have collapsed into one cell. `unique().numel()` is that same
+    # quantity named directly, so the captured 2088 still means what it meant.
+    assert int(batch.legal_node_gather.unique().numel()) == scalars["legal_mask_sum"] == scalars["Lg"], (
+        "the gather must contain exactly one row per distinct legal node (captured 2088)"
     )
 
 

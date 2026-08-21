@@ -32,34 +32,79 @@ from mantis.train.losses import ragged_policy_ce
 from mantis.train.trainer.core import Trainer
 
 
-def test_legal_mask_and_legal_offsets_are_one_set_total_count(payload_fields) -> None:
-    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")))
-    assert int(batch.legal_mask.sum().item()) == int(batch.legal_offsets[-1].item())
+def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields) -> None:
+    """A4 re-expressed against the GATHER (R297(c)), and it asserts MORE than it used to.
+
+    The old form was `legal_mask.sum() == legal_offsets[-1]`. That was two assertions wearing one
+    face, because `legal_mask` was a SCATTER of the gather (`legal_mask_np[gather] = True`): the
+    count agreed only if the gather's length matched the CSR **and** the gather had no duplicate
+    entries — a duplicate would scatter twice into one cell and sink the sum below the length.
+
+    Re-expressed naively as `len(gather) == legal_offsets[-1]`, the uniqueness half is silently
+    lost. Both halves are therefore asserted explicitly below, which is a strictly stronger test
+    than the one it replaces and names the property instead of implying it through a scatter.
+    """
+    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1)
+    gather = batch.legal_node_gather
+    assert int(gather.numel()) == int(batch.legal_offsets[-1].item()), (
+        "the gather and the CSR disagree on the size of the legal set"
+    )
+    assert int(gather.unique().numel()) == int(gather.numel()), (
+        "the gather contains a duplicate node — the old mask form caught this implicitly, via a "
+        "scatter that collapsed the repeat; it is asserted directly here so it cannot be lost"
+    )
 
 
-def test_legal_mask_and_legal_offsets_agree_per_graph_segment(payload_fields) -> None:
-    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")))
-    assert batch.n_graphs >= 2, "the b6 golden must carry >=2 graphs for a real per-segment check"
-    for i in range(batch.n_graphs):
+def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields) -> None:
+    """The per-graph half, re-expressed. Each graph's slice of the gather must fall inside that
+    graph's node range and must be exactly as long as the CSR says."""
+    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1)
+    for i in range(int(batch.n_graphs)):
         lo, hi = int(batch.node_offsets[i]), int(batch.node_offsets[i + 1])
-        segment_true = int(batch.legal_mask[lo:hi].sum().item())
-        csr_count = int(batch.legal_offsets[i + 1] - batch.legal_offsets[i])
-        assert segment_true == csr_count, f"graph {i}: mask/CSR disagree"
+        c0, c1 = int(batch.legal_offsets[i]), int(batch.legal_offsets[i + 1])
+        segment = batch.legal_node_gather[c0:c1]
+        assert int(segment.numel()) == c1 - c0
+        assert bool(((segment >= lo) & (segment < hi)).all()), (
+            f"graph {i}: a gather entry points outside its own node range [{lo}, {hi}) — the "
+            "block-diagonal offset contract is what makes the ragged output re-assemblable"
+        )
 
 
-def test_train_step_from_graph_batch_never_reassigns_legal_mask_or_offsets() -> None:
-    """AST/text-level guarantee (§7.2 item 2, the "test-caught" half of A4's phrasing):
-    the training-step function body contains no `legal_mask =`/`legal_offsets =`
-    statement after the `def` line — the loss and the model forward literally receive
-    the identical object the caller (the graph-batch producer) constructed."""
-    src = textwrap.dedent(inspect.getsource(Trainer.train_step_from_graph_batch))
-    # Scan the whole function body (skip the `def ...(` signature lines themselves,
-    # which end at the first line containing the closing `) -> ...:`).
-    lines = src.splitlines()
-    sig_end = next(i for i, line in enumerate(lines) if line.rstrip().endswith(":"))
-    body_text = "\n".join(lines[sig_end + 1:])
-    assert "legal_mask =" not in body_text
-    assert "legal_offsets =" not in body_text
+def test_the_legal_set_is_never_RE_DERIVED_inside_its_consumers() -> None:
+    """A4's single-authority half, re-pointed at a consumer that actually has the set.
+
+    **THE OLD FORM WAS VACUOUS AND THIS IS THE FINDING, not a refactor.** It scanned
+    `train_step_from_graph_batch`'s source text for `legal_mask =` / `legal_offsets =`. That
+    function's signature is `parts`/denominators/caps — it never had either name in it, so the
+    assertion could not fail: a guard green because there is nothing there to be red about, which
+    is the phantom class (LAW-07). The subject moved when the trainer was partitioned and the
+    guard did not move with it.
+
+    Re-pointed at `ragged_policy_ce`, which genuinely takes `legal_offsets` as a required
+    parameter, and derived from the **AST** rather than from a substring (R296(f)): a text scan
+    for `"legal_offsets ="` also matches a comment, a docstring, or `legal_offsets == x`.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from mantis.train.losses import ragged_policy_ce
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(ragged_policy_ce)))
+    params = {p.arg for p in tree.body[0].args.args} | {p.arg for p in tree.body[0].args.kwonlyargs}
+    assert "legal_offsets" in params, (
+        "the re-pointed guard has lost ITS subject too — `ragged_policy_ce` no longer takes the "
+        "legal set, so this test is now the vacuous thing it was written to replace"
+    )
+    rebound = [
+        node.lineno for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+        and node.id == "legal_offsets"
+    ]
+    assert not rebound, (
+        f"`legal_offsets` is re-assigned inside ragged_policy_ce at line(s) {rebound}; the legal "
+        "set has one authority (the wire) and a consumer that rebuilds it is a second"
+    )
 
 
 def test_ragged_policy_ce_and_forward_batch_require_the_legal_set_no_default() -> None:

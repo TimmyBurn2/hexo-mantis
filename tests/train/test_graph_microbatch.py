@@ -266,7 +266,13 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
             assert torch.equal(part.x, full.x[n0:n1])
             assert torch.equal(part.edge_attr, full.edge_attr[e0:e1])
             assert torch.equal(part.edge_index, full.edge_index[:, e0:e1] - n0)
-            assert torch.equal(part.legal_mask, full.legal_mask[n0:n1])
+            # (was: `part.legal_mask == full.legal_mask[n0:n1]`.) `legal_mask` is retired by
+            # RQ-16 / R297(c). Its CONTENT here is the row two below — the gather split parity —
+            # and the one thing it added beyond that, namely that no legal node outside a graph's
+            # CSR slice lands inside that graph's node range, is now asserted globally and
+            # directly by `test_the_gather_and_the_CSR_agree_per_graph_segment`
+            # (tests/selfplay/test_graph_collate_masking_authority.py). Rebuilding both masks
+            # from gathers this block already asserts equal would be a tautology, not a check.
             assert torch.equal(part.node_offsets, full.node_offsets[g0:g1 + 1] - n0)
             assert torch.equal(part.legal_offsets, full.legal_offsets[g0:g1 + 1] - l0)
             assert torch.equal(part.legal_node_gather,

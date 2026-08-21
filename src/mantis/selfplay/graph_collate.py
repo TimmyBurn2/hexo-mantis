@@ -181,8 +181,13 @@ class GraphWirePayload:
 @dataclass
 class GraphBatch:
     """Collated block-diagonal torch tensors. `x`/`edge_index`/`edge_attr`/
-    `legal_mask` feed `GnnNet.forward_batch`; the remaining fields support the
-    ragged OUTPUT assemble and stay on device.
+    `legal_node_gather`/`node_offsets` feed `GnnNet.forward_batch`; the remaining
+    fields support the ragged OUTPUT assemble and stay on device.
+
+    (This line named `legal_mask` as the forward's input until 2026-08-21. It had been false
+    since R284/P-MASK repointed `forward_batch` onto `legal_index` — the serve path passes
+    `batch.legal_node_gather`, measured at `inference_server.py:873` — which is the same
+    false-arrow class R291(c) fixed in the consumer registry, in a docstring.)
 
     `node_coords` was RETIRED here by R297(c) on the RQ-16 per-tensor census: the DEVICE tensor
     had zero reads anywhere in the tree, so it was an H2D transfer per part that nothing read.
@@ -195,7 +200,6 @@ class GraphBatch:
     x: Any  # torch.Tensor (N, 11) float
     edge_index: Any  # (2, E) int64
     edge_attr: Any  # (E, 5) float
-    legal_mask: Any  # (N,) bool
     legal_offsets: Any  # (B+1,) int64
     legal_node_gather: Any  # (Lg,) int64 (global rows)
     policy_dst_slot: Any  # (Lg,) int64 (per-graph slot; -1 off-window)
@@ -368,15 +372,11 @@ def collate_graph_batch(
     ea = torch.from_numpy(
         np.ascontiguousarray(edge_attr, dtype=np.float32)
     ).reshape(E, edge_feat_dim).to(device)
-    legal_mask_np = np.zeros(N, dtype=bool)
-    legal_mask_np[legal_node_gather.astype(np.int64)] = True
-    legal_mask = torch.from_numpy(legal_mask_np).to(device)
 
     return GraphBatch(
         x=x,
         edge_index=ei,
         edge_attr=ea,
-        legal_mask=legal_mask,
         legal_offsets=torch.from_numpy(
             np.ascontiguousarray(legal_offsets, dtype=np.int64)
         ).to(device),

@@ -88,10 +88,33 @@ def _batch(payload_fields, stem: str):
     return spec, batch
 
 
+def _legal_mask(batch) -> torch.Tensor:
+    """The dense boolean view of the legal set, built HERE from the gather.
+
+    It used to be `batch.legal_mask`, a field `collate_graph_batch` produced. RQ-16's per-tensor
+    census found no production path read it and R297(c) retired it, so this oracle builds it.
+
+    THE ORACLE'S INDEPENDENCE IS UNCHANGED, and the reason is worth stating because "the reference
+    is now derived from the thing under test" sounds fatal and is not. The collate built this mask
+    the same way — `legal_mask_np[legal_node_gather] = True`, a scatter of the very same gather —
+    so the mask was NEVER independent of the gather. What these rows compare, and all they ever
+    compared, is two INDEXING FORMULATIONS over one index set: boolean-mask selection
+    (`emb[mask]`) against index selection (`emb[gather]`). That comparison is exactly as strong
+    from a locally-built mask as from a collate-built one.
+
+    The proof is in this file already: `test_a_wrong_gather_is_SEEN_by_this_oracle` corrupts the
+    gather three ways and requires each corruption to be caught. Those rows still fire — if the
+    reference had collapsed into the thing under test, they could not.
+    """
+    mask = torch.zeros(batch.x.shape[0], dtype=torch.bool)
+    mask[batch.legal_node_gather.to(torch.int64)] = True
+    return mask
+
+
 def _reference_logits(net: GnnNet, batch, stone_mask) -> torch.Tensor:
     """The OLD line, through public parts: `emb[legal_mask]` -> policy MLP."""
     emb = net.node_embeddings(batch.x, batch.edge_index, batch.edge_attr)
-    return net.policy_head.mlp(emb[batch.legal_mask]).squeeze(-1)
+    return net.policy_head.mlp(emb[_legal_mask(batch)]).squeeze(-1)
 
 
 @pytest.mark.parametrize("stem", ["b1", "b6"])
@@ -156,7 +179,7 @@ def test_forward_single_is_the_independent_cross_formulation_reference(payload_f
             batch.legal_node_gather, stone_mask, batch.node_offsets,
         )
         single, s_value, _s = net.forward_single(
-            batch.x, batch.edge_index, batch.edge_attr, batch.legal_mask, stone_mask,
+            batch.x, batch.edge_index, batch.edge_attr, _legal_mask(batch), stone_mask,
         )
     assert torch.equal(batched, single), "policy logits must be byte-identical at B=1"
     assert torch.allclose(b_value.reshape(()), s_value.reshape(()), atol=1e-5)

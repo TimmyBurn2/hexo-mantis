@@ -23,4 +23,10 @@ from __future__ import annotations
 #: The other four census findings (`legal_mask`, `policy_dst_slot`, `window_center`,
 #: `current_player`) are TEST-ONLY LAW-08 findings, NOT dead, and R297(c) resolves them one commit
 #: per field. They do not belong here until their own act lands.
-RETIRED_BATCH_FIELDS: frozenset[str] = frozenset({"node_coords"})
+#: RQ-16 / R297(c), own commit. `legal_mask` was a TEST-ONLY LAW-08 finding: a local SCATTER of
+#: `legal_node_gather` that no production path read. Two prose claims said otherwise and both were
+#: false — `GraphBatch`'s own docstring named it as `forward_batch`'s input (repointed to
+#: `legal_index` by R284/P-MASK), and the A4 file said `train_step_from_graph_batch` consumed it
+#: (that function never mentioned it). The A4 agreement rows are re-expressed against the gather
+#: and assert MORE than before: the scatter's implicit uniqueness check is now explicit.
+RETIRED_BATCH_FIELDS: frozenset[str] = frozenset({"node_coords", "legal_mask"})

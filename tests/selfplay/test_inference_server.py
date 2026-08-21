@@ -262,7 +262,6 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         x=torch.zeros(n, 11, dtype=torch.float32),
         edge_index=torch.zeros((2, 0), dtype=torch.int64),
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
-        legal_mask=legal_mask,
         legal_offsets=legal_offsets,
         # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending
         # across the fuse (wire check 13). It used to be all zeros, which worked only

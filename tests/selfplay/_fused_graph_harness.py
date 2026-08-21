@@ -154,7 +154,6 @@ def collate_from_payload(wire: Any, *_a: Any, **_kw: Any) -> GraphBatch:
         edge_attr=torch.from_numpy(
             np.ascontiguousarray(wire.edge_attr, dtype=np.float32).reshape(e_total, -1)
         ),
-        legal_mask=legal_mask,
         legal_offsets=torch.from_numpy(lo.copy()),
         legal_node_gather=torch.from_numpy(gather.copy()),
         policy_dst_slot=torch.from_numpy(
