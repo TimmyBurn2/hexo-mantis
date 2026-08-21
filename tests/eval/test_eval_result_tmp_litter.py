@@ -72,6 +72,16 @@ def _eval_cfg() -> EvalConfig:
     )
 
 
+#: The run id these fixtures build under, and the ONE place it is spelled. RQ-13 scoped the work
+#: dir by `run_id`, so the sidecar path is `<out-dir>/spool.work/<run_id>` — derived here rather
+#: than hardcoded at each assertion site, where three copies would have drifted independently.
+_RUN_ID = "q3_tmp_litter"
+
+
+def _work_dir(tmp_path: Path) -> Path:
+    return tmp_path / "spool.work" / _RUN_ID
+
+
 def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
     spool_dir = tmp_path / "spool"
     spool_dir.mkdir(exist_ok=True)
@@ -82,13 +92,13 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             eval_final_drain_hard_cap_sec=5.0, terminal_eval_hard_cap_sec=5.0,
         ),
         encoding="v6_live2_ls",
-        run_id="q3_tmp_litter",
+        run_id=_RUN_ID,
         spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt",
-            run_id="q3_tmp_litter",
+            run_id=_RUN_ID,
             encoding="v6_live2_ls",
             save_anchor=lambda *a, **k: None,
             guarded_load=lambda *a, **k: None,
@@ -164,9 +174,11 @@ def test_a_stale_result_tmp_is_swept_when_a_pipeline_opens_the_work_dir(tmp_path
 
     Safe because at construction this pipeline provably has no live writer, and a second
     pipeline over one work dir does not happen: `build_eval_pipeline` has one call site, once
-    per process, and the dir is derived from `--out-dir`."""
-    work = tmp_path / "spool.work"
-    work.mkdir()
+    per process, and the dir is derived from `--out-dir` AND `run_id` (RQ-13). The run_id half
+    is what makes that structural rather than circumstantial — derived from the out-dir alone,
+    the claim was false exactly when two runs shared one, and nothing locks an out-dir."""
+    work = _work_dir(tmp_path)
+    work.mkdir(parents=True)
     stale = work / f"{_ROUND_ID}_result.json.tmp"
     stale.write_text("{}", encoding="utf-8")
 
@@ -186,8 +198,8 @@ def test_the_sweep_leaves_completed_results_and_snapshots_alone(tmp_path) -> Non
     is far worse than the litter it was built to remove. Only the `.tmp` suffix is in scope —
     the completed result, the round spec, the progress sidecar and a candidate snapshot must
     all survive untouched, byte for byte."""
-    work = tmp_path / "spool.work"
-    work.mkdir()
+    work = _work_dir(tmp_path)
+    work.mkdir(parents=True)
     keep = {
         work / f"{_ROUND_ID}_result.json": '{"ok": true}',
         work / f"{_ROUND_ID}_spec.json": '{"round_id": "x"}',
@@ -361,8 +373,8 @@ def test_the_construction_sweep_survives_an_unlinkable_stale_tmp(
     """The same never-fatal contract at the other site. A work dir the run cannot delete from
     is a real condition (a read-only mount, a stale NFS handle), and a pipeline that refuses to
     BUILD because it could not remove litter would be a far worse failure than the litter."""
-    work = tmp_path / "spool.work"
-    work.mkdir()
+    work = _work_dir(tmp_path)
+    work.mkdir(parents=True)
     (work / f"{_ROUND_ID}_result.json.tmp").write_text("{}", encoding="utf-8")
 
     real_unlink = Path.unlink

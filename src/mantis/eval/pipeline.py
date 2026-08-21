@@ -396,7 +396,14 @@ class EvalPipeline:
         # under spool_dir: spool_dir holds ONLY model snapshot (.pt) files — the LAW-12
         # one-loader carve-out this WP pins (test_snapshots_are_not_checkpoints walks
         # every file under spool_dir and torch.load()s it).
-        self._work_dir = self._spool_dir.parent / f"{self._spool_dir.name}.work"
+        #
+        # SCOPED BY `run_id` (RQ-13 / clause (l)). Nothing locks an out-dir, and round ids are
+        # a PER-RUN counter (`r{round_idx:06d}_{step}`), so two runs sharing one out-dir wrote
+        # identical sidecar filenames into one directory. `run_id` is safe to put in a path by
+        # TYPE rather than by inspection: the schema constrains it to `^[a-z0-9][a-z0-9_\-]*$`
+        # (`config/schema/core.py`), so it cannot contain a separator or a `..` — a sanitizer
+        # here would be a second authority for a constraint pydantic already enforces.
+        self._work_dir = self._spool_dir.parent / f"{self._spool_dir.name}.work" / self._run_id
         self._work_dir.mkdir(parents=True, exist_ok=True)
         # F-816-20 item 3a, the sweep. This is the ONLY handle the "the run itself was
         # SIGKILLed" case has: no code ran in that process, so the only thing that can ever
@@ -404,7 +411,12 @@ class EvalPipeline:
         # a `--resume-from` relaunch into the same `--out-dir` is. The precondition is that at
         # CONSTRUCTION this pipeline has no live writer, and a second pipeline over one work
         # dir is already impossible: `build_eval_pipeline` has one call site, once per
-        # process, and the dir is derived from `--out-dir`. Only the `.tmp` suffix is in
+        # process, and the dir is derived from `--out-dir` AND `run_id`. The second half is
+        # new with RQ-13 and it is the half that makes the precondition structural: derived
+        # from the out-dir alone, the claim was false exactly when two runs shared one, which
+        # is the case A5 raised and nothing prevents. A relaunch still reaches its OWN litter
+        # because `--resume-from` supplies the same `--config`, hence the same run_id and the
+        # same out-dir (`run.py`: `run_id = config.run_id`, `log_dir = out_dir / "logs"`). Only the `.tmp` suffix is in
         # scope — results, specs, progress sidecars and snapshots are never touched. No age
         # threshold: that would be an unmeasured constant bought to solve a race the
         # precondition already excludes.
