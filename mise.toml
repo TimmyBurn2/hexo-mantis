@@ -1,0 +1,24 @@
+# Repo-local toolchain pin for the ONE tool `rust-toolchain.toml` does not cover: node.
+#
+# WHY THIS FILE EXISTS. Gate 14 runs `uv run pyright`, and `pyright` is a shim over node. On a
+# host whose node comes from mise, a shim with no selected version resolves to nothing, the
+# probe emits no version string, and the gate REFUSES (rc 2, R289(u)) — correctly, because
+# nothing was measured. That refusal is a HOST condition, and until now the only fixes were to
+# change a developer's GLOBAL mise config or to prepend an installed node bin to PATH by hand
+# for every invocation. Both are per-host acts that no clone inherits.
+#
+# THE SHAPE IS BORROWED, NOT INVENTED: `rust-toolchain.toml` already pins the Rust channel and
+# its components, rustup honours it automatically, and no `rustup default` is ever run. This is
+# the same contract for node — committed, portable, auto-provisioned on first use by any mise
+# host, and it touches no global configuration.
+#
+# WHAT IT DELIBERATELY DOES NOT DO. It does not disarm the gate's refusal arm. A host without
+# mise reads this file as inert and gate 14 still refuses loudly rather than reporting a green
+# it did not measure — which is the whole point of R289(u) and is not traded away for
+# convenience here. The pin removes the obstacle; it does not remove the detector.
+#
+# Node is a TYPE-CHECKING dependency only: nothing in `src/`, `crates/` or the runtime touches
+# it, so this pin carries none of the perf-attestation weight the Rust channel does (a Rust
+# bump invalidates all 28 bench floors; a node bump invalidates nothing).
+[tools]
+node = "26.7.0"

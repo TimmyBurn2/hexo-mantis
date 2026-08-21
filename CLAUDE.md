@@ -104,6 +104,11 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   rustc attested in `tools/bench_floors.toml`, so changing it invalidates all 28 bench
   floors: a bump is a perf-host event, not a local one. Without rustup the file is inert,
   and the `rust-version = "1.87"` MSRV in `[workspace.package]` is what refuses the build.
+- Node is PINNED by `mise.toml` (`node = "26.7.0"`) and exists for ONE consumer: gate 14's
+  pyright, which is a shim over node. Same contract as `rust-toolchain.toml` — committed,
+  portable, auto-provisioned, no global config touched — but none of its weight: a node bump
+  invalidates no bench floor, because nothing in `src/` or `crates/` touches node. Without mise
+  the file is inert and gate 14 REFUSES loudly (rc 2) rather than reporting an unmeasured green.
 - Commits are ONE line: `type(scope): what changed and why it matters`. Informative, not
   bloated — no body paragraphs, no trailing register/dispatch dumps, no multi-line footers.
   If the change needs more explanation than one line, it is more than one commit.
