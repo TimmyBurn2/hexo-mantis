@@ -49,16 +49,21 @@ loop's dense model input goes through the encode kernel (`mantis_encoding::to_pl
 claim the Rust encoder and its name does not imply it.
 
 COMPACTNESS IS ESTABLISHED BY CONSTRUCTION AND CERTIFIED FROM ENGINE-READ NUMBERS. A cluster is
-compact when its span is at most `S - 4` (`cluster.rs:43`), with `S` read off the constructed
-board. Every corpus target is a root of observed span `s` plus `k` descent plies, and every
-legal move lies within `R` of an existing stone (`moves.rs:118-122`), so the target's cluster
-spans are bounded by `s + k*R`; the tier certifies `s + k*R <= S - 4` from `S` and `R` READ OFF
-THE BOARD rather than re-deriving cluster membership in Python, which would be a second
-authority over the clustering rule.
+compact when its span is at most `S - offset` (`cluster.rs:43`). `S`, `R` and the observed span
+come off the CONSTRUCTED BOARD (`cluster_window_size`, `legal_move_radius`, `get_stones`); the
+`offset` has no `PyBoard` getter at all, so it is read off `cluster.rs`'s own definition line by
+`span_threshold_offset` below — the one term of this bound that is not on the Python surface,
+named here rather than typed as a `4`. Every corpus target is a root of observed span `s` plus
+`k` descent plies, and every legal move lies within `R` of an existing stone
+(`moves.rs:118-122`), so the target's cluster spans are bounded by `s + k*R`; the tier certifies
+`s + k*R <= S - offset` rather than re-deriving cluster membership in Python, which would be a
+second authority over the clustering rule.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -67,6 +72,20 @@ from mantis._engine import Board, MCTSTree
 from mantis.env.game_state import GameState
 
 from _corpus import ConformanceRefusal, build_board, require_corpus_member, roster
+
+#: The engine source that DEFINES the small-cluster span threshold. There is no `PyBoard`
+#: getter for it — `crates/mantis-bridge/src/board.rs` exposes `legal_move_radius`,
+#: `cluster_threshold`, `cluster_window_size` and `to_flat` and nothing else relevant — so the
+#: offset in `S - offset` cannot be asked of a board. It is READ OFF THE ENGINE'S OWN SOURCE
+#: instead of typed here: a typed `4` is a second authority over a rule this tier certifies
+#: against, and it would go on certifying the wrong rule silently if `cluster.rs` changed.
+SPAN_THRESHOLD_SOURCE = (
+    Path(__file__).resolve().parents[3]
+    / "crates" / "mantis-core" / "src" / "board" / "state" / "cluster.rs"
+)
+_SPAN_THRESHOLD_DEFINITION = re.compile(
+    r"let\s+span_threshold\s*:\s*i32\s*=\s*window_size\s+as\s+i32\s*-\s*(\d+)\s*;"
+)
 
 PATH_A = "A:direct-construction"
 PATH_B = "B:select_leaves-descent"
@@ -99,6 +118,32 @@ class EmptyPartition(ConformanceRefusal):
 
 class CompactnessNotCertified(ConformanceRefusal):
     """The engine-read bound does not certify this target's clusters as compact."""
+
+
+class SpanThresholdUnreadable(ConformanceRefusal):
+    """The span-threshold definition could not be read off `cluster.rs` in its expected form."""
+
+
+def span_threshold_offset(source: Path = SPAN_THRESHOLD_SOURCE) -> int:
+    """The `offset` of the engine's `span_threshold = S - offset`, read off `cluster.rs`.
+
+    A cluster is small when its span is at most `window_size - offset` (`cluster.rs:43`). The
+    window side `S` is on the Python surface (`Board.cluster_window_size`); the offset is NOT,
+    and transcribing it as a literal `4` would make this tier a second authority over the rule
+    it certifies against — the certificate would survive a change to `cluster.rs` and go on
+    admitting or refusing the wrong targets in silence. Reading the definition instead means a
+    changed VALUE moves this tier with the engine, and a changed FORM fails by name rather than
+    falling back to a default.
+    """
+    found = _SPAN_THRESHOLD_DEFINITION.findall(source.read_text(encoding="utf-8"))
+    if len(found) != 1:
+        raise SpanThresholdUnreadable(
+            f"{source} carries {len(found)} definitions matching "
+            f"{_SPAN_THRESHOLD_DEFINITION.pattern!r}; exactly one is expected. The small-cluster "
+            "span threshold has moved, been renamed or been duplicated, and every compactness "
+            "certificate in this tier is a certificate over the old rule until this is read again."
+        )
+    return int(found[0])
 
 
 @dataclass(frozen=True)
@@ -143,14 +188,20 @@ def stone_span(board: Board) -> int:
 
 
 def certify_compact(root: Board, added_plies: int, target: Board) -> None:
-    """`s + k*R <= S - 4`, every term read off the engine. Never a typed span threshold."""
+    """`s + k*R <= S - offset`: `s`, `k` and `R` off the board, `S - offset` off `cluster.rs`.
+
+    Nothing here is a typed span threshold, and the offset in particular is not: it has no
+    `PyBoard` getter, so it is read out of the engine's own source by `span_threshold_offset`
+    rather than transcribed.
+    """
     side = target.cluster_window_size()
     radius = target.legal_move_radius()
+    threshold = side - span_threshold_offset()
     bound = stone_span(root) + added_plies * radius
-    if bound > side - 4:
+    if bound > threshold:
         raise CompactnessNotCertified(
             f"root span {stone_span(root)} + {added_plies} plies x radius {radius} = {bound} "
-            f"exceeds the engine's small-cluster span threshold {side - 4} (S={side}); this "
+            f"exceeds the engine's small-cluster span threshold {threshold} (S={side}); this "
             "target is not certified compact and may not enter a compact partition."
         )
 
@@ -237,7 +288,7 @@ def spread_root_moves(enc: str) -> list[tuple[int, int]]:
     exceeds its own small-cluster span threshold. Every number is read off a board."""
     probe = Board.with_encoding_name(enc)
     step = min(probe.cluster_threshold(), probe.legal_move_radius())
-    span_threshold = probe.cluster_window_size() - 4
+    span_threshold = probe.cluster_window_size() - span_threshold_offset()
     count = span_threshold // step + 2
     # An EVEN placement count leaves the root one placement short of completing a compound
     # turn, which is the structure the path-A/path-C reconstruction below relies on.
@@ -498,6 +549,51 @@ def test_an_UNCERTIFIED_compactness_bound_is_refused():
     root = build_board(spec.name, spread_root_moves(spec.name))
     with pytest.raises(CompactnessNotCertified, match="span threshold"):
         certify_compact(root, 2, root)
+
+
+def test_the_span_threshold_OFFSET_is_read_off_the_engine_source_and_not_typed_here(derived):
+    """The one term of the compactness bound with no `PyBoard` getter, and the controls that
+    make reading it a mechanism rather than a decorated literal.
+
+    A reader that silently returns a default when the engine source changes shape is worse than
+    the literal it replaced, because the certificate would then be over a rule nobody has read.
+    So the missing and the duplicated forms both FAIL by name, driven through the same function
+    the gate calls.
+    """
+    offset = span_threshold_offset()
+    derived("t3.span_threshold_offset", offset)
+    derived("t3.span_threshold_source", SPAN_THRESHOLD_SOURCE.name)
+    assert offset > 0
+
+    probe = Board.with_encoding_name(roster()[0].name)
+    assert probe.cluster_window_size() - offset > 0, (
+        "the read offset leaves no positive span threshold on a constructed board"
+    )
+
+
+def test_an_UNREADABLE_span_threshold_definition_is_refused(tmp_path):
+    """Both failure shapes of the reader: no definition, and more than one."""
+    absent = tmp_path / "no_definition.rs"
+    absent.write_text("let half: i32 = (window_size as i32 - 1) / 2;\n", encoding="utf-8")
+    with pytest.raises(SpanThresholdUnreadable, match="0 definitions"):
+        span_threshold_offset(absent)
+
+    # DELIBERATELY not the engine's own offset: a reader that returned a constant instead of
+    # reading the source would pass a fixture that agreed with the engine, and fail here.
+    stand_in = 7
+    line = f"    let span_threshold: i32 = window_size as i32 - {stand_in};\n"
+    duplicated = tmp_path / "two_definitions.rs"
+    duplicated.write_text(line * 2, encoding="utf-8")
+    with pytest.raises(SpanThresholdUnreadable, match="2 definitions"):
+        span_threshold_offset(duplicated)
+
+    single = tmp_path / "one_definition.rs"
+    single.write_text(line, encoding="utf-8")
+    assert span_threshold_offset(single) == stand_in
+    assert span_threshold_offset(single) != span_threshold_offset(), (
+        "the stand-in source and the engine source read the same offset, so this control "
+        "cannot distinguish a reader from a constant"
+    )
 
 
 # --------------------------------------------------------------------------------------- #
