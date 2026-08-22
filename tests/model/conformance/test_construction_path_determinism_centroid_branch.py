@@ -103,20 +103,35 @@ class CompactnessNotCertified(ConformanceRefusal):
 
 @dataclass(frozen=True)
 class PathBoard:
-    """A board plus WHICH PATH produced it and HOW. Provenance travels with the board."""
+    """A board plus WHICH PATH produced it and HOW. Provenance travels with the board.
+
+    `descended_from` is the leaf list `select_leaves` actually returned, and a path-B board
+    must be one of those OBJECTS — not a board that merely compares equal to one. A label
+    alone would be forgeable by the very repair this tier exists to refuse: rebuilding the
+    position and calling the result path B. Object identity is not.
+    """
 
     board: Board
     path: str
     provenance: str
+    descended_from: tuple[Board, ...] = ()
 
 
 def require_path_provenance(item: PathBoard) -> None:
-    if item.path == PATH_B and item.provenance != "select_leaves":
+    if item.path != PATH_B:
+        return
+    if item.provenance != "select_leaves":
         raise ReconstructedPathBBoard(
             f"a board declared path B carries provenance {item.provenance!r}. A path-B board "
             "must have come from MCTSTree.select_leaves and must not have been re-inserted, "
             "replayed or reconstructed — a reconstruction turns this tier into a comparison of "
             "a position with itself, green forever, measuring nothing."
+        )
+    if not any(item.board is leaf for leaf in item.descended_from):
+        raise ReconstructedPathBBoard(
+            "a board declared path B is not one of the objects select_leaves returned. It was "
+            "rebuilt or replayed, which silently converts path B into path A while looking, in "
+            "the diff, exactly like a bug fix."
         )
 
 
@@ -298,7 +313,7 @@ def build_corpus(enc: str) -> list[tuple[Target, PathBoard, PathBoard, PathBoard
             path_a = PathBoard(build_board(enc, root_moves + added), PATH_A, "direct")
             swapped = root_moves[:-1] + [added[0], root_moves[-1], added[1]]
             path_c = PathBoard(build_board(enc, swapped), PATH_C, "direct")
-            path_b = PathBoard(leaf, PATH_B, "select_leaves")
+            path_b = PathBoard(leaf, PATH_B, "select_leaves", tuple(leaves))
             n_centres = len(centres_of(path_a))
             if intent == "compact":
                 certify_compact(root, 2, path_a.board)
@@ -440,7 +455,18 @@ def test_a_RECONSTRUCTED_path_B_board_is_REFUSED(derived):
     )
     with pytest.raises(ReconstructedPathBBoard, match="replayed-stones"):
         compare_paths(path_a, rebuilt, target.partition)
-    derived("t3.provenance_refusal", "fired")
+    # And the harder half: the SAME reconstruction wearing the honest label. A string is
+    # forgeable by exactly the repair this refuses; the identity of the object select_leaves
+    # returned is not.
+    disguised = PathBoard(
+        build_board(spec.name, target.root_moves + target.added),
+        PATH_B,
+        "select_leaves",
+        path_b.descended_from,
+    )
+    with pytest.raises(ReconstructedPathBBoard, match="not one of the objects"):
+        compare_paths(path_a, disguised, target.partition)
+    derived("t3.provenance_refusal", "fired-on-both-forms")
 
 
 def test_a_tree_with_ZERO_simulations_is_refused():
