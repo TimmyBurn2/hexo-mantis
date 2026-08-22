@@ -421,6 +421,168 @@ def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
     assert disarming_forms(ast.parse(module.read_text(encoding="utf-8"))) == []
 
 
+#: TIER PLACEMENT, DECLARED. `(module, test)` for every test in this suite that may carry
+#: `slow`. This is a DECLARATION of which of this suite's tests are measurements and reports
+#: rather than gates — not a threshold, not a tunable, and not a number: there is nothing here
+#: to raise or lower, and the only way to change it is to say in a diff which gate stopped
+#: running in CI. That is exactly what was missing. Everything else in this suite is derived
+#: because a derivation exists; a tier assignment has no producer to derive it from, and the
+#: alternative on offer — deriving the CI tier from the marker source itself — is the
+#: one-source comparison this suite refuses everywhere else.
+_SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("test_leaf_forward_throughput_harness.py", "test_leaf_forward_throughput_ladder"),
+        (
+            "test_legal_move_coverage_boundary.py",
+            "test_report_the_uncovered_legal_move_distribution_per_grid_encoding",
+        ),
+        (
+            "test_construction_path_determinism_centroid_branch.py",
+            "test_report_construction_path_disagreement_over_the_spread_partition",
+        ),
+        (
+            "test_window_frame_midpoint_translation_boundary.py",
+            "test_report_the_graph_node_feature_translation_residual",
+        ),
+    }
+)
+
+#: Markers a test in this suite may carry AT ALL. CI's default gate is
+#: `-m "not integration and not slow"`, so those two words are what can move a test out of the
+#: run; an unknown marker is refused outright rather than reasoned about, because a marker this
+#: census does not know is one whose tier effect it cannot predict.
+_ALLOWED_MARKERS = frozenset({"parametrize", "slow"})
+
+#: The module-wide spelling. `pytestmark = pytest.mark.slow` deselects every test in a file at
+#: once and appears in no decorator list.
+_MODULE_LEVEL = "<module-level pytestmark>"
+
+
+class MarkerOutsideTheDeclaredSet(ConformanceRefusal):
+    """A test in this suite carries a marker the tier-placement census does not know."""
+
+
+class TierPlacementChanged(ConformanceRefusal):
+    """A test moved into or out of the CI default tier without the declaration moving with it."""
+
+
+def marker_census(path: Path) -> list[tuple[str, str, str]]:
+    """`(module, test, marker)` for every `pytest.mark.X` on a test in one module.
+
+    Both spellings: the decorator on a test function, and the module-level `pytestmark`, which
+    carries no decorator and takes a whole file out of the tier in one line.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    rows: list[tuple[str, str, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
+            "test_"
+        ):
+            for decorator in node.decorator_list:
+                func = decorator.func if isinstance(decorator, ast.Call) else decorator
+                if isinstance(func, ast.Attribute) and _is_mark_root(func.value):
+                    rows.append((path.name, node.name, func.attr))
+        elif isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets
+        ):
+            for inner in ast.walk(node.value):
+                if isinstance(inner, ast.Attribute) and _is_mark_root(inner.value):
+                    rows.append((path.name, _MODULE_LEVEL, inner.attr))
+    return sorted(set(rows))
+
+
+def require_declared_tier_placement(
+    census: list[tuple[str, str, str]], declared: frozenset[tuple[str, str]]
+) -> frozenset[tuple[str, str]]:
+    """Refuse an unknown marker, and refuse tier placement drifting from the declaration.
+
+    BOTH DIRECTIONS ARE REFUSED. A gate moved OUT of the CI default tier is the attack — one
+    `slow` line on T4's graph arm removed the cross-crate legal-set claim from CI while the
+    suite reported `96 passed, 5 deselected` and every gate in the repo, the collected-test
+    floor included, stayed rc 0, because a DESELECTED test is still COLLECTED. A measurement
+    moved INTO the default tier is refused too: a wall-clock ladder in the CI tier is how a
+    magnitude becomes a verdict by accident.
+    """
+    unknown = [row for row in census if row[2] not in _ALLOWED_MARKERS]
+    if unknown:
+        raise MarkerOutsideTheDeclaredSet(
+            f"markers outside the declared set on {sorted(unknown)}. CI's default gate selects "
+            f"on markers, so a marker this census does not know is one whose effect on tier "
+            f"membership it cannot predict. Declared: {sorted(_ALLOWED_MARKERS)}."
+        )
+    observed = frozenset((module, test) for module, test, mark in census if mark == "slow")
+    if observed != declared:
+        raise TierPlacementChanged(
+            f"tier placement changed. Moved OUT of the CI default tier (now `slow`, not "
+            f"declared): {sorted(observed - declared)}; moved IN (declared `slow`, no longer "
+            f"marked): {sorted(declared - observed)}. A deselected test is still COLLECTED, so "
+            "neither the suite's own green nor the collected-test floor gate reports this."
+        )
+    return observed
+
+
+def test_the_TIER_PLACEMENT_of_every_test_in_this_suite_matches_the_declaration(derived):
+    """The guard F-RT-3 found missing, and this module's docstring already called tier
+    placement "the thing that nearly disarmed this tier" before anything asserted it."""
+    modules = suite_modules()
+    census = [row for path in modules for row in marker_census(path)]
+    derived("t6.tier.marker_census", census)
+    assert census, "the marker census is EMPTY — it is reporting a clean tier over nothing"
+    derived(
+        "t6.tier.slow_members",
+        sorted(require_declared_tier_placement(census, _SLOW_TIER_MEMBERS)),
+    )
+
+
+def test_a_GATE_moved_OUT_of_the_CI_default_tier_is_refused():
+    """PB-46c. RED-TEAM's exact plant, driven through the gate's own helper: one `slow` line
+    above T4's graph arm, which no other instrument in the repo would report."""
+    census = [row for path in suite_modules() for row in marker_census(path)]
+    planted = [
+        *census,
+        (
+            "test_legal_move_coverage_boundary.py",
+            "test_the_graph_wire_carries_exactly_mantis_cores_legal_set",
+            "slow",
+        ),
+    ]
+    with pytest.raises(TierPlacementChanged, match="Moved OUT of the CI default tier"):
+        require_declared_tier_placement(planted, _SLOW_TIER_MEMBERS)
+
+
+def test_a_MEASUREMENT_moved_INTO_the_CI_default_tier_is_refused():
+    """The other direction, and it is not symmetry for its own sake: the ladder in the default
+    tier puts a host-dependent wall-clock number on every CI run."""
+    census = [row for path in suite_modules() for row in marker_census(path)]
+    without_ladder = [row for row in census if row[1] != "test_leaf_forward_throughput_ladder"]
+    with pytest.raises(TierPlacementChanged, match="moved IN"):
+        require_declared_tier_placement(without_ladder, _SLOW_TIER_MEMBERS)
+
+
+def test_a_MODULE_LEVEL_pytestmark_is_seen_by_the_tier_census(tmp_path):
+    """PB-46d. `pytestmark = pytest.mark.slow` takes a whole file out of the tier in one line
+    and appears in no decorator list, so a decorator-only census cannot see it."""
+    module = tmp_path / "test_planted.py"
+    module.write_text(
+        "import pytest\n\npytestmark = pytest.mark.slow\n\ndef test_x(): assert True\n",
+        encoding="utf-8",
+    )
+    assert marker_census(module) == [("test_planted.py", _MODULE_LEVEL, "slow")]
+    with pytest.raises(TierPlacementChanged, match="Moved OUT"):
+        require_declared_tier_placement(marker_census(module), _SLOW_TIER_MEMBERS)
+
+
+def test_an_UNKNOWN_marker_is_refused_rather_than_ignored(tmp_path):
+    """A marker the census does not know is a marker whose tier effect it cannot predict, and
+    ignoring it is how a new `-m` expression silently deselects a gate."""
+    module = tmp_path / "test_planted.py"
+    module.write_text(
+        'import pytest\n\n@pytest.mark.flaky\ndef test_x(): assert True\n', encoding="utf-8"
+    )
+    with pytest.raises(MarkerOutsideTheDeclaredSet, match="flaky"):
+        require_declared_tier_placement(marker_census(module), _SLOW_TIER_MEMBERS)
+
+
 def test_a_MAGNITUDE_cannot_be_written_into_a_tracked_path(tmp_path):
     """PB-47. Keeps "what does NOT land" enforceable rather than aspirational, by attempting it."""
     assert require_no_magnitude_lands(tmp_path / "block.md") == tmp_path / "block.md"
