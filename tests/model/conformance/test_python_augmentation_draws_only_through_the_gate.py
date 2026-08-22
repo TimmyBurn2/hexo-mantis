@@ -87,6 +87,13 @@ _TRANSFORM_METHODS = frozenset(
 )
 _TRANSFORM_FUNCTIONS = frozenset({"int", "list", "tuple", "asarray", "array", "int64", "intp"})
 
+#: The module-function form of an in-place write, where the target is argument 1. Enumerated
+#: and NON-EXHAUSTIVE — the other two arms below are general, and this one is stated so the
+#: residue is a named list rather than an implied one.
+_INPLACE_FUNCTIONS = frozenset({"copyto", "put", "putmask", "place"})
+#: numpy's general in-place channel, and it is a keyword rather than a family.
+_OUT_PARAM = "out"
+
 
 class UngatedSymmetryDraw(ConformanceRefusal):
     """A D6 element reaches a symmetry application without coming through the per-record gate."""
@@ -145,6 +152,8 @@ class ModuleFacts:
                     self._record_definition(node.target, node.value)
             elif isinstance(node, ast.AugAssign):
                 self._record_definition(node.target, node.value)
+            elif isinstance(node, ast.Call):
+                self._record_inplace_writes(node)
             elif isinstance(node, ast.For) and isinstance(node.target, ast.Name):
                 if isinstance(node.iter, ast.Call) and _callee_name(node.iter.func) == "range":
                     self.range_loops[node.target.id] = node
@@ -175,6 +184,42 @@ class ModuleFacts:
             base = base.value
         if isinstance(base, ast.Name) and base is not target:
             self.definitions.setdefault(base.id, []).append(value)
+
+    def _record_inplace_writes(self, node: ast.Call) -> None:
+        """Record a CALL that may overwrite a name IN PLACE as a definition of that name.
+
+        `_record_definition` records stores — `x = …`, `x[:] = …`, `x += …` — so the subscript
+        spelling of an in-place overwrite is seen. A mutation performed by a CALL leaves the
+        name bound to the gate call and no store exists at all, so the walk kept resolving the
+        name to the gate: `np.copyto(sym_indices, np.random.randint(0, 12, size=n))` planted
+        one line after the real draw in `train/batch_assembly.py` left the whole suite green.
+        The F3 fix's own argument was that the subscript store is "the cheapest spelling of the
+        defect there is"; `np.copyto` is cheaper, and `.fill(3)` is cheaper still.
+
+        THE METHOD ARM IS DEFAULT-UNSAFE ON PURPOSE. A method this census does not model may
+        write through its receiver, so anything outside the PURE transform set it already
+        models counts as a write. Over-recording costs a false ungated report, which is a red
+        someone reads; under-recording costs a green that means nothing.
+        """
+        for keyword in node.keywords:
+            if keyword.arg == _OUT_PARAM and isinstance(keyword.value, ast.Name):
+                self.definitions.setdefault(keyword.value.id, []).append(node)
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            if func.attr in _INPLACE_FUNCTIONS and node.args:
+                target = node.args[0]
+                if isinstance(target, ast.Name):
+                    self.definitions.setdefault(target.id, []).append(node)
+            elif (
+                isinstance(func.value, ast.Name)
+                and func.attr not in _TRANSFORM_METHODS
+                and func.attr not in GATE_FUNCTIONS
+            ):
+                self.definitions.setdefault(func.value.id, []).append(node)
+        elif isinstance(func, ast.Name) and func.id in _INPLACE_FUNCTIONS and node.args:
+            target = node.args[0]
+            if isinstance(target, ast.Name):
+                self.definitions.setdefault(target.id, []).append(node)
 
     def _is_scatter_factory_call(self, node: ast.expr) -> bool:
         inner = node
@@ -590,6 +635,64 @@ def test_an_IN_PLACE_OVERWRITE_of_the_gate_drawn_array_FIRES(tmp_path):
     assert len(sinks) == 1, sinks
     with pytest.raises(UngatedSymmetryDraw):
         require_all_gated(sinks)
+
+
+#: One planted line per in-place-through-a-CALL spelling. Each leaves the name bound to the
+#: gate call, so a walk that records only STORES keeps resolving it to the gate.
+_INPLACE_CALL_PLANTS: tuple[tuple[str, str], ...] = (
+    ("np-copyto", "    np.copyto(sym_indices, np.random.randint(0, 12, size=n))\n"),
+    ("method-fill", "    sym_indices.fill(3)\n"),
+    ("np-put", "    np.put(sym_indices, np.arange(n), np.random.randint(0, 12, size=n))\n"),
+    ("out-keyword", "    np.mod(sym_indices, 7, out=sym_indices)\n"),
+    ("method-sort", "    sym_indices.sort()\n"),
+)
+
+
+@pytest.mark.parametrize(
+    "label,line", _INPLACE_CALL_PLANTS, ids=[row[0] for row in _INPLACE_CALL_PLANTS]
+)
+def test_an_IN_PLACE_OVERWRITE_through_a_CALL_FIRES(label, line, tmp_path):
+    """F-RT-5. `np.copyto` planted one line after the real draw in `train/batch_assembly.py`
+    left the entire suite green — the store-only walk saw no store, so the name still resolved
+    to the gate. Every row here is a line a numpy-heavy diff writes without thinking about it,
+    and the clean half of the same module is required to pass so this is a discriminator and
+    not a test that the gate call was spelled at all."""
+    body = (
+        "import numpy as np\n" + _GATE_IMPORT +
+        "from mantis.data.augment import spread_mask\n"
+        "from mantis._engine import apply_symmetries_batch\n"
+        "def go(states, board_size, n):\n"
+        "    sym_indices = draw_record_syms(spread_mask(board_size, states=states))\n"
+        "{overwrite}"
+        "    return apply_symmetries_batch(states, sym_indices.tolist())\n"
+    )
+    clean = _tree(tmp_path / f"clean_{label}", body.format(overwrite=""))
+    _draws, sinks = census(clean)
+    require_all_gated(sinks)  # the SAME module minus one line must pass
+
+    planted = _tree(tmp_path / f"planted_{label}", body.format(overwrite=line))
+    _draws, sinks = census(planted)
+    assert len(sinks) == 1, sinks
+    with pytest.raises(UngatedSymmetryDraw):
+        require_all_gated(sinks)
+
+
+def test_a_PURE_TRANSFORM_on_the_gate_drawn_array_does_NOT_fire(tmp_path):
+    """The negative half of the default-unsafe method arm. `.astype`/`.tolist`/`.reshape` are
+    the transforms this census already models as pure; a rule widened until they counted as
+    writes would red the two production loops, which is the proxy this tier refuses."""
+    root = _tree(
+        tmp_path,
+        "import numpy as np\n" + _GATE_IMPORT +
+        "from mantis.data.augment import spread_mask\n"
+        "from mantis._engine import apply_symmetries_batch\n"
+        "def go(states, board_size, n):\n"
+        "    sym_indices = draw_record_syms(spread_mask(board_size, states=states))\n"
+        "    flat = sym_indices.astype(np.int64).reshape(-1).copy()\n"
+        "    return apply_symmetries_batch(states, flat.tolist())\n",
+    )
+    _draws, sinks = census(root)
+    assert len(sinks) == 1 and sinks[0][3] is True, sinks
 
 
 def test_the_TWO_PRODUCTION_LOOPS_do_NOT_fire(tmp_path):
