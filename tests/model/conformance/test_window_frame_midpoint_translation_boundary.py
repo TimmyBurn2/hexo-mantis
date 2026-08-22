@@ -37,9 +37,16 @@ stated scope. Roots walked: `crates/*/src/**/*.rs`; how many files that is is a 
 of the run (`t1.census.files_walked`), not a number written here. Case-SENSITIVE. Comments
 (`//`, `///`, `//!`, nested `/* */`) and string/char literals are stripped by a lexer BEFORE
 any matching, so a decoy in either is invisible; both decoys are planted as controls below.
-The matcher is a token SHAPE — `(` PATH `+` PATH `)` `/` `2` — with NO name requirement of any
-kind: no `min`/`max`, no `midpoint`, no `window`. A name requirement is the blind spot, because
-the dangerous case is a new origin written under different names. `crates/*/tests/**` and
+The matcher is a token SHAPE — a balanced `(` group containing a `+`, divided by an integer
+`2` — with NO name requirement of any kind (no `min`/`max`, no `midpoint`, no `window`) and NO
+OPERAND GRAMMAR AT ALL. Both omissions are load-bearing and both were earned: a name
+requirement is a blind spot because the dangerous case is a new origin under different names,
+and an operand grammar is a blind spot because five spellings were measured walking past one —
+`2i32` and `2_i32` (the divisor lexes as a single token), `(*a + *b) / 2`,
+`((min_q + max_q) as i32) / 2` and `(v[0] + v[1]) / 2`, the last being an ordinary refactor
+for a bbox held as `[i32; 2]` in a crate that already works in coordinate arrays. What the
+matcher renders for the pin is therefore normalised token text, since it can render an operand
+shape it cannot parse. `crates/*/tests/**` and
 `crates/*/benches/**` are excluded by design (they hold the inv18 pins, which are assertions
 ABOUT the rule, not authorities OVER it) and the exclusion is inert: the same census over those
 roots returns zero constructions, asserted below rather than claimed.
@@ -67,16 +74,18 @@ cannot tell that `core.rs:381` is an origin and an unrelated average is not. Tha
 the pinned table's `frame` column, which is prose and is NOT what the assertion compares — the
 assertion compares triples. RESIDUE, named and unguarded, and MEASURED rather than imagined —
 every form named here was planted against the real crates tree and confirmed to walk past: an
-origin spelled `>> 1`, via `i32::midpoint`, through a helper fn or any call taking ARGUMENTS,
-through a `const`, or re-implemented in Python, is outside this census, and there is no second
-instrument that would catch it. The zero-argument accessor form
-`(self.lo_q() + self.hi_q()) / 2` WAS outside it and is now inside: it is the spelling a
-field-to-getter refactor produces, it is not the "helper fn" this paragraph already named, and
-a reader of the paragraph would not have predicted it — which is the only thing a stated scope
-is for.
+origin spelled `>> 1`, via `i32::midpoint`, through a `const`, with the sum more than one
+bracket deep, or re-implemented in Python, is outside this census, and there is no second
+instrument that would catch it. Three forms this paragraph USED to name are now inside, each
+because it was measured rather than imagined: the zero-argument accessor
+`(self.lo_q() + self.hi_q()) / 2`, which is what a field-to-getter refactor produces; the
+argument-bearing helper call, which the operand grammar excluded and the token shape does not;
+and the five spellings above. A residue that shrinks when it is measured is the only evidence
+that the paragraph was ever a scope statement rather than a hedge.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -462,35 +471,69 @@ def lex_rust(src: str) -> list[tuple[str, int]]:
     return tokens
 
 
-def _dotted_path(tokens: list[tuple[str, int]], i: int) -> tuple[str, int] | None:
-    """A dotted run of identifiers at `i` — `min_q`, `self.min_q`, `a.b.c`, `self.min_q()`.
+#: The divisor: an integer `2` with an optional Rust type suffix. `2i32` and `2_i32` lex as ONE
+#: token, so a matcher comparing the token to the string "2" walks past both.
+_DIVISOR_TWO = re.compile(r"^2(_?[iu](?:8|16|32|64|128|size))?$")
+#: How deep inside the parenthesised group the `+` may sit. Depth 0 is `(a + b) / 2`; depth 1
+#: admits the cast form `((min_q + max_q) as i32) / 2`, which is a second authority spelled
+#: through a conversion and was measured to walk past a depth-0 matcher.
+_MAX_SUM_DEPTH = 1
 
-    No name filter of any kind. The optional empty argument list is here because the accessor
-    spelling `(self.lo_q() + self.hi_q()) / 2` is what a field-to-getter refactor produces, and
-    it was measured to walk past the identifier-only form. A call WITH arguments is a helper
-    call and stays outside this census, disclosed with the rest of the residue in the module
-    docstring rather than half-matched here.
+
+def _matching_open(tokens: list[tuple[str, int]], close: int) -> int | None:
+    """The `(` matching the `)` at `close`, or `None` if the bracket that closes is not one."""
+    depth = 0
+    for i in range(close, -1, -1):
+        token = tokens[i][0]
+        if token in (")", "]"):
+            depth += 1
+        elif token in ("(", "["):
+            depth -= 1
+            if depth == 0:
+                return i if token == "(" else None
+    return None
+
+
+def _has_sum(tokens: list[tuple[str, int]], open_idx: int, close_idx: int) -> bool:
+    """A binary `+` inside the group, at most `_MAX_SUM_DEPTH` brackets deep."""
+    depth = 0
+    for i in range(open_idx + 1, close_idx):
+        token = tokens[i][0]
+        if token in ("(", "["):
+            depth += 1
+        elif token in (")", "]"):
+            depth -= 1
+        elif token == "+" and depth <= _MAX_SUM_DEPTH:
+            return True
+    return False
+
+
+def _render(tokens: list[tuple[str, int]]) -> str:
+    """The matched span as NORMALISED token text — one space between tokens, none around `.`.
+
+    Rendering from the tokens rather than from a reassembled operand grammar is what lets the
+    matcher accept any operand shape: `*a`, `v[0]`, `self.min_q()` and a cast all render without
+    the renderer knowing what any of them are.
     """
-    if i >= len(tokens):
-        return None
-    head = tokens[i][0]
-    if not head or head[0] not in _IDENT or head[0].isdigit():
-        return None
-    parts, j = [head], i + 1
-    while j + 1 < len(tokens) and tokens[j][0] == ".":
-        nxt = tokens[j + 1][0]
-        if not nxt or nxt[0] not in _IDENT or nxt[0].isdigit():
-            break
-        parts.append(nxt)
-        j += 2
-    text = ".".join(parts)
-    if j + 1 < len(tokens) and tokens[j][0] == "(" and tokens[j + 1][0] == ")":
-        return text + "()", j + 2
-    return text, j
+    return (
+        " ".join(token for token, _line in tokens).replace(" . ", ".").replace(" ( )", "()")
+    )
 
 
 def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[tuple[str, int, str]]:
-    """Every `(PATH + PATH) / 2` token shape under `root`, as `(file, line, expression)`.
+    """Every `( … + … ) / 2` token SHAPE under `root`, as `(file, line, expression)`.
+
+    THE OPERANDS ARE NOT PARSED, WHICH IS THE POINT. The matcher used to require each operand
+    to be a dotted identifier run with an optional EMPTY argument list, so five spellings of a
+    new origin walked past it — measured, one plant per row, against a temp crates tree:
+    `2i32` and `2_i32` (the divisor lexes as one token), `(*a + *b) / 2`,
+    `((min_q + max_q) as i32) / 2`, and `(v[0] + v[1]) / 2`. The last is the one that matters:
+    a bbox held as `[i32; 2]` is an ordinary refactor and the graph crate already works in
+    coordinate arrays. Requiring only a balanced group containing a `+`, divided by a 2-literal,
+    removes the operand grammar as a place a new origin can hide.
+
+    `>> 1` remains outside, with the rest of the residue in the module docstring: it is a
+    different token shape, not a different operand shape.
 
     Root-parameterised on purpose: a break that cannot be constructed because the walk hard-codes
     its root is a failed obligation, and every temp-tree control below depends on this signature.
@@ -498,25 +541,22 @@ def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[t
     found: list[tuple[str, int, str]] = []
     for path in sorted(root.glob(pattern)):
         tokens = lex_rust(path.read_text(encoding="utf-8"))
-        for i, (tok, line) in enumerate(tokens):
-            if tok != "(":
+        for i, (tok, _line) in enumerate(tokens):
+            if tok != "/" or i + 1 >= len(tokens):
                 continue
-            left = _dotted_path(tokens, i + 1)
-            if left is None:
+            if not _DIVISOR_TWO.match(tokens[i + 1][0]):
                 continue
-            left_text, j = left
-            if j >= len(tokens) or tokens[j][0] != "+":
+            if i == 0 or tokens[i - 1][0] != ")":
                 continue
-            right = _dotted_path(tokens, j + 1)
-            if right is None:
-                continue
-            right_text, k = right
-            if k + 2 >= len(tokens):
-                continue
-            if (tokens[k][0], tokens[k + 1][0], tokens[k + 2][0]) != (")", "/", "2"):
+            opened = _matching_open(tokens, i - 1)
+            if opened is None or not _has_sum(tokens, opened, i - 1):
                 continue
             found.append(
-                (path.relative_to(root).as_posix(), line, f"({left_text} + {right_text}) / 2")
+                (
+                    path.relative_to(root).as_posix(),
+                    tokens[opened][1],
+                    _render(tokens[opened : i + 2]),
+                )
             )
     return sorted(found)
 
@@ -526,19 +566,34 @@ def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[t
 #: a pin the tier rewrites when it differs certifies its own breakage, and a count pins none of
 #: the four ambiguous units this census could be measured in. The `frame` note beside each row
 #: is prose for the reader; the assertion compares the triples only.
+#:
+#: THE EXPRESSION COLUMN IS NORMALISED TOKEN TEXT, which is what the matcher can render for an
+#: operand shape it does not parse. The rows were re-pinned once, when the operand grammar was
+#: removed; the `(file, line)` multiset of the census was IDENTICAL across that change except
+#: for `core.rs:48` below, which the old matcher could not see at all — that is the check that
+#: distinguishes a renderer change from a tree change, and it was made before re-pinning.
 _THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, int, str], ...] = (
     # dense, cluster frame — small-cluster centroid branch
-    ("mantis-core/src/board/state/cluster.rs", 71, "(min_q + max_q) / 2"),
-    ("mantis-core/src/board/state/cluster.rs", 71, "(min_r + max_r) / 2"),
+    ("mantis-core/src/board/state/cluster.rs", 71, "( min_q + max_q ) / 2"),
+    ("mantis-core/src/board/state/cluster.rs", 71, "( min_r + max_r ) / 2"),
     # dense, cluster frame — massive-cluster no-anchor fallback
-    ("mantis-core/src/board/state/cluster.rs", 92, "(min_q + max_q) / 2"),
-    ("mantis-core/src/board/state/cluster.rs", 92, "(min_r + max_r) / 2"),
+    ("mantis-core/src/board/state/cluster.rs", 92, "( min_q + max_q ) / 2"),
+    ("mantis-core/src/board/state/cluster.rs", 92, "( min_r + max_r ) / 2"),
+    # NOT A WINDOW ORIGIN — `hex_distance`'s axial halving. It is in the pin because the census
+    # counts midpoint CONSTRUCTIONS and cannot tell an origin from an unrelated halving; that
+    # judgement is this prose column, which the assertion does not read. It was invisible to
+    # the operand grammar the matcher used to carry, so it arrived with the wider matcher.
+    (
+        "mantis-core/src/board/state/core.rs",
+        48,
+        "( ( q1 - q2 ).abs() + ( q1 + r1 - q2 - r2 ).abs() + ( r1 - r2 ).abs() ) / 2",
+    ),
     # dense, BOARD frame — Board::window_center()
-    ("mantis-core/src/board/state/core.rs", 381, "(self.min_q + self.max_q) / 2"),
-    ("mantis-core/src/board/state/core.rs", 382, "(self.min_r + self.max_r) / 2"),
+    ("mantis-core/src/board/state/core.rs", 381, "( self.min_q + self.max_q ) / 2"),
+    ("mantis-core/src/board/state/core.rs", 382, "( self.min_r + self.max_r ) / 2"),
     # graph arm — mantis-graph's own fn window_center
-    ("mantis-graph/src/lib.rs", 252, "(min_q + max_q) / 2"),
-    ("mantis-graph/src/lib.rs", 252, "(min_r + max_r) / 2"),
+    ("mantis-graph/src/lib.rs", 252, "( min_q + max_q ) / 2"),
+    ("mantis-graph/src/lib.rs", 252, "( min_r + max_r ) / 2"),
 )
 
 
@@ -608,7 +663,7 @@ def test_a_FIFTH_site_carrying_the_allow_marker_is_named(tmp_path):
         "}\n",
     )
     found = midpoint_constructions(tmp_path)
-    assert found == [("planted/src/lib.rs", 4, "(min_q + max_q) / 2")], found
+    assert found == [("planted/src/lib.rs", 4, "( min_q + max_q ) / 2")], found
     with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
         require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
 
@@ -631,16 +686,15 @@ def test_a_FIFTH_site_with_NO_marker_and_DIFFERENT_names_is_named(tmp_path):
         "}\n",
     )
     found = midpoint_constructions(tmp_path)
-    assert found == [("planted/src/lib.rs", 5, "(self.lo_q + self.hi_q) / 2")], found
+    assert found == [("planted/src/lib.rs", 5, "( self.lo_q + self.hi_q ) / 2")], found
     with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
         require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
 
 
-def test_a_fifth_site_whose_operands_are_ACCESSOR_CALLS_is_named(tmp_path):
-    """PB-9b. The field-to-getter spelling, measured to walk past the identifier-only matcher.
-
-    A call taking ARGUMENTS remains outside the census by decision, so this control asserts that
-    edge too: a scope is only stated if what falls outside it is shown, not just what falls in.
+def test_a_fifth_site_whose_operands_are_ACCESSOR_or_HELPER_CALLS_is_named(tmp_path):
+    """PB-9b. The field-to-getter spelling, measured to walk past the identifier-only matcher —
+    and the ARGUMENT-BEARING helper call beside it, which used to be a stated residue and is
+    now inside, because removing the operand grammar removed the distinction that kept it out.
     """
     _plant(
         tmp_path,
@@ -654,9 +708,47 @@ def test_a_fifth_site_whose_operands_are_ACCESSOR_CALLS_is_named(tmp_path):
         "}\n",
     )
     found = midpoint_constructions(tmp_path)
-    assert found == [("planted/src/lib.rs", 3, "(self.lo_q() + self.hi_q()) / 2")], found
+    assert found == [
+        ("planted/src/lib.rs", 3, "( self.lo_q() + self.hi_q() ) / 2"),
+        ("planted/src/lib.rs", 6, "( mid_of ( a , b ) + mid_of ( b , a ) ) / 2"),
+    ], found
     with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
         require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
+
+
+#: One plant per spelling RED-TEAM measured walking past the operand grammar. Rendering is not
+#: asserted here — only that the site is SEEN, which is the property that failed.
+_EVASION_SPELLINGS: tuple[tuple[str, str], ...] = (
+    ("typed-suffix", "(min_q + max_q) / 2i32"),
+    ("underscore-suffix", "(min_q + max_q) / 2_i32"),
+    ("deref-operands", "(*a + *b) / 2"),
+    ("cast", "((min_q + max_q) as i32) / 2"),
+    ("indexed-operands", "(v[0] + v[1]) / 2"),
+    ("mixed", "(*v[0] + self.hi.q()) / 2usize"),
+)
+
+
+@pytest.mark.parametrize(
+    "label,expr", _EVASION_SPELLINGS, ids=[row[0] for row in _EVASION_SPELLINGS]
+)
+def test_each_MEASURED_evasion_spelling_is_SEEN_by_the_census(label, expr, tmp_path):
+    """Every row here was planted against the real crates tree and confirmed to walk past the
+    identifier-run operand grammar. `(v[0] + v[1]) / 2` is the one that matters: a bbox held as
+    `[i32; 2]` is an ordinary refactor and the graph crate already works in coordinate arrays.
+    """
+    _plant(tmp_path / label, f"pub fn origin(a: i32, b: i32) -> i32 {{\n    {expr}\n}}\n")
+    found = midpoint_constructions(tmp_path / label)
+    assert len(found) == 1, f"{label}: {expr} was not seen — {found}"
+    with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
+        require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
+
+
+def test_the_SHIFT_spelling_remains_OUTSIDE_the_census(tmp_path):
+    """The residue, asserted rather than claimed. `>> 1` is a different token shape, not a
+    different operand shape, and no widening of the operand side reaches it — so a reader of
+    the residue paragraph can check the paragraph against this."""
+    _plant(tmp_path, "pub fn origin(a: i32, b: i32) -> i32 {\n    (a + b) >> 1\n}\n")
+    assert midpoint_constructions(tmp_path) == []
 
 
 def test_a_DELETED_pinned_site_is_named():
