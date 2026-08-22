@@ -27,10 +27,19 @@ import mantis.encoding as encoding
 
 from _corpus import RosterCollapsed, check_roster, roster, roster_names
 
+#: THE ROSTER AS THE TIERS WERE PARAMETRISED OVER IT, captured at module import — which is
+#: collection time, the same pass in which every `@pytest.mark.parametrize(..., roster(), ...)`
+#: in this suite is evaluated. This is the guard's whole mechanism: the comparison below reads
+#: the live registry surface AGAIN at run time and compares it against this capture, so the two
+#: sides have two different times of observation. Reading `roster()` inside the test instead
+#: gives two live calls one line apart, which shrink together under any registry change and can
+#: therefore report only `len == 0` — exactly what `fail_at_collect` already reports.
+ROSTER_AT_COLLECTION: tuple[str, ...] = roster_names(roster())
+
 
 def test_the_parametrisation_roster_is_non_empty_and_matches_the_live_registry(derived):
     """The guard itself. Its cardinality is a derived output of the run, never a typed number."""
-    observed = roster_names(roster())
+    observed = ROSTER_AT_COLLECTION
     live = tuple(sorted(s.name for s in encoding.all_specs()))
     cardinality = check_roster(observed, live)
     derived("roster.names", observed)
@@ -51,6 +60,19 @@ def test_a_SHRUNKEN_roster_is_refused():
     assert len(live) > 1, "a one-member registry cannot exercise the shrink control"
     with pytest.raises(RosterCollapsed, match="differs from the live registry surface"):
         check_roster(live[:-1], live)
+
+
+def test_the_COLLECTION_TIME_capture_is_what_the_guard_compares_against():
+    """The shrink half is only reachable because the two sides are observed at two times.
+
+    A registry emptied or shrunk AFTER collection leaves the capture intact and moves the live
+    read alone; this asserts the capture is the gate's left-hand side rather than a second live
+    call, by driving the helper with the capture against a live read that has lost a member.
+    """
+    assert ROSTER_AT_COLLECTION == roster_names(roster())
+    shrunk_live = ROSTER_AT_COLLECTION[:-1]
+    with pytest.raises(RosterCollapsed, match="differs from the live registry surface"):
+        check_roster(ROSTER_AT_COLLECTION, shrunk_live)
 
 
 def test_the_guard_does_NOT_fire_on_the_real_roster():
