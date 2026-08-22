@@ -36,8 +36,10 @@ from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
 from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.resolve import resolve_bot
+from mantis.config.resolve.allocator_posture import assert_posture_token
 from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
 from mantis.eval.aggregate import aggregate_gate, aggregate_rung
+from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
 from mantis.eval.rounds import RoundSpec, RungJob
@@ -373,6 +375,7 @@ def _round_result(
     spec: RoundSpec, *, gate_result: dict | None, rungs_result: dict[str, Any],
     skipped_rungs: list[dict[str, str]], random_result: dict[str, Any],
     floor_payload: dict[str, Any] | None, adjudicator: PlyCapAdjudicator | None,
+    device_memory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """THE sidecar result builder — one shape, one place, both exit paths.
 
@@ -398,6 +401,13 @@ def _round_result(
             "min_margin": adjudicator.min_margin,
             **adjudicator.tally(),
         }
+    if device_memory is not None:
+        # RECAL-PREP / R308(g)(ii). UNCONDITIONAL on both exit paths, unlike the two posture
+        # keys above: those are attached iff their posture was armed, and this one is a
+        # MEASUREMENT the re-sit needs from every round including the ones that stopped early.
+        # A round that returned at the strength floor is exactly a round whose term is small,
+        # and dropping it would bias the series the growth verdict is taken over.
+        result["device_memory"] = device_memory
     return result
 
 
@@ -407,6 +417,17 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     fatal) — an unrecoverable failure (model load, engine build) is allowed to propagate
     so the parent's join/exit-code path classifies it (isolation law 2)."""
     from mantis._engine import Board
+
+    # RECAL-PREP / R308(g)(i): the eval child asserts the allocator posture FOR ITSELF, first
+    # statement, before any model is loaded or any engine is built. The child is a SECOND
+    # allocator on the same card in its own process; the parent's boot assertion says nothing
+    # about the environment a hand-launched `python -m mantis.eval.worker` runs in, and a
+    # posture is a property of THIS process. A cuda worker_device with no token RAISES —
+    # `assert_posture_token`'s own refusal — so the seam's `None` default can fail an
+    # assertion but never excuse one.
+    assert_posture_token(spec.allocator_posture, device_type=spec.worker_device)
+    probe = make_probe(spec.worker_device, round_id=spec.round_id)
+    probe.mark("round_start")
 
     # ONE resolution of the round's DECLARED encoding. Board geometry and the inference
     # decode are sized from the SAME resolved value, so they cannot diverge — before this,
@@ -440,21 +461,28 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             )
             verdict = evaluate_strength_floor(probe_records, spec.strength_floor)
             floor_payload = verdict.as_payload()
+            probe.mark("floor_probe")
             if not verdict.passed:
                 # The round STOPS here, and says so. Nothing is fabricated: no gate result,
                 # no rung results, no random-floor number — the absence of a gate result is
                 # what keeps `promote.apply_gate_decision` from promoting, by the same
                 # `gate_result is None` route a round with no anchor already takes.
+                probe.mark("round_end")
                 return _round_result(
                     spec, gate_result=None, rungs_result={}, skipped_rungs=[],
                     random_result={"games": 0, "wr": None},
                     floor_payload=floor_payload, adjudicator=adjudicator,
+                    device_memory=probe.payload(),
                 )
 
         gate_records = _play_gate_block(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
             adjudicator=adjudicator,
         )
+        # The one phase that puts a SECOND model and a SECOND engine on the card, and the one
+        # that is skipped WHOLE while there is no anchor. Marked whichever branch it took, so
+        # the series carries the round's posture rather than only its number.
+        probe.mark("gate_block")
         gate_result: dict | None = None
         if gate_records is not None:
             gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
@@ -479,7 +507,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 )
             except RungUnresolvable as exc:
                 skipped_rungs.append({"rung": rung_job.name, "reason": exc.reason})
+                probe.mark(f"rung_skipped:{rung_job.name}")
                 continue
+            probe.mark(f"rung:{rung_job.name}")
             # M-2: thread eval.ladder.bootstrap_{resamples,ci_level,seed} through — never
             # fall back to aggregate.py's own signature defaults, which had no live
             # consumer and made a minted `eval.ladder.bootstrap_resamples` silently inert.
@@ -499,6 +529,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
             adjudicator=adjudicator,
         )
+        probe.mark("random_floor")
         random_agg = (
             aggregate_rung(
                 random_records,
@@ -515,10 +546,12 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             else {"games": random_agg.games, "wr": random_agg.wr}
         )
 
+        probe.mark("round_end")
         return _round_result(
             spec, gate_result=gate_result, rungs_result=rungs_result,
             skipped_rungs=skipped_rungs, random_result=random_result,
             floor_payload=floor_payload, adjudicator=adjudicator,
+            device_memory=probe.payload(),
         )
     finally:
         candidate_engine.close()

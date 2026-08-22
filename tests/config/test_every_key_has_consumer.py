@@ -47,6 +47,14 @@ CONSUMER_REGISTRY = {
         " build_eval_pipeline branch (R120; the deleted `compose_run(eval_enabled=…)`"
         " parameter's code-side default True died with it)"
     ),
+    "allocator_posture": (
+        "mantis.config.resolve.allocator_posture.resolve_allocator_posture -> the boot "
+        "assertion in mantis.run.build_run_collaborators (the run process, before the first "
+        "CUDA allocation) AND -> RoundSpec.allocator_posture -> mantis.eval.worker.run_round's "
+        "first statement (the eval child, a SECOND allocator on the same card in its own "
+        "process); audited by armed_aborts row `allocator_posture_minted` (RECAL-PREP, "
+        "R308(g)(i))"
+    ),
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
@@ -486,8 +494,19 @@ def test_registry_matches_the_live_leaf_count():
     # train-side OF2-9 census freezes those names and distinct names keep the two budgets
     # unconfusable. Shipped `null` in both production configs — the R119 placeholder, which
     # is schema-valid and runtime-REFUSED, never an off state. 182 + 2 = 184.
-    assert len(CONSUMER_REGISTRY) == 184
-    assert len(_leaf_paths(RunConfig)) == 184
+    # RECAL-PREP (R308(g)(i)) ADDS 1 and the count becomes 185: `allocator_posture`, a
+    # TOP-LEVEL leaf naming the CUDA caching allocator's REGIME. TOP-LEVEL for `eval_enabled`'s
+    # own recorded grounds — a root-composition fact spanning more than one section's surface,
+    # with three consumers in two processes (trainer, self-play/inference, and the eval child,
+    # which is a SECOND allocator on the same card). It is a `Literal | None` SCALAR, not a
+    # block, so the walker contributes exactly one leaf and each YAML file carries exactly one
+    # line; there is no descend-into-optional-block arithmetic here of the kind the
+    # eval-posture bundle above needed. Shipped `null` in EVERY committed config — R119's
+    # placeholder, schema-valid and runtime-REFUSED — because R308(g)(i) reserves the VALUE
+    # for the re-calibration sitting under R282(b) and a token minted by a dispatcher would be
+    # a regime nobody measured. 184 + 1 = 185.
+    assert len(CONSUMER_REGISTRY) == 185
+    assert len(_leaf_paths(RunConfig)) == 185
 
 
 def test_no_forward_reference_strings_in_registry():

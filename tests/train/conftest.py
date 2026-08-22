@@ -254,6 +254,10 @@ def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
     return {
         "schema_version": 1,
         "eval_enabled": True,
+        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
+        # placeholder — refused at boot on a cuda process, valued only by the
+        # re-calibration sitting under R282(b).
+        "allocator_posture": None,
         "run_id": run_id,
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},

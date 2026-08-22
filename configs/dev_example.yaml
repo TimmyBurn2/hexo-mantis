@@ -5,6 +5,7 @@ schema_version: 1
 run_id: dev_example
 seed: 20260716
 eval_enabled: true
+allocator_posture: null
 identity:
   encoding: gnn_axis_v1
   representation: graph

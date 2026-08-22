@@ -61,7 +61,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -69,6 +68,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from mantis.config.resolve.allocator_posture import (
+    read_live_allocator_conf as _live_alloc_conf,
+)
 
 _TOOL = "mantis.diagnostics.fusion_calibrate"
 _KEY = "inference.fused_graph_caps"
@@ -495,6 +498,7 @@ def _provenance(config_path: Path, spec: Any, arch: Any) -> dict[str, Any]:
     import torch
 
     cuda = torch.cuda.is_available()
+    _alloc_conf = _live_alloc_conf()
     return {
         "tool": _TOOL,
         "torch_version": torch.__version__,
@@ -506,7 +510,17 @@ def _provenance(config_path: Path, spec: Any, arch: Any) -> dict[str, Any]:
         ),
         # The allocator posture is STAMPED because a cap does not transfer across a change of
         # it: `expandable_segments` moves the reserved/allocated ratio the budget divides by.
-        "pytorch_cuda_alloc_conf": os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
+        #
+        # READ THROUGH THE ONE AUTHORITY (RECAL-PREP, R308(g)(i)), and the change closes a real
+        # hole rather than tidying an import. This line used to read `PYTORCH_CUDA_ALLOC_CONF`
+        # alone — but c10 also honours `PYTORCH_ALLOC_CONF` as a fallback, so a fit taken under
+        # the generic variable stamped `""` and its provenance ASSERTED the default posture for
+        # a run that was not in it. On the one tool whose `fragmentation_ratio` the whole
+        # memory partition divides by, that is a provenance block certifying the wrong regime.
+        # The variable the value came FROM is stamped beside it, because "unset" and "set to
+        # the empty string in the other variable" are different facts about a drive.
+        "pytorch_cuda_alloc_conf": _alloc_conf.raw,
+        "pytorch_alloc_conf_source_var": _alloc_conf.source_var,
         "config_path": str(config_path),
         "config_sha256": _sha256(config_path),
         "encoding_spec": spec.name,

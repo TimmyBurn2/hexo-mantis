@@ -5,6 +5,15 @@ schema_version: 1
 run_id: template_dev
 seed: 20260716
 eval_enabled: true
+# `allocator_posture` — the CUDA caching allocator's REGIME (RECAL-PREP, R308(g)(i)).
+# `null` is R119's PLACEHOLDER, not an off state: schema-valid so this template mints
+# complete configs, and REFUSED at boot on any cuda process, so a run cannot proceed under a
+# regime nobody measured. The VALUE is a measurement the re-calibration sitting takes under
+# R282(b) — the 2026-08-22 sitting measured 14.98 GiB of card high-water under DEFAULT
+# against 11.36 under `expandable_segments:True` at matched config and duration, and could
+# not adopt the better one because nothing minted, checked or armed it. That is what this
+# key ends. Mint it with the caps, in the same act, or not at all.
+allocator_posture: null
 identity:
   encoding: gnn_axis_v1
   representation: graph

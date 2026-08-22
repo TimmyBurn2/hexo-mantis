@@ -11,6 +11,7 @@ schema_version: 1
 run_id: run5
 seed: 20260718
 eval_enabled: true
+allocator_posture: null
 identity:
   encoding: gnn_axis_v1
   representation: graph

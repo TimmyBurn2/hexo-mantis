@@ -657,6 +657,10 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
     valid_config = {
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
         "eval_enabled": True,
+        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
+        # placeholder — refused at boot on a cuda process, valued only by the
+        # re-calibration sitting under R282(b).
+        "allocator_posture": None,
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": _make_eval_block(),
         # WPMINT Phase K-A stage 0: DERIVED from a MINTED config, not a twelfth restatement

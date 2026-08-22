@@ -8,6 +8,7 @@ schema_version: 1
 run_id: smoke_radius_curriculum
 seed: 20260721
 eval_enabled: true
+allocator_posture: null
 identity:
   encoding: v6w25
   representation: grid

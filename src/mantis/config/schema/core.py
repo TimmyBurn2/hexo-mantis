@@ -341,6 +341,23 @@ class RunConfig(StrictModel):
     # eval and monitor wired-source surfaces — `train.terminal_eval_enabled` stays the
     # distinct close-out knob it already is.
     eval_enabled: bool
+    # RECAL-PREP / R308(g)(i): the CUDA caching allocator's REGIME, as a closed token set
+    # (`default` | `expandable_segments`) or the R119 `null` placeholder. TOP-LEVEL for
+    # `eval_enabled`'s own recorded grounds — it is a root-composition fact spanning more
+    # than one section's surface: the trainer, the self-play inference server and the eval
+    # child are three consumers in two processes, and any sectional home would make one of
+    # the three read another section's key.
+    #
+    # WHY IT IS A CONFIG KEY AT ALL, measured. The 2026-08-22 re-calibration sitting measured
+    # 14.98 GiB of card high-water under DEFAULT against 11.36 under `expandable_segments:True`
+    # at matched config and duration, and kept DEFAULT anyway — not on the measurement, but
+    # because a cap fitted under the better posture would depend on an environment variable no
+    # config minted, no gate checked and no `armed_aborts` row covered. That is a minted value
+    # with an unminted precondition (R1's silent-authority class), and this field is its
+    # removal. The VALUE is a MEASUREMENT the re-sit takes under R282(b); `null` is refused at
+    # boot by `mantis.config.resolve.allocator_posture`, so no CUDA run can proceed on a regime
+    # nobody measured, and no `Literal` member may be minted by anything but that sitting.
+    allocator_posture: Literal["default", "expandable_segments"] | None
     identity: IdentityConfig
     eval: EvalConfig
     train: TrainConfig

@@ -147,6 +147,10 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
     return {
         "schema_version": SCHEMA_VERSION, "run_id": "unit_test", "seed": 1,
         "eval_enabled": True,
+        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
+        # placeholder — refused at boot on a cuda process, valued only by the
+        # re-calibration sitting under R282(b).
+        "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _eval_block(), "train": _train_block(**(train_over or {})),
         "selfplay": _selfplay_block(), "inference": _inference_block(),

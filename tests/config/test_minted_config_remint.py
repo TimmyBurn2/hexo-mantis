@@ -107,6 +107,12 @@ _POST_BASELINE_MINTS = (("shakedown_20260807.yaml", "dev"),)
 #: Exactly what this WP's re-mint may add — one key, one family of three leaves, one key.
 _ADDED_LEAVES = {
     "eval_enabled",
+    # RECAL-PREP (R308(g)(i)): the CUDA caching allocator's REGIME, minted `null` (R119's
+    # placeholder) in every config because the VALUE is a measurement the re-calibration
+    # sitting takes under R282(b) — never a dispatcher's act. An INSERTION in every one of the
+    # seven configs and a value nowhere, so both halves of this file's instrument stay live:
+    # the structural half sees exactly one added leaf, the textual half exactly one added line.
+    "allocator_posture",
     "monitor.disk_guard.interval_sec",
     "monitor.disk_guard.warn_gb",
     "monitor.disk_guard.fail_gb",

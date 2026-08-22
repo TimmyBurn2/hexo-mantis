@@ -268,10 +268,22 @@ def test_the_cwd_relative_default_is_gone(rel: str) -> None:
 
 
 def _minted_config() -> Any:
-    """The real minted run5 config — production parameters, not a hand-built stub (R155)."""
-    from mantis.config import load_config
+    """The real minted run5 config — production parameters, not a hand-built stub (R155).
 
-    return load_config(str(REPO_ROOT / "configs" / "smoke_gnn.yaml"))
+    RECAL-PREP (R308(g)(i)): the config mints `train.device: cuda`, so
+    `build_run_collaborators` now asserts the allocator posture before it builds the trainer —
+    and every committed config carries the R119 `null` placeholder, whose VALUE is the
+    re-calibration sitting's act under R282(b). The drive therefore states the regime it is
+    composing under, exactly as an operator's throwaway config does: `default` is what CI runs
+    in (no allocator configuration at all). Re-validated through the schema so every
+    cross-field validator still runs on the result.
+    """
+    from mantis.config import load_config
+    from mantis.config.schema import RunConfig
+
+    base = load_config(str(REPO_ROOT / "configs" / "smoke_gnn.yaml")).model_dump()
+    base["allocator_posture"] = "default"
+    return RunConfig.model_validate(base)
 
 
 def _tmp_out_dir() -> Path:

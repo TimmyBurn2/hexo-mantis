@@ -6,6 +6,7 @@ schema_version: 1
 run_id: sustained_kcluster
 seed: 20260720
 eval_enabled: true
+allocator_posture: null
 identity:
   encoding: v6_live2_ls
   representation: grid

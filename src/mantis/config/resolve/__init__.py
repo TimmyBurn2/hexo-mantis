@@ -5,6 +5,16 @@ train/eval cannot re-derive a knob divergently (CONTEXT bug-class #3). None of t
 torch (config → encoding, util only — DAG).
 """
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
+from mantis.config.resolve.allocator_posture import (
+    AllocatorPosture,
+    AllocatorPostureMismatchError,
+    AllocatorPostureSpec,
+    MissingAllocatorPostureError,
+    UncalibratedAllocatorPostureError,
+    assert_allocator_posture,
+    assert_posture_token,
+    resolve_allocator_posture,
+)
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.bootstrap import (
     BootstrapNotFoundError,
@@ -51,22 +61,30 @@ from mantis.config.resolve.run_length import resolve_max_train_steps
 __all__ = [
     "UNSPECIFIED",
     "AbsentEncodingError",
+    "AllocatorPosture",
+    "AllocatorPostureMismatchError",
+    "AllocatorPostureSpec",
     "BootstrapNotFoundError",
     "DrainCapsSpec",
     "DrawRateAbortSpec",
     "EncodingConflictError",
     "EncodingResolution",
     "FusedGraphCapsSpec",
+    "MissingAllocatorPostureError",
     "MissingFusedGraphCapsError",
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
+    "UncalibratedAllocatorPostureError",
     "UncalibratedFusedGraphCapsError",
     "UnvalidatedConfigError",
     "normalize_declared",
     "normalize_stamp",
+    "assert_allocator_posture",
+    "assert_posture_token",
     "reconcile_encoding",
     "require_run_config",
+    "resolve_allocator_posture",
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
     "resolve_bootstrap",

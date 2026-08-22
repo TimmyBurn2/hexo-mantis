@@ -83,6 +83,15 @@ from mantis.config.armed_aborts import (
 from mantis.config.emit import resolve_config
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
+from mantis.config.resolve.allocator_posture import (
+    assert_allocator_posture as _assert_allocator_posture,
+)
+from mantis.config.resolve.allocator_posture import (
+    declared_allocator_posture as _declared_allocator_posture,
+)
+from mantis.config.resolve.allocator_posture import (
+    governs_device as _posture_governs_device,
+)
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
 from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
 from mantis.config.resolve.disk_guard import resolve_disk_guard
@@ -480,6 +489,15 @@ def build_run_collaborators(
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device(config.train.device)
+    # RECAL-PREP / R308(g)(i): the allocator-posture assertion, BEFORE the first CUDA
+    # allocation and therefore before `init_trainer`. A cap is fitted under ONE allocator
+    # regime; running the same cap under the other is a memory partition measured for a
+    # machine state this process is not in, and the 2026-08-22 sitting measured that
+    # difference at 3.62 GiB of card high-water. It is placed HERE, at the composition root's
+    # one device site, for `seed_everything`'s reason one line up: both callers would
+    # otherwise have their own assertion site, and there is one site now. Non-cuda runs are
+    # not enforced and say so — no CUDA device, no CUDA caching allocator, no regime.
+    _assert_allocator_posture(config.model_dump(), device_type=device.type)
     with _seam("init_trainer"):
         # F-R-P2B-2: the trainer gets the SAME late-binding adapter shape the WorkerPool
         # below gets — `sink=None` here meant every trainer-side emission
@@ -870,6 +888,20 @@ def compose_run(
                     fused_graph_caps=(
                         resolve_fused_graph_caps(config.model_dump())
                         if config.identity.representation == "graph"
+                        else None
+                    ),
+                    # RECAL-PREP / R308(g)(i): the eval child is a SECOND allocator on the same
+                    # card, in its own process with its own CUDA context, so it asserts the
+                    # posture FOR ITSELF at round start — the parent's verdict says nothing
+                    # about the environment a hand-launched `python -m mantis.eval.worker`
+                    # runs in. THREADED here, not judged here: `declared_allocator_posture`
+                    # refuses a token outside the closed regime set and passes the R119
+                    # placeholder through, because this seam does not know the child's device
+                    # and the child does. `None` on the not-cuda arm, where there is no
+                    # caching allocator to govern.
+                    allocator_posture=(
+                        _declared_allocator_posture(config.model_dump())
+                        if _posture_governs_device(config.eval.worker_device)
                         else None
                     ),
                     run_id=run_id, spool_dir=log_dir / "eval_spool",

@@ -142,6 +142,10 @@ def _full_config(*, lr: float = 1e-3) -> dict:
     return {
         "schema_version": 1, "run_id": "resume_wiring", "seed": 20260725,
         "eval_enabled": True,
+        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
+        # placeholder — refused at boot on a cuda process, valued only by the
+        # re-calibration sitting under R282(b).
+        "allocator_posture": None,
         "identity": {"encoding": ENCODING, "representation": "grid"},
         "eval": _eval_block(),
         "train": _train_block(lr=lr),

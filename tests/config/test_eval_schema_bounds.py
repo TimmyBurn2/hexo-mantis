@@ -167,6 +167,10 @@ def _payload(**eval_overrides: Any) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
+        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
+        # placeholder — refused at boot on a cuda process, valued only by the
+        # re-calibration sitting under R282(b).
+        "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},

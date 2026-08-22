@@ -147,6 +147,18 @@ class RoundSpec:
     #: has no fused graph forward to bound, and `None` must round-trip as `None` rather than
     #: as a rehydration failure.
     fused_graph_caps: FusedGraphCapsSpec | None
+    #: The CUDA caching allocator REGIME the round's caps were fitted under (RECAL-PREP,
+    #: R308(g)(i)), as the config's own minted token. Here for `fused_graph_caps`' reason and
+    #: on the same seam: the child is a SECOND allocator on the same card, in its own process,
+    #: and a posture is a property of the PROCESS's environment — so the parent's boot
+    #: assertion says nothing about the child's, and the child has no `RunConfig` to resolve
+    #: against. `None` is the NOT-CUDA arm: a cpu eval child has no caching allocator to
+    #: govern. It is the one field on this dataclass carrying a DEFAULT, and the default is
+    #: safe for the reason `ArmedAbort.ceiling_path`'s is: the consumer REQUIRES a token
+    #: whenever `worker_device` is cuda and raises without one, so `None` can neither excuse
+    #: an assertion nor pass for a posture. What it buys is that a round spec built by a test
+    #: that has no opinion about allocators does not have to state one.
+    allocator_posture: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)

@@ -188,6 +188,14 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
         # WPMAIN/R120+R123: both are CONFIG facts now; `compose_run` has no parameter for
         # either, so the drive declares its posture where the config is built.
         eval_enabled=True, run_id="drain_wiring",
+        # RECAL-PREP (R308(g)(i)): this drive composes an eval pipeline for a config whose
+        # `eval.worker_device` is cuda, so `compose_run` asserts the allocator posture at
+        # boot — against the environment the spawn-context child would inherit. Every
+        # committed config mints the R119 `null` placeholder (the VALUE is the re-calibration
+        # sitting's act under R282(b)), so the drive states the regime it is composing under,
+        # exactly as an operator's throwaway config does. `default` is the regime CI runs in:
+        # no allocator configuration at all.
+        allocator_posture="default",
     )
     mantis.run.compose_run(
         config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),

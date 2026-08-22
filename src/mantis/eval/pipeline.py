@@ -36,6 +36,7 @@ from mantis.config.resolve.eval_posture import (
 )
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.eval.bt import fit_bt, predict_p
+from mantis.eval.child_memory import EVENT as EVAL_DEVICE_MEMORY_EVENT
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
@@ -236,6 +237,27 @@ def _classify_skip_reason(reason: str) -> str | None:
     return matched[0]
 
 
+def emit_device_memory(
+    sink: Any, *, round_id: str, step: int, device_memory: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Publish the CHILD's own device-memory readout (RECAL-PREP, R308(g)(ii)).
+
+    Emitted from the child's payload rather than from anything the parent measures: the term
+    this exists to bound is the child's, in the child's own process and CUDA context, and a
+    parent-side reading of it is exactly the substitute reading that has under-measured it
+    three times. Unconditional whenever the payload arrives — including the `available: false`
+    arm, where every counter is `null`. A reader must be able to tell "this round had no
+    counters" from "nobody looked", and dropping the unmeasured rounds would silently bias the
+    series a growth verdict is taken over.
+    """
+    payload = {
+        "event": EVAL_DEVICE_MEMORY_EVENT, "round_id": round_id, "step": step,
+        "device_memory": dict(device_memory),
+    }
+    _emit(sink, payload)
+    return payload
+
+
 def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink: Any) -> None:
     """Per skipped rung: an `eval_rung_skipped` event, an ERROR log line, AND — new in WP12-R
     Phase A — one `eval_rung_skip_class` counter event carrying the running per-class count.
@@ -353,6 +375,7 @@ class EvalPipeline:
         fused_graph_caps: FusedGraphCapsSpec | None,
         run_id: str,
         spool_dir: str | Path,
+        allocator_posture: str | None = None,
         ladder_state_path: str | Path,
         promotion: DeployTagHooks,
         sink: Any = None,
@@ -389,6 +412,13 @@ class EvalPipeline:
         #: nobody minted, standing in for the one the operator measured. `None` is the GRID
         #: arm, where there is no fused graph forward to bound.
         self._fused_graph_caps = fused_graph_caps
+        #: The allocator REGIME the round's caps were fitted under (RECAL-PREP, R308(g)(i)),
+        #: resolved ONCE in the parent and carried to every round's `RoundSpec`. Unlike
+        #: `fused_graph_caps` this one carries a DEFAULT, and the reason is stated rather than
+        #: convenient: the safety here is not "a value is present" but "a cuda child that was
+        #: handed no token RAISES" (`assert_posture_token`), so `None` cannot excuse an
+        #: assertion — it can only fail one. `None` is the not-cuda arm.
+        self._allocator_posture = allocator_posture
         self._run_id = run_id
         self._spool_dir = Path(spool_dir)
         self._spool_dir.mkdir(parents=True, exist_ok=True)
@@ -609,6 +639,10 @@ class EvalPipeline:
             # `RunConfig` and its `LocalInferenceEngine` builds its graph server from a
             # hand-made dict, so this is the only way the bound reaches the second allocator.
             fused_graph_caps=self._fused_graph_caps,
+            # Same seam, same reason: a posture is a property of the PROCESS environment, so
+            # the parent's boot assertion says nothing about the child's, and the child has no
+            # config to resolve one from.
+            allocator_posture=self._allocator_posture,
         )
         return spec, dict(alloc), run_gate, candidate_path
 
@@ -904,6 +938,12 @@ class EvalPipeline:
             games_total=games_total, promoted=result["promoted"], wr_sealbot=result["wr_sealbot"],
         )
         emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
+        device_memory = raw.get("device_memory")
+        if device_memory is not None:
+            emit_device_memory(
+                self._sink, round_id=inflight["round_id"], step=inflight["step"],
+                device_memory=device_memory,
+            )
         self._emit_posture_events(inflight, raw)
         return result
 
@@ -1005,6 +1045,7 @@ def build_eval_pipeline(
     spool_dir: str | Path,
     ladder_state_path: str | Path,
     promotion: DeployTagHooks,
+    allocator_posture: str | None = None,
     sink: Any = None,
     heartbeat: Callable[[str], None] | None = None,
     clock: Callable[[], float] = time.monotonic,
@@ -1016,6 +1057,7 @@ def build_eval_pipeline(
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, run_id=run_id,
+        allocator_posture=allocator_posture,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,
     )
@@ -1027,6 +1069,7 @@ __all__ = [
     "build_eval_pipeline",
     "drain_budget_sec",
     "drain_or_kill",
+    "emit_device_memory",
     "emit_ply_cap_adjudication",
     "emit_round_complete",
     "emit_round_skipped_busy",

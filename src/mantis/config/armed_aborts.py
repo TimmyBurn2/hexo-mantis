@@ -165,6 +165,22 @@ class Mechanism(StrEnum):
     #: path instead, so the ceiling is a value the operator already minted for the same
     #: quantity, it moves when the config moves, and `is_armed` stays a pure predicate.
     CONFIG_THRESHOLD_BELOW_CEILING = "config_threshold_below_ceiling"
+    #: RECAL-PREP / R308(g)(i). A TOKEN, not a number: armed iff the value is a non-empty
+    #: string. Its subject is `allocator_posture`, whose value is a member of a closed regime
+    #: set or the R119 `null` placeholder.
+    #:
+    #: Why a fourth member rather than reusing one of the three above: all three read NUMBERS.
+    #: `CONFIG_THRESHOLD_GT_ZERO` answers False for `"default"` — `_is_real_number` rejects a
+    #: str — so a correctly minted posture would report DISARMED forever, which is the
+    #: "armed in the config, absent in the audit" defect this manifest exists to make visible,
+    #: pointing the other way. A predicate that cannot see its own subject is not a predicate.
+    #:
+    #: Why the closed SET is not enumerated here: it lives in the schema `Literal` and in
+    #: `mantis.config.resolve.allocator_posture`, and duplicating it would be a second
+    #: authority over which regimes exist — the same reason `ceiling_path` is DATA on the row
+    #: rather than a literal in this enum. This member answers exactly one question ("is a
+    #: value minted here, or is this the placeholder"), which is what the audit needs.
+    CONFIG_ENUM_VALUED = "config_enum_valued"
 
     def is_armed(self, value: Any, *, ceiling: Any = None) -> bool:
         """True iff `value` arms the abort. A real predicate in BOTH directions — a
@@ -183,6 +199,12 @@ class Mechanism(StrEnum):
         """
         if self is Mechanism.CONFIG_BOOL:
             return value is True
+        if self is Mechanism.CONFIG_ENUM_VALUED:
+            # `bool` is excluded before `str` is tested only for symmetry with the numeric
+            # branches below; a bool is not a str, so this is a statement of intent rather
+            # than a live guard. `""` is DISARMED: an empty token is the placeholder wearing
+            # a different spelling.
+            return isinstance(value, str) and value != ""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return False
         if self is Mechanism.CONFIG_THRESHOLD_BELOW_CEILING:
@@ -1168,6 +1190,56 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "resolver's own refusal, so deleting it, renaming the error or softening the null "
             "check to a default all break the R56 scan rather than the cap silently becoming "
             "absent-and-unbounded while still reporting as present."
+        ),
+    ),
+    ArmedAbort(
+        name="allocator_posture_minted",
+        config_path="allocator_posture",
+        mechanism=Mechanism.CONFIG_ENUM_VALUED,
+        # The rule runs at CONSTRUCTION -- the assertion fires in the run process's builder
+        # and in the eval child's first statement -- so it consumes no operands: there is no
+        # threshold to accumulate and no window to fill, only a value that is minted or is
+        # `null`. Declared on a DEFERRED row for `fused_graph_caps_calibrated`'s reason: the
+        # flip to REQUIRED must stay the one-field data edit S8.5 claims it is.
+        cadence=Cadence.CONSTRUCTION_TIME,
+        cadence_paths=(),
+        status=Status.DEFERRED,
+        exit_code=None,
+        owner="the re-calibration sitting (R308(g)(i)); architect ratifies at its mint",
+        source_pin=(
+            "src/mantis/config/resolve/allocator_posture.py",
+            "raise UncalibratedAllocatorPostureError(",
+        ),
+        note=(
+            "THE ALLOCATOR REGIME THE CAPS ARE FITTED UNDER. `PYTORCH_CUDA_ALLOC_CONF` "
+            "changes the reserved/allocated ratio the whole memory partition divides by: the "
+            "2026-08-22 re-calibration sitting measured 14.98 GiB of card high-water under "
+            "DEFAULT against 11.36 under `expandable_segments:True`, same config, same host, "
+            "same duration. It kept DEFAULT anyway -- and the reason was governance, not the "
+            "measurement: a cap fitted under the better posture would have depended on an "
+            "environment variable that no config minted, no gate checked and NO ROW HERE "
+            "COVERED. This row is the third of those three. "
+            "DEFERRED, and the reason is the one this manifest keeps meeting: the VALUE is a "
+            "MEASUREMENT nobody has taken. R308(g)(i) reserves it for the re-calibration "
+            "sitting under R282(b), so flipping this REQUIRED now would gate every push on a "
+            "regime this repo would have to invent -- the class R84 refused when it ratified "
+            "exit_code=None rather than fabricating a 46. A DEFERRED row prints loudly on "
+            "every gate-12 run and gates nothing, which is exactly the posture for a live "
+            "refusal whose value is owed. "
+            "WHY THE ROW EXISTS AT ALL, given the refusal is already run-fatal: the refusal "
+            "fires when a cuda process starts, and gate 12 runs on every push. The row is "
+            "what makes an unminted production posture AUDIBLE in CI instead of discovered by "
+            "a boot at the box. `CONFIG_ENUM_VALUED` reads the R119 `null` placeholder as "
+            "DISARMED, which is the truth, and any member of the closed regime set as ARMED. "
+            "exit_code is None, truthfully: this is a CONSTRUCTION-TIME refusal on the "
+            "`UncalibratedFusedGraphCapsError` shape, not a `_fire_hard_abort` rule. "
+            "TO CLOSE THIS ROW: decide the posture at the box (the procedure's STEP 1b), mint "
+            "it into every production config IN THE SAME ACT as the caps it is fitted under -- "
+            "the posture and the pair are one regime and a config carrying one without the "
+            "other describes a machine state nobody measured -- and flip status to REQUIRED, "
+            "dropping `owner` as the dataclass then demands. The pin binds the resolver's own "
+            "placeholder refusal, so deleting it, renaming the error or softening the null "
+            "check to a default all break the R56 scan."
         ),
     ),
 )

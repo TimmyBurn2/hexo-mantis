@@ -674,6 +674,12 @@ def strip_and_restamp(
         # artifact never boots a run, so this is zero-behaviour placeholder posture — the
         # same one the pre-existing seed=0 / run_id=<caller> placeholders carry.
         "eval_enabled": True,
+        # RECAL-PREP / R308(g)(i): `allocator_posture` is a REQUIRED top-level key. `None` —
+        # R119's PLACEHOLDER — is the correct value here and is not a placeholder-by-default:
+        # the posture is a property of the RUN the caps were fitted for, and a stripped
+        # artifact belongs to no run and boots none. Minting a token would state a regime this
+        # payload was never measured under, which is the one thing R308(g)(i) reserves.
+        "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
         # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
         # This synthetic config exists only to satisfy the schema-validate-on-write gate
