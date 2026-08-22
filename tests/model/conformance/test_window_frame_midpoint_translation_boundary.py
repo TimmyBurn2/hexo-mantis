@@ -175,6 +175,36 @@ def require_matrix(executed: frozenset, expected: frozenset) -> None:
         )
 
 
+def require_every_declared_frame_executed(specs, executed: frozenset) -> int:
+    """The matrix's SECOND side, and the only one `frames_for` does not produce.
+
+    `require_matrix` compares `derived_frame_matrix` against the pairs `run_frame_assertions`
+    executed, and BOTH enumerate `frames_for`: a branch there that drops a frame shrinks the
+    two sides together and the comparison stays green while the dropped frame's every
+    assertion silently stops running. That is a comparison whose two sides come from one
+    source — the failure class this suite exists to refuse, arriving inside it.
+
+    This side does not call `frames_for`. It states the claim where it is asserted: the two
+    dense frames exist for every registered encoding, and the graph frame exists exactly for
+    the encodings whose spec says `is_graph` (`HexgBuffer::new` refuses a grid encoding by
+    construction, `crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`).
+    """
+    missing: list[tuple[str, str]] = []
+    for spec in specs:
+        for frame in (FRAME_DENSE_CLUSTER, FRAME_DENSE_BOARD):
+            if (spec.name, frame) not in executed:
+                missing.append((spec.name, frame))
+        if spec.is_graph and (spec.name, FRAME_GRAPH) not in executed:
+            missing.append((spec.name, FRAME_GRAPH))
+    if missing:
+        raise FrameMatrixMismatch(
+            f"frames declared by the specs but never executed: {sorted(missing)}. Every "
+            "registered encoding carries both dense frames and every is_graph encoding carries "
+            "the graph frame; a frame that no assertion reached is reported by pytest as PASSED."
+        )
+    return len(executed)
+
+
 def require_cross_arm(enc: str, dense: tuple[int, int], graph: tuple[int, int]) -> None:
     if dense != graph:
         raise CrossArmDisagreement(
@@ -236,7 +266,22 @@ def test_the_executed_frame_matrix_equals_the_matrix_derived_from_the_specs(deri
     derived("t1.frame_matrix", sorted(executed))
     derived("t1.frame_matrix.cardinality", len(executed))
     require_matrix(executed, expected)
+    require_every_declared_frame_executed(specs, executed)
     assert len(executed) > 0
+
+
+def test_a_DECLARED_frame_that_never_executes_is_refused():
+    """PB-X3. The break `require_matrix` structurally cannot see, driven through the gate's own
+    helper: with the graph pairs removed, the one-source comparison is still satisfiable while
+    the declared-frame side names exactly what stopped running."""
+    specs = roster()
+    assert [s for s in specs if s.is_graph], "no graph encoding — this control has no subject"
+    full = derived_frame_matrix(specs)
+    assert require_every_declared_frame_executed(specs, full) == len(full)
+    dropped = frozenset(pair for pair in full if pair[1] != FRAME_GRAPH)
+    require_matrix(dropped, dropped)  # a `frames_for` that drops the frame shrinks both sides
+    with pytest.raises(FrameMatrixMismatch, match="never executed"):
+        require_every_declared_frame_executed(specs, dropped)
 
 
 def test_the_dense_board_and_graph_arms_report_the_SAME_origin(derived):
