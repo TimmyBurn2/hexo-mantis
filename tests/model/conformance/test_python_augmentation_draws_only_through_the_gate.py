@@ -62,7 +62,7 @@ ARCH_SYMBOLS = frozenset({"ModelArch", "CnnArch", "GnnArch", "ArchCaps", "arch_f
 ARCH_MODULES = ("mantis.model.arch",)
 
 _TRANSFORM_METHODS = frozenset(
-    {"astype", "tolist", "ravel", "flatten", "reshape", "copy", "item", "squeeze", "tolist"}
+    {"astype", "tolist", "ravel", "flatten", "reshape", "copy", "item", "squeeze"}
 )
 _TRANSFORM_FUNCTIONS = frozenset({"int", "list", "tuple", "asarray", "array", "int64", "intp"})
 
