@@ -60,6 +60,13 @@ GATE_MODULE = "mantis.data.augment"
 GATE_FUNCTIONS = ("draw_record_syms", "draw_window_preserving_syms")
 SCATTER_FACTORY = "get_policy_scatters"
 ENGINE_SINK = "apply_symmetries_batch"
+#: The engine's own parameter name for the index operand
+#: (`crates/mantis-bridge/src/utils.rs:46`). It is here because the operand is a POSITION only
+#: until someone passes it by keyword, which the engine accepts and which ruff and pyright
+#: accept: `apply_symmetries_batch(states, sym_indices=np.random.randint(0, 12, size=n))` is a
+#: working ungated draw that a positional-only reader records as no sink at all.
+ENGINE_SINK_INDEX_PARAM = "sym_indices"
+ENGINE_SINK_KIND = "apply_symmetries_batch.index_operand"
 GRAPH_SINK = "sample_graph_batch"
 #: Arch / capability symbols that may not be imported into the augmentation path (clause ii).
 ARCH_SYMBOLS = frozenset({"ModelArch", "CnnArch", "GnnArch", "ArchCaps", "arch_from_spec_and_config"})
@@ -83,6 +90,10 @@ _TRANSFORM_FUNCTIONS = frozenset({"int", "list", "tuple", "asarray", "array", "i
 
 class UngatedSymmetryDraw(ConformanceRefusal):
     """A D6 element reaches a symmetry application without coming through the per-record gate."""
+
+
+class UnclassifiableSink(ConformanceRefusal):
+    """A symmetry application was found whose index operand this census cannot locate."""
 
 
 class EmptyAugmentationCensus(ConformanceRefusal):
@@ -185,6 +196,22 @@ class ModuleFacts:
         return False
 
 
+def _engine_sink_operand(node: ast.Call) -> ast.expr | None:
+    """The per-row index operand of an engine sink call, by POSITION or by KEYWORD.
+
+    `len(node.args) >= 2` used to be a precondition of recording the sink at all, so a call
+    with one positional and one keyword argument recorded NO sink — the census cardinality went
+    6 to 5 and nothing compared it, while the call itself works at runtime.
+    """
+    for keyword in node.keywords:
+        if keyword.arg == ENGINE_SINK_INDEX_PARAM:
+            return keyword.value
+    positional = node.args
+    if len(positional) >= 2 and not any(isinstance(a, ast.Starred) for a in positional[:2]):
+        return positional[1]
+    return None
+
+
 def _callee_name(func: ast.expr) -> str:
     if isinstance(func, ast.Name):
         return func.id
@@ -267,10 +294,20 @@ def module_sinks(facts: ModuleFacts) -> list[tuple[str, int, str, bool]]:
             is_engine_sink = (
                 isinstance(callee, ast.Name) and callee.id in facts.engine_sink_names
             ) or (isinstance(callee, ast.Attribute) and callee.attr == ENGINE_SINK)
-            if is_engine_sink and len(node.args) >= 2:
+            if is_engine_sink:
+                operand = _engine_sink_operand(node)
+                if operand is None:
+                    raise UnclassifiableSink(
+                        f"{facts.path}:{node.lineno}: a call to {ENGINE_SINK} was found whose "
+                        f"`{ENGINE_SINK_INDEX_PARAM}` operand this census cannot locate (a "
+                        "splat, or a spelling not modelled here). The census REFUSES rather "
+                        "than skipping it: a sink dropped for being unreadable is a sink that "
+                        "disappears from the number a reader takes for coverage, which is "
+                        "exactly what a positional-only reader did with the keyword form."
+                    )
                 sinks.append(
-                    ("apply_symmetries_batch.arg2", node.lineno, "engine batch symmetry apply",
-                     resolves_to_gate(node.args[1], facts))
+                    (ENGINE_SINK_KIND, node.lineno, "engine batch symmetry apply",
+                     resolves_to_gate(operand, facts))
                 )
                 continue
             if _callee_name(callee) == GRAPH_SINK:
@@ -435,9 +472,54 @@ def test_an_ALIASED_engine_sink_fed_an_UNGATED_index_still_fires(tmp_path):
         "    return _asb(states, sym.tolist())\n",
     )
     _draws, sinks = census(root)
-    assert [s[2] for s in sinks] == ["apply_symmetries_batch.arg2 — engine batch symmetry apply"]
+    assert [s[2] for s in sinks] == [f"{ENGINE_SINK_KIND} — engine batch symmetry apply"]
     with pytest.raises(UngatedSymmetryDraw):
         require_all_gated(sinks)
+
+
+def test_the_engine_sink_whose_index_is_passed_by_KEYWORD_is_STILL_a_sink(tmp_path):
+    """F-RT-4. The form was planted in the real `train/batch_assembly.py`, ran correctly against
+    the engine, passed ruff and pyright, and the whole conformance suite reported 101 passed
+    while the sink census went 6 to 5. A sink that is not recorded is not a sink that is gated;
+    it is one nothing was asked about."""
+    root = _tree(
+        tmp_path,
+        "import numpy as np\n"
+        "from mantis._engine import apply_symmetries_batch as _asb\n"
+        "def go(states, n):\n"
+        "    return _asb(states, sym_indices=np.random.randint(0, 12, size=n).tolist())\n",
+    )
+    _draws, sinks = census(root)
+    assert [s[2] for s in sinks] == [f"{ENGINE_SINK_KIND} — engine batch symmetry apply"]
+    with pytest.raises(UngatedSymmetryDraw):
+        require_all_gated(sinks)
+
+
+def test_a_GATED_index_passed_by_KEYWORD_does_NOT_fire(tmp_path):
+    """The negative half. A reader widened until every keyword call fires is measuring the
+    spelling, not the provenance."""
+    root = _tree(
+        tmp_path,
+        _GATE_IMPORT + "from mantis._engine import apply_symmetries_batch as _asb\n"
+        "def go(states, mask):\n"
+        "    sym = draw_record_syms(mask)\n"
+        "    return _asb(states, sym_indices=sym.tolist())\n",
+    )
+    _draws, sinks = census(root)
+    assert len(sinks) == 1 and sinks[0][3] is True, sinks
+
+
+def test_an_engine_sink_whose_INDEX_OPERAND_cannot_be_LOCATED_is_REFUSED(tmp_path):
+    """Derive-or-refuse. The alternative — skipping the call — is how the keyword form vanished
+    without a single assertion noticing."""
+    root = _tree(
+        tmp_path,
+        "from mantis._engine import apply_symmetries_batch as _asb\n"
+        "def go(states, args):\n"
+        "    return _asb(states, *args)\n",
+    )
+    with pytest.raises(UnclassifiableSink, match="cannot locate"):
+        census(root)
 
 
 def test_a_DECOY_gate_defined_locally_does_NOT_satisfy_the_rule(tmp_path):
