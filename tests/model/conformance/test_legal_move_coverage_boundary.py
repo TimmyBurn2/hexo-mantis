@@ -95,6 +95,10 @@ class NoWitnessConstructed(ConformanceRefusal):
     """No position outside the boundary was constructed, so its property was never asserted."""
 
 
+class BoundaryNotWhereDerived(ConformanceRefusal):
+    """The first position OUTSIDE the derived boundary covers every legal move after all."""
+
+
 class DensePartitionRefused(ConformanceRefusal):
     """A multi-centre or stoneless position was injected into the single-cluster dense arm."""
 
@@ -294,6 +298,22 @@ def require_witness(outside: list[int], enc: str) -> int:
     return outside[0]
 
 
+def require_uncovered_at_witness(holes: list[tuple[int, int]], enc: str, span: int) -> int:
+    """The witness's own refusal, behind a helper so a planted break can DRIVE it (R-O1).
+
+    It was an inline `assert` in the gate, which left PB-36 — the permissive coverage stand-in —
+    able to show only that the stand-in reports no holes. "And therefore the tier reds" was an
+    inference about code the break never executed. It executes now.
+    """
+    if not holes:
+        raise BoundaryNotWhereDerived(
+            f"{enc}: the first position outside the boundary (span={span}) covers every legal "
+            "move, so the boundary is not where the tier says it is — or the coverage fact came "
+            "from something more permissive than the engine's own to_flat."
+        )
+    return len(holes)
+
+
 def require_dense_partition(board: Board, ctx: str) -> tuple[int, int]:
     """PB-40. Single-cluster and stone-bearing, verified FROM THE ENGINE; anything else is
     refused rather than silently compared."""
@@ -381,10 +401,7 @@ def test_the_FIRST_position_outside_the_boundary_is_a_named_WITNESS(spec, derive
     holes = uncovered_legal_moves(board)
     derived(f"t4.dense.witness_span.{spec.name}", span)
     derived(f"t4.dense.witness_uncovered.{spec.name}", len(holes))
-    assert holes, (
-        f"{spec.name}: the first position outside the boundary (span={span}) covers every legal "
-        "move, so the boundary is not where the tier says it is"
-    )
+    require_uncovered_at_witness(holes, spec.name, span)
 
 
 def test_an_EMPTY_inside_partition_is_refused():
@@ -497,6 +514,10 @@ def test_a_PERMISSIVE_coverage_stand_in_REDS_the_tier():
             return 0
 
     assert uncovered_legal_moves(EverythingInWindow(board)) == []
+    with pytest.raises(BoundaryNotWhereDerived, match="more permissive"):
+        require_uncovered_at_witness(
+            uncovered_legal_moves(EverythingInWindow(board)), spec.name, outside[0]
+        )
 
 
 # --------------------------------------------------------------------------------------- #
