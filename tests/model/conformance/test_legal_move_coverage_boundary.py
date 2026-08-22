@@ -272,6 +272,28 @@ def test_an_EMPTY_stone_bearing_graph_partition_is_refused():
 # --------------------------------------------------------------------------------------- #
 # DENSE ARM — the two-sided derived boundary
 # --------------------------------------------------------------------------------------- #
+def require_inside_partition(count: int, enc: str) -> int:
+    """PB-37. If the strictly-inside partition is empty the positive half of the dense gate
+    asserts nothing and only the witness runs — a gate with nothing inside it."""
+    if count <= 0:
+        raise EmptyCoveragePartition(
+            f"{enc}: the strictly-inside partition is EMPTY, so the positive half of this gate "
+            "asserts nothing and only the witness would run."
+        )
+    return count
+
+
+def require_witness(outside: list[int], enc: str) -> int:
+    """PB-38. A witness that was never constructed is an assertion that never ran, so "no
+    witness" is a FAILURE with its own message rather than a quietly skipped clause."""
+    if not outside:
+        raise NoWitnessConstructed(
+            f"{enc}: no position outside the derived boundary was constructed, so the "
+            "boundary's other side was never asserted."
+        )
+    return outside[0]
+
+
 def require_dense_partition(board: Board, ctx: str) -> tuple[int, int]:
     """PB-40. Single-cluster and stone-bearing, verified FROM THE ENGINE; anything else is
     refused rather than silently compared."""
@@ -333,11 +355,7 @@ def test_dense_coverage_holds_strictly_inside_the_derived_boundary(spec, derived
     inside, outside = dense_scan(spec.name)
     derived(f"t4.dense.inside_spans.{spec.name}", inside)
     derived(f"t4.dense.outside_spans.{spec.name}", outside)
-    if not inside:
-        raise EmptyCoveragePartition(
-            f"{spec.name}: the strictly-inside partition is EMPTY, so the positive half of this "
-            "gate asserts nothing and only the witness would run."
-        )
+    require_inside_partition(len(inside), spec.name)
     for span in inside:
         board = build_board(spec.name, dense_line_position(span))
         require_dense_partition(board, f"{spec.name} span={span}")
@@ -357,12 +375,7 @@ def test_the_FIRST_position_outside_the_boundary_is_a_named_WITNESS(spec, derive
     """PB-38. "No witness constructed" is a FAILURE with its own message — a witness that was
     never built is an assertion that never ran."""
     _inside, outside = dense_scan(spec.name)
-    if not outside:
-        raise NoWitnessConstructed(
-            f"{spec.name}: no position outside the derived boundary was constructed, so the "
-            "boundary's other side was never asserted."
-        )
-    span = outside[0]
+    span = require_witness(outside, spec.name)
     board = build_board(spec.name, dense_line_position(span))
     require_dense_partition(board, f"{spec.name} witness span={span}")
     holes = uncovered_legal_moves(board)
@@ -372,6 +385,24 @@ def test_the_FIRST_position_outside_the_boundary_is_a_named_WITNESS(spec, derive
         f"{spec.name}: the first position outside the boundary (span={span}) covers every legal "
         "move, so the boundary is not where the tier says it is"
     )
+
+
+def test_an_EMPTY_inside_partition_is_refused():
+    """PB-37's break, through the same helper the dense gate calls."""
+    spec = next(s for s in roster() if not s.is_graph)
+    inside, _outside = dense_scan(spec.name)
+    assert require_inside_partition(len(inside), spec.name) > 0
+    with pytest.raises(EmptyCoveragePartition, match="strictly-inside"):
+        require_inside_partition(0, spec.name)
+
+
+def test_a_MISSING_witness_is_refused():
+    """PB-38's break: "no witness constructed" must be a named failure, not a silent pass."""
+    spec = next(s for s in roster() if not s.is_graph)
+    _inside, outside = dense_scan(spec.name)
+    assert require_witness(outside, spec.name) == outside[0]
+    with pytest.raises(NoWitnessConstructed, match="never asserted"):
+        require_witness([], spec.name)
 
 
 def test_the_boundary_is_a_function_of_the_ENGINE_reported_S_and_R():
