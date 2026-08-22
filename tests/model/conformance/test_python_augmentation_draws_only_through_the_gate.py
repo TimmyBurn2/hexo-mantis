@@ -21,11 +21,31 @@ pure element-wise transforms (`.astype`, `.tolist`, `int(...)`, `np.asarray`, a 
 it), to its definition, which must be a call to `draw_record_syms` or
 `draw_window_preserving_syms`. NOT COVERED, stated: an index arriving as a parameter from
 another module, one round-tripped through a container the walk does not model, one
-reconstructed from a file/config/checkpoint, and anything outside `src/mantis/**/*.py`.
+reconstructed from a file/config/checkpoint, and anything outside `src/mantis/**/*.py`. An
+in-place overwrite performed BY A CALL — `np.copyto`, `.fill`, `np.put`, `out=` — used to be
+in that list without being in the sentence, and is now inside the walk: it leaves the name
+bound to the gate call, so a walk that recorded only stores kept resolving it to the gate. The
+method arm is DEFAULT-UNSAFE: a method outside the pure-transform set this census models
+counts as a write, because under-recording buys a green that means nothing.
 
 THE GATE IS IDENTIFIED BY ITS IMPORT EDGE TO `mantis.data.augment`, NEVER BY BARE NAME.
 Without the edge any module could define `def draw_record_syms(...): return
 np.random.randint(0, 12, n)` and pass; the decoy control below plants exactly that.
+
+THE GATE'S ARGUMENT IS CHECKED, NOT ONLY ITS IDENTITY. Proving an element CAME THROUGH
+`draw_record_syms` says nothing about what the gate was handed, and
+`draw_record_syms(np.zeros(n, dtype=bool))` sends every row down `augment.py`'s
+`full = np.random.randint(0, 12, size=n)` branch — the uniform-over-12 label noise this tier's
+own refusal message names, produced BY the gate, from a line whose stated motive is that the
+mask is a full-batch scan. So the mask operand of every `draw_record_syms` call must itself
+resolve to `spread_mask`, through the SAME import edge and the SAME reaching-definitions walk.
+`draw_window_preserving_syms` takes a row count rather than a mask and the rule does not apply
+to it; how many calls the rule APPLIED to is a derived output, so a census carrying no masked
+call cannot read as a clean mask check. RESIDUE: a `spread_mask` fed falsified channels is
+inside the rule's letter and outside its spirit, and this census cannot tell them apart — the
+behavioural oracle `tests/train/test_window_preserving_dense_draw.py` is what covers that, at
+both production sites, and naming it here is a statement of where the coverage lives, not a
+claim that this tier has it.
 
 THE SINK IS AN ARGUMENT POSITION THAT RECEIVES A PER-ROW D6 ELEMENT — three of them, structural:
 `apply_symmetries_batch` argument 2 (both the bare-`Name` and the `Attribute` call forms are
@@ -58,6 +78,14 @@ from _corpus import ConformanceRefusal
 SRC = Path(__file__).resolve().parents[3] / "src" / "mantis"
 GATE_MODULE = "mantis.data.augment"
 GATE_FUNCTIONS = ("draw_record_syms", "draw_window_preserving_syms")
+#: The gate function whose argument IS a per-row spread mask. `draw_window_preserving_syms`
+#: takes a row COUNT, so the mask rule below does not apply to it and says so rather than
+#: pretending to cover it.
+MASKED_GATE = "draw_record_syms"
+#: The mask producer, identified by the SAME import edge as the gate itself
+#: (`mantis.data.augment.spread_mask`). Without the edge, a local `def spread_mask` satisfies
+#: the rule by spelling.
+MASK_FUNCTION = "spread_mask"
 SCATTER_FACTORY = "get_policy_scatters"
 ENGINE_SINK = "apply_symmetries_batch"
 #: The engine's own parameter name for the index operand
@@ -99,6 +127,10 @@ class UngatedSymmetryDraw(ConformanceRefusal):
     """A D6 element reaches a symmetry application without coming through the per-record gate."""
 
 
+class MaskNotDerivedFromSpreadMask(ConformanceRefusal):
+    """The gate was handed a mask that does not come from `spread_mask`."""
+
+
 class UnclassifiableSink(ConformanceRefusal):
     """A symmetry application was found whose index operand this census cannot locate."""
 
@@ -118,6 +150,7 @@ class ModuleFacts:
         self.path = path
         self.tree = tree
         self.gate_names: set[str] = set()
+        self.mask_names: set[str] = set()
         self.gate_module_aliases: set[str] = set()
         self.engine_sink_names: set[str] = set()
         self.arch_imports: list[str] = []
@@ -134,6 +167,8 @@ class ModuleFacts:
                     bound = alias.asname or alias.name
                     if module == GATE_MODULE and alias.name in GATE_FUNCTIONS:
                         self.gate_names.add(bound)
+                    if module == GATE_MODULE and alias.name == MASK_FUNCTION:
+                        self.mask_names.add(bound)
                     if alias.name == ENGINE_SINK:
                         self.engine_sink_names.add(bound)
                     if module in ARCH_MODULES or alias.name in ARCH_SYMBOLS:
@@ -229,6 +264,17 @@ class ModuleFacts:
             )
         return isinstance(inner, ast.Call) and _callee_name(inner.func) == SCATTER_FACTORY
 
+    def is_mask_call(self, node: ast.expr) -> bool:
+        """A call to `spread_mask` as imported from the gate module, or as `augment.spread_mask`."""
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        if isinstance(func, ast.Name):
+            return func.id in self.mask_names
+        if isinstance(func, ast.Attribute) and func.attr == MASK_FUNCTION:
+            return isinstance(func.value, ast.Name) and func.value.id in self.gate_module_aliases
+        return False
+
     def is_gate_call(self, node: ast.expr) -> bool:
         if not isinstance(node, ast.Call):
             return False
@@ -281,28 +327,53 @@ def _strip_transforms(node: ast.expr) -> ast.expr:
     return current
 
 
-def resolves_to_gate(node: ast.expr, facts: ModuleFacts, depth: int = 0) -> bool:
-    """Backwards reaching-definitions: does this expression come from a gate call?
+def resolves_to(node: ast.expr, facts: ModuleFacts, origin: str, depth: int = 0) -> bool:
+    """Backwards reaching-definitions: does this expression come from `origin`?
 
-    EVERY definition of a name must resolve to the gate, not merely one — a name whose second
-    definition is an ungated draw is an escape hatch, not an ambiguity.
+    EVERY definition of a name must resolve to the origin, not merely one — a name whose second
+    definition is an ungated draw is an escape hatch, not an ambiguity. `origin` selects the
+    producer being traced: the GATE for an applied index, `spread_mask` for the mask the gate
+    is handed. One walk, two subjects, so a fix to the walk reaches both.
     """
     if depth > 12:
         return False
+    matches = facts.is_gate_call if origin == "gate" else facts.is_mask_call
     current = _strip_transforms(node)
-    if facts.is_gate_call(current):
+    if matches(current):
         return True
     if isinstance(current, ast.Subscript):
-        return resolves_to_gate(current.value, facts, depth + 1)
+        return resolves_to(current.value, facts, origin, depth + 1)
     if isinstance(current, ast.Name):
         values = facts.definitions.get(current.id)
         if not values:
             return False
-        return all(resolves_to_gate(v, facts, depth + 1) for v in values)
+        return all(resolves_to(v, facts, origin, depth + 1) for v in values)
     if isinstance(current, ast.Call) and isinstance(current.func, ast.Attribute):
         if current.func.attr == "where" and len(current.args) == 1:
-            return resolves_to_gate(current.args[0], facts, depth + 1)
+            return resolves_to(current.args[0], facts, origin, depth + 1)
     return False
+
+
+def resolves_to_gate(node: ast.expr, facts: ModuleFacts, depth: int = 0) -> bool:
+    return resolves_to(node, facts, "gate", depth)
+
+
+def mask_provenance(node: ast.Call, facts: ModuleFacts) -> bool | None:
+    """`True`/`False` for a masked gate call's mask operand; `None` when the rule does not apply.
+
+    T2b proved a D6 element CAME THROUGH the gate and never looked at what the gate was handed.
+    `draw_record_syms(np.zeros(n, dtype=bool))` sends every row down `augment.py`'s
+    `full = np.random.randint(0, 12, size=n)` branch — the uniform-over-12 label noise this
+    tier's own refusal message describes, produced BY the gate, with a perfectly ordinary
+    motive ("the spread mask is a full-batch scan"). The stated NOT-COVERED list did not name
+    it and a reader of that list would not have predicted it.
+    """
+    if _callee_name(node.func) != MASKED_GATE:
+        return None
+    operand = node.args[0] if node.args else next(
+        (kw.value for kw in node.keywords if kw.arg is not None), None
+    )
+    return False if operand is None else resolves_to(operand, facts, "mask")
 
 
 def _is_per_row_index(node: ast.expr, facts: ModuleFacts) -> bool:
@@ -387,17 +458,21 @@ def module_sinks(facts: ModuleFacts) -> list[tuple[str, int, str, bool]]:
     return sinks
 
 
-def census(root: Path) -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str, bool]]]:
+def census(
+    root: Path,
+) -> tuple[list[tuple[str, int, str, bool | None]], list[tuple[str, int, str, bool]]]:
     """`(draws, sinks)` over every `*.py` under `root`. Root-parameterised so every planted
     break below is constructible against the SAME walk the gate runs."""
-    draws: list[tuple[str, int, str]] = []
+    draws: list[tuple[str, int, str, bool | None]] = []
     sinks: list[tuple[str, int, str, bool]] = []
     for path in sorted(root.rglob("*.py")):
         facts = ModuleFacts(path, ast.parse(path.read_text(encoding="utf-8")))
         rel = path.relative_to(root).as_posix()
         for node in ast.walk(facts.tree):
             if facts.is_gate_call(node):
-                draws.append((rel, node.lineno, _callee_name(node.func)))
+                draws.append(
+                    (rel, node.lineno, _callee_name(node.func), mask_provenance(node, facts))
+                )
         for kind, line, desc, gated in module_sinks(facts):
             sinks.append((f"{rel}:{line}", line, f"{kind} — {desc}", gated))
     return draws, sinks
@@ -443,6 +518,21 @@ def require_no_arch_imports(root: Path) -> int:
     return len(augmentation_path_modules(root))
 
 
+def require_gate_masks(draws: list[tuple[str, int, str, bool | None]]) -> int:
+    """Every masked gate call is handed a mask that comes from `spread_mask`. Returns how many
+    calls the rule APPLIED to, so a census of nothing-but-`draw_window_preserving_syms` cannot
+    read as a clean mask check."""
+    ungrounded = [f"{d[0]}:{d[1]}" for d in draws if d[3] is False]
+    if ungrounded:
+        raise MaskNotDerivedFromSpreadMask(
+            f"{MASKED_GATE} is handed a mask that does not come from {GATE_MODULE}."
+            f"{MASK_FUNCTION} at: {ungrounded}. The gate's IDENTITY is not the whole property: "
+            "an all-False mask makes every row take the uniform-over-12 branch, which is the "
+            "label noise this tier's own refusal describes, produced by the gate itself."
+        )
+    return len([d for d in draws if d[3] is not None])
+
+
 def require_all_gated(sinks: list[tuple[str, int, str, bool]]) -> None:
     ungated = [f"{s[0]} ({s[2]})" for s in sinks if not s[3]]
     if ungated:
@@ -461,6 +551,7 @@ def test_every_per_row_D6_element_applied_in_src_comes_through_the_gate(derived)
     draws, sinks = census(SRC)
     derived("t2b.draw_sites", [f"{d[0]}:{d[1]}" for d in draws])
     derived("t2b.draw_census.cardinality", require_non_empty(draws, "draw"))
+    derived("t2b.mask_checked_draws", require_gate_masks(draws))
     derived("t2b.sink_sites", [f"{s[0]} {s[2]}" for s in sinks])
     derived("t2b.sink_census.cardinality", require_non_empty(sinks, "sink"))
     kinds: dict[str, int] = {}
@@ -693,6 +784,67 @@ def test_a_PURE_TRANSFORM_on_the_gate_drawn_array_does_NOT_fire(tmp_path):
     )
     _draws, sinks = census(root)
     assert len(sinks) == 1 and sinks[0][3] is True, sinks
+
+
+def test_a_CONSTANT_FALSE_mask_handed_to_the_gate_FIRES(tmp_path):
+    """F-RT-6, planted in the real `train/batch_assembly.py` with the comment a real diff would
+    carry. Every row takes the uniform branch; the gate's identity is untouched and 101 tests
+    passed."""
+    root = _tree(
+        tmp_path,
+        "import numpy as np\n" + _GATE_IMPORT +
+        "from mantis._engine import apply_symmetries_batch\n"
+        "def go(states, n):\n"
+        "    sym_indices = draw_record_syms(np.zeros(n, dtype=bool))\n"
+        "    return apply_symmetries_batch(states, sym_indices.tolist())\n",
+    )
+    draws, sinks = census(root)
+    require_all_gated(sinks)  # the SINK half is satisfied — that is the whole finding
+    with pytest.raises(MaskNotDerivedFromSpreadMask, match="all-False"):
+        require_gate_masks(draws)
+
+
+def test_a_mask_BOUND_TO_A_NAME_satisfies_the_rule(tmp_path):
+    """Negative half. A rule that only accepts the mask spelled inline at the call would red
+    the ordinary refactor and would then be relaxed until it accepted anything."""
+    root = _tree(
+        tmp_path,
+        "import numpy as np\n" + _GATE_IMPORT +
+        "from mantis.data.augment import spread_mask\n"
+        "def go(states, board_size, n):\n"
+        "    mask = spread_mask(board_size, states=states)\n"
+        "    return draw_record_syms(mask)\n",
+    )
+    draws, _sinks = census(root)
+    assert require_gate_masks(draws) == 1
+
+
+def test_a_DECOY_spread_mask_defined_locally_does_NOT_satisfy_the_rule(tmp_path):
+    """The mask carries the SAME import-edge discipline as the gate. A local function of the
+    right name is a spelling, not a producer."""
+    root = _tree(
+        tmp_path,
+        "import numpy as np\n" + _GATE_IMPORT +
+        "def spread_mask(board_size, **kw):\n    return np.zeros(4, dtype=bool)\n"
+        "def go(board_size):\n"
+        "    return draw_record_syms(spread_mask(board_size))\n",
+    )
+    draws, _sinks = census(root)
+    with pytest.raises(MaskNotDerivedFromSpreadMask):
+        require_gate_masks(draws)
+
+
+def test_the_UNMASKED_gate_function_is_reported_as_OUTSIDE_the_rule(tmp_path):
+    """`draw_window_preserving_syms(n)` takes a row count. The rule does not apply, and the
+    counter says so rather than letting a census of zero masked calls read as a clean check."""
+    root = _tree(
+        tmp_path,
+        "from mantis.data.augment import draw_window_preserving_syms\n"
+        "def go(n):\n    return draw_window_preserving_syms(n)\n",
+    )
+    draws, _sinks = census(root)
+    assert len(draws) == 1 and draws[0][3] is None, draws
+    assert require_gate_masks(draws) == 0
 
 
 def test_the_TWO_PRODUCTION_LOOPS_do_NOT_fire(tmp_path):
