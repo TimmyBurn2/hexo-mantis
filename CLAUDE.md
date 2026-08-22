@@ -13,7 +13,12 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 - crates/mantis-graph — dep-free axis-graph builder (native + wasm32), sits below
   mantis-encoding in the DAG; `make check.wasm` targets it (and mantis-encoding if it
   becomes wasm-targeted).
-- crates/mantis-encoding — registry.toml + spec + validators + dense encode kernels.
+- crates/mantis-encoding — crates/mantis-encoding/src/registry.toml (THE encoding registry,
+  single source of truth) + spec + validators + dense encode kernels. Cite that path WHOLE,
+  `src/` segment included: this line used to say a bare `registry.toml`, and a landed
+  ruling was twice mis-cited from it to a crate-root path that does not exist (R309(b),
+  ANNOTATION 7 — which carries the full account, and names the wrong string so this file
+  does not have to).
 - crates/mantis-search — MCTS (PUCT + Gumbel), completed-Q, tactics solver.
 - crates/mantis-selfplay — runner, worker loop, inference queues, replay buffers.
 - crates/mantis-bridge — ALL PyO3 lives here; maturin builds mantis._engine (abi3).
