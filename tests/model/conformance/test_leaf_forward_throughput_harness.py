@@ -206,9 +206,13 @@ def test_the_timer_EXCLUDES_input_construction_and_INCLUDES_the_forward(derived)
     )
     derived("t6.differential.outside_median_ns", outside.median_ns)
     derived("t6.differential.inside_median_ns", inside.median_ns)
-    assert outside.median_ns < sleep_ns, (
-        "a sleep moved OUTSIDE the timed region still moved the reported median — the timer "
-        "does not exclude input construction"
+    assert inside.median_ns - outside.median_ns >= sleep_ns, (
+        "moving the sleep INTO the timed region did not grow the reported median by the sleep. "
+        "Either the timer includes input construction — in which case both arms carry it and "
+        "the difference collapses — or it excludes the forward. This is the RELATION the "
+        "docstring promises: both terms are measured in this same process, so no host-dependent "
+        "bound is committed. Comparing `outside` against the sleep constant alone, which is what "
+        "stood here, is a wall-clock ceiling on an empty call and flakes on a loaded host."
     )
     assert inside.median_ns >= sleep_ns, (
         "a sleep moved INSIDE the timed region did NOT move the reported median — the timer is "
@@ -372,8 +376,18 @@ def _tiny_graph_forward(spec):
 
 @pytest.mark.slow
 def test_leaf_forward_throughput_ladder(derived):
-    """The measurement. Returns a TABLE — candidate count, block label, repeats, median, IQR,
-    device — and asserts nothing about any magnitude in it."""
+    """The measurement. Returns a TABLE — encoding, candidate count, block label, repeats,
+    median, IQR, device — and asserts nothing about any magnitude in it.
+
+    COVERAGE, STATED, because the table is narrower than the design asks and a table is read as
+    its own scope. MEASURED: the reachable block of the ONE registered graph encoding, on CPU.
+    NOT MEASURED, and named rather than implied: the registered GRID encodings, because this
+    harness builds a GNN forward and a dense arm is a different net rather than a different
+    parameter of this one; and the SYNTHETIC block, which is a projection point with no board
+    that produces it — it is reported as a candidate count and carries no timing. The row set is
+    asserted to contain no synthetic label below, so a projection cannot later drift into the
+    measured table wearing a reachable figure.
+    """
     spec = next(s for s in roster() if s.is_graph)
     build, forward = _tiny_graph_forward(spec)
     spans = (1, 4, 8)
@@ -390,6 +404,7 @@ def test_leaf_forward_throughput_ladder(derived):
         )
         rows.append(
             {
+                "encoding": spec.name,
                 "candidates": point.candidates,
                 "block": point.label,
                 "repeats": measurement.repeats,
@@ -399,5 +414,13 @@ def test_leaf_forward_throughput_ladder(derived):
             }
         )
     derived("t6.measurement.rows", rows)
-    derived("t6.measurement.synthetic_block", [p.candidates for p in points[len(spans):]])
+    derived(
+        "t6.measurement.synthetic_block_UNMEASURED",
+        [p.candidates for p in points[len(spans):]],
+    )
+    derived("t6.measurement.encodings_measured", sorted({row["encoding"] for row in rows}))
     assert rows, "the ladder produced no row"
+    assert {row["block"] for row in rows} == {LADDER_REACHABLE}, (
+        "a synthetic projection point carries a timing in the measured table; the synthetic "
+        "block is a candidate-count projection and every measured row is reachable"
+    )
