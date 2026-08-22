@@ -114,17 +114,42 @@ class ModuleFacts:
                         self.arch_imports.append(alias.name)
             elif isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        self.definitions.setdefault(target.id, []).append(node.value)
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    self._record_definition(target, node.value)
+            elif isinstance(node, ast.AnnAssign):
                 if node.value is not None:
-                    self.definitions.setdefault(node.target.id, []).append(node.value)
+                    self._record_definition(node.target, node.value)
+            elif isinstance(node, ast.AugAssign):
+                self._record_definition(node.target, node.value)
             elif isinstance(node, ast.For) and isinstance(node.target, ast.Name):
                 if isinstance(node.iter, ast.Call) and _callee_name(node.iter.func) == "range":
                     self.range_loops[node.target.id] = node
         for name, values in self.definitions.items():
             if any(self._is_scatter_factory_call(v) for v in values):
                 self.scatter_names.add(name)
+
+    def _record_definition(self, target: ast.expr, value: ast.expr) -> None:
+        """Record `value` as a definition of the name this store writes THROUGH.
+
+        A STORE IS NOT ONLY A REBINDING. `sym_indices[:] = np.random.randint(0, 12, size=n)`
+        overwrites every element of a gate-drawn array while leaving the name bound to the gate
+        call, so a walk that records only `ast.Name` targets keeps resolving the name to the
+        gate and every downstream row receives a uniform-over-12 element — the exact defect this
+        tier describes, in its cheapest spelling, and one the stated residues do not name.
+        A subscript store is therefore recorded as an ADDITIONAL definition of its base name, as
+        is an `AugAssign`, so `resolves_to_gate`'s "every definition, not merely one" sees it.
+
+        An `Attribute` store is deliberately NOT recorded: an attribute expression never
+        resolves to the gate on the read side either, so recording one under its base name
+        would attribute a write to the wrong subject.
+        """
+        if isinstance(target, ast.Name):
+            self.definitions.setdefault(target.id, []).append(value)
+            return
+        base = target
+        while isinstance(base, ast.Subscript):
+            base = base.value
+        if isinstance(base, ast.Name) and base is not target:
+            self.definitions.setdefault(base.id, []).append(value)
 
     def _is_scatter_factory_call(self, node: ast.expr) -> bool:
         inner = node
@@ -351,7 +376,7 @@ def test_the_augmentation_path_module_set_is_non_empty_and_imports_no_arch_symbo
 # --------------------------------------------------------------------------------------- #
 def _tree(tmp_path: Path, body: str, name: str = "mod.py") -> Path:
     root = tmp_path / "mantis"
-    root.mkdir(exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
     (root / name).write_text(body, encoding="utf-8")
     return root
 
@@ -423,6 +448,35 @@ def test_an_UNGATED_draw_into_each_sink_FIRES(tmp_path):
     _draws, sinks = census(root)
     assert len(sinks) == 2, sinks
     assert all(not s[3] for s in sinks), sinks
+    with pytest.raises(UngatedSymmetryDraw):
+        require_all_gated(sinks)
+
+
+def test_an_IN_PLACE_OVERWRITE_of_the_gate_drawn_array_FIRES(tmp_path):
+    """PB-19b, and the cheapest spelling of the defect there is: the name stays bound to the
+    gate call while every element it carries is replaced by a uniform draw. Both halves are
+    here, because the discriminator is only meaningful if the SAME module without the overwrite
+    line passes — otherwise this is a test that the gate call was spelled at all."""
+    body = (
+        "import numpy as np\n" + _GATE_IMPORT +
+        "from mantis.data.augment import spread_mask\n"
+        "from mantis._engine import apply_symmetries_batch\n"
+        "def go(states, board_size, n):\n"
+        "    sym_indices = draw_record_syms(spread_mask(board_size, states=states))\n"
+        "{overwrite}"
+        "    return apply_symmetries_batch(states, sym_indices.tolist())\n"
+    )
+    clean = _tree(tmp_path / "clean", body.format(overwrite=""))
+    _draws, sinks = census(clean)
+    assert len(sinks) == 1, sinks
+    require_all_gated(sinks)  # must NOT raise: the same module, minus one line
+
+    overwritten = _tree(
+        tmp_path / "overwritten",
+        body.format(overwrite="    sym_indices[:] = np.random.randint(0, 12, size=n)\n"),
+    )
+    _draws, sinks = census(overwritten)
+    assert len(sinks) == 1, sinks
     with pytest.raises(UngatedSymmetryDraw):
         require_all_gated(sinks)
 
