@@ -346,6 +346,21 @@ def require_non_empty(items: list, what: str) -> int:
     return len(items)
 
 
+def require_no_arch_imports(root: Path) -> int:
+    """Clause (ii)'s refusal, behind a helper so the planted break DRIVES it (R-O1).
+
+    The raise used to be inline in the gate, which meant the control could only assert that the
+    offender list came back non-empty — the tier's actual refusal was never reached by any
+    break, and "this reds the tier" was an inference.
+    """
+    offenders = arch_imports_on_path(root)
+    if offenders:
+        raise ArchImportInAugmentationPath(
+            "the augmentation path imports arch/capability symbols: " + ", ".join(offenders)
+        )
+    return len(augmentation_path_modules(root))
+
+
 def require_all_gated(sinks: list[tuple[str, int, str, bool]]) -> None:
     ungated = [f"{s[0]} ({s[2]})" for s in sinks if not s[3]]
     if ungated:
@@ -382,11 +397,7 @@ def test_the_augmentation_path_module_set_is_non_empty_and_imports_no_arch_symbo
     modules = augmentation_path_modules(SRC)
     derived("t2b.augmentation_path_modules", modules)
     derived("t2b.augmentation_path.cardinality", require_non_empty(list(modules), "module-set"))
-    offenders = arch_imports_on_path(SRC)
-    if offenders:
-        raise ArchImportInAugmentationPath(
-            "the augmentation path imports arch/capability symbols: " + ", ".join(offenders)
-        )
+    require_no_arch_imports(SRC)
 
 
 # --------------------------------------------------------------------------------------- #
@@ -616,3 +627,5 @@ def test_an_ARCH_IMPORT_planted_on_the_augmentation_path_FIRES(tmp_path):
     )
     assert augmentation_path_modules(root) == ("mod.py",)
     assert arch_imports_on_path(root) == ["mod.py: mantis.model.arch.GnnArch"]
+    with pytest.raises(ArchImportInAugmentationPath, match="mantis.model.arch.GnnArch"):
+        require_no_arch_imports(root)
