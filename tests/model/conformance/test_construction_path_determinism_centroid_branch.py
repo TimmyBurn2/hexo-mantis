@@ -386,6 +386,25 @@ def require_partitions_non_empty(counts: dict[str, int]) -> None:
         )
 
 
+def require_comparisons_executed(comparisons: int, enc: str, counts: dict[str, int]) -> int:
+    """The per-encoding gate counts COMPARISONS, not corpus members.
+
+    The assertion this replaces was `sum(counts.values()) > 0`, which counts every corpus
+    member INCLUDING the spread/massive ones the loop `continue`s past without comparing
+    anything. An encoding whose corpus produced only spread targets therefore satisfied it
+    with zero comparisons executed — the vacuous pass this tier exists to refuse, in the
+    tier's own gate. `require_partitions_non_empty` covers the corpus ACROSS encodings; it
+    says nothing about any one of them.
+    """
+    if comparisons <= 0:
+        raise EmptyPartition(
+            f"{enc}: the gate executed ZERO path comparisons over partition counts {counts}. "
+            "Every member fell in the spread/massive partition, which the loop skips, so the "
+            "three construction paths were never compared and pytest reports PASSED."
+        )
+    return comparisons
+
+
 def require_target_matched(matches: int, target: Target) -> None:
     if matches != 1:
         raise NoMatchingLeaf(
@@ -415,8 +434,27 @@ def test_the_three_construction_paths_agree_on_the_compact_partitions(spec, deri
         compare_paths(path_a, path_c, target.partition)
         comparisons += 2
     derived(f"t3.partition_counts.{spec.name}", counts)
-    derived(f"t3.comparisons.{spec.name}", comparisons)
-    assert sum(counts.values()) > 0
+    derived(
+        f"t3.comparisons.{spec.name}",
+        require_comparisons_executed(comparisons, spec.name, counts),
+    )
+
+
+def test_a_corpus_of_ONLY_SPREAD_targets_is_refused_by_the_per_encoding_gate():
+    """The gate ran its loop zero times and passed. `sum(counts.values()) > 0` is satisfied by
+    a corpus of nothing but spread targets — every one of which the loop skips — so the
+    counter it asserted was the wrong counter, not a missing one."""
+    spread_only = dict.fromkeys(PARTITIONS, 0)
+    spread_only[PARTITION_SPREAD] = 7
+    assert sum(spread_only.values()) > 0, "the assertion this replaces is SATISFIED here"
+    with pytest.raises(EmptyPartition, match="ZERO path comparisons"):
+        require_comparisons_executed(0, "stand-in", spread_only)
+
+
+def test_the_comparison_counter_does_NOT_fire_when_comparisons_RAN():
+    """Negative control: a counter that fires on a real count is not a counter."""
+    counts = dict.fromkeys(PARTITIONS, 1)
+    assert require_comparisons_executed(4, "stand-in", counts) == 4
 
 
 def test_all_three_partitions_are_non_empty_across_the_corpus(derived):
