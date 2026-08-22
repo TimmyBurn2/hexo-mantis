@@ -33,19 +33,26 @@ NO TOLERANCE APPEARS ANYWHERE IN THIS TIER, by construction: every assertion is 
 and a tolerance here would be an armed value.
 
 CENSUS SCOPE AND CASE POSTURE (R297(b)), stated because a census is only as honest as its
-stated scope. Roots walked: `crates/*/src/**/*.rs` — 79 files. Case-SENSITIVE. Comments
+stated scope. Roots walked: `crates/*/src/**/*.rs`; how many files that is is a derived output
+of the run (`t1.census.files_walked`), not a number written here. Case-SENSITIVE. Comments
 (`//`, `///`, `//!`, nested `/* */`) and string/char literals are stripped by a lexer BEFORE
 any matching, so a decoy in either is invisible; both decoys are planted as controls below.
 The matcher is a token SHAPE — `(` PATH `+` PATH `)` `/` `2` — with NO name requirement of any
 kind: no `min`/`max`, no `midpoint`, no `window`. A name requirement is the blind spot, because
 the dangerous case is a new origin written under different names. `crates/*/tests/**` and
 `crates/*/benches/**` are excluded by design (they hold the inv18 pins, which are assertions
-ABOUT the rule, not authorities OVER it) and the exclusion is inert: the same census over
-those 59 files returns zero constructions, asserted below rather than claimed.
+ABOUT the rule, not authorities OVER it) and the exclusion is inert: the same census over those
+roots returns zero constructions, asserted below rather than claimed.
 
 THE COUNTING UNIT IS THE CONSTRUCTION, and stating it is not pedantry: the same census has four
-defensible cardinalities — 8 constructions at 6 lines across 4 window-origin sites under 3
-`#[allow]` markers. A derived count is still ambiguous until its unit is fixed.
+defensible cardinalities — constructions, distinct `(file, line)` pairs, window-origin sites,
+and `#[allow]` markers — and they are four different numbers. Which unit this tier counts in is
+fixed here; WHAT it counts to is a derived output of the run (`t1.census.constructions`,
+`t1.census.distinct_lines`) and is deliberately absent from this sentence. A transcribed tally
+inside the very argument that a count needs its unit fixed is that same defect one level up: it
+must be re-edited on every edit, will eventually be wrong, and is then read as evidence
+(R192(e), SF-7, derive-or-delete). It already had been — this paragraph carried a line tally the
+instrument itself contradicted.
 
 THE `#[allow]` MARKER IS NOT THE CENSUS KEY, and the backstop that was supposed to excuse that
 does not exist. A marker-keyed census sees only sites that already DECLARE their own
