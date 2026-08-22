@@ -83,7 +83,32 @@ never inside core.
 
 Python (import direction, top-level imports only; lazy imports need a stated reason):
 ```
-util, diagnostics            → (leaves)
+util                         → (leaf)
+diagnostics                  → SINK, not leaf: may import anything BELOW `run`; NOTHING imports
+                               it. AMENDED (R9) by WORKER-SWEEP, R309(g). The old row read
+                               "util, diagnostics -> (leaves)" and was ALREADY FALSE at that
+                               commit, in two places: `diagnostics/fusion_calibrate.py` imports
+                               `config.resolve.allocator_posture`, `config.loader`, `encoding`,
+                               `model`, `selfplay.graph_collate` and `_engine`, and
+                               `diagnostics/eval_child_memory.py` imports `eval.child_memory`.
+                               CI gate 9 checks CYCLES ONLY (its own docstring), so nothing ever
+                               saw the drift. This row is corrected rather than newly broken, and
+                               the correction is the honest description of what the layer IS: a
+                               production-importable readout that must measure the SAME program
+                               the run executes — `fusion_calibrate.py`'s own module docstring
+                               gives the reason ("a calibration that skips the softmax or the D2H
+                               measures a different program"), and `diagnostics/worker_sweep.py`
+                               inherits it, reaching `selfplay.pool` for exactly that reason.
+                               WHAT ENFORCES IT, since gate 9 does not: the direction. Nothing
+                               may import `mantis.diagnostics`, which is what keeps the sink a
+                               sink and keeps every cycle through it unrepresentable — census
+                               test `tests/test_import_layers.py::
+                               test_nothing_outside_diagnostics_imports_mantis_diagnostics`. The
+                               narrower ban that matters for the re-sit — `worker_sweep` may not
+                               reach `mantis.train` or `mantis.run` at ALL — is a separate,
+                               stronger census (`tests/diagnostics/
+                               test_worker_sweep_reachability.py`), because R309(g) requires that
+                               no trainer step be executable before the mint.
 encoding                     → _engine only
 env                          → encoding
 config                       → encoding, util

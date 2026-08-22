@@ -48,6 +48,7 @@ read of live module objects.
 from __future__ import annotations
 
 import ast
+import sys
 import tokenize
 from pathlib import Path
 
@@ -69,6 +70,37 @@ _SANCTIONED_SITES = {
 
 #: DESIGN §1.5 — the re-cut composer's parameter tuple, as the CHILD must pass it.
 _COMPOSE_KWARGS = ("config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir")
+
+#: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries, and the second is
+#: argued rather than typed — an allowlist that grows by edit is not an allowlist.
+#:
+#: **What the rule was, and what it now is.** The original assertion was "one pool
+#: construction, in the composition root's builder", and its stated subject was
+#: `tools/ci_gates/preflight_mint.py::_boot_main` — a CI GATE that owned the only real
+#: collaborator build and could therefore drift from the boot it claimed to preflight. That is
+#: the D-1 inversion. The rule is now **one pool construction ON ANY BOOT PATH**, which is a
+#: weaker claim, and the test's assertion message says the weaker thing rather than the
+#: stronger one (the overclaiming class `0bb4381` was written for).
+#:
+#: **Why the second site is not a boot path, and why that is checkable rather than asserted.**
+#: `mantis.diagnostics.worker_sweep` is Phase W of the re-calibration re-sit (R309(g)): it
+#: measures self-play throughput and memory against `selfplay.n_workers` so the memory caps are
+#: fitted at the geometry the run will actually use. R309(g) requires that **no trainer step
+#: executes** in it — the caps are VOID on the host and a training step would cross the
+#: voided-caps row — so it composes no run at all: no trainer, no `compose_run`, no
+#: `StepCoordinator`, no run-safety triple, no lifecycle. Every one of those absences is
+#: asserted ABOVE by the same census (each of the three composer steps has exactly one call
+#: site, and `init_trainer` has exactly one), and the module's inability to reach the trainer at
+#: all is proved structurally by `tests/diagnostics/test_worker_sweep_reachability.py`. A future
+#: edit that turned the sweep into a boot path would therefore red one of those rows, not this
+#: one — which is what keeps this entry from being the hole it would otherwise be.
+#:
+#: A THIRD entry is a design decision that edits this set, never an edit that happens to pass;
+#: `test_the_pool_allowlist_BITES_on_a_third_construction_site` is the proof it can still say no.
+_SANCTIONED_POOL_SITES = {
+    "src/mantis/run.py::build_run_collaborators",
+    "src/mantis/diagnostics/worker_sweep.py::build_sweep_pool",
+}
 
 
 def _production_sources() -> list[Path]:
@@ -223,12 +255,16 @@ def test_no_second_composer_exists_under_any_name() -> None:
             f"{symbol} is one of composition's irreducible steps: a second caller is a "
             f"second composer under another name; got {sorted(_call_sites(symbol))}"
         )
-    for symbol in ("init_trainer", "WorkerPool"):
-        assert _call_sites(symbol) == {"src/mantis/run.py::build_run_collaborators"}, (
-            f"{symbol} must be constructed in the composition root's builder and nowhere "
-            f"else — a tool that builds its own is the D-1 inversion; got "
-            f"{sorted(_call_sites(symbol))}"
-        )
+    assert _call_sites("init_trainer") == {"src/mantis/run.py::build_run_collaborators"}, (
+        "init_trainer must be constructed in the composition root's builder and nowhere "
+        "else — a tool that builds its own is the D-1 inversion; got "
+        f"{sorted(_call_sites('init_trainer'))}"
+    )
+    assert _call_sites("WorkerPool") == _SANCTIONED_POOL_SITES, (
+        "WorkerPool may be constructed on the composition root's builder and at the ONE "
+        "filed non-boot site (see `_SANCTIONED_POOL_SITES`); got "
+        f"{sorted(_call_sites('WorkerPool'))}"
+    )
 
 
 def test_the_preflight_child_binds_its_composer_from_mantis_run_itself() -> None:
@@ -518,4 +554,35 @@ def test_no_or_fallback_or_dict_get_stands_behind_a_config_fact_at_the_root() ->
     assert reads_run_id, (
         "compose_run must read `config.run_id` — the exact expression, from the validated "
         "config (`core.py:237`), with no parameter and no fallback behind it (R123)"
+    )
+
+
+def test_the_pool_allowlist_BITES_on_a_third_construction_site(tmp_path) -> None:
+    """LAW-07 self-test, on the `0bb4381` precedent: an allowlist rule that has never been
+    shown to reject anything is indistinguishable from a rule that accepts everything.
+
+    The plant is a THIRD construction site in a temp tree, and the row requires the census to
+    name it. It is the same shape the second entry above was granted for, so if the grant ever
+    becomes a blanket exemption this row is what fails first."""
+    planted_src = tmp_path / "src" / "mantis" / "somewhere"
+    planted_src.mkdir(parents=True)
+    (planted_src / "new_booter.py").write_text(
+        "from mantis.selfplay.pool import WorkerPool\n"
+        "def boot():\n"
+        "    return WorkerPool(model=None, config={}, device=None, replay_buffer=None,\n"
+        "                      arch=None)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tools").mkdir()
+    module = sys.modules[__name__]
+    saved = (module._SRC, module._TOOLS, module._REPO)
+    module._SRC = tmp_path / "src" / "mantis"
+    module._TOOLS = tmp_path / "tools"
+    module._REPO = tmp_path
+    try:
+        offenders = _call_sites("WorkerPool") - _SANCTIONED_POOL_SITES
+    finally:
+        module._SRC, module._TOOLS, module._REPO = saved
+    assert offenders == {"src/mantis/somewhere/new_booter.py::boot"}, (
+        f"a planted third WorkerPool construction site was not rejected: {sorted(offenders)}"
     )

@@ -1,0 +1,124 @@
+# WORKER-SWEEP PLAN — the pre-registered ladder and every threshold the sweep decides with.
+# Consumed by `python -m mantis.diagnostics.worker_sweep --plan tools/worker_sweep_plan.toml`.
+#
+# WHY THIS IS A FILE AND NOT A SET OF DEFAULTS IN SOURCE. R309(f) records the operator's
+# n_workers pre-registration and closes with "no post-hoc movement of any of it". A rule that
+# lives in a tool's argument defaults is a rule nobody can date. This file is committed BEFORE
+# the sitting, so `git log` is the proof that the rule predates the numbers — which is what
+# "no post-hoc movement" has to mean to someone who was not in the room.
+#
+# WHY IT LIVES UNDER tools/ AND NOT configs/. CI gate 7 schema-validates every file under
+# configs/ against RunConfig and would red on this one. The precedent for the home is
+# tools/bench_floors.toml: a tracked TOML of pre-registered thresholds, read by one consumer.
+#
+# EVERY KEY IS REQUIRED AND UNKNOWN KEYS ARE REFUSED (R1's shape applied to a tool). There is
+# no default anywhere in `mantis.diagnostics.worker_sweep`: a missing key raises ValueError
+# naming the key, and an unknown key raises rather than being ignored. A silently-ignored key
+# is how a rule that someone believed was in force turns out never to have been read.
+#
+# WHOSE VALUES THESE ARE, AND WHICH OF THEM THIS FILE CANNOT ACTUALLY CHANGE.
+# The LADDER (2, 4, 8, 12, 14) and the KNEE PERCENT (95) are R309(f)/(g)'s own constants and are
+# PINNED IN SOURCE — `mantis.diagnostics.worker_sweep.RULED_RUNGS` / `RULED_KNEE_PCT`. They are
+# stated here so the report echoes what it ran under, and the loader REFUSES any other value,
+# naming the ruling. That closes an asymmetry the design review found: the file already refused
+# to smuggle `n_workers = 1` back in, citing R309(f) — and then left the OTHER constant from the
+# same sentence editable, validated only for range. A sitting that disliked its pick could have
+# re-run with `knee_pct = 90` and every check would have stayed green.
+#
+# What is legitimately editable here is the MEASUREMENT BUDGET (round lengths, round counts,
+# sampler interval) and this design's own OPERATIONALIZATIONS of the ruling's words — `band_pct`
+# and `plateau_rounds` make "memory discipline holds" checkable, `min_gain_pct` and
+# `extension_step` make "while gains persist" checkable, `extension_max` is a runaway stop.
+# Those are the WORKER-SWEEP PREP session's authorship, with reasons stated, and are OPEN to the
+# architect's amendment before the sitting. None of it is movable IN the sitting: an in-sitting
+# edit to this file is a pre-registration change and HALTs.
+
+[provenance]
+prereg_ruling   = "R309(f)"
+prereg_recorded = "2026-08-22"
+authored_by     = "WORKER-SWEEP PREP (Phase W of the re-sit, R309(g))"
+note = """The operator's row: n_workers = 1 REJECTED; bracket (1..14]; extension past 14 \
+permitted while throughput gains persist and memory discipline holds, bounded above by the \
+box's measured thread count; point value by the knee rule — the smallest rung within 95% of \
+the best PASSING rung's throughput; a rung PASSES only on a PLATEAU memory verdict; GROWING \
+fails the rung; REFUSED is never a verdict; an OOM fails the rung and stops ladder extension."""
+
+[ladder]
+# R309(f) verbatim in substance. 1 is ABSENT because it is REJECTED, and the loader refuses a
+# plan that puts it back — the rule cannot be un-made by editing the file it is written in.
+rungs = [2, 4, 8, 12, 14]
+# Extension rungs are `best_passing + extension_step`, walked while gains persist.
+extension_step = 2
+# A hard ceiling independent of the box. The real bound is the measured thread count
+# (R309(f)); this exists so a host that reports an implausible affinity mask cannot walk the
+# ladder for hours. Whichever bound is lower governs, and the report names which one stopped it.
+extension_max = 32
+# "While throughput gains persist" made checkable: an extension rung continues the walk only
+# if it PASSES and beats the best passing rung so far by more than this. 5% is the same width
+# as the plateau band below, deliberately — a gain smaller than the memory band's own
+# tolerance is not a gain this instrument can distinguish from noise.
+min_gain_pct = 5.0
+
+[rounds]
+# A measurement ROUND is a fixed wall window. Rounds exist because the stopping rule needs a
+# SERIES: one number cannot plateau, and "watched until it looked flat" is the reading that
+# produced 1.1855 GiB for a term STEP 4 then measured at 3.5293.
+# The first rounds of a rung are DISCARDED, and TWO of them rather than one. Pool start-up is
+# not throughput — that was always the reason — but the design review found a second and sharper
+# one on the memory side: `classify` compares its trailing window against the running maximum
+# BEFORE the window, so a start-up transient that lands inside a MEASURED round raises the
+# baseline and a strictly rising window underneath it still verdicts PLATEAU. Two discarded
+# rounds is the cheap half of the answer; the other half is that the driver REPORTS a strictly
+# rising trailing window as a disclosed non-gating flag, because the stopping rule is the
+# ruling's and is not being changed to suit this instrument.
+#
+# `measured_rounds` must be GREATER than `plateau_rounds`, not merely not-fewer: at equality
+# `classify` takes its degenerate branch (baseline = the first element, window = the whole
+# series) and the rule silently becomes something else. The loader refuses equality.
+#
+# COST, so nobody discovers it at the box: 7 rounds x 120 s = 14 minutes per rung, 5 base rungs
+# = ~70 minutes before any extension rung.
+warmup_rounds = 2
+measured_rounds = 5
+round_sec = 120.0
+# The block's own STEP 4 convention samples the card every 5 s and states, in the same
+# sentence, that a 5-second poll can miss a sub-poll allocation spike. 1 s is that convention
+# with the stated limitation reduced; the report prints the sample count beside every peak so
+# the remaining limit is on the face of the figure and not in a footnote.
+sampler_interval_sec = 1.0
+
+[stopping_rule]
+# Applied by `mantis.diagnostics.eval_child_memory.classify` — the SAME function the eval-child
+# instrument uses, imported rather than re-written, so there is one stopping rule in this tree
+# and one place it can be wrong. TRAILING window of 3 measured rounds out of 5: a window equal
+# to the series would make GROWING unreachable, and a window of 1 would call any single quiet
+# round a plateau.
+plateau_rounds = 3
+# 1.0 AND NOT THE EVAL INSTRUMENT'S 5.0, re-derived for the quantity it is now applied to
+# rather than inherited. `eval_child_memory` applies its band to a ~3.5 GiB process-local DEMAND
+# peak; this band is applied to `max(card level, allocator peak)`, which on the 2026-08-22 host
+# is the CARD LEVEL in nearly every round — a ~15.48 GiB number with a large constant floor
+# (0.26 GiB of CUDA context plus resident weights). 5% of that is 774 MiB of permitted growth
+# PER ROUND, against a sitting whose falsifier fired on a 343 MiB overshoot with 19.6 MiB of
+# card left. 1% is ~158 MiB per round, ~478 MiB across the three-round window.
+#
+# STATED LIMITATION, because a percentage of a level is the wrong SHAPE and saying so is cheaper
+# than pretending otherwise: the same percentage means different absolute growth on a different
+# card, and the constant floor makes it a looser test than the same number on a demand peak. An
+# absolute band would be the right instrument; `classify` takes a percentage and there is ONE
+# stopping rule in this tree, which is worth more than a better-shaped second one.
+band_pct = 1.0
+
+[selection]
+# R309(f): the smallest rung within 95 percent of the best PASSING rung's throughput.
+knee_pct = 95.0
+# WHICH throughput ranks the rungs. Closed token set {"moves_per_min", "games_per_min"}; BOTH
+# figures are recorded and printed for every rung either way, and only the RANKING is
+# single-valued. Pre-registered as moves_per_min on a measurement taken before any box number
+# existed: on a CPU host at 2 workers a 20 s window produced 22 moves and ZERO completed games,
+# because a game runs to max_game_moves. games_per_min therefore reads 0 for a healthy rung
+# whenever a round is shorter than a game, and a metric that can be 0 for a healthy rung cannot
+# rank rungs. A "move" here is the engine's positions_generated: ONE PER APPLIED COMPOUND TURN
+# (two stones), not a ply — LAW-03, verified at
+# crates/mantis-selfplay/src/runner/search_drive.rs:1002, not assumed.
+metric = "moves_per_min"

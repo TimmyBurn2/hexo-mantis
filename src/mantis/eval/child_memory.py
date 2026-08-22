@@ -84,7 +84,8 @@ _COUNTER_KEYS = (
 
 
 def torch_cuda_reader(device: str) -> Callable[[], dict[str, int]]:
-    """The production counter source for `device`, via the repo's ONE `torch.cuda` owner.
+    """The production counter source for `device`, via the module that owns `torch.cuda` for
+    the paths a guard fences off.
 
     The four numbers come from `mantis.util.device.cuda_memory_counters` — two high-water
     (`max_memory_*`) and two instantaneous. The high-water pair is the one that matters: the
@@ -96,13 +97,18 @@ def torch_cuda_reader(device: str) -> Callable[[], dict[str, int]]:
     `src/mantis/eval/*.py` except the child entry point, because an in-process CUDA eval path
     on the PARENT side is what that law makes unrepresentable. This module is imported by the
     child, so wording the guard around it would be the exact "write documents around a gate"
-    shape this repo refuses. The counters live in `mantis.util.device`, which already owns
-    `torch.cuda` for the whole repo.
+    shape this repo refuses. The counters live in `mantis.util.device`, which owns `torch.cuda`
+    for the FENCED paths — not for the whole repo, which is measurably false
+    (`selfplay/graph_collate.py`, `selfplay/inference_server.py`, `train/subsystems.py` and
+    `diagnostics/fusion_calibrate.py` all touch it directly).
 
-    The probe additionally keeps a RUNNING MAXIMUM over the two high-water fields. Nothing in
-    `src/` calls `reset_peak_memory_stats` on this path — the two call sites are
-    `diagnostics/fusion_calibrate.py` and a train-side oracle, neither of which runs in an eval
-    child — but the guard is cheap and its absence would be invisible: a foreign reset would
+    The probe additionally keeps a RUNNING MAXIMUM over the two high-water fields. Nothing that
+    runs in an eval child calls `reset_peak_memory_stats` — the callers are
+    `diagnostics/fusion_calibrate.py`, a train-side oracle and (since WORKER-SWEEP)
+    `mantis.util.device.reset_cuda_peak_counters`, which `mantis.diagnostics.worker_sweep` uses
+    to open its own per-round windows in its own process. The names are given rather than
+    counted, per derive-or-delete: this sentence used to say "the two call sites" and a third
+    arrived. The guard is cheap and its absence would be invisible: a foreign reset would
     silently turn every later phase's figure into a fragment of the round, and a figure that
     FELL would be read as memory being released.
     """

@@ -6,9 +6,14 @@
 # which is the one-authority violation CARD-RUN-MAIN existed to end. The original R8
 # argument extends verbatim to that layer and is the reason a split is argued AGAINST, not
 # merely skipped: this module is the only one importing both `mantis.train` and `mantis.eval`
-# at top level (§a.4/§c.6), `build_run_collaborators` is the only module-external consumer of
-# `resolve_coordinator_knobs(...).capacity`, and moving the builder out would either put a
-# `mantis.run -> sibling` import in the one place the DAG forbids new edges or create a
+# at top level (§a.4/§c.6), `build_run_collaborators` was the only module-external consumer of
+# `resolve_coordinator_knobs(...).capacity` until WORKER-SWEEP (R309(g)) gave
+# `mantis.diagnostics.worker_sweep.build_sweep_pool` the same read — corrected here in the same
+# act that made it false, because a load-bearing reason that has quietly stopped being true is
+# worse than none (SF-7). The reason SURVIVES the correction and is narrower: the second reader
+# is a diagnostics instrument that composes no run (no trainer, no composer, no coordinator),
+# so there is still exactly one consumer ON A BOOT PATH — and moving the builder out would
+# either put a `mantis.run -> sibling` import in the one place the DAG forbids new edges or create a
 # SECOND place a `StepCoordinatorConfig` / a collaborator set can be built — which is
 # precisely the two-surfaces shape `tests/test_run_one_authority.py`,
 # `tests/config/test_drawrate_arming_authority.py` and `test_coordinator_knobs_wiring.py`
