@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any
 
 import numpy as np
@@ -66,6 +66,10 @@ class GraphContractError(ValueError):
 # --- startup handshake -----------------------------------------------------
 class GraphContractVersionMismatch(GraphContractError):
     pass
+
+
+class WireSurfaceIncomplete(GraphContractError):
+    """The object handed to the wire adapter does not carry the `GraphWire` attribute surface."""
 
 
 class NonNativeSampleBuilder(GraphContractError):
@@ -251,6 +255,11 @@ def _graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Rust GraphWire → GraphWirePayload adapter (the step-6 wiring reads the pyclass).
 # ---------------------------------------------------------------------------
+#: The wire surface, DERIVED from the payload this adapter builds rather than transcribed
+#: beside it — a hand-kept second list would drift the moment a field is added.
+_WIRE_SURFACE: tuple[str, ...] = tuple(f.name for f in fields(GraphWirePayload))
+
+
 def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
     """Read one Rust `GraphWire` into a payload, through its single-read `take()`.
 
@@ -262,6 +271,9 @@ def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
 
     Raises:
         WireAlreadyConsumed: the wire was already taken (a second read of one wire).
+        WireSurfaceIncomplete: `gw` carries neither `take()` nor the `GraphWire` attribute
+            surface — raised from the getter read, which is the only path a wrong-kind
+            object reaches.
     """
     if not hasattr(gw, "take"):
         return _payload_from_getters(gw)
@@ -287,7 +299,27 @@ def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
 
 
 def _payload_from_getters(gw: Any) -> GraphWirePayload:
-    """The per-array getter read — for duck-typed wires that carry no `take()`."""
+    """The per-array getter read — for duck-typed wires that carry no `take()`.
+
+    A payload that does not carry the wire surface is refused BY NAME. Callers write
+    `wire, targets = buf.sample_graph_batch(...)` and the two halves transpose easily; handing
+    the targets half (or `None`, or a dict) used to produce a bare
+    `AttributeError: 'GraphTargets' object has no attribute 'contract_version'`, which names
+    neither the function nor what was wrong with the argument. The check sits HERE and not in
+    `graph_wire_from_rust` because probing the surface on a live pyclass would invoke the very
+    copying getters `take()` exists to avoid, and `take()` is the Rust `GraphWire`'s alone —
+    so every wrong kind still arrives here.
+
+    Raises:
+        WireSurfaceIncomplete: `gw` lacks one or more `GraphWirePayload` field names.
+    """
+    missing = [name for name in _WIRE_SURFACE if not hasattr(gw, name)]
+    if missing:
+        raise WireSurfaceIncomplete(
+            f"graph_wire_from_rust was handed a {type(gw).__name__}, which does not carry the "
+            f"GraphWire surface: missing {missing}. Only the wire half of "
+            "`sample_graph_batch`'s (wire, targets) pair is a graph wire."
+        )
     return GraphWirePayload(
         contract_version=int(gw.contract_version),
         builder_impl=int(gw.builder_impl),
