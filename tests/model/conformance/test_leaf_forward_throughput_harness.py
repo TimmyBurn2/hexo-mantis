@@ -275,12 +275,11 @@ def test_a_CLOSED_hardware_gate_FAILS_rather_than_skips():
         require_device_available("cuda", False)
 
 
-def test_the_module_contains_no_pytest_skip_call():
-    """PB-46's other half, asserted STRUCTURALLY over this module's own AST rather than by a
-    text search that would match this assertion itself."""
-    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
-    skips = [
-        node
+def _skip_calls(tree: ast.AST) -> list[int]:
+    """Lines calling `pytest.skip(...)` in one module, matched on the AST so this very
+    assertion — which necessarily contains the word — is not itself a hit."""
+    return [
+        node.lineno
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -288,7 +287,33 @@ def test_the_module_contains_no_pytest_skip_call():
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == "pytest"
     ]
-    assert not skips, f"pytest.skip called at lines {[n.lineno for n in skips]}"
+
+
+def test_NO_MODULE_of_the_conformance_suite_calls_pytest_skip(derived):
+    """PB-46's other half, over EVERY module of this suite rather than this one.
+
+    SCOPE IS THE FINDING THAT PUT THIS HERE. Parsing `Path(__file__)` asserted the discipline
+    over one module of eight, and a `pytest.skip` planted in T1 produced `94 passed, 1 skipped`
+    — a green run. A silent skip is this suite's headline failure mode; a guard against it that
+    covers an eighth of the subject is the scope overclaim the suite exists to police.
+
+    It stays in this module because PB-46's two halves — a hardware gate that FAILS rather than
+    skips, and no module that skips at all — are one claim and a control that lives apart from
+    its check can be deleted without the check going red. The census cardinality is a derived
+    output, so an empty glob cannot pass for a clean census.
+    """
+    modules = sorted(Path(__file__).parent.glob("*.py"))
+    offenders = [
+        f"{path.name}:{line}"
+        for path in modules
+        for line in _skip_calls(ast.parse(path.read_text(encoding="utf-8")))
+    ]
+    derived("t6.no_skip.modules_walked", [p.name for p in modules])
+    assert len(modules) > 1, (
+        "the no-skip census walked fewer than two modules of this suite — an empty or "
+        "single-file walk reports a clean census over nothing"
+    )
+    assert not offenders, f"pytest.skip called at {offenders}"
 
 
 def test_a_MAGNITUDE_cannot_be_written_into_a_tracked_path(tmp_path):
