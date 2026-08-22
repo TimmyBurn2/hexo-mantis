@@ -130,9 +130,10 @@ def _load_tool():
 TOOL = _load_tool()
 
 
-def _run_tool(*args, cwd: Path = REPO_ROOT, tool: Path = TOOL_PATH, timeout: int = 300):
+def _run_tool(*args, cwd: Path = REPO_ROOT, tool: Path = TOOL_PATH, timeout: int = 300,
+              env: dict[str, str] | None = None):
     return subprocess.run([sys.executable, str(tool), *args], cwd=str(cwd),
-                          capture_output=True, text=True, timeout=timeout)
+                          capture_output=True, text=True, timeout=timeout, env=env)
 
 
 def _cuda_is_available() -> bool:
@@ -812,10 +813,34 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     this row asserts about and where the other host's evidence lives. A skip is the honest
     outcome on a CUDA box — the alternative (asserting rc 40 there instead) would be two
     different subjects wearing one name.
+
+    A SECOND PRECONDITION NOW STANDS BETWEEN THE BOOT AND `init_trainer`, and this row supplies
+    it rather than measuring it (RECAL-PREP / R308(g)(i); frozen-edit grant R309(e), re-pinned
+    in the same act). `mantis.run.build_run_collaborators` asserts the config's minted
+    `allocator_posture` against the live allocator environment BEFORE the trainer is built —
+    necessarily before, because the whole point is to refuse ahead of the first CUDA
+    allocation. Run under an inherited environment this row would therefore stop at the POSTURE
+    refusal and never reach the DEVICE one, measuring a different subject under the same name.
+    So the child is launched IN the config's own minted posture, READ FROM THE CONFIG through
+    `resolve_allocator_posture` and never transcribed: the row keeps its subject under whichever
+    posture run5 carries, and if run5 is ever minted to a posture this box cannot satisfy the
+    resolver says so at the launch instead of the assertion saying it in the tail.
+
+    POSTURE-COUPLING, DISCLOSED because it is the thing a future reader would otherwise
+    rediscover (RECAL_PREP_EXIT.md §6): while `configs/run5.yaml` carried the R119 `null`
+    placeholder this row was RED for a reason that had nothing to do with the device — the boot
+    refused on an unminted regime. It goes green under EITHER minted token, and the RED-TEAM
+    obligation attached to the grant is exactly that check, on a CPU host, under both.
     """
     out_dir = tmp_path / "run5_on_cpu"
+    # RECAL-PREP (R308(g)(i)): run5's boot now asserts its minted allocator posture BEFORE
+    # init_trainer, so this row must launch the child IN that posture or it measures the
+    # posture refusal instead of the device one. Read from the config, never transcribed.
+    from mantis.config.resolve.allocator_posture import resolve_allocator_posture
+    posture = resolve_allocator_posture(load_config(RUN5).model_dump())
+    env = {**os.environ, **posture.required_env()}
     result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", env=env)
     assert load_config(RUN5).train.device == "cuda", (
         "PREMISE: run5 mints `train.device: cuda`. If run5 is ever re-minted to cpu this row "
         "is testing nothing and must be re-adjudicated, not adjusted"

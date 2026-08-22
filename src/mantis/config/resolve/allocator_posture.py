@@ -143,6 +143,26 @@ class AllocatorPostureSpec:
     def required_conf(self) -> dict[str, str]:
         return dict(_REQUIRED_CONF[self.posture])
 
+    def required_env(self) -> dict[str, str]:
+        """The environment this posture REQUIRES, as a mapping a launcher can splat.
+
+        Landed with the R309(e) grant because the granted diff calls it: a test that must launch
+        a child IN the config's minted posture needs the env as DATA, not as the human-readable
+        `launch_hint` string beside it. Both render from `_REQUIRED_CONF`, so they cannot drift —
+        which is the whole reason this is a method here rather than a dict built at a call site.
+
+        The CUDA-named variable is the one written, because c10 reads it FIRST
+        (`c10/cuda/CUDAAllocatorConfig.h`) — writing the generic one instead would produce an
+        environment this module's own reader calls AMBIGUOUS the moment anything sets the other.
+        DEFAULT renders as the EMPTY STRING rather than as an absent key: a launcher splatting
+        this mapping over an inherited environment must be able to OVERRIDE an inherited posture,
+        and a missing key cannot. `read_live_allocator_conf` parses `""` to the empty conf, which
+        is exactly what DEFAULT requires.
+        """
+        conf = _REQUIRED_CONF[self.posture]
+        rendered = ",".join(f"{k}:{v}" for k, v in sorted(conf.items()))
+        return {ALLOC_CONF_VARS[0]: rendered}
+
     @property
     def launch_hint(self) -> str:
         """How to launch under this posture, in the shape an operator can paste."""
