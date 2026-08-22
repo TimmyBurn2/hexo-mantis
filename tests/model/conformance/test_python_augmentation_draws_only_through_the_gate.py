@@ -30,7 +30,11 @@ np.random.randint(0, 12, n)` and pass; the decoy control below plants exactly th
 THE SINK IS AN ARGUMENT POSITION THAT RECEIVES A PER-ROW D6 ELEMENT — three of them, structural:
 `apply_symmetries_batch` argument 2 (both the bare-`Name` and the `Attribute` call forms are
 live at HEAD), a subscript of a `get_policy_scatters(...)` result whose index is per-row, and
-`sample_graph_batch(augment=True)`.
+`sample_graph_batch(augment=True)`. THE THIRD KIND IS RECORDED, NOT CHECKED, and cannot be:
+its draw happens in Rust (`hexg/sample.rs:172`), one of this tier's three named residues. It is
+therefore unfalsifiable by construction — it can never contribute an ungated row — and its
+count is reported SEPARATELY from the checked sinks so that a kind which checks nothing cannot
+swell the number a reader takes for coverage. Zero such sinks exist at HEAD.
 
 THE GROUP-ENUMERATION FORM IS EXCLUDED BY A STATED CRITERION, NOT BY TUNING, and the criterion
 is STRICTLY STRONGER than "skip enumeration loops". In that form the subscript index is the
@@ -60,6 +64,16 @@ GRAPH_SINK = "sample_graph_batch"
 #: Arch / capability symbols that may not be imported into the augmentation path (clause ii).
 ARCH_SYMBOLS = frozenset({"ModelArch", "CnnArch", "GnnArch", "ArchCaps", "arch_from_spec_and_config"})
 ARCH_MODULES = ("mantis.model.arch",)
+
+#: `sample_graph_batch(augment=True)` hands the draw to Rust (`hexg/sample.rs:172`), which this
+#: PYTHON census cannot read. The sink is still RECORDED, because the census's job is to name
+#: every place a D6 element is applied; but the `gated` flag it is recorded with means "NOT
+#: CHECKED HERE", not "checked and found gated". Such a row can never be ungated, so it can
+#: never falsify anything, and folding it into the gated total would let a kind that checks
+#: nothing raise the number that reads as coverage. It is counted separately at the gate for
+#: exactly that reason.
+_RUST_SIDE_NOT_CHECKED_HERE = True
+GRAPH_SINK_KIND = "sample_graph_batch.augment"
 
 _TRANSFORM_METHODS = frozenset(
     {"astype", "tolist", "ravel", "flatten", "reshape", "copy", "item", "squeeze"}
@@ -267,7 +281,8 @@ def module_sinks(facts: ModuleFacts) -> list[tuple[str, int, str, bool]]:
                 )
                 if augment_on:
                     sinks.append(
-                        ("sample_graph_batch.augment", node.lineno, "rust-side graph draw", True)
+                        (GRAPH_SINK_KIND, node.lineno, "rust-side graph draw (NOT CHECKED by "
+                         "this census: the draw is Rust-side)", _RUST_SIDE_NOT_CHECKED_HERE)
                     )
                 continue
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
@@ -355,6 +370,9 @@ def test_every_per_row_D6_element_applied_in_src_comes_through_the_gate(derived)
     for kind, _line, _desc, _gated in ((s[2].split(" — ")[0], s[1], s[2], s[3]) for s in sinks):
         kinds[kind] = kinds.get(kind, 0) + 1
     derived("t2b.sink_kinds", kinds)
+    unchecked = [s for s in sinks if s[2].split(" — ")[0] == GRAPH_SINK_KIND]
+    derived("t2b.sink_census.rust_side_NOT_CHECKED", len(unchecked))
+    derived("t2b.sink_census.checked_here", len(sinks) - len(unchecked))
     require_all_gated(sinks)
 
 
