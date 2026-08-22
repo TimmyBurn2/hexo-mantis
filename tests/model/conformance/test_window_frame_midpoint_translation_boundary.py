@@ -65,9 +65,15 @@ unmarked planted break below is the load-bearing one.
 WHAT THE CENSUS DOES NOT CLAIM. It censuses midpoint CONSTRUCTIONS, not window ORIGINS: it
 cannot tell that `core.rs:381` is an origin and an unrelated average is not. That judgement is
 the pinned table's `frame` column, which is prose and is NOT what the assertion compares — the
-assertion compares triples. RESIDUE, named and unguarded: an origin spelled `>> 1`, via
-`i32::midpoint`, through a helper fn or a `const`, or re-implemented in Python, is outside this
-census, and there is no second instrument that would catch it.
+assertion compares triples. RESIDUE, named and unguarded, and MEASURED rather than imagined —
+every form named here was planted against the real crates tree and confirmed to walk past: an
+origin spelled `>> 1`, via `i32::midpoint`, through a helper fn or any call taking ARGUMENTS,
+through a `const`, or re-implemented in Python, is outside this census, and there is no second
+instrument that would catch it. The zero-argument accessor form
+`(self.lo_q() + self.hi_q()) / 2` WAS outside it and is now inside: it is the spelling a
+field-to-getter refactor produces, it is not the "helper fn" this paragraph already named, and
+a reader of the paragraph would not have predicted it — which is the only thing a stated scope
+is for.
 """
 from __future__ import annotations
 
@@ -457,7 +463,14 @@ def lex_rust(src: str) -> list[tuple[str, int]]:
 
 
 def _dotted_path(tokens: list[tuple[str, int]], i: int) -> tuple[str, int] | None:
-    """A dotted run of identifiers at `i` — `min_q`, `self.min_q`, `a.b.c`. No name filter."""
+    """A dotted run of identifiers at `i` — `min_q`, `self.min_q`, `a.b.c`, `self.min_q()`.
+
+    No name filter of any kind. The optional empty argument list is here because the accessor
+    spelling `(self.lo_q() + self.hi_q()) / 2` is what a field-to-getter refactor produces, and
+    it was measured to walk past the identifier-only form. A call WITH arguments is a helper
+    call and stays outside this census, disclosed with the rest of the residue in the module
+    docstring rather than half-matched here.
+    """
     if i >= len(tokens):
         return None
     head = tokens[i][0]
@@ -470,7 +483,10 @@ def _dotted_path(tokens: list[tuple[str, int]], i: int) -> tuple[str, int] | Non
             break
         parts.append(nxt)
         j += 2
-    return ".".join(parts), j
+    text = ".".join(parts)
+    if j + 1 < len(tokens) and tokens[j][0] == "(" and tokens[j + 1][0] == ")":
+        return text + "()", j + 2
+    return text, j
 
 
 def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[tuple[str, int, str]]:
@@ -616,6 +632,29 @@ def test_a_FIFTH_site_with_NO_marker_and_DIFFERENT_names_is_named(tmp_path):
     )
     found = midpoint_constructions(tmp_path)
     assert found == [("planted/src/lib.rs", 5, "(self.lo_q + self.hi_q) / 2")], found
+    with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
+        require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
+
+
+def test_a_fifth_site_whose_operands_are_ACCESSOR_CALLS_is_named(tmp_path):
+    """PB-9b. The field-to-getter spelling, measured to walk past the identifier-only matcher.
+
+    A call taking ARGUMENTS remains outside the census by decision, so this control asserts that
+    edge too: a scope is only stated if what falls outside it is shown, not just what falls in.
+    """
+    _plant(
+        tmp_path,
+        "impl Thing {\n"
+        "    pub fn origin(&self) -> i32 {\n"
+        "        (self.lo_q() + self.hi_q()) / 2\n"
+        "    }\n"
+        "    pub fn helper_form(&self, a: i32, b: i32) -> i32 {\n"
+        "        (mid_of(a, b) + mid_of(b, a)) / 2\n"
+        "    }\n"
+        "}\n",
+    )
+    found = midpoint_constructions(tmp_path)
+    assert found == [("planted/src/lib.rs", 3, "(self.lo_q() + self.hi_q()) / 2")], found
     with pytest.raises(SecondWindowOriginAuthority, match="NEW"):
         require_census(found, _THE_MIDPOINT_CONSTRUCTIONS)
 
