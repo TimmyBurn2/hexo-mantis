@@ -59,7 +59,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mantis._engine import Board
+from mantis._engine import Board, HexgBuffer
 from mantis.selfplay.graph_collate import GraphWirePayload
 
 from _corpus import (
@@ -85,6 +85,10 @@ class WireSurfaceMismatch(ConformanceRefusal):
 
 class RadiusDisagreement(ConformanceRefusal):
     """The graph wire's radius and the Board's legal-move radius are not the same parameter."""
+
+
+class ArmMatrixDisagreement(ConformanceRefusal):
+    """The arm matrix the specs declare differs from the one the engine admits."""
 
 
 class EmptyCoveragePartition(ConformanceRefusal):
@@ -201,16 +205,82 @@ def test_the_graph_wire_carries_exactly_mantis_cores_legal_set(spec, derived):
     )
 
 
-def test_the_executed_arm_matrix_equals_the_matrix_derived_from_the_specs(derived):
+def engine_admitted_arm_matrix(specs) -> frozenset[tuple[str, str]]:
+    """`(encoding, arm)` OBSERVED FROM THE ENGINE, which is the side `derived_arm_matrix` lacks.
+
+    `HexgBuffer::new` refuses a grid encoding by construction
+    (`crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`), so which encodings the graph
+    replay surface admits is a fact the engine holds, and `spec.is_graph` is a CLAIM about that
+    fact. Constructing the buffer is how the claim gets a second producer.
+    """
+    observed: set[tuple[str, str]] = set()
+    for spec in specs:
+        try:
+            HexgBuffer(2, spec.name, 8)
+        except (ValueError, TypeError):
+            observed.add((spec.name, ARM_DENSE))
+        else:
+            observed.add((spec.name, ARM_GRAPH))
+    return frozenset(observed)
+
+
+def require_arm_matrix_agreement(declared: frozenset, admitted: frozenset) -> int:
+    if declared != admitted:
+        raise ArmMatrixDisagreement(
+            f"the arm matrix the SPECS declare and the one the ENGINE admits disagree: "
+            f"declared-only={sorted(declared - admitted)}; engine-only={sorted(admitted - declared)}"
+        )
+    return len(declared)
+
+
+def test_the_arm_matrix_the_SPECS_declare_equals_the_one_the_ENGINE_admits(derived):
+    """PB-30. Both sides used to come from ONE source: `expected` was `derived_arm_matrix(specs)`
+    and `executed` was a re-typing of that function's own generator expression, so
+    `executed == expected` could not fail for ANY input — measured over four stand-in rosters,
+    including one that lost the graph flag on every spec and one that was empty, all four True.
+    That is the F2 defect class, found and fixed in T1's frame matrix and left standing here;
+    its practical cost was measured too, when one `slow` marker removed the graph arm from the
+    CI tier and this test still reported the arm as present.
+
+    The second side is the engine's own refusal, which no spec field produces.
+    """
     specs = roster()
-    expected = derived_arm_matrix(specs)
-    executed = frozenset(
+    declared = derived_arm_matrix(specs)
+    admitted = engine_admitted_arm_matrix(specs)
+    derived("t4.arm_matrix.declared", sorted(declared))
+    derived("t4.arm_matrix.engine_admitted", sorted(admitted))
+    derived("t4.arm_matrix.cardinality", require_arm_matrix_agreement(declared, admitted))
+    assert any(arm == ARM_GRAPH for _, arm in declared), "no graph arm — the tier has no subject"
+    assert any(arm == ARM_DENSE for _, arm in declared), "no dense arm — the tier has no subject"
+
+
+class _ArmClaim:
+    """A spec stand-in carrying only what the arm matrix reads: a registered name and a claim."""
+
+    def __init__(self, name: str, is_graph: bool) -> None:
+        self.name = name
+        self.is_graph = is_graph
+
+
+def test_a_FLIPPED_arm_claim_is_refused_by_the_engine_side():
+    """The break the one-source comparison structurally cannot see. The same input is fed to
+    both comparisons: the old shape is still satisfied, the engine side names the encoding."""
+    specs = [_ArmClaim(spec.name, not spec.is_graph) for spec in roster()]
+    one_source = frozenset(
         (spec.name, ARM_GRAPH if spec.is_graph else ARM_DENSE) for spec in specs
     )
-    derived("t4.arm_matrix", sorted(executed))
-    assert executed == expected
-    assert any(arm == ARM_GRAPH for _, arm in executed), "no graph arm — the tier has no subject"
-    assert any(arm == ARM_DENSE for _, arm in executed), "no dense arm — the tier has no subject"
+    assert one_source == derived_arm_matrix(specs), (
+        "the comparison this replaces is SATISFIED by a roster with every arm claim flipped"
+    )
+    with pytest.raises(ArmMatrixDisagreement, match="declared-only"):
+        require_arm_matrix_agreement(derived_arm_matrix(specs), engine_admitted_arm_matrix(specs))
+
+
+def test_an_EMPTY_roster_cannot_pass_the_arm_matrix():
+    """The old comparison was True on the empty roster; the subject asserts survive it, and
+    this states which assertion is doing that work rather than leaving it to be inferred."""
+    assert require_arm_matrix_agreement(derived_arm_matrix([]), engine_admitted_arm_matrix([])) == 0
+    assert not any(arm == ARM_GRAPH for _, arm in derived_arm_matrix([]))
 
 
 def test_a_LENGTH_PRESERVING_coordinate_substitution_fails_the_SET_half():
