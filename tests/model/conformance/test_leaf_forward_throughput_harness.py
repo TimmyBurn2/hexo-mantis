@@ -279,45 +279,146 @@ def test_a_CLOSED_hardware_gate_FAILS_rather_than_skips():
         require_device_available("cuda", False)
 
 
-def _skip_calls(tree: ast.AST) -> list[int]:
-    """Lines calling `pytest.skip(...)` in one module, matched on the AST so this very
-    assertion — which necessarily contains the word — is not itself a hit."""
-    return [
-        node.lineno
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "skip"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "pytest"
-    ]
+#: THE MARKER FAMILY THAT REMOVES A TEST FROM THE RUN, enumerated and NON-EXHAUSTIVE, and
+#: matched only as an attribute of `pytest.mark` / `mark` so an unrelated field named `skip`
+#: is not a hit. `xfail` is in the family because a test whose failure is swallowed has stopped
+#: asserting as surely as one that never runs.
+_DISARMING_MARKS = frozenset({"skip", "skipif", "xfail"})
+#: The call spellings. `importorskip` is the one that arrives disguised as an import.
+_DISARMING_CALLS = frozenset({"skip", "importorskip", "xfail"})
+#: The unittest spelling, which pytest honours and which no `pytest.` prefix announces.
+_DISARMING_EXCEPTIONS = frozenset({"SkipTest"})
 
 
-def test_NO_MODULE_of_the_conformance_suite_calls_pytest_skip(derived):
-    """PB-46's other half, over EVERY module of this suite rather than this one.
+def _is_mark_root(node: ast.expr) -> bool:
+    """`pytest.mark` or a bare `mark` bound by `from pytest import mark`."""
+    if isinstance(node, ast.Attribute):
+        return node.attr == "mark" and isinstance(node.value, ast.Name) and node.value.id == "pytest"
+    return isinstance(node, ast.Name) and node.id == "mark"
 
-    SCOPE IS THE FINDING THAT PUT THIS HERE. Parsing `Path(__file__)` asserted the discipline
-    over one module of eight, and a `pytest.skip` planted in T1 produced `94 passed, 1 skipped`
-    — a green run. A silent skip is this suite's headline failure mode; a guard against it that
-    covers an eighth of the subject is the scope overclaim the suite exists to police.
+
+def _pytest_callee(func: ast.expr) -> str:
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        return func.attr if func.value.id == "pytest" else ""
+    return ""
+
+
+def _empty_parametrize(node: ast.Call) -> bool:
+    """`parametrize(..., [])`. Under pytest's default `empty_parameter_set_mark` an empty
+    argvalues collects one SKIPPED item — a disarm that contains no skip word at all."""
+    func = node.func
+    named = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+    if named != "parametrize" or len(node.args) < 2:
+        return False
+    argvalues = node.args[1]
+    return isinstance(argvalues, ast.List | ast.Tuple | ast.Set) and not argvalues.elts
+
+
+def disarming_forms(tree: ast.AST) -> list[tuple[int, str]]:
+    """`(line, form)` for every construct in one module that removes a test from the run.
+
+    MECHANISM, NOT SCOPE, IS WHAT WAS WRONG. The control this replaces matched `ast.Call` nodes
+    whose func was `pytest.skip`, so one `@pytest.mark.skipif(True, reason=...)` line above any
+    gate in this suite produced a green run with one silent skip, `rc 0`, and a collected-test
+    floor gate that also returned `rc 0` — because a skipped test is still COLLECTED. The prior
+    fix widened this census from one module to every module of the suite and left the single
+    spelling in place; nine modules times one spelling of six is still one spelling of six.
+
+    Matched on the AST, so this very docstring — which necessarily contains the words — is not
+    a hit, and so is the family declaration above.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in _DISARMING_MARKS:
+            if _is_mark_root(node.value):
+                found.append((node.lineno, f"mark.{node.attr}"))
+        elif isinstance(node, ast.Call):
+            callee = _pytest_callee(node.func)
+            if callee in _DISARMING_CALLS:
+                found.append((node.lineno, f"pytest.{callee}()"))
+            elif _empty_parametrize(node):
+                found.append((node.lineno, "parametrize with EMPTY argvalues"))
+        elif isinstance(node, ast.Name) and node.id in _DISARMING_EXCEPTIONS:
+            found.append((node.lineno, node.id))
+        elif isinstance(node, ast.Attribute) and node.attr in _DISARMING_EXCEPTIONS:
+            found.append((node.lineno, node.attr))
+    return sorted(set(found))
+
+
+def suite_modules() -> list[Path]:
+    return sorted(Path(__file__).parent.glob("*.py"))
+
+
+def test_NO_MODULE_of_the_conformance_suite_DISARMS_a_TEST(derived):
+    """PB-46's other half, over EVERY module of this suite and every form that disarms one.
+
+    SCOPE WAS THE FIRST FINDING HERE and MECHANISM was the second. Parsing `Path(__file__)`
+    asserted the discipline over one module of eight; matching only `pytest.skip(...)` asserted
+    it over one spelling of six, and a `skipif` DECORATOR on T1's cross-arm gate — the half of
+    T1 no other instrument makes — produced `104 passed, 1 skipped`, `rc 0`, with every gate in
+    the repo green. A silent skip is this suite's headline failure mode.
 
     It stays in this module because PB-46's two halves — a hardware gate that FAILS rather than
-    skips, and no module that skips at all — are one claim and a control that lives apart from
-    its check can be deleted without the check going red. The census cardinality is a derived
-    output, so an empty glob cannot pass for a clean census.
+    skips, and no module that disarms a test at all — are one claim, and a control that lives
+    apart from its check can be deleted without the check going red. The census cardinality is
+    a derived output, so an empty glob cannot pass for a clean census.
     """
-    modules = sorted(Path(__file__).parent.glob("*.py"))
+    modules = suite_modules()
     offenders = [
-        f"{path.name}:{line}"
+        f"{path.name}:{line} ({form})"
         for path in modules
-        for line in _skip_calls(ast.parse(path.read_text(encoding="utf-8")))
+        for line, form in disarming_forms(ast.parse(path.read_text(encoding="utf-8")))
     ]
-    derived("t6.no_skip.modules_walked", [p.name for p in modules])
+    derived("t6.no_disarm.modules_walked", [p.name for p in modules])
+    derived("t6.no_disarm.forms_matched", sorted(_DISARMING_MARKS | _DISARMING_CALLS))
     assert len(modules) > 1, (
-        "the no-skip census walked fewer than two modules of this suite — an empty or "
+        "the no-disarm census walked fewer than two modules of this suite — an empty or "
         "single-file walk reports a clean census over nothing"
     )
-    assert not offenders, f"pytest.skip called at {offenders}"
+    assert not offenders, f"a test in this suite is disarmed at {offenders}"
+
+
+#: One planted line per disarming spelling, each written the way a hurried commit writes it.
+#: A census that names a family and is only ever shown to catch one member of it is a family
+#: claim resting on one measurement.
+_DISARM_PLANTS: tuple[tuple[str, str], ...] = (
+    ("decorator-skipif", '@pytest.mark.skipif(True, reason="flaky")\ndef test_x(): pass\n'),
+    ("decorator-skip", "@pytest.mark.skip\ndef test_x(): pass\n"),
+    ("decorator-xfail", '@pytest.mark.xfail(reason="known")\ndef test_x(): pass\n'),
+    ("inline-call", 'def test_x():\n    pytest.skip("later")\n'),
+    ("import-or-skip", 'torch = pytest.importorskip("torch")\n'),
+    ("param-marks", '@pytest.mark.parametrize("a", [pytest.param(1, marks=pytest.mark.skip)])\n'
+                    "def test_x(a): pass\n"),
+    ("unittest-exception", "def test_x():\n    raise SkipTest\n"),
+    ("module-level", "pytestmark = pytest.mark.skipif(True, reason='off')\n"),
+    ("empty-parametrize", '@pytest.mark.parametrize("a", [])\ndef test_x(a): pass\n'),
+)
+
+
+@pytest.mark.parametrize("label,body", _DISARM_PLANTS, ids=[p[0] for p in _DISARM_PLANTS])
+def test_EVERY_disarming_spelling_is_seen_by_the_census(label, body, tmp_path):
+    """PB-46b. Each row is a line that produces a green run with one fewer assertion."""
+    module = tmp_path / f"test_{label.replace('-', '_')}.py"
+    module.write_text(body, encoding="utf-8")
+    found = disarming_forms(ast.parse(module.read_text(encoding="utf-8")))
+    assert found, f"{label}: the census did not see {body!r}"
+
+
+def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
+    """Negative control, and as binding as the positive rows. A census that flags `parametrize`
+    with real argvalues, a fixture, or a field that happens to be named `skip` would be widened
+    until it fired on ordinary code, and its green would stop meaning its name."""
+    module = tmp_path / "test_ordinary.py"
+    module.write_text(
+        "import pytest\n\n"
+        "@pytest.fixture\ndef thing(): return 1\n\n"
+        '@pytest.mark.parametrize("a", [1, 2])\ndef test_x(a, thing): assert a\n\n'
+        "@pytest.mark.slow\ndef test_y(): assert True\n\n"
+        "class Cfg:\n    skip = 3\n\n"
+        "def test_z(): assert Cfg.skip == 3\n",
+        encoding="utf-8",
+    )
+    assert disarming_forms(ast.parse(module.read_text(encoding="utf-8"))) == []
 
 
 def test_a_MAGNITUDE_cannot_be_written_into_a_tracked_path(tmp_path):
