@@ -50,8 +50,14 @@ cd "$REPO_ROOT"
 
 run_ruff() { uv run ruff check . ; }
 run_pyright_count() {
-  uv run pyright --outputjson 2>/dev/null \
-    | uv run python -c 'import json,sys; print(json.load(sys.stdin)["summary"]["errorCount"])'
+  # R313(c) PIPE-EXIT LAW. `pyright` is a VERIFIER sitting upstream of a pipe: without
+  # pipefail this function's status is the JSON reader's, so a pyright that dies while still
+  # emitting parseable JSON reports its errorCount and the gate reads green. Scoped to a
+  # SUBSHELL rather than set globally, because this file's `printf ... | grep -q` idioms
+  # deliberately want the DOWNSTREAM status and pipefail must not reach them.
+  ( set -o pipefail
+    uv run pyright --outputjson 2>/dev/null \
+      | uv run python -c 'import json,sys; print(json.load(sys.stdin)["summary"]["errorCount"])' )
 }
 
 # ── R289(u): a missing interpreter REFUSES; it is never reported as a failed fixture ──────

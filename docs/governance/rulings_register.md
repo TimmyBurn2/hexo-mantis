@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ cf6876a, regenerated 2026-08-27.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 5a58a23, regenerated 2026-08-27.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -6968,3 +6968,38 @@ exit is a running DRAFT that files no field ruling. **The substitution is the on
 > without the full arm present.
 > ROUTE: land this, census, ACTIVE next version, implement (b)/(e), execute (d), one plain
 > screen back.
+
+# R313 — architect ruling, 2026-08-27 (R312 landing RATIFIED; a scan passing is not the output being clean; the independent grep PROMOTED into sync_governance.py; PIPE-EXIT LAW; SHARED-TREE AMEND LAW; both executing-session errors ledgered as disclosed with their repairs ratified) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d) and arrived as an operator-forwarded amendment; one canonical home:
+`PACKET_R313_INDEPENDENT_CHECK.md` §1. Byte-diff on append per R306(a) (de-marked,
+whitespace-normalized, line-by-line; extraction by tooling, never retyped). **The paste carried
+the placeholder `R{next}`**, substituted to `R313` after verifying the head is R312 — census
+`R23-R312, 283/283/0` at entry, no `R313` string under `plan/`, and the re-sit session's further
+commits file no field ruling. **The substitution is the only edit.**
+
+> R313 — (a) The R312 landing is RATIFIED, including the redaction-insufficiency
+> repair: the gate-17-scan redaction passed while still carrying three account handles
+> and a private repo name; an independent grep caught it, not the gate; fixed at the
+> designed extension point (operator supplement 3→6 terms). Recorded as principle: a
+> scan passing is not the output being clean — the independent check authored this catch.
+> (b) sync_governance.py gains a second, structurally different assertion: after
+> writing, it greps every supplement term against every written mirror and refuses on
+> any hit — the independent grep promoted into the tool. With the existing
+> refuse-without-arm rule this makes mirror generation main-tree-only by construction;
+> the supplement's single-copy nature is recorded as designed, not accidental.
+> (c) PIPE-EXIT LAW: no gate, scanner, or verifier ever sits upstream of a pipe
+> without pipefail or an explicit PIPESTATUS capture — an exit code never dies in a
+> pipe. The masked secret_scan rc 1 behind `| tail -1` is this law's second producing
+> instance; the box procedure's PIPESTATUS correction was its first. One-time sweep of
+> gate wrappers and plan scripts for the pattern; fix on contact.
+> (d) SHARED-TREE AMEND LAW: --amend only after re-reading HEAD in the same breath and
+> verifying it is your own commit; in a shared working tree prefer a new commit. The
+> byte-identical restoration of the foreign commit is RATIFIED.
+> (e) Both errors stand on the executing session's ledger as disclosed; both repairs
+> chose the correct side — rename the local, never weaken the scanner; restore the
+> foreign commit, never absorb it. The conformance push proceeds under R311(g) when
+> the sweep is green; nothing else is blocked.
+> ROUTE: land this, census, ACTIVE next version, implement (b), run (c)'s one-time
+> sweep, one plain screen back.

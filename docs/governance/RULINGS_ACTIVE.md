@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ cf6876a, regenerated 2026-08-27.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5a58a23, regenerated 2026-08-27.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.17, 2026-08-27. Created under R271 (register hygiene: archive/index split);
+# v3.19, 2026-08-27. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -366,6 +366,36 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # EXTENSION only, F-WS-7 falls back down the passing rungs largest-first and HALTS with numbers if
 # none closes, F-WS-4 corrects the two stale draw-rate sentences in the mint act with `N_pool_min`
 # unmoved — so **the re-sit is FORWARDABLE**, the first time it has been since R308(g)(i).
+# **v3.18 = R312 folded in — the curation where the MIRROR STOPS BEING A COPY.** The R311 landing
+# is **RATIFIED** including the v1-revert-before-commit, the four found-not-told corrections, and
+# the mirror leak near-miss; **two architect errors go on the ledger** (the `rustfmt` gate claim and
+# the stale re-sit prompt), and **supersessions of in-flight packets ship as LABELED AMENDMENTS from
+# now on, never replacements** — the v1/v2 recovery is what bought that sentence. **The mirror is a
+# REDACTED DERIVATIVE**: `sync_governance.py` redacts through **gate 17's own scan**, with stable
+# hash-keyed placeholders, re-scans the written bytes, and refuses to write anything that does not
+# come back clean; the header names the file a derivative and points at canonical; **verbatim
+# mirroring into a public repo is REFUSED**, and the operator's override is to make the repo
+# private. **`--check` stays OUT of the gate set until Q4's protocol lands** — it runs at every
+# governance landing instead, which is the honest arrangement while the collision stands.
+# **Gate 17's WORKTREE WEAKNESS is CLOSED LOUD**: an absent local-terms supplement now prints
+# **OPERATOR-TERM ARM SKIPPED**, because `0 local term(s) live` read exactly like a full-strength
+# pass from any worktree, fresh clone or CI runner. **The conformance branch repair is ORDERED and
+# was EXECUTED in the same act.**
+# **v3.19 = R313 folded in — the curation where THE INDEPENDENT CHECK BECOMES THE TOOL'S OWN.**
+# R312's landing is **RATIFIED with its redaction-insufficiency repair**, and the principle is
+# stated flat: **a scan passing is not the output being clean.** The gate-17-driven redaction passed
+# while three account handles and a private repo name were still in the written bytes; **an
+# independent `grep` authored that catch, not the gate**. So the grep is **PROMOTED INTO THE TOOL**
+# as a SECOND assertion that deliberately shares no code with the first: `audit_written` reads the
+# supplement's RAW terms and greps them over what actually landed, and removes the mirrors rather
+# than merely reporting. With the refuse-without-arm rule this makes **mirror generation
+# main-tree-only BY CONSTRUCTION**, and the supplement's single-copy nature is recorded as
+# **DESIGNED, not accidental** — a supplement copied into every worktree ends up in git eventually,
+# which is the leak the untracked design exists to prevent. **PIPE-EXIT LAW** and **SHARED-TREE
+# AMEND LAW** are adopted, each earned by a producing instance this session supplied. Both executing
+# errors stand **disclosed on the ledger with their repairs ratified** — and the ratification is
+# specifically of *which side each repair chose*: rename the local, never weaken the scanner;
+# restore the foreign commit, never absorb it.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -810,6 +840,59 @@ Verbatim text in the register; one-liners here are index only.
 - **R311(e) — PLAIN COMMS. LAW, standing; text at `plan/COMMS_STYLE.md`.** Plain language to the
   operator; **one short screen per report** with full detail on disk; no ceremony; **no restating of
   state that lives in a file the reader has**. Binds the architect and every dispatcher.
+
+- **R312(b) — THE MIRROR IS A REDACTED DERIVATIVE, NOT THE TEXT. LAW, standing; tool at
+  `plan/sync_governance.py`.** Verbatim mirroring of governance text into a PUBLIC repo is
+  **REFUSED**. Every rule-7 hit is replaced by a **stable placeholder keyed on a hash of the
+  fragment** — hash, not a counter, so one new hit upstream does not renumber the file and turn a
+  one-line edit into an unreviewable whole-file diff. The written bytes are **RE-SCANNED and must
+  come back clean or nothing is written**: the guarantee is on what lands, never on the transform
+  having run. The header **names the file a derivative and points at canonical**, because a reader
+  who does not know the text was transformed will quote a placeholder back as if it were the ruling.
+  Redaction runs through **gate 17's own `scan_text`, imported and never re-implemented** — one
+  pattern authority. **The operator's override is to make the repo PRIVATE**, not to relax this.
+- **R312(c) — `--check` STAYS OUT OF THE GATE SET until Q4's gate protocol lands. LIVE.** It runs
+  at **every governance landing** under the standing line instead. Recorded as an arrangement, not
+  an omission: wiring it means a file under `tools/ci_gates/` and a CLAUDE.md gate-list row, both
+  reserved to Q4 CI-RUNTIME, and the protocol there is state-it-and-HALT.
+- **R312(e) — A SCAN THAT RAN WEAK MUST SAY SO. LAW, standing.** `rule7_local_terms.txt` is
+  untracked by design and therefore lives in exactly ONE working directory. Gate 17 now prints
+  **`*** OPERATOR-TERM ARM SKIPPED ***`** when it is absent, and `sync_governance.py` **refuses to
+  write any mirror at all** without it. **Earned by measurement, not foresight:** the first
+  redacted mirror PASSED gate 17 and still carried an account handle four times over, because the
+  tracked patterns do not match a bare handle and the worktree that scanned it had none of the
+  operator's terms loaded. A weaker scan that announces itself in the same sentence as a full one
+  is the false-clean class, one level above the phantom gate.
+
+- **R313(a) — A SCAN PASSING IS NOT THE OUTPUT BEING CLEAN. LAW, standing.** A checker built on the
+  same patterns as the transform it checks **cannot catch what those patterns miss**, and will
+  report clean while the defect ships. Verification of an output is worth what its INDEPENDENCE from
+  the producer is worth. **Earned, not reasoned:** the gate-17-driven redaction passed gate 17 with
+  three account handles and a private repo name still in the written bytes; a hand-run `grep`
+  over the output caught it.
+- **R313(b) — TWO ASSERTIONS THAT SHARE NO CODE. LAW, standing; `plan/sync_governance.py`.** After
+  writing, the tool greps every supplement term, as a RAW STRING read from the file, over every
+  written mirror, and **refuses on any hit — removing the mirrors, because a leak left on disk
+  because the audit merely complained is the same leak**. It does NOT route through the gate's
+  compiled patterns: a second copy of the first assertion proves nothing. **Consequence, recorded as
+  designed rather than discovered: mirror generation is MAIN-TREE-ONLY BY CONSTRUCTION**, since both
+  the refusal and the audit need a file that exists in exactly one working directory — and that
+  single copy is the point, because a supplement copied everywhere reaches git eventually.
+- **R313(c) — PIPE-EXIT LAW. LAW, standing.** No gate, scanner or verifier ever sits upstream of a
+  pipe without `pipefail` or an explicit `PIPESTATUS` capture. **An exit code never dies in a pipe.**
+  Second producing instance: `secret_scan.py` returned rc 1 on a SECRET-class hit and `| tail -1`
+  ate it, so the commit ran. First: the box procedure's `PIPESTATUS` correction. **One-time sweep
+  EXECUTED** over the engine's gate wrappers and the governance plan scripts — **one real instance
+  found and fixed on contact**: `lint_gate.sh`'s `run_pyright_count` had **pyright, a verifier,
+  upstream of a pipe**, so the function returned the JSON reader's status and a pyright that died
+  while still emitting parseable JSON would have read GREEN. Fixed in a **subshell**, because that
+  file's `printf | grep -q` idioms deliberately want the downstream status.
+- **R313(d) — SHARED-TREE AMEND LAW. LAW, standing.** `--amend` only after **re-reading HEAD in the
+  same breath** and confirming the commit is your own; in a shared working tree **prefer a new
+  commit**. Producing instance: another session committed between this one's commit and its amend,
+  so the amend took the foreign commit and folded a rename in under its message. **The
+  byte-identical restoration (`git reset --soft`, foreign commit back at the same sha, own change
+  re-committed separately) is RATIFIED as the correct repair.**
 
 ## 5. Live pre-mint force — LIVE (rows expire at mint or on their event)
 
@@ -3265,3 +3348,80 @@ Verbatim text in the register; one-liners here are index only.
   two texts is the ARCHITECT'S, not the tool's:** sanitizing the canonical texts and publishing a
   redacted derivative both change what the mirror IS, and R311(c) does not reach a decision like
   that. **Recorded as OPEN.**
+- 2026-08-27 — **v3.18** curated by the ARCH-ERA architect session (R303(d)), landing **R312** and
+  executing (b), (c), (e) and (d) in the same act. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST, because the amendment said the re-sit might have field-ruled past R311.**
+  It had not: census `R23-R311, 282/282/0` at entry, no `R312` string under `plan/`, and the
+  re-sit's `RESIT_EXIT_2026-08-27.md` is a running DRAFT filing no field ruling. **Numbered R312 and
+  said so.** The paste carried the placeholder `R{next}`; the substitution is disclosed in the
+  provenance note and is the ONLY edit to the canonical text.
+  **Byte-diff, R306(a): `awk`-extracted both sides, de-marked, whitespace-normalized — `diff` rc 0
+  RAW and NORMALIZED, 19 lines each side, `sha256` `7732481eb8794d8e…`; header diffed separately,
+  verbatim. Census: R23–R312, 283 sections / 283 distinct / 0 duplicates, excluded set 53,
+  `missing-in-range` UNCHANGED.**
+  **(b) AND (e) IMPLEMENTED — AND (b) AS SPECIFIED WAS MEASURED INSUFFICIENT, WHICH IS THE ENTRY
+  THAT MATTERS.** R312(b) says redact "via gate 17's own scan". Done exactly that — and the first
+  redacted mirror **passed gate 17 while still carrying `[REDACTED:local:rule7_local_terms.txt:25:292d8813]` ×3, `[REDACTED:local:rule7_local_terms.txt:26:8f2fd2d5]` ×4 and a
+  private repo name ×4**. The tracked patterns match `user@host`, `[REDACTED:abs-root-path:0fe68e7a]`, `/home/<user>`; **they
+  do not match a BARE ACCOUNT HANDLE**, and the operator's untracked supplement — the designed home
+  for exactly those terms — **was not loaded in the worktree that scanned it**. Caught by an
+  independent `grep`, not by the gate. **Fixed at the designed extension point**: three handles
+  added to `rule7_local_terms.txt` (untracked, `.gitignore`d, so strengthening it cannot leak),
+  taking the arm from 3 live terms to 6; re-redacted; **residual scan of the written bytes clean**,
+  22 placeholders across the two files. **The tokens name the supplement's FILE AND LINE, never the
+  term** — the same discipline the gate itself keeps.
+  **PUSHED:** `dev` = `origin/dev` = `2c733b3`, gates 6, 10, 15, 16, 17 rc 0 and
+  `tests/tools/test_rule7_gate.py` 32 passed. Gate 17's self-test is now **6 controls**, the new one
+  proving the banner fires ABSENT and stays silent PRESENT — an arm with no control is what this
+  ruling exists to stop.
+  **(d) EXECUTED — `planc-conformance` RESET ONTO `dev` (R308(b)), ancestry-verified.** `git rebase
+  dev`: **34 commits replayed, 3 dropped as EMPTY** — precisely the branch's own floor ratchets
+  (3607/3613/3664), every one of them below `dev`'s 3783, so resolving each conflict to the **MAX**
+  left them changing nothing. **31 ahead, 0 behind, `dev` IS an ancestor, tree clean.** The
+  granted gate-17 escape is applied in place and **says why**, since an unexplained suppression is
+  indistinguishable from a real one waved through. **Floor RE-DERIVED on the reset tree by
+  collection — 3935 — and ratcheted 3783 → 3935 in its OWN commit** per the shared-invariant
+  protocol; gate 3 rc 0. **A backup ref `planc-backup-pre-r312` was tagged before the rebase and
+  every original subject was diffed against the result.** The full local sweep is RUNNING; **the
+  push under R311(g) waits on it and on nothing else.**
+  **SPOT-CHECKS: SIX, all clean**, by script under R306(a)'s de-mark-before-normalize order — the
+  labeled-amendments sentence · *Verbatim mirroring into a public repo is refused* · the
+  private-repo override · the `--check`-stays-out sentence · the OPERATOR-TERM ARM SKIPPED banner
+  clause · (d)'s five ordered steps.
+- 2026-08-27 — **v3.19** curated by the ARCH-ERA architect session (R303(d)), landing **R313** and
+  implementing (b) and (c) in the same act. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST, again on the amendment's own instruction.** Census `R23-R312, 283/283/0`
+  at entry, stamp v3.18, last register header `R312`, no `R313` string under `plan/`; the re-sit
+  session had committed several further sitting records and **filed no field ruling**. Numbered
+  **R313** and said so; the `R{next}` substitution is disclosed as the only edit.
+  **Byte-diff, R306(a): `awk` both sides, de-marked, whitespace-normalized — `diff` rc 0 RAW and
+  NORMALIZED, 24 lines each side, `sha256` `43ce51ed41278882…`; header diffed separately, verbatim.
+  Census: R23–R313, 284 sections / 284 distinct / 0 duplicates, excluded 53, `missing-in-range`
+  UNCHANGED.** The append itself ran under `set -o pipefail`, which is R313(c) applied to the act
+  that adopted it.
+  **(b) IMPLEMENTED.** `audit_written` reads the supplement's RAW terms from the file and greps them
+  over the bytes that landed, **removing the mirrors on any hit** rather than reporting. Wired into
+  BOTH `sync` and `--check`, so a hand-edited mirror is audited too. **It shares no code with the
+  redaction** — that is its whole value, and the docstring says so at the site. Self-test **5 → 16
+  controls**, the three new ones planting a REAL supplement term (written to a temp file, **never
+  printed**) to prove the audit fires, that it removes the offending file, and that a re-sync
+  restores. §4's row records the main-tree-only consequence as **designed, not discovered**.
+  **(c)'s ONE-TIME SWEEP EXECUTED, and it was not empty.** Seven engine shell wrappers and four
+  governance plan scripts examined for a verifier upstream of a pipe. **One real instance:
+  `tools/ci_gates/lint_gate.sh`'s `run_pyright_count` piped `uv run pyright --outputjson` into a
+  JSON reader with no `pipefail`**, so the function's status was the reader's and a pyright that
+  died while still emitting parseable JSON would have reported its `errorCount` and read GREEN —
+  gate 14 announcing a clean type baseline it had not measured. **Fixed on contact in a SUBSHELL**,
+  because the same file's `printf | grep -q` idioms want the downstream status and a global
+  `pipefail` would have reached them. Gate 14 **rc 0** and its self-test **all 4 arms + 1 control**
+  after the change. The other ten scripts were clean: six already set `pipefail`, four have no
+  verifier-upstream pipe at all.
+  **THE CONFORMANCE SWEEP IS GREEN THROUGH FIFTEEN LEGS** on the reset branch — default tier rc 0,
+  integration rc 0, gates 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 all rc 0, including the
+  count floor that produced the first sweep's red and the rule-7 row the granted escape repaired.
+  `cargo test` and `clippy` were still running at this entry's writing; **the R311(g) push waits on
+  them and on nothing else**, and its result is recorded in the checkpoint rather than predicted here.
+  **SPOT-CHECKS: SIX, all clean**, by script under R306(a)'s de-mark-before-normalize order — the
+  scan-passing-is-not-clean sentence · *the independent grep promoted into the tool* · the
+  main-tree-only-by-construction clause · PIPE-EXIT's *an exit code never dies in a pipe* ·
+  SHARED-TREE AMEND's same-breath condition · (e)'s *rename the local, never weaken the scanner*.
