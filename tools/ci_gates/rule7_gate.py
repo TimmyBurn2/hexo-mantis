@@ -213,6 +213,27 @@ def local_class_count() -> int:
     return len(_compiled()) - len(PATTERNS)
 
 
+def operator_arm_banner() -> str | None:
+    """The loud line for a scan run WITHOUT the operator-term arm, or None when it is present.
+
+    R312(e). `LOCAL_TERMS` is untracked by design, so it lives in ONE working directory: any run
+    from a `git worktree` -- or on CI, or a fresh clone -- silently scanned at the tracked floor
+    while printing `0 local term(s) live`, a sentence that reads identically to "the file is
+    there and empty". A weaker scan that announces itself the same way as a full one is the
+    false-clean class this gate exists to stop, so the ABSENT case now says so in its own words.
+    Distinguishes ABSENT from PRESENT-BUT-EMPTY: only the first is a missing arm.
+    """
+    if LOCAL_TERMS.is_file():
+        return None
+    return (
+        "gate 17: *** OPERATOR-TERM ARM SKIPPED *** "
+        f"{LOCAL_TERMS.name} is ABSENT, so this scan ran at the TRACKED FLOOR only. "
+        "The supplement is untracked by design and exists in one working directory -- "
+        "a worktree, a fresh clone or CI does not have it. A PASS here is weaker than a "
+        "pass in the main tree and does NOT clear operator-identifying terms."
+    )
+
+
 def _justified(lines: list[str], lineno: int) -> bool:
     """Escape on the line itself, or anywhere in the comment block directly above it."""
     if ESCAPE in lines[lineno - 1]:
@@ -357,10 +378,15 @@ def self_test() -> bool:
 
     if not _local_arm_fires():
         ok = False
+    if not _operator_arm_banner_fires():
+        ok = False
     if ok:
         print(f"gate 17 self-test: all {len(PATTERNS)} registered pattern classes fire, "
-              f"5 controls clean, local-supplement arm wired "
+              f"6 controls clean, local-supplement arm wired "
               f"({local_class_count()} local term(s) live)")
+        banner = operator_arm_banner()
+        if banner:
+            print(banner)
     return ok
 
 
@@ -397,6 +423,37 @@ def _local_arm_fires() -> bool:
                 ok = False
         finally:
             LOCAL_TERMS, _COMPILED = saved_path, saved_cache
+    return ok
+
+
+def _operator_arm_banner_fires() -> bool:
+    """LAW-07 for the R312(e) banner: prove it fires ABSENT and stays silent PRESENT.
+
+    Without this control the banner could be wired to a condition that never holds and every
+    worktree run would keep reporting a floor-strength scan in a full-strength sentence -- the
+    exact defect R312(e) closes. Drives the real function against both states of the real
+    module global, and restores it in `finally`.
+    """
+    global LOCAL_TERMS
+    saved, ok = LOCAL_TERMS, True
+    with tempfile.TemporaryDirectory() as td:
+        present, absent = Path(td) / "rule7_local_terms.txt", Path(td) / "not_here.txt"
+        present.write_text("zzplantedlocaltermzz\n", encoding="utf-8")
+        try:
+            LOCAL_TERMS = absent
+            banner = operator_arm_banner()
+            if banner is None or "OPERATOR-TERM ARM SKIPPED" not in banner:
+                print("gate 17 SELF-TEST FAIL: an ABSENT local-terms file did not raise the "
+                      "OPERATOR-TERM ARM SKIPPED banner -- a worktree scan would report a "
+                      "floor-strength pass in a full-strength sentence (R312(e))")
+                ok = False
+            LOCAL_TERMS = present
+            if operator_arm_banner() is not None:
+                print("gate 17 SELF-TEST FAIL: the banner fired with the supplement PRESENT -- "
+                      "a banner that always prints is noise and stops being read")
+                ok = False
+        finally:
+            LOCAL_TERMS = saved
     return ok
 
 
@@ -474,6 +531,10 @@ def main() -> int:
             "grounds and the blob sha -- never in the escape hatch."
         )
         rc = 1
+
+    banner = operator_arm_banner()
+    if banner:
+        print(banner, file=sys.stderr)
 
     if rc == 0:
         where = "tracked tree" if args.full_tree else f"files changed vs {args.base}"
