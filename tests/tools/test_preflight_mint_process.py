@@ -826,25 +826,55 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     posture run5 carries, and if run5 is ever minted to a posture this box cannot satisfy the
     resolver says so at the launch instead of the assertion saying it in the tail.
 
-    POSTURE-COUPLING, DISCLOSED because it is the thing a future reader would otherwise
-    rediscover (RECAL_PREP_EXIT.md §6): while `configs/run5.yaml` carried the R119 `null`
-    placeholder this row was RED for a reason that had nothing to do with the device — the boot
-    refused on an unminted regime. It goes green under EITHER minted token, and the RED-TEAM
-    obligation attached to the grant is exactly that check, on a CPU host, under both.
+    TWO LIVE ARMS, and the branch is the CONFIG'S OWN STATE — not the host's and not a marker
+    (F-R309-1; frozen-edit grant R310(a), re-pinned in the same act). The R309(e) grant launched
+    the child in run5's minted posture, which is right and which `configs/run5.yaml` cannot
+    satisfy: it carries the R119 `null` PLACEHOLDER, and `resolve_allocator_posture` refuses
+    that BEFORE any environment is consulted, so NO environment makes the minted arm reachable.
+    A row left red-by-design at HEAD converts a correct refusal into a standing CI outage, so
+    the row now carries one arm per state the config can be in, and BOTH of them assert:
+
+    - PLACEHOLDER (what HEAD carries): the boot refuses with `UncalibratedAllocatorPostureError`
+      and does NOT reach `init_trainer`. That is R308(g)(i)'s ORDERING — the posture lands ahead
+      of the first CUDA allocation — measured END TO END through the shipped preflight process.
+      Nothing else in this repo asserts it there: the in-process oracles drive the resolver, not
+      a boot, so this arm is a witness the repair ADDS rather than a consolation for one it lost.
+    - MINTED (what the re-calibration sitting produces): the original device subject, unchanged,
+      with the child launched in the config's own posture read through the resolver.
+
+    SELF-EXPIRING BY CONSTRUCTION, which is why this shape and not a skip: the moment the sitting
+    mints a posture into run5, `declared_allocator_posture` stops returning `None`, the
+    placeholder arm goes dormant and the row measures its original subject again — nothing has to
+    remember to switch it back. The rejected alternative was extending the `skipif`: cheaper, and
+    it would have switched off R126's only witness — *the instrument that cannot false-clear* —
+    for however long the box sitting took.
+
+    VERIFIED UNDER BOTH MINTED TOKENS on a CPU host — PASS at `default`, PASS at
+    `expandable_segments`, `configs/run5.yaml` restored byte-identical after each probe — so the
+    minted arm is MEASURED and not merely written (R309(e)'s obligation, and R310(f)'s rule that
+    a granted diff is a measured one).
     """
     out_dir = tmp_path / "run5_on_cpu"
-    # RECAL-PREP (R308(g)(i)): run5's boot now asserts its minted allocator posture BEFORE
-    # init_trainer, so this row must launch the child IN that posture or it measures the
-    # posture refusal instead of the device one. Read from the config, never transcribed.
-    from mantis.config.resolve.allocator_posture import resolve_allocator_posture
-    posture = resolve_allocator_posture(load_config(RUN5).model_dump())
-    env = {**os.environ, **posture.required_env()}
-    result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45", env=env)
     assert load_config(RUN5).train.device == "cuda", (
         "PREMISE: run5 mints `train.device: cuda`. If run5 is ever re-minted to cpu this row "
         "is testing nothing and must be re-adjudicated, not adjusted"
     )
+    # The arm selector is the module that OWNS the vocabulary: `None` IS the R119 placeholder, a
+    # token is a minted regime, and anything else raises THERE instead of being guessed at here.
+    # RECAL-PREP (R308(g)(i)): a minted boot asserts its posture BEFORE init_trainer, so the
+    # minted arm must launch the child IN that posture or it measures the posture refusal under
+    # the device refusal's name. Read from the config, never transcribed.
+    from mantis.config.resolve.allocator_posture import (
+        declared_allocator_posture,
+        resolve_allocator_posture,
+    )
+    full_config = load_config(RUN5).model_dump()
+    minted = declared_allocator_posture(full_config) is not None
+    # The placeholder arm passes NO environment, and that is its own premise rather than an
+    # oversight: the refusal fires before the environment is read, so there is nothing to satisfy.
+    env = {**os.environ, **resolve_allocator_posture(full_config).required_env()} if minted else None
+    result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", env=env)
     assert result.returncode == 33, (
         "run5 on a non-CUDA box must FAIL, not rehearse something else: rc 33 "
         f"PreflightBootFailedError. got {result.returncode}\n"
@@ -856,14 +886,29 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
         "the refusal is IMMEDIATE — a timeout here would mean the boot got past the device"
     )
     tail = report["child"]["stderr_tail"]
-    assert "composition seam: init_trainer" in tail, (
-        "rc 33 must trace to a NAMED failure, not a swallowed one (R130): `_seam` annotates "
-        f"the in-flight exception with WHERE it happened and re-raises it. got tail {tail[-800:]!r}"
-    )
-    assert "Torch not compiled with CUDA enabled" in tail, (
-        "…and the raise itself is torch's own, verbatim in the evidence — acceptable-loud per "
-        f"R130, recorded rather than re-wrapped in scope. got tail {tail[-800:]!r}"
-    )
+    if not minted:
+        assert "UncalibratedAllocatorPostureError" in tail, (
+            "PLACEHOLDER ARM: an unminted regime must refuse the boot BY NAME through the "
+            f"SHIPPED process, not somewhere else and not silently. got tail {tail[-800:]!r}"
+        )
+        assert "composition seam: init_trainer" not in tail, (
+            "…and it must refuse BEFORE the trainer is built: R308(g)(i) exists to land ahead "
+            "of the first CUDA allocation, and the init_trainer seam in this tail means that "
+            f"ordering inverted. got tail {tail[-800:]!r}"
+        )
+        assert "Torch not compiled with CUDA enabled" not in tail, (
+            "…and ahead of the DEVICE refusal too — this arm's subject is the ordering, so a "
+            f"torch CUDA assertion here is the device refusal winning. got tail {tail[-800:]!r}"
+        )
+    else:
+        assert "composition seam: init_trainer" in tail, (
+            "rc 33 must trace to a NAMED failure, not a swallowed one (R130): `_seam` annotates "
+            f"the in-flight exception with WHERE it happened and re-raises it. got {tail[-800:]!r}"
+        )
+        assert "Torch not compiled with CUDA enabled" in tail, (
+            "…and the raise itself is torch's own, verbatim in the evidence — acceptable-loud "
+            f"per R130, recorded rather than re-wrapped in scope. got tail {tail[-800:]!r}"
+        )
 
 
 # ══ the mini-tree rig: the tool's own REPO_ROOT, addressable ═══════════════════════════
