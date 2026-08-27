@@ -576,6 +576,9 @@ def test_an_UNKNOWN_marker_is_refused_rather_than_ignored(tmp_path):
     """A marker the census does not know is a marker whose tier effect it cannot predict, and
     ignoring it is how a new `-m` expression silently deselects a gate."""
     module = tmp_path / "test_planted.py"
+    # rule7-gate: ok -- the `\n@pytest.mark.flaky` in this planted source reads as user@host to
+    # the ssh-userhost pattern: the "user" is the n of an escaped newline and the "domain" is a
+    # pytest marker path. No account, no machine, and the string is a fixture this test writes.
     module.write_text(
         'import pytest\n\n@pytest.mark.flaky\ndef test_x(): assert True\n', encoding="utf-8"
     )
