@@ -174,6 +174,26 @@ _REMOVED_LEAVES = {"train.buffer_save_interval"}
 #: and not merely a deletion of the same SIZE somewhere else in the file.
 _REMOVED_LINES = ["  buffer_save_interval: 0"]
 
+#: Exactly which BODY leaves a re-mint may MOVE, by (config, dotted key). A closed set of one,
+#: and the THIRD non-insertion this file has ever admitted.
+#:
+#: **THE OPERATOR'S GRANT, 2026-08-27.** Phase W of the re-calibration sitting mints a
+#: MEASUREMENT-DERIVED `selfplay.n_workers` under R309(f)'s knee rule, and `n_workers: 1` — the
+#: value the `b482243` baseline carries — is the ONE value that rule REJECTS. So every pick the
+#: pre-registered ladder can legally produce moves this leaf, and both halves of this file
+#: refused it: the structural half as a moved value, the textual half as a `replace`. The
+#: operator granted the widening rather than let a measurement-derived mint be blocked by an
+#: instrument written before the measurement existed. Widening it FURTHER is a ruling, not an
+#: edit — the same sentence `_REMOVED_LEAVES` carries.
+#:
+#: **SUBSET, not equality, and the difference is deliberate.** `_REMOVED_LEAVES` asserts
+#: equality because its deletion HAS happened and must stay happened. This is a PERMISSION
+#: whose exercise depends on a mint: a clone from before the mint moves nothing and must stay
+#: green; the tree after it moves exactly this leaf. Nothing is given up by the weaker
+#: relation — a move on any key OUTSIDE this set still reds, which is the whole of the "and
+#: only those rows" bite, and `test_a_second_moved_leaf_still_reds` is its producer.
+_MOVED_LEAVES = {("run5.yaml", "selfplay.n_workers")}
+
 #: Exactly which minted-header delta lines R187's re-mint may RE-RENDER, by (config, key). A
 #: closed set of five, and the second non-insertion this file has ever seen.
 #:
@@ -245,6 +265,56 @@ def _is_ruled_reheader(name: str, old_line: str, new_line: str) -> bool:
                for old, new in ((old_before, new_before), (old_after, new_after)))
 
 
+def _ruled_move_paths(name: str) -> dict[str, str]:
+    """`leaf name -> dotted path` for this config's ruled moves, REFUSING an ambiguous leaf.
+
+    The textual half sees `  n_workers: 8`, a body line with no section context, so the leaf
+    name has to resolve to a dotted path. That resolution is DERIVED from the config's own
+    leaf map, and it REFUSES rather than guesses when a leaf name is not unique — a predicate
+    that silently picked one of two same-named keys would tolerate a move on the wrong one,
+    which is exactly the class this file exists to catch."""
+    live = _live_leaves(name)
+    resolved: dict[str, str] = {}
+    for config_name, dotted in _MOVED_LEAVES:
+        if config_name != name or dotted not in live:
+            continue
+        leaf = dotted.rsplit(".", 1)[-1]
+        matches = [path for path in live if path.rsplit(".", 1)[-1] == leaf]
+        assert matches == [dotted], (
+            f"{name}: the ruled-move leaf {leaf!r} resolves to {matches}, not uniquely to "
+            f"{dotted!r}. This predicate refuses an ambiguous leaf rather than picking one"
+        )
+        resolved[leaf] = dotted
+    return resolved
+
+
+def _is_ruled_move(name: str, old_line: str, new_line: str) -> bool:
+    """True iff the two BODY lines are the SAME ruled leaf carrying its baseline and live values.
+
+    Every conjunct is DERIVED from the two configs, none transcribed: same indentation, same
+    key, the key resolves (uniquely) to a `_MOVED_LEAVES` path for this config, the OLD value
+    parses to the value the BASELINE config holds there, and the NEW value parses to the value
+    the LIVE config holds there. A line that disagrees with the body it claims to describe
+    fails, and so does a move on any key nobody named."""
+    if old_line.lstrip().startswith("#") or new_line.lstrip().startswith("#"):
+        return False
+    if len(old_line) - len(old_line.lstrip(" ")) != len(new_line) - len(new_line.lstrip(" ")):
+        return False
+    old_key, old_sep, old_value = old_line.strip().partition(": ")
+    new_key, new_sep, new_value = new_line.strip().partition(": ")
+    if not (old_sep and new_sep) or old_key != new_key:
+        return False
+    dotted = _ruled_move_paths(name).get(old_key)
+    if dotted is None:
+        return False
+    try:
+        parsed_old, parsed_new = yaml.safe_load(old_value), yaml.safe_load(new_value)
+    except yaml.YAMLError:
+        return False
+    return (parsed_old == _baseline_leaves(name).get(dotted)
+            and parsed_new == _live_leaves(name).get(dotted))
+
+
 def _replace_is_reheaders_plus_insertions(name: str, old: list[str], new: list[str]) -> bool:
     """True iff every OLD line is matched, IN ORDER, by a NEW line that is IDENTICAL or a
     RULED re-header, and every remaining NEW line is an addition.
@@ -266,7 +336,8 @@ def _replace_is_reheaders_plus_insertions(name: str, old: list[str], new: list[s
     i = 0
     for old_line in old:
         while i < len(new) and not (new[i] == old_line
-                                    or _is_ruled_reheader(name, old_line, new[i])):
+                                    or _is_ruled_reheader(name, old_line, new[i])
+                                    or _is_ruled_move(name, old_line, new[i])):
             i += 1                       # an ADDED line: allowed, it is an insertion
         if i == len(new):
             return False                 # an old line vanished or was rewritten
@@ -344,12 +415,15 @@ def test_the_remint_adds_the_new_keys_and_moves_nothing_else(name: str) -> None:
         f"{name}: the re-mint may add exactly {sorted(_ADDED_LEAVES)} (R120 + R122 + R126); "
         f"got {sorted(added)}"
     )
+    ruled = {path for config_name, path in _MOVED_LEAVES if config_name == name}
     moved = {path: (baseline[path], live[path])
              for path in baseline
              if path not in _REMOVED_LEAVES and live[path] != baseline[path]}
-    assert not moved, (
-        f"{name}: the re-mint MOVED existing values {moved} — the three schema items are "
-        "additive by construction (§6), so any other delta is template drift"
+    unruled = {path: pair for path, pair in moved.items() if path not in ruled}
+    assert not unruled, (
+        f"{name}: the re-mint MOVED existing values {unruled} — the three schema items are "
+        "additive by construction (§6), so any delta outside the named ruled moves "
+        f"{sorted(ruled)} is template drift"
     )
 
 
@@ -417,6 +491,58 @@ def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
     )
     assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
         "a leaf cannot be both added and removed by one re-mint"
+    )
+
+
+def test_a_second_moved_leaf_still_reds() -> None:
+    """The allowance's own guard: this file tolerates a MOVED value at all only because the
+    operator granted ONE on 2026-08-27, and the tolerance must never become "moves are fine".
+
+    MUTATION THAT REDS IT: a later sitting that needs its own leaf moved and widens
+    `_MOVED_LEAVES` instead of getting a grant. The set is closed at one `(config, key)` pair,
+    the key is named, and `_is_ruled_move` refuses any line whose key is not IN it — so the
+    two ways a second move could slip through (a wider set, or a predicate that matched on
+    shape rather than on name) are both closed here.
+
+    The `_is_ruled_move` arms are driven against the LIVE tree rather than against a fixture,
+    so they stay true of whatever `configs/run5.yaml` currently holds: before the mint the
+    baseline and live values agree and every arm is False for want of a difference; after it
+    the ruled pair is the one that passes. Neither state can make an UNNAMED key pass."""
+    assert _MOVED_LEAVES == {("run5.yaml", "selfplay.n_workers")}, (
+        "the ruled-move set is the operator's 2026-08-27 grant and is closed at one "
+        "(config, key) pair; widening it is a grant, not a maintenance edit"
+    )
+    assert not {path for _c, path in _MOVED_LEAVES} & _ADDED_LEAVES, (
+        "a leaf cannot be both added by the re-mint and moved by it"
+    )
+    assert not {path for _c, path in _MOVED_LEAVES} & _REMOVED_LEAVES, (
+        "a leaf cannot be both removed by the re-mint and moved by it"
+    )
+    assert not (set(_MOVED_LEAVES) & _REHEADERED_DELTAS), (
+        "the body-move allowance and the header re-render allowance must not name the same "
+        "(config, key): one tolerates a moved VALUE, the other proves nothing moved"
+    )
+    # An UNNAMED key of exactly the tolerated SHAPE must still fail — the predicate matches on
+    # the ruled name, never on "looks like a scalar that changed".
+    assert not _is_ruled_move("run5.yaml", "  batch_size: 256", "  batch_size: 128"), (
+        "a body line of the tolerated shape on a key nobody named must not pass"
+    )
+    # The ruled key in a config the grant does not cover must still fail.
+    assert not _is_ruled_move("dev_example.yaml", "  n_workers: 1", "  n_workers: 8"), (
+        "the grant names (run5.yaml, selfplay.n_workers); the same key elsewhere is unruled"
+    )
+    # A line that disagrees with the body it claims to describe must still fail, whichever
+    # side disagrees — this is the conjunct that makes the predicate DERIVED rather than a
+    # pattern match, and it is the one a hand-edited config would trip.
+    live_workers = _live_leaves("run5.yaml")["selfplay.n_workers"]
+    base_workers = _baseline_leaves("run5.yaml")["selfplay.n_workers"]
+    assert not _is_ruled_move("run5.yaml", f"  n_workers: {base_workers}",
+                              f"  n_workers: {int(live_workers) + 1}"), (
+        "a NEW slot that does not equal the live config's own value must not pass"
+    )
+    assert not _is_ruled_move("run5.yaml", f"  n_workers: {int(base_workers) + 1}",
+                              f"  n_workers: {live_workers}"), (
+        "an OLD slot that does not equal the baseline config's own value must not pass"
     )
 
 
