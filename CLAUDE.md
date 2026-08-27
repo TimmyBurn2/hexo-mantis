@@ -67,7 +67,9 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
    Reason: keeps the audit greppable; unjustified growth hides structure drift.
 9. **R9 registers.** docs/registers/falsified.md is read-before-optimizing;
    docs/registers/laws.md governs; deviations from docs/design/repo_design.md require an
-   amendment commit, never silent drift.
+   amendment commit, never silent drift. A NON-canonical working doc that disagrees with
+   verified repo state is repaired in place by whoever finds it, noted in one line, no loop
+   (R311(c)); register text still corrects only by annotation.
    Reason: re-litigating falsified work and silent contract drift burned weeks before.
 
 ## Laws digest (full text: docs/registers/laws.md)
@@ -91,6 +93,21 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 - LAW-17 structure — zero sys.path writes; one tests/ root; pyo3 only in the bridge.
 - LAW-18 in-run observability — a lever under test logs its own fire-rate in-run.
 
+## Code style
+
+- **Python.** Type hints on all new/changed code. Public APIs carry a docstring, and every
+  catchable exception is named in a `Raises:` section. Imports at top of file — lazy-loading
+  an optional dep is the ONE exception. Text-mode IO always passes `encoding=` (gate 16
+  enforces tools/ and tests/ module scope; the RULE is the whole tree).
+  Catch specific exceptions; bare `except Exception:` only in a top-level handler, which
+  logs through `logger.exception` and does NOT repeat the exception in the message.
+- **Rust.** No `unwrap()`/`expect()` on production paths — fail-loud means a NAMED error type
+  that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
+  reaching for the panic in the first place). `expect()` is fine in tests and in startup
+  invariants when its message names the invariant. clippy rides gate 2 (`-D clippy::all`);
+  rustfmt is house style and is NOT gated anywhere — run it yourself, do not assume a gate
+  caught it.
+
 ## Build & test
 
 - `uv sync` — the ONE bootstrap: builds mantis._engine via maturin, installs everything.
@@ -98,6 +115,12 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   native flags; artifacts host-specific, never distributed).
 - `make test` — pytest default tier + `cargo test --workspace --locked`.
 - `make test.integration` — the CI integration tier (`-m integration`).
+- Cadence (R311(b)): targeted tests, smallest relevant first, while iterating; the FULL local
+  gate set at leg exit and before any push, never per edit. **Remote CI is SUSPENDED by
+  operator decision** until the operator re-enables it — no push or merge waits on it, and
+  local green is the gate. Doc/governance-only commits need no gates at all. The accepted cost
+  is on the record: gate 1's fresh-clone `uv sync` is the one check no local run reproduces.
+  This sets WHEN gates run, never WHAT they check.
 - `make bench` / `make bench.baseline` — criterion smoke bench (baseline saves locally).
 - `make check.wasm` — mantis-graph must stay wasm32-clean.
 - `make vendor` — fetch vendor pins. `make clean` — cargo clean + dist removal.
