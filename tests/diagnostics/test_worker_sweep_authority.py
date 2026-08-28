@@ -675,11 +675,20 @@ def test_the_report_carries_the_config_basename_and_never_its_path(
     cfg = tmp_path / "deeply" / "nested" / "run5_local.yaml"
     cfg.parent.mkdir(parents=True)
     cfg.write_text("x: 1\n", encoding="utf-8")
-    prov = ws.provenance(SimpleNamespace(run_id="r", identity=SimpleNamespace(
+    # `seed` joins the stub because `provenance` now carries it: F-RESIT-10's repair makes the
+    # ladder's rungs comparable only if they are seeded, and R69 says the report travels with
+    # that mechanism rather than leaving a reader to trust it. A stub omitting a field the
+    # production path reads raises `AttributeError` — correctly, and it is the same maintenance
+    # every new surface has needed here.
+    prov = ws.provenance(SimpleNamespace(run_id="r", seed=20260718, identity=SimpleNamespace(
         encoding="gnn_axis_v1", representation="graph"),
         model_dump=lambda: {"allocator_posture": None}),
         cfg, device="cpu", label="t")
     assert prov["config_name"] == "run5_local.yaml"
+    assert prov["seed"] == 20260718, (
+        "the report must say what the ladder was seeded with; before F-RESIT-10's repair the "
+        "honest value of this field was 'unseeded' and nothing in the report said so"
+    )
     assert str(tmp_path) not in json.dumps(prov)
     assert prov["config_sha256"] == hashlib.sha256(cfg.read_bytes()).hexdigest(), (
         "the field names SHA-256; a git blob SHA-1 under that name makes a later `sha256sum` "

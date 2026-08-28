@@ -72,6 +72,7 @@ producers is a phantom-armed abort chain waiting to happen).
 | the fire path reaches `exit_fn` even if a BOUNDED effect (snapshot, sink close) hangs — the two fire emits are exception-safe but hang-unbounded, supervisor-covered (`_fire` docstring, N3) | `heartbeat_watchdog.py::_bounded` (`heartbeat_watchdog_fire_complete`) | `tests/train/test_heartbeat_watchdog.py::test_hung_snapshot_still_exits_within_a_bounded_time` |
 | an eval-result shape the seam cannot consume is recorded | `train/coordinator/drain.py::_route_eval_result` (`eval_result_unroutable`) | `tests/train/test_run_safety_wiring.py::test_an_unroutable_eval_result_is_recorded_loudly` |
 | an inert gate is loud, not silent (skip counter) | `step.py::on_eval_round_complete` (`sealbot_wr_gate_skipped`) | `tests/train/test_coordinator_gates.py::test_sealbot_absent_key_skips_and_counts` |
+| a gate skipped because the round BROKE is distinguishable from one skipped because the round carried no number (F-RESIT-14) | `step.py::on_eval_round_complete` (`sealbot_wr_gate_skipped` with `reason: eval_round_broken` + the typed `eval_broken_reason`) | `tests/train/test_eval_broken_reaches_the_gate.py::test_a_broken_round_reaches_the_gate_and_is_NAMED_there` |
 
 ## Shipped rows (WP13-A)
 

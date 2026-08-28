@@ -36,6 +36,7 @@ class EvalBrokenReason(StrEnum):
     """
 
     JOIN_TIMEOUT = "join_timeout"
+    ROUND_TIMEOUT = "round_timeout"
     KILLED = "killed"
     EXIT_NONZERO = "exit_nonzero"
     RESULT_MISSING = "result_missing"

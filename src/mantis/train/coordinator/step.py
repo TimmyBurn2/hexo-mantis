@@ -1107,13 +1107,33 @@ class StepCoordinator:
         # train step and mis-stamp the WR ring (RED-TEAM F12): test for absence, not truth.
         raw_step = payload.get("step")
         step = self._train_step if raw_step is None else int(raw_step)
+        # F-RESIT-14's GATE HOLE, closed here. A round that BROKE and a healthy round that
+        # simply carried no sealbot number reached this gate as the SAME observable: one skip
+        # event, one reason string, `wr_sealbot_absent`. They are not the same fact. A round
+        # that could not run is not a round that ran without a number, and LAW-15's promotion
+        # bar must not be reported as merely un-evidenced when the evidence PATH failed.
+        # Measured at the 2026-08-27 re-sit: every in-run round ended `eval_broken`
+        # (`reason=join_timeout`, the round-progress budget escalating), the promotion gate
+        # therefore never fired for the life of the burst, and this event said
+        # `wr_sealbot_absent` each time — indistinguishable from a healthy quiet round.
+        #
+        # `.get` and NOT a subscript, deliberately, and the asymmetry with
+        # `apply_gate_decision` is the point: there a subscript is right because an ABSENT
+        # reason must never read as clean on the PROMOTION path (R152/LAW-11). Here the
+        # mapping legitimately predates the key on the terminal and hand-built routes, and a
+        # `KeyError` raised in this method kills the poller thread — converting a VISIBLE skip
+        # into a silent hang, which is the F1 failure mode the eval pipeline is built against.
+        broken = payload.get("eval_broken_reason")
         wr = payload.get("wr_sealbot")
         if wr is None:
             stats["skips"] += 1
             emit_via(self._sink, {
                 "event": "sealbot_wr_gate_skipped",
                 "step": step,
-                "reason": "wr_sealbot_absent",
+                "reason": "eval_round_broken" if broken is not None else "wr_sealbot_absent",
+                # Present on EVERY skip, `None` on the healthy-but-metric-less arm, so a
+                # consumer reads one key rather than inferring the case from a string.
+                "eval_broken_reason": broken,
                 "skipped_total": stats["skips"],
                 "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })

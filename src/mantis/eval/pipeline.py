@@ -540,7 +540,11 @@ class EvalPipeline:
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
         proc.kill()
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
-        self._finalize_round(inflight, escalated_reason=EvalBrokenReason.JOIN_TIMEOUT)
+        # The round exceeded `round_timeout_sec`, its PROGRESS budget. The joins above are
+        # the kill sequence, not the cause — this path reported `JOIN_TIMEOUT` until R316(c),
+        # which told an operator the child would not exit when it had in fact been killed for
+        # running long. The genuine join timeout is `_drain_escalate`'s, and it keeps the name.
+        self._finalize_round(inflight, escalated_reason=EvalBrokenReason.ROUND_TIMEOUT)
 
     # ── kick / ack ───────────────────────────────────────────────────────────────────
     def run_evaluation(
@@ -757,8 +761,14 @@ class EvalPipeline:
         # every time, never a hang, never a silent skip.
         try:
             if escalated_reason is not None:
+                # `phase` is a FUNCTION of the reason, which is why it stays on the payload rather
+                # than folding into the enum. Both escalating routes arrive here: the drain's
+                # genuine join timeout, and `_poll_loop`'s round-budget kill. A constant "drain"
+                # would send a supervisor triaging a round timeout to look at the drain budget.
+                phase = ("round_timeout" if escalated_reason is EvalBrokenReason.ROUND_TIMEOUT
+                         else "drain")
                 result = self._broken_result(inflight, reason=escalated_reason, exit_code=exit_code,
-                                             wall_sec=wall_sec, phase="drain")
+                                             wall_sec=wall_sec, phase=phase)
             elif exit_code is not None and exit_code != 0:
                 reason = (EvalBrokenReason.KILLED if exit_code < 0
                           else EvalBrokenReason.EXIT_NONZERO)

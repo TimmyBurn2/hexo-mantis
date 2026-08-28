@@ -149,6 +149,7 @@ from mantis.selfplay.buffers import BufferKind
 from mantis.selfplay.hparams import resolve_pool_encoding
 from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.pool_hooks import runner_stats
+from mantis.util.determinism import seed_everything
 from mantis.util.device import (
     cuda_counters_available,
     cuda_device_total_bytes,
@@ -222,6 +223,21 @@ RULED_KNEE_PCT = 95.0
 #: A pre-registration with a measured basis and no enforcement is a preference; one token in a
 #: plan file made the pick arbitrary with every check green.
 PREREG_METRIC = "moves_per_min"
+
+#: THE DETERMINISM CONTROL'S BAND, pinned in SOURCE for the same reason `RULED_KNEE_PCT` is.
+#: R315(c)(i) fixes it by number — *"a determinism control (same rung, same seed, twice, sub-1%
+#: apart)"* — so it is the ruling's constant, not this design's, and a constant a sitting could
+#: edit between two runs of the same tool has moved (F-WS-3, and the register's own words: "No
+#: post-hoc movement of any of it").
+#:
+#: WHY A BAND AT ALL RATHER THAN EQUALITY. Seeding fixes the NETWORK, which is what F-RESIT-10
+#: measured varying; it does not make wall-clock throughput bit-identical, because the drive is a
+#: real self-play pool with OS scheduling in it. The 2026-08-27 discriminator measured the
+#: residual with the network held fixed: two drives of the same rung in one process came back
+#: **0.58 % apart**, inside each drive's own +/-4 % round-to-round spread. 1 % is therefore a band
+#: the repair is already known to clear, and one that the 1.60x draw-to-draw variation it replaces
+#: would have failed by a factor of sixty.
+RULED_DETERMINISM_BAND_PCT = 1.0
 
 #: The band's UPPER bound. The plan file argues 1.0 at length (5.0 would permit 774 MiB of growth
 #: per round on this card, against a sitting whose falsifier fired on 343 MiB). A bound is what
@@ -853,6 +869,38 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
     return ReplayBuffer(capacity, config.identity.encoding)
 
 
+def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
+    """SEED, then build this rung's network. The seeding is the point, and it is a REPAIR.
+
+    **F-RESIT-10, measured at the 2026-08-27 re-sit.** This tool built a fresh `build_net(arch)`
+    per rung from an UNSEEDED RNG, so every rung of the pre-registered ladder raced a DIFFERENT
+    random network. On an unbounded board a network's policy decides how far stones spread, which
+    decides the graph's node and edge counts, which decides what every fused forward costs — so
+    the ladder's ranking column was a function of `n_workers` **and an uncontrolled draw**. The
+    knee rule compares rungs, and a column carrying a term resampled between rungs cannot be
+    compared: on the measured ladder the pick moved six rungs depending on which net a rung drew.
+
+    **Size of the effect, measured rather than argued.** At a FIXED worker count, throughput
+    varied **1.60x** on the draw alone (277 seeded / 444 on a lucky unseeded draw at
+    `n_workers = 4`), against **2.39x** for the entire ladder from 2 workers to 16. The noise was
+    roughly 60 % of the signal, constant within a rung and resampled between them — the worst
+    possible shape for a rule that compares rungs.
+
+    **R30a's ONE-BOOT-SITE rule is not crossed, and the distinction is not a technicality.**
+    `mantis.run.build_run_collaborators` remains the only place a RUN seeds, once, before any
+    RNG-consuming object exists. This process is not a run: it builds MANY pools and its entire
+    output is a COMPARISON between them, so each one must start from the same RNG state or the
+    comparison is not one. `seed_everything` is documented idempotent and is called here per rung,
+    from the config's own `seed` — never a literal, so a re-minted seed follows without an edit.
+
+    Placed immediately before the ONE RNG consumer on this path, which is `build_net`.
+    """
+    from mantis.model import build_net
+
+    seed_everything(int(config.seed))
+    return build_net(arch).to(device)
+
+
 def build_sweep_pool(config: Any, *, n_workers: int, device: torch.device) -> WorkerPool:
     """Build the self-play collaborators for ONE rung — model, buffer, pool. No trainer.
 
@@ -860,12 +908,12 @@ def build_sweep_pool(config: Any, *, n_workers: int, device: torch.device) -> Wo
     (`SelfPlayHParams.from_config(config, n_workers)`), never by editing a config on disk:
     varying it is the measurement, and the config is otherwise the run's own, unchanged.
     """
-    from mantis.model import arch_from_spec_and_config, build_net
+    from mantis.model import arch_from_spec_and_config
 
     raw = config.model_dump()
     resolved = resolve_pool_encoding(raw, arch=None)
     arch = arch_from_spec_and_config(resolved.registry_spec, raw)
-    model = build_net(arch).to(device)
+    model = build_sweep_net(config, arch, device)
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     buffer = _select_sweep_buffer(config, resolved.registry_spec, capacity)
     return WorkerPool(model=model, config=raw, device=device, replay_buffer=buffer,
@@ -1112,6 +1160,70 @@ def walk_ladder(plan: SweepPlan, *, runner: Any, label: str) -> tuple[list[RungR
 
 
 # ══ the knee ═════════════════════════════════════════════════════════════════════════════
+AGREE = "AGREE"
+DIVERGED = "DIVERGED"
+
+
+def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *, metric: str,
+                        band_pct: float) -> dict[str, Any]:
+    """Two drives of the SAME rung under the SAME seed: did they land inside the band?
+
+    PURE, over the two rung rows, for `select_knee`'s reason — the sitting reads the arithmetic
+    and not an answer, and the same function is driven by its own oracle with rows it constructs.
+
+    **WHAT THIS CONTROLS FOR, stated narrowly.** Seeding fixes the NETWORK, which is the term
+    F-RESIT-10 measured varying by 1.60x at a FIXED worker count. It does not make wall-clock
+    throughput bit-identical — a real self-play pool has OS scheduling in it — so the control is a
+    BAND and not an equality. `RULED_DETERMINISM_BAND_PCT` is R315(c)(i)'s own number and is
+    pinned in source; the 2026-08-27 discriminator measured the residual at **0.58 %** with the
+    network held fixed, so the repair is known to clear this band with room.
+
+    **REFUSED IS NEVER A VERDICT** — the rule this tool carries everywhere. A drive that OOM'd,
+    errored, lost its producer or ranks at zero has no throughput to compare, and saying
+    "they agree" about two numbers that are not measurements is the failure mode the whole
+    instrument is built against.
+
+    Raises:
+        ValueError: either row is missing `n_workers` or the ranking column, the two rows are
+            not the SAME rung (which would make the comparison a ladder step, not a control),
+            or a ranking value is non-finite.
+    """
+    rows = (first, second)
+    for row in rows:
+        if metric not in row:
+            raise ValueError(f"a determinism-control row carries no {metric!r} column")
+        value = row[metric]
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not isfinite(value):
+            raise ValueError(
+                f"a determinism-control row's {metric} is {value!r}. NaN and +/-inf are values "
+                "to `json.loads`, and a control that ranks one would report agreement about a "
+                "number that is not a measurement"
+            )
+    if first.get("n_workers") != second.get("n_workers"):
+        raise ValueError(
+            f"the determinism control compares ONE rung with itself; got n_workers "
+            f"{first.get('n_workers')!r} and {second.get('n_workers')!r}. Two different rungs "
+            "would make this a ladder step wearing the control's name"
+        )
+    values = [float(row[metric]) for row in rows]
+    undecidable = [row.get("verdict") for row in rows
+                   if row.get("verdict") in (REFUSED, OOM, RUNG_ERROR, PRODUCER_DEAD)]
+    block = {
+        "n_workers": first.get("n_workers"), "metric": metric, "band_pct": band_pct,
+        "first": values[0], "second": values[1],
+        "verdicts": [row.get("verdict") for row in rows],
+    }
+    if undecidable or min(values) <= 0:
+        return {**block, "spread_pct": None, "verdict": REFUSED,
+                "reason": (f"a drive is not a measurement to compare: verdicts {block['verdicts']}"
+                           f", {metric} {values}. REFUSED is never a verdict about determinism")}
+    spread = abs(values[1] - values[0]) / min(values) * 100.0
+    return {**block, "spread_pct": spread,
+            "verdict": AGREE if spread <= band_pct else DIVERGED,
+            "reason": (f"the two drives are {spread:.4f}% apart on {metric} against a "
+                       f"{band_pct:g}% band (R315(c)(i))")}
+
+
 def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> dict[str, Any]:
     """R309(f)'s knee rule, as a pure function over the report's own rung rows.
 
@@ -1237,6 +1349,12 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
         # scratch directory or a tarball with no `.git` on exactly the host that matters.
         "git_dirty": None if commit is None else bool(porcelain),
         "run_id": getattr(config, "run_id", None),
+        # THE SEED EVERY RUNG'S NETWORK WAS BUILT FROM (F-RESIT-10). Carried because a ladder
+        # whose rungs are comparable is a CLAIM about how they were built, and R69 says a
+        # measurement travels with its mechanism: a reader of this report can now see that the
+        # ranking column is a function of `n_workers` alone, rather than having to trust it.
+        # Before the repair the honest value of this field would have been "unseeded".
+        "seed": int(config.seed),
         "encoding": config.identity.encoding,
         "representation": config.identity.representation,
         "device": device,
@@ -1371,6 +1489,21 @@ def render(report: dict[str, Any], out: Any) -> None:
     render_selection(report["selection"], out)
 
 
+def render_determinism_control(control: dict[str, Any], out: Any) -> None:
+    """The control's own screen: both figures, the spread, the band, and the verdict."""
+    spread = control["spread_pct"]
+    shown = "unmeasurable" if spread is None else f"{spread:.4f}%"
+    print("", file=out)
+    print(f"DETERMINISM CONTROL — rung {control['n_workers']} driven twice in one process, "
+          "same seed", file=out)
+    print(f"  drive 1        {control['first']:12.4f} {control['metric']}", file=out)
+    print(f"  drive 2        {control['second']:12.4f} {control['metric']}", file=out)
+    print(f"  spread         {shown:>12}   against a {control['band_pct']:g}% band "
+          "(R315(c)(i))", file=out)
+    print(f"  rung verdicts  {control['verdicts']}", file=out)
+    print(f"  VERDICT        {control['verdict']:>12}   {control['reason']}", file=out)
+
+
 def render_selection(selection: dict[str, Any], out: Any) -> None:
     """The knee arithmetic WITH its inputs — the derivation, not just the answer."""
     print(f"selection: knee_pct={selection['knee_pct']:g} on {selection['metric']}", file=out)
@@ -1401,6 +1534,51 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
 
 
 # ══ entry ════════════════════════════════════════════════════════════════════════════════
+def run_determinism_control(*, config_path: Path, plan_path: Path, n_workers: int,
+                            out: Any) -> dict[str, Any]:
+    """Drive ONE rung TWICE in one process and report whether the two agree inside the band.
+
+    **The control R315(c)(i) orders, and it is the instrument that makes the ladder's ranking
+    column testable rather than trusted.** `build_sweep_net` seeds from the config's own `seed`
+    before every pool build, so two drives of the same rung must build the SAME network; if they
+    do, their throughputs land inside `RULED_DETERMINISM_BAND_PCT`. If seeding is removed or
+    perturbed, they do not — which is what
+    `tests/diagnostics/test_worker_sweep_determinism.py` demonstrates rather than asserts.
+
+    It lives HERE, in the shipped tool, and not in a sitting's script: an instrument a sitting
+    authors on the box is an instrument nobody reviewed, and the 2026-08-27 re-sit had to write
+    three of them.
+
+    ONE PROCESS, deliberately — the same process the ladder walks in, so the control measures the
+    thing the ladder does. The 2026-08-27 discriminator established the residual is position-
+    independent (0.58 % apart, first drive against second, network held fixed), so a difference
+    here is about the seeding and not about where the drive sat.
+
+    Raises:
+        AllocatorPostureMismatchError: the live allocator conf does not match the minted posture.
+        SweepRefusal: the plan file is unreadable, incomplete, or moves a ruled constant.
+    """
+    plan = load_plan(plan_path)
+    config = load_config(config_path)
+    device = torch.device(config.train.device)
+    assert_allocator_posture(config.model_dump(), device_type=device.type)
+    label = f"{getattr(config, 'run_id', 'run')}@{_git('rev-parse', '--short', 'HEAD') or 'no-git'}"
+
+    rows: list[dict[str, Any]] = []
+    for attempt in (1, 2):
+        result = drive_rung(config, plan, n_workers=n_workers, device=device,
+                            label=f"{label}#determinism-{attempt}", out=out)
+        row = result.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
+                             band_pct=plan.band_pct)
+        row["drive"] = attempt
+        rows.append(row)
+    control = determinism_verdict(rows[0], rows[1], metric=plan.metric,
+                                  band_pct=RULED_DETERMINISM_BAND_PCT)
+    prov = provenance(config, Path(config_path), device=str(device), label=label)
+    return {"tool": TOOL, "mode": "determinism_control", "prereg": dict(plan.provenance),
+            "provenance": prov, "drives": rows, "control": control}
+
+
 def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]:
     """Load, assert the regime, walk the ladder, build the report. Writes no config, ever."""
     plan = load_plan(plan_path)
@@ -1459,7 +1637,50 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", help="report destination; stdout when absent")
     parser.add_argument("--select-only",
                         help="re-derive the knee from a report this tool already wrote")
+    parser.add_argument("--determinism-control", type=int, metavar="N",
+                        help="drive rung N TWICE in one process and report whether the two agree "
+                             "inside the ruled band (R315(c)(i)); walks no ladder and picks nothing")
     args = parser.parse_args(argv)
+
+    if args.determinism_control is not None:
+        # Same discipline --select-only carries: an input this mode does not read is refused BY
+        # NAME rather than ignored, because naming an input a mode does not read describes a run
+        # that did not happen.
+        if args.select_only:
+            print("REFUSED: --determinism-control drives a rung and --select-only reads a written "
+                  "report; they are different modes and naming both describes neither",
+                  file=sys.stderr)
+            return RC_REFUSED
+        if not args.config or not args.plan:
+            print("REFUSED: --determinism-control needs both --config and --plan, for the reason "
+                  "the ladder does: a config this tool picked would measure a program nobody "
+                  "asked about, and a plan it picked would be a pre-registration nobody wrote",
+                  file=sys.stderr)
+            return RC_REFUSED
+        if args.determinism_control < 2:
+            print(f"REFUSED: --determinism-control {args.determinism_control}; R309(f) REJECTS "
+                  "n_workers = 1 and this tool will not drive a rung it would refuse to pick",
+                  file=sys.stderr)
+            return RC_REFUSED
+        try:
+            report = run_determinism_control(config_path=Path(args.config),
+                                             plan_path=Path(args.plan),
+                                             n_workers=args.determinism_control, out=sys.stderr)
+        except KeyboardInterrupt:
+            print("REFUSED: interrupted; no control was completed", file=sys.stderr)
+            return RC_REFUSED
+        except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
+            print(f"REFUSED: {exc!r}", file=sys.stderr)
+            return RC_REFUSED
+        if args.out is not None:
+            Path(args.out).write_text(json.dumps(report, indent=2, sort_keys=True),
+                                      encoding="utf-8")
+            print(f"{TOOL}: determinism control written to {args.out}", file=sys.stderr)
+        else:
+            print(json.dumps(report, indent=2, sort_keys=True))
+        render_determinism_control(report["control"], sys.stderr)
+        verdict = report["control"]["verdict"]
+        return 0 if verdict == AGREE else (1 if verdict == DIVERGED else RC_REFUSED)
 
     if args.select_only:
         # EVERY input the mode does not read is refused BY NAME. `--out` was silently ignored
@@ -1555,6 +1776,12 @@ __all__ = [
     "main",
     "parse_sweep_markers",
     "provenance",
+    "AGREE",
+    "DIVERGED",
+    "build_sweep_net",
+    "determinism_verdict",
+    "render_determinism_control",
+    "run_determinism_control",
     "rc_for",
     "read_report",
     "render",

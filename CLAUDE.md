@@ -101,6 +101,11 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   enforces tools/ and tests/ module scope; the RULE is the whole tree).
   Catch specific exceptions; bare `except Exception:` only in a top-level handler, which
   logs through `logger.exception` and does NOT repeat the exception in the message.
+- **Comments (R316(e), operator direction).** Comments only where needed; public APIs carry
+  docstrings. NO file-top banner comments and NO narrative comment blocks — a needed comment
+  states its non-obvious fact in ONE line. CARVE-OUT: load-bearing in-source markers are
+  mechanism, not commentary, and STAY — pinned bands, planted-break markers, armed-value
+  provenance, licence-required attribution. Applied ON CONTACT, never as a cleanup pass.
 - **Rust.** No `unwrap()`/`expect()` on production paths — fail-loud means a NAMED error type
   that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
   reaching for the panic in the first place). `expect()` is fine in tests and in startup
