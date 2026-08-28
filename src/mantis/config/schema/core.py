@@ -533,12 +533,13 @@ class RunConfig(StrictModel):
 
         It does **NOT** assert that the bar is REACHABLE. This validator used to be called
         `_draw_rate_evidence_bar_is_reachable`, and that name was an OVERCLAIM (ADJ-22):
-        reachability depends on how many workers actually report, which load time cannot
-        see. At the ceiling (`N_pool_min == DRAW_RATE_WINDOW * n_workers`, which is run5's
-        posture — 50 == 50 x 1) EVERY configured worker must fill its entire window before
-        the bar is met, so a single silent worker leaves it unmet for the whole run while
-        the config validates clean. No config-time arithmetic can close that, because the
-        missing input is a runtime one.
+        see. At the ceiling (`N_pool_min == DRAW_RATE_WINDOW * n_workers`) EVERY configured
+        worker must fill its entire window before the bar is met, so a single silent worker
+        leaves it unmet for the whole run while the config validates clean. No config-time
+        arithmetic can close that, because the missing input is a runtime one. (A concrete
+        example used to be transcribed here; R192(e)/derive-or-delete — `n_workers` mints per
+        sitting, so read run5's OWN value from `configs/run5.yaml` rather than trust a number
+        written down at some earlier mint.)
 
         R95 settles it by fixing the CLAIM rather than widening the check: **a validator's
         name and message may assert only what its inputs can witness.** Evidence sufficiency

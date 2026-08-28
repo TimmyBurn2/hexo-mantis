@@ -7,6 +7,7 @@
 # delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: 1708894, max_fused_nodes: 77781}
+# delta: selfplay.n_workers: 1 -> 12
 schema_version: 1
 run_id: run5
 seed: 20260718
@@ -154,7 +155,7 @@ train:
   ply_index_weight: 0.0
   threat_pos_weight: 1.0
 selfplay:
-  n_workers: 1
+  n_workers: 12
   leaf_batch_size: 8
   max_game_moves: 128
   inference_pool_size: null

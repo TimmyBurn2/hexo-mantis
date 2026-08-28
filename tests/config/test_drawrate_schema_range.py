@@ -115,6 +115,10 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
     the boundary is asserted on both sides so the bound is the arithmetic and not a literal.
     """
     armed = dict(RUN5_PREREG)
+    # The N_pool_min ceiling is `DRAW_RATE_WINDOW * selfplay.n_workers` (DS-7 below), derived
+    # from run5's OWN minted worker count rather than a literal — a literal here is the exact
+    # "50 == 50 x 1" premise that goes stale the moment a Phase W sitting mints a pick.
+    _ceiling = DRAW_RATE_WINDOW * load_config(CONFIGS_DIR / "run5.yaml").selfplay.n_workers
     assert _with_block(armed).train.draw_rate_abort.threshold == 0.25
     assert _with_block({**armed, "threshold": 1.0}).train.draw_rate_abort.threshold == 1.0, (
         "1.0 is IN range — `le=1` is a ceiling on the metric's own maximum, not an exclusion"
@@ -137,8 +141,9 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "threshold .inf — the same class at the limit":
             ({**armed, "threshold": float("inf")}, "threshold"),
         "threshold true — a bool is not a fraction": ({**armed, "threshold": True}, "threshold"),
-        "N_pool_min 51 — unreachable evidence on a 1-worker pool (R92's fourth axis)":
-            ({**armed, "N_pool_min": 51}, "N_pool_min"),
+        "N_pool_min one past the ceiling — unreachable evidence on run5's own pool "
+        "(R92's fourth axis)":
+            ({**armed, "N_pool_min": _ceiling + 1}, "N_pool_min"),
         "N_pool_min 0 — no pool ever banks fewer than zero games, so the bar is inert":
             ({**armed, "N_pool_min": 0}, "N_pool_min"),
         "min_step 0 — the ADJ-14 hair-trigger the R80 guards exist to close":
@@ -203,23 +208,25 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     the one R92's own change creates: `Sum(completed)` never reaches it, the gate makes NO
     observation for the entire run, and gate 12 audits the row ARMED.
 
-    Three arms, because two of them alone are satisfied by a re-spelled `le=50`:
-    the boundary on both sides at `n_workers: 1`, and the SAME value ACCEPTED once the worker
-    count is raised. The behaviour the bound describes is
-    `tests/selfplay/test_drawrate_pooled_statistic.py`.
+    Three arms, because two of them alone are satisfied by a re-spelled `le=50`: the boundary
+    on both sides AT `run5`'s own worker count (whatever it is minted to — Phase W picks it,
+    R309(g)), and the SAME value ACCEPTED once the worker count is raised again. The ceiling is
+    derived from the loaded config rather than a literal `1`, because "run5 is a one-worker
+    pool" stopped being true the moment a Phase W sitting mints a pick (F-RESIT-6/R316(f)) —
+    a hardcoded `== 1` here is exactly the "50 == 50 x 1" premise Δ8 warned would go stale on
+    the first pick, and it did (R317-era RECAL-SITTING-3 minted `n_workers: 12`). The behaviour
+    the bound describes is `tests/selfplay/test_drawrate_pooled_statistic.py`.
     """
-    assert load_config(CONFIGS_DIR / "run5.yaml").selfplay.n_workers == 1, (
-        "harness precondition: run5 is a ONE-worker pool, which is what makes 50 the ceiling "
-        "here. If this ever changes the two boundary arms below move with it"
-    )
-    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW})
-    assert at_ceiling.train.draw_rate_abort.N_pool_min == DRAW_RATE_WINDOW, (
+    n_workers = load_config(CONFIGS_DIR / "run5.yaml").selfplay.n_workers
+    ceiling = DRAW_RATE_WINDOW * n_workers
+    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": ceiling})
+    assert at_ceiling.train.draw_rate_abort.N_pool_min == ceiling, (
         "AT the ceiling the bar is satisfiable (the deque saturates exactly there), so it "
         "must load — a bound that also forbade the reachable value would disarm the abort"
     )
 
     with pytest.raises(ValidationError) as caught:
-        _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1})
+        _with_block({**RUN5_PREREG, "N_pool_min": ceiling + 1})
     assert "N_pool_min" in str(caught.value) and "n_workers" in str(caught.value), (
         "one game above the ceiling must be REJECTED, and the message must name BOTH keys: "
         "the operator cannot act on 'too big' without knowing what it is too big FOR; got "
@@ -227,11 +234,10 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     )
 
     wider = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
-    wider["selfplay"]["n_workers"] = 2
-    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1}
-    assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == (
-        DRAW_RATE_WINDOW + 1), (
-        "the SAME value must be accepted on a two-worker pool: the bound is the PRODUCT "
+    wider["selfplay"]["n_workers"] = n_workers + 1
+    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": ceiling + 1}
+    assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == ceiling + 1, (
+        "the SAME value must be accepted on a wider pool: the bound is the PRODUCT "
         "`DRAW_RATE_WINDOW * selfplay.n_workers`, not a re-spelled `le=DRAW_RATE_WINDOW`. "
         "Without this arm the cross-section rule is indistinguishable from a field bound"
     )
