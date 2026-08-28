@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ ba82ab0, regenerated 2026-08-28.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 2eff77c, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7032,3 +7032,41 @@ completed exit files a self-correction but no field ruling. **The substitution i
 > dev's truth. The filed finding closes with this.
 > ROUTE: land this, census, ACTIVE next version, implement (c) with its control, one
 > plain screen back.
+
+# R315 — architect ruling, 2026-08-28 (the re-sit RATIFIED as a SUCCESSFUL HALT — blocked by the instrument, not the card; the allocator posture SETTLED as expandable_segments on a pre-declared mechanism criterion; RESIT-PREP-2 ORDERED engine-side; the third sitting gated behind it and a ratified margin floor) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d) and arrived as an operator-forwarded amendment; one canonical home:
+`PACKET_R315_RESIT_RATIFICATION.md` §1. Byte-diff on append per R306(a) (de-marked,
+whitespace-normalized, line-by-line; extraction by tooling, never retyped; extraction and diff
+under `set -o pipefail`, R313(c)). **The paste carried the placeholder `R{next}`**, substituted
+to `R315` after verifying the head is R314 — census `R23-R314, 285/285/0` at entry, stamp v3.20,
+no `R315` string under `plan/`. **The substitution is the only edit.**
+
+> R315 — (a) The re-sit is RATIFIED AS A SUCCESSFUL HALT — blocked by the
+> instrument, not the card — and the R314 landing is RATIFIED with it. Every
+> August FAIL clause now passes under expandable_segments; the REFUSED eval
+> verdict is the tool working. Nothing vests: caps stay void, F-R302-1 stays open
+> (mechanism now fully explained as a posture artefact; it closes at a standing
+> mint), R61 unsatisfied.
+> (b) The allocator posture is SETTLED: expandable_segments, on the sitting's
+> pre-declared mechanism criterion — the fragmentation divisor the partition
+> arithmetic divides by is wrong 3.77× under DEFAULT and within 0.6% under
+> expandable. It mints with the caps at the next sitting.
+> (c) RESIT-PREP-2 is ORDERED, engine-side, no box, reading RESIT_FINDINGS.md at
+> point of use: (i) F-RESIT-10 — worker_sweep calls seed_everything; a
+> determinism control (same rung, same seed, twice, sub-1% apart) becomes a
+> planted-break; (ii) F-RESIT-14 — derive the eval-round timeout mechanism from
+> the findings, fix at cause, and close the gate hole: a timeout exit must fire
+> LAW-15's gate, never bypass it; (iii) Δ8 is REWRITTEN against the measured
+> nine-act mint — RESIT_MINT_MEASURED_DIFF.patch is the base and the block names
+> all ten files and both frozen rows correctly; (iv) F-RESIT-7 — conjunct 2
+> gains a pre-registered MARGIN FLOOR proposed from the two sittings' measured
+> peaks and ratified by the architect before any forwarding; a partition that
+> passes by a rounding error licenses nothing, twice measured.
+> (d) The third sitting forwards after (c) lands and the margin floor is
+> ratified: seeded sweep, eval term to plateau or bound, then measure-fit-mint-
+> burst per the corrected block. Intent of record: the instrument is now
+> complete; this is the sitting that mints or produces a card-level fact.
+> ROUTE: land this, census, ACTIVE next version, then RESIT-PREP-2 as a fresh
+> dispatch the operator forwards; one plain screen back.

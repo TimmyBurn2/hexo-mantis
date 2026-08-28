@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ ba82ab0, regenerated 2026-08-28.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2eff77c, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.20, 2026-08-28. Created under R271 (register hygiene: archive/index split);
+# v3.21, 2026-08-28. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -409,6 +409,19 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # once and independently confirmed by the other session's own branch-base measurement.
 # **`--check` RE-TARGETS to the `dev` ref**: the mirror contract is about what `dev` carries, not
 # about which branch a working tree happens to be parked on, and the filed finding closes with it.
+# **v3.21 = R315 folded in — the curation where A HALT IS RATIFIED AS A SUCCESS.** The re-sit is
+# **RATIFIED AS A SUCCESSFUL HALT — blocked by the INSTRUMENT, not the CARD** — and R314's landing
+# is ratified with it. **Every August FAIL clause now passes under `expandable_segments`, and the
+# REFUSED eval verdict is the tool working**, not the tool breaking. **NOTHING VESTS:** the caps
+# stay VOID, `F-R302-1` stays OPEN — its mechanism now fully explained as a **posture artefact**,
+# and it closes at a standing mint, not at an explanation — and **R61 is UNSATISFIED**. **The
+# ALLOCATOR POSTURE IS SETTLED: `expandable_segments`**, on the sitting's own PRE-DECLARED mechanism
+# criterion rather than on a preference — the fragmentation divisor the partition arithmetic divides
+# by is **wrong 3.77× under DEFAULT and within 0.6% under expandable**. It mints with the caps at
+# the next sitting. **RESIT-PREP-2 is ORDERED engine-side, no box**, four items reading
+# `RESIT_FINDINGS.md` at point of use; **the third sitting forwards only after it lands AND the
+# margin floor is ratified.** Intent of record: **the instrument is now complete — the next sitting
+# mints or produces a card-level fact.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -926,6 +939,17 @@ Verbatim text in the register; one-liners here are index only.
   checkout parked on another branch whose tree carries a wrong one, and `--check` must report
   `dev`'s truth; a companion control proves it still FAILS when `dev` is genuinely stale, so the
   re-target cannot be satisfied by a check that has stopped checking.
+
+- **R315(b) — THE ALLOCATOR POSTURE IS SETTLED: `expandable_segments`. LIVE, mints with the caps at
+  the next sitting.** Settled on the sitting's **pre-declared mechanism criterion**, not on an
+  outcome preference: **the fragmentation divisor the partition arithmetic divides by is wrong
+  3.77× under DEFAULT and within 0.6% under expandable.** A posture chosen because the arithmetic's
+  own divisor is right under it is a different thing from a posture chosen because a run survived.
+- **R315(a) — NOTHING VESTS FROM A SUCCESSFUL HALT. LIVE.** The re-sit is ratified as a **success —
+  blocked by the INSTRUMENT, not the card** — and every August FAIL clause now passes under
+  `expandable_segments`, with the **REFUSED eval verdict recorded as the tool WORKING**. And still:
+  **caps VOID, `F-R302-1` OPEN, R61 UNSATISFIED.** `F-R302-1`'s mechanism is now fully explained as
+  a **posture artefact**, and an explanation is not a mint — **it closes at a standing mint.**
 
 ## 5. Live pre-mint force — LIVE (rows expire at mint or on their event)
 
@@ -3491,3 +3515,36 @@ Verbatim text in the register; one-liners here are index only.
   *precisely the class the law was cut for* · *verify branch AND tip before ANY commit* · the
   main-checkout-belongs-to-the-box-session sentence · the named recovery pattern · *never the
   working tree, because the mirror contract is about what dev carries* · (c)'s new-control sentence.
+- 2026-08-28 — **v3.21** curated by the ARCH-ERA architect session (R303(d)), landing **R315** and
+  authoring the RESIT-PREP-2 dispatch in the same act. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST:** census `R23-R314, 285/285/0`, stamp v3.20, last header `R314`, no `R315`
+  string under `plan/`. Numbered **R315**; the `R{next}` substitution is disclosed as the only edit.
+  **Byte-diff, R306(a), extraction and diff under `set -o pipefail` (R313(c)): `diff` rc 0 RAW and
+  NORMALIZED, 27 lines each side, `sha256` `e210d78c3b519c4d…`; header diffed separately, verbatim.
+  Census: R23–R315, 286 sections / 286 distinct / 0 duplicates, excluded 53, `missing-in-range`
+  UNCHANGED.**
+  **(c)(iii)'s "ten files" WAS CHECKED RATHER THAN TRANSCRIBED, and it RECONCILES.**
+  `RESIT_MINT_MEASURED_DIFF.patch` carries **12 distinct files**, which reads as a mismatch against
+  the clause until the two are separated: **seven configs plus three `src/` modules are the TEN**,
+  and `tests/config/test_armed_abort_manifest.py` + `tests/tools/test_preflight_mint_process.py` are
+  **exactly the BOTH FROZEN ROWS** Δ8 names by path. 10 + 2 = 12, and the ruling's wording is
+  precise. **Recorded because the next reader will do the same subtraction and should not have to
+  re-derive it** — and because a count that looks wrong and is right is worth pinning once.
+  **THE DISPATCH IS AUTHORED, NOT EXECUTED** (`plan/DISPATCH_RESIT_PREP_2.md`, the operator
+  forwards it, and that forwarding is the authorisation). It carries the four items with their
+  findings cited at point of use, the no-box / no-mint / no-frozen-edit exclusions, R311(b)'s
+  cadence, R313(c)'s pipe rule, **R314(b)'s shared-tree rule with the named recovery pattern**
+  because another session may hold the main checkout, and R311(d)'s verify-at-HEAD marking on every
+  figure it carries. **(iv) is written as PROPOSE-AND-STOP**: the margin floor's arithmetic is the
+  dispatcher's, the ratification is the architect's, and the prereg value is the operator's —
+  three hands, stated as three, so the dispatcher does not close the loop alone.
+  **The numbers the margin floor is proposed from are on the record here so the proposal can be
+  audited against them:** August's conjunct-2 PASS was `declared 15.110 ≤ measured 15.218`, headroom
+  **+0.108 GiB**, while STEP 4 measured the joint peak **343 MiB OVER** the same budget — both true
+  at once, because the conjunct never tested what the burst tested. F-RESIT-7's second consequence
+  (~**0.26 GiB** conservative, `cuda_context` counted on one side only) is flagged in the dispatch
+  as something the proposal must ADDRESS rather than silently correct (R262).
+  **SPOT-CHECKS: SIX, all clean**, by script under R306(a)'s de-mark-before-normalize order —
+  *blocked by the instrument, not the card* · *the REFUSED eval verdict is the tool working* ·
+  *Nothing vests* · the 3.77×/0.6% divisor sentence · *a partition that passes by a rounding error
+  licenses nothing* · (d)'s *mints or produces a card-level fact*.
