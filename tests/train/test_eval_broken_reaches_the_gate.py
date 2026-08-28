@@ -31,6 +31,10 @@ that is engine-side and was silently wrong regardless of why any given round bro
 """
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from mantis.eval.errors import EvalBrokenReason
@@ -38,9 +42,85 @@ from mantis.eval.rounds import build_round_result
 
 pytest.importorskip("torch")
 
-from tests.train.test_coordinator_gates import (  # noqa: E402  (after importorskip, by design)
-    _make_coordinator,
-)
+_REPO = Path(__file__).resolve().parents[2]
+
+
+def _make_coordinator():
+    """A minimal coordinator, harness PRIVATE to this file — the house convention.
+
+    Not imported from a sibling test module: `tests` is not a package (R5 — single collection
+    root, no package named `tests` below it, zero `sys.path` mutation), so a
+    `from tests.train... import` resolves under one pytest invocation and raises
+    `ModuleNotFoundError` under another. This file was written that way first and the count
+    gate's `uv run pytest --collect-only` caught it while a direct `python -m pytest` had not —
+    which is precisely the unreproducible-collection failure R5 exists to close.
+
+    The config is DERIVED from the production builder (`mantis.run._step_coordinator_config`)
+    rather than hand-written as a kwarg census, so a new coordinator knob costs this file no
+    edit — the same discipline the frozen `tests/eval/test_wr_sealbot_handshake.py` states."""
+    from mantis.config.loader import load_config
+    from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+    from mantis.config.resolve.drain import resolve_drain_caps
+    from mantis.monitor.config import MonitorConfig
+    from mantis.run import _step_coordinator_config
+    from mantis.train.coordinator.step import StepCoordinator
+    from mantis.train.lifecycle.signals import ShutdownState
+
+    dev = load_config(_REPO / "configs" / "dev_example.yaml")
+
+    class _Sink:
+        def __init__(self) -> None:
+            self.events: list[dict] = []
+
+        def emit(self, payload: dict) -> None:
+            self.events.append(payload)
+
+        def named(self, name: str) -> list[dict]:
+            return [e for e in self.events if e.get("event") == name]
+
+    class _Pool:
+        games_completed = 0
+        avg_game_length = 0.0
+
+        def runner_stats(self):
+            return SimpleNamespace()
+
+    class _Trainer:
+        step = 0
+        model = object()
+
+        def train_step_from_tensors(self, *a, **k) -> dict:
+            return {}
+
+        def save_checkpoint(self, loss_info) -> None: ...
+
+    class _Buffer:
+        size = 1000
+        capacity = 100_000
+
+        def resize(self, n: int) -> None: ...
+
+        def save_to_path(self, p) -> None: ...
+
+    sink = _Sink()
+    config = dataclasses.replace(
+        _step_coordinator_config(
+            stop_step=10 ** 9, draw_rate_abort=None,
+            drain_caps=resolve_drain_caps(dev.monitor),
+            gate_interval=dev.monitor.gate_interval,
+            knobs=resolve_coordinator_knobs(dev.train),
+        ),
+        eval_interval=1, log_interval=1, gate_interval=1, min_buf_size=10,
+    )
+    coord = StepCoordinator(
+        trainer=_Trainer(), buffer=_Buffer(), pretrained_buffer=None, recent_buffer=None,
+        pool=_Pool(), eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
+        anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
+        shutdown=ShutdownState(), eval_model=object(), bufs=None,
+        config=config, full_config={}, train_cfg={}, mixing_cfg={},
+        sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
+    )
+    return SimpleNamespace(coord=coord, sink=sink)
 
 #: Every reason the taxonomy spells. The gate must name ALL of them, not the one that happened to
 #: be measured — a guard written around `join_timeout` alone would be silent on the next reason,
