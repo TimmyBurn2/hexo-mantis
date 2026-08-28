@@ -1,11 +1,12 @@
-# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete). ONE CLAIM
-# with two halves that cannot be split: "the sweep's per-rung network is reproducible, and the
-# control that says so can fail". The mechanism arm (the same seed builds the same net) and the
-# instrument arm (`determinism_verdict` separates AGREE from DIVERGED from REFUSED) are the two
-# things F-RESIT-10 needs together — a reproducible net nobody checks is a claim, and a checker
-# with nothing reproducible under it is a checker of noise. Each arm carries its own planted
-# break in-file, for the reason `test_worker_sweep_reachability.py` states: a predicate and the
-# proof it can fire must move together or the proof rots quietly.
+# ONE CLAIM with two halves that are deliberately not split across files: "the sweep's per-rung
+# network is reproducible, and the control that says so can fail". The mechanism arm (the same
+# seed builds the same net) and the instrument arm (`determinism_verdict` separates AGREE from
+# DIVERGED from REFUSED) are the two things F-RESIT-10 needs together — a reproducible net nobody
+# checks is a claim, and a checker with nothing reproducible under it is a checker of noise. Each
+# arm carries its own planted break in-file, for the reason `test_worker_sweep_reachability.py`
+# states: a predicate and the proof it can fire must move together or the proof rots quietly.
+# (No R8 justification is claimed: this file is under the 300-line cap. Sizes are derived by
+# `wc -l`, never asserted.)
 """F-RESIT-10's repair, and the control that witnesses it.
 
 **THE DEFECT, measured at the 2026-08-27 re-calibration re-sit.** `mantis.diagnostics.worker_sweep`
