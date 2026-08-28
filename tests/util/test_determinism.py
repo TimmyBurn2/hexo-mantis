@@ -1,7 +1,7 @@
 """SC-A6 oracle — the ONE determinism boot site (R30a; DESIGN_P2.md §7 / PREREG_P2.md
 suite #13).
 
-RED-at-import until IMPL lands `mantis.train.determinism.seed_everything`. Pins: two
+RED-at-import until IMPL lands `mantis.util.determinism.seed_everything`. Pins: two
 `seed_everything(same_seed)` + build + first-step boots on CPU produce bit-identical
 `loss`/`grad_norm`/first-layer-weight-tensor; two DIFFERENT seeds produce DIFFERENT init
 weights (negative control — a suite that can't tell "seeded" from "unseeded" is
@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from mantis.model import CnnArch, build_net
-from mantis.train.determinism import seed_everything
+from mantis.util.determinism import seed_everything
 
 
 def _tiny_arch() -> CnnArch:

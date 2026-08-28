@@ -117,7 +117,7 @@ from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
-from mantis.train.determinism import seed_everything
+from mantis.util.determinism import seed_everything
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import (

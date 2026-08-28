@@ -39,7 +39,8 @@ CONSUMER_REGISTRY = {
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
     "seed": (
-        "seed_everything (mantis.train.determinism, R30a) -> mantis.run.build_run_collaborators, the ONE boot site + "
+        "seed_everything (mantis.util.determinism, R30a) -> mantis.run.build_run_collaborators, the ONE boot "
+        "site for a RUN; mantis.diagnostics.worker_sweep seeds per rung from the same key (F-RESIT-10) + "
         "emit source-tag"
     ),
     "eval_enabled": (

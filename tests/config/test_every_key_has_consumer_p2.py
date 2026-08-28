@@ -51,7 +51,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     # ── unchanged from the pre-Phase-2 registry (35 of the original 36; radius dropped) ──
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
-    "seed": "emit source-tag (acting RNG consumer: mantis.train.determinism.seed_everything, SC-A6)",
+    "seed": "emit source-tag (acting RNG consumer: mantis.util.determinism.seed_everything, SC-A6)",
     "eval_enabled": (
         "mantis.run.compose_run -> the `wired_sources` eval_round declaration AND the"
         " build_eval_pipeline branch (R120; the deleted `compose_run(eval_enabled=…)`"

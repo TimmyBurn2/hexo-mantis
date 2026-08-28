@@ -45,7 +45,7 @@ hexo-mantis/
 │   ├── bots/                   # BotProtocol + all bot wrappers incl. community API client
 │   ├── monitor/                # HEADLESS ONLY: event emit, producer manifest, alert rules
 │   ├── diagnostics/            # single-definition production-importable readouts
-│   ├── util/                   # small helpers (device, coordinates, cpu budget)
+│   ├── util/                   # small helpers (device, coordinates, determinism)
 │   └── deploy/                 # RESERVED: ONNX export + torch-parity check (post-cutover)
 ├── tests/                      # SINGLE collection root; mirrors src/mantis + crates
 │   └── fixtures/               # frozen oracle banks (books, goldens, probe npz, positions)
