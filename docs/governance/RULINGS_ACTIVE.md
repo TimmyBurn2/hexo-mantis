@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2eff77c, regenerated 2026-08-28.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5e4e81d, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.21, 2026-08-28. Created under R271 (register hygiene: archive/index split);
+# v3.22, 2026-08-28. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -422,6 +422,26 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # `RESIT_FINDINGS.md` at point of use; **the third sitting forwards only after it lands AND the
 # margin floor is ratified.** Intent of record: **the instrument is now complete — the next sitting
 # mints or produces a card-level fact.**
+# **v3.22 = R316 folded in — the curation where A FLOOR IS GIVEN ITS OPERATIVE FORM.**
+# RESIT-PREP-2 is **RATIFIED IN FULL**: the seeded sweep and its determinism control, the
+# `seed_everything` move to `mantis.util.determinism` on its measured ground (any import under
+# `mantis.train` pulls **eight** training modules into `sys.modules`, so a carve-out would have
+# been a hole), the **mechanism correction of record** — the eval-round failure is a
+# progress-budget escalation **mislabelled `JOIN_TIMEOUT`**, not a join timeout — and the **gate
+# hole CLOSED**. **THE MARGIN FLOOR IS RATIFIED AT `M = 0.35 GiB`, AND ITS OPERATIVE FORM IS THE
+# RULING'S REAL WORK:** `M` is a **SUBTRAHEND IN THE DERIVATION BEFORE THE FIT** —
+# `budget = (usable − trainer − eval_child − M) ÷ frag` — and conjunct 2 then asserts
+# `headroom ≥ M`. **A floor merely CHECKED, with the derivation left alone, refuses every sitting
+# mechanically**, because the derivation consumes headroom to ≈0.107 GiB by construction, twice
+# measured. **`M` is a FORCING TERM, never a predictor** (conjunct-2 headroom separated two
+# sittings by 0.0012 GiB whose bursts differed by 3.075 GiB), it is denominated in the CURRENT
+# arithmetic **double-count included**, and **correcting that double-count VOIDS it**. **The
+# ARMED VALUE IS THE OPERATOR'S.** A **FROZEN-FILE GRANT** issues for the reason rename, scoped
+# to the ONE measured row. **R257 is ANNOTATED, not repaired** (ANNOTATION 9): its "search-free"
+# premise qualifies to the reference bot's TRAINING loop; the served artifact searches at deploy,
+# which CORROBORATES the R254/R258 deploy lock. **COMMENT STYLE** is adopted as an operator
+# direction, applied ON CONTACT and never as a cleanup pass, with load-bearing in-source markers
+# CARVED OUT as mechanism rather than commentary.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -3548,3 +3568,35 @@ Verbatim text in the register; one-liners here are index only.
   *blocked by the instrument, not the card* · *the REFUSED eval verdict is the tool working* ·
   *Nothing vests* · the 3.77×/0.6% divisor sentence · *a partition that passes by a rounding error
   licenses nothing* · (d)'s *mints or produces a card-level fact*.
+
+- 2026-08-28 — **v3.22** curated by the ARCH-ERA architect session (R303(d)), landing **R316** and
+  **ANNOTATION 9** in the same act. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST:** census `R23-R315, 286/286/0`, excluded 53, `missing-in-range`
+  `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.21 == §8 last entry
+  v3.21`; last header `R315`, no `R316` heading present. Numbered **R316**; the `R{next}`
+  substitution is disclosed as the only edit to the canonical text.
+  **A PRECONDITION THAT CAN NO LONGER BE MET AS WORDED, recorded rather than waved through.** The
+  packet asks for *no `R{next}` string under `plan/`*. **Ten files carry one**, this register and
+  this file among them — and **every occurrence is the prose each landing writes to disclose its
+  own substitution**. There is no LIVE unsubstituted placeholder, which is what the check means;
+  the literal form has been self-falsifying since R312 wrote the first disclosure. **Verified by
+  READING all ten, not by counting them.** A future packet should ask for "no live placeholder".
+  **Byte-diff, R306(a), under `set -o pipefail` (R313(c)): 59 lines compared, 0 mismatches**,
+  de-marked and whitespace-normalized line-by-line; extraction by tooling, never retyped.
+  **Census after: R23–R316, 287 sections / 287 distinct / 0 duplicates, excluded 53,
+  `missing-in-range` UNCHANGED.**
+  **AN OVER-BROAD SUBSTITUTION OF MINE, CAUGHT AND REVERSED IN THE SAME ACT.** The blanket
+  `R{next}` → `R316` replacement also rewrote the packet's PREAMBLE, where the string names the
+  *placeholder* rather than the ruling — turning the precondition into "no `R316` string under
+  `plan/`", which is not the check. **The preamble was restored; §1's substitution stands.** The
+  instruction "the substitution is the only edit" governs the CANONICAL TEXT, and a landing that
+  silently corrupts the sentence describing its own check is the stale-text class arriving at the
+  one place it would be least visible.
+  **ANNOTATION 9 cites its ground and deliberately does NOT restate its figures**
+  (`plan/research/REFBOT_EVIDENCE_shrimp.md` §6 at `mantis-migration @ 0af92d7`, read at that
+  source's own `9c94b95`) — R287(a): a number copied into a second home is a number that can
+  drift. R257's text is **untouched**; the annotation form exists precisely so the fence and its
+  qualification are found together.
+  **WHAT THIS CURATION DOES NOT DO:** it does not forward the third sitting (the operator's act,
+  on forwarding a corrected block carrying `M = 0.35`), it opens no REFBOT candidate, and it
+  touches no prereg row, no owed text (R227/R228/R267) and not the mint word.

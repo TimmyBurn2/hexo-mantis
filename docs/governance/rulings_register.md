@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 2eff77c, regenerated 2026-08-28.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 5e4e81d, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -5269,6 +5269,27 @@ typing of (ii) and, with it, the field. As with ANNOTATION 5 itself: **the corre
 decomposition's typing, not to the holding.**
 
 
+**ANNOTATION 9 — R257's "search-free" premise is QUALIFIED, not repaired. Ordered by R316(d),
+appended 2026-08-28 by the R316 landing.** R257's second fence describes the reference bot's net
+as acting *search-free via the KLENT operator*, without qualification. **That holds of its
+TRAINING loop and not of the artifact it serves**: the deployed checkpoint searches — Gumbel
+sequential halving at 16–128 sims per stone. The ground is
+`plan/research/REFBOT_EVIDENCE_shrimp.md` §6 at `mantis-migration @ 0af92d7`, read at that
+source's own `9c94b95`; the figures live there and are deliberately not restated here (R287(a):
+cite the producing record, do not copy its numbers into a second home where they can drift).
+
+**Nothing in R257 is edited and no clause moves.** The fence's premise is narrower than its text,
+which is a statement about the PREMISE and not about the holding — and the direction is the
+favourable one: an artifact that searches at deploy is independent corroboration of the R254/R258
+deploy lock, not a challenge to it. R316(d) accepts REFBOT-SCAN-1 as evidence on disk and parks
+every candidate on the rail; nothing enters the tree on this annotation.
+
+**Why an annotation and not a repair, stated once for the class.** A landed ruling is read from
+the register, never rewritten by a mission (R9/R289(v)). A premise that has narrowed since it was
+written is exactly what the annotation form exists for: the reader who follows R257 to its fence
+must find the qualification attached to it, and must not find a text quietly different from the
+one the operator ratified.
+
 # R291 — architect adjudication response, operator-ratified by forwarding, 2026-08-20 (R290's execution ratified; F-816-24 RATIFIED MINT-BLOCKING with a fix packet ORDERED; the LAW-08 citation-prose defect fixed as a CLASS; R289(c) slotted; R289(v) matured into read-from-the-register) [INLINE]
 
 **Provenance: [INLINE], verbatim.** Text supplied in the R291 follow-up packet under its own
@@ -7070,3 +7091,69 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > complete; this is the sitting that mints or produces a card-level fact.
 > ROUTE: land this, census, ACTIVE next version, then RESIT-PREP-2 as a fresh
 > dispatch the operator forwards; one plain screen back.
+
+# R316 — architect ruling, ARCH-ERA session, 2026-08-28 (RESIT-PREP-2 RATIFIED in full; the conjunct-2 MARGIN FLOOR ratified at M = 0.35 GiB with its operative form pinned as a subtrahend BEFORE the fit; the frozen-file GRANT for the reason rename scoped to the one measured row; REFBOT-SCAN-1 accepted and R257 ANNOTATED not repaired; COMMENT STYLE adopted as an operator direction; F-RESIT-6 defaulted; the third sitting cleared to forward on the operator's arm) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d); one canonical home: `PACKET_R316_RESIT_PREP2_RATIFICATION.md` §1. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by tooling, never retyped). **The paste carried the placeholder `R{next}`**, substituted to `R316` after verifying the head is R315 — census R23–R315, 286 sections / 286 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.21 == §8 last entry v3.21`. The substitution is disclosed as the only edit to the canonical text.
+
+**Precondition note, recorded because the check as worded can no longer be satisfied by any landing.** The packet asks for *no `R{next}` string under `plan/`*. Ten files carry one, including this register and `RULINGS_ACTIVE.md` — every occurrence is the PROSE each landing writes to disclose its own substitution (*"the paste carried the placeholder `R{next}`, substituted to R31x"*). There is no LIVE unsubstituted placeholder, which is what the check means; the literal form has been self-falsifying since R312 wrote the first disclosure. Verified by reading all ten, not by counting them.
+
+> R316 — (a) RESIT-PREP-2 is RATIFIED in full. (i) The seeded sweep with its
+> determinism control (0.5821% against a 1% band, AGREE; three planted breaks
+> bite) and the seed_everything move to mantis.util.determinism, on its measured
+> ground: any import under mantis.train pulls eight training modules into
+> sys.modules, so a carve-out would have been a hole. (ii) The mechanism
+> correction of record — the eval-round failure is a progress-budget escalation
+> mislabelled JOIN_TIMEOUT, not a join timeout — and the gate hole CLOSED: a
+> broken round now fires LAW-15's gate with reason eval_round_broken, planted
+> break 8 rows red on revert. (iii) The Δ8 rewrite, membership derived from the
+> measured patch, never counted. The session's three self-caught errors stand on
+> its own ledger as the gates working.
+> (b) The MARGIN FLOOR is RATIFIED: M = 0.35 GiB, derived from the single
+> measured under-prediction — 2026-08-22's joint peak exceeded its declared
+> budget by 0.3352 GiB — rounded up. OPERATIVE FORM, pinned: M is a subtrahend
+> in the budget derivation BEFORE the fit, budget = (usable − trainer −
+> eval_child − M) ÷ frag, and conjunct 2 then asserts headroom ≥ M. A floor
+> checked without the derivation subtracting it refuses every sitting
+> mechanically: the derivation consumes headroom to ≈0.107 GiB by construction,
+> twice measured. LIMITS CARRIED: the evidence is one measurement; conjunct-2
+> headroom cannot separate a passing burst from a failing one (0.0012 GiB apart
+> across sittings whose bursts differ by 3.075 GiB), so M is a forcing term,
+> never a predictor; and M is denominated in the CURRENT partition arithmetic,
+> the 0.26 GiB double-count included — correcting that double-count VOIDS M and
+> re-derives it. THE ARMED VALUE IS THE OPERATOR'S: his forwarding of a
+> third-sitting block carrying M = 0.35 is the value lock.
+> (c) FROZEN-FILE GRANT for the reason rename. Scope: exactly the measured one
+> row — test_eval_broken_reason_enum.py's set-equality pin — plus the source
+> symbol it pins; the applied-driven-reverted probe satisfies the flip-one-byte
+> standard. Executes as RESIT-PREP-2b: one commit, own worktree (R314(b)), full
+> local gates at leg exit. Ground: an instrument label naming a mechanism that
+> is not the cause is the stale-text defect class inside an instrument, and it
+> does not ride into the third sitting.
+> (d) REFBOT-SCAN-1 is ACCEPTED as evidence on disk. R257 is ANNOTATED at the
+> register foot, never repaired: its "search-free" premise qualifies to
+> Shrimp-Bot's TRAINING loop; the served artifact searches at deploy — Gumbel
+> sequential halving, 16–128 sims — which corroborates the R254/R258 deploy
+> lock. The candidates PARK on the rail: C-GUMBEL routes to the run6 sims-fork
+> prereg adjudication (operator lock); C-RECOMPUTE queues as a post-mint seam
+> candidate carrying its written witness, its upstream figure standing only as
+> a prior because the author repudiated the record it comes from; C-PROVEN-LEAF
+> parks to the SYS-5+ExIt arc with F-15's ExIt-injection term binding. Nothing
+> enters the tree now.
+> (e) COMMENT STYLE, operator direction, standard on contact via CLAUDE.md:
+> comments only where needed; public APIs carry docstrings; no file-top banner
+> comments; no narrative comment blocks — a needed comment states its
+> non-obvious fact in one line. CARVE-OUT: load-bearing in-source markers —
+> pinned bands, planted-break markers, armed-value provenance, license-required
+> attribution — are mechanism, not commentary, and stay. Applied on contact,
+> never as a cleanup pass.
+> (f) F-RESIT-6 DEFAULT: the corrected block mints shakedown's n_workers to the
+> Phase W pick with the other six configs. The operator's forwarding of the
+> block confirms the default by silence; preserving a different value anywhere
+> is his word before it.
+> (g) The third sitting FORWARDS when (c)'s commit lands and the operator arms
+> M — R315(d) is then satisfied. Intent unchanged: it mints or produces a
+> card-level fact.
+> ROUTE: land this, census, ACTIVE next version; annotate R257 in the same
+> landing; execute (c) engine-side from its own worktree; add (e) to CLAUDE.md;
+> one plain screen back.
