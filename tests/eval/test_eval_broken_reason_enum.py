@@ -41,14 +41,23 @@ import pytest
 # RED-at-import anchor: the name does not exist at HEAD.
 from mantis.eval.errors import EvalBrokenReason
 
-#: The seven censused routes (DESIGN_O §a.2), spelled EXACTLY as `mantis/eval/pipeline.py`
-#: already emits them at HEAD. Byte-identity is load-bearing and deliberate: it keeps every
-#: existing event-stream assertion pointing at the same values, so this phase's change is a
-#: SHAPE change and never a VALUE change. Transcribed here on purpose — this file IS the
-#: independent statement of the census, and deriving it from the enum under test would make
-#: the assertion self-satisfying (R81).
+#: The censused routes (DESIGN_O §a.2), spelled EXACTLY as `mantis/eval/pipeline.py` emits them.
+#: Byte-identity is load-bearing and deliberate: it keeps every existing event-stream assertion
+#: pointing at the same values. Transcribed here on purpose — this file IS the independent
+#: statement of the census, and deriving it from the enum under test would make the assertion
+#: self-satisfying (R81).
+#:
+#: `round_timeout` JOINS THE CENSUS under the R316(c) frozen-file grant, and it is a route that
+#: always existed under another route's name. `_poll_loop` kills a round that exceeds
+#: `eval.round_timeout_sec` — a PROGRESS budget — and reported it as `join_timeout`, which names
+#: the kill sequence rather than the cause; the 2026-08-27 re-sit's every in-run round ended that
+#: way and the operator was told the child would not exit. `_drain_escalate`'s genuine join
+#: timeout keeps the name. Adding the member is therefore NOT a new failure mode: it is one
+#: existing mode ceasing to wear another's label, which is the stale-text defect class inside an
+#: instrument.
 _CENSUSED_REASONS = {
     "join_timeout",
+    "round_timeout",
     "killed",
     "exit_nonzero",
     "result_missing",
@@ -59,15 +68,20 @@ _CENSUSED_REASONS = {
 
 
 def test_the_enum_declares_exactly_the_seven_censused_reasons() -> None:
-    """O-01. Seven members, seven routes, exact set equality in BOTH directions.
+    """O-01. Exact set equality in BOTH directions, member count derived from the census itself.
 
     An extra member means a reason with no producer (the phantom-input class LAW-07 exists
     to stop); a missing one means a live failure route whose reason is unrepresentable and
     therefore back to being a bare string.
     """
     members = list(EvalBrokenReason)
-    assert len(members) == 7, (
-        f"the taxonomy is the seven censused routes (DESIGN_O §a.2); got {len(members)}: "
+    # DERIVED from the census set, not a literal. A hard `== 7` had to be re-edited the first
+    # time a route was correctly named (R316(c)) — and a count that must be re-edited on every
+    # edit is the derive-or-delete class (G-DFIX-4 / R192(e)) sitting inside the oracle that
+    # exists to catch it. The set below is still the INDEPENDENT statement of the census; only
+    # its cardinality stops being transcribed twice.
+    assert len(members) == len(_CENSUSED_REASONS), (
+        f"the taxonomy is the censused routes (DESIGN_O §a.2); got {len(members)}: "
         f"{[m.name for m in members]}"
     )
     values = {member.value for member in members}
