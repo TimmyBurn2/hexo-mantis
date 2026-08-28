@@ -98,7 +98,8 @@ def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
     monkeypatch.setattr(ws, "build_sweep_pool", explode)
     sink = io.StringIO()
     with pytest.raises(ValueError, match="allocator_posture"):
-        ws.run_sweep(config_path=Path("configs/run5.yaml"), plan_path=_PLAN, out=sink)
+        ws.run_sweep(config_path=Path("configs/run5.yaml"), plan_path=_PLAN, out=sink,
+                     noise_floor_rel_std=0.0)
 
 
 def test_the_null_posture_refusal_reaches_the_exit_code_as_a_named_refusal(
@@ -305,7 +306,8 @@ def test_two_rungs_with_different_producers_print_both(plan: ws.SweepPlan, capsy
             "thread_bound": 16, "thread_bound_source": "os.sched_getaffinity(0)",
             "cuda_counters_available": True}
     report = ws.build_report(plan=plan, prov=prov,
-                             results=[rung(2, "run5@aaa"), rung(4, "run5@bbb")], stopped="t")
+                             results=[rung(2, "run5@aaa"), rung(4, "run5@bbb")], stopped="t",
+                             noise_floor_rel_std=0.0)
     ws.render(report, __import__("sys").stdout)
     text = capsys.readouterr().out
     assert "run5@aaa" in text and "run5@bbb" in text
@@ -370,6 +372,7 @@ def test_a_rung_whose_sole_producer_died_does_not_report_a_plateau(
     This sweep has no trainer, so nothing called it."""
     class _DeadFeeder:
         _producer_exc = RuntimeError("selfplay_producer_died")
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
         def stop(self) -> None: ...
@@ -410,6 +413,8 @@ def test_a_dead_card_sampler_refuses_the_rung_instead_of_switching_instrument(
     verdicted PLATEAU — the exact hazard `reset_cuda_peak_counters`' own docstring names."""
     class _Pool:
         _producer_exc = None
+        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
         def stop(self) -> None: ...
@@ -465,6 +470,7 @@ def test_a_teardown_failure_does_not_erase_the_oom_finding_it_was_teardown_for(
     traceback."""
     class _Exploding:
         _producer_exc = None
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
         def check_producer_health(self) -> None:
@@ -507,11 +513,16 @@ def test_select_only_refuses_a_report_whose_stated_rule_is_not_the_ruling_s(
             "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0}]}
     ok = tmp_path / "ok.json"
     ok.write_text(json.dumps(base), encoding="utf-8")
-    assert ws.main(["--select-only", str(ok)]) == 0
+    # R317(d): --select-only now needs a measured noise floor to select under.
+    nf_path = tmp_path / "noise_floor.json"
+    nf_path.write_text(json.dumps({"tool": ws.TOOL, "mode": "noise_floor",
+                                   "noise_floor": {"rel_std": 0.0}}), encoding="utf-8")
+    assert ws.main(["--select-only", str(ok), "--noise-floor-report", str(nf_path)]) == 0
     for edit in ({"knee_pct": 60.0}, {"knee_pct": 100.0}, {"metric": "games_per_min"}):
         bad = tmp_path / f"bad{tuple(edit)[0]}{tuple(edit.values())[0]}.json"
         bad.write_text(json.dumps({**base, "plan": {**base["plan"], **edit}}), encoding="utf-8")
-        assert ws.main(["--select-only", str(bad)]) == ws.RC_REFUSED, (
+        assert ws.main(["--select-only", str(bad), "--noise-floor-report", str(nf_path)]) \
+            == ws.RC_REFUSED, (
             f"a one-field edit ({edit}) re-derived a pick with the ruling's own authority"
         )
 
@@ -581,6 +592,8 @@ def test_one_probe_and_one_counter_reset_per_round_on_a_counters_present_host(
 
     class _Pool:
         _producer_exc = None
+        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
         def stop(self) -> None: ...
@@ -652,7 +665,8 @@ def test_the_report_carries_the_card_total_every_peak_is_measured_against(
         for i in range(6))
     rung = ws.RungResult(n_workers=4, verdict=ws.PLATEAU, rounds=rounds, refusal=None,
                          produced_by="run5@abc")
-    report = ws.build_report(plan=plan, prov=prov, results=[rung], stopped="t")
+    report = ws.build_report(plan=plan, prov=prov, results=[rung], stopped="t",
+                             noise_floor_rel_std=0.0)
     assert report["provenance"]["card_total_bytes"] == 16 * 1024 ** 3
     ws.render(report, __import__("sys").stdout)
     assert "card_total=16.0000 GiB" in capsys.readouterr().out, (

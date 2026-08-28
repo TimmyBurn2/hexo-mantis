@@ -224,19 +224,12 @@ RULED_KNEE_PCT = 95.0
 #: plan file made the pick arbitrary with every check green.
 PREREG_METRIC = "moves_per_min"
 
-#: THE DETERMINISM CONTROL'S BAND, pinned in SOURCE for the same reason `RULED_KNEE_PCT` is.
-#: R315(c)(i) fixes it by number — *"a determinism control (same rung, same seed, twice, sub-1%
-#: apart)"* — so it is the ruling's constant, not this design's, and a constant a sitting could
-#: edit between two runs of the same tool has moved (F-WS-3, and the register's own words: "No
-#: post-hoc movement of any of it").
-#:
-#: WHY A BAND AT ALL RATHER THAN EQUALITY. Seeding fixes the NETWORK, which is what F-RESIT-10
-#: measured varying; it does not make wall-clock throughput bit-identical, because the drive is a
-#: real self-play pool with OS scheduling in it. The 2026-08-27 discriminator measured the
-#: residual with the network held fixed: two drives of the same rung in one process came back
-#: **0.58 % apart**, inside each drive's own +/-4 % round-to-round spread. 1 % is therefore a band
-#: the repair is already known to clear, and one that the 1.60x draw-to-draw variation it replaces
-#: would have failed by a factor of sixty.
+#: THE DETERMINISM CONTROL'S FORMER BAND. **SUPERSEDED BY R317(c)** — kept only as a historical
+#: constant (old reports cite it, and `render_determinism_control`/the sitting record still print
+#: the spread beside it for continuity). R315(c)(i) pinned it at 1%, measured 0.5821% AGREE
+#: engine-side; RECAL-SITTING-3 measured the SAME check live on a box at 3.9258%, DIVERGED — the
+#: band was a cross-regime carry (R317(b)), not a property of the seeding. The GATE is now
+#: net-parameter-hash equality (`_hash_gate`), no band; this constant no longer gates anything.
 RULED_DETERMINISM_BAND_PCT = 1.0
 
 #: The band's UPPER bound. The plan file argues 1.0 at length (5.0 would permit 774 MiB of growth
@@ -682,6 +675,10 @@ class RungResult:
     rounds: tuple[RoundReading, ...]
     refusal: str | None
     produced_by: str
+    #: R317(c)(i): the constructed net's parameter hash, post-seed pre-play. `None` when the rung
+    #: never reached a built net (OOM/error during construction) — the gate excludes those rather
+    #: than treating an absence as an equality or an inequality.
+    net_param_hash: str | None = None
 
     def measured_peaks(self) -> list[int]:
         """The governing peaks of the measured rounds, oldest first.
@@ -788,7 +785,7 @@ class RungResult:
         sinks = [r.governing_sink for r in self.measured]
         return {
             "n_workers": self.n_workers, "verdict": self.verdict, "refusal": self.refusal,
-            "produced_by": self.produced_by,
+            "produced_by": self.produced_by, "net_param_hash": self.net_param_hash,
             "rounds_total": len(self.rounds), "rounds_measured": len(self.measured),
             "rounds_unmeasured": len(self.scored) - len(self.measured),
             "wall_sec": round(sum(r.wall_sec for r in self.rounds), 3),
@@ -901,6 +898,46 @@ def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
     return build_net(arch).to(device)
 
 
+def _net_param_hash(model: torch.nn.Module) -> str:
+    """SHA-256 over the constructed net's parameters, POST-SEED PRE-PLAY (R317(c)(i)).
+
+    This is the gate F-RESIT-10's repair claimed and the throughput band could only proxy:
+    same seed must mean the SAME net, exactly, not "close on a throughput reading that also
+    carries OS scheduling noise". Sorted by name so dict/state_dict ordering is not load-bearing;
+    raw parameter bytes, not a repr, so two numerically-identical tensors under a different
+    dtype or layout would still be caught by their own dtype/shape difference.
+    """
+    digest = hashlib.sha256()
+    for name, tensor in sorted(model.state_dict().items()):
+        digest.update(name.encode("utf-8"))
+        digest.update(str(tuple(tensor.shape)).encode("utf-8"))
+        digest.update(str(tensor.dtype).encode("utf-8"))
+        digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+    return digest.hexdigest()
+
+
+def _hash_gate(pairs: list[tuple[str, str | None]]) -> dict[str, Any]:
+    """R317(c)(i), THE GATE: net-parameter hash equality, no band, over whichever drives built
+    a net. `pairs` is (label, hash-or-None) per drive; a drive that never reached a built net
+    (OOM/error during construction) is excluded rather than counted as an agreement or a
+    divergence — the gate answers "did the nets that exist agree", not "did every drive run".
+    """
+    present = {label: h for label, h in pairs if h is not None}
+    if len(present) < 2:
+        return {"verdict": REFUSED, "hashes": present,
+                "reason": f"only {len(present)} drive(s) built a net to hash; R317(c)(i) needs "
+                          "at least two to gate on"}
+    distinct = sorted(set(present.values()))
+    if len(distinct) > 1:
+        return {"verdict": DIVERGED, "hashes": present,
+                "reason": f"net-parameter hashes differ across drives (R317(c)(i)): "
+                          f"{len(distinct)} distinct value(s) over {len(present)} drive(s) — "
+                          "the same seed did not build the same net"}
+    return {"verdict": AGREE, "hashes": present,
+            "reason": f"net-parameter hashes agree across all {len(present)} drive(s) that "
+                      "built one (R317(c)(i))"}
+
+
 def build_sweep_pool(config: Any, *, n_workers: int, device: torch.device) -> WorkerPool:
     """Build the self-play collaborators for ONE rung — model, buffer, pool. No trainer.
 
@@ -975,11 +1012,12 @@ def drive_rung(
     sampler: CardSampler | None = None
     started = False
     teardown_note: str | None = None
+    net_hash: str | None = None
 
     def _finish(verdict: str, refusal: str | None) -> RungResult:
         note = refusal if teardown_note is None else f"{refusal or ''} | {teardown_note}".strip()
         return RungResult(n_workers=n_workers, verdict=verdict, rounds=tuple(readings),
-                          refusal=note or None, produced_by=label)
+                          refusal=note or None, produced_by=label, net_param_hash=net_hash)
 
     emit_marker({"phase": "rung_start", "n_workers": n_workers, "counters": counters,
                  "produced_by": label}, out=out)
@@ -988,6 +1026,9 @@ def drive_rung(
             # The BUILD is inside the guard: a rung can OOM constructing the model or the ring,
             # and that is the same data as a rung that OOMs mid-drive.
             pool = build_sweep_pool(config, n_workers=n_workers, device=device)
+            # R317(c)(i): hashed POST-SEED, PRE-PLAY — before `pool.start()` lets any worker
+            # touch the net, so a later divergence cannot be blamed on this read.
+            net_hash = _net_param_hash(pool.model)
             sampler = CardSampler(device_str, plan.sampler_interval_sec) if counters else None
             pool.start()
             started = True
@@ -1164,19 +1205,26 @@ AGREE = "AGREE"
 DIVERGED = "DIVERGED"
 
 
-def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *, metric: str,
-                        band_pct: float) -> dict[str, Any]:
-    """Two drives of the SAME rung under the SAME seed: did they land inside the band?
+def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *,
+                        metric: str) -> dict[str, Any]:
+    """Two drives of the SAME rung under the SAME seed: did they build the SAME net?
+
+    **RE-SPECIFIED, R317(c). SUPERSEDES R315(c)(i)'s throughput band.** RECAL-SITTING-3 measured
+    this control live on a real box, on the SAME rung this docstring used to cite as evidence for
+    the band (n_workers=4): 3.9258% spread, DIVERGED against the 1% band, where RESIT-PREP-2's
+    engine-side measurement had come back 0.5821%, AGREE. **The defect was the check, not the
+    seeding**: `moves_per_min` conflates what a seed controls (the net, the game trajectories)
+    with what the machine controls (wall-clock scheduling), and the band was carried from one
+    quiet regime to certify a noisier one it was never measured against (R317(b)).
+
+    **THE GATE IS NOW NET-PARAMETER-HASH EQUALITY, NO BAND** (R317(c)(i)): this tests exactly
+    what F-RESIT-10's repair claimed — same seed, same net — with nothing about timing in it.
+    `_hash_gate` does the comparison; this function's job is to also carry the throughput spread
+    as a REPORTED, NON-GATING figure (R317(c)(iii)) so a reader sees both without either one
+    controlling the other's answer.
 
     PURE, over the two rung rows, for `select_knee`'s reason — the sitting reads the arithmetic
     and not an answer, and the same function is driven by its own oracle with rows it constructs.
-
-    **WHAT THIS CONTROLS FOR, stated narrowly.** Seeding fixes the NETWORK, which is the term
-    F-RESIT-10 measured varying by 1.60x at a FIXED worker count. It does not make wall-clock
-    throughput bit-identical — a real self-play pool has OS scheduling in it — so the control is a
-    BAND and not an equality. `RULED_DETERMINISM_BAND_PCT` is R315(c)(i)'s own number and is
-    pinned in source; the 2026-08-27 discriminator measured the residual at **0.58 %** with the
-    network held fixed, so the repair is known to clear this band with room.
 
     **REFUSED IS NEVER A VERDICT** — the rule this tool carries everywhere. A drive that OOM'd,
     errored, lost its producer or ranks at zero has no throughput to compare, and saying
@@ -1209,29 +1257,52 @@ def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *, metric
     undecidable = [row.get("verdict") for row in rows
                    if row.get("verdict") in (REFUSED, OOM, RUNG_ERROR, PRODUCER_DEAD)]
     block = {
-        "n_workers": first.get("n_workers"), "metric": metric, "band_pct": band_pct,
+        "n_workers": first.get("n_workers"), "metric": metric,
         "first": values[0], "second": values[1],
         "verdicts": [row.get("verdict") for row in rows],
     }
+    gate = _hash_gate([("first", first.get("net_param_hash")),
+                       ("second", second.get("net_param_hash"))])
     if undecidable or min(values) <= 0:
-        return {**block, "spread_pct": None, "verdict": REFUSED,
+        return {**block, "spread_pct": None, "net_hash_gate": gate, "verdict": REFUSED,
                 "reason": (f"a drive is not a measurement to compare: verdicts {block['verdicts']}"
                            f", {metric} {values}. REFUSED is never a verdict about determinism")}
     spread = abs(values[1] - values[0]) / min(values) * 100.0
-    return {**block, "spread_pct": spread,
-            "verdict": AGREE if spread <= band_pct else DIVERGED,
-            "reason": (f"the two drives are {spread:.4f}% apart on {metric} against a "
-                       f"{band_pct:g}% band (R315(c)(i))")}
+    return {**block, "spread_pct": spread, "net_hash_gate": gate, "verdict": gate["verdict"],
+            "reason": (f"{gate['reason']}; throughput spread {spread:.4f}% on {metric} "
+                       "REPORTED with no band (R317(c)(iii))")}
 
 
-def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> dict[str, Any]:
+def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str,
+                noise_floor_rel_std: float) -> dict[str, Any]:
     """R309(f)'s knee rule, as a pure function over the report's own rung rows.
 
     PURE, so `--select-only` re-derives the pick from a written report through THIS function
     and not a second copy of it. The returned block carries every input the rule ran on, which
     is the difference between a sitting record that carries the arithmetic and one that carries
     the answer.
+
+    **R317(d): the rule is AMENDED, strictly conservative.** `noise_floor_rel_std` is the
+    coefficient of variation measured from four fresh same-seed drives at a reference rung
+    (`run_noise_floor`) — a MEASURED noise floor, not a guess, and it carries no default: a
+    sitting that has not measured one cannot select a pick under this rule. The `within` set
+    widens by `3 * noise_floor_rel_std * best`, which can only ADD rungs, never remove one, and
+    the pick is still the SMALLEST member of `within` — so the amendment can only move the pick
+    toward FEWER workers, never toward more. Pass `0.0` to recover the un-amended rule exactly
+    (every existing report re-selected before R317 landed does this, disclosed by the value
+    itself rather than by a second code path).
+
+    Raises:
+        ValueError: `noise_floor_rel_std` is negative or non-finite, in addition to every
+            pre-existing validation this function performs.
     """
+    if not isinstance(noise_floor_rel_std, (int, float)) or isinstance(noise_floor_rel_std, bool) \
+            or not isfinite(noise_floor_rel_std) or noise_floor_rel_std < 0:
+        raise ValueError(
+            f"noise_floor_rel_std is {noise_floor_rel_std!r}; R317(d) requires a measured, "
+            "non-negative, finite coefficient of variation from run_noise_floor — pass 0.0 "
+            "explicitly to select under the un-amended rule, never a default."
+        )
     if knee_pct != RULED_KNEE_PCT:
         raise ValueError(
             f"knee_pct is {knee_pct}; R309(f) fixes the knee rule at {RULED_KNEE_PCT:g} percent. "
@@ -1272,12 +1343,16 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
                     if r.get("verdict") in (OOM, RUNG_ERROR, PRODUCER_DEAD, REFUSED)})
     if not rows:
         return {"knee_pct": knee_pct, "metric": metric, "passing": [], "best": None,
-                "threshold": None, "within": [], "picked": None, "notes": notes,
+                "threshold": None, "noise_floor_rel_std": noise_floor_rel_std,
+                "noise_floor_adjustment": None, "adjusted_threshold": None,
+                "within": [], "picked": None, "notes": notes,
                 "reason": "the report carries NO RUNGS at all — this is a statement about the "
                           "document, not about the card's memory"}
     if not passing:
         return {"knee_pct": knee_pct, "metric": metric, "passing": [], "best": None,
-                "threshold": None, "within": [], "picked": None, "notes": notes,
+                "threshold": None, "noise_floor_rel_std": noise_floor_rel_std,
+                "noise_floor_adjustment": None, "adjusted_threshold": None,
+                "within": [], "picked": None, "notes": notes,
                 "reason": "no rung PASSED (a PLATEAU memory verdict is required, R309(f))"}
     best = max(passing, key=lambda p: p["value"])
     if best["value"] <= 0:
@@ -1287,14 +1362,22 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
             "picking the smallest rung off an identically-zero table."
         )
     threshold = best["value"] * (knee_pct / 100.0)
-    within = [p for p in passing if p["value"] >= threshold]
+    # R317(d): the ONLY safe post-hoc direction. Subtracting from the threshold can only ADD
+    # rungs to `within`, and the pick is still the SMALLEST member — so this can only pull the
+    # pick toward fewer workers, never toward more, whatever `noise_floor_rel_std` turns out to be.
+    adjustment = 3.0 * noise_floor_rel_std * best["value"]
+    adjusted_threshold = threshold - adjustment
+    within = [p for p in passing if p["value"] >= adjusted_threshold]
     picked = min(within, key=lambda p: p["n_workers"])
     return {
         "knee_pct": knee_pct, "metric": metric, "passing": passing, "best": best,
-        "threshold": threshold, "within": within, "picked": picked["n_workers"],
+        "threshold": threshold, "noise_floor_rel_std": noise_floor_rel_std,
+        "noise_floor_adjustment": adjustment, "adjusted_threshold": adjusted_threshold,
+        "within": within, "picked": picked["n_workers"],
         "notes": notes,
         "reason": (f"the smallest passing rung within {knee_pct:g}% of the best passing rung's "
-                   f"{metric}"),
+                   f"{metric}, widened by R317(d)'s 3-sigma noise floor "
+                   f"({noise_floor_rel_std:.4%} rel. std, -{adjustment:.4f} off the threshold)"),
     }
 
 
@@ -1378,9 +1461,19 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
 
 
 def build_report(*, plan: SweepPlan, prov: dict[str, Any], results: list[RungResult],
-                 stopped: str) -> dict[str, Any]:
+                 stopped: str, noise_floor_rel_std: float) -> dict[str, Any]:
     rows = [r.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
                       band_pct=plan.band_pct) for r in results]
+    # R317(c)(i): the ladder-wide gate. Every rung shares one seed and one config, so every net
+    # any rung built must hash equal — a divergence here means the ranking column this ladder
+    # exists to produce is not comparable, and no knee arithmetic on it can be trusted.
+    gate = _hash_gate([(str(r.n_workers), r.net_param_hash) for r in results])
+    selection = select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric,
+                            noise_floor_rel_std=noise_floor_rel_std)
+    if gate["verdict"] == DIVERGED:
+        selection = {**selection, "picked": None,
+                     "reason": f"VOIDED by R317(c)(i): {gate['reason']} — the ranking column is "
+                               "not comparable across rungs built from different nets"}
     return {
         "tool": TOOL,
         "prereg": dict(plan.provenance),
@@ -1395,12 +1488,21 @@ def build_report(*, plan: SweepPlan, prov: dict[str, Any], results: list[RungRes
         "provenance": prov,
         "ladder_stopped_because": stopped,
         "rungs": rows,
-        "selection": select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric),
+        "net_hash_gate": gate,
+        "selection": selection,
     }
 
 
 def rc_for(report: dict[str, Any]) -> int:
-    """0 a pick · 1 measurable but nothing PASSED · 2 nothing was measurable at all."""
+    """0 a pick · 1 measurable but nothing PASSED · 2 nothing was measurable at all.
+
+    R317(c)(i): a DIVERGED net_hash_gate is neither of the first two — it means the ranking
+    column itself is not comparable, which is a statement about the INSTRUMENT, not about the
+    card's memory or the ladder's throughput. It REFUSES (rc 2) rather than reporting "no pick"
+    the way an all-GROWING ladder does, because the latter is data and the former is not.
+    """
+    if report.get("net_hash_gate", {}).get("verdict") == DIVERGED:
+        return RC_REFUSED
     if report["selection"]["picked"] is not None:
         return 0
     decisive = [r for r in report["rungs"] if r["verdict"] in (PLATEAU, GROWING, OOM)]
@@ -1490,16 +1592,18 @@ def render(report: dict[str, Any], out: Any) -> None:
 
 
 def render_determinism_control(control: dict[str, Any], out: Any) -> None:
-    """The control's own screen: both figures, the spread, the band, and the verdict."""
+    """The control's own screen: the net-hash gate (R317(c)(i)), the reported spread with no
+    band (R317(c)(iii)), and the verdict."""
     spread = control["spread_pct"]
     shown = "unmeasurable" if spread is None else f"{spread:.4f}%"
+    gate = control.get("net_hash_gate", {})
     print("", file=out)
     print(f"DETERMINISM CONTROL — rung {control['n_workers']} driven twice in one process, "
           "same seed", file=out)
     print(f"  drive 1        {control['first']:12.4f} {control['metric']}", file=out)
     print(f"  drive 2        {control['second']:12.4f} {control['metric']}", file=out)
-    print(f"  spread         {shown:>12}   against a {control['band_pct']:g}% band "
-          "(R315(c)(i))", file=out)
+    print(f"  net hashes     {gate.get('hashes', {})}", file=out)
+    print(f"  spread         {shown:>12}   REPORTED, no band (R317(c)(iii))", file=out)
     print(f"  rung verdicts  {control['verdicts']}", file=out)
     print(f"  VERDICT        {control['verdict']:>12}   {control['reason']}", file=out)
 
@@ -1523,7 +1627,10 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
           f"@ {selection['best']['value']:.3f}", file=out)
     print(f"  threshold = {selection['best']['value']:.3f} * "
           f"{selection['knee_pct'] / 100.0:g} = {selection['threshold']:.3f}", file=out)
-    print("  at or above threshold:        "
+    print(f"  R317(d) noise floor: {selection['noise_floor_rel_std']:.4%} rel. std -> "
+          f"-{selection['noise_floor_adjustment']:.3f}, adjusted threshold = "
+          f"{selection['adjusted_threshold']:.3f}", file=out)
+    print("  at or above adjusted threshold:"
           + ", ".join(f"{p['n_workers']}@{p['value']:.3f}" for p in selection["within"]),
           file=out)
     print(f"  PICK = {selection['picked']}   ({selection['reason']})", file=out)
@@ -1536,13 +1643,13 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
 # ══ entry ════════════════════════════════════════════════════════════════════════════════
 def run_determinism_control(*, config_path: Path, plan_path: Path, n_workers: int,
                             out: Any) -> dict[str, Any]:
-    """Drive ONE rung TWICE in one process and report whether the two agree inside the band.
+    """Drive ONE rung TWICE in one process and report whether the two built the SAME net.
 
-    **The control R315(c)(i) orders, and it is the instrument that makes the ladder's ranking
-    column testable rather than trusted.** `build_sweep_net` seeds from the config's own `seed`
-    before every pool build, so two drives of the same rung must build the SAME network; if they
-    do, their throughputs land inside `RULED_DETERMINISM_BAND_PCT`. If seeding is removed or
-    perturbed, they do not — which is what
+    **The control R315(c)(i) orders and R317(c) RE-SPECIFIES, and it is the instrument that
+    makes the ladder's ranking column testable rather than trusted.** `build_sweep_net` seeds
+    from the config's own `seed` before every pool build, so two drives of the same rung must
+    build the SAME network; if they do, their net-parameter hashes are EQUAL — no band. If
+    seeding is removed or perturbed, they are not — which is what
     `tests/diagnostics/test_worker_sweep_determinism.py` demonstrates rather than asserts.
 
     It lives HERE, in the shipped tool, and not in a sitting's script: an instrument a sitting
@@ -1572,14 +1679,91 @@ def run_determinism_control(*, config_path: Path, plan_path: Path, n_workers: in
                              band_pct=plan.band_pct)
         row["drive"] = attempt
         rows.append(row)
-    control = determinism_verdict(rows[0], rows[1], metric=plan.metric,
-                                  band_pct=RULED_DETERMINISM_BAND_PCT)
+    control = determinism_verdict(rows[0], rows[1], metric=plan.metric)
     prov = provenance(config, Path(config_path), device=str(device), label=label)
     return {"tool": TOOL, "mode": "determinism_control", "prereg": dict(plan.provenance),
             "provenance": prov, "drives": rows, "control": control}
 
 
-def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]:
+def run_noise_floor(*, config_path: Path, plan_path: Path, n_workers: int,
+                    out: Any) -> dict[str, Any]:
+    """R317(d): FOUR fresh same-seed drives at one reference rung — the measured noise floor
+    the amended knee rule requires. Walks no ladder and picks nothing, same discipline as
+    `run_determinism_control`.
+
+    The coefficient of variation (population std / mean) of the four drive means is the
+    RELATIVE noise this sitting carries forward under the stated assumption that it holds
+    across every rung of the ladder (R317(d)) — a measured number, not a guess, and one the
+    knee rule (`select_knee`) can no longer be asked to select without.
+
+    Raises:
+        AllocatorPostureMismatchError: the live allocator conf does not match the minted posture.
+        SweepRefusal: the plan file is unreadable, incomplete, or moves a ruled constant.
+    """
+    from statistics import fmean, pstdev
+
+    plan = load_plan(plan_path)
+    config = load_config(config_path)
+    device = torch.device(config.train.device)
+    assert_allocator_posture(config.model_dump(), device_type=device.type)
+    label = f"{getattr(config, 'run_id', 'run')}@{_git('rev-parse', '--short', 'HEAD') or 'no-git'}"
+
+    rows: list[dict[str, Any]] = []
+    for attempt in range(1, 5):
+        result = drive_rung(config, plan, n_workers=n_workers, device=device,
+                            label=f"{label}#noisefloor-{attempt}", out=out)
+        row = result.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
+                             band_pct=plan.band_pct)
+        row["drive"] = attempt
+        rows.append(row)
+    gate = _hash_gate([(f"drive{r['drive']}", r.get("net_param_hash")) for r in rows])
+    means = [row[plan.metric] for row in rows]
+    undecidable = [row.get("verdict") for row in rows
+                   if row.get("verdict") in (REFUSED, OOM, RUNG_ERROR, PRODUCER_DEAD)]
+    if undecidable or min(means) <= 0:
+        noise_floor = {
+            "n_workers": n_workers, "metric": plan.metric, "means": means,
+            "mean_of_means": None, "std": None, "rel_std": None, "n_sigma": 3,
+            "reason": f"a drive is not a measurement to average: verdicts "
+                      f"{[row.get('verdict') for row in rows]}, {plan.metric} {means}",
+        }
+    else:
+        mean_of_means = fmean(means)
+        std = pstdev(means)
+        noise_floor = {
+            "n_workers": n_workers, "metric": plan.metric, "means": means,
+            "mean_of_means": mean_of_means, "std": std,
+            "rel_std": std / mean_of_means if mean_of_means else None, "n_sigma": 3,
+            "reason": f"rung-{n_workers} relative noise (coefficient of variation over "
+                      f"{len(means)} fresh same-seed drives), assumed to carry across every "
+                      "rung of the ladder (R317(d))",
+        }
+    prov = provenance(config, Path(config_path), device=str(device), label=label)
+    return {"tool": TOOL, "mode": "noise_floor", "prereg": dict(plan.provenance),
+            "provenance": prov, "drives": rows, "net_hash_gate": gate,
+            "noise_floor": noise_floor}
+
+
+def render_noise_floor(payload: dict[str, Any], out: Any) -> None:
+    """The noise-floor screen: the four drives, the hash gate, and the derived rel_std."""
+    nf = payload["noise_floor"]
+    gate = payload.get("net_hash_gate", {})
+    print("", file=out)
+    print(f"NOISE FLOOR — rung {nf['n_workers']} driven {len(nf['means'])} times, same seed "
+          "(R317(d))", file=out)
+    for i, value in enumerate(nf["means"], start=1):
+        print(f"  drive {i}         {value:12.4f} {nf['metric']}", file=out)
+    print(f"  net hashes     {gate.get('hashes', {})}  gate={gate.get('verdict')}", file=out)
+    if nf["rel_std"] is None:
+        print(f"  REFUSED — {nf['reason']}", file=out)
+    else:
+        print(f"  mean_of_means  {nf['mean_of_means']:12.4f}", file=out)
+        print(f"  std            {nf['std']:12.4f}", file=out)
+        print(f"  rel_std        {nf['rel_std']:12.4%}   ({nf['reason']})", file=out)
+
+
+def run_sweep(*, config_path: Path, plan_path: Path, out: Any,
+             noise_floor_rel_std: float) -> dict[str, Any]:
     """Load, assert the regime, walk the ladder, build the report. Writes no config, ever."""
     plan = load_plan(plan_path)
     config = load_config(config_path)
@@ -1596,7 +1780,8 @@ def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]
 
     results, stopped = walk_ladder(plan, runner=runner, label=label)
     prov = provenance(config, Path(config_path), device=str(device), label=label)
-    return build_report(plan=plan, prov=prov, results=results, stopped=stopped)
+    return build_report(plan=plan, prov=prov, results=results, stopped=stopped,
+                        noise_floor_rel_std=noise_floor_rel_std)
 
 
 def read_report(path: str | Path) -> dict[str, Any]:
@@ -1630,6 +1815,24 @@ def read_report(path: str | Path) -> dict[str, Any]:
     return report
 
 
+def read_noise_floor_report(path: str | Path) -> float:
+    """R317(d): load a `--noise-floor` report and REFUSE anything else, returning `rel_std`.
+
+    A separate reader from `read_report`, deliberately: a noise-floor document has no `rungs` or
+    `plan` block — it is not a ladder report and must not be read as one just because both come
+    from this tool.
+    """
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(report, dict) or report.get("tool") != TOOL or \
+            report.get("mode") != "noise_floor":
+        raise ValueError(f"{path}: not a --noise-floor report from {TOOL}")
+    rel_std = report.get("noise_floor", {}).get("rel_std")
+    if rel_std is None:
+        raise ValueError(f"{path}: carries no measured rel_std (its own drive was REFUSED) — "
+                         "nothing to select under")
+    return float(rel_std)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog=f"python -m {TOOL}", description=__doc__)
     parser.add_argument("--config", help="a MINTED RunConfig — the run's own, otherwise unchanged")
@@ -1638,9 +1841,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--select-only",
                         help="re-derive the knee from a report this tool already wrote")
     parser.add_argument("--determinism-control", type=int, metavar="N",
-                        help="drive rung N TWICE in one process and report whether the two agree "
-                             "inside the ruled band (R315(c)(i)); walks no ladder and picks nothing")
+                        help="drive rung N TWICE in one process and report whether the two built "
+                             "the SAME net, by hash equality (R317(c)(i)); walks no ladder and "
+                             "picks nothing")
+    parser.add_argument("--noise-floor", type=int, metavar="N",
+                        help="drive rung N FOUR times in one process and report the measured "
+                             "relative noise (R317(d)); walks no ladder and picks nothing")
+    parser.add_argument("--noise-floor-report",
+                        help="a report this tool already wrote with --noise-floor, supplying "
+                             "the measured noise floor the amended knee rule requires "
+                             "(R317(d)); required by drive mode and --select-only alike")
     args = parser.parse_args(argv)
+
+    if args.determinism_control is not None and args.noise_floor is not None:
+        print("REFUSED: --determinism-control and --noise-floor are different drive modes; "
+              "naming both describes neither", file=sys.stderr)
+        return RC_REFUSED
 
     if args.determinism_control is not None:
         # Same discipline --select-only carries: an input this mode does not read is refused BY
@@ -1682,6 +1898,42 @@ def main(argv: list[str] | None = None) -> int:
         verdict = report["control"]["verdict"]
         return 0 if verdict == AGREE else (1 if verdict == DIVERGED else RC_REFUSED)
 
+    if args.noise_floor is not None:
+        if args.select_only or args.noise_floor_report:
+            print("REFUSED: --noise-floor drives a rung and the other two read a written "
+                  "report; naming more than one mode describes none of them",
+                  file=sys.stderr)
+            return RC_REFUSED
+        if not args.config or not args.plan:
+            print("REFUSED: --noise-floor needs both --config and --plan, for the reason "
+                  "every drive mode does: a config this tool picked would measure a program "
+                  "nobody asked about, and a plan it picked would be a pre-registration nobody "
+                  "wrote", file=sys.stderr)
+            return RC_REFUSED
+        if args.noise_floor < 2:
+            print(f"REFUSED: --noise-floor {args.noise_floor}; R309(f) REJECTS n_workers = 1 "
+                  "and this tool will not drive a rung it would refuse to pick", file=sys.stderr)
+            return RC_REFUSED
+        try:
+            report = run_noise_floor(config_path=Path(args.config), plan_path=Path(args.plan),
+                                     n_workers=args.noise_floor, out=sys.stderr)
+        except KeyboardInterrupt:
+            print("REFUSED: interrupted; no noise floor was completed", file=sys.stderr)
+            return RC_REFUSED
+        except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
+            print(f"REFUSED: {exc!r}", file=sys.stderr)
+            return RC_REFUSED
+        if args.out is not None:
+            Path(args.out).write_text(json.dumps(report, indent=2, sort_keys=True),
+                                      encoding="utf-8")
+            print(f"{TOOL}: noise floor written to {args.out}", file=sys.stderr)
+        else:
+            print(json.dumps(report, indent=2, sort_keys=True))
+        render_noise_floor(report, sys.stderr)
+        if report["net_hash_gate"]["verdict"] == DIVERGED:
+            return RC_REFUSED
+        return 0 if report["noise_floor"]["rel_std"] is not None else RC_REFUSED
+
     if args.select_only:
         # EVERY input the mode does not read is refused BY NAME. `--out` was silently ignored
         # here while `--config`/`--plan` were refused — one of the two behaviours is wrong, and
@@ -1693,10 +1945,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"REFUSED: --select-only re-derives a pick from a written report and runs no "
                   f"drive; {', '.join(unread)} name inputs it does not read", file=sys.stderr)
             return RC_REFUSED
+        if not args.noise_floor_report:
+            print("REFUSED: --select-only needs --noise-floor-report; R317(d) requires a "
+                  "measured noise floor before a pick can be selected, and this reader will not "
+                  "re-derive one under an implicit 0.0", file=sys.stderr)
+            return RC_REFUSED
         try:
             report = read_report(args.select_only)
+            noise_floor_rel_std = read_noise_floor_report(args.noise_floor_report)
             selection = select_knee(report["rungs"], knee_pct=RULED_KNEE_PCT,
-                                    metric=PREREG_METRIC)
+                                    metric=PREREG_METRIC,
+                                    noise_floor_rel_std=noise_floor_rel_std)
             produced_by = report["provenance"].get("produced_by", "<unstated>")
         except (OSError, AttributeError, KeyError, TypeError, ValueError) as exc:
             print(f"REFUSED: cannot re-derive a pick from {args.select_only}: {exc}",
@@ -1713,6 +1972,17 @@ def main(argv: list[str] | None = None) -> int:
               "this tool picked would measure a program nobody asked about, and a plan it "
               "picked would be a pre-registration nobody wrote.", file=sys.stderr)
         return RC_REFUSED
+    if not args.noise_floor_report:
+        print("REFUSED: the ladder needs --noise-floor-report; R317(d) requires a measured "
+              "noise floor before a pick can be selected, and this tool will not walk a "
+              "seventy-minute ladder toward a selection it cannot make at the end",
+              file=sys.stderr)
+        return RC_REFUSED
+    try:
+        noise_floor_rel_std = read_noise_floor_report(args.noise_floor_report)
+    except (OSError, ValueError) as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return RC_REFUSED
     if args.out is not None:
         # PROBED BEFORE THE FIRST RUNG, because the destination used to be validated at the moment
         # it is least recoverable: the write sat outside the guard and BEFORE the render, so an
@@ -1726,7 +1996,7 @@ def main(argv: list[str] | None = None) -> int:
             return RC_REFUSED
     try:
         report = run_sweep(config_path=Path(args.config), plan_path=Path(args.plan),
-                           out=sys.stderr)
+                           out=sys.stderr, noise_floor_rel_std=noise_floor_rel_std)
     except KeyboardInterrupt:
         print("REFUSED: interrupted; no complete ladder was measured", file=sys.stderr)
         return RC_REFUSED
@@ -1784,8 +2054,11 @@ __all__ = [
     "run_determinism_control",
     "rc_for",
     "read_report",
+    "read_noise_floor_report",
     "render",
+    "render_noise_floor",
     "render_selection",
+    "run_noise_floor",
     "run_sweep",
     "select_knee",
     "thread_bound",

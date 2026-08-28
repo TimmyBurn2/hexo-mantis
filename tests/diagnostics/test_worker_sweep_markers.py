@@ -39,6 +39,8 @@ class _Stats:
 
 class _Pool:
     _producer_exc = None
+    # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+    model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
     def start(self) -> None: ...
     def stop(self) -> None: ...
@@ -133,7 +135,8 @@ def _report(plan: ws.SweepPlan, result: ws.RungResult, *, counters: bool) -> dic
         "declared_allocator_posture": None, "allocator_posture_governs_device": False,
         "live_allocator_conf": "", "live_allocator_conf_source_var": None,
     }
-    return ws.build_report(plan=plan, prov=prov, results=[result], stopped="test")
+    return ws.build_report(plan=plan, prov=prov, results=[result], stopped="test",
+                           noise_floor_rel_std=0.0)
 
 
 def test_every_rung_row_names_its_producing_run_and_its_sampling_limit(

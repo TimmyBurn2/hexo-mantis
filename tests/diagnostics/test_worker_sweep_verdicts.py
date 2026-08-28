@@ -87,7 +87,7 @@ def test_a_rising_series_verdicts_growing_and_is_excluded_from_the_knee_set(
     flat = _rung(2, [900.0, 1000.0, 1000.0, 1001.0, 1000.0, 1002.0], moves=1000, plan=plan)
     assert growing.verdict == ws.GROWING
     rows = [r.as_dict(plan.metric) for r in (flat, growing)]
-    selection = ws.select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric)
+    selection = ws.select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric, noise_floor_rel_std=0.0)
     assert [p["n_workers"] for p in selection["passing"]] == [2]
     assert selection["picked"] == 2, (
         "the GROWING rung is the faster one; if it can be picked, the memory verdict is "
@@ -159,7 +159,7 @@ def test_an_oom_fails_its_own_rung_and_stops_only_the_extension(plan: ws.SweepPl
     assert verdicts[12] == verdicts[14] == ws.PLATEAU
     assert "EXTENSION" in stopped and "8" in stopped
     rows = [r.as_dict(plan.metric) for r in results]
-    selection = ws.select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric)
+    selection = ws.select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric, noise_floor_rel_std=0.0)
     assert selection["picked"] == 2
     assert ws.rc_for({"rungs": rows, "selection": selection}) == 0, (
         "the sweep SURVIVES the OOM — an OOM is data that fails a rung, never a sitting failure"
@@ -250,6 +250,8 @@ def test_a_rung_that_generated_no_moves_is_refused_with_its_sampling_limit(
 
     class _Pool:
         _producer_exc = None
+        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
         def stop(self) -> None: ...
