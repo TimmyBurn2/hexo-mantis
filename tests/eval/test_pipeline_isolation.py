@@ -189,7 +189,7 @@ def fake_mp(monkeypatch):
 
 # ── kick / ack plumbing ──────────────────────────────────────────────────────────────
 def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> None:
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         t0 = time.perf_counter()
         ack = pipeline.run_evaluation(
@@ -206,13 +206,13 @@ def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> Non
 
 def test_builder_refuses_device_and_model_arguments(tmp_path) -> None:
     with pytest.raises(TypeError):
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path), device="cpu")  # type: ignore[call-arg]
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path), device="cpu", leaf_batch_size=1)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path), model=_tiny_model())  # type: ignore[call-arg]
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path), model=_tiny_model(), leaf_batch_size=1)  # type: ignore[call-arg]
 
 
 def test_pipeline_retains_no_module_after_kick(fake_mp, tmp_path) -> None:
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         ack = pipeline.run_evaluation(
             _tiny_model(), 1000, None, full_config={}, best_model_step=None
@@ -235,7 +235,7 @@ def test_pipeline_retains_no_module_after_kick(fake_mp, tmp_path) -> None:
 
 def test_worker_spawned_with_spawn_context(fake_mp, tmp_path) -> None:
     requested, ctx = fake_mp
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert requested.get("name") == "spawn"
@@ -248,7 +248,7 @@ def test_snapshots_are_not_checkpoints(fake_mp, tmp_path) -> None:
     checkpoint_dir = tmp_path / "checkpoints"
     checkpoint_dir.mkdir()
     kwargs = _pipeline_kwargs(tmp_path)
-    pipeline = build_eval_pipeline(**kwargs)
+    pipeline = build_eval_pipeline(**kwargs, leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         spool_dir = Path(kwargs["spool_dir"])

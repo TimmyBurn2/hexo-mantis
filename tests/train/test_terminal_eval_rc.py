@@ -553,6 +553,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
+        leaf_batch_size=1,
         eval_cfg=eval_cfg,
         coordinator_cfg_caps=DrainCaps(final_eval_drain_timeout_sec=0.05,
                                        eval_final_drain_safety_factor=1.0,

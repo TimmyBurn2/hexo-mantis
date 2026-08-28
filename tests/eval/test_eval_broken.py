@@ -241,7 +241,7 @@ def _result_path_from_ctx(ctx: _FakeCtx) -> Path:
 # ── scenarios ────────────────────────────────────────────────────────────────────────────
 def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -272,7 +272,7 @@ def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_pat
     sink = _SpySink()
     clock = FakeClock(0.0)
     cfg = _eval_cfg(round_timeout_sec=0.2, worker_kill_grace_sec=0.1)
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1)
     try:
         ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -296,7 +296,7 @@ def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_pat
 
 def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         result_path = _result_path_from_ctx(fake_mp)
@@ -320,7 +320,7 @@ def test_garbage_sidecar_json_is_eval_broken_not_a_crash(fake_mp, tmp_path) -> N
 
 def test_missing_result_file_is_eval_broken(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         proc = fake_mp.last_process
@@ -342,7 +342,7 @@ def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) 
     # Both must hold together — a routed promoted=False result WITH no event (silent), or
     # an event WITH no routed result (dropped), are each a partial failure this test rejects.
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         proc = fake_mp.last_process

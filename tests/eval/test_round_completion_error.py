@@ -205,7 +205,7 @@ def _inject_completion_crash(pipeline) -> None:
 # ── scenario 1: the REAL background poller thread notices the crash on its own tick ─────
 def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert ack["kicked"] is True
@@ -255,7 +255,7 @@ def test_poller_thread_survives_an_uncaught_exception_in_round_completion(fake_m
 #    reachable via drain_pending/close_out, not only the poller's own tick ─────────────────
 def test_drain_pending_survives_an_uncaught_exception_in_round_completion(fake_mp, tmp_path) -> None:
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)
@@ -283,7 +283,7 @@ def test_round_completion_error_never_silent_never_dropped(fake_mp, tmp_path) ->
     broken_never_promotes_and_never_silently_skips`): a routed result WITH no event, or an
     event WITH no routed result, are each rejected."""
     sink = _SpySink()
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         _inject_completion_crash(pipeline)

@@ -147,6 +147,15 @@ class RoundSpec:
     #: has no fused graph forward to bound, and `None` must round-trip as `None` rather than
     #: as a rehydration failure.
     fused_graph_caps: FusedGraphCapsSpec | None
+    #: The deploy head's MCTS leaf-batch width (R318(b)) — the config's OWN
+    #: `selfplay.leaf_batch_size`, carried across the process seam so the eval child searches
+    #: under the SAME regime the net's policy/value targets were generated in. Here for
+    #: `fused_graph_caps`' reason: the child has no `RunConfig` to resolve against. NOT
+    #: defaulted, unlike `allocator_posture` below — no consumer can refuse a bad value on this
+    #: axis the way `assert_posture_token` refuses a missing posture, so a default would
+    #: silently restore the k=1 train/deploy mismatch this field exists to close. A plain int,
+    #: so it round-trips through `asdict`/`from_dict` with no rehydration entry.
+    leaf_batch_size: int
     #: The CUDA caching allocator REGIME the round's caps were fitted under (RECAL-PREP,
     #: R308(g)(i)), as the config's own minted token. Here for `fused_graph_caps`' reason and
     #: on the same seam: the child is a SECOND allocator on the same card, in its own process,

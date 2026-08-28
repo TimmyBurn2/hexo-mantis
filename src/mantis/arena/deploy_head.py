@@ -80,6 +80,7 @@ class DeployHeadPlayer:
         infer_fn: InferFn | None = None,
         expand_fn: ExpandFn | None = None,
         n_sims: int,
+        leaf_batch_size: int,
         c_visit: float = 50.0,
         c_scale: float = 1.0,
     ) -> None:
@@ -90,9 +91,18 @@ class DeployHeadPlayer:
                 f"(graph); {supplied} was supplied. There is no default arm — picking one "
                 f"here would decide the decode contract silently."
             )
+        # R318(b): REQUIRED and never defaulted. A default would be a search-regime constant
+        # nobody minted, and the value it would take (1) is the defect itself.
+        if int(leaf_batch_size) < 1:
+            raise ValueError(
+                f"DeployHeadPlayer: leaf_batch_size={leaf_batch_size!r} must be >= 1. It is "
+                f"the config's own selfplay.leaf_batch_size (schema `ge=1`), threaded here so "
+                f"deploy searches under the regime the net's targets were generated in."
+            )
         self._infer_fn = infer_fn
         self._expand_fn = expand_fn
         self._n_sims = int(n_sims)
+        self._leaf_batch_size = int(leaf_batch_size)
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
         self._tree: MCTSTree | None = None
@@ -107,21 +117,37 @@ class DeployHeadPlayer:
         tree = self._tree if self._tree is not None else MCTSTree()
         self._tree = tree
         tree.new_game(board)
-        for _ in range(self._n_sims):
-            leaves = tree.select_leaves(1)
+        # R318(b): leaves are selected in batches of `leaf_batch_size`, the SAME knob the
+        # self-play worker reads. What changes is the number of BLOCKING round-trips — n_sims
+        # of them at k=1, roughly n_sims/k above it — never the amount of search.
+        #
+        # THE BUDGET ADVANCES BY LEAVES RETURNED, NOT BY LEAVES REQUESTED, and the difference
+        # is load-bearing (R318(b)(iii), "fixed nodes"). `select_leaves(k)` yields FEWER than k
+        # on a cold tree — measured 1, 1, then k — so crediting the request would spend ~11%
+        # fewer nodes at k=8 than at k=1, making a self-play THROUGHPUT knob silently change
+        # deploy STRENGTH. `selfplay/worker.py` credits the request instead; that divergence is
+        # deliberate and is the one place this head does not mirror it, because self-play's
+        # budget is a data-generation rate while this one is the strength dial a promotion gate
+        # is read against. The two are matched on WIDTH, which is what deploy-matching means
+        # here; they were never matched on node count (n_simulations 50 vs deploy_sims 128).
+        sims_done = 0
+        while sims_done < self._n_sims:
+            current_batch = min(self._leaf_batch_size, self._n_sims - sims_done)
+            leaves = tree.select_leaves(current_batch)
             if not leaves:
                 break
             if self._expand_fn is not None:
                 self._expand_fn(tree, leaves)
-                continue
-            assert self._infer_fn is not None  # ctor guarantees exactly one arm
-            policies: list[list[float]] = []
-            values: list[float] = []
-            for leaf in leaves:
-                policy, value = self._infer_fn(leaf)
-                policies.append(policy)
-                values.append(value)
-            tree.expand_and_backup(policies, values)
+            else:
+                assert self._infer_fn is not None  # ctor guarantees exactly one arm
+                policies: list[list[float]] = []
+                values: list[float] = []
+                for leaf in leaves:
+                    policy, value = self._infer_fn(leaf)
+                    policies.append(policy)
+                    values.append(value)
+                tree.expand_and_backup(policies, values)
+            sims_done += len(leaves)
         children_info = tree.get_root_children_info()
         try:
             move = select_argmax_child(children_info, c_visit=self._c_visit, c_scale=self._c_scale)

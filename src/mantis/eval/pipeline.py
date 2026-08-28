@@ -373,6 +373,7 @@ class EvalPipeline:
         caps: DrainCaps,
         encoding: str,
         fused_graph_caps: FusedGraphCapsSpec | None,
+        leaf_batch_size: int,
         run_id: str,
         spool_dir: str | Path,
         allocator_posture: str | None = None,
@@ -412,6 +413,11 @@ class EvalPipeline:
         #: nobody minted, standing in for the one the operator measured. `None` is the GRID
         #: arm, where there is no fused graph forward to bound.
         self._fused_graph_caps = fused_graph_caps
+        #: The deploy head's MCTS leaf-batch width (R318(b)), carried to every round's
+        #: `RoundSpec`. NOT defaulted, for `fused_graph_caps`' reason: it is the config's own
+        #: `selfplay.leaf_batch_size`, and a default here would be a search regime nobody
+        #: minted standing in for the one the net was trained under.
+        self._leaf_batch_size = int(leaf_batch_size)
         #: The allocator REGIME the round's caps were fitted under (RECAL-PREP, R308(g)(i)),
         #: resolved ONCE in the parent and carried to every round's `RoundSpec`. Unlike
         #: `fused_graph_caps` this one carries a DEFAULT, and the reason is stated rather than
@@ -643,6 +649,9 @@ class EvalPipeline:
             # `RunConfig` and its `LocalInferenceEngine` builds its graph server from a
             # hand-made dict, so this is the only way the bound reaches the second allocator.
             fused_graph_caps=self._fused_graph_caps,
+            # R318(b), same seam and same reason: the deploy head must search at the width the
+            # net's targets were generated at, and the child cannot read the config to find it.
+            leaf_batch_size=self._leaf_batch_size,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's, and the child has no
             # config to resolve one from.
@@ -1051,6 +1060,7 @@ def build_eval_pipeline(
     coordinator_cfg_caps: DrainCaps,
     encoding: str,
     fused_graph_caps: FusedGraphCapsSpec | None,
+    leaf_batch_size: int,
     run_id: str,
     spool_dir: str | Path,
     ladder_state_path: str | Path,
@@ -1066,7 +1076,7 @@ def build_eval_pipeline(
     `run_evaluation`'s protocol args and are IMMEDIATELY serialized-and-dropped)."""
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
-        fused_graph_caps=fused_graph_caps, run_id=run_id,
+        fused_graph_caps=fused_graph_caps, leaf_batch_size=leaf_batch_size, run_id=run_id,
         allocator_posture=allocator_posture,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,

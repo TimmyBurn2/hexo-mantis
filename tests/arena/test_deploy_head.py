@@ -80,8 +80,8 @@ def test_deploy_head_is_deterministic_given_fixed_inference():
         # enough to exercise search determinism without a real net.
         return [0.0] * 362, 0.0
 
-    player_a = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE)
-    player_b = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE)
+    player_a = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE, leaf_batch_size=1)
+    player_b = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE, leaf_batch_size=1)
 
     board_a = Board.with_encoding_name("v6_live2_ls")
     board_b = Board.with_encoding_name("v6_live2_ls")

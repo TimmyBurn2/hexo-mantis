@@ -121,6 +121,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
 
     cfg = load_config(_CONFIG_DIR / config_name)
     pipeline = EvalPipeline(
+        leaf_batch_size=1,
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
@@ -182,12 +183,14 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # round-trips. Its own round-trip (both arms) is pinned by
     # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
+                         leaf_batch_size=1,
                          fused_graph_caps=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
     assert back.ply_cap_adjudication is None and back.strength_floor is None
     assert back == disarmed
 
     armed = RoundSpec(
+        leaf_batch_size=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),

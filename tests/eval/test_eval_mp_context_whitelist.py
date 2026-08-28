@@ -93,7 +93,7 @@ def test_a_forkserver_context_is_refused_at_construction(tmp_path) -> None:
     `ValueError` — a bad argument VALUE — deliberately distinct from item 1's `RuntimeError`,
     which reports a violated invariant."""
     with pytest.raises(ValueError, match="forkserver"):
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="forkserver"))
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="forkserver"), leaf_batch_size=1)
 
 
 def test_a_fork_context_is_refused_at_construction(tmp_path) -> None:
@@ -101,7 +101,7 @@ def test_a_fork_context_is_refused_at_construction(tmp_path) -> None:
     passes the row above and dies here — which is what forces the refusal to be a WHITELIST
     equality (`!= "spawn"`) rather than a blacklist of the two known-bad names."""
     with pytest.raises(ValueError, match="fork"):
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="fork"))
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="fork"), leaf_batch_size=1)
 
 
 @pytest.mark.parametrize("bad", ["", "SPAWN", "spawn ", "threads"])
@@ -110,7 +110,7 @@ def test_any_other_context_name_is_refused_too(tmp_path, bad: str) -> None:
     Empty string, wrong case, stray whitespace and an invented name are all refused by the same
     equality, with no per-value arm to forget."""
     with pytest.raises(ValueError):
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx=bad))
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx=bad), leaf_batch_size=1)
 
 
 def test_the_default_context_constructs(tmp_path) -> None:
@@ -118,7 +118,7 @@ def test_the_default_context_constructs(tmp_path) -> None:
     actually be built and carry `'spawn'` forward to the spawn site, and its work dir must
     exist — a refusal that swallowed the legal value, or a constructor that returned early,
     would satisfy a bare does-not-raise check while breaking every round."""
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         assert pipeline._mp_ctx_name == "spawn"
         assert pipeline._work_dir.is_dir()
@@ -132,7 +132,7 @@ def test_the_refusal_names_the_only_supported_value(tmp_path) -> None:
     moves the puzzle. It must say what IS supported and why the arming makes the alternatives
     wrong, not merely that the value was rejected."""
     with pytest.raises(ValueError) as caught:
-        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="fork"))
+        build_eval_pipeline(**_pipeline_kwargs(tmp_path, mp_ctx="fork"), leaf_batch_size=1)
     message = str(caught.value)
     assert "'spawn'" in message
     assert "PR_SET_PDEATHSIG" in message

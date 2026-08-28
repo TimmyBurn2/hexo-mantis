@@ -228,7 +228,7 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     pos = _positions(fx)[0]
     board = _board(pos)
 
-    player = worker._build_candidate_player(engine, 1, spec=spec)
+    player = worker._build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()
     player.select_move(board)
@@ -427,7 +427,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     pos = _positions(_load(_P2_FIXTURE))[3]
     board = _board(pos)
     head_seat = int(board.current_player)
-    player = worker._build_candidate_player(engine, 1, spec=spec)
+    player = worker._build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
     player.new_game()
     bot = RandomBot(seed=20260731)
 
@@ -572,7 +572,7 @@ def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
 
     kwargs = {} if case == "neither" else {"infer_fn": _infer, "expand_fn": _expand_fn}
     with pytest.raises(ValueError):
-        DeployHeadPlayer(n_sims=1, **kwargs)
+        DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1)
 
 
 # ── ⊕ C-6 ────────────────────────────────────────────────────────────────────────────
@@ -611,7 +611,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
     )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
-            worker._build_candidate_player(engine, 2, spec=spec)
+            worker._build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1)
     finally:
         engine.close()
 

@@ -83,6 +83,7 @@ def test_poller_thread_beats_eval_round() -> None:
         real_beat(source)
 
     pipeline = mantis.eval.pipeline.build_eval_pipeline(
+        leaf_batch_size=1,
         eval_cfg=object(), coordinator_cfg_caps=object(), encoding="gnn_axis_v1",
         run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test",
         ladder_state_path="/tmp/mantis-eval-heartbeat-test/ladder.json",

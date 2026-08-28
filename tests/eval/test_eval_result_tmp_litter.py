@@ -182,7 +182,7 @@ def test_a_stale_result_tmp_is_swept_when_a_pipeline_opens_the_work_dir(tmp_path
     stale = work / f"{_ROUND_ID}_result.json.tmp"
     stale.write_text("{}", encoding="utf-8")
 
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         assert pipeline._work_dir == work, "the work dir under test is not the one swept"
         assert not stale.exists(), (
@@ -209,7 +209,7 @@ def test_the_sweep_leaves_completed_results_and_snapshots_alone(tmp_path) -> Non
     for path, body in keep.items():
         path.write_text(body, encoding="utf-8")
 
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
         for path, body in keep.items():
             assert path.exists(), f"the sweep deleted {path.name}, which it must never touch"
@@ -385,5 +385,5 @@ def test_the_construction_sweep_survives_an_unlinkable_stale_tmp(
         real_unlink(self, *a, **kw)
 
     monkeypatch.setattr(Path, "unlink", _boom)
-    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path))
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     pipeline.stop()

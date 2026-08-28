@@ -157,7 +157,7 @@ def value_visible_engines():
 
 def _search(engine, spec, board, n_sims):
     """Drive the PRODUCTION entrance and return (played move, root child q values)."""
-    player = worker._build_candidate_player(engine, n_sims, spec=spec)
+    player = worker._build_candidate_player(engine, n_sims, spec=spec, leaf_batch_size=1)
     player.new_game()
     move = player.select_move(board)
     tree = player._tree

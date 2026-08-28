@@ -167,15 +167,22 @@ def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
 
 
 def _build_candidate_player(
-    engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec
+    engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int
 ) -> DeployHeadPlayer:
     """CLOSED match on the DECLARED representation — never on a model attribute, and
     never with a dense arm as the fallthrough. An unregistered representation is the
-    exact input that must not silently become a dropping decode (R138's class)."""
+    exact input that must not silently become a dropping decode (R138's class).
+
+    `leaf_batch_size` is THREADED, never defaulted (R318(b)): it is the round spec's copy of
+    the config's `selfplay.leaf_batch_size`, so both arms search at the width the net's
+    policy/value targets were generated at.
+    """
     if spec.representation == "graph":
-        return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims)
+        return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims,
+                                leaf_batch_size=leaf_batch_size)
     if spec.representation == "grid":
-        return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims)
+        return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims,
+                                leaf_batch_size=leaf_batch_size)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arms are "
@@ -216,7 +223,8 @@ def _play_floor_probe(
     bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
     opponent = bot_factory(seed=spec.seed_base)
     candidate = _build_candidate_player(
-        candidate_engine, spec.random_model_sims, spec=encoding_spec
+        candidate_engine, spec.random_model_sims, spec=encoding_spec,
+        leaf_batch_size=spec.leaf_batch_size,
     )
     regime_key = RegimeKey(
         bot="random", variant=FLOOR_PROBE_VARIANT, model_sims=spec.random_model_sims,
@@ -258,10 +266,12 @@ def _play_gate_block(
     )
     try:
         candidate = _build_candidate_player(
-            candidate_engine, spec.gate.deploy_sims, spec=encoding_spec
+            candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
+            leaf_batch_size=spec.leaf_batch_size,
         )
         opponent = _build_candidate_player(
-            best_engine, spec.gate.deploy_sims, spec=encoding_spec
+            best_engine, spec.gate.deploy_sims, spec=encoding_spec,
+            leaf_batch_size=spec.leaf_batch_size,
         )
 
         regime_key = RegimeKey(
@@ -320,7 +330,8 @@ def _play_rung_block(
     # different regime value was an A3 mislabel (the record must describe the regime it
     # actually played).
     candidate = _build_candidate_player(
-        candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec
+        candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
+        leaf_batch_size=spec.leaf_batch_size,
     )
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
@@ -348,7 +359,8 @@ def _play_random_floor(
     # M-3: same fix as the rung block — the random floor plays at the resolved
     # random_model_sims, not gate.deploy_sims.
     candidate = _build_candidate_player(
-        candidate_engine, spec.random_model_sims, spec=encoding_spec
+        candidate_engine, spec.random_model_sims, spec=encoding_spec,
+        leaf_batch_size=spec.leaf_batch_size,
     )
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,
