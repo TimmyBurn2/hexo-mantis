@@ -117,7 +117,6 @@ from mantis.train.buffer_persist import canonical_buffer_path
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
-from mantis.util.determinism import seed_everything
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import (
@@ -130,6 +129,7 @@ from mantis.train.lifecycle.signals import (
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
 from mantis.train.subsystems import build_run_safety
+from mantis.util.determinism import seed_everything
 
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
