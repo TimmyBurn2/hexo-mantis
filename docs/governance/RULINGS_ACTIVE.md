@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5a58a23, regenerated 2026-08-27.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ ba82ab0, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.19, 2026-08-27. Created under R271 (register hygiene: archive/index split);
+# v3.20, 2026-08-28. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -396,6 +396,19 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # errors stand **disclosed on the ledger with their repairs ratified** — and the ratification is
 # specifically of *which side each repair chose*: rename the local, never weaken the scanner;
 # restore the foreign commit, never absorb it.
+# **v3.20 = R314 folded in — the curation where A CHECK STOPS ASKING THE WRONG PLACE.** R313's
+# execution is **RATIFIED**: both conformance reds fixed AT CAUSE (branch reset and re-floored by
+# measurement; the rule-7 false positive escaped in place), **R308(b) DISCHARGED**, and the pipe-exit
+# sweep's catch named for what it was — **gate 14 could have announced a zero-error type baseline it
+# never measured**, which is exactly the class the law was cut for. **The shared-tree law
+# GENERALIZES on its THIRD instance in one family: verify BRANCH AND TIP before ANY commit in a
+# shared worktree, not only before an amend.** Concurrent sessions commit from their own worktrees
+# (R276(b) extended past mission leaves to every concurrent session) and **the main checkout belongs
+# to the session running the box event**. The **detached-worktree cherry-pick with byte-identical
+# restoration of the foreign tip is RATIFIED as the NAMED recovery pattern** — it has now been used
+# once and independently confirmed by the other session's own branch-base measurement.
+# **`--check` RE-TARGETS to the `dev` ref**: the mirror contract is about what `dev` carries, not
+# about which branch a working tree happens to be parked on, and the filed finding closes with it.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -893,6 +906,26 @@ Verbatim text in the register; one-liners here are index only.
   so the amend took the foreign commit and folded a rename in under its message. **The
   byte-identical restoration (`git reset --soft`, foreign commit back at the same sha, own change
   re-committed separately) is RATIFIED as the correct repair.**
+
+- **R314(b) — VERIFY THE BRANCH, NOT ONLY THE TIP. LAW, standing; supersedes the narrower reading of
+  R313(d).** Before **ANY** commit in a shared working tree, verify **branch AND tip** — not only
+  before an `--amend`. **Concurrent sessions commit from their OWN worktrees** (R276(b), extended
+  beyond mission leaves to every concurrent session), and **the main checkout belongs to the session
+  running the box event.** **Third instance in one family**, which is what promoted the rule: an
+  amend onto a foreign commit, then a commit onto a foreign branch, both from the same too-narrow
+  generalization of the same hazard. **NAMED RECOVERY PATTERN, ratified:** a detached worktree on
+  the target ref, `cherry-pick`, push, worktree removed, then the foreign tip restored
+  **byte-identical** after re-reading it. Never rewrite a foreign branch you have not just re-read.
+- **R314(c) — A CHECK READS THE REF, NOT THE WORKING TREE. LAW, standing; `plan/sync_governance.py`.**
+  Mirrors are compared against **`git show dev:docs/governance/<name>`**. A fixed filesystem path
+  reports on whatever branch a checkout is parked on, which made `--check` call mirrors STALE that
+  `dev` carried correctly — **true about the files, misleading about the repo**, and the misleading
+  half is the one a reader acts on. **Writing stays main-tree-only** (R313(b)): the supplement lives
+  in one working directory and both the refusal and the audit need it. **Its control reproduces the
+  situation rather than describing it** — a real git repo, a correct mirror committed on `dev`, the
+  checkout parked on another branch whose tree carries a wrong one, and `--check` must report
+  `dev`'s truth; a companion control proves it still FAILS when `dev` is genuinely stale, so the
+  re-target cannot be satisfied by a check that has stopped checking.
 
 ## 5. Live pre-mint force — LIVE (rows expire at mint or on their event)
 
@@ -3425,3 +3458,36 @@ Verbatim text in the register; one-liners here are index only.
   scan-passing-is-not-clean sentence · *the independent grep promoted into the tool* · the
   main-tree-only-by-construction clause · PIPE-EXIT's *an exit code never dies in a pipe* ·
   SHARED-TREE AMEND's same-breath condition · (e)'s *rename the local, never weaken the scanner*.
+- 2026-08-28 — **v3.20** curated by the ARCH-ERA architect session (R303(d)), landing **R314** and
+  implementing (c) with its control in the same act. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST, third amendment running.** Census `R23-R313, 284/284/0`, stamp v3.19, last
+  header `R313`, no `R314` string under `plan/`. The re-sit session had meanwhile **COMPLETED its
+  exit — VERDICT HALT** — and filed a self-correction about its branch base, **but no field ruling**.
+  Numbered **R314**; the `R{next}` substitution is disclosed as the only edit.
+  **Byte-diff, R306(a), the extraction and the diff both under `set -o pipefail` (R313(c) applied to
+  its own successor): `diff` rc 0 RAW and NORMALIZED, 17 lines each side, `sha256`
+  `267923c121ec62b0…`; header diffed separately, verbatim. Census: R23–R314, 285 sections / 285
+  distinct / 0 duplicates, excluded 53, `missing-in-range` UNCHANGED.**
+  **THE OTHER SESSION INDEPENDENTLY CONFIRMED THIS SESSION'S REPAIR, which is worth more than the
+  repair.** R313's checkpoint recorded a commit landed on the re-sit's mint branch and recovered
+  through a detached worktree. That session then measured its own branch base from the ref and
+  corrected its own prior claim: **`recal-mint-20260827` = `0ff1d39`, based on `2c733b3`, one commit
+  of its own, one behind `dev`** — exactly the state the recovery left. **Two sessions, two
+  independent derivations, same answer**, which is the only kind of agreement worth recording.
+  **(c) IMPLEMENTED.** `--check` now reads `git show dev:docs/governance/<name>`; the working-tree
+  reader survives only as an injected parameter the SELF-TEST uses, so production cannot silently
+  fall back to it. The R313(b) audit was factored into a **pure content core** shared by the on-disk
+  and ref paths — two audits that drift apart would put the check back where R313(a) found it.
+  **Self-test 16 → 19 controls**, the three new ones building a REAL git repo, committing a correct
+  mirror on `dev`, parking the checkout on another branch with a wrong mirror in its tree, and
+  asserting `--check` reports `dev`'s truth · that the parked tree genuinely differed (so the
+  control cannot pass vacuously) · and that `--check` **still FAILS when `dev` is genuinely stale**.
+  **MEASURED IMMEDIATELY, in the live situation that produced the finding:** the engine's main
+  checkout is parked on `recal-mint-20260827`, and `--check` now reports **only
+  `rulings_register.md` stale** — which is `dev`'s actual truth after this landing's append — where
+  before the re-target it called two mirrors stale that `dev` carried correctly. **The filed finding
+  is CLOSED.**
+  **SPOT-CHECKS: SIX, all clean**, by script under R306(a)'s de-mark-before-normalize order — (a)'s
+  *precisely the class the law was cut for* · *verify branch AND tip before ANY commit* · the
+  main-checkout-belongs-to-the-box-session sentence · the named recovery pattern · *never the
+  working tree, because the mirror contract is about what dev carries* · (c)'s new-control sentence.

@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 5a58a23, regenerated 2026-08-27.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ ba82ab0, regenerated 2026-08-28.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7003,3 +7003,32 @@ commits file no field ruling. **The substitution is the only edit.**
 > the sweep is green; nothing else is blocked.
 > ROUTE: land this, census, ACTIVE next version, implement (b), run (c)'s one-time
 > sweep, one plain screen back.
+
+# R314 — architect ruling, 2026-08-28 (R313 execution RATIFIED; the shared-tree law GENERALIZES to every commit and the detached-worktree recovery is named; sync_governance --check RE-TARGETS to the dev ref and the filed finding closes) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d) and arrived as an operator-forwarded amendment; one canonical home:
+`PACKET_R314_DEV_REF_MIRROR.md` §1. Byte-diff on append per R306(a) (de-marked,
+whitespace-normalized, line-by-line; extraction by tooling, never retyped; the extraction and
+diff ran under `set -o pipefail`, which is R313(c) applied to its own successor). **The paste
+carried the placeholder `R{next}`**, substituted to `R314` after verifying the head is R313 —
+census `R23-R313, 284/284/0` at entry, no `R314` string under `plan/`, and the re-sit session's
+completed exit files a self-correction but no field ruling. **The substitution is the only edit.**
+
+> R314 — (a) The R313 execution is RATIFIED: both conformance reds fixed at cause,
+> R308(b) discharged, the audit-written assertion sharing no code with the redaction,
+> and the pipe-exit sweep's gate-14 catch — a type baseline that could announce itself
+> unmeasured is precisely the class the law was cut for.
+> (b) The shared-tree law GENERALIZES, third instance in one family: verify branch AND
+> tip before ANY commit in a shared worktree, not only before an amend. Concurrent
+> sessions commit from their own worktrees (R276(b) extended beyond mission leaves to
+> every concurrent session); the main checkout belongs to the session running the box
+> event. The detached-worktree cherry-pick with byte-identical restoration of the
+> foreign tip is RATIFIED as the named recovery pattern.
+> (c) sync_governance.py --check RE-TARGETS to the dev ref: mirrors are compared
+> against git show dev:docs/governance/<name>, never the working tree, because the
+> mirror contract is about what dev carries. Writing stays main-tree-only per R313(b).
+> One new control: with the worktree parked on a non-dev branch, --check must report
+> dev's truth. The filed finding closes with this.
+> ROUTE: land this, census, ACTIVE next version, implement (c) with its control, one
+> plain screen back.
