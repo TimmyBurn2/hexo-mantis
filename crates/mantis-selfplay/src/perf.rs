@@ -18,13 +18,21 @@ pub const SELECT_LEAVES: usize = 0;
 pub const GRAPH_BUILD: usize = 1;
 pub const SUBMIT_WAIT: usize = 2;
 pub const EXPAND_BACKUP: usize = 3;
-pub const N_STAGES: usize = 4;
+/// Server-thread stages, recorded inside the bridge's `next_graph_batch`. They share this
+/// table because they are the OTHER half of one round trip and must be read together.
+pub const QUEUE_POP_WAIT: usize = 4;
+pub const WIRE_INFLIGHT: usize = 5;
+pub const WIRE_FUSE: usize = 6;
+pub const N_STAGES: usize = 7;
 
 pub const STAGE_NAMES: [&str; N_STAGES] = [
     "select_leaves",
     "graph_build",
     "submit_wait",
     "expand_backup",
+    "queue_pop_wait",
+    "wire_inflight",
+    "wire_fuse",
 ];
 
 /// Power-of-two buckets for the per-call leaf count, `1` … `2048`.
