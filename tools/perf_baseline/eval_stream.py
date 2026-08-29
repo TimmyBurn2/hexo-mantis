@@ -21,7 +21,11 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import GpuSampler, git_sha, stats, write_json  # noqa: E402
 
-from mantis._engine import Board  # noqa: E402
+from mantis._engine import (  # noqa: E402
+    Board,
+    selfplay_perf_reset,
+    selfplay_perf_snapshot,
+)
 from mantis.arena.deploy_head import DeployHeadPlayer  # noqa: E402
 from mantis.config.loader import load_config  # noqa: E402
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps  # noqa: E402
@@ -107,6 +111,7 @@ def main() -> int:
         board.apply_move(*warm_move)
         TIMES.clear()
         LEAVES[0] = 0
+        selfplay_perf_reset()
         py_before = server.perf_stage_snapshot()
         bt_before = server.batch_timing_snapshot()
         sampler.start()
@@ -121,6 +126,7 @@ def main() -> int:
             moves += 1
         wall = time.monotonic() - t0
         sampler.stop()
+        rust = selfplay_perf_snapshot()
         py_after = server.perf_stage_snapshot()
         bt_after = server.batch_timing_snapshot()
         sampler.join(timeout=5.0)
@@ -139,6 +145,7 @@ def main() -> int:
             "ms_per_move": stats(move_ms),
             "ms_per_sim": (wall * 1e3 / sims) if sims else None,
             "sims_per_move": sims / moves if moves else None,
+            "rust_stages": rust,
             "python_stages": stages,
             "python_stage_total_ms_per_sim":
                 sum(v["total_ms"] for v in stages.values()) / sims if sims else None,

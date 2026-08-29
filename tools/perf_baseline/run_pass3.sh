@@ -23,4 +23,9 @@ sleep 5
 echo "=== C: seam, null-model server (uniform probs) ==="
 $PY tools/perf_baseline/seam.py --out "$OUT/seam.json" --iters 120 2>&1 | tail -20
 
+sleep 5
+
+echo "=== E2: eval single-stream, DEEPER game (graph size grows with ply) ==="
+$PY tools/perf_baseline/eval_stream.py --out "$OUT/eval_stream_deep.json" --max-moves 64 2>&1 | tail -6
+
 echo "=== PASS 3 DONE ==="
