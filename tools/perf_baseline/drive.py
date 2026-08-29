@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 import pickle
+import random
 import sys
 import time
 from pathlib import Path
@@ -25,26 +26,45 @@ from mantis.diagnostics.worker_sweep import build_sweep_pool  # noqa: E402
 from mantis.selfplay.pool_hooks import runner_stats  # noqa: E402
 
 
-def install_capture(out_dir: str, limit: int) -> list[int]:
-    """Wrap `graph_wire_from_rust` so the first `limit` real wire payloads land on disk.
+def install_capture(out_dir: str, limit: int, stride: int, per_pop: int) -> list[int]:
+    """Wrap `graph_wire_from_rust` so SINGLE graphs, sampled across the WHOLE drive, land on disk.
 
     Patched at MODULE scope before `pool.start()`: `_run_graph_loop` imports the name inside
     the thread body, so the loop picks up the wrapper. Production graphs, production radius,
     real halo sizes — §2 A refuses synthetic input.
+
+    STRIDED, and that is a repair rather than a refinement. Capturing the FIRST N pops samples
+    the first seconds of a drive, when every board is nearly empty: the first pass here read a
+    median of 6.6 k edges per graph against an in-run mean of ~69 k, so the silicon floor it
+    produced was measured on graphs an order of magnitude smaller than the ones actually served.
+    A floor is the denominator of every multiplier in this ledger, so it has to be sampled over
+    the drive's own ply distribution, not over its opening.
+
+    Single graphs, not whole pops: a late-game pop of 40 graphs is tens of megabytes, and the
+    floor harness slices to single graphs anyway.
     """
     from mantis.selfplay import graph_collate
+    from mantis.selfplay.graph_wire_split import slice_graph_wire
 
     original = graph_collate.graph_wire_from_rust
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     saved = [0]
+    seen = [0]
+    rng = random.Random(20260829)
 
     def wrapped(wire: Any) -> Any:
         payload = original(wire)
-        if saved[0] < limit:
-            idx = saved[0]
-            saved[0] += 1
-            with open(f"{out_dir}/wire_{idx:04d}.pkl", "wb") as fh:
-                pickle.dump(payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        seen[0] += 1
+        if saved[0] < limit and seen[0] % stride == 0 and payload.n_graphs > 0:
+            for _ in range(min(per_pop, payload.n_graphs)):
+                if saved[0] >= limit:
+                    break
+                g = rng.randrange(payload.n_graphs)
+                idx = saved[0]
+                saved[0] += 1
+                with open(f"{out_dir}/wire_{idx:05d}.pkl", "wb") as fh:
+                    pickle.dump(slice_graph_wire(payload, g, g + 1), fh,
+                                protocol=pickle.HIGHEST_PROTOCOL)
         return payload
 
     graph_collate.graph_wire_from_rust = wrapped
@@ -82,7 +102,9 @@ def main() -> int:
                          "serialises the stream, so throughput from a --sync-cuda run is NOT "
                          "the serving throughput")
     ap.add_argument("--capture-dir", default=None)
-    ap.add_argument("--capture-limit", type=int, default=400)
+    ap.add_argument("--capture-limit", type=int, default=600)
+    ap.add_argument("--capture-stride", type=int, default=3)
+    ap.add_argument("--capture-per-pop", type=int, default=2)
     ap.add_argument("--label", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default="/tmp/perf_baseline")
@@ -104,7 +126,8 @@ def main() -> int:
 
     saved_counter = None
     if args.capture_dir:
-        saved_counter = install_capture(args.capture_dir, args.capture_limit)
+        saved_counter = install_capture(args.capture_dir, args.capture_limit,
+                                        args.capture_stride, args.capture_per_pop)
 
     pool = build_sweep_pool(config, n_workers=args.n_workers, device=device)
     server = pool._inference_server  # noqa: SLF001 — diagnostic read of the one server
