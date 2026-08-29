@@ -21,7 +21,7 @@ from _common import git_sha, stats, write_json  # noqa: E402
 
 from mantis.config.loader import load_config  # noqa: E402
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs  # noqa: E402
-from mantis.config.resolve.pool_encoding import resolve_pool_encoding  # noqa: E402
+from mantis.selfplay.hparams import resolve_pool_encoding  # noqa: E402
 from mantis.diagnostics.worker_sweep import build_sweep_pool  # noqa: E402
 from mantis.model import arch_from_spec_and_config  # noqa: E402
 from mantis.train.coordinator.dispatch import train_one_batch  # noqa: E402
@@ -78,9 +78,7 @@ def main() -> int:
     knobs = resolve_coordinator_knobs(config.train)
 
     pool = build_sweep_pool(config, n_workers=args.fill_workers, device=device)
-    buffer = pool.replay_buffer.buffer if hasattr(pool.replay_buffer, "buffer") else None
-    if buffer is None:
-        buffer = getattr(pool.replay_buffer, "_buffer", None)
+    buffer = getattr(pool.replay_buffer, "raw", None)
     if buffer is None or not hasattr(buffer, "sample_graph_batch"):
         print(f"REFUSING: no sample_graph_batch on {type(pool.replay_buffer).__name__}; "
               f"attrs={[a for a in dir(pool.replay_buffer) if not a.startswith('__')]}")

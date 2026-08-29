@@ -25,7 +25,7 @@ from mantis._engine import Board  # noqa: E402
 from mantis.arena.deploy_head import DeployHeadPlayer  # noqa: E402
 from mantis.config.loader import load_config  # noqa: E402
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps  # noqa: E402
-from mantis.config.resolve.pool_encoding import resolve_pool_encoding  # noqa: E402
+from mantis.selfplay.hparams import resolve_pool_encoding  # noqa: E402
 from mantis.diagnostics.worker_sweep import build_sweep_net  # noqa: E402
 from mantis.model import arch_from_spec_and_config  # noqa: E402
 

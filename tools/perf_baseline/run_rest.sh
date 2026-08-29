@@ -21,16 +21,12 @@ sleep 5
 $PY tools/perf_baseline/eval_stream.py --out "$OUT/eval_stream_sync.json" --max-moves 25 --sync-cuda 2>&1 | tail -10
 sleep 5
 
-echo "=== B: py-spy over a contended drive ==="
-MANTIS_PERF_STAGES=1 $PY tools/perf_baseline/drive.py --n-workers 12 \
-    --warmup-sec 25 --window-sec 90 --label w12_pyspy \
-    --out "$OUT/w12_pyspy.json" --scratch "$OUT/cfg" > "$OUT/w12_pyspy.log" 2>&1 &
-DRIVE_PID=$!
-sleep 40
-.venv/bin/py-spy record --pid "$DRIVE_PID" --duration 60 --rate 120 --threads \
-    --format raw --output "$OUT/pyspy_w12.folded" 2>&1 | tail -5
-wait $DRIVE_PID
-tail -3 "$OUT/w12_pyspy.log"
+echo "=== B: py-spy over a contended drive (py-spy is the PARENT: ptrace_scope=1) ==="
+.venv/bin/py-spy record --rate 120 --threads --format raw \
+    --output "$OUT/pyspy_w12.folded" -- \
+    $PY tools/perf_baseline/drive.py --n-workers 12 \
+    --warmup-sec 20 --window-sec 100 --label w12_pyspy \
+    --out "$OUT/w12_pyspy.json" --scratch "$OUT/cfg" 2>&1 | tail -6
 sleep 5
 
 echo "=== D: trainer step ==="

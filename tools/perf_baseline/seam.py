@@ -150,7 +150,7 @@ def main() -> int:
 
     config = load_config(args.config)
     raw = config.model_dump()
-    from mantis.config.resolve.pool_encoding import resolve_pool_encoding
+    from mantis.selfplay.hparams import resolve_pool_encoding
 
     spec = resolve_pool_encoding(raw, arch=None).registry_spec
     leaf_batch = config.selfplay.leaf_batch_size

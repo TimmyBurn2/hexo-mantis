@@ -121,7 +121,7 @@ def main() -> int:
     config = load_config(args.config)
     device = torch.device("cuda")
     raw = config.model_dump()
-    from mantis.config.resolve.pool_encoding import resolve_pool_encoding
+    from mantis.selfplay.hparams import resolve_pool_encoding
     from mantis.model import amp_dtype_for, arch_from_spec_and_config
 
     resolved = resolve_pool_encoding(raw, arch=None)
