@@ -99,7 +99,10 @@ def main() -> int:
         pool.start()
         time.sleep(args.fill_sec)
         pool.check_producer_health()
-        record["ring_len_after_fill"] = len(buffer)
+        # HexgBuffer exposes no __len__; `get_buffer_stats` is the engine's own reader.
+        stats_tuple = buffer.get_buffer_stats()
+        record["ring_buffer_stats_after_fill"] = list(stats_tuple[:2])
+        record["ring_len_after_fill"] = int(stats_tuple[0])
     finally:
         pool.stop()
     print(f"ring holds {record['ring_len_after_fill']} samples after fill")
