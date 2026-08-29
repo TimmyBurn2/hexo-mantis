@@ -135,18 +135,24 @@ impl PyHexgBuffer {
     /// Releasing it is sound because `&mut self` is exclusive: pyo3 hands out a `PyRefMut`,
     /// so a second Python thread touching this same buffer is refused by the borrow check
     /// rather than racing the released section. `HexgBuffer` holds no Python object.
-    #[pyo3(signature = (batch_size, augment = false, recent_frac = 0.0))]
+    ///
+    /// `n_threads` is the rebuild's width (B1). `1` is the serial path and the exact-parity
+    /// control; the caller derives the budget from the run's own keys
+    /// (`mantis.config.resolve.sample_threads`) rather than this layer inventing one, because
+    /// the threads it may take are the ones the self-play workers are not already using.
+    #[pyo3(signature = (batch_size, augment = false, recent_frac = 0.0, n_threads = 1))]
     pub fn sample_graph_batch(
         &mut self,
         py: Python<'_>,
         batch_size: usize,
         augment: bool,
         recent_frac: f32,
+        n_threads: usize,
     ) -> PyResult<(PyGraphWire, PyGraphTargets)> {
         let inner = &mut self.inner;
         let sampled = py.detach(move || {
             let (graphs, targets) =
-                inner.sample_graph_batch_impl(batch_size, augment, recent_frac)?;
+                inner.sample_graph_batch_impl(batch_size, augment, recent_frac, n_threads)?;
             // Single-source block-diagonal fuse (shared with the inference seam so the
             // C3/C8 union arithmetic never drifts). For a single graph local == global.
             let mut wire = GraphWire::from_axis_graphs(&graphs, inner.contract_version);

@@ -44,6 +44,7 @@ from typing import Any, cast
 import mantis.data.loss_counters as _data_loss
 import mantis.train.buffer_persist as _buffer_persist
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
+from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     WR_PEAK_WINDOW_EVALS,
@@ -270,6 +271,9 @@ class StepCoordinator:
         # route dispatches off spec.representation, resolved from the DECLARED config this
         # coordinator already holds, through THE one resolver (never a buffer sniff).
         self._resolved_step_spec: Any | None = None
+        #: PERF-TRANCHE-1 B1 — the ring rebuild's thread budget, derived once (see
+        #: `_sample_threads`). `None` = not yet derived, never "no threads".
+        self._resolved_sample_threads: int | None = None
         #: WP12-R F2: the memo behind `_microbatch_caps`, the graph-only cap thunk.
         self._resolved_caps: Any | None = None
         self._initial_policy_loss: float | None = None
@@ -1226,6 +1230,7 @@ class StepCoordinator:
             batch_size=batch_size, augment=cfg.augment,
             recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
             caps_provider=self._microbatch_caps,
+            sample_threads=self._sample_threads(),
         )
 
     def _step_spec(self) -> Any:
@@ -1235,6 +1240,17 @@ class StepCoordinator:
         if self._resolved_step_spec is None:
             self._resolved_step_spec = resolve_step_spec(self.full_config)
         return self._resolved_step_spec
+
+    def _sample_threads(self) -> int:
+        """The ring rebuild's thread budget, derived ONCE from this coordinator's config.
+
+        Cached for `_step_spec`'s reason and not for speed: the derivation reads
+        `selfplay.n_workers` and the host's core count, both fixed for the life of the run,
+        so re-deriving it per step would be a second reading of a constant.
+        """
+        if self._resolved_sample_threads is None:
+            self._resolved_sample_threads = resolve_sample_threads(self.full_config)
+        return self._resolved_sample_threads
 
     def _microbatch_caps(self) -> Any:
         """The resolved graph micro-batch caps, lazily resolved ONCE from the declared config

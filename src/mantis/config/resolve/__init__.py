@@ -47,6 +47,10 @@ from mantis.config.resolve.inference_batching import (
     MissingInferenceBatchingError,
     resolve_inference_batching,
 )
+from mantis.config.resolve.sample_threads import (
+    MissingSampleThreadsInputError,
+    resolve_sample_threads,
+)
 from mantis.config.resolve.eval_posture import (
     PlyCapAdjudicationSpec,
     StrengthFloorSpec,
@@ -79,6 +83,7 @@ __all__ = [
     "MissingAllocatorPostureError",
     "MissingFusedGraphCapsError",
     "MissingInferenceBatchingError",
+    "MissingSampleThreadsInputError",
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
@@ -100,6 +105,7 @@ __all__ = [
     "resolve_eval_model_sims",
     "resolve_fused_graph_caps",
     "resolve_inference_batching",
+    "resolve_sample_threads",
     "resolve_max_train_steps",
     "resolve_monitor_config",
     "resolve_ply_cap_adjudication",

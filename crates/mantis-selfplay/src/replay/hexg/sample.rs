@@ -20,7 +20,7 @@ use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList};
 use rand::RngExt;
 
 use super::super::sym::{rotate_axial, N_SYMS};
-use super::{GraphTargets, HexgBuffer};
+use super::{GraphRecord, GraphTargets, HexgBuffer};
 
 /// Compare aligned visit mass against the mass stored at push time; LOUD-fail,
 /// naming the record's `game_id`/`ply`, when they diverge beyond tolerance.
@@ -132,16 +132,62 @@ impl HexgBuffer {
     /// Rebuild + align `batch_size` sampled records. Returns the buffer-owned
     /// `(Vec<AxisGraph>, GraphTargets)`; the block-diagonal graph-wire fuse
     /// (`from_axis_graphs`) is deferred to WP6 (R-1). See module docs.
+    /// The per-sample D6 draws for one batch, in INDEX ORDER — the RNG hoist B1 needs.
+    ///
+    /// The draw is the only generator use in the rebuild body, and the parallel rebuild
+    /// cannot share `&mut self.rng`. Hoisting it here consumes the generator in exactly the
+    /// order and count the serial loop did, which is what makes the parallel path
+    /// BIT-IDENTICAL rather than merely equivalent-in-distribution.
+    ///
+    /// `self.n_stones[idx] != 0` stands in for the original `!rec.stones.is_empty()` so the
+    /// draw does not require materialising a record first. They are the same predicate —
+    /// `record_at` builds `stones` with exactly `n_stones[slot]` entries — and
+    /// `tests/hexg_sample_parallel_parity.rs` pins the equivalence against a transcription
+    /// of the original inline draw rather than leaving it asserted here.
+    pub fn draw_syms(&mut self, indices: &[usize], augment: bool) -> Vec<usize> {
+        indices
+            .iter()
+            .map(|&idx| {
+                if augment && self.n_stones[idx] != 0 {
+                    self.rng.random_range(0..N_SYMS)
+                } else {
+                    0
+                }
+            })
+            .collect()
+    }
+
     pub fn sample_graph_batch_impl(
         &mut self,
         batch_size: usize,
         augment: bool,
         recent_frac: f32,
+        n_threads: usize,
     ) -> Result<(Vec<AxisGraph>, GraphTargets), String> {
         if self.size == 0 {
             return Err("Cannot sample from an empty HEXG buffer".to_string());
         }
         let indices = self.sample_indices(batch_size, recent_frac);
+
+        let params_base = BuildParams {
+            win_length: self.win_length,
+            radius: self.radius,
+            current_player: 1, // overwritten per record
+            moves_remaining: 2,
+            trunk_size: self.trunk_size,
+        };
+
+        let syms = self.draw_syms(&indices, augment);
+
+        // Materialise the records BEFORE the parallel section: `record_at` borrows `&self`,
+        // and the section must not hold a borrow of the buffer while threads run.
+        let items: Vec<(GraphRecord, i64, usize)> = indices
+            .iter()
+            .zip(&syms)
+            .map(|(&idx, &sym)| (self.record_at(idx), self.game_ids[idx], sym))
+            .collect();
+
+        let per_item = build_and_align_batch(&items, &params_base, n_threads)?;
 
         let mut graphs = Vec::with_capacity(batch_size);
         let mut policy_target: Vec<f32> = Vec::new();
@@ -152,106 +198,170 @@ impl HexgBuffer {
         let mut argmax_r: Vec<i32> = Vec::with_capacity(batch_size);
         let mut argmax_valid: Vec<u8> = Vec::with_capacity(batch_size);
 
-        let params_base = BuildParams {
-            win_length: self.win_length,
-            radius: self.radius,
-            current_player: 1, // overwritten per record
-            moves_remaining: 2,
-            trunk_size: self.trunk_size,
-        };
-
-        for &idx in &indices {
-            let rec = self.record_at(idx);
-            let game_id = self.game_ids[idx];
-            let ply_idx = rec.ply_index;
-
-            // D6 element for this sample (uniform per-sample). sym 0 = identity
-            // when augmentation is OFF. Force identity for a 0-stone record: the
-            // empty-board fallback rectangle is not closed under 8 of the 12 D6
-            // elements, and an empty stone list carries no orientation to learn.
-            let sym = if augment && !rec.stones.is_empty() {
-                self.rng.random_range(0..N_SYMS)
-            } else {
-                0
-            };
-
-            // Rotate stones by the element (axial lattice automorphism).
-            let mut stones: Vec<(i32, i32, i8)> = Vec::with_capacity(rec.stones.len());
-            for &(q, r, p) in &rec.stones {
-                let (rq, rr) = rotate_axial(i32::from(q), i32::from(r), sym);
-                stones.push((rq, rr, p));
-            }
-            let params = BuildParams {
-                current_player: rec.current_player,
-                moves_remaining: rec.moves_remaining,
-                ..params_base
-            };
-            // Rebuild — the builder emits the correctly re-indexed graph and
-            // stamps builder_impl=1. edge_index is NEVER cached across aug.
-            let g = build_axis_graph(&StoneList { stones }, &params);
-
-            // Rotate the visit-map KEYS by the SAME element, so the policy target
-            // follows each cell to its new location.
-            let mut vmap: FxHashMap<(i32, i32), f32> = FxHashMap::default();
-            let stored_mass: f32 = rec.visits.iter().map(|&(_, _, prob)| prob).sum();
-            for &(q, r, prob) in &rec.visits {
-                let (rq, rr) = rotate_axial(i32::from(q), i32::from(r), sym);
-                vmap.insert((rq, rr), prob);
-            }
-
-            // Align to the built legal nodes (gather order == the segment order):
-            // target[i] = rotated_visit_map[coord_of_legal_node_i] or 0. No
-            // off-window drop — every legal node gets its coord's mass.
-            let mut best_prob = f32::NEG_INFINITY;
-            let mut best_coord: Option<(i32, i32)> = None;
-            let mut aligned_mass = 0.0f32;
-            for &row in &g.legal_node_gather {
-                let cq = g.node_coords[row as usize * 2];
-                let cr = g.node_coords[row as usize * 2 + 1];
-                let prob = vmap.get(&(cq, cr)).copied().unwrap_or(0.0);
-                aligned_mass += prob;
-                policy_target.push(prob);
-                if prob > best_prob {
-                    best_prob = prob;
-                    best_coord = Some((cq, cr));
-                }
-            }
-
-            // ALWAYS-ON contract check: compare aligned mass against the mass
-            // stored at push time and LOUD-fail, naming the record, when they
-            // diverge beyond tolerance. `rotate_axial` is exact integer-lattice
-            // math, so a legit producer's mass survives the align bit-for-bit.
-            mass_drop_check(game_id, ply_idx, stored_mass, aligned_mass)?;
-
-            match best_coord {
-                Some((q, r)) if best_prob > 0.0 => {
-                    argmax_q.push(q);
-                    argmax_r.push(r);
-                    argmax_valid.push(1);
-                }
-                // all-zero target (value-only / quick-search row): no argmax cell.
-                _ => {
-                    argmax_q.push(0);
-                    argmax_r.push(0);
-                    argmax_valid.push(0);
-                }
-            }
-
-            outcomes.push(rec.outcome);
-            value_valid.push(u8::from(rec.value_valid));
-            is_full_search.push(u8::from(rec.is_full_search));
-            graphs.push(g);
+        // Reassembly is IN INDEX ORDER, not completion order: `policy_target` is one flat
+        // concatenation whose segment boundaries the collate derives from the graphs'
+        // own legal counts, so a permutation here would silently mis-pair every target.
+        for out in per_item {
+            policy_target.extend_from_slice(&out.policy_target);
+            argmax_q.push(out.argmax_q);
+            argmax_r.push(out.argmax_r);
+            argmax_valid.push(out.argmax_valid);
+            outcomes.push(out.outcome);
+            value_valid.push(out.value_valid);
+            is_full_search.push(out.is_full_search);
+            graphs.push(out.graph);
         }
 
-        let targets = GraphTargets {
-            policy_target,
-            outcomes,
-            value_valid,
-            is_full_search,
-            argmax_q,
-            argmax_r,
-            argmax_valid,
-        };
-        Ok((graphs, targets))
+        Ok((
+            graphs,
+            GraphTargets {
+                policy_target,
+                outcomes,
+                value_valid,
+                is_full_search,
+                argmax_q,
+                argmax_r,
+                argmax_valid,
+            },
+        ))
     }
+}
+
+/// One sampled record's rebuilt graph and its aligned per-legal-node targets.
+struct SampleOut {
+    graph: AxisGraph,
+    policy_target: Vec<f32>,
+    argmax_q: i32,
+    argmax_r: i32,
+    argmax_valid: u8,
+    outcome: f32,
+    value_valid: u8,
+    is_full_search: u8,
+}
+
+/// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning
+/// the results IN INDEX ORDER.
+///
+/// B1, against ledger §10.5 line #1. The measured split of `sample_ring` at run5 shape is
+/// 1 221 ms of `build_axis_graph` against 163 ms of fuse and 2 ms of align — 88 % of the
+/// trainer's single largest line is a SERIAL loop over an embarrassingly parallel rebuild,
+/// on a 24-thread box. Each item touches only its own record, so the only thing that had to
+/// move for this to be safe was the generator draw, hoisted by the caller.
+///
+/// `std::thread::scope` and a chunked split rather than a work-stealing pool: rayon is
+/// absent from this workspace and adding it is a `vendor/pins.toml` event, which is a real
+/// cost this repo prices deliberately. The items are near-uniform in size (one sampled
+/// position each), so static chunking loses little to imbalance.
+///
+/// `n_threads <= 1` runs the serial path in this thread — the exact-parity control, and the
+/// posture for a caller that has no threads to spare.
+fn build_and_align_batch(
+    items: &[(GraphRecord, i64, usize)],
+    params_base: &BuildParams,
+    n_threads: usize,
+) -> Result<Vec<SampleOut>, String> {
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    let threads = n_threads.max(1).min(items.len());
+    if threads == 1 {
+        return items.iter().map(|it| build_and_align_one(it, params_base)).collect();
+    }
+    let chunk = items.len().div_ceil(threads);
+    let mut per_chunk: Vec<Result<Vec<SampleOut>, String>> = Vec::new();
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = items
+            .chunks(chunk)
+            .map(|slice| scope.spawn(move || {
+                slice.iter().map(|it| build_and_align_one(it, params_base)).collect()
+            }))
+            .collect();
+        for h in handles {
+            // A panicking worker is turned into the NAMED error the caller already handles,
+            // never re-raised as a panic that would cross the FFI (R2/LAW-13).
+            per_chunk.push(h.join().unwrap_or_else(|_| {
+                Err("HEXG sample: a rebuild worker thread panicked".to_string())
+            }));
+        }
+    });
+    let mut out = Vec::with_capacity(items.len());
+    for chunk_result in per_chunk {
+        out.extend(chunk_result?);
+    }
+    Ok(out)
+}
+
+/// The per-record body: rotate, rebuild, align the visit map, check the mass.
+fn build_and_align_one(
+    item: &(GraphRecord, i64, usize),
+    params_base: &BuildParams,
+) -> Result<SampleOut, String> {
+    let (rec, game_id, sym) = (&item.0, item.1, item.2);
+    let ply_idx = rec.ply_index;
+    let mut policy_target: Vec<f32> = Vec::new();
+
+    // Rotate stones by the element (axial lattice automorphism).
+    let mut stones: Vec<(i32, i32, i8)> = Vec::with_capacity(rec.stones.len());
+    for &(q, r, p) in &rec.stones {
+        let (rq, rr) = rotate_axial(i32::from(q), i32::from(r), sym);
+        stones.push((rq, rr, p));
+    }
+    let params = BuildParams {
+        current_player: rec.current_player,
+        moves_remaining: rec.moves_remaining,
+        ..*params_base
+    };
+    // Rebuild — the builder emits the correctly re-indexed graph and
+    // stamps builder_impl=1. edge_index is NEVER cached across aug.
+    let g = build_axis_graph(&StoneList { stones }, &params);
+
+    // Rotate the visit-map KEYS by the SAME element, so the policy target
+    // follows each cell to its new location.
+    let mut vmap: FxHashMap<(i32, i32), f32> = FxHashMap::default();
+    let stored_mass: f32 = rec.visits.iter().map(|&(_, _, prob)| prob).sum();
+    for &(q, r, prob) in &rec.visits {
+        let (rq, rr) = rotate_axial(i32::from(q), i32::from(r), sym);
+        vmap.insert((rq, rr), prob);
+    }
+
+    // Align to the built legal nodes (gather order == the segment order):
+    // target[i] = rotated_visit_map[coord_of_legal_node_i] or 0. No
+    // off-window drop — every legal node gets its coord's mass.
+    let mut best_prob = f32::NEG_INFINITY;
+    let mut best_coord: Option<(i32, i32)> = None;
+    let mut aligned_mass = 0.0f32;
+    for &row in &g.legal_node_gather {
+        let cq = g.node_coords[row as usize * 2];
+        let cr = g.node_coords[row as usize * 2 + 1];
+        let prob = vmap.get(&(cq, cr)).copied().unwrap_or(0.0);
+        aligned_mass += prob;
+        policy_target.push(prob);
+        if prob > best_prob {
+            best_prob = prob;
+            best_coord = Some((cq, cr));
+        }
+    }
+
+    // ALWAYS-ON contract check: compare aligned mass against the mass
+    // stored at push time and LOUD-fail, naming the record, when they
+    // diverge beyond tolerance. `rotate_axial` is exact integer-lattice
+    // math, so a legit producer's mass survives the align bit-for-bit.
+    mass_drop_check(game_id, ply_idx, stored_mass, aligned_mass)?;
+
+    let (argmax_q, argmax_r, argmax_valid) = match best_coord {
+        Some((q, r)) if best_prob > 0.0 => (q, r, 1u8),
+        // all-zero target (value-only / quick-search row): no argmax cell.
+        _ => (0, 0, 0u8),
+    };
+
+    Ok(SampleOut {
+        graph: g,
+        policy_target,
+        argmax_q,
+        argmax_r,
+        argmax_valid,
+        outcome: rec.outcome,
+        value_valid: u8::from(rec.value_valid),
+        is_full_search: u8::from(rec.is_full_search),
+    })
 }

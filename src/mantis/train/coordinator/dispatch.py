@@ -87,6 +87,7 @@ def run_declared_train_step(
     recency_weight: float,
     recent_buffer: Any | None,
     caps_provider: Callable[[], Any],
+    sample_threads: int,
 ) -> dict[str, float]:
     """One straight self-play gradient update through the typed route for ``spec``.
 
@@ -102,12 +103,19 @@ def run_declared_train_step(
     It is REQUIRED and has no default. A default would be a code-side default for a
     config-derived value — the exact class R1 kills — and a caller that forgot it would
     silently get an UNCAPPED step, which is the defect this whole card exists to close.
+
+    ``sample_threads`` rides the SAME shape and for a related reason (PERF-TRANCHE-1 B1): it
+    is the ring rebuild's width, DERIVED from the run's own keys by
+    `mantis.config.resolve.sample_threads`, and it is handed to the GRAPH arm alone because
+    the dense sampler has no rebuild to widen. Required and undefaulted, because a default
+    here would be a thread budget nobody derived, silently taking cores from the self-play
+    workers on whatever box the run lands on.
     """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
                            recency_weight=recency_weight, recent_buffer=recent_buffer,
-                           caps_provider=caps_provider)
+                           caps_provider=caps_provider, sample_threads=sample_threads)
     if representation == "grid":
         return _grid_step(trainer, buffer, batch_size=batch_size, augment=augment,
                           recency_weight=recency_weight, recent_buffer=recent_buffer)
@@ -120,7 +128,7 @@ def run_declared_train_step(
 def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
-    caps_provider: Callable[[], Any],
+    caps_provider: Callable[[], Any], sample_threads: int,
 ) -> dict[str, float]:
     """graph: `sample_graph_batch` → wire payload (ONCE) → `plan_microbatches` →
     per-part `collate_graph_batch` (semantic="full", the trainer's every-batch posture) +
@@ -175,7 +183,12 @@ def _graph_step(
     caps = caps_provider()
     max_edges = caps.max_edges
     max_nodes = caps.max_nodes
-    wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight)
+    # B1: the rebuild's width, DERIVED from the run's own keys — the cores the self-play
+    # workers and the inference-server thread are not already holding. `sample_ring` is
+    # 1 386 ms of a 2 769 ms step and 88 % of that is a serial loop over independent items
+    # (ledger §10.5 #1, split by PERF-TRANCHE-1 M-2).
+    wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight,
+                            n_threads=sample_threads)
     payload = graph_wire_from_rust(wire)
     plan = plan_microbatches(payload.edge_offsets, payload.node_offsets,
                              max_edges, max_nodes)
