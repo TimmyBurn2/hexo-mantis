@@ -51,7 +51,7 @@ class GpuSampler(threading.Thread):
         super().__init__(daemon=True, name="perf-gpu-sampler")
         self.interval_s = interval_s
         self.samples: list[tuple[float, int, int, int]] = []
-        self._stop = threading.Event()
+        self._stop_evt = threading.Event()
         self.error: BaseException | None = None
 
     def run(self) -> None:
@@ -60,7 +60,7 @@ class GpuSampler(threading.Thread):
 
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            while not self._stop.is_set():
+            while not self._stop_evt.is_set():
                 rates = pynvml.nvmlDeviceGetUtilizationRates(handle)
                 mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
                 self.samples.append(
@@ -72,7 +72,7 @@ class GpuSampler(threading.Thread):
             self.error = exc
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_evt.set()
 
     def summary(self) -> dict[str, Any]:
         if not self.samples:
