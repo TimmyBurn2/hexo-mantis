@@ -42,9 +42,28 @@ def timed(name: str, fn: Any) -> Any:
     return wrapper
 
 
-def install_wrappers(model: Any) -> None:
+def timed_sync(name: str, fn: Any) -> Any:
+    """Like `timed`, but synchronises the device first so the span carries its own GPU work.
+
+    DISCLOSED: this serialises what would otherwise overlap. It is used only on `forward` and
+    `backward`, whose async launches would otherwise charge their GPU time to whatever
+    synchronises next — which is exactly the mis-attribution this run exists to remove.
+    """
+    def wrapper(*a: Any, **kw: Any) -> Any:
+        if not ACTIVE["on"]:
+            return fn(*a, **kw)
+        t0 = time.perf_counter()
+        out = fn(*a, **kw)
+        torch.cuda.synchronize()
+        TIMES[name].append((time.perf_counter() - t0) * 1e3)
+        return out
+    return wrapper
+
+
+def install_wrappers(model: Any, buffer: Any, trainer: Any) -> None:
     from mantis.selfplay import graph_collate, graph_wire_split
 
+    buffer.sample_graph_batch = timed("sample_ring", buffer.sample_graph_batch)
     graph_collate.graph_wire_from_rust = timed(
         "wire_copyout", graph_collate.graph_wire_from_rust)
     graph_collate.collate_graph_batch = timed(
@@ -54,8 +73,10 @@ def install_wrappers(model: Any) -> None:
     graph_wire_split.slice_graph_wire = timed(
         "slice_wire", graph_wire_split.slice_graph_wire)
     graph_wire_split.slice_targets = timed("slice_targets", graph_wire_split.slice_targets)
-    model.forward_batch = timed("forward", model.forward_batch)
-    torch.Tensor.backward = timed("backward", torch.Tensor.backward)
+    model.forward_batch = timed_sync("forward", model.forward_batch)
+    torch.Tensor.backward = timed_sync("backward", torch.Tensor.backward)
+    trainer.optimizer.step = timed_sync("optimizer_step", trainer.optimizer.step)
+    trainer.optimizer.zero_grad = timed("zero_grad", trainer.optimizer.zero_grad)
 
 
 def main() -> int:
@@ -67,6 +88,8 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=25)
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt-dir", default="/workspace/perfbase/ckpt_throwaway")
+    ap.add_argument("--save-ring", default=None,
+                    help="persist the filled ring so a re-run need not pay the fill again")
     args = ap.parse_args()
 
     config = load_config(args.config)
@@ -103,12 +126,15 @@ def main() -> int:
         stats_tuple = buffer.get_buffer_stats()
         record["ring_buffer_stats_after_fill"] = list(stats_tuple[:2])
         record["ring_len_after_fill"] = int(stats_tuple[0])
+        if args.save_ring:
+            buffer.save_to_path(args.save_ring)
+            record["ring_saved_to"] = args.save_ring
     finally:
         pool.stop()
     print(f"ring holds {record['ring_len_after_fill']} samples after fill")
 
     trainer = Trainer(pool.model, raw, arch=arch, checkpoint_dir=args.ckpt_dir, device=device)
-    install_wrappers(trainer.model)
+    install_wrappers(trainer.model, buffer, trainer)
 
     def caps_provider() -> Any:
         return config.train.microbatch_caps
