@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 5e4e81d, regenerated 2026-08-28.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 77b2671, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7157,3 +7157,204 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > ROUTE: land this, census, ACTIVE next version; annotate R257 in the same
 > landing; execute (c) engine-side from its own worktree; add (e) to CLAUDE.md;
 > one plain screen back.
+
+# R317 — architect ruling, ARCH-ERA session, 2026-08-28 (the RECAL-SITTING-3 HALT ratified in full; the determinism control's defect diagnosed AT CAUSE as a wall-clock throughput proxy under a cross-regime carried band; the control RE-SPECIFIED on exact observables — net-parameter-hash GATE, move-sequence-hash DIAGNOSTIC, throughput REPORTED with no band; a measured noise floor with a strictly-conservative knee-rule amendment; the sitting RESUMES in the same session under the same grant) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to the waiting RECAL-SITTING-3 session — same session, same grant, no new lock consumed; one canonical home: `PACKET_R317_DETERMINISM_RESPEC.md` §1. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by tooling, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The paste carried the placeholder `R{next}`**, substituted to `R317` after verifying the head is R316 — census R23–R316, 287 sections / 287 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.22 == §8 last entry v3.22`. The substitution is disclosed as the only edit to the canonical text.
+
+> R317 — (a) The RECAL-SITTING-3 HALT is RATIFIED on every clause:
+> halt-on-surprise applied to the instrument's own DIVERGED verdict; no
+> mid-sitting instrument change improvised; the background ladder banked as
+> evidence only; nothing touched. The conduct is the apparatus working.
+> (b) THE DEFECT, AT CAUSE. The determinism control certifies through a PROXY —
+> wall-clock moves_per_min conflates what the seed controls (the net, the
+> trajectories) with what the machine controls (timing) — and its 1% band is a
+> CROSS-REGIME CARRY: calibrated from one quiet engine-side measurement
+> (0.5821%, n=1) and asked to certify a live-GPU drive whose own within-drive
+> round noise is ~6% peak-to-peak. R302(c)'s voiding logic extends across
+> regimes; the architect ratified past it at R316(a)(i), and that error is on
+> the architect's ledger. The 0.5821% figure stays true in its regime; the 1%
+> band is SUPERSEDED by (c).
+> (c) THE CONTROL IS RE-SPECIFIED on exact observables, pre-registered here
+> before any measurement it will judge: (i) GATE — net-parameter hash equality:
+> the constructed net hashes EQUAL across both control drives AND across every
+> ladder rung; any inequality is DIVERGED and HALTs. This tests exactly what
+> the F-RESIT-10 repair claimed — same seed, same net — with no band. (ii)
+> DIAGNOSTIC, non-gating — per-drive move-sequence hash: equality means the
+> throughput spread is timing; inequality is a live-pipeline nondeterminism
+> fact (batching/kernel class) recorded as a host-regime finding. This decides
+> the sitting's two readings by measurement, not argument. (iii) REPORTED —
+> the throughput spread, no band, beside the measured noise floor.
+> (d) NOISE FLOOR, measured in the certifying regime: FOUR fresh same-seed
+> drives at rung 4 on the box, after (c) lands; σ = the empirical std of the
+> four drive means (each the mean of its 5 measured rounds, matching the
+> ladder's unit), disclosed with the stated assumption that rung-4 relative
+> noise carries across rungs. The knee rule is AMENDED in the only safe
+> post-hoc direction — strictly conservative: the within set expands to every
+> rung with metric ≥ (knee threshold − 3σ·best); the pick remains the smallest
+> member. The expansion can only pull the pick toward fewer workers. No
+> criterion here is fitted to a number that will be used: the banked ladder
+> stays evidence-only and the pick comes from a fresh seeded ladder under
+> (c)/(d).
+> (e) THE SITTING RESUMES in the same session under the same grant. Order:
+> land this ruling; implement (c)/(d) engine-side from an own worktree
+> (R314(b)), full local gates, merge to dev, push, re-sync the box to the new
+> tip and stamp it; then Phase W under (c)/(d); then the block unchanged —
+> eval term to PLATEAU or DECLARED BOUND, measure-fit-mint-burst, M = 0.35
+> binding as armed. The Phase W screen (pick, both hashes, σ, the within set)
+> is WRITTEN INTO THE SITTING RECORD, not surfaced — RUN-TO-DONE holds.
+> Intent unchanged: mint or a card-level fact.
+> ROUTE: land this, census, ACTIVE next version, then execute (e) to done;
+> one plain exit screen at the end.
+
+# R318 — architect ruling, ARCH-ERA session, 2026-08-28 (the eval-stall investigation RATIFIED on every leg; the deploy head ADOPTS self-play's leaf batching, k read from the same leaf_batch_size knob, as a train/deploy ALIGNMENT rather than a concession; the deploy-lock word given by operator relay for exactly this change; the per-move cache release KEPT as the eval term's bounding mechanism; a falsifiable ~8x prediction rides as a surprise tripwire; the sitting resumes RUN-TO-DONE) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to the waiting RECAL-SITTING-3 session — same session, same grant, the launcher's operator acts carrying; one canonical home: `PACKET_R318_DEPLOY_LEAF_BATCHING.md` §1. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by tooling, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The paste carried the placeholder `R{next}`**, substituted to `R318` after verifying the head is R317 — census R23–R317, 288 sections / 288 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.23 == §8 last entry v3.23`; last register header `R317`, no `R318` heading present, and no LIVE placeholder under `plan/` (every surviving occurrence is a landed disclosure's own prose, R316's recorded precondition note). The substitution is disclosed as the only edit to the canonical text, and the packet's PREAMBLE reference to the placeholder was deliberately LEFT UNSUBSTITUTED — R316's own over-broad-substitution near-miss, applied as the standing caution.
+
+> R318 — (a) The eval-stall investigation is RATIFIED on every leg: the
+> mechanism named at cause on three independent grounds (identical frames with
+> a hot core and an idle card; arithmetic that reproduces games_total 0 from
+> first principles; structural provenance to 075ae35, killing every regression
+> hypothesis by the code's own history); the geometry bisect with its
+> limitation disclosed rather than smoothed; the Phase W pick acquitted; the
+> fix withheld because it moves the quantity STEP 1d measures and sits inside
+> the deploy lock. The record's in-place correction of its own stale line and
+> the flagged non-ship of R317(c)(ii)'s diagnostic under the escape clause are
+> both accepted; the diagnostic stays on the books as non-blocking debt.
+> (b) THE RULING. The deploy head adopts leaf batching: select_leaves(k) with
+> k read from the SAME config knob self-play reads (leaf_batch_size; run5
+> value 8) — no new constant enters the tree. GROUNDS: (i) the defect is the
+> round-trip count and only batching reaches it; (ii) the net's policy and
+> value targets are generated by k=8 leaf-batched search, so k=1 at deploy was
+> the unexamined train/deploy mismatch — this change ALIGNS the shipped search
+> with the regime the model is trained under, and eval remains deploy-matched
+> by construction because eval runs the deploy head; (iii) the promotion
+> protocol stays fair: both sides of every gate and of run6-vs-run5 search
+> under one regime at fixed nodes. The per-move release_cuda_cache STAYS — it
+> is the eval term's bounding mechanism; the term is measured with it, at
+> k = leaf_batch_size, as production will run.
+> (c) LOCK. This is a change within the R254/R258 locked surface. The
+> operator's relay of this packet is his word on the lock for this change,
+> named in §0. The lock itself is untouched: search at deploy remains of
+> record; search-free deploy remains ruled out.
+> (d) A FALSIFIABLE PREDICTION rides with the fix, as a surprise tripwire and
+> not a gate: round-trips fall ~8× and the first re-run gate block completes
+> WELL inside eval.round_timeout_sec at the minted geometry. If round 1 does
+> not complete inside its budget, the mechanism statement was incomplete —
+> halt on surprise, nothing measured around.
+> (e) SEQUENCE. Implement (b) engine-side from an own worktree, full local
+> gates, merge dev, push, re-sync the box and stamp the new tip. Re-run the
+> battery at the minted geometry: PASS = games complete inside the budget AND
+> the eval-term instrument returns a real series at last. Then STEP 1d at
+> k = leaf_batch_size with the release in place, then STEP 2–4 per the block,
+> M = 0.35 binding as armed. If the measured term refuses the partition at
+> STEP 2 under M, that is a HALT and a card-level fact — no in-sitting knob
+> search. RUN-TO-DONE; mint or card-level fact.
+> (f) On PASS of (e)'s battery, the standing WPMAIN caveat "rc 0 does not
+> certify eval health" is DISCHARGED by annotation at the next landing — its
+> referent now has a mechanism, a fix, and a passing battery attached. Until
+> that PASS it stands.
+> ROUTE: land this, census, ACTIVE next version, then execute (e) to done;
+> one plain exit screen at the end.
+
+# R319 — architect ruling, ARCH-ERA session, 2026-08-28 (the R318(d) tripwire HALT RATIFIED and the retraction ACCEPTED as exemplary conduct; the CARD-LEVEL FACT banked — the pre-registered gate geometry cannot fit its own budget on this card class under any implementation; the EVAL-CHILD TERM DECOUPLED from gate geometry on a measured invariance ground with a two-point probe carrying its own falsifier; gate-geometry-vs-budget ROUTED to the operator with run6 held behind it; two field-scoped orders — no default readable as a measurement, progress_path goes live) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to the RECAL-SITTING-3 session (same grants re-signed by the operator's forwarding); one canonical home: `DISPATCH_RECAL_SITTING3_RESUME.md` §2 — which SUPERSEDES the never-forwarded `PACKET_R319_TERM_DECOUPLE.md` (verified ABSENT under `plan/`, so no competing text exists and R285's ONE-TEXT rule is satisfied by construction rather than by cleanup). Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by tooling, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The paste carried the placeholder `R{next}`**, substituted to `R319` after verifying the head is R318 — census R23–R318, 289 sections / 289 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.24 == §8 last entry v3.24`; last register header `R318`, no `R319` heading present, and no LIVE placeholder under `plan/`. The substitution is disclosed as the only edit to the canonical text; the dispatch's §1 reference to the placeholder was deliberately left unsubstituted, R316's over-broad-substitution near-miss applied as a standing caution.
+
+**A STALE SHA IN THE FORWARDED TEXT, repaired in place under R311(c) rather than executed against.** §1 states `recal-mint-20260828 @ 0e566d9`; the branch is at **`28fcad1`**. `0e566d9` was the PRE-REBASE mint commit — the R318 landing rebased so `dev` carries only the fix and the mint branch is `dev` plus the single mint commit, with content verified identical (`git diff` between old and new tips: EMPTY). The dispatch's own `28fcad1` box-HEAD line is the correct one; the two lines describe the same tree. Noted in one line in the dispatch, no loop.
+
+> R319 — (a) The R318(d) tripwire HALT is RATIFIED and the fix stands
+> VERIFIED independently of it: the oracle proves ~8× fewer round-trips at a
+> byte-exact identical node budget, both planted breaks bite. What was
+> incomplete was the SIZE estimate, not the mechanism. The RETRACTION is
+> ACCEPTED into the record as exemplary conduct: games_total 0 was a hardcoded
+> broken-path literal read as a measurement — a default wearing a measurement's
+> clothes, this project's top defect class, caught by the session's own record
+> discipline. Every previously ratified conclusion survives on the positive
+> observation that always carried it: the phase marker is emitted only after
+> the gate block returns and was absent in every drive. Nothing in R317 or
+> R318 moves.
+> (b) THE CARD-LEVEL FACT, banked by this sitting regardless of what follows:
+> the pre-registered gate block (screen_games 80 × deploy_sims 150, ~1.5M leaf
+> evaluations; confirm 128 on escalation) costs on the order of an hour of
+> this card's FULL measured self-play throughput, and multiples of that beside
+> training — the executor re-derives the throughput figure from the ladder
+> artifacts at point of use, verify-at-HEAD. round_timeout_sec 3600 cannot
+> hold that geometry on this card class under ANY implementation. The residual
+> defect is the pre-registered geometry/budget pair, not the code path.
+> (c) THE EVAL-CHILD TERM IS DECOUPLED from gate geometry, on a MEASURED
+> ground, pre-registered here before the measurement: the child plays games
+> sequentially, so peak device demand is per-game-structured and invariant to
+> screen_games; the term is denominated in (deploy_sims, leaf_batch_size,
+> model/config shape) only. STEP 1d therefore runs a diagnostic eval geometry
+> — production sims and k, throwaway generous timeout, disclosed — as a
+> TWO-POINT INVARIANCE PROBE: a 4-game round, then an 8-game round. From the
+> first round's observed per-game peak variance the session pre-states a
+> tolerance BEFORE driving the second; the two round peaks must agree within
+> it. Agreement: the larger point is the term, at least three diagnostic
+> rounds supply the round-dependence series to the existing PLATEAU/GROWING/
+> REFUSED instrument, and STEP 2–4 proceed unchanged with M = 0.35 binding.
+> Disagreement FALSIFIES the invariance ground and HALTs — the probe is an
+> instrument, not an assumption. The minted term SURVIVES any later
+> re-preregistration of gate geometry that preserves sims, k, and model shape.
+> (d) GATE GEOMETRY vs BUDGET is ROUTED TO THE OPERATOR as a prereg
+> adjudication, prepared by the architect after this sitting: raise
+> round_timeout to measured need with margin; reduce screen/confirm with the
+> power loss stated; or a sequential (SPRT-class) gate per the REFBOT
+> evidence, expected games typically well under fixed-N at equal error rates.
+> Nothing in this sitting touches those rows. RUN6 DOES NOT START until this
+> adjudication lands — a promotion gate that cannot complete inside its own
+> budget is the defect class this era exists to end.
+> (e) TWO FIELD-SCOPED ORDERS land with (c)'s implementation: (i) the
+> broken-round path stops reporting a valid-looking games_total — absent or an
+> explicit sentinel, pinned by a test; a default must not be readable as a
+> measurement again. (ii) RoundSpec.progress_path goes LIVE minimally: the
+> child writes per-game progress (game index, move count, timestamp), the
+> parent logs it, escalation semantics UNCHANGED this sitting — observability
+> first, policy later. A declared field with no consumer does not remain in
+> the tree.
+> (f) VERIFY THE HISTORY: whether any production eval round has EVER completed
+> (search run5-era artifacts for a success-path games_total). The answer lands
+> in the sitting record either way; if none, run5 ran effectively ungated,
+> recorded plainly, and (d)'s urgency is thereby measured, not argued.
+> (g) SEQUENCE: implement (c)+(e) engine-side from an own worktree, full local
+> gates, merge dev, push, re-sync the box; STEP 1d per (c); STEP 2–4 per the
+> block; RUN-TO-DONE. Mint or card-level fact — noting (b) already banks one.
+> ROUTE: land this, census, ACTIVE next version, then execute to done; one
+> plain exit screen at the end.
+
+# R320 — architect ruling, ARCH-ERA session, 2026-08-29 (PERF-TRANCHE-1 RATIFIED with A3's refutation accepted as evidence and the 7.2% pre-control discrepancy left OPEN as instrument hygiene; the 2026-08-29 gate-geometry adjudication WITHDRAWN as fatally defective with the error placed at the architect's desk, its harness check RATIFIED at mechanism — the eval outcome channel is a CONSTANT, so 0/13 is not a slow gate but no gate at all; the SEQUENCING INVERTED, ply-cap adjudication made the PRECONDITION of gate geometry and the EVAL_POSTURE_OPTIONS §4.4 posture ADOPTED FOR MEASUREMENT for one round; the screen's 84.3% unconditional-escalation property RECORDED so sitting 4 does not inherit it) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to this EVAL-CHANNEL-1 dispatcher (the operator's forwarding is the box grant and his signature on the §4.4 measurement posture); one canonical home: `DISPATCH_EVAL_CHANNEL_1.md` §2, written to disk from the forwarded paste before extraction, and no competing text exists under `plan/`. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The paste carried the placeholder `R{next}`**, substituted to `R320` after verifying the head is R319 — census R23–R319, 290 sections / 290 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.25 == §8 last entry v3.25`; `--self-test` all controls fire; last register header `R319`, no `R320` heading present, and no LIVE `R{next}` placeholder under `plan/` (the ten files carrying the string carry it as a REFERENCE to the convention, none inside a quoted canonical block — checked as `^> *R{next}`, zero hits). The substitution is disclosed as the only edit to the canonical text, and it was applied to the canonical home as well as to this entry so the two are byte-identical; §1.3's "head must be R319" is a precondition statement, not a placeholder, and was left untouched.
+
+**Clause (a)'s referents verified at point of use before landing, not transcribed from the paste.** `plan/research/PERF_TRANCHE1_RESULTS.md`: A3 `REFUTED` at :80 with the F-10 correction at :109 and :190-192; A4 `NOT LANDED` at :81 with the 0.157 ms/sim figure and the non-attempt's grounds at :155-165; the 7.2% pre-control-vs-ledger gap at :11-12 and :223. **Clause (b)'s harness chain re-derived at HEAD** (`hexo-mantis` @ `3d4636a`), each link at its source: `src/mantis/arena/match.py:122-125` (`plies >= max_plies` and `adjudicator is None` ⇒ `winner = "draw"`, `_DEFAULT_MAX_PLIES = 128` at :66); all **seven** committed configs ship `eval.ply_cap_adjudication: null` (`grep -rn` over `configs/`); `src/mantis/eval/aggregate.py:62-63` scores a draw `0.5`; `should_escalate` at :205 and `gate_promotion_decision` at :211-217; `configs/run5.yaml:34-35` `promotion_winrate: 0.55`, `screen_confirm_lo: 0.44`; and the ~350 s/game, every-game-at-the-128-ply-cap measurement at `RECAL_SITTING3_RECORD_2026-08-28.md` §10.3. **Clause (d)'s 84.3% recomputed** by exact binomial tail — P(X >= 36 | n=80, p=0.5) = 0.842847 — together with the withdrawn text's two corrected figures (screen-80 false-pass 0.217021; end-to-end power 0.9716 × 0.4954 = 0.4813). The withdrawal itself is on the record at `plan/ADJUDICATION_EVAL_GATE_GEOMETRY.md` (committed `fa73a01`), reviewed against `plan/EVAL_POSTURE_OPTIONS.md` §2/§4.2/§4.4 and the pinned constant-channel test `tests/eval/test_strength_floor_gate.py::test_an_all_ply_cap_probe_reads_a_healthy_half_on_the_WIN_RATE_axis_alone` before it was committed.
+
+> R320 — (a) PERF-TRANCHE-1 is RATIFIED: witness verdicts as tabled; A3's
+> refutation accepted as evidence correcting F-10; the A4 non-attempt ENDORSED
+> (correctness exposure outranks its 0.157 ms/sim); Appendix A's in-place
+> corrections ratified; the in-tranche defect disclosure accepted. The 7.2%
+> pre-control/ledger discrepancy stands OPEN as instrument hygiene: ledger
+> absolute levels are not quotable without re-measurement.
+> (b) The gate-geometry adjudication of 2026-08-29 is WITHDRAWN as fatally
+> defective, error at the architect's desk: authored without reading
+> plan/EVAL_POSTURE_OPTIONS.md, whose §2 already states the outcome channel is
+> a constant; its arithmetic additionally erred in the flattering direction.
+> The harness check is RATIFIED at mechanism: every game runs to the 128-ply
+> cap, every config ships ply_cap_adjudication null, a capped game with no
+> adjudicator scores draw, a draw scores 0.5 — so WR ≡ 0.500 with zero
+> variance, the gate escalates unconditionally and returns constant False.
+> 0/13 is explained: it is not a slow gate; it is not a gate.
+> (c) SEQUENCING INVERTED: ply-cap adjudication is the PRECONDITION of gate
+> geometry. The EVAL_POSTURE_OPTIONS §4.4 posture is ADOPTED FOR MEASUREMENT:
+> longest_run_margin, seat-neutral, min_margin 1, wired for one measurement
+> round whose tally reads the margin distribution nobody has measured — how
+> capped games decide, at what margins, with what seat balance and decisive
+> rate. Production adjudication values and the ply-cap matrix remain operator
+> prereg, grounded by that distribution.
+> (d) RECORDED: even on a healthy channel the shipped screen never screens —
+> P(escalate | truly-50%) ≈ 84.3%. Sitting 4 does not inherit the screen
+> geometry unexamined; geometry is re-adjudicated AFTER (c)'s distribution
+> lands, a sequential gate the likely destination, draw increments defined
+> then. The sealbot rung repair rides unchanged.
+> ROUTE: land this, census, ACTIVE next version; execute the measurement
+> round; one plain exit screen.
