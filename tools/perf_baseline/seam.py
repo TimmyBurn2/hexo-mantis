@@ -68,8 +68,14 @@ class EchoServer(threading.Thread):
                 t1 = time.perf_counter()
                 legal_offsets = np.ascontiguousarray(
                     np.asarray(payload.legal_offsets), dtype=np.int64)
-                n_legal = int(legal_offsets[-1])
-                probs = np.zeros(n_legal, dtype=np.float32)
+                # UNIFORM, not zeros. The Rust assemble validates each segment sums to 1
+                # (`assemble_ls_from_gnn_probs`: "probs sum to 0 not 1"), so a null model still
+                # has to produce a normalised policy — the check is part of the return path
+                # being measured and must not be routed around.
+                seg = np.diff(legal_offsets)
+                probs = np.repeat(
+                    (1.0 / np.maximum(seg, 1)).astype(np.float32), seg
+                ).astype(np.float32)
                 values = np.zeros(payload.n_graphs, dtype=np.float32)
                 t2 = time.perf_counter()
                 self.batcher.submit_graph_inference_results(
