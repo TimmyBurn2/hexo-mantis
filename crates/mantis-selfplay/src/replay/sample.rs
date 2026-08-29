@@ -193,7 +193,12 @@ pub fn to_ordered_tags_with_pos(out: &SampleBatchWithPos) -> [(&'static str, Typ
 /// — the internal buffer sampling path calls it with `u16` (f16 bits). Pure
 /// scatter; caller zeroes `dst` before invocation.
 #[inline]
-pub fn apply_symmetry_state<T: Copy>(src: &[T], dst: &mut [T], sym_idx: usize, sym_tables: &SymTables) {
+pub fn apply_symmetry_state<T: Copy>(
+    src: &[T],
+    dst: &mut [T],
+    sym_idx: usize,
+    sym_tables: &SymTables,
+) {
     debug_assert_eq!(src.len(), dst.len());
     debug_assert!(sym_idx < N_SYMS);
     let n_cells = sym_tables.n_cells;
@@ -220,7 +225,12 @@ pub fn apply_symmetry_state<T: Copy>(src: &[T], dst: &mut [T], sym_idx: usize, s
 /// Apply symmetry `sym_idx` to one 6-plane chain-length tensor (coord scatter +
 /// axis-plane remap). Caller zeroes `dst` before invocation.
 #[inline]
-pub fn apply_chain_symmetry<T: Copy>(src: &[T], dst: &mut [T], sym_idx: usize, sym_tables: &SymTables) {
+pub fn apply_chain_symmetry<T: Copy>(
+    src: &[T],
+    dst: &mut [T],
+    sym_idx: usize,
+    sym_tables: &SymTables,
+) {
     let n_cells = sym_tables.n_cells;
     debug_assert_eq!(src.len(), N_CHAIN_PLANES * n_cells);
     debug_assert_eq!(dst.len(), N_CHAIN_PLANES * n_cells);
@@ -299,12 +309,16 @@ impl ReplayBuffer {
     /// Sample `batch_size` slot indices, optionally deduplicating by game_id.
     pub(crate) fn sample_indices(&mut self, batch_size: usize, use_dedup: bool) -> Vec<usize> {
         if !use_dedup {
-            return (0..batch_size).map(|_| self.weighted_sample_one()).collect();
+            return (0..batch_size)
+                .map(|_| self.weighted_sample_one())
+                .collect();
         }
 
         const MAX_RETRIES: usize = 8;
 
-        let mut indices: Vec<usize> = (0..batch_size).map(|_| self.weighted_sample_one()).collect();
+        let mut indices: Vec<usize> = (0..batch_size)
+            .map(|_| self.weighted_sample_one())
+            .collect();
 
         let mut seen: HashSet<i64> = HashSet::with_capacity(batch_size);
         for _ in 0..MAX_RETRIES {
@@ -346,7 +360,11 @@ impl ReplayBuffer {
     /// the gate was first described under).
     #[inline]
     fn record_symmetry_draw(&self, compact: bool) {
-        let counter = if compact { &self.compact_draws } else { &self.spread_draws };
+        let counter = if compact {
+            &self.compact_draws
+        } else {
+            &self.spread_draws
+        };
         counter.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -355,8 +373,22 @@ impl ReplayBuffer {
     #[inline]
     pub fn apply_sym(sym_idx: usize, slices: ApplySymSlices<'_>) {
         let ApplySymSlices {
-            src: ApplySymSrc { state: src_state, chain: src_chain, policy: src_policy, own: src_own, wl: src_wl },
-            dst: ApplySymDst { state: dst_state, chain: dst_chain, policy: dst_policy, own: dst_own, wl: dst_wl },
+            src:
+                ApplySymSrc {
+                    state: src_state,
+                    chain: src_chain,
+                    policy: src_policy,
+                    own: src_own,
+                    wl: src_wl,
+                },
+            dst:
+                ApplySymDst {
+                    state: dst_state,
+                    chain: dst_chain,
+                    policy: dst_policy,
+                    own: dst_own,
+                    wl: dst_wl,
+                },
             tables,
         } = slices;
 
@@ -394,7 +426,11 @@ impl ReplayBuffer {
     /// empty, the rest 0-fill) and `apply_sym` writes only scatter pairs, so a
     /// destination cell no pair reaches keeps its neutral — which is exactly what
     /// the source cell held, for a compact record. No clipped copy is emitted.
-    pub fn sample_batch_core(&mut self, batch_size: usize, augment: bool) -> Result<SampleBatch, String> {
+    pub fn sample_batch_core(
+        &mut self,
+        batch_size: usize,
+        augment: bool,
+    ) -> Result<SampleBatch, String> {
         if self.size == 0 {
             return Err("Cannot sample from an empty replay buffer".to_string());
         }
@@ -446,8 +482,20 @@ impl ReplayBuffer {
             Self::apply_sym(
                 sym_idx,
                 ApplySymSlices {
-                    src: ApplySymSrc { state: src_state, chain: src_chain, policy: src_policy, own: src_own, wl: src_wl },
-                    dst: ApplySymDst { state: dst_state, chain: dst_chain, policy: dst_policy, own: dst_own, wl: dst_wl },
+                    src: ApplySymSrc {
+                        state: src_state,
+                        chain: src_chain,
+                        policy: src_policy,
+                        own: src_own,
+                        wl: src_wl,
+                    },
+                    dst: ApplySymDst {
+                        state: dst_state,
+                        chain: dst_chain,
+                        policy: dst_policy,
+                        own: dst_own,
+                        wl: dst_wl,
+                    },
                     tables: self.sym_tables,
                 },
             );
@@ -527,8 +575,20 @@ impl ReplayBuffer {
             Self::apply_sym(
                 sym_idx,
                 ApplySymSlices {
-                    src: ApplySymSrc { state: src_state, chain: src_chain, policy: src_policy, own: src_own, wl: src_wl },
-                    dst: ApplySymDst { state: dst_state, chain: dst_chain, policy: dst_policy, own: dst_own, wl: dst_wl },
+                    src: ApplySymSrc {
+                        state: src_state,
+                        chain: src_chain,
+                        policy: src_policy,
+                        own: src_own,
+                        wl: src_wl,
+                    },
+                    dst: ApplySymDst {
+                        state: dst_state,
+                        chain: dst_chain,
+                        policy: dst_policy,
+                        own: dst_own,
+                        wl: dst_wl,
+                    },
                     tables: self.sym_tables,
                 },
             );

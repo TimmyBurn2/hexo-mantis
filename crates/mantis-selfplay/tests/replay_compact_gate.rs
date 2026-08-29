@@ -34,7 +34,13 @@ const ENC: &str = "v6";
 /// (state, chain, policy, aux) strides + `n_cells` for the encoding under test.
 fn shape() -> (usize, usize, usize, usize, usize) {
     let s = lookup_or_panic(ENC);
-    (s.state_stride(), s.chain_stride(), s.policy_stride(), s.aux_stride(), s.n_cells())
+    (
+        s.state_stride(),
+        s.chain_stride(),
+        s.policy_stride(),
+        s.aux_stride(),
+        s.n_cells(),
+    )
 }
 
 /// One dense record in push-config form.
@@ -96,7 +102,10 @@ impl Row {
 /// from the buffer's own sym tables.
 fn dropped_and_interior(buf: &ReplayBuffer) -> (usize, usize) {
     let dropped = &buf.sym_tables.dropped_cells;
-    assert!(!dropped.is_empty(), "D must be non-empty or every test here is vacuous");
+    assert!(
+        !dropped.is_empty(),
+        "D must be non-empty or every test here is vacuous"
+    );
     let d: HashSet<usize> = dropped.iter().map(|&c| c as usize).collect();
     let interior = (0..buf.sym_tables.n_cells)
         .find(|c| !d.contains(c))
@@ -121,11 +130,20 @@ fn push_impl_flags_compact_and_spread_rows() {
     let mut buf = ReplayBuffer::new(4, ENC);
     let (d, interior) = dropped_and_interior(&buf);
 
-    buf.push_impl(compact_row(interior).push_config(0.0)).unwrap();
+    buf.push_impl(compact_row(interior).push_config(0.0))
+        .unwrap();
     buf.push_impl(spread_row(d).push_config(1.0)).unwrap();
 
-    assert_eq!(buf.compact_at(0), 1, "a window-fitting record must be flagged COMPACT");
-    assert_eq!(buf.compact_at(1), 0, "a record with content on D must be flagged SPREAD");
+    assert_eq!(
+        buf.compact_at(0),
+        1,
+        "a window-fitting record must be flagged COMPACT"
+    );
+    assert_eq!(
+        buf.compact_at(1),
+        0,
+        "a record with content on D must be flagged SPREAD"
+    );
 }
 
 #[test]
@@ -351,8 +369,10 @@ fn ring_wraparound_overwrite_recomputes_the_flag() {
     let mut buf = ReplayBuffer::new(2, ENC);
     let (d, interior) = dropped_and_interior(&buf);
 
-    buf.push_impl(compact_row(interior).push_config(0.0)).unwrap();
-    buf.push_impl(compact_row(interior).push_config(1.0)).unwrap();
+    buf.push_impl(compact_row(interior).push_config(0.0))
+        .unwrap();
+    buf.push_impl(compact_row(interior).push_config(1.0))
+        .unwrap();
     assert_eq!([buf.compact_at(0), buf.compact_at(1)], [1u8, 1]);
 
     // Wrap: slot 0 is overwritten by a spread record.
@@ -383,13 +403,19 @@ fn resize_carries_the_flag_through_linearise() {
         buf.push_impl(row.push_config(i as f32)).unwrap();
     }
     assert_eq!(buf.head, 1, "test setup: the ring must have wrapped");
-    assert_eq!([buf.compact_at(0), buf.compact_at(1), buf.compact_at(2)], [0u8, 1, 0]);
+    assert_eq!(
+        [buf.compact_at(0), buf.compact_at(1), buf.compact_at(2)],
+        [0u8, 1, 0]
+    );
 
     buf.resize(6).unwrap();
 
     // Linearised order (oldest → newest) is r1, r2, r3 = compact, spread, spread.
     // Not-rotating the flag column would leave [0, 1, 0] against that data.
-    assert_eq!([buf.compact_at(0), buf.compact_at(1), buf.compact_at(2)], [1u8, 0, 0]);
+    assert_eq!(
+        [buf.compact_at(0), buf.compact_at(1), buf.compact_at(2)],
+        [1u8, 0, 0]
+    );
     for slot in 0..buf.size() {
         assert_eq!(
             buf.compact_at(slot),
@@ -399,7 +425,11 @@ fn resize_carries_the_flag_through_linearise() {
     }
     // The grown tail defaults to SPREAD (uncertified), never to compact.
     for slot in buf.size()..buf.capacity() {
-        assert_eq!(buf.compact_at(slot), 0, "grown slot {slot} must default to spread");
+        assert_eq!(
+            buf.compact_at(slot),
+            0,
+            "grown slot {slot} must default to spread"
+        );
     }
 }
 
@@ -416,7 +446,9 @@ fn hexb_roundtrip_recomputes_flags_for_a_mixed_buffer() {
     let mut writer = ReplayBuffer::new(4, ENC);
     let (d, interior) = dropped_and_interior(&writer);
     writer.push_impl(spread_row(d).push_config(0.0)).unwrap();
-    writer.push_impl(compact_row(interior).push_config(1.0)).unwrap();
+    writer
+        .push_impl(compact_row(interior).push_config(1.0))
+        .unwrap();
     writer.push_impl(spread_row(d).push_config(2.0)).unwrap();
     writer.save_to_path(path.to_str().unwrap()).unwrap();
 
@@ -428,12 +460,19 @@ fn hexb_roundtrip_recomputes_flags_for_a_mixed_buffer() {
     assert_eq!(n, 3);
 
     assert_eq!(
-        [reader.compact_at(0), reader.compact_at(1), reader.compact_at(2)],
+        [
+            reader.compact_at(0),
+            reader.compact_at(1),
+            reader.compact_at(2)
+        ],
         [0u8, 1, 0],
         "the HEXB load path must recompute the flag per loaded row (it is not on the wire)"
     );
     for slot in 0..n {
-        assert_eq!(reader.compact_at(slot), u8::from(reader.slot_is_compact(slot)));
+        assert_eq!(
+            reader.compact_at(slot),
+            u8::from(reader.slot_is_compact(slot))
+        );
     }
 
     let _ = std::fs::remove_file(path);
@@ -507,8 +546,9 @@ fn observed_syms(buf: &mut ReplayBuffer, expected: &[Vec<f32>], draws: usize) ->
     for _ in 0..draws {
         let out = buf.sample_batch_core(1, true).unwrap();
         let emitted = &out.policies[..po];
-        let matches: Vec<usize> =
-            (0..N_SYMS).filter(|&s| expected[s].as_slice() == emitted).collect();
+        let matches: Vec<usize> = (0..N_SYMS)
+            .filter(|&s| expected[s].as_slice() == emitted)
+            .collect();
         assert_eq!(
             matches.len(),
             1,
@@ -525,8 +565,12 @@ fn observed_syms(buf: &mut ReplayBuffer, expected: &[Vec<f32>], draws: usize) ->
 fn a_compact_only_buffer_draws_the_full_group() {
     let mut buf = ReplayBuffer::new(1, ENC);
     buf.rng = StdRng::seed_from_u64(0xC011_AC70);
-    let dropped: HashSet<usize> =
-        buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();
+    let dropped: HashSet<usize> = buf
+        .sym_tables
+        .dropped_cells
+        .iter()
+        .map(|&c| c as usize)
+        .collect();
     let n_cells = buf.sym_tables.n_cells;
     let row = discriminating_row((0..n_cells).filter(|c| !dropped.contains(c)));
 
@@ -545,7 +589,11 @@ fn a_compact_only_buffer_draws_the_full_group() {
     // `sample.rs` call site (the counter goes dark while the draw keeps drawing), or
     // swap the `compact`/`spread` counters (a compact-only buffer would then read
     // `spread_draws() == 512`).
-    assert_eq!(buf.compact_draws(), 512, "every draw from an all-compact buffer must tick compact_draws");
+    assert_eq!(
+        buf.compact_draws(),
+        512,
+        "every draw from an all-compact buffer must tick compact_draws"
+    );
     assert_eq!(buf.spread_draws(), 0, "…and never spread_draws");
 }
 
@@ -564,13 +612,20 @@ fn a_spread_only_buffer_draws_exactly_the_window_preserving_subgroup() {
     let seen = observed_syms(&mut buf, &expected, 512);
     assert_eq!(
         seen,
-        WINDOW_PRESERVING_SYMS.iter().copied().collect::<HashSet<usize>>(),
+        WINDOW_PRESERVING_SYMS
+            .iter()
+            .copied()
+            .collect::<HashSet<usize>>(),
         "a spread record must draw EXACTLY the window-preserving subgroup — support \
          exact in both directions (nothing missing, nothing extra)"
     );
     // R266/F-P1/N1 — the LAW-18 fire-rate counter, driven by the SAME 512 draws above.
     // MUTATION THAT REDS IT: same as the compact-only twin above, inverted.
-    assert_eq!(buf.spread_draws(), 512, "every draw from an all-spread buffer must tick spread_draws");
+    assert_eq!(
+        buf.spread_draws(),
+        512,
+        "every draw from an all-spread buffer must tick spread_draws"
+    );
     assert_eq!(buf.compact_draws(), 0, "…and never compact_draws");
 }
 
@@ -589,8 +644,16 @@ fn augment_false_ticks_neither_counter() {
     for _ in 0..64 {
         buf.sample_batch_core(1, false).unwrap();
     }
-    assert_eq!(buf.compact_draws(), 0, "an unaugmented draw must not tick compact_draws");
-    assert_eq!(buf.spread_draws(), 0, "…nor spread_draws — the lever was never exercised");
+    assert_eq!(
+        buf.compact_draws(),
+        0,
+        "an unaugmented draw must not tick compact_draws"
+    );
+    assert_eq!(
+        buf.spread_draws(),
+        0,
+        "…nor spread_draws — the lever was never exercised"
+    );
 }
 
 #[test]
@@ -602,8 +665,12 @@ fn sample_batch_with_pos_core_ticks_the_same_counters() {
     let mut buf = ReplayBuffer::new(1, ENC);
     buf.rng = StdRng::seed_from_u64(0x905E_C0DE);
     let n_cells = buf.sym_tables.n_cells;
-    let dropped: HashSet<usize> =
-        buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();
+    let dropped: HashSet<usize> = buf
+        .sym_tables
+        .dropped_cells
+        .iter()
+        .map(|&c| c as usize)
+        .collect();
     let row = discriminating_row((0..n_cells).filter(|c| !dropped.contains(c)));
     buf.push_impl(row.push_config(0.0)).unwrap();
     assert_eq!(buf.compact_at(0), 1, "test setup: the row must be compact");
@@ -611,7 +678,11 @@ fn sample_batch_with_pos_core_ticks_the_same_counters() {
     for _ in 0..32 {
         buf.sample_batch_with_pos_core(1, true).unwrap();
     }
-    assert_eq!(buf.compact_draws(), 32, "the pos-variant must tick the SHARED counter");
+    assert_eq!(
+        buf.compact_draws(),
+        32,
+        "the pos-variant must tick the SHARED counter"
+    );
     assert_eq!(buf.spread_draws(), 0);
 }
 
@@ -628,13 +699,7 @@ struct Mass {
     wl_nonzero: usize,
 }
 
-fn mass(
-    state: &[u16],
-    chain: &[u16],
-    policy: &[f32],
-    own: &[u8],
-    wl: &[u8],
-) -> Mass {
+fn mass(state: &[u16], chain: &[u16], policy: &[f32], own: &[u8], wl: &[u8]) -> Mass {
     Mass {
         // Small integers only (see `mixed_row`), so f32 addition is exact and
         // summation order cannot perturb the comparison.
@@ -671,11 +736,18 @@ fn mixed_buffer(seed: u64) -> (ReplayBuffer, Vec<Mass>) {
     let (st, ch, po, ax, _) = shape();
     let mut buf = ReplayBuffer::new(8, ENC);
     buf.rng = StdRng::seed_from_u64(seed);
-    let dropped: Vec<usize> =
-        buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();
+    let dropped: Vec<usize> = buf
+        .sym_tables
+        .dropped_cells
+        .iter()
+        .map(|&c| c as usize)
+        .collect();
     let interior: Vec<usize> = {
         let d: HashSet<usize> = dropped.iter().copied().collect();
-        (0..buf.sym_tables.n_cells).filter(|c| !d.contains(c)).take(5).collect()
+        (0..buf.sym_tables.n_cells)
+            .filter(|c| !d.contains(c))
+            .take(5)
+            .collect()
     };
 
     let mut masses = Vec::with_capacity(8);

@@ -13,15 +13,16 @@
 use pyo3::prelude::*;
 
 mod board;
+mod buffer;
 mod encoding;
+mod graph_contract;
+mod hexg;
+mod inference;
 mod mcts;
+mod perf;
+mod runner;
 mod tactics;
 mod utils;
-mod graph_contract;
-mod runner;
-mod inference;
-mod buffer;
-mod hexg;
 
 /// Compiled mantis engine bridge (PyO3). All Python-facing Rust lives here.
 ///
@@ -41,5 +42,6 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     runner::register(m)?; // SelfPlayRunnerConfig + SelfPlayRunner
     buffer::register(m)?; // ReplayBuffer
     hexg::register(m)?; // HexgBuffer + GraphTargets
+    perf::register(m)?; // DIAGNOSTIC selfplay_perf_snapshot/reset (PERF-BASELINE)
     Ok(())
 }

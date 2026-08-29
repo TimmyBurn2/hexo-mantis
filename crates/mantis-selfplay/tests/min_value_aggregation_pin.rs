@@ -21,9 +21,22 @@ fn fold_min(values: &[f32]) -> f32 {
 
 #[test]
 fn k1_degenerate_returns_the_single_value_bit_for_bit() {
-    for &v in &[-1.0f32, -0.999_999_9, -0.5, -0.0, 0.0, 0.25, 0.999_999_9, 1.0] {
+    for &v in &[
+        -1.0f32,
+        -0.999_999_9,
+        -0.5,
+        -0.0,
+        0.0,
+        0.25,
+        0.999_999_9,
+        1.0,
+    ] {
         let out = aggregate_cluster_values_min(&[v]);
-        assert_eq!(out.to_bits(), v.to_bits(), "K=1 must be identity, got {out} for {v}");
+        assert_eq!(
+            out.to_bits(),
+            v.to_bits(),
+            "K=1 must be identity, got {out} for {v}"
+        );
     }
 }
 
@@ -38,7 +51,11 @@ fn k2_returns_the_smaller_bit_for_bit() {
     ];
     for (input, expected) in cases {
         let out = aggregate_cluster_values_min(input);
-        assert_eq!(out.to_bits(), expected.to_bits(), "K=2 min mismatch for {input:?}");
+        assert_eq!(
+            out.to_bits(),
+            expected.to_bits(),
+            "K=2 min mismatch for {input:?}"
+        );
     }
 }
 
@@ -72,5 +89,8 @@ fn order_independence_all_rotations_and_reversal_bit_for_bit() {
     }
     let mut reversed = base;
     reversed.reverse();
-    assert_eq!(aggregate_cluster_values_min(&reversed).to_bits(), expected.to_bits());
+    assert_eq!(
+        aggregate_cluster_values_min(&reversed).to_bits(),
+        expected.to_bits()
+    );
 }

@@ -44,13 +44,34 @@ use crate::replay::hexg::GraphRecord;
 /// Field order: `(feat, chain, policy, outcome, plies, combined_aux_u8,
 /// is_full_search, ply_index, value_valid)`. The P-04 pin destructures this
 /// carrier exhaustively — a carrier-type change bites.
-pub type WorkerResultRow = (Vec<f32>, Vec<f32>, Vec<f32>, f32, usize, Vec<u8>, bool, u16, u8);
+pub type WorkerResultRow = (
+    Vec<f32>,
+    Vec<f32>,
+    Vec<f32>,
+    f32,
+    usize,
+    Vec<u8>,
+    bool,
+    u16,
+    u8,
+);
 
 /// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]
 /// (frozen `mod.rs:54`). Field order: `(plies, winner_code, move_history,
 /// worker_id, terminal_reason, model_version_min, model_version_max,
 /// model_version_distinct, seeded, solver_fires)`.
-pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32, u8, u32);
+pub type GameResultRow = (
+    usize,
+    u8,
+    Vec<(i32, i32)>,
+    usize,
+    u8,
+    u64,
+    u64,
+    u32,
+    u8,
+    u32,
+);
 
 /// Flat snapshot of the runner's LAW-18 in-run counter atomics, each read once
 /// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
@@ -251,12 +272,12 @@ impl SelfPlayRunner {
         // `n_simulations` — the ONE resolution rule, shared with the capacity
         // derivation below (`effective_standard_sims`). Reject zero on the
         // *effective* value.
-        let effective_standard =
-            crate::replay::hexg::effective_standard_sims(config.n_simulations, config.standard_sims);
+        let effective_standard = crate::replay::hexg::effective_standard_sims(
+            config.n_simulations,
+            config.standard_sims,
+        );
         if effective_standard == 0 {
-            return Err(
-                "SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string(),
-            );
+            return Err("SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string());
         }
         if config.fast_prob > 0.0 && config.fast_sims == 0 {
             return Err("SelfPlayRunner: fast_sims must be > 0 when fast_prob > 0".to_string());
@@ -371,7 +392,10 @@ impl SelfPlayRunner {
     /// worker panic is NOT sufficient — `stop()` swallows join results.
     pub fn store_fatal_defect(&self, msg: String) {
         {
-            let mut slot = self.fatal_defect.lock().expect("fatal_defect lock poisoned");
+            let mut slot = self
+                .fatal_defect
+                .lock()
+                .expect("fatal_defect lock poisoned");
             if slot.is_none() {
                 *slot = Some(msg);
             }
@@ -458,7 +482,10 @@ impl SelfPlayRunner {
     /// the `collect_graph_data` producer face (frozen pymethod dropped to WP7).
     /// FIFO push order. Mirrors [`Self::drain_game_results`].
     pub fn drain_graph_records(&self) -> Vec<GraphRecord> {
-        let mut rows = self.graph_results.lock().expect("graph_results lock poisoned");
+        let mut rows = self
+            .graph_results
+            .lock()
+            .expect("graph_results lock poisoned");
         rows.drain(..).collect()
     }
 
@@ -588,10 +615,28 @@ mod seam_roundtrip {
             "fresh runner has no training rows"
         );
 
-        let row0: WorkerResultRow =
-            (vec![1.0, 2.0], vec![3.0], vec![0.5], 1.0, 7, vec![9u8], true, 4u16, 1u8);
-        let row1: WorkerResultRow =
-            (vec![-1.0], vec![], vec![0.25, 0.75], -0.1, 3, vec![], false, 2u16, 0u8);
+        let row0: WorkerResultRow = (
+            vec![1.0, 2.0],
+            vec![3.0],
+            vec![0.5],
+            1.0,
+            7,
+            vec![9u8],
+            true,
+            4u16,
+            1u8,
+        );
+        let row1: WorkerResultRow = (
+            vec![-1.0],
+            vec![],
+            vec![0.25, 0.75],
+            -0.1,
+            3,
+            vec![],
+            false,
+            2u16,
+            0u8,
+        );
         {
             let mut q = r.results.lock().expect("results lock poisoned");
             q.push_back(row0.clone());
@@ -658,7 +703,11 @@ mod seam_roundtrip {
             panic!("injected worker panic");
         });
 
-        assert_eq!(panics.load(Ordering::SeqCst), 1, "the panic was not COUNTED");
+        assert_eq!(
+            panics.load(Ordering::SeqCst),
+            1,
+            "the panic was not COUNTED"
+        );
         assert!(
             !running.load(Ordering::SeqCst),
             "the panic was counted but the run was not HALTED — the pool would keep \
@@ -681,8 +730,15 @@ mod seam_roundtrip {
 
         crate::runner::spawn::guard_worker(&panics, &running, || { /* returns normally */ });
 
-        assert_eq!(panics.load(Ordering::SeqCst), 0, "counted a panic that never happened");
-        assert!(running.load(Ordering::SeqCst), "halted a run over a healthy worker");
+        assert_eq!(
+            panics.load(Ordering::SeqCst),
+            0,
+            "counted a panic that never happened"
+        );
+        assert!(
+            running.load(Ordering::SeqCst),
+            "halted a run over a healthy worker"
+        );
     }
 
     /// The escape arm: `stop()` must CHECK the join result, not discard it.
@@ -707,16 +763,27 @@ mod seam_roundtrip {
             1,
             "stop() swallowed a join Err — a worker died and nothing recorded it"
         );
-        assert_eq!(r.stats_snapshot().worker_panics, 1, "the count did not reach the stats");
+        assert_eq!(
+            r.stats_snapshot().worker_panics,
+            1,
+            "the count did not reach the stats"
+        );
     }
 
     /// A clean worker must not be counted by the `stop()` arm either.
     #[test]
     fn stop_does_not_count_a_worker_that_exited_cleanly() {
         let r = runner();
-        r.handles.lock().expect("handles lock").push(std::thread::spawn(|| {}));
+        r.handles
+            .lock()
+            .expect("handles lock")
+            .push(std::thread::spawn(|| {}));
         r.stop();
-        assert_eq!(r.worker_panics(), 0, "a clean thread exit was counted as a panic");
+        assert_eq!(
+            r.worker_panics(),
+            0,
+            "a clean thread exit was counted as a panic"
+        );
     }
 
     #[test]
@@ -743,7 +810,8 @@ mod seam_roundtrip {
         r.mcts_stat_count.store(9, Ordering::Relaxed);
         r.mcts_quiescence_fires.store(10, Ordering::Relaxed);
         r.cluster_value_std_accum.store(11, Ordering::Relaxed);
-        r.cluster_policy_disagreement_accum.store(12, Ordering::Relaxed);
+        r.cluster_policy_disagreement_accum
+            .store(12, Ordering::Relaxed);
         r.cluster_variance_samples.store(13, Ordering::Relaxed);
         r.solver_moves_eligible.store(14, Ordering::Relaxed);
         r.solver_win_proven.store(15, Ordering::Relaxed);

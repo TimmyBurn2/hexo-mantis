@@ -53,8 +53,14 @@ mod tests {
     fn test_weight_schedule_lookup() {
         let schedule = WeightSchedule {
             brackets: vec![
-                WeightBracket { max_moves: 10, weight: f16::from_f32(0.15).to_bits() },
-                WeightBracket { max_moves: 25, weight: f16::from_f32(0.50).to_bits() },
+                WeightBracket {
+                    max_moves: 10,
+                    weight: f16::from_f32(0.15).to_bits(),
+                },
+                WeightBracket {
+                    max_moves: 25,
+                    weight: f16::from_f32(0.50).to_bits(),
+                },
             ],
             default_weight: f16::from_f32(1.0).to_bits(),
         };

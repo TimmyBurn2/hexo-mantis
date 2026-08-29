@@ -70,5 +70,9 @@ fn dense_sample_core_v6_b512_aug(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, scatter_state_v6_b512, dense_sample_core_v6_b512_aug);
+criterion_group!(
+    benches,
+    scatter_state_v6_b512,
+    dense_sample_core_v6_b512_aug
+);
 criterion_main!(benches);

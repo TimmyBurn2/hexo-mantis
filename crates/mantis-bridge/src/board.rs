@@ -13,12 +13,12 @@
 //! `Board` is `Send + !Sync` (deliberately no `unsafe impl Sync`) — the bridge
 //! brings single-thread Python ownership via `#[pyclass(unsendable)]` (LOCKED #3).
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
 use numpy::{IntoPyArray, PyArray1, PyArray3, PyArrayMethods};
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
+use mantis_core::board::{BOARD_SIZE, DEFAULT_CLUSTER_THRESHOLD, HALF};
 use mantis_core::{Board as RustBoard, BoardGeometry, Cell, Player};
-use mantis_core::board::{BOARD_SIZE, HALF, DEFAULT_CLUSTER_THRESHOLD};
 use mantis_encoding::RegistrySpec;
 
 /// Return tuple of `get_cluster_views`: a list of `(2, S, S)` view arrays
@@ -69,7 +69,10 @@ impl PyBoard {
     /// Create a new empty board (no encoding bound).
     #[new]
     pub fn new() -> Self {
-        PyBoard { inner: RustBoard::new(), encoding: None }
+        PyBoard {
+            inner: RustBoard::new(),
+            encoding: None,
+        }
     }
 
     /// Registry-resolved Board ctor. Looks the encoding up by name in
@@ -90,7 +93,8 @@ impl PyBoard {
             legal_move_radius: spec.legal_move_radius as i32,
             cluster_threshold: spec
                 .cluster_threshold
-                .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize) as i32,
+                .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize)
+                as i32,
             cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
         };
         Ok(PyBoard {
@@ -163,7 +167,9 @@ impl PyBoard {
 
     /// True if `player` has ≥ `min_len` consecutive stones along any hex axis.
     pub fn has_player_long_run(&self, player: i8, min_len: usize) -> PyResult<bool> {
-        Ok(self.inner.has_player_long_run(player_from_i8(player)?, min_len))
+        Ok(self
+            .inner
+            .has_player_long_run(player_from_i8(player)?, min_len))
     }
 
     /// Cells that, if `player` plays them, create ≥1 immediate winning move (an
@@ -230,7 +236,7 @@ impl PyBoard {
         if self.encoding.is_some() {
             return Err(PyValueError::new_err(
                 "set_legal_move_radius after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction"
+                 use registry (Board.with_encoding_name) instead of overriding post-construction",
             ));
         }
         self.inner.set_legal_move_radius(radius);
@@ -287,10 +293,7 @@ impl PyBoard {
     /// (default 19 = v6 wire format; v6w25 callers `set_cluster_window_size(25)`).
     /// Plane 0 = current player's stones, plane 1 = opponent's stones. Arrays are
     /// created via zero-copy transfer from Rust allocations.
-    pub fn get_cluster_views(
-        &self,
-        py: Python<'_>,
-    ) -> PyResult<ClusterViewsOut> {
+    pub fn get_cluster_views(&self, py: Python<'_>) -> PyResult<ClusterViewsOut> {
         let window_size = self.inner.cluster_window_size();
         let (views, centers) = self.inner.get_cluster_views();
         let py_views: PyResult<Vec<_>> = views
@@ -315,7 +318,7 @@ impl PyBoard {
         if self.encoding.is_some() {
             return Err(PyValueError::new_err(
                 "set_cluster_threshold after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction"
+                 use registry (Board.with_encoding_name) instead of overriding post-construction",
             ));
         }
         self.inner.set_cluster_threshold(threshold);
@@ -337,7 +340,7 @@ impl PyBoard {
         if self.encoding.is_some() {
             return Err(PyValueError::new_err(
                 "set_cluster_window_size after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction"
+                 use registry (Board.with_encoding_name) instead of overriding post-construction",
             ));
         }
         if size < 7 || size.is_multiple_of(2) {
@@ -404,24 +407,36 @@ impl PyBoard {
 
     /// Return a deep clone of this board (carries the encoding binding).
     pub fn clone(&self) -> PyBoard {
-        PyBoard { inner: self.inner.clone(), encoding: self.encoding }
+        PyBoard {
+            inner: self.inner.clone(),
+            encoding: self.encoding,
+        }
     }
 
     /// Python copy.copy() support.
     pub fn __copy__(&self) -> PyBoard {
-        PyBoard { inner: self.inner.clone(), encoding: self.encoding }
+        PyBoard {
+            inner: self.inner.clone(),
+            encoding: self.encoding,
+        }
     }
 
     /// Python copy.deepcopy() support.
     pub fn __deepcopy__(&self, _memo: Py<PyAny>) -> PyBoard {
-        PyBoard { inner: self.inner.clone(), encoding: self.encoding }
+        PyBoard {
+            inner: self.inner.clone(),
+            encoding: self.encoding,
+        }
     }
 
     pub fn __repr__(&self) -> String {
         let mut s = format!(
             "Board(ply={}, player={}, moves_remaining={})\n",
             self.inner.ply.index(),
-            match self.inner.current_player { Player::One => 1, Player::Two => -1 },
+            match self.inner.current_player {
+                Player::One => 1,
+                Player::Two => -1,
+            },
             self.inner.moves_remaining,
         );
         let (cq, cr) = self.inner.window_center();
@@ -450,7 +465,10 @@ impl PyBoard {
     /// the wrapper's encoding is `None` — leaf boards are pure geometry (the
     /// encoding is a bridge-only concern bound solely via `with_encoding_name`).
     pub(crate) fn from_inner(inner: RustBoard) -> Self {
-        PyBoard { inner, encoding: None }
+        PyBoard {
+            inner,
+            encoding: None,
+        }
     }
 
     /// Crate-internal accessor for the wrapped Rust Board. Used by PyMCTSTree /
@@ -497,7 +515,7 @@ mod threats {
     pub(super) struct ThreatCell {
         pub q: i32,
         pub r: i32,
-        pub level: u8, // 3=warning, 4=forced, 5=critical
+        pub level: u8,  // 3=warning, 4=forced, 5=critical
         pub player: u8, // 0 or 1
     }
 
@@ -515,10 +533,18 @@ mod threats {
         let mut min_r = i32::MAX;
         let mut max_r = i32::MIN;
         for &(q, r) in stones.keys() {
-            if q < min_q { min_q = q; }
-            if q > max_q { max_q = q; }
-            if r < min_r { min_r = r; }
-            if r > max_r { max_r = r; }
+            if q < min_q {
+                min_q = q;
+            }
+            if q > max_q {
+                max_q = q;
+            }
+            if r < min_r {
+                min_r = r;
+            }
+            if r > max_r {
+                max_r = r;
+            }
         }
         let margin = WIN_LEN as i32;
         min_q -= margin;
@@ -533,20 +559,28 @@ mod threats {
             if dq == 1 && dr == 0 {
                 // Lines indexed by r. For each r, slide window over q.
                 for r in min_r..=max_r {
-                    scan_line(stones, &mut best, ScanLineParams {
-                        start: (min_q, r),
-                        end: (max_q, r),
-                        axis: (dq, dr),
-                    });
+                    scan_line(
+                        stones,
+                        &mut best,
+                        ScanLineParams {
+                            start: (min_q, r),
+                            end: (max_q, r),
+                            axis: (dq, dr),
+                        },
+                    );
                 }
             } else if dq == 0 && dr == 1 {
                 // Lines indexed by q. For each q, slide window over r.
                 for q in min_q..=max_q {
-                    scan_line(stones, &mut best, ScanLineParams {
-                        start: (q, min_r),
-                        end: (q, max_r),
-                        axis: (dq, dr),
-                    });
+                    scan_line(
+                        stones,
+                        &mut best,
+                        ScanLineParams {
+                            start: (q, min_r),
+                            end: (q, max_r),
+                            axis: (dq, dr),
+                        },
+                    );
                 }
             } else {
                 // (1, -1): lines indexed by q+r. For constant s = q+r,
@@ -556,18 +590,27 @@ mod threats {
                 for s in min_s..=max_s {
                     let start_q = min_q;
                     let start_r = s - start_q;
-                    scan_line_general(stones, &mut best, ScanLineGeneralParams {
-                        start: (start_q, start_r),
-                        axis: (dq, dr),
-                        bbox_min: (min_q, min_r),
-                        bbox_max: (max_q, max_r),
-                    });
+                    scan_line_general(
+                        stones,
+                        &mut best,
+                        ScanLineGeneralParams {
+                            start: (start_q, start_r),
+                            axis: (dq, dr),
+                            bbox_min: (min_q, min_r),
+                            bbox_max: (max_q, max_r),
+                        },
+                    );
                 }
             }
         }
 
         best.into_iter()
-            .map(|((q, r, player), level)| ThreatCell { q, r, level, player })
+            .map(|((q, r, player), level)| ThreatCell {
+                q,
+                r,
+                level,
+                player,
+            })
             .collect()
     }
 
@@ -577,7 +620,11 @@ mod threats {
         best: &mut HashMap<(i32, i32, u8), u8>,
         params: ScanLineParams,
     ) {
-        let ScanLineParams { start: (start_q, start_r), end: (end_q, end_r), axis: (dq, dr) } = params;
+        let ScanLineParams {
+            start: (start_q, start_r),
+            end: (end_q, end_r),
+            axis: (dq, dr),
+        } = params;
 
         let (line_start_q, line_start_r, steps) = if dq == 1 && dr == 0 {
             (start_q, start_r, (end_q - start_q + 1) as usize)
@@ -703,7 +750,10 @@ mod threats {
             stones.insert((4, 0), 1u8);
 
             let threats = get_threats(&stones);
-            let forced: Vec<_> = threats.iter().filter(|t| t.level == 4 && t.player == 1).collect();
+            let forced: Vec<_> = threats
+                .iter()
+                .filter(|t| t.level == 4 && t.player == 1)
+                .collect();
             assert!(forced.iter().any(|t| t.q == 3 && t.r == 0));
             assert!(forced.iter().any(|t| t.q == 5 && t.r == 0));
             assert!(!forced.iter().any(|t| t.q == 0 && t.r == 0));
@@ -716,7 +766,10 @@ mod threats {
                 stones.insert((q, 0), 0u8);
             }
             let threats = get_threats(&stones);
-            let critical: Vec<_> = threats.iter().filter(|t| t.level == 5 && t.player == 0).collect();
+            let critical: Vec<_> = threats
+                .iter()
+                .filter(|t| t.level == 5 && t.player == 0)
+                .collect();
             assert!(critical.iter().any(|t| t.q == 5 && t.r == 0));
             assert!(critical.iter().any(|t| t.q == -1 && t.r == 0));
         }
@@ -729,7 +782,10 @@ mod threats {
                 stones.insert((i, -i), 0u8);
             }
             let threats = get_threats(&stones);
-            let forced: Vec<_> = threats.iter().filter(|t| t.level == 4 && t.player == 0).collect();
+            let forced: Vec<_> = threats
+                .iter()
+                .filter(|t| t.level == 4 && t.player == 0)
+                .collect();
             assert!(!forced.is_empty());
             for f in &forced {
                 assert!(!stones.contains_key(&(f.q, f.r)));
@@ -752,7 +808,11 @@ mod tests {
     fn new_board_is_encoding_less() {
         let b = PyBoard::new();
         assert!(b.encoding.is_none());
-        assert_eq!(b.size(), BOARD_SIZE, "encoding-less board size defaults to v6 geometry");
+        assert_eq!(
+            b.size(),
+            BOARD_SIZE,
+            "encoding-less board size defaults to v6 geometry"
+        );
         assert_eq!(b.current_player(), 1);
         assert_eq!(b.moves_remaining(), 1);
         assert_eq!(b.ply(), 0);
@@ -830,13 +890,17 @@ mod tests {
         b.apply_move(1, 12).unwrap(); // P2 filler -> P1 turn (mr 2)
         b.apply_move(1, 0).unwrap(); // P1
         b.apply_move(2, 0).unwrap(); // P1 -> P1 now has (0,0),(1,0),(2,0)
-        // get_threats maps the viewer scan; P1 is player id 0. A 3-in-a-row in
-        // an open length-6 window is at least a level-3 warning.
+                                     // get_threats maps the viewer scan; P1 is player id 0. A 3-in-a-row in
+                                     // an open length-6 window is at least a level-3 warning.
         let empty = PyBoard::new();
         assert!(empty.get_threats().is_empty(), "empty board has no threats");
         let threats = b.get_threats();
-        assert!(threats.iter().any(|&(_, _, level, player)| level >= 3 && player == 0),
-            "expected a P1 (id 0) warning/forced threat, got {threats:?}");
+        assert!(
+            threats
+                .iter()
+                .any(|&(_, _, level, player)| level >= 3 && player == 0),
+            "expected a P1 (id 0) warning/forced threat, got {threats:?}"
+        );
         // Every returned threat cell must be EMPTY (viewer contract).
         for &(q, r, _, _) in &threats {
             assert_eq!(b.get(q, r), 0, "threat cell ({q},{r}) must be empty");

@@ -238,7 +238,11 @@ fn check_position(src: &str, i: usize, with_priors: bool) {
     let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.25);
     tree.new_game(board.clone());
     let leaves = tree.select_leaves(1);
-    assert_eq!(leaves.len(), 1, "{id}: fresh root must yield one pending leaf");
+    assert_eq!(
+        leaves.len(),
+        1,
+        "{id}: fresh root must yield one pending leaf"
+    );
     tree.expand_and_backup_ls_at(&[ls], &[0.0f32], &[g.window_center], spec.trunk_size as i32);
 
     // `get_top_visits` returns zero-visit children too (`policy.rs:358-381`), so this is
@@ -293,7 +297,10 @@ fn rust_leg_matches_dispersed_fixture() {
     let src = fixture_text("dispersed_r6_v1.json");
     assert_eq!(scalar(&src, "schema"), 1, "fixture schema");
     let n = scalar(&src, "n_positions");
-    assert_eq!(n, 4, "the dispersed fixture is pre-registered at 4 positions");
+    assert_eq!(
+        n, 4,
+        "the dispersed fixture is pre-registered at 4 positions"
+    );
     for i in 0..n as usize {
         // Every dispersed position is in the >361-legal regime with off-window legal
         // moves — P-2a's precondition, asserted on this side of the FFI as well.

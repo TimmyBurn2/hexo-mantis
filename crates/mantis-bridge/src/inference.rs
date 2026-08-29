@@ -37,7 +37,9 @@ use pyo3::types::PyDict;
 use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
-use mantis_selfplay::queues::{build_leaf_graph, DenseQueue, GraphQueue, GraphWire, GraphWireArrays};
+use mantis_selfplay::queues::{
+    build_leaf_graph, DenseQueue, GraphQueue, GraphWire, GraphWireArrays,
+};
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::SelfPlayRunner;
 
@@ -346,7 +348,10 @@ impl PyInferenceBatcher {
             let pending = self.dense_pending.clone();
             std::thread::spawn(move || {
                 pending.fetch_add(1, Ordering::SeqCst);
-                if dense.submit_batch_and_wait(vec![vec![0.0f32; feature_len]]).is_ok() {
+                if dense
+                    .submit_batch_and_wait(vec![vec![0.0f32; feature_len]])
+                    .is_ok()
+                {
                     completed.fetch_add(1, Ordering::SeqCst);
                 }
             });
@@ -525,8 +530,11 @@ impl PyInferenceBatcher {
     /// on `submit_graph_and_wait`.
     pub fn spawn_mock_graph_games(&self, n_games: usize) -> PyResult<()> {
         self.require_graph()?;
-        let (win_length, radius, trunk_size) =
-            (self.graph_win_length, self.graph_radius, self.graph_trunk_size);
+        let (win_length, radius, trunk_size) = (
+            self.graph_win_length,
+            self.graph_radius,
+            self.graph_trunk_size,
+        );
         for _ in 0..n_games {
             let graph_q = self.graph.clone();
             let completed = self.completed_graph_games.clone();
@@ -539,9 +547,7 @@ impl PyInferenceBatcher {
                 for q in 30..35i64 {
                     stones.push((q, 0, -1));
                 }
-                if let Ok(graph) =
-                    build_leaf_graph(&stones, 1, 2, win_length, radius, trunk_size)
-                {
+                if let Ok(graph) = build_leaf_graph(&stones, 1, 2, win_length, radius, trunk_size) {
                     pending.fetch_add(1, Ordering::SeqCst);
                     if graph_q.submit_graph_and_wait(graph).is_ok() {
                         completed.fetch_add(1, Ordering::SeqCst);
@@ -682,7 +688,8 @@ impl PyInferenceBatcher {
                     leaf_probs.len(),
                     meta.policy_dst_slot.len()
                 );
-                self.graph.submit_graph_results(&[id], vec![Err(msg.clone())]);
+                self.graph
+                    .submit_graph_results(&[id], vec![Err(msg.clone())]);
                 self.fail_remaining_graph_ids(&request_ids[i + 1..], &msg);
                 return Err(PyValueError::new_err(msg));
             }
@@ -693,7 +700,8 @@ impl PyInferenceBatcher {
                 &meta.legal_coords,
             ) {
                 Ok(ls) => {
-                    self.graph.submit_graph_results(&[id], vec![Ok((ls, vals[i]))]);
+                    self.graph
+                        .submit_graph_results(&[id], vec![Ok((ls, vals[i]))]);
                 }
                 Err(e) => {
                     self.graph.submit_graph_results(&[id], vec![Err(e.clone())]);
@@ -912,12 +920,24 @@ impl PyGraphWire {
         d.set_item("node_offsets", PyArray1::from_slice(py, &a.node_offsets))?;
         d.set_item("edge_offsets", PyArray1::from_slice(py, &a.edge_offsets))?;
         d.set_item("legal_offsets", PyArray1::from_slice(py, &a.legal_offsets))?;
-        d.set_item("legal_node_gather", PyArray1::from_slice(py, &a.legal_node_gather))?;
-        d.set_item("policy_dst_slot", PyArray1::from_slice(py, &a.policy_dst_slot))?;
-        d.set_item("n_nodes_checksum", PyArray1::from_slice(py, &a.n_nodes_checksum))?;
+        d.set_item(
+            "legal_node_gather",
+            PyArray1::from_slice(py, &a.legal_node_gather),
+        )?;
+        d.set_item(
+            "policy_dst_slot",
+            PyArray1::from_slice(py, &a.policy_dst_slot),
+        )?;
+        d.set_item(
+            "n_nodes_checksum",
+            PyArray1::from_slice(py, &a.n_nodes_checksum),
+        )?;
         d.set_item("n_stones", PyArray1::from_slice(py, &a.n_stones))?;
         d.set_item("window_center", PyArray1::from_slice(py, &a.window_center))?;
-        d.set_item("current_player", PyArray1::from_slice(py, &a.current_player))?;
+        d.set_item(
+            "current_player",
+            PyArray1::from_slice(py, &a.current_player),
+        )?;
         Ok(d)
     }
 }
@@ -927,7 +947,10 @@ impl PyGraphWire {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyInferenceBatcher>()?;
     m.add_class::<PyGraphWire>()?;
-    m.add("WireAlreadyConsumed", m.py().get_type::<WireAlreadyConsumed>())?;
+    m.add(
+        "WireAlreadyConsumed",
+        m.py().get_type::<WireAlreadyConsumed>(),
+    )?;
     Ok(())
 }
 
@@ -967,16 +990,33 @@ mod tests {
         let counter = AtomicUsize::new(0);
         lock_or_recover(&mutex, &counter).insert(
             7,
-            InFlightGraph { policy_dst_slot: vec![1, 2], legal_coords: vec![(3, 4)] },
+            InFlightGraph {
+                policy_dst_slot: vec![1, 2],
+                legal_coords: vec![(3, 4)],
+            },
         );
-        assert_eq!(counter.load(Ordering::SeqCst), 0, "a clean lock must not count");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            0,
+            "a clean lock must not count"
+        );
 
         poison(&mutex);
 
         let guard = lock_or_recover(&mutex, &counter);
-        assert_eq!(counter.load(Ordering::SeqCst), 1, "recovery must be counted (LAW-18)");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            1,
+            "recovery must be counted (LAW-18)"
+        );
         // The data is intact: recovery hands back the map, it does not reset it.
-        assert_eq!(guard.get(&7).expect("entry survived poisoning").policy_dst_slot, vec![1, 2]);
+        assert_eq!(
+            guard
+                .get(&7)
+                .expect("entry survived poisoning")
+                .policy_dst_slot,
+            vec![1, 2]
+        );
         drop(guard);
 
         // Poisoning is a one-way latch, so every later lock recovers and counts again.
@@ -986,9 +1026,18 @@ mod tests {
 
     #[test]
     fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None)
-            .expect("graph batcher constructs");
-        assert_eq!(b.lock_recoveries(), 0, "a fresh batcher has recovered nothing");
+        let b = PyInferenceBatcher::new(
+            Some(PyRegistrySpec::from_static(gnn_spec())),
+            None,
+            None,
+            None,
+        )
+        .expect("graph batcher constructs");
+        assert_eq!(
+            b.lock_recoveries(),
+            0,
+            "a fresh batcher has recovered nothing"
+        );
 
         poison(&b.in_flight_graphs);
 
@@ -1017,14 +1066,26 @@ mod tests {
         let before = counter.load(Ordering::SeqCst);
         let guard = lock_or_recover(&mutex, &counter);
         let after = counter.load(Ordering::SeqCst);
-        assert!(guard.is_empty(), "recovered map is indistinguishable from a healthy empty one");
-        assert_eq!(after - before, 1, "counter did not move on a recovery that definitely happened");
+        assert!(
+            guard.is_empty(),
+            "recovered map is indistinguishable from a healthy empty one"
+        );
+        assert_eq!(
+            after - before,
+            1,
+            "counter did not move on a recovery that definitely happened"
+        );
     }
 
     #[test]
     fn grid_batcher_derives_shapes_and_is_grid() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(v6_spec())), None, None, None)
-            .expect("v6 batcher constructs");
+        let b = PyInferenceBatcher::new(
+            Some(PyRegistrySpec::from_static(v6_spec())),
+            None,
+            None,
+            None,
+        )
+        .expect("v6 batcher constructs");
         assert!(!b.is_graph);
         assert_eq!(b.representation, "grid");
         assert_eq!(b.feature_len, v6_spec().state_stride());
@@ -1047,8 +1108,13 @@ mod tests {
 
     #[test]
     fn graph_batcher_reads_graph_params() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None)
-            .expect("graph batcher constructs");
+        let b = PyInferenceBatcher::new(
+            Some(PyRegistrySpec::from_static(gnn_spec())),
+            None,
+            None,
+            None,
+        )
+        .expect("graph batcher constructs");
         assert!(b.is_graph);
         assert_eq!(b.representation, "graph");
         assert_eq!(b.graph_win_length, 6);
@@ -1082,8 +1148,10 @@ mod tests {
     /// surface post-ASM — the embedded cargo-test interpreter can't load numpy).
     #[test]
     fn graph_wire_take_is_single_read() {
-        let stones: Vec<(i64, i64, i64)> =
-            (0..5i64).map(|q| (q, 0, 1)).chain((30..35i64).map(|q| (q, 0, -1))).collect();
+        let stones: Vec<(i64, i64, i64)> = (0..5i64)
+            .map(|q| (q, 0, 1))
+            .chain((30..35i64).map(|q| (q, 0, -1)))
+            .collect();
         let graph = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("valid graph");
         let mut wire = GraphWire::from_axis_graphs(&[graph], 1);
         let arrays = wire.take().expect("first fuse take");
@@ -1093,17 +1161,24 @@ mod tests {
         assert_eq!(gw.n_graphs(), 1);
         // The single-read latch: acquire once, second acquisition fails.
         assert!(
-            gw.taken.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok(),
+            gw.taken
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok(),
             "a fresh wire's latch is acquirable"
         );
         assert!(
-            gw.taken.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err(),
+            gw.taken
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err(),
             "the latch is single-read"
         );
         // take() on an already-consumed wire maps to WireAlreadyConsumed.
         Python::initialize();
         Python::attach(|py| {
-            assert!(gw.take(py).is_err(), "a consumed wire's take() raises WireAlreadyConsumed");
+            assert!(
+                gw.take(py).is_err(),
+                "a consumed wire's take() raises WireAlreadyConsumed"
+            );
         });
     }
 }

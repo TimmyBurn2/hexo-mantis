@@ -47,16 +47,22 @@ impl ReplayBuffer {
         let mut w = BufWriter::new(file);
 
         // Header
-        w.write_all(&HEXB_MAGIC.to_le_bytes()).map_err(|e| e.to_string())?;
-        w.write_all(&HEXB_VERSION.to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(&HEXB_MAGIC.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        w.write_all(&HEXB_VERSION.to_le_bytes())
+            .map_err(|e| e.to_string())?;
         // Redundant plane-count field for sanity checking.
-        w.write_all(&(self.encoding.n_planes as u32).to_le_bytes()).map_err(|e| e.to_string())?;
-        w.write_all(&(self.capacity as u64).to_le_bytes()).map_err(|e| e.to_string())?;
-        w.write_all(&(self.size as u64).to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(&(self.encoding.n_planes as u32).to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        w.write_all(&(self.capacity as u64).to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        w.write_all(&(self.size as u64).to_le_bytes())
+            .map_err(|e| e.to_string())?;
 
         // v7: encoding name
         let name_bytes = self.encoding.name.as_bytes();
-        w.write_all(&(name_bytes.len() as u32).to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(&(name_bytes.len() as u32).to_le_bytes())
+            .map_err(|e| e.to_string())?;
         w.write_all(name_bytes).map_err(|e| e.to_string())?;
 
         let state_stride = self.encoding.state_stride();
@@ -75,7 +81,9 @@ impl ReplayBuffer {
             // before any aliasing &mut to self.states can be created.
             let state_bytes = unsafe {
                 std::slice::from_raw_parts(
-                    self.states[state_start..state_start + state_stride].as_ptr().cast::<u8>(),
+                    self.states[state_start..state_start + state_stride]
+                        .as_ptr()
+                        .cast::<u8>(),
                     state_stride * 2,
                 )
             };
@@ -86,7 +94,9 @@ impl ReplayBuffer {
             // SAFETY: as above.
             let chain_bytes = unsafe {
                 std::slice::from_raw_parts(
-                    self.chain_planes[chain_start..chain_start + chain_stride].as_ptr().cast::<u8>(),
+                    self.chain_planes[chain_start..chain_start + chain_stride]
+                        .as_ptr()
+                        .cast::<u8>(),
                     chain_stride * 2,
                 )
             };
@@ -97,30 +107,40 @@ impl ReplayBuffer {
             // SAFETY: &[f32] is layout-compatible with &[u8] (byte_len = 4 × elem_len).
             let pol_bytes = unsafe {
                 std::slice::from_raw_parts(
-                    self.policies[pol_start..pol_start + policy_stride].as_ptr().cast::<u8>(),
+                    self.policies[pol_start..pol_start + policy_stride]
+                        .as_ptr()
+                        .cast::<u8>(),
                     policy_stride * 4,
                 )
             };
             w.write_all(pol_bytes).map_err(|e| e.to_string())?;
 
             // outcome: f32
-            w.write_all(&self.outcomes[slot].to_le_bytes()).map_err(|e| e.to_string())?;
+            w.write_all(&self.outcomes[slot].to_le_bytes())
+                .map_err(|e| e.to_string())?;
             // game_id: i64
-            w.write_all(&self.game_ids[slot].to_le_bytes()).map_err(|e| e.to_string())?;
+            w.write_all(&self.game_ids[slot].to_le_bytes())
+                .map_err(|e| e.to_string())?;
             // weight: u16
-            w.write_all(&self.weights[slot].to_le_bytes()).map_err(|e| e.to_string())?;
+            w.write_all(&self.weights[slot].to_le_bytes())
+                .map_err(|e| e.to_string())?;
 
             // ownership: aux_stride × u8
             let aux_start = slot * aux_stride;
-            w.write_all(&self.ownership[aux_start..aux_start + aux_stride]).map_err(|e| e.to_string())?;
+            w.write_all(&self.ownership[aux_start..aux_start + aux_stride])
+                .map_err(|e| e.to_string())?;
             // winning_line: aux_stride × u8
-            w.write_all(&self.winning_line[aux_start..aux_start + aux_stride]).map_err(|e| e.to_string())?;
+            w.write_all(&self.winning_line[aux_start..aux_start + aux_stride])
+                .map_err(|e| e.to_string())?;
             // is_full_search: u8
-            w.write_all(&[self.is_full_search[slot]]).map_err(|e| e.to_string())?;
+            w.write_all(&[self.is_full_search[slot]])
+                .map_err(|e| e.to_string())?;
             // position_index u16 (HEXB v8)
-            w.write_all(&self.position_indices[slot].to_le_bytes()).map_err(|e| e.to_string())?;
+            w.write_all(&self.position_indices[slot].to_le_bytes())
+                .map_err(|e| e.to_string())?;
             // value_target_valid u8 (HEXB v9)
-            w.write_all(&[self.value_target_valid[slot]]).map_err(|e| e.to_string())?;
+            w.write_all(&[self.value_target_valid[slot]])
+                .map_err(|e| e.to_string())?;
         }
 
         w.flush().map_err(|e| e.to_string())?;

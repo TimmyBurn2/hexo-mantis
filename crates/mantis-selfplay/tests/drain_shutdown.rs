@@ -74,7 +74,11 @@ fn mock_dense_infer(features: &[f32], policy_stride: usize, seed: u64) -> (Vec<f
 /// `served` counts the inference requests actually served — a strictly-positive
 /// value proves a worker was genuinely mid-MCTS-search (a leaf batch in flight), the
 /// "worker mid-game" signal that de-vacuums the drain-shutdown oracle below.
-fn spawn_dense_producer(queue: DenseQueue, policy_stride: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
+fn spawn_dense_producer(
+    queue: DenseQueue,
+    policy_stride: usize,
+    served: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_batch(2, 5);
         if batch.is_empty() {
@@ -129,7 +133,9 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
     thread::sleep(Duration::from_millis(80));
     runner.stop(); // flips running, closes queues (wakes waiters), joins workers
 
-    producer.join().expect("mock producer exits once the queue is closed");
+    producer
+        .join()
+        .expect("mock producer exits once the queue is closed");
     assert!(!runner.is_running(), "runner stopped");
 
     let drained = runner.drain_game_results();
@@ -230,5 +236,8 @@ fn false_draw_checker_bites_on_injected_reason_3() {
         (10, 0, Vec::new(), 0, 2, 0, 0, 0, 0, 0), // ply-cap
         (11, 1, Vec::new(), 1, 0, 0, 0, 0, 0, 0), // six-in-a-row win
     ];
-    assert!(!has_false_draw(&clean), "the checker must not flag legitimate terminals");
+    assert!(
+        !has_false_draw(&clean),
+        "the checker must not flag legitimate terminals"
+    );
 }

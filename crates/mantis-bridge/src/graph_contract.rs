@@ -314,7 +314,15 @@ mod tests {
     fn clean_edge_passes() {
         let (nf, nc, ei, ea, no, cp) = clean_fixture();
         assert!(verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH
         )
         .is_ok());
     }
@@ -323,7 +331,15 @@ mod tests {
     fn empty_edge_set_is_ok() {
         let (nf, nc, _ei, _ea, no, cp) = clean_fixture();
         assert!(verify_edge_geometry_impl(
-            &nf, &nc, &[], &[], &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH
+            &nf,
+            &nc,
+            &[],
+            &[],
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH
         )
         .is_ok());
     }
@@ -337,7 +353,15 @@ mod tests {
         let (nf, nc, ei, mut ea, no, cp) = clean_fixture();
         ea[3] = -ea[3];
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(
@@ -351,7 +375,15 @@ mod tests {
         let (nf, nc, ei, mut ea, no, cp) = clean_fixture();
         ea[1] = 1.0; // now two axes set — not a clean one-hot
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("one-hot"), "got: {err}");
@@ -362,7 +394,15 @@ mod tests {
         let (nf, nc, ei, mut ea, no, cp) = clean_fixture();
         ea[3] = 2.5;
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("non-integral"), "got: {err}");
@@ -373,7 +413,15 @@ mod tests {
         let (nf, nc, ei, mut ea, no, cp) = clean_fixture();
         ea[4] = -1.0; // should be +1
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("src_player"), "got: {err}");
@@ -424,7 +472,15 @@ mod tests {
         let (nf, nc, _ei, ea, no, cp) = clean_fixture();
         let edge_index: Vec<i64> = vec![0, 99]; // dst way out of [0, N)
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &edge_index, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &edge_index,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("out of"), "got: {err}");
@@ -435,7 +491,15 @@ mod tests {
         let (nf, nc, _ei, ea, no, cp) = clean_fixture();
         let edge_index: Vec<i64> = vec![-1, 2];
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &edge_index, &ea, &no, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &edge_index,
+            &ea,
+            &no,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("out of"), "got: {err}");
@@ -446,7 +510,15 @@ mod tests {
         let (nf, nc, ei, ea, _no, cp) = clean_fixture();
         let node_offsets: Vec<i64> = vec![0, 999]; // end > N
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &node_offsets, &cp, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &node_offsets,
+            &cp,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("node_offsets"), "got: {err}");
@@ -457,7 +529,15 @@ mod tests {
         let (nf, nc, ei, ea, no, _cp) = clean_fixture();
         let current_player: Vec<i8> = vec![1, -1]; // B=1 expected, got 2
         let err = verify_edge_geometry_impl(
-            &nf, &nc, &ei, &ea, &no, &current_player, NODE_FEAT_DIM, EDGE_FEAT_DIM, WIN_LENGTH,
+            &nf,
+            &nc,
+            &ei,
+            &ea,
+            &no,
+            &current_player,
+            NODE_FEAT_DIM,
+            EDGE_FEAT_DIM,
+            WIN_LENGTH,
         )
         .unwrap_err();
         assert!(err.contains("current_player"), "got: {err}");

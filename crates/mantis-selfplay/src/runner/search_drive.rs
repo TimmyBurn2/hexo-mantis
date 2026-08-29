@@ -20,8 +20,8 @@
 //! dedup-pushed into `version_seen`, so a no-NN run's drain tuple is byte-identical
 //! to the frozen `(mv_min, mv_max, mv_distinct) = (0, 0, 1)`.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use rand::prelude::IndexedRandom;
 use rand::rngs::ThreadRng;
@@ -31,8 +31,8 @@ use mantis_core::board::hex_distance;
 use mantis_core::Board;
 use mantis_encoding::{encode_state_to_buffer_channels, RegistrySpec};
 use mantis_search::{
-    compute_move_temperature, ply_to_compound_move, GumbelSearchState, LegalSetPolicy,
-    MCTSTree, Outcome, TacticalConfig, TacticalSolver,
+    compute_move_temperature, ply_to_compound_move, GumbelSearchState, LegalSetPolicy, MCTSTree,
+    Outcome, TacticalConfig, TacticalSolver,
 };
 
 use crate::queues::{build_leaf_graph, DenseQueue, GraphQueue};
@@ -306,7 +306,11 @@ pub(crate) struct InferenceSeamFailure {
 
 impl InferenceSeamFailure {
     fn new(arm: &'static str, stage: &'static str, reason: impl Into<String>) -> Self {
-        Self { arm, stage, reason: reason.into() }
+        Self {
+            arm,
+            stage,
+            reason: reason.into(),
+        }
     }
 }
 
@@ -407,35 +411,36 @@ fn infer_and_expand(
 
     let total_clusters: usize = leaf_metadata.iter().map(|(k, _)| *k).sum();
 
-    let (all_policies, all_values) = match infer.dense_queue.submit_batch_and_wait(all_batch_features) {
-        Ok(results) => {
-            let mut ps = Vec::with_capacity(results.len());
-            let mut vs = Vec::with_capacity(results.len());
-            for (mut p, v) in results {
-                // §130: inverse-scatter the policy back to canonical frame.
-                if infer.sym_idx != 0 {
-                    rotate_policy_inplace(&mut p, infer.inv_idx, infer.sym_tables, n_cells);
+    let (all_policies, all_values) =
+        match infer.dense_queue.submit_batch_and_wait(all_batch_features) {
+            Ok(results) => {
+                let mut ps = Vec::with_capacity(results.len());
+                let mut vs = Vec::with_capacity(results.len());
+                for (mut p, v) in results {
+                    // §130: inverse-scatter the policy back to canonical frame.
+                    if infer.sym_idx != 0 {
+                        rotate_policy_inplace(&mut p, infer.inv_idx, infer.sym_tables, n_cells);
+                    }
+                    ps.push(p);
+                    vs.push(v);
                 }
-                ps.push(p);
-                vs.push(v);
+                (ps, vs)
             }
-            (ps, vs)
-        }
-        // R275(b): was "dense skip-on-Err (reason NOT consumed, D6): skip the
-        // batch". The frozen dense surface collapses the waiter's reason to `()`
-        // before it ever reaches here, so the arm and stage are all this leg can
-        // name — which is precisely why it must be loud rather than silent.
-        Err(()) => {
-            return seam_or_shutdown(
-                infer.running,
-                "dense",
-                "submit_batch_and_wait",
-                "the dense queue surface collapses the waiter reason to `()` (D6); \
+            // R275(b): was "dense skip-on-Err (reason NOT consumed, D6): skip the
+            // batch". The frozen dense surface collapses the waiter's reason to `()`
+            // before it ever reaches here, so the arm and stage are all this leg can
+            // name — which is precisely why it must be loud rather than silent.
+            Err(()) => {
+                return seam_or_shutdown(
+                    infer.running,
+                    "dense",
+                    "submit_batch_and_wait",
+                    "the dense queue surface collapses the waiter reason to `()` (D6); \
                  causes are a producer-submitted inference failure or a feature-length \
                  mismatch",
-            )
-        }
-    };
+                )
+            }
+        };
 
     if all_policies.len() < total_clusters {
         return seam_or_shutdown(
@@ -450,10 +455,16 @@ fn infer_and_expand(
     }
 
     // One arm allocates, the other is an empty `Vec::new()` — one policy_pool per run.
-    let mut aggregated_policies: Vec<Vec<f32>> =
-        if legal_set { Vec::new() } else { Vec::with_capacity(leaves.len()) };
-    let mut aggregated_policies_ls: Vec<LegalSetPolicy> =
-        if legal_set { Vec::with_capacity(leaves.len()) } else { Vec::new() };
+    let mut aggregated_policies: Vec<Vec<f32>> = if legal_set {
+        Vec::new()
+    } else {
+        Vec::with_capacity(leaves.len())
+    };
+    let mut aggregated_policies_ls: Vec<LegalSetPolicy> = if legal_set {
+        Vec::with_capacity(leaves.len())
+    } else {
+        Vec::new()
+    };
     let mut aggregated_values = Vec::with_capacity(leaves.len());
     let mut curr = 0;
 
@@ -465,7 +476,11 @@ fn infer_and_expand(
         // I2 investigation metric: per-cluster value/policy variance (Q2/Q27).
         if *k >= 2 {
             let mean_v: f32 = leaf_values.iter().sum::<f32>() / *k as f32;
-            let var_v: f32 = leaf_values.iter().map(|&v| (v - mean_v).powi(2)).sum::<f32>() / *k as f32;
+            let var_v: f32 = leaf_values
+                .iter()
+                .map(|&v| (v - mean_v).powi(2))
+                .sum::<f32>()
+                / *k as f32;
             let std_v = var_v.sqrt();
             let mut top1 = Vec::with_capacity(*k);
             for p in leaf_policies {
@@ -487,19 +502,33 @@ fn infer_and_expand(
                 }
             }
             let disagree = 1.0f32 - (max_c as f32 / *k as f32);
-            variance.value_std_accum.fetch_add((std_v * 1_000_000.0) as u64, Ordering::Relaxed);
-            variance.policy_disagreement_accum.fetch_add((disagree * 1_000_000.0) as u64, Ordering::Relaxed);
+            variance
+                .value_std_accum
+                .fetch_add((std_v * 1_000_000.0) as u64, Ordering::Relaxed);
+            variance
+                .policy_disagreement_accum
+                .fetch_add((disagree * 1_000_000.0) as u64, Ordering::Relaxed);
             variance.variance_samples.fetch_add(1, Ordering::Relaxed);
         }
 
         aggregated_values.push(aggregate_cluster_values_min(leaf_values));
         if legal_set {
             aggregated_policies_ls.push(records::aggregate_policy_ls(
-                policy_stride, has_pass_slot, agg_trunk_sz, &leaves[i], centers, leaf_policies,
+                policy_stride,
+                has_pass_slot,
+                agg_trunk_sz,
+                &leaves[i],
+                centers,
+                leaf_policies,
             ));
         } else {
             aggregated_policies.push(records::aggregate_policy(
-                policy_stride, has_pass_slot, agg_trunk_sz, &leaves[i], centers, leaf_policies,
+                policy_stride,
+                has_pass_slot,
+                agg_trunk_sz,
+                &leaves[i],
+                centers,
+                leaf_policies,
             ));
         }
     }
@@ -533,17 +562,27 @@ fn infer_and_expand_graph(
     agg_trunk_sz: i32,
     infer: InferContext,
 ) -> Result<usize, InferenceSeamFailure> {
+    let perf_span = crate::perf::Span::start(crate::perf::SELECT_LEAVES);
     let leaves = tree.select_leaves(batch_size);
+    perf_span.stop();
+    crate::perf::record_leaf_batch(leaves.len());
     if leaves.is_empty() {
         return Ok(0);
     }
 
     // Graph-build geometry from the resolved spec (graph specs define these).
-    let win_length = infer.spec.win_length.expect("graph spec must define win_length") as u8;
-    let radius = infer.spec.graph_radius.expect("graph spec must define graph_radius") as u16;
+    let win_length = infer
+        .spec
+        .win_length
+        .expect("graph spec must define win_length") as u8;
+    let radius = infer
+        .spec
+        .graph_radius
+        .expect("graph spec must define graph_radius") as u16;
 
     let mut graphs = Vec::with_capacity(leaves.len());
     let mut centers: Vec<(i32, i32)> = Vec::with_capacity(leaves.len());
+    let perf_span = crate::perf::Span::start(crate::perf::GRAPH_BUILD);
     for leaf in &leaves {
         // Stone list from the board's sparse cell map (order irrelevant — the
         // builder coordinate-sorts). `Cell`/`Player` are `#[repr(i8)]` (±1).
@@ -553,7 +592,14 @@ fn infer_and_expand_graph(
         }
         let current_player = leaf.current_player as i64;
         let moves_remaining = i64::from(leaf.moves_remaining);
-        match build_leaf_graph(&stones, current_player, moves_remaining, win_length, radius, agg_trunk_sz) {
+        match build_leaf_graph(
+            &stones,
+            current_player,
+            moves_remaining,
+            win_length,
+            radius,
+            agg_trunk_sz,
+        ) {
             Ok(g) => {
                 centers.push(g.window_center);
                 graphs.push(g);
@@ -567,10 +613,16 @@ fn infer_and_expand_graph(
             // through `seam_or_shutdown`: a build guard is a pure function of the
             // board, so a closed queue cannot cause it and cannot excuse it.
             Err(reason) => {
-                return Err(InferenceSeamFailure::new("graph", "build_leaf_graph", reason))
+                return Err(InferenceSeamFailure::new(
+                    "graph",
+                    "build_leaf_graph",
+                    reason,
+                ))
             }
         }
     }
+
+    perf_span.stop();
 
     // Submit the WHOLE leaf batch in one shot and block on the assembled
     // `(LegalSetPolicy, value)` of each. Q-FIND-1/R263: submitting one graph at a
@@ -578,7 +630,9 @@ fn infer_and_expand_graph(
     // threshold was structurally unreachable and every forward carried a single
     // graph. The returned `Vec` is indexed by SUBMISSION ORDER — the same order as
     // `leaves` and `centers`, which `expand_and_backup_ls_at` below requires.
+    let perf_span = crate::perf::Span::start(crate::perf::SUBMIT_WAIT);
     let results = infer.graph_queue.submit_graphs_and_wait(graphs);
+    perf_span.stop();
     // COLLECT-ALL-THEN-DECIDE: every waiter has already resolved by the time this
     // Vec exists, so the refusal below cannot orphan one. The waiter's
     // `Err(reason)` travels back verbatim (D6) — R275(b) stops it being collapsed
@@ -595,12 +649,7 @@ fn infer_and_expand_graph(
                 aggregated_values.push(v);
             }
             Err(reason) => {
-                return seam_or_shutdown(
-                    infer.running,
-                    "graph",
-                    "submit_graphs_and_wait",
-                    reason,
-                )
+                return seam_or_shutdown(infer.running, "graph", "submit_graphs_and_wait", reason)
             }
         }
     }
@@ -625,11 +674,12 @@ fn infer_and_expand_graph(
     // slot window and silently misreads every in-window slot. One integer compare per
     // leaf batch (release strips no `assert!`); die-loud on mismatch.
     assert_eq!(
-        agg_trunk_sz,
-        infer.spec.trunk_size as i32,
+        agg_trunk_sz, infer.spec.trunk_size as i32,
         "graph trunk mismatch: spec agg_trunk_sz vs spec graph trunk_size"
     );
+    let perf_span = crate::perf::Span::start(crate::perf::EXPAND_BACKUP);
     tree.expand_and_backup_ls_at(&aggregated_ls, &aggregated_values, &centers, agg_trunk_sz);
+    perf_span.stop();
     Ok(n)
 }
 
@@ -668,7 +718,16 @@ fn run_mcts_search(
     if gumbel_mcts {
         // ── Gumbel MCTS with Sequential Halving ──
         let root_sims = match infer_and_expand(
-            tree, 1, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+            tree,
+            1,
+            kept_planes,
+            n_cells,
+            policy_stride,
+            has_pass_slot,
+            agg_trunk_sz,
+            legal_set,
+            infer,
+            variance,
         ) {
             Ok(n) => n,
             Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -687,7 +746,16 @@ fn run_mcts_search(
                     break;
                 }
                 let n = match infer_and_expand(
-                    tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+                    tree,
+                    leaf_batch_size,
+                    kept_planes,
+                    n_cells,
+                    policy_stride,
+                    has_pass_slot,
+                    agg_trunk_sz,
+                    legal_set,
+                    infer,
+                    variance,
                 ) {
                     Ok(n) => n,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -732,7 +800,16 @@ fn run_mcts_search(
                         // overshoot `sims_per`.
                         let batch = leaf_batch_size.min(sims_per.saturating_sub(cand_sims));
                         let n = match infer_and_expand(
-                            tree, batch.max(1), kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+                            tree,
+                            batch.max(1),
+                            kept_planes,
+                            n_cells,
+                            policy_stride,
+                            has_pass_slot,
+                            agg_trunk_sz,
+                            legal_set,
+                            infer,
+                            variance,
                         ) {
                             Ok(n) => n,
                             Err(e) => {
@@ -760,7 +837,16 @@ fn run_mcts_search(
     } else {
         // ── Standard PUCT search with Dirichlet root noise ──
         let root_n = match infer_and_expand(
-            tree, 1, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+            tree,
+            1,
+            kept_planes,
+            n_cells,
+            policy_stride,
+            has_pass_slot,
+            agg_trunk_sz,
+            legal_set,
+            infer,
+            variance,
         ) {
             Ok(n) => n,
             Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -774,7 +860,8 @@ fn run_mcts_search(
         if dirichlet_enabled && !is_intermediate_ply && tree.pool[0].is_expanded() {
             let n_ch = tree.pool[0].n_children as usize;
             if n_ch > 0 {
-                let noise = mantis_search::mcts::dirichlet::sample_dirichlet(dirichlet_alpha, n_ch, rng);
+                let noise =
+                    mantis_search::mcts::dirichlet::sample_dirichlet(dirichlet_alpha, n_ch, rng);
                 tree.apply_dirichlet_to_root(&noise, dirichlet_epsilon);
             }
         }
@@ -784,7 +871,16 @@ fn run_mcts_search(
                 break;
             }
             let n = match infer_and_expand(
-                tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+                tree,
+                leaf_batch_size,
+                kept_planes,
+                n_cells,
+                policy_stride,
+                has_pass_slot,
+                agg_trunk_sz,
+                legal_set,
+                infer,
+                variance,
             ) {
                 Ok(n) => n,
                 Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -834,7 +930,11 @@ pub(crate) fn play_one_move(
     // Move-level playout cap (orthogonal to game-level fast_prob).
     let (move_is_full_search, move_sims) = if ctx.full_search_prob > 0.0 {
         let full = rng.random::<f32>() < ctx.full_search_prob;
-        let sims = if full { ctx.n_sims_full } else { ctx.n_sims_quick };
+        let sims = if full {
+            ctx.n_sims_full
+        } else {
+            ctx.n_sims_quick
+        };
         (full, sims)
     } else {
         (true, ctx.game_sims)
@@ -844,11 +944,27 @@ pub(crate) fn play_one_move(
     tree.new_game(board.clone());
 
     let gumbel_state = match run_mcts_search(
-        tree, board, move_sims, ctx.leaf_batch_size, ctx.gumbel_mcts,
-        ctx.dirichlet_enabled, ctx.dirichlet_alpha, ctx.dirichlet_epsilon,
-        ctx.gumbel_m, ctx.c_visit, ctx.c_scale, running, rng,
-        kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set,
-        infer, variance,
+        tree,
+        board,
+        move_sims,
+        ctx.leaf_batch_size,
+        ctx.gumbel_mcts,
+        ctx.dirichlet_enabled,
+        ctx.dirichlet_alpha,
+        ctx.dirichlet_epsilon,
+        ctx.gumbel_m,
+        ctx.c_visit,
+        ctx.c_scale,
+        running,
+        rng,
+        kept_planes,
+        n_cells,
+        policy_stride,
+        has_pass_slot,
+        agg_trunk_sz,
+        legal_set,
+        infer,
+        variance,
     ) {
         McTSSearchResult::Completed(gs) => gs,
         McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
@@ -892,12 +1008,17 @@ pub(crate) fn play_one_move(
     // Accumulate MCTS health stats once per search (not in the inner sim loop).
     {
         let (depth, conc) = tree.last_search_stats();
-        accumulators.mcts_depth_accum.fetch_add((depth * 1_000_000.0) as u64, Ordering::Relaxed);
-        accumulators.mcts_conc_accum.fetch_add((conc * 1_000_000.0) as u64, Ordering::Relaxed);
-        accumulators.mcts_stat_count.fetch_add(1, Ordering::Relaxed);
         accumulators
-            .mcts_quiescence_fires
-            .fetch_add(tree.quiescence_fire_count.load(Ordering::Relaxed), Ordering::Relaxed);
+            .mcts_depth_accum
+            .fetch_add((depth * 1_000_000.0) as u64, Ordering::Relaxed);
+        accumulators
+            .mcts_conc_accum
+            .fetch_add((conc * 1_000_000.0) as u64, Ordering::Relaxed);
+        accumulators.mcts_stat_count.fetch_add(1, Ordering::Relaxed);
+        accumulators.mcts_quiescence_fires.fetch_add(
+            tree.quiescence_fire_count.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
     }
 
     // Phase B' Class-1 (frozen `inner.rs:1214`): snapshot the model version once per
@@ -940,7 +1061,11 @@ pub(crate) fn play_one_move(
                 // COUNTED by the R256 instrument (the one counted helper, shared with
                 // the solver hook so mechanism and instrument cannot drift).
                 MovePolicy::Ls(ls) => records::apply_forced_win_one_hot_ls_counted(
-                    board, ls, (wq, wr), ctx.forced_win_weight, agg_trunk_sz,
+                    board,
+                    ls,
+                    (wq, wr),
+                    ctx.forced_win_weight,
+                    agg_trunk_sz,
                     accumulators.uncovered_forced_win,
                 ),
             },
@@ -950,8 +1075,15 @@ pub(crate) fn play_one_move(
     // D-WS3 L1: native solver-in-loop SOFT visit-injection (default-OFF =
     // byte-identical hot path).
     let solver_fired = run_solver_hook(
-        board, &mut target_policy, &ctx, legal_set, policy_stride, agg_trunk_sz,
-        solver_counters, solver_fires, accumulators.uncovered_forced_win,
+        board,
+        &mut target_policy,
+        &ctx,
+        legal_set,
+        policy_stride,
+        agg_trunk_sz,
+        solver_counters,
+        solver_fires,
+        accumulators.uncovered_forced_win,
     );
 
     let record_full_search = move_is_full_search || forced_win_fired || solver_fired;
@@ -961,12 +1093,23 @@ pub(crate) fn play_one_move(
     // this population was being truncated by the coverage gate.
     if let MovePolicy::Ls(ls) = &target_policy {
         if ls.overflow.values().any(|&p| p > 0.0) {
-            accumulators.export_offwindow_mass_moves.fetch_add(1, Ordering::Relaxed);
+            accumulators
+                .export_offwindow_mass_moves
+                .fetch_add(1, Ordering::Relaxed);
         }
     }
 
     // ── Sample and apply move (ZOI-filtered legal set) ──
-    let Some(move_idx) = select_move(board, move_history, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng) else {
+    let Some(move_idx) = select_move(
+        board,
+        move_history,
+        &policy,
+        gumbel_state,
+        ctx,
+        agg_trunk_sz,
+        tree,
+        rng,
+    ) else {
         return MoveOutcome::Break;
     };
 
@@ -977,7 +1120,11 @@ pub(crate) fn play_one_move(
              SelfPlayRunner::new's graph arm (R255)",
         );
         if let Err(err) = record_position_graph_dispatch(
-            board, &target_policy, agg_trunk_sz, record_full_search, graph_records_vec,
+            board,
+            &target_policy,
+            agg_trunk_sz,
+            record_full_search,
+            graph_records_vec,
             visit_capacity,
         ) {
             // LAW-14: a target-integrity defect is RUN-FATAL — latch the typed
@@ -988,8 +1135,19 @@ pub(crate) fn play_one_move(
         }
     } else {
         record_position(
-            board, kept_planes, n_cells, agg_trunk_sz, ctx.is_fast_game, ctx.completed_q_values,
-            policy_stride, has_pass_slot, &target_policy, ctx.sym_idx, infer.sym_tables, record_full_search, records_vec,
+            board,
+            kept_planes,
+            n_cells,
+            agg_trunk_sz,
+            ctx.is_fast_game,
+            ctx.completed_q_values,
+            policy_stride,
+            has_pass_slot,
+            &target_policy,
+            ctx.sym_idx,
+            infer.sym_tables,
+            record_full_search,
+            records_vec,
             accumulators.gridls_zero_policy_rows,
             accumulators.k_cluster_histogram,
         );
@@ -999,7 +1157,9 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
     move_history.push((move_idx.0, move_idx.1));
-    accumulators.positions_generated.fetch_add(1, Ordering::Relaxed);
+    accumulators
+        .positions_generated
+        .fetch_add(1, Ordering::Relaxed);
     MoveOutcome::Played
 }
 
@@ -1024,9 +1184,13 @@ fn run_solver_hook(
         return false;
     }
     // Every move reaching here is "eligible" (the solver runs on every move).
-    solver_counters.moves_eligible.fetch_add(1, Ordering::Relaxed);
+    solver_counters
+        .moves_eligible
+        .fetch_add(1, Ordering::Relaxed);
     if ctx.seeded {
-        solver_counters.moves_eligible_seeded.fetch_add(1, Ordering::Relaxed);
+        solver_counters
+            .moves_eligible_seeded
+            .fetch_add(1, Ordering::Relaxed);
     }
     let cfg = TacticalConfig {
         cand_cap: 40,
@@ -1034,7 +1198,11 @@ fn run_solver_hook(
         // coverage gate gives them a ragged slot). DENSE (single-window): keep the
         // single-window guard so the solver only spends budget on the expressible
         // action space.
-        window_half: if legal_set { None } else { Some((agg_trunk_sz - 1) / 2) },
+        window_half: if legal_set {
+            None
+        } else {
+            Some((agg_trunk_sz - 1) / 2)
+        },
         // Quiet-move widening; < 0 → None (threat-only).
         neighbor_dist: if ctx.solver_neighbor_dist < 0 {
             None
@@ -1044,7 +1212,9 @@ fn run_solver_hook(
     };
     let proof = TacticalSolver::new(cfg).prove(board, ctx.solver_depth, ctx.solver_node_budget);
     if proof.budget_exhausted {
-        solver_counters.budget_exhausted.fetch_add(1, Ordering::Relaxed);
+        solver_counters
+            .budget_exhausted
+            .fetch_add(1, Ordering::Relaxed);
     }
     if proof.result != Outcome::Win {
         return false;
@@ -1067,23 +1237,34 @@ fn run_solver_hook(
         // Coverage-gated (the SAME counted helper as the O1 LS path — R256).
         MovePolicy::Ls(ls) => {
             let did = records::apply_forced_win_one_hot_ls_counted(
-                board, ls, (wq, wr), ctx.solver_visit_weight, agg_trunk_sz, uncovered_forced_win,
+                board,
+                ls,
+                (wq, wr),
+                ctx.solver_visit_weight,
+                agg_trunk_sz,
+                uncovered_forced_win,
             );
             // Off-window = injected into the ragged OVERFLOW target: the win maps
             // outside the dense global window (>= policy_stride).
             let (bcq, bcr) = board.window_center();
             let half = (agg_trunk_sz - 1) / 2;
-            let off = did && Board::window_flat_idx_at_geom(wq, wr, bcq, bcr, agg_trunk_sz, half) >= policy_stride;
+            let off = did
+                && Board::window_flat_idx_at_geom(wq, wr, bcq, bcr, agg_trunk_sz, half)
+                    >= policy_stride;
             (did, off)
         }
     };
     if injected {
         solver_counters.injected.fetch_add(1, Ordering::Relaxed);
         if ctx.seeded {
-            solver_counters.injected_seeded.fetch_add(1, Ordering::Relaxed);
+            solver_counters
+                .injected_seeded
+                .fetch_add(1, Ordering::Relaxed);
         }
         if off_window {
-            solver_counters.injected_offwindow.fetch_add(1, Ordering::Relaxed);
+            solver_counters
+                .injected_offwindow
+                .fetch_add(1, Ordering::Relaxed);
         }
         *solver_fires += 1;
     }
@@ -1143,7 +1324,11 @@ fn select_move(
     // Move selection: Gumbel winner or visit-count sampling. D-WS3V3 gates the
     // exploration on ply RELATIVE to game start.
     let use_gumbel_winner = gumbel_state.is_some()
-        && relative_explore_gate(board.ply.index() as usize, ctx.game_start_ply, ctx.gumbel_explore_moves);
+        && relative_explore_gate(
+            board.ply.index() as usize,
+            ctx.game_start_ply,
+            ctx.gumbel_explore_moves,
+        );
     let move_idx = if use_gumbel_winner {
         let mut gs = gumbel_state.unwrap();
         let best_pool = gs.best_action_pool_idx(tree);

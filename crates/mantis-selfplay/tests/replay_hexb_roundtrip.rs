@@ -29,7 +29,12 @@ fn unique_path(stem: &str) -> std::path::PathBuf {
 /// v6 stride facts, computed from the spec (used for hand-written headers).
 fn v6_strides() -> (usize, usize, usize, usize) {
     let s = lookup_or_panic("v6");
-    (s.state_stride(), s.chain_stride(), s.policy_stride(), s.aux_stride())
+    (
+        s.state_stride(),
+        s.chain_stride(),
+        s.policy_stride(),
+        s.aux_stride(),
+    )
 }
 
 /// v7-format per-row byte size (no position_index, no value_target_valid).
@@ -80,7 +85,10 @@ fn o1_aux_and_chain_f16_bits_roundtrip() {
     }
     assert_eq!(buf2.chain_planes[0], f16::from_f32(0.5).to_bits());
     assert_eq!(buf2.chain_planes[100], f16::from_f32(1.0).to_bits());
-    assert_eq!(buf2.chain_planes[buf2.encoding.n_cells()], f16::from_f32(0.25).to_bits());
+    assert_eq!(
+        buf2.chain_planes[buf2.encoding.n_cells()],
+        f16::from_f32(0.25).to_bits()
+    );
     assert_eq!(buf2.is_full_search_at(0), 0);
     assert_eq!(buf2.position_indices[0], 42);
     let _ = std::fs::remove_file(path);
@@ -100,8 +108,16 @@ fn o1_value_target_valid_v9_roundtrip() {
     buf2.value_target_valid[0] = 0; // poison — load must WRITE per-row
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 2);
-    assert_eq!(buf2.value_target_valid_at(0), 1, "uncapped row reloads as supervise");
-    assert_eq!(buf2.value_target_valid_at(1), 0, "ply-capped row stays masked");
+    assert_eq!(
+        buf2.value_target_valid_at(0),
+        1,
+        "uncapped row reloads as supervise"
+    );
+    assert_eq!(
+        buf2.value_target_valid_at(1),
+        0,
+        "ply-capped row stays masked"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -121,7 +137,11 @@ fn o1_position_index_multirow_roundtrip() {
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 5);
     for i in 0..5u16 {
-        assert_eq!(buf2.position_indices[i as usize], i * 7 + 3, "position_index mismatch row {i}");
+        assert_eq!(
+            buf2.position_indices[i as usize],
+            i * 7 + 3,
+            "position_index mismatch row {i}"
+        );
     }
     let _ = std::fs::remove_file(path);
 }
@@ -206,7 +226,10 @@ fn o4_v6_backward_compat() {
     assert_eq!(n, 5);
     assert_eq!(buf.size(), 5);
     for slot in 0..5 {
-        assert_eq!(buf.outcomes[slot], slot as f32, "v6 compat outcome mismatch at {slot}");
+        assert_eq!(
+            buf.outcomes[slot], slot as f32,
+            "v6 compat outcome mismatch at {slot}"
+        );
     }
     let _ = std::fs::remove_file(path);
 }
@@ -223,7 +246,10 @@ fn o5_v5_hard_reject() {
     }
     let mut buf = ReplayBuffer::new(10, "v6");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
-    assert!(err.contains("not supported"), "expected 'not supported', got: {err}");
+    assert!(
+        err.contains("not supported"),
+        "expected 'not supported', got: {err}"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -243,8 +269,15 @@ fn o6_all_grid_encodings_round_trip() {
         let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
         assert_eq!(n, 10, "encoding {name}: expected 10 loaded");
         for slot in 0..10 {
-            assert_eq!(buf2.outcomes[slot], slot as f32, "{name} outcome mismatch at {slot}");
-            assert_eq!(buf2.is_full_search_at(slot), (slot % 3 == 0) as u8, "{name} ifs mismatch at {slot}");
+            assert_eq!(
+                buf2.outcomes[slot], slot as f32,
+                "{name} outcome mismatch at {slot}"
+            );
+            assert_eq!(
+                buf2.is_full_search_at(slot),
+                (slot % 3 == 0) as u8,
+                "{name} ifs mismatch at {slot}"
+            );
         }
         let _ = std::fs::remove_file(&path);
     }
@@ -282,8 +315,14 @@ fn o8_v6_file_into_v6w25_buffer_rejects() {
 
     let mut reader = ReplayBuffer::new(10, "v6w25");
     let err = reader.load_from_path(path.to_str().unwrap()).unwrap_err();
-    assert!(err.contains("encoding mismatch"), "expected 'encoding mismatch': {err}");
-    assert!(err.contains("wire_signature"), "expected 'wire_signature' framing: {err}");
+    assert!(
+        err.contains("encoding mismatch"),
+        "expected 'encoding mismatch': {err}"
+    );
+    assert!(
+        err.contains("wire_signature"),
+        "expected 'wire_signature' framing: {err}"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -299,8 +338,14 @@ fn o8_v6_file_into_gnn_buffer_rejects() {
     // guard rejects ((0,..) != (8,..)).
     let mut reader = ReplayBuffer::new(8, "gnn_axis_v1");
     let err = reader.load_from_path(path.to_str().unwrap()).unwrap_err();
-    assert!(err.contains("encoding mismatch"), "expected 'encoding mismatch': {err}");
-    assert!(err.contains("wire_signature"), "expected 'wire_signature' framing: {err}");
+    assert!(
+        err.contains("encoding mismatch"),
+        "expected 'encoding mismatch': {err}"
+    );
+    assert!(
+        err.contains("wire_signature"),
+        "expected 'wire_signature' framing: {err}"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -322,7 +367,10 @@ fn o10_unknown_encoding_rejects() {
     }
     let mut buf = ReplayBuffer::new(10, "v6");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
-    assert!(err.contains("unknown encoding"), "expected 'unknown encoding': {err}");
+    assert!(
+        err.contains("unknown encoding"),
+        "expected 'unknown encoding': {err}"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -344,7 +392,10 @@ fn o11_n_planes_header_guard() {
     let mut buf = ReplayBuffer::new(10, "v6");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("n_planes"), "expected n_planes framing: {err}");
-    assert!(err.contains("corrupted"), "expected 'corrupted' framing: {err}");
+    assert!(
+        err.contains("corrupted"),
+        "expected 'corrupted' framing: {err}"
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -374,9 +425,17 @@ fn o12_hexb_v9_byte_golden_load_and_resave_identity() {
     let expect_ifs = [1u8, 0, 1, 0];
     for i in 0..4 {
         assert_eq!(buf.outcomes[i], expect_outcome[i], "outcome[{i}]");
-        assert_eq!(buf.is_full_search_at(i), expect_ifs[i], "is_full_search[{i}]");
+        assert_eq!(
+            buf.is_full_search_at(i),
+            expect_ifs[i],
+            "is_full_search[{i}]"
+        );
         assert_eq!(buf.position_indices[i], 0, "position_index[{i}] default");
-        assert_eq!(buf.value_target_valid_at(i), 1, "value_target_valid[{i}] default");
+        assert_eq!(
+            buf.value_target_valid_at(i),
+            1,
+            "value_target_valid[{i}] default"
+        );
     }
 
     // Re-save the loaded content → byte-identical to the frozen golden (absolute
@@ -384,7 +443,10 @@ fn o12_hexb_v9_byte_golden_load_and_resave_identity() {
     let resave = unique_path("o12_resave");
     buf.save_to_path(resave.to_str().unwrap()).unwrap();
     let resaved_bytes = std::fs::read(&resave).unwrap();
-    assert_eq!(resaved_bytes, golden_bytes, "new-engine re-save must reproduce the frozen bytes");
+    assert_eq!(
+        resaved_bytes, golden_bytes,
+        "new-engine re-save must reproduce the frozen bytes"
+    );
     let _ = std::fs::remove_file(resave);
 }
 
@@ -395,7 +457,12 @@ fn o34a_f16_bits_survive_save_load_no_roundtrip() {
     use mantis_selfplay::replay::push_config::PushSingleConfig;
 
     let spec = lookup_or_panic("v6");
-    let (st, ch, po, au) = (spec.state_stride(), spec.chain_stride(), spec.policy_stride(), spec.aux_stride());
+    let (st, ch, po, au) = (
+        spec.state_stride(),
+        spec.chain_stride(),
+        spec.policy_stride(),
+        spec.aux_stride(),
+    );
 
     // Craft adversarial f16 bit patterns: NaN, subnormal, -0, max-normal.
     let patterns: [u16; 4] = [0x7e00, 0x0001, 0x8000, 0x7bff];
@@ -437,7 +504,10 @@ fn o34a_f16_bits_survive_save_load_no_roundtrip() {
     buf2.load_from_path(path.to_str().unwrap()).unwrap();
     for (i, &bits) in patterns.iter().enumerate() {
         assert_eq!(buf2.states[i], bits, "post save/load state bit pattern {i}");
-        assert_eq!(buf2.chain_planes[i], bits, "post save/load chain bit pattern {i}");
+        assert_eq!(
+            buf2.chain_planes[i], bits,
+            "post save/load chain bit pattern {i}"
+        );
     }
     let _ = std::fs::remove_file(path);
 }

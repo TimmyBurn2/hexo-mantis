@@ -37,7 +37,9 @@ impl ReplayBuffer {
         r.read_exact(&mut buf4).map_err(|e| format!("{e}"))?;
         let magic = u32::from_le_bytes(buf4);
         if magic != HEXB_MAGIC {
-            return Err(format!("invalid magic: expected 0x48455842 (HEXB), got 0x{magic:08X}"));
+            return Err(format!(
+                "invalid magic: expected 0x48455842 (HEXB), got 0x{magic:08X}"
+            ));
         }
 
         r.read_exact(&mut buf4).map_err(|e| format!("{e}"))?;
@@ -63,7 +65,9 @@ impl ReplayBuffer {
             r.read_exact(&mut buf4).map_err(|e| format!("{e}"))?;
             let name_len = u32::from_le_bytes(buf4) as usize;
             if name_len > 256 {
-                return Err(format!("HEXB v{version} encoding_name_len={name_len} exceeds maximum 256"));
+                return Err(format!(
+                    "HEXB v{version} encoding_name_len={name_len} exceeds maximum 256"
+                ));
             }
             let mut name_buf = vec![0u8; name_len];
             r.read_exact(&mut name_buf).map_err(|e| format!("{e}"))?;
@@ -104,8 +108,9 @@ impl ReplayBuffer {
                 "HEXB file declares unknown encoding '{file_encoding_name}'. \
                  Registered encodings: {:?}",
                 {
-                    let mut known: Vec<&str> =
-                        mantis_encoding::registry::all_specs().map(|s| s.name).collect();
+                    let mut known: Vec<&str> = mantis_encoding::registry::all_specs()
+                        .map(|s| s.name)
+                        .collect();
                     known.sort_unstable();
                     known
                 }
@@ -155,7 +160,8 @@ impl ReplayBuffer {
         // v6/v7 entry: state + chain + policy + outcome(4) + game_id(8) + weight(2)
         //              + ownership + winning_line + is_full_search(1)
         // v8 entry: above + position_index(2); v9 entry: above + value_target_valid(1)
-        let v7_entry_bytes = state_bytes + chain_bytes + policy_bytes + 4 + 8 + 2 + aux_stride + aux_stride + 1;
+        let v7_entry_bytes =
+            state_bytes + chain_bytes + policy_bytes + 4 + 8 + 2 + aux_stride + aux_stride + 1;
         let entry_bytes = match version {
             9 => v7_entry_bytes + 2 + 1,
             8 => v7_entry_bytes + 2,
@@ -169,7 +175,8 @@ impl ReplayBuffer {
             let mut skip_buf = vec![0u8; 8192.min(skip_bytes)];
             while remaining > 0 {
                 let chunk = remaining.min(skip_buf.len());
-                r.read_exact(&mut skip_buf[..chunk]).map_err(|e| format!("{e}"))?;
+                r.read_exact(&mut skip_buf[..chunk])
+                    .map_err(|e| format!("{e}"))?;
                 remaining -= chunk;
             }
         }
@@ -329,7 +336,10 @@ mod tests {
         let n = reader
             .load_from_path(path.to_str().unwrap())
             .expect("name-divergent buffer with matching wire_signature must LOAD");
-        assert_eq!(n, 1, "the v6 file must load into the v6_alias buffer (sig == v6.sig)");
+        assert_eq!(
+            n, 1,
+            "the v6 file must load into the v6_alias buffer (sig == v6.sig)"
+        );
 
         let _ = std::fs::remove_file(path);
     }

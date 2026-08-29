@@ -90,7 +90,12 @@ fn spawn_healthy_graph_producer(
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
@@ -109,7 +114,15 @@ fn spawn_healthy_graph_producer(
 fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capacity() {
     let spec = lookup_or_panic("gnn_axis_v1");
     let capacity = derived_visit_capacity(
-        PROD_SIMS, 0, 0.0, PROD_FAST_SIMS, 0.0, 0, 0, PROD_LEAF_BATCH, false,
+        PROD_SIMS,
+        0,
+        0.0,
+        PROD_FAST_SIMS,
+        0.0,
+        0,
+        0,
+        PROD_LEAF_BATCH,
+        false,
     )
     .expect("the production sims regime must have a derivable capacity");
 
@@ -136,8 +149,11 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     .expect("production-parameter gnn runner constructs");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer =
-        spawn_healthy_graph_producer(runner.graph_producer(), spec.policy_logit_count, served.clone());
+    let producer = spawn_healthy_graph_producer(
+        runner.graph_producer(),
+        spec.policy_logit_count,
+        served.clone(),
+    );
 
     runner.start();
     // Wait on the RECORDS, not on `games_completed`. Two race modes die here rather than
@@ -167,8 +183,14 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(served.load(Ordering::Relaxed) > 0, "no graph inference served — vacuous drive");
-    assert!(defect.is_none(), "a HEALTHY production game latched a fatal defect: {defect:?}");
+    assert!(
+        served.load(Ordering::Relaxed) > 0,
+        "no graph inference served — vacuous drive"
+    );
+    assert!(
+        defect.is_none(),
+        "a HEALTHY production game latched a fatal defect: {defect:?}"
+    );
     assert!(
         snap.games_completed >= 1,
         "no game completed inside the budget — this drive would then be measuring a partial \

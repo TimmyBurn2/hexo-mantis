@@ -54,7 +54,11 @@ fn encoding_name_v6_resolves_to_2888_362() {
     let runner = SelfPlayRunner::new(cfg_with_encoding(Some("v6")))
         .expect("v6 must resolve via the registry");
     assert_eq!(runner.feature_len(), 2888, "v6 state_stride = 8×361");
-    assert_eq!(runner.policy_len(), 362, "v6 policy_stride = 361 + pass slot");
+    assert_eq!(
+        runner.policy_len(),
+        362,
+        "v6 policy_stride = 361 + pass slot"
+    );
     assert!(!runner.is_running());
 }
 

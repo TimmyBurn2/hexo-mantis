@@ -211,21 +211,21 @@ pub struct HexgBuffer {
     pub visit_capacity: usize,
 
     // ── fixed-slot record storage (SoA) ──
-    pub stones_qr: Vec<i16>,     // flat [cap * MAX_STONES * 2]
-    pub stone_players: Vec<i8>,  // flat [cap * MAX_STONES]
-    pub n_stones: Vec<u16>,      // [cap]
-    pub visit_qr: Vec<i16>,      // flat [cap * visit_capacity * 2]
-    pub visit_probs: Vec<f32>,   // flat [cap * visit_capacity]
-    pub n_visits: Vec<u16>,      // [cap]
-    pub current_player: Vec<i8>, // [cap]
+    pub stones_qr: Vec<i16>,      // flat [cap * MAX_STONES * 2]
+    pub stone_players: Vec<i8>,   // flat [cap * MAX_STONES]
+    pub n_stones: Vec<u16>,       // [cap]
+    pub visit_qr: Vec<i16>,       // flat [cap * visit_capacity * 2]
+    pub visit_probs: Vec<f32>,    // flat [cap * visit_capacity]
+    pub n_visits: Vec<u16>,       // [cap]
+    pub current_player: Vec<i8>,  // [cap]
     pub moves_remaining: Vec<u8>, // [cap]
-    pub ply_index: Vec<u16>,     // [cap]
-    pub is_full_search: Vec<u8>, // [cap]
-    pub outcomes: Vec<f32>,      // [cap]
-    pub value_valid: Vec<u8>,    // [cap]
-    pub game_length: Vec<u16>,   // [cap]
-    pub game_ids: Vec<i64>,      // [cap]; -1 = untagged
-    pub weights: Vec<u16>,       // f16 bits; [cap]
+    pub ply_index: Vec<u16>,      // [cap]
+    pub is_full_search: Vec<u8>,  // [cap]
+    pub outcomes: Vec<f32>,       // [cap]
+    pub value_valid: Vec<u8>,     // [cap]
+    pub game_length: Vec<u16>,    // [cap]
+    pub game_ids: Vec<i64>,       // [cap]; -1 = untagged
+    pub weights: Vec<u16>,        // f16 bits; [cap]
 
     pub weight_schedule: WeightSchedule,
     pub next_game_id: i64,
@@ -259,8 +259,12 @@ impl HexgBuffer {
                  (R255/ADJ-D34)"
             ));
         }
-        let win_length = spec.win_length.expect("validate guarantees win_length for a graph spec") as u8;
-        let radius = spec.graph_radius.expect("validate guarantees graph_radius for a graph spec") as u16;
+        let win_length =
+            spec.win_length
+                .expect("validate guarantees win_length for a graph spec") as u8;
+        let radius =
+            spec.graph_radius
+                .expect("validate guarantees graph_radius for a graph spec") as u16;
         let contract_version = spec
             .contract_version
             .expect("validate guarantees contract_version for a graph spec");

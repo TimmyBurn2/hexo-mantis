@@ -131,7 +131,12 @@ fn spawn_graph_producer(
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
@@ -253,13 +258,19 @@ fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
         msg.contains("InferenceSeamFailure"),
         "the variant name must survive seam → latch → drain face verbatim: {msg}"
     );
-    assert!(msg.contains("graph"), "the failing ARM must ride the message: {msg}");
+    assert!(
+        msg.contains("graph"),
+        "the failing ARM must ride the message: {msg}"
+    );
     assert!(
         msg.contains(INJECTED_REASON),
         "the waiter's reason must ride VERBATIM — dropping it is §7.3, the whole point of \
          carrying it: {msg}"
     );
-    assert!(halted, "store-then-halt: running must be false once the latch stores (LAW-14)");
+    assert!(
+        halted,
+        "store-then-halt: running must be false once the latch stores (LAW-14)"
+    );
     assert_eq!(
         snap.inference_failures_total, 1,
         "the SEAM counter must count this fire (LAW-18)"
@@ -298,17 +309,32 @@ fn injected_dense_inference_failure_dies_loud_and_named_at_the_seam() {
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(served.load(Ordering::Relaxed) >= SERVE_OK_BEFORE_FAILURE, "vacuous drive");
+    assert!(
+        served.load(Ordering::Relaxed) >= SERVE_OK_BEFORE_FAILURE,
+        "vacuous drive"
+    );
     let msg = msg.expect(
         "an injected DENSE inference failure never latched — the dense arm still skips the \
          batch silently. The dense leg matters on its own: it is the arm the R250 absence \
          rule would have wrongly excused this counter from (R256)",
     );
-    assert!(msg.contains("InferenceSeamFailure"), "variant name must ride: {msg}");
-    assert!(msg.contains("dense"), "the failing ARM must ride the message: {msg}");
+    assert!(
+        msg.contains("InferenceSeamFailure"),
+        "variant name must ride: {msg}"
+    );
+    assert!(
+        msg.contains("dense"),
+        "the failing ARM must ride the message: {msg}"
+    );
     assert!(halted, "store-then-halt (LAW-14)");
-    assert_eq!(snap.inference_failures_total, 1, "the seam counter must count the dense fire");
-    assert_eq!(snap.target_integrity_defects, 0, "wrong counter ticked (M-SEAM-3)");
+    assert_eq!(
+        snap.inference_failures_total, 1,
+        "the seam counter must count the dense fire"
+    );
+    assert_eq!(
+        snap.target_integrity_defects, 0,
+        "wrong counter ticked (M-SEAM-3)"
+    );
 }
 
 // ── The discriminator: a drain shutdown is NOT a defect ──────────────────────────────
@@ -375,13 +401,19 @@ fn dense_drain_shutdown_is_not_an_inference_failure() {
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(blocked, "vacuous drive: the producer never parked holding a batch");
+    assert!(
+        blocked,
+        "vacuous drive: the producer never parked holding a batch"
+    );
     assert_eq!(
         runner.stats_snapshot().inference_failures_total,
         0,
         "a clean dense stop was reported as an inference failure (M-SEAM-2)"
     );
-    assert!(runner.fatal_defect().is_none(), "a clean stop latched a fatal defect");
+    assert!(
+        runner.fatal_defect().is_none(),
+        "a clean stop latched a fatal defect"
+    );
 }
 
 // ── The discriminator: a queue closed by ANYTHING BUT our own stop (R276(a)) ─────────
@@ -423,11 +455,17 @@ fn an_inference_server_death_that_closes_the_queue_is_a_failure_not_a_shutdown()
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(blocked, "vacuous drive: the producer never parked holding a batch");
+    assert!(
+        blocked,
+        "vacuous drive: the producer never parked holding a batch"
+    );
     let msg = msg.expect(
         "a queue closed by something other than `stop()` was treated as a clean shutdown —          a dying inference server can therefore park every worker in a silent batch-skip          forever, with `running` still true and nothing raised. This is the F-816-9 degrade          re-entering through the shutdown door (R276(a))",
     );
-    assert!(msg.contains("InferenceSeamFailure"), "variant name must ride: {msg}");
+    assert!(
+        msg.contains("InferenceSeamFailure"),
+        "variant name must ride: {msg}"
+    );
     assert_eq!(
         snap.inference_failures_total, 1,
         "the seam counter must count a server-death failure like any other"

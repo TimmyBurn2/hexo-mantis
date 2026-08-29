@@ -59,19 +59,34 @@ fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
 #[test]
 fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
     // standard-only: 50 + 8 - 1 = 57.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false), Ok(57));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false),
+        Ok(57)
+    );
     // standard_sims wins over n_simulations when set: 40 + 8 - 1 = 47.
-    assert_eq!(derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, false), Ok(47));
+    assert_eq!(
+        derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, false),
+        Ok(47)
+    );
     // PCR-armed: max(50, 75, 600) + 8 - 1 = 607.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, false), Ok(607));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, false),
+        Ok(607)
+    );
     // fast-armed: max(50, 500) + 8 - 1 = 507.
-    assert_eq!(derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, false), Ok(507));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, false),
+        Ok(507)
+    );
 }
 
 #[test]
 fn derivation_ignores_a_defined_but_unarmed_arm() {
     // [M-O] `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, false), Ok(57));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, false),
+        Ok(57)
+    );
     // Quick/full carrying huge values while full_search_prob == 0.0: still 57.
     assert_eq!(
         derived_visit_capacity(50, 0, 0.0, 50, 0.0, 70_000, 70_000, 8, false),
@@ -155,13 +170,25 @@ fn boot_refuses_a_regime_over_the_format_ceiling() {
 fn completed_q_graph_refused_while_derived_capacity_below_child_cap() {
     // 50 + 8 - 1 = 57 < MAX_CHILDREN_PER_NODE (192): child-count-wide support
     // cannot fit — refuse, naming both values and the offending key.
-    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..graph_cfg() };
+    let cfg = SelfPlayRunnerConfig {
+        completed_q_values: true,
+        ..graph_cfg()
+    };
     let err = SelfPlayRunner::new(cfg)
         .err()
         .expect("completed-Q on graph must refuse while derived capacity < 192");
-    assert!(err.contains("192"), "must name MAX_CHILDREN_PER_NODE=192: {err}");
-    assert!(err.contains("57"), "must name the derived capacity 57: {err}");
-    assert!(err.contains("completed_q"), "must name the offending key: {err}");
+    assert!(
+        err.contains("192"),
+        "must name MAX_CHILDREN_PER_NODE=192: {err}"
+    );
+    assert!(
+        err.contains("57"),
+        "must name the derived capacity 57: {err}"
+    );
+    assert!(
+        err.contains("completed_q"),
+        "must name the offending key: {err}"
+    );
 }
 
 #[test]
@@ -170,7 +197,10 @@ fn completed_q_graph_admitted_once_derived_capacity_covers_child_cap() {
     // covers MAX_CHILDREN_PER_NODE (192) — the record physically holds
     // child-count-wide support, so the refusal would be vacuous and must not fire
     // (the old guard's own "retirement-until-raised" condition, realized).
-    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..pcr_600_75_cfg() };
+    let cfg = SelfPlayRunnerConfig {
+        completed_q_values: true,
+        ..pcr_600_75_cfg()
+    };
     assert!(
         SelfPlayRunner::new(cfg).is_ok(),
         "completed-Q on graph must ADMIT once the derived capacity covers \

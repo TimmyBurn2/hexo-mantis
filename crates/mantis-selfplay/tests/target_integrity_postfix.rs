@@ -70,8 +70,16 @@ fn spread_board() -> Board {
 /// ls carrying `masses[i]` at the i-th legal coord (dense/overflow routed by flat).
 fn ls_on_first_legal(board: &Board, masses: &[f32]) -> LegalSetPolicy {
     let legal = board.legal_moves();
-    assert!(legal.len() >= masses.len(), "board has {} legal, need {}", legal.len(), masses.len());
-    let mut ls = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    assert!(
+        legal.len() >= masses.len(),
+        "board has {} legal, need {}",
+        legal.len(),
+        masses.len()
+    );
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     for (i, &m) in masses.iter().enumerate() {
         let (q, r) = legal[i];
         let flat = board.window_flat_idx(q, r);
@@ -84,7 +92,10 @@ fn ls_on_first_legal(board: &Board, masses: &[f32]) -> LegalSetPolicy {
     ls
 }
 
-fn record(board: &Board, ls: &LegalSetPolicy) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
+fn record(
+    board: &Board,
+    ls: &LegalSetPolicy,
+) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
     record_position_graph(board, ls, TRUNK, 1, 2, 3, true, MAX_VISITS)
 }
 
@@ -97,18 +108,27 @@ fn deg_4a_half_mass_raises_mass_not_unity() {
     let err = record(&board, &ls).expect_err("a Σ=0.5 target must be unconstructible");
     match err {
         TargetIntegrityError::MassNotUnity { sum, .. } => {
-            assert!((sum - 0.5).abs() < 1e-6, "Display/fields must carry the sum, got {sum}");
+            assert!(
+                (sum - 0.5).abs() < 1e-6,
+                "Display/fields must carry the sum, got {sum}"
+            );
         }
         other => panic!("expected MassNotUnity, got {other} — the order-arms drifted"),
     }
-    assert!(err_text(&record(&board, &ls)).contains("0.5"), "Display must print the sum");
+    assert!(
+        err_text(&record(&board, &ls)).contains("0.5"),
+        "Display must print the sum"
+    );
 }
 
 #[test]
 fn deg_4b_all_zero_ls_raises_empty_target() {
     let board = wide_board();
     let n_legal = board.legal_moves().len();
-    let ls = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let ls = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     let err = record(&board, &ls).expect_err("an all-zero target must be unconstructible");
     match err {
         TargetIntegrityError::EmptyTarget { n_legal: n, .. } => {
@@ -138,7 +158,10 @@ fn deg_4c_one_nan_among_valid_raises_non_finite_mass_not_unity() {
         other => panic!("expected MassNotUnity with a non-finite sum, got {other}"),
     }
     let text = err_text(&record(&board, &ls));
-    assert!(text.contains("NaN"), "Display must print the non-finite sum verbatim: {text}");
+    assert!(
+        text.contains("NaN"),
+        "Display must print the non-finite sum verbatim: {text}"
+    );
 }
 
 #[test]
@@ -157,7 +180,9 @@ fn deg_4c_all_nan_ls_raises_non_finite_mass_not_unity_not_empty_target() {
     }
 }
 
-fn err_text(res: &Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError>) -> String {
+fn err_text(
+    res: &Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError>,
+) -> String {
     match res {
         Err(e) => format!("{e}"),
         Ok(_) => panic!("expected an error"),
@@ -175,14 +200,22 @@ fn s2a_record_carries_every_ls_cell_by_coord() {
         .iter()
         .find(|&&(q, r)| board.window_flat_idx(q, r) < NA)
         .expect("in-window legal cell");
-    let mut ls = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     ls.dense[board.window_flat_idx(in_cell.0, in_cell.1)] = 0.3;
     ls.overflow.insert((28, 0), 0.7); // off-window mass — M-J's exact victim
 
     let rec = record(&board, &ls).expect("a full-mass target must record");
     let got: std::collections::HashMap<(i16, i16), f32> =
         rec.visits.iter().map(|&(q, r, p)| ((q, r), p)).collect();
-    assert_eq!(got.len(), 2, "exactly the two nonzero cells stored, got {:?}", rec.visits);
+    assert_eq!(
+        got.len(),
+        2,
+        "exactly the two nonzero cells stored, got {:?}",
+        rec.visits
+    );
     assert!(
         (got[&(in_cell.0 as i16, in_cell.1 as i16)] - 0.3).abs() < 1e-6,
         "in-window cell mass must ride by coord"
@@ -201,7 +234,11 @@ fn s2b_admits_exactly_128_mass_cells() {
     let masses = vec![1.0f32 / 128.0; 128];
     let ls = ls_on_first_legal(&board, &masses);
     let rec = record(&board, &ls).expect("128 cells == MAX_VISITS must be admitted");
-    assert_eq!(rec.visits.len(), 128, "all 128 cells stored, none truncated");
+    assert_eq!(
+        rec.visits.len(),
+        128,
+        "all 128 cells stored, none truncated"
+    );
 }
 
 #[test]
@@ -214,7 +251,10 @@ fn s2b_refuses_129_mass_cells_with_the_typed_error() {
     match err {
         TargetIntegrityError::VisitSlotsExceeded { n, max, .. } => {
             assert_eq!(n, 129, "the error must carry the offending count");
-            assert_eq!(max, 128, "the error must carry the capacity the record was built against");
+            assert_eq!(
+                max, 128,
+                "the error must carry the capacity the record was built against"
+            );
         }
         other => panic!("expected VisitSlotsExceeded, got {other}"),
     }
@@ -228,9 +268,15 @@ fn s2b_zero_visit_prior_fallback_on_a_wide_root_raises_visit_slots_exceeded() {
     // evidences inference failure, and raising is CORRECT.
     let board = wide_board();
     let legal = board.legal_moves();
-    assert!(legal.len() > 192, "need >192 legal so the expand caps at 192 children");
+    assert!(
+        legal.len() > 192,
+        "need >192 legal so the expand caps at 192 children"
+    );
     let p = 1.0f32 / legal.len() as f32;
-    let mut prior = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut prior = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     for &(q, r) in &legal {
         let flat = board.window_flat_idx(q, r);
         if flat < NA {
@@ -245,7 +291,10 @@ fn s2b_zero_visit_prior_fallback_on_a_wide_root_raises_visit_slots_exceeded() {
     assert_eq!(leaves.len(), 1);
     let centers = vec![board.window_center()];
     tree.expand_and_backup_ls_at(&[prior], &[0.0f32], &centers, TRUNK);
-    assert!(tree.pool[0].n_children as usize > 128, "root must hold >128 children");
+    assert!(
+        tree.pool[0].n_children as usize > 128,
+        "root must hold >128 children"
+    );
 
     let ls = tree.get_policy_ls(1.0, NA); // zero-visit → prior fallback, >128 cells
     let err = record(&board, &ls).expect_err("a >128-cell prior fallback must raise");
@@ -273,7 +322,10 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
     );
     // A real (tiny) search so the export is a genuine visit distribution.
     let p = 1.0f32 / legal.len() as f32;
-    let mut prior = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut prior = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     for &(q, r) in &legal {
         prior.dense[board.window_flat_idx(q, r)] = p;
     }
@@ -300,9 +352,15 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
         .expect("full-arm record");
     let rec_quick = record_position_graph(&board, &ls, TRUNK, 1, 2, 3, false, MAX_VISITS)
         .expect("quick-arm record");
-    assert_eq!(rec_full.visits, rec_quick.visits, "the visit target must be flag-independent");
+    assert_eq!(
+        rec_full.visits, rec_quick.visits,
+        "the visit target must be flag-independent"
+    );
     let sum: f64 = rec_quick.visits.iter().map(|&(_, _, p)| f64::from(p)).sum();
-    assert!((sum - 1.0).abs() < 1e-4, "the is_full_search=false row must carry FULL mass");
+    assert!(
+        (sum - 1.0).abs() < 1e-4,
+        "the is_full_search=false row must carry FULL mass"
+    );
     assert!(rec_full.is_full_search && !rec_quick.is_full_search);
 
     // Buffer round-trip: the flag rides push → record_at verbatim.
@@ -334,7 +392,10 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
         ..Default::default()
     })
     .expect("runner constructs");
-    assert!(runner.fatal_defect().is_none(), "fresh runner carries no defect");
+    assert!(
+        runner.fatal_defect().is_none(),
+        "fresh runner carries no defect"
+    );
     assert_eq!(
         runner.stats_snapshot().target_integrity_defects,
         0,
@@ -343,7 +404,11 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
 
     runner.start();
     assert!(runner.is_running());
-    let err = TargetIntegrityError::MassNotUnity { sum: 0.5, ply_index: 3, n_cells: 7 };
+    let err = TargetIntegrityError::MassNotUnity {
+        sum: 0.5,
+        ply_index: 3,
+        n_cells: 7,
+    };
     runner.store_fatal_defect(err.to_string());
 
     assert!(
@@ -359,7 +424,11 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
         "the VARIANT NAME must reach the supervisor-facing surface (M-N kills this): {msg}"
     );
     assert!(msg.contains("0.5"), "the Display fields must ride: {msg}");
-    assert_eq!(runner.stats_snapshot().target_integrity_defects, 1, "latch fire-count == 1");
+    assert_eq!(
+        runner.stats_snapshot().target_integrity_defects,
+        1,
+        "latch fire-count == 1"
+    );
     runner.stop();
 }
 
@@ -375,7 +444,11 @@ fn splitmix64_step(s: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
-fn spawn_dense_producer(queue: DenseQueue, stride: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
+fn spawn_dense_producer(
+    queue: DenseQueue,
+    stride: usize,
+    served: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_batch(2, 5);
         if batch.is_empty() {
@@ -460,7 +533,8 @@ fn ctr_gridls_zero_policy_rows_fires_on_a_dispersed_ls_run() {
         "the counter must be VISIBLE at 0 before any position records (LAW-18 idle posture)"
     );
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_dense_producer(runner.dense_producer(), runner.policy_len(), served.clone());
+    let producer =
+        spawn_dense_producer(runner.dense_producer(), runner.policy_len(), served.clone());
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(300);
@@ -475,7 +549,10 @@ fn ctr_gridls_zero_policy_rows_fires_on_a_dispersed_ls_run() {
     }
     runner.stop();
     producer.join().expect("producer exits");
-    assert!(served.load(Ordering::Relaxed) > 0, "no inference served — vacuous drive");
+    assert!(
+        served.load(Ordering::Relaxed) > 0,
+        "no inference served — vacuous drive"
+    );
     assert!(
         fired >= 1,
         "gridls_zero_policy_rows never fired across the dispersed drive — the §3.5 \

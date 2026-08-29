@@ -25,7 +25,12 @@ use super::{GraphTargets, HexgBuffer};
 /// Compare aligned visit mass against the mass stored at push time; LOUD-fail,
 /// naming the record's `game_id`/`ply`, when they diverge beyond tolerance.
 /// Pure (no bindings) so it is directly unit-testable.
-pub fn mass_drop_check(game_id: i64, ply_idx: u16, stored_mass: f32, aligned_mass: f32) -> Result<(), String> {
+pub fn mass_drop_check(
+    game_id: i64,
+    ply_idx: u16,
+    stored_mass: f32,
+    aligned_mass: f32,
+) -> Result<(), String> {
     const REL_TOL: f32 = 1e-4;
     const ABS_FLOOR: f32 = 1e-6;
     let dropped = stored_mass - aligned_mass;
@@ -96,7 +101,9 @@ impl HexgBuffer {
             idx.extend((n_recent..batch_size).map(|_| self.weighted_sample_one()));
             idx
         } else {
-            (0..batch_size).map(|_| self.weighted_sample_one()).collect()
+            (0..batch_size)
+                .map(|_| self.weighted_sample_one())
+                .collect()
         };
         let mut seen: HashSet<i64> = HashSet::with_capacity(batch_size);
         for _ in 0..MAX_RETRIES {

@@ -11,7 +11,9 @@
 //! sentinel. Plus the single-graph degenerate case (local == global), the
 //! single-read `take()` guard, and the mandatory LAW-07 mutation self-test.
 
-use mantis_graph::{AxisGraph, EdgeAttr, EdgeIndex, NodeFeat, PolicyScatterIndex, BUILDER_IMPL_NATIVE};
+use mantis_graph::{
+    AxisGraph, EdgeAttr, EdgeIndex, NodeFeat, PolicyScatterIndex, BUILDER_IMPL_NATIVE,
+};
 use mantis_selfplay::queues::{GraphWire, GraphWireArrays, WireAlreadyConsumed};
 
 // Frozen expected offsets (CAPTURE_LOG §A.2): running prefix sums of the
@@ -82,10 +84,16 @@ fn read_input() -> (Vec<AxisGraph>, Vec<Local>) {
         .join("../../tests/fixtures/worker")
         .join("graphwire_multigraph_input.bin");
     let data = std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    let mut cur = Cur { data: &data, off: 0 };
+    let mut cur = Cur {
+        data: &data,
+        off: 0,
+    };
 
     let n_graphs = cur.u32() as usize;
-    assert_eq!(n_graphs, 3, "fixture carries 3 fuse-input graphs (CAPTURE_LOG §C g8)");
+    assert_eq!(
+        n_graphs, 3,
+        "fixture carries 3 fuse-input graphs (CAPTURE_LOG §C g8)"
+    );
     let mut graphs = Vec::with_capacity(n_graphs);
     let mut locals = Vec::with_capacity(n_graphs);
     for _ in 0..n_graphs {
@@ -124,8 +132,16 @@ fn read_input() -> (Vec<AxisGraph>, Vec<Local>) {
         };
         // Fixture-consistency: the fuse reads num_nodes()/num_edges() (feat/edge-
         // derived), which must equal the stored per-graph counts.
-        assert_eq!(g.num_nodes() as u32, n_nodes, "node_feat length ⇒ num_nodes");
-        assert_eq!(g.num_edges() as u32, n_edges, "edge_index.src length ⇒ num_edges");
+        assert_eq!(
+            g.num_nodes() as u32,
+            n_nodes,
+            "node_feat length ⇒ num_nodes"
+        );
+        assert_eq!(
+            g.num_edges() as u32,
+            n_edges,
+            "edge_index.src length ⇒ num_edges"
+        );
         graphs.push(g);
         locals.push(Local {
             edge_src,
@@ -142,7 +158,11 @@ fn read_input() -> (Vec<AxisGraph>, Vec<Local>) {
 /// Verify the fused arrays reconstruct the per-graph locals block-diagonally.
 /// Uses the fused offsets as the source of truth for each graph's `node_off`, so
 /// a corrupted `node_offsets` entry makes the reconstruction disagree.
-fn reconstruct_ok(a: &GraphWireArrays, graphs: &[AxisGraph], locals: &[Local]) -> Result<(), String> {
+fn reconstruct_ok(
+    a: &GraphWireArrays,
+    graphs: &[AxisGraph],
+    locals: &[Local],
+) -> Result<(), String> {
     let b = graphs.len();
     // (i) offsets are running prefix sums of the per-graph counts.
     let mut node_acc = 0i64;
@@ -162,7 +182,10 @@ fn reconstruct_ok(a: &GraphWireArrays, graphs: &[AxisGraph], locals: &[Local]) -
             return Err(format!("edge_offsets[{}] != prefix-sum {edge_acc}", i + 1));
         }
         if a.legal_offsets[i + 1] != legal_acc {
-            return Err(format!("legal_offsets[{}] != prefix-sum {legal_acc}", i + 1));
+            return Err(format!(
+                "legal_offsets[{}] != prefix-sum {legal_acc}",
+                i + 1
+            ));
         }
     }
     // total directed edge count E; edge_index = [src (E) | dst (E)].
@@ -268,7 +291,11 @@ fn take_is_single_read() {
     let _first = wire.take().expect("first take ok");
     assert!(!wire.is_available());
     let second = wire.take();
-    assert_eq!(second, Err(WireAlreadyConsumed), "second take is the named error");
+    assert_eq!(
+        second,
+        Err(WireAlreadyConsumed),
+        "second take is the named error"
+    );
 }
 
 // ── P-09 LAW-07 mutation self-test (mandatory) ───────────────────────────────

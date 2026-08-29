@@ -266,7 +266,10 @@ impl SymTables {
 
         // Flat index → axial coordinates.
         let from_flat = |flat: usize| -> (i32, i32) {
-            ((flat / board_size) as i32 - half, (flat % board_size) as i32 - half)
+            (
+                (flat / board_size) as i32 - half,
+                (flat % board_size) as i32 - half,
+            )
         };
 
         const EMPTY: Vec<(u16, u16)> = Vec::new();
@@ -314,7 +317,10 @@ impl SymTables {
                     matched,
                     "transformed basis axis {:?} did not match any canonical axis \
                      (sym_idx={}, reflect={}, n_rot={})",
-                    (tq, tr), sym_idx, reflect, n_rot
+                    (tq, tr),
+                    sym_idx,
+                    reflect,
+                    n_rot
                 );
             }
             debug_assert!(
@@ -324,7 +330,10 @@ impl SymTables {
             // Sanity check: perm must be a bijection on {0,1,2}.
             let mut seen = [false; 3];
             for &i in &perm {
-                debug_assert!(!seen[i], "axis_perm[{sym_idx}] is not a bijection: {perm:?}");
+                debug_assert!(
+                    !seen[i],
+                    "axis_perm[{sym_idx}] is not a bijection: {perm:?}"
+                );
                 seen[i] = true;
             }
             axis_perm[sym_idx] = perm;
@@ -490,7 +499,11 @@ mod tests {
                     same_axis((tq, tr), HEX_BASIS[expected_dst_j]),
                     "sym_idx={} src_i={}: transformed basis {:?} does not match \
                      expected axis {} ({:?})",
-                    sym_idx, src_i, (tq, tr), expected_dst_j, HEX_BASIS[expected_dst_j]
+                    sym_idx,
+                    src_i,
+                    (tq, tr),
+                    expected_dst_j,
+                    HEX_BASIS[expected_dst_j]
                 );
             }
         }
@@ -503,8 +516,14 @@ mod tests {
             let perm = tables.axis_perm[sym_idx];
             let mut seen = [false; 3];
             for &i in &perm {
-                assert!(i < 3, "axis_perm[{sym_idx}] has out-of-range index: {perm:?}");
-                assert!(!seen[i], "axis_perm[{sym_idx}] is not a bijection: {perm:?}");
+                assert!(
+                    i < 3,
+                    "axis_perm[{sym_idx}] has out-of-range index: {perm:?}"
+                );
+                assert!(
+                    !seen[i],
+                    "axis_perm[{sym_idx}] is not a bijection: {perm:?}"
+                );
                 seen[i] = true;
             }
         }
@@ -526,8 +545,16 @@ mod tests {
     #[test]
     fn v6_rot180_preserve_all_cells() {
         let v6 = SymTables::new();
-        assert_eq!(v6.scatter[0].len(), 361, "v6 identity must keep all 361 cells");
-        assert_eq!(v6.scatter[3].len(), 361, "v6 rot180 must keep all 361 cells");
+        assert_eq!(
+            v6.scatter[0].len(),
+            361,
+            "v6 identity must keep all 361 cells"
+        );
+        assert_eq!(
+            v6.scatter[3].len(),
+            361,
+            "v6 rot180 must keep all 361 cells"
+        );
     }
 
     // ── O-15: board-size invariance (v6 vs v6w25, re-anchored from v8) ──────────
@@ -537,7 +564,10 @@ mod tests {
         let v6 = SymTables::new();
         let w25 = SymTables::with_shape(lookup("v6w25").board_size, lookup("v6w25").n_planes);
         for s in 0..N_SYMS {
-            assert_eq!(v6.axis_perm[s], w25.axis_perm[s], "axis_perm[{s}] must be board-size invariant");
+            assert_eq!(
+                v6.axis_perm[s], w25.axis_perm[s],
+                "axis_perm[{s}] must be board-size invariant"
+            );
         }
     }
 
@@ -558,7 +588,11 @@ mod tests {
     #[test]
     fn each_encoding_derives_its_own_policy_width() {
         assert_eq!(lookup("v6").policy_stride(), 362, "v6 derives 362");
-        assert_eq!(lookup("v6w25").policy_stride(), 626, "v6w25 derives its own 626");
+        assert_eq!(
+            lookup("v6w25").policy_stride(),
+            626,
+            "v6w25 derives its own 626"
+        );
     }
 
     // ── O-14: sym_tables_for singletons + shape ─────────────────────────────────
@@ -571,8 +605,14 @@ mod tests {
         assert_eq!(via_fn.n_cells, via_new.n_cells);
         assert_eq!(via_fn.n_planes, via_new.n_planes);
         for s in 0..N_SYMS {
-            assert_eq!(via_fn.scatter[s], via_new.scatter[s], "scatter[{s}] mismatch");
-            assert_eq!(via_fn.axis_perm[s], via_new.axis_perm[s], "axis_perm[{s}] mismatch");
+            assert_eq!(
+                via_fn.scatter[s], via_new.scatter[s],
+                "scatter[{s}] mismatch"
+            );
+            assert_eq!(
+                via_fn.axis_perm[s], via_new.axis_perm[s],
+                "axis_perm[{s}] mismatch"
+            );
             assert_eq!(
                 via_fn.chain_src_lookup[s], via_new.chain_src_lookup[s],
                 "chain_src_lookup[{s}] mismatch"
@@ -608,11 +648,15 @@ mod tests {
     /// Live board sizes, taken from the registry rather than hardcoded, so a newly
     /// registered encoding is covered automatically (LAW-08 / derive-never-transcribe).
     fn registry_board_sizes() -> Vec<usize> {
-        let mut sizes: Vec<usize> =
-            mantis_encoding::registry::all_specs().map(|s| s.board_size).collect();
+        let mut sizes: Vec<usize> = mantis_encoding::registry::all_specs()
+            .map(|s| s.board_size)
+            .collect();
         sizes.sort_unstable();
         sizes.dedup();
-        assert!(!sizes.is_empty(), "registry must ship at least one encoding");
+        assert!(
+            !sizes.is_empty(),
+            "registry must ship at least one encoding"
+        );
         sizes
     }
 
@@ -630,8 +674,9 @@ mod tests {
     fn window_preserving_syms_are_derived_not_asserted() {
         for bs in registry_board_sizes() {
             let tables = SymTables::with_shape(bs, 8);
-            let derived: Vec<usize> =
-                (0..N_SYMS).filter(|&s| tables.scatter[s].len() == tables.n_cells).collect();
+            let derived: Vec<usize> = (0..N_SYMS)
+                .filter(|&s| tables.scatter[s].len() == tables.n_cells)
+                .collect();
             assert_eq!(
                 derived.as_slice(),
                 WINDOW_PRESERVING_SYMS.as_slice(),
@@ -656,7 +701,8 @@ mod tests {
                 dsts.sort_unstable();
                 dsts.dedup();
                 assert_eq!(
-                    dsts.len(), n_pairs,
+                    dsts.len(),
+                    n_pairs,
                     "board_size={bs}: sym {s} has colliding destinations — not a bijection"
                 );
             }
@@ -837,11 +883,15 @@ mod tests {
             "a COMPACT record must draw over the full D6 group"
         );
 
-        let spread_seen: HashSet<usize> =
-            (0..4096).map(|_| draw_record_sym(&mut rng, false)).collect();
+        let spread_seen: HashSet<usize> = (0..4096)
+            .map(|_| draw_record_sym(&mut rng, false))
+            .collect();
         assert_eq!(
             spread_seen,
-            WINDOW_PRESERVING_SYMS.iter().copied().collect::<HashSet<usize>>(),
+            WINDOW_PRESERVING_SYMS
+                .iter()
+                .copied()
+                .collect::<HashSet<usize>>(),
             "a SPREAD record must draw ONLY from the window-preserving subgroup"
         );
     }
@@ -850,6 +900,9 @@ mod tests {
     fn sym_tables_for_returns_stable_ref() {
         let t1 = sym_tables_for(lookup("v6")) as *const _;
         let t2 = sym_tables_for(lookup("v6")) as *const _;
-        assert_eq!(t1, t2, "sym_tables_for must return the same static singleton");
+        assert_eq!(
+            t1, t2,
+            "sym_tables_for must return the same static singleton"
+        );
     }
 }

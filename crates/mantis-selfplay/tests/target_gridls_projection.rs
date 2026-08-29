@@ -38,7 +38,10 @@ fn spread_board() -> Board {
 /// an in-window cell, so the global target is a valid distribution.
 fn ls_with_covered_offwindow(board: &Board, mass: f32) -> (LegalSetPolicy, usize, usize) {
     let legal = board.legal_moves();
-    assert!(legal.contains(&(28, 0)), "(28,0) must be legal near cluster-2");
+    assert!(
+        legal.contains(&(28, 0)),
+        "(28,0) must be legal near cluster-2"
+    );
     // an in-window legal cell for the remainder
     let &(iq, ir) = legal
         .iter()
@@ -58,7 +61,11 @@ fn ls_with_covered_offwindow(board: &Board, mass: f32) -> (LegalSetPolicy, usize
 #[test]
 fn s2c_covered_offwindow_mass_projects_into_the_covering_cluster() {
     let board = spread_board();
-    assert_eq!(board.window_center(), (17, 0), "spread-board geometry drifted");
+    assert_eq!(
+        board.window_center(),
+        (17, 0),
+        "spread-board geometry drifted"
+    );
     let legal = board.legal_moves();
     let (ls, _, local_28) = ls_with_covered_offwindow(&board, 0.4);
 
@@ -83,14 +90,19 @@ fn s2c_window_renorm_preserves_relative_mass() {
     for &(q, r) in &legal {
         let wq = q - 2 + 9;
         let wr = r + 9;
-        if (0..TRUNK).contains(&wq) && (0..TRUNK).contains(&wr) && board.window_flat_idx(q, r) < NA {
+        if (0..TRUNK).contains(&wq) && (0..TRUNK).contains(&wr) && board.window_flat_idx(q, r) < NA
+        {
             vis.push(((q, r), 0.0));
             if vis.len() == 2 {
                 break;
             }
         }
     }
-    assert_eq!(vis.len(), 2, "cluster-1 window must see >=2 in-window legal cells");
+    assert_eq!(
+        vis.len(),
+        2,
+        "cluster-1 window must see >=2 in-window legal cells"
+    );
     let mut dense = vec![0.0f32; NA];
     dense[board.window_flat_idx(vis[0].0 .0, vis[0].0 .1)] = 0.3;
     dense[board.window_flat_idx(vis[1].0 .0, vis[1].0 .1)] = 0.1;
@@ -102,13 +114,19 @@ fn s2c_window_renorm_preserves_relative_mass() {
     let local = aggregate_policy_to_local_ls(NA, true, TRUNK, &board, &(2, 0), &ls, &legal);
     let l0 = local[((vis[0].0 .0 - 2 + 9) as usize) * TRUNK as usize + (vis[0].0 .1 + 9) as usize];
     let l1 = local[((vis[1].0 .0 - 2 + 9) as usize) * TRUNK as usize + (vis[1].0 .1 + 9) as usize];
-    assert!(l0 > 0.0 && l1 > 0.0, "visible cells must survive projection");
+    assert!(
+        l0 > 0.0 && l1 > 0.0,
+        "visible cells must survive projection"
+    );
     assert!(
         (l0 / l1 - 3.0).abs() < 1e-4,
         "window renorm must preserve relative mass (3:1), got {l0}/{l1}"
     );
     let sum: f32 = local.iter().sum();
-    assert!((sum - 1.0).abs() < 1e-5, "a window WITH visible mass renorms to 1, got {sum}");
+    assert!(
+        (sum - 1.0).abs() < 1e-5,
+        "a window WITH visible mass renorms to 1, got {sum}"
+    );
 }
 
 // ── flip-set row 10: zero-visible-window → the ZERO row, never a fabricated uniform ──
@@ -122,7 +140,10 @@ fn s2c_zero_visible_window_yields_the_zero_row_not_uniform() {
     // fabricated UNIFORM distribution trained at full weight (the R157-worse object).
     let (ls, _, _) = ls_with_covered_offwindow(&board, 1.0);
     let global_mass: f32 = ls.dense.iter().sum::<f32>() + ls.overflow.values().sum::<f32>();
-    assert!((global_mass - 1.0).abs() < 1e-6, "construction: global ls must be a distribution");
+    assert!(
+        (global_mass - 1.0).abs() < 1e-6,
+        "construction: global ls must be a distribution"
+    );
 
     let local = aggregate_policy_to_local_ls(NA, true, TRUNK, &board, &(2, 0), &ls, &legal);
     let sum: f32 = local.iter().sum();

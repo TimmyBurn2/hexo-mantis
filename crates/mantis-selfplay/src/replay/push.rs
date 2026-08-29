@@ -22,8 +22,17 @@ impl ReplayBuffer {
     /// winning_line)` sample.
     pub fn push_impl(&mut self, cfg: PushSingleConfig<'_>) -> Result<(), String> {
         let PushSingleConfig {
-            state, chain_planes, policy, outcome, ownership, winning_line,
-            game_id, game_length, is_full_search, position_index, value_target_valid,
+            state,
+            chain_planes,
+            policy,
+            outcome,
+            ownership,
+            winning_line,
+            game_id,
+            game_length,
+            is_full_search,
+            position_index,
+            value_target_valid,
         } = cfg;
 
         let state_slice = state;
@@ -42,33 +51,46 @@ impl ReplayBuffer {
         if state_slice.len() != state_stride {
             return Err(format!(
                 "state must have {} elements ({}×{}×{}, HEXB {}), got {}",
-                state_stride, n_planes, trunk_size, trunk_size, self.encoding.name,
+                state_stride,
+                n_planes,
+                trunk_size,
+                trunk_size,
+                self.encoding.name,
                 state_slice.len()
             ));
         }
         if chain_slice.len() != chain_stride {
             return Err(format!(
                 "chain_planes must have {} elements ({}×{}×{}), got {}",
-                chain_stride, self.encoding.n_chain_planes, trunk_size, trunk_size,
+                chain_stride,
+                self.encoding.n_chain_planes,
+                trunk_size,
+                trunk_size,
                 chain_slice.len()
             ));
         }
         if policy_slice.len() != policy_stride {
             return Err(format!(
                 "policy must have {} elements ({}), got {}",
-                policy_stride, policy_stride, policy_slice.len()
+                policy_stride,
+                policy_stride,
+                policy_slice.len()
             ));
         }
         if own_slice.len() != aux_stride {
             return Err(format!(
                 "ownership must have {} elements ({}), got {}",
-                aux_stride, aux_stride, own_slice.len()
+                aux_stride,
+                aux_stride,
+                own_slice.len()
             ));
         }
         if wl_slice.len() != aux_stride {
             return Err(format!(
                 "winning_line must have {} elements ({}), got {}",
-                aux_stride, aux_stride, wl_slice.len()
+                aux_stride,
+                aux_stride,
+                wl_slice.len()
             ));
         }
 
@@ -123,8 +145,17 @@ impl ReplayBuffer {
     /// Store all positions from a completed game efficiently (handles wrap).
     pub fn push_game_impl(&mut self, cfg: PushGameConfig<'_>) -> Result<(), String> {
         let PushGameConfig {
-            states, chain_planes, policies, outcomes, ownership, winning_line,
-            game_id, game_length, is_full_search, position_indices, value_target_valid,
+            states,
+            chain_planes,
+            policies,
+            outcomes,
+            ownership,
+            winning_line,
+            game_id,
+            game_length,
+            is_full_search,
+            position_indices,
+            value_target_valid,
         } = cfg;
 
         let states_s = states;
@@ -167,17 +198,23 @@ impl ReplayBuffer {
         }
         if !ifs_s.is_empty() && ifs_s.len() != t {
             return Err(format!(
-                "is_full_search must have {} elements (one per position), got {}", t, ifs_s.len()
+                "is_full_search must have {} elements (one per position), got {}",
+                t,
+                ifs_s.len()
             ));
         }
         if !pos_s.is_empty() && pos_s.len() != t {
             return Err(format!(
-                "position_indices must have {} elements (one per position), got {}", t, pos_s.len()
+                "position_indices must have {} elements (one per position), got {}",
+                t,
+                pos_s.len()
             ));
         }
         if !vv_s.is_empty() && vv_s.len() != t {
             return Err(format!(
-                "value_target_valid must have {} elements (one per position), got {}", t, vv_s.len()
+                "value_target_valid must have {} elements (one per position), got {}",
+                t,
+                vv_s.len()
             ));
         }
 
@@ -214,7 +251,8 @@ impl ReplayBuffer {
 
             // Policy: direct f32 copy
             let src_pol = &policies_s[i * policy_stride..(i + 1) * policy_stride];
-            self.policies[slot * policy_stride..(slot + 1) * policy_stride].copy_from_slice(src_pol);
+            self.policies[slot * policy_stride..(slot + 1) * policy_stride]
+                .copy_from_slice(src_pol);
 
             // Auxiliary spatial targets — direct u8 copies.
             self.ownership[slot * aux_stride..(slot + 1) * aux_stride]
@@ -247,8 +285,16 @@ impl ReplayBuffer {
     /// Store N positions with per-row `game_length` and `is_full_search`.
     pub fn push_many_impl(&mut self, cfg: PushManyConfig<'_>) -> Result<(), String> {
         let PushManyConfig {
-            states, chain_planes, policies, outcomes, ownership, winning_line,
-            game_lengths, is_full_search, position_indices, value_target_valid,
+            states,
+            chain_planes,
+            policies,
+            outcomes,
+            ownership,
+            winning_line,
+            game_lengths,
+            is_full_search,
+            position_indices,
+            value_target_valid,
         } = cfg;
 
         let states_s = states;
@@ -288,16 +334,28 @@ impl ReplayBuffer {
             return Err("winning_line shape mismatch".to_string());
         }
         if gl_s.len() != t {
-            return Err(format!("game_lengths must have {t} elements, got {}", gl_s.len()));
+            return Err(format!(
+                "game_lengths must have {t} elements, got {}",
+                gl_s.len()
+            ));
         }
         if ifs_s.len() != t {
-            return Err(format!("is_full_search must have {t} elements, got {}", ifs_s.len()));
+            return Err(format!(
+                "is_full_search must have {t} elements, got {}",
+                ifs_s.len()
+            ));
         }
         if !pos_s.is_empty() && pos_s.len() != t {
-            return Err(format!("position_indices must have {t} elements, got {}", pos_s.len()));
+            return Err(format!(
+                "position_indices must have {t} elements, got {}",
+                pos_s.len()
+            ));
         }
         if !vv_s.is_empty() && vv_s.len() != t {
-            return Err(format!("value_target_valid must have {t} elements, got {}", vv_s.len()));
+            return Err(format!(
+                "value_target_valid must have {t} elements, got {}",
+                vv_s.len()
+            ));
         }
 
         let available = self.capacity.saturating_sub(self.size);
@@ -326,16 +384,18 @@ impl ReplayBuffer {
             let dst_state = &mut self.states[slot * state_stride..(slot + 1) * state_stride];
             debug_assert_eq!(src_state.len(), dst_state.len());
             // SAFETY: f16 and u16 same size/align; bit pattern preserved (to_bits semantics).
-            let src_bits =
-                unsafe { std::slice::from_raw_parts(src_state.as_ptr().cast::<u16>(), src_state.len()) };
+            let src_bits = unsafe {
+                std::slice::from_raw_parts(src_state.as_ptr().cast::<u16>(), src_state.len())
+            };
             dst_state.copy_from_slice(src_bits);
 
             let src_chain = &chain_s[i * chain_stride..(i + 1) * chain_stride];
             let dst_chain = &mut self.chain_planes[slot * chain_stride..(slot + 1) * chain_stride];
             debug_assert_eq!(src_chain.len(), dst_chain.len());
             // SAFETY: same as above.
-            let chain_bits =
-                unsafe { std::slice::from_raw_parts(src_chain.as_ptr().cast::<u16>(), src_chain.len()) };
+            let chain_bits = unsafe {
+                std::slice::from_raw_parts(src_chain.as_ptr().cast::<u16>(), src_chain.len())
+            };
             dst_chain.copy_from_slice(chain_bits);
 
             self.policies[slot * policy_stride..(slot + 1) * policy_stride]

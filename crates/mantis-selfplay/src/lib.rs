@@ -1,6 +1,7 @@
 //! mantis-selfplay: runner, worker loop, inference queues, replay buffers.
 //! WP0 scaffold: compiles empty; selfplay port lands with its work package.
 
+pub mod perf;
 pub mod queues;
 pub mod records;
 pub mod replay;

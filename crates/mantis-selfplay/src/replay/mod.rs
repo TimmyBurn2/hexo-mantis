@@ -34,14 +34,14 @@
 //!   ownership    : Vec<u8>  — [capacity × spec.aux_stride()] (0=P2, 1=empty, 2=P1)
 //!   winning_line : Vec<u8>  — [capacity × spec.aux_stride()] binary mask
 
-mod storage;
+pub mod hexg;
+mod persist;
 mod push;
 pub mod push_config;
 pub mod sample;
-mod persist;
-pub mod hexg;
-pub mod sym;
 pub mod schedule;
+mod storage;
+pub mod sym;
 
 use half::f16;
 use rand::rngs::StdRng;
@@ -49,11 +49,11 @@ use rand::SeedableRng;
 use std::sync::atomic::AtomicU64;
 
 use mantis_encoding::RegistrySpec;
-use sym::{sym_tables_for, SymTables};
 use schedule::WeightSchedule;
+use sym::{sym_tables_for, SymTables};
 
-pub use sample::{SampleBatch, SampleBatchWithPos};
 pub use hexg::{GraphRecord, GraphTargets, HexgBuffer};
+pub use sample::{SampleBatch, SampleBatchWithPos};
 
 // ── ReplayBuffer ───────────────────────────────────────────────────────────────
 
@@ -74,12 +74,12 @@ pub struct ReplayBuffer {
     /// Encoding spec — drives all stride / cell-count calculations.
     pub encoding: &'static RegistrySpec,
 
-    pub states: Vec<u16>,       // f16 bits; flat [capacity × spec.state_stride()]
+    pub states: Vec<u16>, // f16 bits; flat [capacity × spec.state_stride()]
     pub chain_planes: Vec<u16>, // f16 bits; flat [capacity × spec.chain_stride()]
-    pub policies: Vec<f32>,     // flat [capacity × spec.policy_stride()]
-    pub outcomes: Vec<f32>,     // flat [capacity]
-    pub game_ids: Vec<i64>,     // flat [capacity]; -1 = untagged
-    pub weights: Vec<u16>,      // f16-as-u16 bits; flat [capacity]
+    pub policies: Vec<f32>, // flat [capacity × spec.policy_stride()]
+    pub outcomes: Vec<f32>, // flat [capacity]
+    pub game_ids: Vec<i64>, // flat [capacity]; -1 = untagged
+    pub weights: Vec<u16>, // f16-as-u16 bits; flat [capacity]
 
     /// Per-cell ownership of the final board (0=P2, 1=empty, 2=P1).
     pub ownership: Vec<u8>,
@@ -249,8 +249,16 @@ impl ReplayBuffer {
         // simply makes the state loop empty).
         let state_stride = self.encoding.state_stride();
         let chain_stride = self.encoding.chain_stride();
-        debug_assert_eq!(state_stride % n_cells, 0, "state_stride is a whole number of planes");
-        debug_assert_eq!(chain_stride % n_cells, 0, "chain_stride is a whole number of planes");
+        debug_assert_eq!(
+            state_stride % n_cells,
+            0,
+            "state_stride is a whole number of planes"
+        );
+        debug_assert_eq!(
+            chain_stride % n_cells,
+            0,
+            "chain_stride is a whole number of planes"
+        );
         let s0 = slot * state_stride;
         let c0 = slot * chain_stride;
         for plane in 0..(state_stride / n_cells) {

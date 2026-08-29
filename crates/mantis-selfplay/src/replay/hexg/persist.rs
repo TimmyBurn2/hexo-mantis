@@ -43,12 +43,16 @@ impl HexgBuffer {
 
         w.write_all(&HEXG_MAGIC.to_le_bytes()).map_err(io)?;
         w.write_all(&HEXG_VERSION.to_le_bytes()).map_err(io)?;
-        w.write_all(&(MAX_STONES as u32).to_le_bytes()).map_err(io)?;
-        w.write_all(&(self.visit_capacity as u32).to_le_bytes()).map_err(io)?;
-        w.write_all(&(self.capacity as u64).to_le_bytes()).map_err(io)?;
+        w.write_all(&(MAX_STONES as u32).to_le_bytes())
+            .map_err(io)?;
+        w.write_all(&(self.visit_capacity as u32).to_le_bytes())
+            .map_err(io)?;
+        w.write_all(&(self.capacity as u64).to_le_bytes())
+            .map_err(io)?;
         w.write_all(&(self.size as u64).to_le_bytes()).map_err(io)?;
         let name = self.encoding.name.as_bytes();
-        w.write_all(&(name.len() as u32).to_le_bytes()).map_err(io)?;
+        w.write_all(&(name.len() as u32).to_le_bytes())
+            .map_err(io)?;
         w.write_all(name).map_err(io)?;
 
         for i in 0..self.size {
@@ -57,29 +61,41 @@ impl HexgBuffer {
             let nv = self.n_visits[slot];
             w.write_all(&ns.to_le_bytes()).map_err(io)?;
             w.write_all(&nv.to_le_bytes()).map_err(io)?;
-            w.write_all(&self.current_player[slot].to_le_bytes()).map_err(io)?;
-            w.write_all(&self.moves_remaining[slot].to_le_bytes()).map_err(io)?;
-            w.write_all(&self.ply_index[slot].to_le_bytes()).map_err(io)?;
+            w.write_all(&self.current_player[slot].to_le_bytes())
+                .map_err(io)?;
+            w.write_all(&self.moves_remaining[slot].to_le_bytes())
+                .map_err(io)?;
+            w.write_all(&self.ply_index[slot].to_le_bytes())
+                .map_err(io)?;
             w.write_all(&[self.is_full_search[slot]]).map_err(io)?;
             w.write_all(&[self.value_valid[slot]]).map_err(io)?;
-            w.write_all(&self.outcomes[slot].to_le_bytes()).map_err(io)?;
-            w.write_all(&self.game_length[slot].to_le_bytes()).map_err(io)?;
-            w.write_all(&self.game_ids[slot].to_le_bytes()).map_err(io)?;
+            w.write_all(&self.outcomes[slot].to_le_bytes())
+                .map_err(io)?;
+            w.write_all(&self.game_length[slot].to_le_bytes())
+                .map_err(io)?;
+            w.write_all(&self.game_ids[slot].to_le_bytes())
+                .map_err(io)?;
             w.write_all(&self.weights[slot].to_le_bytes()).map_err(io)?;
 
             let stone_base = slot * MAX_STONES * 2;
             let player_base = slot * MAX_STONES;
             for j in 0..ns as usize {
-                w.write_all(&self.stones_qr[stone_base + j * 2].to_le_bytes()).map_err(io)?;
-                w.write_all(&self.stones_qr[stone_base + j * 2 + 1].to_le_bytes()).map_err(io)?;
-                w.write_all(&self.stone_players[player_base + j].to_le_bytes()).map_err(io)?;
+                w.write_all(&self.stones_qr[stone_base + j * 2].to_le_bytes())
+                    .map_err(io)?;
+                w.write_all(&self.stones_qr[stone_base + j * 2 + 1].to_le_bytes())
+                    .map_err(io)?;
+                w.write_all(&self.stone_players[player_base + j].to_le_bytes())
+                    .map_err(io)?;
             }
             let visit_base = slot * self.visit_capacity * 2;
             let prob_base = slot * self.visit_capacity;
             for j in 0..nv as usize {
-                w.write_all(&self.visit_qr[visit_base + j * 2].to_le_bytes()).map_err(io)?;
-                w.write_all(&self.visit_qr[visit_base + j * 2 + 1].to_le_bytes()).map_err(io)?;
-                w.write_all(&self.visit_probs[prob_base + j].to_le_bytes()).map_err(io)?;
+                w.write_all(&self.visit_qr[visit_base + j * 2].to_le_bytes())
+                    .map_err(io)?;
+                w.write_all(&self.visit_qr[visit_base + j * 2 + 1].to_le_bytes())
+                    .map_err(io)?;
+                w.write_all(&self.visit_probs[prob_base + j].to_le_bytes())
+                    .map_err(io)?;
             }
         }
         w.flush().map_err(io)?;
@@ -184,7 +200,8 @@ impl HexgBuffer {
             self.stones_qr[stone_base..stone_base + MAX_STONES * 2].fill(0);
             self.stone_players[player_base..player_base + MAX_STONES].fill(0);
             self.stones_qr[stone_base..stone_base + rec.ns * 2].copy_from_slice(&rec.stones_qr);
-            self.stone_players[player_base..player_base + rec.ns].copy_from_slice(&rec.stone_players);
+            self.stone_players[player_base..player_base + rec.ns]
+                .copy_from_slice(&rec.stone_players);
 
             let vcap = self.visit_capacity;
             let visit_base = slot * vcap * 2;
@@ -323,9 +340,13 @@ impl<'a> Cursor<'a> {
         Ok(f32::from_le_bytes(self.take(4)?.try_into().unwrap()))
     }
     fn u64(&mut self) -> Result<u64, String> {
-        Ok(u64::from_le_bytes(self.take(std::mem::size_of::<u64>())?.try_into().unwrap()))
+        Ok(u64::from_le_bytes(
+            self.take(std::mem::size_of::<u64>())?.try_into().unwrap(),
+        ))
     }
     fn i64(&mut self) -> Result<i64, String> {
-        Ok(i64::from_le_bytes(self.take(std::mem::size_of::<i64>())?.try_into().unwrap()))
+        Ok(i64::from_le_bytes(
+            self.take(std::mem::size_of::<i64>())?.try_into().unwrap(),
+        ))
     }
 }

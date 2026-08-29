@@ -67,7 +67,9 @@ pub fn aggregate_policy(
         let mcts_idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, trunk_sz, half);
         // §P2: only skip the tail index when it really IS a pass slot. v8 has
         // no pass slot — the tail is a real legal cell.
-        if has_pass_slot && mcts_idx >= n_actions - 1 { continue; }
+        if has_pass_slot && mcts_idx >= n_actions - 1 {
+            continue;
+        }
 
         let mut max_prob = 0.0;
         for (k, &(cq, cr)) in centers.iter().enumerate() {
@@ -93,7 +95,9 @@ pub fn aggregate_policy(
 
     let sum: f32 = global_policy.iter().sum();
     if sum > 1e-9 {
-        for p in &mut global_policy { *p /= sum; }
+        for p in &mut global_policy {
+            *p /= sum;
+        }
     } else {
         let uniform = 1.0 / n_actions as f32;
         global_policy.fill(uniform);
@@ -171,7 +175,9 @@ pub fn aggregate_policy_to_local(
 
     let sum: f32 = local_policy.iter().sum();
     if sum > 1e-9 {
-        for p in &mut local_policy { *p /= sum; }
+        for p in &mut local_policy {
+            *p /= sum;
+        }
     } else {
         let uniform = 1.0 / n_actions as f32;
         local_policy.fill(uniform);
@@ -254,7 +260,8 @@ pub(crate) fn reproject_game_end_row(
     // (not per-sim) — no perf concern, no #[inline] needed.
     let trunk_sz = (n_cells as f64).sqrt() as i32;
     debug_assert_eq!(
-        (trunk_sz as usize) * (trunk_sz as usize), n_cells,
+        (trunk_sz as usize) * (trunk_sz as usize),
+        n_cells,
         "reproject_game_end_row: n_cells {n_cells} is not a perfect square — trunk_sz²"
     );
     let half = (trunk_sz - 1) / 2;
@@ -265,8 +272,8 @@ pub(crate) fn reproject_game_end_row(
         let flat = Board::window_flat_idx_at_geom(q, r, cq, cr, trunk_sz, half);
         if flat < n_cells {
             aux_u8[flat] = match cell {
-                Cell::P1    => 2,
-                Cell::P2    => 0,
+                Cell::P1 => 2,
+                Cell::P2 => 0,
                 Cell::Empty => 1,
             };
         }
@@ -489,14 +496,22 @@ pub enum TargetIntegrityError {
     /// The pre-filter legal-scan mass is non-finite or off unity (order-arms 1
     /// and 3 — a NaN/inf anywhere in the ls poisons the f64 sum and lands here
     /// with a non-finite `sum`).
-    MassNotUnity { sum: f64, ply_index: u16, n_cells: usize },
+    MassNotUnity {
+        sum: f64,
+        ply_index: u16,
+        n_cells: usize,
+    },
     /// ~Zero mass over a NON-empty legal set (order-arm 2; the R157 named
     /// degenerate class keeps its own variant — checked BEFORE unity).
     EmptyTarget { ply_index: u16, n_legal: usize },
     /// More positive-mass cells than the DERIVED HEXG visit slot holds — the
     /// silent top-k truncation's typed replacement. `max` is the composed
     /// `visit_capacity` (R255: derived from the sims regime, never a literal).
-    VisitSlotsExceeded { n: usize, max: usize, ply_index: u16 },
+    VisitSlotsExceeded {
+        n: usize,
+        max: usize,
+        ply_index: u16,
+    },
     /// R275(b) EXPORTER conjunct (F-816-9) — the search backed up ZERO child
     /// visits, so there is no visit distribution to export and every exporter
     /// would ship the prior fallback instead. See [`refuse_zero_visit_export`].
@@ -506,7 +521,11 @@ pub enum TargetIntegrityError {
 impl std::fmt::Display for TargetIntegrityError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells } => write!(
+            TargetIntegrityError::MassNotUnity {
+                sum,
+                ply_index,
+                n_cells,
+            } => write!(
                 f,
                 "MassNotUnity: policy-target mass sum={sum} != 1 at ply_index={ply_index} \
                  ({n_cells} positive-mass cells) — the exporter/injector upstream shipped an \
@@ -527,7 +546,10 @@ impl std::fmt::Display for TargetIntegrityError {
                  admits is a defect upstream — silent truncation is deleted (LAW-14: \
                  run-fatal, never recorded)"
             ),
-            TargetIntegrityError::ZeroVisitSearch { ply_index, n_children } => write!(
+            TargetIntegrityError::ZeroVisitSearch {
+                ply_index,
+                n_children,
+            } => write!(
                 f,
                 "ZeroVisitSearch: the search at ply_index={ply_index} backed up ZERO visits \
                  across its {n_children} root children, so there is no visit distribution to \
@@ -597,7 +619,11 @@ pub fn refuse_zero_visit_export(
     ply_index: u16,
 ) -> Result<u32, TargetIntegrityError> {
     let root = &tree.pool[0];
-    let n_children = if root.is_expanded() { root.n_children as usize } else { 0 };
+    let n_children = if root.is_expanded() {
+        root.n_children as usize
+    } else {
+        0
+    };
     let first = root.first_child as usize;
     // Root visits are NOT the subject: the root's own expansion backs up one visit to
     // itself, which is exactly the state F-816-9 died in. The exporters normalize over the
@@ -606,7 +632,10 @@ pub fn refuse_zero_visit_export(
         .map(|i| tree.pool[i].n_visits)
         .sum();
     if backed_up == 0 {
-        return Err(TargetIntegrityError::ZeroVisitSearch { ply_index, n_children });
+        return Err(TargetIntegrityError::ZeroVisitSearch {
+            ply_index,
+            n_children,
+        });
     }
     Ok(backed_up)
 }
@@ -684,13 +713,24 @@ pub fn record_position_graph(
 
     // §3.3 pinned order-arms 1..3 + the §3.4 slot guard.
     if !sum.is_finite() {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     if sum.abs() <= TARGET_MASS_TOL && !legal.is_empty() {
-        return Err(TargetIntegrityError::EmptyTarget { ply_index, n_legal: legal.len() });
+        return Err(TargetIntegrityError::EmptyTarget {
+            ply_index,
+            n_legal: legal.len(),
+        });
     }
     if (sum - 1.0).abs() > TARGET_MASS_TOL {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     if visits.len() > max_visits {
         return Err(TargetIntegrityError::VisitSlotsExceeded {
@@ -946,8 +986,15 @@ mod o1_tests {
         let mut target = vec![0.25_f32; 4];
         apply_forced_win_one_hot(&mut target, 2, 0.5);
         let sum: f32 = target.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-6, "blend must stay a distribution, sum={sum}");
-        assert!((target[2] - 0.625).abs() < 1e-6, "winning action boosted, got {}", target[2]);
+        assert!(
+            (sum - 1.0).abs() < 1e-6,
+            "blend must stay a distribution, sum={sum}"
+        );
+        assert!(
+            (target[2] - 0.625).abs() < 1e-6,
+            "winning action boosted, got {}",
+            target[2]
+        );
         assert!(target[2] > target[0], "winning action must dominate");
     }
 
@@ -955,9 +1002,9 @@ mod o1_tests {
     fn test_apply_forced_win_one_hot_noop_when_disabled() {
         let mut target = vec![0.25_f32; 4];
         let before = target.clone();
-        apply_forced_win_one_hot(&mut target, 2, 0.0);   // weight 0 ⇒ O1 off
+        apply_forced_win_one_hot(&mut target, 2, 0.0); // weight 0 ⇒ O1 off
         assert_eq!(target, before);
-        apply_forced_win_one_hot(&mut target, 99, 1.0);  // out-of-range action
+        apply_forced_win_one_hot(&mut target, 99, 1.0); // out-of-range action
         assert_eq!(target, before);
     }
 
@@ -972,7 +1019,9 @@ mod o1_tests {
         let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
         let board = Board::from_stones(&stones, Player::One, 2, 0, None);
 
-        let win = board.first_winning_move(Player::One).expect("winning move exists");
+        let win = board
+            .first_winning_move(Player::One)
+            .expect("winning move exists");
         let stride = 19 * 19 + 1;
         let action = board.window_flat_idx(win.0, win.1);
         assert!(action < stride, "winning move maps in-window");
@@ -986,8 +1035,17 @@ mod o1_tests {
             aggregate_policy_to_local(stride, true, trunk, &board, &center, &global, &legal);
 
         let nonzero: Vec<f32> = local.iter().copied().filter(|&p| p > 1e-6).collect();
-        assert_eq!(nonzero.len(), 1, "aggregate must preserve a one-hot, got {} non-zero", nonzero.len());
-        assert!((nonzero[0] - 1.0).abs() < 1e-6, "surviving mass ~1.0, got {}", nonzero[0]);
+        assert_eq!(
+            nonzero.len(),
+            1,
+            "aggregate must preserve a one-hot, got {} non-zero",
+            nonzero.len()
+        );
+        assert!(
+            (nonzero[0] - 1.0).abs() < 1e-6,
+            "surviving mass ~1.0, got {}",
+            nonzero[0]
+        );
     }
 }
 
@@ -1024,9 +1082,16 @@ mod ls_tests {
         // cluster-2 (centre (32,0): q∈[23,41]). It must land in overflow and
         // project into cluster-2's local-362 — no usize::MAX index.
         let board = spread_board();
-        assert_eq!(board.window_center(), (17, 0), "global centre between clusters");
+        assert_eq!(
+            board.window_center(),
+            (17, 0),
+            "global centre between clusters"
+        );
         let legal = board.legal_moves();
-        assert!(legal.contains(&(28, 0)), "(28,0) must be a legal move near cluster-2");
+        assert!(
+            legal.contains(&(28, 0)),
+            "(28,0) must be a legal move near cluster-2"
+        );
 
         let centers = vec![(2, 0), (32, 0)];
         // cluster-2's NN prob at (28,0)'s local index: wq=28-32+9=5, wr=9 → 104.
@@ -1044,11 +1109,18 @@ mod ls_tests {
             "off-window covered cell retained in overflow; got keys {:?}",
             ls.overflow.keys().collect::<Vec<_>>()
         );
-        assert!((ls.overflow[&(28, 0)] - 1.0).abs() < 1e-6, "all mass on the one covered cell");
+        assert!(
+            (ls.overflow[&(28, 0)] - 1.0).abs() < 1e-6,
+            "all mass on the one covered cell"
+        );
 
         // Project into cluster-2's local-362: (28,0) must land non-zero at local 104.
         let local = aggregate_policy_to_local_ls(NA, true, TRUNK, &board, &(32, 0), &ls, &legal);
-        assert!((local[local_28] - 1.0).abs() < 1e-6, "off-window cell projected into covering cluster's local-362, got {}", local[local_28]);
+        assert!(
+            (local[local_28] - 1.0).abs() < 1e-6,
+            "off-window cell projected into covering cluster's local-362, got {}",
+            local[local_28]
+        );
     }
 
     // ── R256/ADJ-D37: the uncovered_forced_win fire-rate counter (LAW-18) ────────
@@ -1068,11 +1140,16 @@ mod ls_tests {
 
         let counter = AtomicU64::new(0);
         let mut ls = base.clone();
-        let fired = apply_forced_win_one_hot_ls_counted(
-            &board, &mut ls, (60, 0), 1.0, TRUNK, &counter,
+        let fired =
+            apply_forced_win_one_hot_ls_counted(&board, &mut ls, (60, 0), 1.0, TRUNK, &counter);
+        assert!(
+            !fired,
+            "uncovered win must still NO-OP (the clip is unchanged)"
         );
-        assert!(!fired, "uncovered win must still NO-OP (the clip is unchanged)");
-        assert_eq!(base.dense, ls.dense, "uncovered O1 must not touch the target");
+        assert_eq!(
+            base.dense, ls.dense,
+            "uncovered O1 must not touch the target"
+        );
         assert_eq!(
             counter.load(Ordering::Relaxed),
             1,
@@ -1089,14 +1166,20 @@ mod ls_tests {
         let cp = vec![vec![0.1f32; NA], vec![0.1f32; NA]];
         let centers = vec![(2, 0), (32, 0)];
         let mut ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
-        assert!(is_covered(28, 0, &centers, TRUNK, HALF), "premise: (28,0) is covered");
+        assert!(
+            is_covered(28, 0, &centers, TRUNK, HALF),
+            "premise: (28,0) is covered"
+        );
 
         let counter = AtomicU64::new(0);
-        let fired = apply_forced_win_one_hot_ls_counted(
-            &board, &mut ls, (28, 0), 1.0, TRUNK, &counter,
-        );
+        let fired =
+            apply_forced_win_one_hot_ls_counted(&board, &mut ls, (28, 0), 1.0, TRUNK, &counter);
         assert!(fired, "covered win must fire exactly as before");
-        assert_eq!(counter.load(Ordering::Relaxed), 0, "an injected win is not a drop");
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            0,
+            "an injected win is not a drop"
+        );
     }
 
     #[test]
@@ -1111,11 +1194,14 @@ mod ls_tests {
         let mut ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
 
         let counter = AtomicU64::new(0);
-        let fired = apply_forced_win_one_hot_ls_counted(
-            &board, &mut ls, (60, 0), 0.0, TRUNK, &counter,
-        );
+        let fired =
+            apply_forced_win_one_hot_ls_counted(&board, &mut ls, (60, 0), 0.0, TRUNK, &counter);
         assert!(!fired);
-        assert_eq!(counter.load(Ordering::Relaxed), 0, "weight 0 = disarmed, not dropped");
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            0,
+            "weight 0 = disarmed, not dropped"
+        );
     }
 
     #[test]
@@ -1132,15 +1218,33 @@ mod ls_tests {
             let covered = is_covered(win.0, win.1, &centers, TRUNK, HALF);
             let mut via_primitive = base.clone();
             let f1 = apply_forced_win_one_hot_ls(
-                &mut via_primitive, win, 0.9, covered, 17, 0, TRUNK, HALF,
+                &mut via_primitive,
+                win,
+                0.9,
+                covered,
+                17,
+                0,
+                TRUNK,
+                HALF,
             );
             let mut via_helper = base.clone();
             let f2 = apply_forced_win_one_hot_ls_counted(
-                &board, &mut via_helper, win, 0.9, TRUNK, &AtomicU64::new(0),
+                &board,
+                &mut via_helper,
+                win,
+                0.9,
+                TRUNK,
+                &AtomicU64::new(0),
             );
             assert_eq!(f1, f2, "fired verdict must agree at {win:?}");
-            assert_eq!(via_primitive.dense, via_helper.dense, "dense target at {win:?}");
-            assert_eq!(via_primitive.overflow, via_helper.overflow, "overflow at {win:?}");
+            assert_eq!(
+                via_primitive.dense, via_helper.dense,
+                "dense target at {win:?}"
+            );
+            assert_eq!(
+                via_primitive.overflow, via_helper.overflow,
+                "overflow at {win:?}"
+            );
         }
     }
 
@@ -1177,21 +1281,35 @@ mod ls_tests {
         assert!(covered);
         let fired = apply_forced_win_one_hot_ls(&mut ls, (28, 0), 1.0, covered, 17, 0, TRUNK, HALF);
         assert!(fired, "covered off-window win must fire");
-        assert!((ls.overflow[&(28, 0)] - 1.0).abs() < 1e-6, "pure one-hot on the covered win");
+        assert!(
+            (ls.overflow[&(28, 0)] - 1.0).abs() < 1e-6,
+            "pure one-hot on the covered win"
+        );
         let legal = board.legal_moves();
         let local = aggregate_policy_to_local_ls(NA, true, TRUNK, &board, &(32, 0), &ls, &legal);
         let local_28 = (5usize) * TRUNK as usize + 9;
-        assert!(local[local_28] > 0.99, "covered win one-hot survives projection, got {}", local[local_28]);
+        assert!(
+            local[local_28] > 0.99,
+            "covered win one-hot survives projection, got {}",
+            local[local_28]
+        );
 
         // UNCOVERED cell (60,0): no cluster window contains it → no-op.
         let mut ls2 = base.clone();
         let uncovered = is_covered(60, 0, &centers, TRUNK, HALF);
         assert!(!uncovered, "(60,0) is outside all cluster windows");
         let before = ls2.clone();
-        let fired2 = apply_forced_win_one_hot_ls(&mut ls2, (60, 0), 1.0, uncovered, 17, 0, TRUNK, HALF);
+        let fired2 =
+            apply_forced_win_one_hot_ls(&mut ls2, (60, 0), 1.0, uncovered, 17, 0, TRUNK, HALF);
         assert!(!fired2, "uncovered win must NO-OP (no leak)");
-        assert_eq!(before.dense, ls2.dense, "uncovered O1 must not touch the target");
-        assert!(!ls2.overflow.contains_key(&(60, 0)), "uncovered key never inserted");
+        assert_eq!(
+            before.dense, ls2.dense,
+            "uncovered O1 must not touch the target"
+        );
+        assert!(
+            !ls2.overflow.contains_key(&(60, 0)),
+            "uncovered key never inserted"
+        );
     }
 
     #[test]
@@ -1212,8 +1330,14 @@ mod ls_tests {
 
         let dense = aggregate_policy(NA, true, TRUNK, &board, &centers, &cluster_policies);
         let ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cluster_policies);
-        assert!(ls.overflow.is_empty(), "single centre at global centre → no off-window cells");
-        assert_eq!(dense, ls.dense, "legal_set dense row byte-identical to scatter_max when no off-window cell");
+        assert!(
+            ls.overflow.is_empty(),
+            "single centre at global centre → no off-window cells"
+        );
+        assert_eq!(
+            dense, ls.dense,
+            "legal_set dense row byte-identical to scatter_max when no off-window cell"
+        );
     }
 
     #[test]
@@ -1228,7 +1352,11 @@ mod ls_tests {
         let ls = aggregate_policy_ls(NA, true, TRUNK, &board, &centers, &cp);
         let legal = board.legal_moves();
         let picked = sample_policy_ls(&ls, &legal, &board, TRUNK, 0.0);
-        assert_eq!(picked, Some((28, 0)), "sampler picks the only off-window mass");
+        assert_eq!(
+            picked,
+            Some((28, 0)),
+            "sampler picks the only off-window mass"
+        );
     }
 }
 
@@ -1268,7 +1396,11 @@ mod dws3_tests {
             neighbor_dist: Some(2),
         };
         let proof = TacticalSolver::new(cfg).prove(&board, 16, 50_000);
-        assert_eq!(proof.result, Outcome::Win, "5-in-a-row + moves_remaining=2 is a forced win");
+        assert_eq!(
+            proof.result,
+            Outcome::Win,
+            "5-in-a-row + moves_remaining=2 is a forced win"
+        );
         let (wq, wr) = *proof.line.first().expect("WIN must carry a non-empty line");
         // The surfaced move must be a legal completing move (one of the two open
         // ends of the row).
@@ -1288,16 +1420,30 @@ mod dws3_tests {
         let mut soft = vec![1.0f32 / n as f32; n]; // uniform prior, p[action] ~0.1
         apply_forced_win_one_hot(&mut soft, action, 0.3);
         let sum: f32 = soft.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-6, "soft injection stays a distribution, sum={sum}");
+        assert!(
+            (sum - 1.0).abs() < 1e-6,
+            "soft injection stays a distribution, sum={sum}"
+        );
         // (1-w)*0.1 + w = 0.7*0.1 + 0.3 = 0.37
-        assert!((soft[action] - 0.37).abs() < 1e-6, "saving move boosted softly, got {}", soft[action]);
-        assert!(soft.iter().filter(|&&p| p > 1e-6).count() > 1, "NOT a one-hot — other mass survives");
+        assert!(
+            (soft[action] - 0.37).abs() < 1e-6,
+            "saving move boosted softly, got {}",
+            soft[action]
+        );
+        assert!(
+            soft.iter().filter(|&&p| p > 1e-6).count() > 1,
+            "NOT a one-hot — other mass survives"
+        );
 
         // weight=1 is the destructive one-hot the design forbids — confirm the
         // boundary the W1 KILL>16% verdict softens.
         let mut hot = vec![1.0f32 / n as f32; n];
         apply_forced_win_one_hot(&mut hot, action, 1.0);
-        assert_eq!(hot.iter().filter(|&&p| p > 1e-6).count(), 1, "weight=1 collapses to one-hot");
+        assert_eq!(
+            hot.iter().filter(|&&p| p > 1e-6).count(),
+            1,
+            "weight=1 collapses to one-hot"
+        );
     }
 
     #[test]
@@ -1308,8 +1454,15 @@ mod dws3_tests {
         let mut target = vec![0.0f32; 5];
         target[0] = 1.0; // all mass elsewhere; the saving move (idx 3) is 0-prior
         apply_forced_win_one_hot(&mut target, 3, 0.3);
-        assert!((target[3] - 0.3).abs() < 1e-6, "0-prior saving move reaches w mass, got {}", target[3]);
-        assert!((target.iter().sum::<f32>() - 1.0).abs() < 1e-6, "stays a distribution");
+        assert!(
+            (target[3] - 0.3).abs() < 1e-6,
+            "0-prior saving move reaches w mass, got {}",
+            target[3]
+        );
+        assert!(
+            (target.iter().sum::<f32>() - 1.0).abs() < 1e-6,
+            "stays a distribution"
+        );
     }
 
     #[test]
@@ -1318,7 +1471,11 @@ mod dws3_tests {
         // uses: solver proves the win → covered → soft LS injection fires and the
         // saving move's mass climbs in the ragged target.
         let board = forced_win_board();
-        let cfg = TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: Some(2) };
+        let cfg = TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: Some(2),
+        };
         let proof = TacticalSolver::new(cfg).prove(&board, 16, 50_000);
         let (wq, wr) = *proof.line.first().expect("non-empty WIN line");
 
@@ -1330,18 +1487,35 @@ mod dws3_tests {
         let mut cp = vec![0.0f32; (trunk * trunk + 1) as usize];
         cp[10] = 0.5;
         cp[20] = 0.5;
-        let mut ls = aggregate_policy_ls((trunk * trunk + 1) as usize, true, trunk, &board, &centers, &[cp]);
+        let mut ls = aggregate_policy_ls(
+            (trunk * trunk + 1) as usize,
+            true,
+            trunk,
+            &board,
+            &centers,
+            &[cp],
+        );
 
         let covered = is_covered(wq, wr, &centers, trunk, half);
-        assert!(covered, "the completing move is inside the single global cluster window");
+        assert!(
+            covered,
+            "the completing move is inside the single global cluster window"
+        );
         let before = ls.get(wq, wr, bcq, bcr, trunk, half, 0.0);
-        let fired = apply_forced_win_one_hot_ls(&mut ls, (wq, wr), 0.3, covered, bcq, bcr, trunk, half);
+        let fired =
+            apply_forced_win_one_hot_ls(&mut ls, (wq, wr), 0.3, covered, bcq, bcr, trunk, half);
         assert!(fired, "covered solver win must inject");
         let after = ls.get(wq, wr, bcq, bcr, trunk, half, 0.0);
-        assert!(after > before + 0.25, "soft injection lifts the saving move's mass {before}->{after}");
+        assert!(
+            after > before + 0.25,
+            "soft injection lifts the saving move's mass {before}->{after}"
+        );
         // the ragged target must remain a distribution after the soft blend (dense + overflow)
         let total: f32 = ls.dense.iter().sum::<f32>() + ls.overflow.values().sum::<f32>();
-        assert!((total - 1.0).abs() < 1e-5, "LS soft injection must stay a distribution, sum={total}");
+        assert!(
+            (total - 1.0).abs() < 1e-5,
+            "LS soft injection must stay a distribution, sum={total}"
+        );
     }
 }
 
@@ -1368,12 +1542,23 @@ mod gnn_assemble_tests {
         for q in 30..35i32 {
             stones.push((q, 0, -1)); // P2
         }
-        let params = BuildParams { win_length: 6, radius: 6, current_player: 1, moves_remaining: 2, trunk_size: 19 };
+        let params = BuildParams {
+            win_length: 6,
+            radius: 6,
+            current_player: 1,
+            moves_remaining: 2,
+            trunk_size: 19,
+        };
         let g = build_axis_graph(&StoneList { stones }, &params);
         let legal_coords: Vec<(i32, i32)> = g
             .legal_node_gather
             .iter()
-            .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+            .map(|&row| {
+                (
+                    g.node_coords[row as usize * 2],
+                    g.node_coords[row as usize * 2 + 1],
+                )
+            })
             .collect();
         (g, legal_coords)
     }
@@ -1385,7 +1570,10 @@ mod gnn_assemble_tests {
         let n_legal = slots.len();
         let n_off = slots.iter().filter(|&&s| s == OFF_WINDOW_SLOT).count();
         let n_in = n_legal - n_off;
-        assert!(n_off > 0 && n_in > 0, "fixture must be a MIXED board (in {n_in}, off {n_off})");
+        assert!(
+            n_off > 0 && n_in > 0,
+            "fixture must be a MIXED board (in {n_in}, off {n_off})"
+        );
 
         // uniform distribution over the legal set (pre-normalized, as §4.3 emits)
         let probs = vec![1.0f32 / n_legal as f32; n_legal];
@@ -1393,13 +1581,23 @@ mod gnn_assemble_tests {
 
         // every off-window node landed in overflow (NOT dropped); every
         // in-window node landed at its dense slot; total mass conserved.
-        assert_eq!(ls.overflow.len(), n_off, "all off-window nodes retained in overflow");
+        assert_eq!(
+            ls.overflow.len(),
+            n_off,
+            "all off-window nodes retained in overflow"
+        );
         for (i, &slot) in slots.iter().enumerate() {
             if slot == OFF_WINDOW_SLOT {
                 let v = ls.overflow.get(&coords[i]).copied().unwrap_or(0.0);
-                assert!((v - probs[i]).abs() < 1e-6, "off-window prob preserved by coord");
+                assert!(
+                    (v - probs[i]).abs() < 1e-6,
+                    "off-window prob preserved by coord"
+                );
             } else {
-                assert!((ls.dense[slot as usize] - probs[i]).abs() < 1e-6, "in-window prob at dense slot");
+                assert!(
+                    (ls.dense[slot as usize] - probs[i]).abs() < 1e-6,
+                    "in-window prob at dense slot"
+                );
             }
         }
         let total: f32 = ls.dense.iter().sum::<f32>() + ls.overflow.values().sum::<f32>();
@@ -1425,12 +1623,22 @@ mod gnn_assemble_tests {
         let ls = assemble_ls_from_gnn_probs(362, &probs, slots, &coords).expect("assemble ok");
 
         let off_coord = coords[off_idx];
-        let carried = ls.overflow.get(&off_coord).copied().expect("off-window argmax in overflow");
-        assert!((carried - 0.9).abs() < 1e-6, "off-window argmax mass preserved, got {carried}");
+        let carried = ls
+            .overflow
+            .get(&off_coord)
+            .copied()
+            .expect("off-window argmax in overflow");
+        assert!(
+            (carried - 0.9).abs() < 1e-6,
+            "off-window argmax mass preserved, got {carried}"
+        );
         let dense_max = ls.dense.iter().copied().fold(0.0f32, f32::max);
         let overflow_max = ls.overflow.values().copied().fold(0.0f32, f32::max);
         assert!(overflow_max >= dense_max, "the off-window cell is the GLOBAL argmax (overflow {overflow_max} >= dense {dense_max})");
-        assert!((overflow_max - 0.9).abs() < 1e-6, "global argmax is the off-window chosen move");
+        assert!(
+            (overflow_max - 0.9).abs() < 1e-6,
+            "global argmax is the off-window chosen move"
+        );
     }
 
     #[test]
@@ -1438,19 +1646,36 @@ mod gnn_assemble_tests {
         // A compact single-cluster board: every legal cell is in-window, so
         // overflow stays empty and dense carries the whole distribution.
         let stones = vec![(0, 0, 1i8), (1, 0, -1i8), (0, 1, 1i8)];
-        let params = BuildParams { win_length: 6, radius: 6, current_player: 1, moves_remaining: 2, trunk_size: 19 };
+        let params = BuildParams {
+            win_length: 6,
+            radius: 6,
+            current_player: 1,
+            moves_remaining: 2,
+            trunk_size: 19,
+        };
         let g = build_axis_graph(&StoneList { stones }, &params);
         let slots = &g.policy_scatter_index.0;
-        assert!(slots.iter().all(|&s| s != OFF_WINDOW_SLOT), "compact board is fully in-window");
+        assert!(
+            slots.iter().all(|&s| s != OFF_WINDOW_SLOT),
+            "compact board is fully in-window"
+        );
         let coords: Vec<(i32, i32)> = g
             .legal_node_gather
             .iter()
-            .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+            .map(|&row| {
+                (
+                    g.node_coords[row as usize * 2],
+                    g.node_coords[row as usize * 2 + 1],
+                )
+            })
             .collect();
         let n = slots.len();
         let probs = vec![1.0f32 / n as f32; n];
         let ls = assemble_ls_from_gnn_probs(362, &probs, slots, &coords).expect("assemble ok");
-        assert!(ls.overflow.is_empty(), "no off-window cells → empty overflow");
+        assert!(
+            ls.overflow.is_empty(),
+            "no off-window cells → empty overflow"
+        );
         assert!((ls.dense.iter().sum::<f32>() - 1.0).abs() < 1e-4);
     }
 
@@ -1499,7 +1724,10 @@ mod gnn_assemble_tests {
                 break;
             }
         }
-        assert!(any_in_window, "spread fixture must have in-window legal nodes");
+        assert!(
+            any_in_window,
+            "spread fixture must have in-window legal nodes"
+        );
         assert!(
             any_misread,
             "a wrong window centre MUST misread in-window slots — the F1 frame class S2 guards"
@@ -1532,10 +1760,20 @@ mod gnn_assemble_tests {
         assert!(i0 < 362 && i1 < 362, "chosen legal cells must be in-window");
         dense[i0] = 0.7;
         dense[i1] = 0.3;
-        let ls = LegalSetPolicy { dense, overflow: FxHashMap::default() };
+        let ls = LegalSetPolicy {
+            dense,
+            overflow: FxHashMap::default(),
+        };
 
         let rec = super::record_position_graph(
-            &b, &ls, trunk, b.current_player as i8, b.moves_remaining, b.ply.index() as u16, true, 128,
+            &b,
+            &ls,
+            trunk,
+            b.current_player as i8,
+            b.moves_remaining,
+            b.ply.index() as u16,
+            true,
+            128,
         )
         .expect("a full-mass target must record");
 
@@ -1543,14 +1781,22 @@ mod gnn_assemble_tests {
         assert_eq!(rec.stones.len(), 3);
         let stone_set: std::collections::HashSet<(i16, i16)> =
             rec.stones.iter().map(|&(q, r, _)| (q, r)).collect();
-        assert!(stone_set.contains(&(0, 0)) && stone_set.contains(&(2, 0)) && stone_set.contains(&(0, 2)));
+        assert!(
+            stone_set.contains(&(0, 0))
+                && stone_set.contains(&(2, 0))
+                && stone_set.contains(&(0, 2))
+        );
 
         // Visit target carries exactly the planted mass by coord (no drop).
         let vmap: std::collections::HashMap<(i16, i16), f32> =
             rec.visits.iter().map(|&(q, r, p)| ((q, r), p)).collect();
         assert!((vmap[&(c0.0 as i16, c0.1 as i16)] - 0.7).abs() < 1e-6);
         assert!((vmap[&(c1.0 as i16, c1.1 as i16)] - 0.3).abs() < 1e-6);
-        assert_eq!(rec.visits.len(), 2, "only the two nonzero-mass cells stored (sparse)");
+        assert_eq!(
+            rec.visits.len(),
+            2,
+            "only the two nonzero-mass cells stored (sparse)"
+        );
         assert_eq!(rec.outcome, 0.0, "outcome is a placeholder at record time");
         assert!(rec.is_full_search);
     }
@@ -1573,12 +1819,19 @@ mod gnn_assemble_tests {
             assert!(idx < 362, "chosen legal cells must be in-window");
             dense[idx] = 0.2;
         }
-        let ls = LegalSetPolicy { dense, overflow: FxHashMap::default() };
+        let ls = LegalSetPolicy {
+            dense,
+            overflow: FxHashMap::default(),
+        };
         let err = super::record_position_graph(&b, &ls, trunk, 1, 2, 0, true, 2)
             .expect_err("5 cells against max_visits=2 must raise, never silently truncate");
         match err {
             super::TargetIntegrityError::VisitSlotsExceeded { n, max, .. } => {
-                assert_eq!((n, max), (5, 2), "error carries the offending count + the cap");
+                assert_eq!(
+                    (n, max),
+                    (5, 2),
+                    "error carries the offending count + the cap"
+                );
             }
             other => panic!("expected VisitSlotsExceeded, got {other}"),
         }
@@ -1588,12 +1841,24 @@ mod gnn_assemble_tests {
     fn finalize_graph_outcome_matches_178_split() {
         use mantis_core::Player;
         // Win as this row's player → +1, supervised.
-        assert_eq!(super::finalize_graph_outcome(1, Some(Player::One), 0, -0.5, -0.1), (1.0, 1));
+        assert_eq!(
+            super::finalize_graph_outcome(1, Some(Player::One), 0, -0.5, -0.1),
+            (1.0, 1)
+        );
         // Win as the opponent → −1, supervised.
-        assert_eq!(super::finalize_graph_outcome(-1, Some(Player::One), 0, -0.5, -0.1), (-1.0, 1));
+        assert_eq!(
+            super::finalize_graph_outcome(-1, Some(Player::One), 0, -0.5, -0.1),
+            (-1.0, 1)
+        );
         // Ply-cap (terminal_reason 2) → ply_cap_value, MASKED (value_valid 0).
-        assert_eq!(super::finalize_graph_outcome(1, None, 2, -0.5, -0.1), (-0.5, 0));
+        assert_eq!(
+            super::finalize_graph_outcome(1, None, 2, -0.5, -0.1),
+            (-0.5, 0)
+        );
         // Organic draw (terminal_reason 3) → draw_reward, supervised.
-        assert_eq!(super::finalize_graph_outcome(1, None, 3, -0.5, -0.1), (-0.1, 1));
+        assert_eq!(
+            super::finalize_graph_outcome(1, None, 3, -0.5, -0.1),
+            (-0.1, 1)
+        );
     }
 }

@@ -18,7 +18,14 @@ use mantis_selfplay::replay::ReplayBuffer;
 /// v6 strides (state, chain, policy, aux, n_cells, n_planes) from the spec.
 fn v6_shape() -> (usize, usize, usize, usize, usize, usize) {
     let s = lookup_or_panic("v6");
-    (s.state_stride(), s.chain_stride(), s.policy_stride(), s.aux_stride(), s.n_cells(), s.n_planes)
+    (
+        s.state_stride(),
+        s.chain_stride(),
+        s.policy_stride(),
+        s.aux_stride(),
+        s.n_cells(),
+        s.n_planes,
+    )
 }
 
 // ── O-31: weighted-sampling distribution (seeded) ────────────────────────────────
@@ -28,7 +35,8 @@ fn o31_weighted_sampling_distribution() {
     let mut buf = ReplayBuffer::new(300, "v6");
     buf.rng = StdRng::seed_from_u64(42);
     // <10 → 0.15, <25 → 0.50, ≥25 → 1.0
-    buf.set_weight_schedule(vec![10, 25], vec![0.15, 0.50], 1.0).unwrap();
+    buf.set_weight_schedule(vec![10, 25], vec![0.15, 0.50], 1.0)
+        .unwrap();
 
     for _ in 0..100 {
         buf.push_for_test(1.0, 5, true); // short → outcome 1.0
@@ -55,10 +63,22 @@ fn o31_weighted_sampling_distribution() {
 
     let ratio_short_long = count_short as f64 / count_long as f64;
     let ratio_medium_long = count_medium as f64 / count_long as f64;
-    assert!(ratio_short_long < 0.30, "short/long {ratio_short_long:.3} should be < 0.30 (~0.15)");
-    assert!(ratio_short_long > 0.05, "short/long {ratio_short_long:.3} should be > 0.05 (~0.15)");
-    assert!(ratio_medium_long < 0.80, "medium/long {ratio_medium_long:.3} should be < 0.80 (~0.50)");
-    assert!(ratio_medium_long > 0.25, "medium/long {ratio_medium_long:.3} should be > 0.25 (~0.50)");
+    assert!(
+        ratio_short_long < 0.30,
+        "short/long {ratio_short_long:.3} should be < 0.30 (~0.15)"
+    );
+    assert!(
+        ratio_short_long > 0.05,
+        "short/long {ratio_short_long:.3} should be > 0.05 (~0.15)"
+    );
+    assert!(
+        ratio_medium_long < 0.80,
+        "medium/long {ratio_medium_long:.3} should be < 0.80 (~0.50)"
+    );
+    assert!(
+        ratio_medium_long > 0.25,
+        "medium/long {ratio_medium_long:.3} should be > 0.25 (~0.50)"
+    );
 }
 
 // ── O-32: aux augment equivariance across all 12 syms ────────────────────────────
@@ -91,7 +111,13 @@ fn o32_aux_augment_equivariance() {
             ReplayBuffer::apply_sym(
                 sym_idx,
                 ApplySymSlices {
-                    src: ApplySymSrc { state: &src_state, chain: &src_chain, policy: &src_pol, own: &src_own, wl: &src_wl },
+                    src: ApplySymSrc {
+                        state: &src_state,
+                        chain: &src_chain,
+                        policy: &src_pol,
+                        own: &src_own,
+                        wl: &src_wl,
+                    },
                     dst: ApplySymDst {
                         state: &mut dst_state,
                         chain: &mut dst_chain,
@@ -108,9 +134,18 @@ fn o32_aux_augment_equivariance() {
             let dst_own_idx = (0..aux_stride).find(|&i| dst_own[i] == 2);
             let dst_wl_idx = (0..aux_stride).find(|&i| dst_wl[i] == 1);
 
-            assert_eq!(dst_state_idx, dst_pol_idx, "sym {sym_idx} src {marker_src}: state vs policy");
-            assert_eq!(dst_state_idx, dst_own_idx, "sym {sym_idx} src {marker_src}: state vs ownership");
-            assert_eq!(dst_state_idx, dst_wl_idx, "sym {sym_idx} src {marker_src}: state vs winning_line");
+            assert_eq!(
+                dst_state_idx, dst_pol_idx,
+                "sym {sym_idx} src {marker_src}: state vs policy"
+            );
+            assert_eq!(
+                dst_state_idx, dst_own_idx,
+                "sym {sym_idx} src {marker_src}: state vs ownership"
+            );
+            assert_eq!(
+                dst_state_idx, dst_wl_idx,
+                "sym {sym_idx} src {marker_src}: state vs winning_line"
+            );
         }
     }
 }
@@ -197,11 +232,23 @@ fn o33_aux_alignment_reproject() {
     let (cq_a, cr_a) = (5i32, 2i32); // centre A (legacy bbox frame)
     let (cq_b, cr_b) = (8i32, 8i32); // centre B (per-cluster centre)
 
-    let proj_a: Vec<usize> = winning_cells.iter().map(|&(q, r)| Board::window_flat_idx_at(q, r, cq_a, cr_a)).collect();
-    let proj_b: Vec<usize> = winning_cells.iter().map(|&(q, r)| Board::window_flat_idx_at(q, r, cq_b, cr_b)).collect();
+    let proj_a: Vec<usize> = winning_cells
+        .iter()
+        .map(|&(q, r)| Board::window_flat_idx_at(q, r, cq_a, cr_a))
+        .collect();
+    let proj_b: Vec<usize> = winning_cells
+        .iter()
+        .map(|&(q, r)| Board::window_flat_idx_at(q, r, cq_b, cr_b))
+        .collect();
 
-    let differs = proj_a.iter().zip(&proj_b).any(|(a, b)| *a < aux_stride && *b < aux_stride && a != b);
-    assert!(differs, "test setup: centres A and B must yield different projections");
+    let differs = proj_a
+        .iter()
+        .zip(&proj_b)
+        .any(|(a, b)| *a < aux_stride && *b < aux_stride && a != b);
+    assert!(
+        differs,
+        "test setup: centres A and B must yield different projections"
+    );
 
     let mut buf = ReplayBuffer::new(4, "v6");
     let a_start = 0;
@@ -216,7 +263,11 @@ fn o33_aux_alignment_reproject() {
     let mut centre_b_hits = 0usize;
     for &flat in &proj_b {
         if flat < aux_stride {
-            assert_eq!(buf.winning_line[a_start + flat], 1, "centre-B projection cell {flat} must be marked");
+            assert_eq!(
+                buf.winning_line[a_start + flat],
+                1,
+                "centre-B projection cell {flat} must be marked"
+            );
             centre_b_hits += 1;
         }
     }
@@ -228,7 +279,10 @@ fn o33_aux_alignment_reproject() {
             centre_a_only_misses += 1;
         }
     }
-    assert!(centre_a_only_misses > 0, "centre-A projection should diverge from centre-B on ≥1 cell");
+    assert!(
+        centre_a_only_misses > 0,
+        "centre-A projection should diverge from centre-B on ≥1 cell"
+    );
 }
 
 // ── O-34b: f16-bits preservation through sample(identity) ────────────────────────
@@ -267,7 +321,10 @@ fn o34b_f16_bits_survive_sample_identity() {
     // augment=false → identity scatter → output bits == stored bits (no f16→f32→f16).
     let out = buf.sample_batch_core(1, false).unwrap();
     for (i, &bits) in patterns.iter().enumerate() {
-        assert_eq!(out.states[i], bits, "sample(identity) state bit pattern {i}");
+        assert_eq!(
+            out.states[i], bits,
+            "sample(identity) state bit pattern {i}"
+        );
         assert_eq!(out.chain[i], bits, "sample(identity) chain bit pattern {i}");
     }
 }

@@ -17,12 +17,12 @@
 //!   pub getter, so the wrapper mirrors it (reset to `None` on `new_game`/`reset`,
 //!   matching the tree's internal reset).
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
 use numpy::{IntoPyArray, PyArray1};
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
-use mantis_core::Board;
 use mantis_core::board::BOARD_SIZE;
+use mantis_core::Board;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::records;
 
@@ -72,7 +72,13 @@ impl PyMCTSTree {
     ///     quiescence_blend_2: blend amount for the 2-winning-moves case (default 0.3).
     #[new]
     #[pyo3(signature = (c_puct = 1.5, virtual_loss = 1.0, fpu_reduction = 0.25, quiescence_enabled = true, quiescence_blend_2 = 0.3))]
-    pub fn new(c_puct: f32, virtual_loss: f32, fpu_reduction: f32, quiescence_enabled: bool, quiescence_blend_2: f32) -> Self {
+    pub fn new(
+        c_puct: f32,
+        virtual_loss: f32,
+        fpu_reduction: f32,
+        quiescence_enabled: bool,
+        quiescence_blend_2: f32,
+    ) -> Self {
         let mut inner = MCTSTree::new_full(c_puct, virtual_loss, fpu_reduction);
         inner.configure_quiescence(quiescence_enabled, quiescence_blend_2);
         PyMCTSTree {
@@ -86,7 +92,9 @@ impl PyMCTSTree {
     /// Total quiescence value overrides/blends since last `new_game()`.
     #[getter]
     pub fn get_quiescence_fire_count(&self) -> u64 {
-        self.inner.quiescence_fire_count.load(std::sync::atomic::Ordering::Relaxed)
+        self.inner
+            .quiescence_fire_count
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Search statistics accumulated since the last `new_game()`.
@@ -377,7 +385,9 @@ impl PyMCTSTree {
         // The inner API takes `n_actions` (= policy_stride). The Python-side
         // MCTSTree path is v6-only today, so bs²+1 is correct. Zero-copy return.
         let n_actions = bs * bs + 1;
-        self.inner.get_policy(temperature, n_actions).into_pyarray(py)
+        self.inner
+            .get_policy(temperature, n_actions)
+            .into_pyarray(py)
     }
 
     /// Total visit count at the root (= number of simulations run).
@@ -451,16 +461,27 @@ impl PyMCTSTree {
     /// `(q, r)` is a raw axial tuple; Python callers format at the call site.
     pub fn get_root_children_info(&self) -> Vec<RootChildInfo> {
         let children = self.inner.get_root_children_info();
-        let q_sign: f32 = if self.inner.pool[0].moves_remaining == 1 { -1.0 } else { 1.0 };
-        children.into_iter().map(|(pool_idx, prior)| {
-            let child = &self.inner.pool[pool_idx as usize];
-            let visits = child.n_visits;
-            let q_value = if visits > 0 { q_sign * child.w_value / visits as f32 } else { 0.0 };
-            let val = child.action_idx;
-            let aq = (val >> 16) as i32 - 32768;
-            let ar = (val & 0xFFFF) as i32 - 32768;
-            ((aq, ar), pool_idx, prior, visits, q_value)
-        }).collect()
+        let q_sign: f32 = if self.inner.pool[0].moves_remaining == 1 {
+            -1.0
+        } else {
+            1.0
+        };
+        children
+            .into_iter()
+            .map(|(pool_idx, prior)| {
+                let child = &self.inner.pool[pool_idx as usize];
+                let visits = child.n_visits;
+                let q_value = if visits > 0 {
+                    q_sign * child.w_value / visits as f32
+                } else {
+                    0.0
+                };
+                let val = child.action_idx;
+                let aq = (val >> 16) as i32 - 32768;
+                let ar = (val & 0xFFFF) as i32 - 32768;
+                ((aq, ar), pool_idx, prior, visits, q_value)
+            })
+            .collect()
     }
 
     /// Compute improved policy targets using Gumbel completed Q-values
@@ -508,7 +529,10 @@ mod tests {
     fn cpu_only_simulations_visit_root() {
         let mut t = PyMCTSTree::new(1.5, 1.0, 0.0, true, 0.3);
         t.run_simulations_cpu_only(16);
-        assert!(t.root_visits() > 0, "cpu-only sims must accumulate root visits");
+        assert!(
+            t.root_visits() > 0,
+            "cpu-only sims must accumulate root visits"
+        );
     }
 
     #[test]
@@ -530,7 +554,11 @@ mod tests {
             t.new_game(&board);
             let leaves = t.select_leaves(py, 1).expect("select");
             assert_eq!(leaves.len(), 1);
-            assert_eq!(t.pending_boards.len(), 1, "bridge caches leaf boards for the ls path");
+            assert_eq!(
+                t.pending_boards.len(),
+                1,
+                "bridge caches leaf boards for the ls path"
+            );
             // n_actions for a v6 board = 19*19+1 = 362.
             let policies = vec![vec![1.0f32 / 362.0; 362]];
             let values = vec![0.0f32];

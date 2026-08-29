@@ -46,7 +46,10 @@ fn wide_board() -> Board {
 fn ls_on_first_legal(board: &Board, masses: &[f32]) -> LegalSetPolicy {
     let legal = board.legal_moves();
     assert!(legal.len() >= masses.len());
-    let mut ls = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     for (i, &m) in masses.iter().enumerate() {
         let (q, r) = legal[i];
         let flat = board.window_flat_idx(q, r);
@@ -59,7 +62,10 @@ fn ls_on_first_legal(board: &Board, masses: &[f32]) -> LegalSetPolicy {
     ls
 }
 
-fn record(board: &Board, ls: &LegalSetPolicy) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
+fn record(
+    board: &Board,
+    ls: &LegalSetPolicy,
+) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
     record_position_graph(board, ls, TRUNK, 1, 2, 3, true, VISIT_CAP)
 }
 
@@ -110,10 +116,16 @@ fn drive_negative_prior_chain(use_at: bool) {
     );
     // Negative mixture summing to 1 over the legal set: one cell at +1.5, one at
     // −0.5, rest 0 — mirrors the reproducer through the production seam.
-    let mut prior = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut prior = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     let f0 = board.window_flat_idx(legal[0].0, legal[0].1);
     let f1 = board.window_flat_idx(legal[1].0, legal[1].1);
-    assert!(f0 < NA && f1 < NA, "first two legal cells must be in-window");
+    assert!(
+        f0 < NA && f1 < NA,
+        "first two legal cells must be in-window"
+    );
     prior.dense[f0] = 1.5;
     prior.dense[f1] = -0.5;
 
@@ -170,7 +182,10 @@ fn over_unity_all_positive_is_unconstructible() {
     let err = record(&board, &ls).expect_err("Σ=2.0 must be unconstructible");
     match err {
         TargetIntegrityError::MassNotUnity { sum, .. } => {
-            assert!((sum - 2.0).abs() < 1e-6, "carries the off-unity sum, got {sum}");
+            assert!(
+                (sum - 2.0).abs() < 1e-6,
+                "carries the off-unity sum, got {sum}"
+            );
         }
         other => panic!("expected MassNotUnity, got {other}"),
     }

@@ -70,7 +70,8 @@ pub(crate) fn finalize_game(
     };
     // Snapshot the final-board cell list and winning line once; each row
     // reprojects them into its own per-cluster window centre.
-    let final_cells: Vec<((i32, i32), Cell)> = board.cells_iter().map(|(&qr, &c)| (qr, c)).collect();
+    let final_cells: Vec<((i32, i32), Cell)> =
+        board.cells_iter().map(|(&qr, &c)| (qr, c)).collect();
     let winning_cells: Vec<(i32, i32)> = board.find_winning_line();
 
     // terminal_reason (Phase B' Class-3):
@@ -117,7 +118,8 @@ pub(crate) fn finalize_game(
 
         // Per-row aux reprojection (ownership + winning_line) into this row's
         // per-cluster window centre.
-        let mut aux_u8 = records::reproject_game_end_row(&final_cells, &winning_cells, cq, cr, n_cells);
+        let mut aux_u8 =
+            records::reproject_game_end_row(&final_cells, &winning_cells, cq, cr, n_cells);
         // §130: forward-scatter the aux pair into the same rotated frame as
         // state/chain/policy (reproject + scatter compose — both are pure
         // permutations on cell indices).
@@ -125,7 +127,17 @@ pub(crate) fn finalize_game(
             rotate_aux_inplace(&mut aux_u8, sym_idx, sym_tables, n_cells);
         }
 
-        games_results.push_back((feat, chain, pol, outcome, plies, aux_u8, is_full_search, ply_index, value_valid));
+        games_results.push_back((
+            feat,
+            chain,
+            pol,
+            outcome,
+            plies,
+            aux_u8,
+            is_full_search,
+            ply_index,
+            value_valid,
+        ));
     }
     games_completed.fetch_add(1, Ordering::Relaxed);
     bump_win_counters(winner, x_wins, o_wins, draws);
@@ -205,12 +217,19 @@ pub(crate) fn finalize_game_graph(
     // convention the dense drain applies to `plies` before push.
     let game_length: u16 = plies.div_ceil(2).min(u16::MAX as usize) as u16;
 
-    let mut gq = graph_results_queue.lock().expect("graph_results_queue lock poisoned");
+    let mut gq = graph_results_queue
+        .lock()
+        .expect("graph_results_queue lock poisoned");
     for mut rec in graph_records {
         // §178 KEEP-verbatim split — reads rec.current_player / winner /
         // terminal_reason only, no cell geometry.
-        let (outcome, value_valid_u8) =
-            records::finalize_graph_outcome(rec.current_player, winner, terminal_reason, ply_cap_value, draw_reward);
+        let (outcome, value_valid_u8) = records::finalize_graph_outcome(
+            rec.current_player,
+            winner,
+            terminal_reason,
+            ply_cap_value,
+            draw_reward,
+        );
         rec.outcome = outcome;
         rec.value_valid = value_valid_u8 != 0;
         rec.game_length = game_length;
@@ -253,7 +272,12 @@ fn version_range(version_seen: &[u64]) -> (u64, u64, u32) {
 }
 
 /// Increment the per-outcome win/draw counters (frozen `:1716`).
-fn bump_win_counters(winner: Option<Player>, x_wins: &AtomicU64, o_wins: &AtomicU64, draws: &AtomicU64) {
+fn bump_win_counters(
+    winner: Option<Player>,
+    x_wins: &AtomicU64,
+    o_wins: &AtomicU64,
+    draws: &AtomicU64,
+) {
     match winner {
         Some(Player::One) => {
             x_wins.fetch_add(1, Ordering::Relaxed);
@@ -283,7 +307,9 @@ fn push_recent_meta(
     solver_fires: u32,
 ) {
     let (mv_min, mv_max, mv_distinct) = versions;
-    let mut rg = recent_game_results.lock().expect("recent_game_results lock poisoned");
+    let mut rg = recent_game_results
+        .lock()
+        .expect("recent_game_results lock poisoned");
     rg.push_back((
         plies,
         winner_code,
@@ -327,9 +353,13 @@ mod inv26_finalize_outcome_tests {
     fn no_winner_board() -> Board {
         let mut b = Board::new();
         for &(q, r) in &[(0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (0, 2)] {
-            b.apply_move(q, r).expect("move within the default legal radius");
+            b.apply_move(q, r)
+                .expect("move within the default legal radius");
         }
-        assert!(b.winner().is_none(), "6 scattered stones must not produce a winner");
+        assert!(
+            b.winner().is_none(),
+            "6 scattered stones must not produce a winner"
+        );
         b
     }
 
@@ -406,7 +436,10 @@ mod inv26_finalize_outcome_tests {
             (outcome - (-0.1)).abs() > 1e-9,
             "ply-cap outcome must NOT equal draw_reward (-0.1); got {outcome}",
         );
-        assert_eq!(value_valid, 0, "ply-cap (reason 2) masks the fabricated label (value_valid=0)");
+        assert_eq!(
+            value_valid, 0,
+            "ply-cap (reason 2) masks the fabricated label (value_valid=0)"
+        );
     }
 
     /// The complementary branch: an organic non-terminal-by-cap board
@@ -423,6 +456,9 @@ mod inv26_finalize_outcome_tests {
             (outcome - (-0.1)).abs() < 1e-9,
             "organic draw outcome must equal draw_reward (-0.1); got {outcome}",
         );
-        assert_eq!(value_valid, 1, "organic draw (reason 3) is a valid value target");
+        assert_eq!(
+            value_valid, 1,
+            "organic draw (reason 3) is a valid value target"
+        );
     }
 }

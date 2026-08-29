@@ -248,6 +248,12 @@ class InferenceServer(threading.Thread):
         self._occupancy_hist: dict[int, int] = {}
         self._empty_polls = 0
 
+        # PERF-BASELINE (2026-08-29) DIAGNOSTIC stage accumulators for the graph loop.
+        # Written only under `diagnostics.perf_timing`; read by `perf_stage_snapshot`.
+        self._stage_count: dict[str, int] = {}
+        self._stage_total_s: dict[str, float] = {}
+        self._stage_max_s: dict[str, float] = {}
+
         # ── fused-forward instrumentation (LAW-18 / R164) ────────────────────────────
         # The lever's OWN fire rate, in-run. Written ONLY by `_run_graph_loop`; measured PER
         # PART, because the part is what the GPU sees and what the cap bounds — a pop's total
@@ -540,6 +546,36 @@ class InferenceServer(threading.Thread):
         bucket = _pow2_bucket(n_requests)
         self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
 
+    def _record_stage(self, name: str, dt: float) -> None:
+        """Fold one DIAGNOSTIC stage sample into the cumulative accumulators."""
+        self._stage_count[name] = self._stage_count.get(name, 0) + 1
+        self._stage_total_s[name] = self._stage_total_s.get(name, 0.0) + dt
+        prev = self._stage_max_s.get(name)
+        if prev is None or dt > prev:
+            self._stage_max_s[name] = dt
+
+    def perf_stage_snapshot(self) -> dict[str, Any]:
+        """Cumulative per-stage timings for the graph loop (PERF-BASELINE diagnostic).
+
+        Empty when `diagnostics.perf_timing` is off — an absent stage is an un-armed
+        timer, never a measured zero.
+        """
+        return {
+            "perf_timing": self._perf_timing,
+            "perf_sync_cuda": self._perf_sync_cuda,
+            "forward_count": self._forward_count,
+            "total_requests": self._total_requests,
+            "stages": {
+                name: {
+                    "count": count,
+                    "total_ms": self._stage_total_s[name] * 1e3,
+                    "mean_ms": (self._stage_total_s[name] / count) * 1e3,
+                    "max_ms": self._stage_max_s[name] * 1e3,
+                }
+                for name, count in sorted(self._stage_count.items())
+            },
+        }
+
     def _record_collate(self, collate_s: float) -> None:
         """Accumulate ONE successful `collate_graph_batch`. Counted SEPARATELY from the
         wait: a batch whose collate raises still contributes a real wait sample, and
@@ -790,6 +826,8 @@ class InferenceServer(threading.Thread):
         # First batch after (re)start runs the FULL semantic/geometric layer.
         reset_semantic_canary()
         canary_period = int(self._batch_size)  # cheap; a knob if it ever matters
+        _perf = self._perf_timing
+        _sync = self._perf_sync_cuda and self.device.type == "cuda"
 
         try:
             while not self._stop_event.is_set():
@@ -818,7 +856,12 @@ class InferenceServer(threading.Thread):
                     self._total_requests += len(request_ids)
                     try:
                         # ONE read of each Rust getter, then pure-numpy views per part.
+                        _t0 = time.perf_counter() if _perf else 0.0
                         payload = graph_wire_from_rust(wire)
+                        if _perf:
+                            self._record_stage(
+                                "wire_copyout", time.perf_counter() - _t0)
+                            _t0 = time.perf_counter()
                         edge_counts = np.diff(
                             np.asarray(payload.edge_offsets, dtype=np.int64)
                         )
@@ -832,10 +875,16 @@ class InferenceServer(threading.Thread):
                             len(plan),
                             *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
                         )
+                        if _perf:
+                            self._record_stage("plan", time.perf_counter() - _t0)
                         probs_parts: list[np.ndarray] = []
                         values_parts: list[np.ndarray] = []
                         for g0, g1 in plan:
+                            _t0 = time.perf_counter() if _perf else 0.0
                             sub = slice_graph_wire(payload, g0, g1)
+                            if _perf:
+                                self._record_stage(
+                                    "slice", time.perf_counter() - _t0)
                             _t_collate_start = time.perf_counter()
                             batch = collate_graph_batch(
                                 sub,
@@ -851,7 +900,11 @@ class InferenceServer(threading.Thread):
                             # Per PART, not per pop: `collate.count == sum(M)` where it used to
                             # equal `queue_wait.count`. The asymmetry is intended and recorded
                             # so it is not read as a leak.
-                            self._record_collate(time.perf_counter() - _t_collate_start)
+                            _collate_s = time.perf_counter() - _t_collate_start
+                            self._record_collate(_collate_s)
+                            if _perf:
+                                self._record_stage("collate_h2d", _collate_s)
+                                _t0 = time.perf_counter()
                             stone_mask = stone_mask_from_batch(batch)
                             if self._forward_count == 0:
                                 assert not self.model.training, (
@@ -874,6 +927,12 @@ class InferenceServer(threading.Thread):
                                         stone_mask,
                                         batch.node_offsets,
                                     )
+                            if _perf:
+                                if _sync:
+                                    torch.cuda.synchronize()
+                                self._record_stage(
+                                    "forward", time.perf_counter() - _t0)
+                                _t0 = time.perf_counter()
                             # Segment-softmax in float32 (corrects reduced-precision drift,
                             # exactly like the dense path re-normalizes exp()). Segment-LOCAL
                             # by construction, so a part's softmax is the un-split forward's
@@ -893,6 +952,12 @@ class InferenceServer(threading.Thread):
                                     f"(probs finite={bool(torch.isfinite(probs).all())}, "
                                     f"values finite={bool(torch.isfinite(value).all())})"
                                 )
+                            if _perf:
+                                if _sync:
+                                    torch.cuda.synchronize()
+                                self._record_stage(
+                                    "postproc", time.perf_counter() - _t0)
+                                _t0 = time.perf_counter()
                             probs_parts.append(np.ascontiguousarray(
                                 probs.detach().cpu().numpy(), dtype=np.float32
                             ))
@@ -900,6 +965,8 @@ class InferenceServer(threading.Thread):
                                 value.detach().float().cpu().numpy().reshape(-1),
                                 dtype=np.float32,
                             ))
+                            if _perf:
+                                self._record_stage("d2h", time.perf_counter() - _t0)
                             self._record_fusion_part(
                                 int(node_counts[g0:g1].sum()),
                                 int(edge_counts[g0:g1].sum()),
@@ -911,6 +978,7 @@ class InferenceServer(threading.Thread):
                         # ONE submit per pop, against the payload's own UNSLICED offsets: the
                         # parts' offsets are re-based and would segment the concatenation
                         # wrongly from the first part onward.
+                        _t0 = time.perf_counter() if _perf else 0.0
                         self._batcher.submit_graph_inference_results(
                             request_ids,
                             np.ascontiguousarray(
@@ -923,6 +991,8 @@ class InferenceServer(threading.Thread):
                                 np.concatenate(values_parts), dtype=np.float32
                             ),
                         )
+                        if _perf:
+                            self._record_stage("submit", time.perf_counter() - _t0)
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
                         error_msg = f"Graph inference failed: {exc}"
                         _LOG.error(

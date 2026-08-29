@@ -8,9 +8,9 @@
 //!
 //! Thread-local `SymTables` avoids per-call allocation.
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
 use numpy::{IntoPyArray, PyArray4, PyArrayMethods, PyReadonlyArray4, PyUntypedArrayMethods};
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_search::{pool_overflow_count, take_pool_overflow_count};
@@ -56,7 +56,8 @@ pub(crate) fn apply_symmetries_batch<'py>(
     if sym_indices.len() != n {
         return Err(PyValueError::new_err(format!(
             "sym_indices length {} != batch size {}",
-            sym_indices.len(), n
+            sym_indices.len(),
+            n
         )));
     }
     for (i, &s) in sym_indices.iter().enumerate() {
@@ -76,7 +77,8 @@ pub(crate) fn apply_symmetries_batch<'py>(
             apply_symmetry_state::<f32>(src_b, dst_b, sym_indices[b], tables);
         }
     });
-    dst.into_pyarray(py).reshape([n, n_planes, BOARD_SIZE, BOARD_SIZE])
+    dst.into_pyarray(py)
+        .reshape([n, n_planes, BOARD_SIZE, BOARD_SIZE])
 }
 
 /// Read the process-wide MCTS pool-overflow counter without resetting.

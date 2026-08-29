@@ -69,7 +69,12 @@ pub(crate) fn rotate_policy_inplace(
 /// place (frozen `rotate.rs:115`). Ownership default is 1 (empty); winning_line
 /// default is 0 (no win mask).
 #[inline]
-pub(crate) fn rotate_aux_inplace(buf: &mut Vec<u8>, sym_idx: usize, tables: &SymTables, n_cells: usize) {
+pub(crate) fn rotate_aux_inplace(
+    buf: &mut Vec<u8>,
+    sym_idx: usize,
+    tables: &SymTables,
+    n_cells: usize,
+) {
     let mut tmp = vec![0u8; buf.len()];
     tmp[..n_cells].fill(1); // ownership default = empty
     let scatter = &tables.scatter[sym_idx];
@@ -115,8 +120,9 @@ mod parity_tests {
         let bs = t.board_size as i32;
         let half = (bs - 1) / 2;
         let n = t.n_cells;
-        let coords: Vec<(i32, i32)> =
-            (-3..=3).flat_map(|q| (-3..=3).map(move |r| (q, r))).collect();
+        let coords: Vec<(i32, i32)> = (-3..=3)
+            .flat_map(|q| (-3..=3).map(move |r| (q, r)))
+            .collect();
         let mut base = vec![0.0f32; n];
         for (k, &(q, r)) in coords.iter().enumerate() {
             base[flat(q, r, bs, half)] = (k as f32) + 1.0;

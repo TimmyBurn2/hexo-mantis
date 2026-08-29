@@ -299,7 +299,10 @@ impl GraphQueue {
             if self.inner.closed.load(Ordering::SeqCst) {
                 return Err("graph batcher closed while request was waiting".to_string());
             }
-            guard = waiter.cv.wait(guard).expect("graph waiter condvar poisoned");
+            guard = waiter
+                .cv
+                .wait(guard)
+                .expect("graph waiter condvar poisoned");
         }
     }
 

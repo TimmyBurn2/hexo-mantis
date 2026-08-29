@@ -215,8 +215,17 @@ pub(crate) fn run_worker_thread(
         random_opening_plies,
         visit_capacity,
         registry_spec,
-        search_flags: SearchFlags { quiescence_enabled, completed_q_values, gumbel_mcts },
-        exploration_flags: ExplorationFlags { dirichlet_enabled, selfplay_rotation_enabled },
+        search_flags:
+            SearchFlags {
+                quiescence_enabled,
+                completed_q_values,
+                gumbel_mcts,
+            },
+        exploration_flags:
+            ExplorationFlags {
+                dirichlet_enabled,
+                selfplay_rotation_enabled,
+            },
         // D7: `zoi_enabled` only — the radius-jitter sibling is killed.
         move_constraint_flags: MoveConstraintFlags { zoi_enabled },
         forced_win_policy:
@@ -255,7 +264,9 @@ pub(crate) fn run_worker_thread(
         cluster_threshold: registry_spec
             .cluster_threshold
             .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize) as i32,
-        cluster_window_size: registry_spec.cluster_window_size.unwrap_or(registry_spec.board_size),
+        cluster_window_size: registry_spec
+            .cluster_window_size
+            .unwrap_or(registry_spec.board_size),
     };
 
     let variance_atomics = ClusterVarianceAtomics {
@@ -333,8 +344,13 @@ pub(crate) fn run_worker_thread(
         solver_neighbor_dist,
         solver_visit_weight,
     };
-    let finalize_counters: (&AtomicUsize, &AtomicU64, &AtomicU64, &AtomicU64, &AtomicU64) =
-        (&games_completed, &x_wins, &o_wins, &draws, &positions_dropped);
+    let finalize_counters: (&AtomicUsize, &AtomicU64, &AtomicU64, &AtomicU64, &AtomicU64) = (
+        &games_completed,
+        &x_wins,
+        &o_wins,
+        &draws,
+        &positions_dropped,
+    );
 
     while running.load(Ordering::Relaxed) {
         run_one_game(
@@ -447,7 +463,9 @@ fn run_one_game(
 
     // D-WS3V3: count a seeded game once at start.
     if seeded {
-        solver_counters.seeded_games_started.fetch_add(1, Ordering::Relaxed);
+        solver_counters
+            .seeded_games_started
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     let infer = InferContext {
@@ -639,11 +657,17 @@ fn init_per_game_board(
         && seed.seed_fraction > 0.0
         && rng.random::<f32>() < seed.seed_fraction
     {
-        let prefix = seed.corpus.choose(rng).expect("corpus non-empty checked above");
+        let prefix = seed
+            .corpus
+            .choose(rng)
+            .expect("corpus non-empty checked above");
         let mut ok = true;
         for &(q, r) in prefix {
             if board.apply_move(q, r).is_err() {
-                debug_assert!(false, "seed prefix replay failed at ({q},{r}) — corpus is ctor-validated");
+                debug_assert!(
+                    false,
+                    "seed prefix replay failed at ({q},{r}) — corpus is ctor-validated"
+                );
                 ok = false;
                 break;
             }
@@ -681,7 +705,11 @@ fn init_per_game_board(
 
     // KataGo-style playout cap randomisation.
     let is_fast_game = init_ctx.fast_prob > 0.0 && rng.random::<f32>() < init_ctx.fast_prob;
-    let game_sims = if is_fast_game { init_ctx.fast_sims } else { init_ctx.standard_sims };
+    let game_sims = if is_fast_game {
+        init_ctx.fast_sims
+    } else {
+        init_ctx.standard_sims
+    };
 
     PerGameInit {
         board,

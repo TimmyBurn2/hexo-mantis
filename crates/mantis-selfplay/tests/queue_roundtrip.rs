@@ -135,12 +135,17 @@ fn dense_over_batch_drops_unknown_id() {
 fn dense_underflow_and_length_mismatch_are_loud() {
     let q = DenseQueue::new(FEAT);
     // length-mismatch ⇒ Err(()).
-    assert!(q.submit_batch_and_wait(vec![vec![0.0f32; FEAT + 1]]).is_err());
+    assert!(q
+        .submit_batch_and_wait(vec![vec![0.0f32; FEAT + 1]])
+        .is_err());
     // close ⇒ underflow: submit returns Err, and pop of the closed empty queue is empty.
     q.close();
     assert!(q.is_closed());
     assert!(q.submit_batch_and_wait(vec![vec![0.0f32; FEAT]]).is_err());
-    assert!(q.pop_batch(64, 10).is_empty(), "pop of closed empty queue is empty");
+    assert!(
+        q.pop_batch(64, 10).is_empty(),
+        "pop of closed empty queue is empty"
+    );
 }
 
 #[test]
@@ -151,7 +156,10 @@ fn dense_close_wakes_blocked_waiter() {
     // ensure the request is enqueued (waiter blocked) before closing.
     let _ = drain_dense(&q, 1);
     q.close();
-    assert!(handle.join().unwrap().is_err(), "closed-while-waiting ⇒ Err(())");
+    assert!(
+        handle.join().unwrap().is_err(),
+        "closed-while-waiting ⇒ Err(())"
+    );
 }
 
 #[test]
@@ -163,7 +171,10 @@ fn dense_submit_failure_makes_consumer_skip() {
     let popped = drain_dense(&q, 1);
     let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
     q.submit_failure(&ids, "mock inference boom");
-    assert!(handle.join().unwrap().is_err(), "submit-Err ⇒ worker skips batch");
+    assert!(
+        handle.join().unwrap().is_err(),
+        "submit-Err ⇒ worker skips batch"
+    );
 }
 
 // ── P-08 graph round-trip + reason-travels ────────────────────────────────────
@@ -211,7 +222,11 @@ fn graph_inference_failure_reason_travels() {
     let id = popped[0].0;
     q.submit_graph_results(&[id], vec![Err("segment desync boom".to_string())]);
     let res = handle.join().unwrap();
-    assert_eq!(res.unwrap_err(), "segment desync boom", "reason travels verbatim");
+    assert_eq!(
+        res.unwrap_err(),
+        "segment desync boom",
+        "reason travels verbatim"
+    );
 }
 
 #[test]
@@ -221,7 +236,9 @@ fn graph_fail_remaining_orphans_none() {
     let mut handles = Vec::new();
     for _ in 0..3 {
         let qc = q.clone();
-        handles.push(thread::spawn(move || qc.submit_graph_and_wait(valid_leaf())));
+        handles.push(thread::spawn(move || {
+            qc.submit_graph_and_wait(valid_leaf())
+        }));
     }
     let popped = drain_graph(&q, 3);
     assert_eq!(popped.len(), 3);
@@ -249,7 +266,11 @@ fn graph_build_failure_reason_preserved_and_travels() {
     let popped = drain_graph(&q, 1);
     let id = popped[0].0;
     q.fail_remaining(&[id], &reason);
-    assert_eq!(handle.join().unwrap().unwrap_err(), reason, "build reason travels to waiter");
+    assert_eq!(
+        handle.join().unwrap().unwrap_err(),
+        reason,
+        "build reason travels to waiter"
+    );
 }
 
 #[test]
@@ -297,7 +318,10 @@ fn graph_close_wakes_blocked_waiter() {
 fn graph_closed_before_submit_is_loud() {
     let q = GraphQueue::new();
     q.close();
-    assert_eq!(q.submit_graph_and_wait(valid_leaf()).unwrap_err(), "graph batcher is closed");
+    assert_eq!(
+        q.submit_graph_and_wait(valid_leaf()).unwrap_err(),
+        "graph batcher is closed"
+    );
 }
 
 // ── Q-FIND-1 batch submit: the whole leaf batch in flight at once ─────────────
@@ -315,7 +339,9 @@ fn one_pop(q: &GraphQueue, cap: usize) -> Vec<(u64, mantis_graph::AxisGraph)> {
     Vec::new()
 }
 
-fn ok_results(popped: &[(u64, mantis_graph::AxisGraph)]) -> Vec<Result<(LegalSetPolicy, f32), String>> {
+fn ok_results(
+    popped: &[(u64, mantis_graph::AxisGraph)],
+) -> Vec<Result<(LegalSetPolicy, f32), String>> {
     popped
         .iter()
         .map(|(_, g)| Ok((mock_ls(g.legal_node_gather.len()), 0.5f32)))
@@ -347,7 +373,11 @@ fn batch_submit_puts_the_whole_leaf_batch_in_flight_before_any_wait() {
     q.submit_graph_results(&ids, ok_results(&popped));
 
     let out = handle.join().unwrap();
-    assert_eq!(out.len(), n, "one result per submitted graph, in submission order");
+    assert_eq!(
+        out.len(),
+        n,
+        "one result per submitted graph, in submission order"
+    );
     assert!(out.iter().all(Result::is_ok));
 }
 
@@ -378,7 +408,11 @@ fn a_pop_capacity_below_the_leaf_batch_clears_in_exactly_ceil_n_over_cap_pops() 
         served += popped.len();
     }
     assert_eq!(served, n);
-    assert_eq!(pops, n.div_ceil(cap), "must clear in ceil(N/cap) pops, got {pops}");
+    assert_eq!(
+        pops,
+        n.div_ceil(cap),
+        "must clear in ceil(N/cap) pops, got {pops}"
+    );
     assert!(handle.join().unwrap().iter().all(Result::is_ok));
 }
 
@@ -426,7 +460,11 @@ fn batch_submit_preserves_submission_order_through_the_fuse() {
     let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
 
     let popped = one_pop(&q, n);
-    assert_eq!(popped.len(), n, "the whole batch must be in flight before any reply");
+    assert_eq!(
+        popped.len(),
+        n,
+        "the whole batch must be in flight before any reply"
+    );
     let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
     // Reply in REVERSE order with position-encoded values.
     for pos in (0..n).rev() {
@@ -439,7 +477,10 @@ fn batch_submit_preserves_submission_order_through_the_fuse() {
     let out = handle.join().unwrap();
     for (i, r) in out.iter().enumerate() {
         let (_ls, v) = r.as_ref().expect("all ok");
-        assert_eq!(*v as usize, i, "result {i} carries another graph's value — order broke");
+        assert_eq!(
+            *v as usize, i,
+            "result {i} carries another graph's value — order broke"
+        );
     }
 }
 
@@ -474,7 +515,11 @@ fn an_unreachable_threshold_still_serves_on_the_deadline() {
     let qc = q.clone();
     let handle = thread::spawn(move || qc.submit_graphs_and_wait(vec![valid_leaf()]));
     let popped = one_pop(&q, 64); // threshold 32, supply 1
-    assert_eq!(popped.len(), 1, "deadline expiry serves the single queued graph");
+    assert_eq!(
+        popped.len(),
+        1,
+        "deadline expiry serves the single queued graph"
+    );
     let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
     q.submit_graph_results(&ids, ok_results(&popped));
     assert!(handle.join().unwrap()[0].is_ok());
@@ -525,7 +570,10 @@ fn concurrent_batch_submitters_each_receive_only_their_own_results() {
     seen.sort_by(f32::total_cmp);
     let mut expected: Vec<f32> = ids.iter().map(|&id| id as f32).collect();
     expected.sort_by(f32::total_cmp);
-    assert_eq!(seen, expected, "every id delivered exactly once, to exactly one waiter");
+    assert_eq!(
+        seen, expected,
+        "every id delivered exactly once, to exactly one waiter"
+    );
 }
 
 #[test]
@@ -540,14 +588,22 @@ fn a_mid_batch_producer_failure_wakes_every_waiter_with_the_reason() {
     let handle = thread::spawn(move || qc.submit_graphs_and_wait(graphs));
 
     let popped = one_pop(&q, n);
-    assert_eq!(popped.len(), n, "the whole batch must be in flight before the failure");
+    assert_eq!(
+        popped.len(),
+        n,
+        "the whole batch must be in flight before the failure"
+    );
     let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
     let n_legal = popped[0].1.legal_node_gather.len();
     q.submit_graph_results(&ids[..2], vec![Ok((mock_ls(n_legal), 0.5)); 2]);
     q.fail_remaining(&ids[2..], "forward blew up mid-batch");
 
     let out = handle.join().unwrap();
-    assert_eq!(out.len(), n, "the caller returns only after EVERY waiter resolved");
+    assert_eq!(
+        out.len(),
+        n,
+        "the caller returns only after EVERY waiter resolved"
+    );
     assert!(out[0].is_ok() && out[1].is_ok());
     for r in &out[2..] {
         assert_eq!(r.as_ref().unwrap_err(), "forward blew up mid-batch");
@@ -564,7 +620,10 @@ fn graph_and_dense_queues_are_disjoint() {
     let graph = GraphQueue::new();
     graph.close();
     assert!(graph.is_closed());
-    assert!(!dense.is_closed(), "dense pool untouched by the graph batcher");
+    assert!(
+        !dense.is_closed(),
+        "dense pool untouched by the graph batcher"
+    );
 }
 
 #[test]

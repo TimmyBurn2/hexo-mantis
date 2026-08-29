@@ -41,13 +41,24 @@ fn refuse_non_distribution_row(
 ) -> Result<(), TargetIntegrityError> {
     let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum();
     if !sum.is_finite() {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     if visits.is_empty() || sum.abs() <= TARGET_MASS_TOL {
-        return Err(TargetIntegrityError::EmptyTarget { ply_index, n_legal: visits.len() });
+        return Err(TargetIntegrityError::EmptyTarget {
+            ply_index,
+            n_legal: visits.len(),
+        });
     }
     if (sum - 1.0).abs() > TARGET_MASS_TOL {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     Ok(())
 }
@@ -139,12 +150,17 @@ impl PyHexgBuffer {
         // C3/C8 union arithmetic never drifts). For a single graph local == global.
         let mut wire = GraphWire::from_axis_graphs(&graphs, self.inner.contract_version);
         let arrays = wire.take().expect("a freshly fused wire always has arrays");
-        Ok((PyGraphWire::from_arrays(arrays), PyGraphTargets { inner: targets }))
+        Ok((
+            PyGraphWire::from_arrays(arrays),
+            PyGraphTargets { inner: targets },
+        ))
     }
 
     /// Grow to `new_capacity`, preserving all records.
     pub fn resize(&mut self, new_capacity: usize) -> PyResult<()> {
-        self.inner.resize_impl(new_capacity).map_err(PyValueError::new_err)
+        self.inner
+            .resize_impl(new_capacity)
+            .map_err(PyValueError::new_err)
     }
 
     /// Set the game-length weight schedule (identical semantics to `ReplayBuffer`).
@@ -171,12 +187,16 @@ impl PyHexgBuffer {
 
     /// Save records to a binary file (HEXG on-disk format).
     pub fn save_to_path(&self, path: &str) -> PyResult<()> {
-        self.inner.save_to_path_impl(path).map_err(PyValueError::new_err)
+        self.inner
+            .save_to_path_impl(path)
+            .map_err(PyValueError::new_err)
     }
 
     /// Load records written by `save_to_path`; returns the number loaded.
     pub fn load_from_path(&mut self, path: &str) -> PyResult<usize> {
-        self.inner.load_from_path_impl(path).map_err(PyValueError::new_err)
+        self.inner
+            .load_from_path_impl(path)
+            .map_err(PyValueError::new_err)
     }
 
     #[getter]
@@ -288,7 +308,10 @@ mod tests {
 
     #[test]
     fn grid_encoding_is_loud_error() {
-        assert!(PyHexgBuffer::new(8, "v6", 128).is_err(), "HexgBuffer rejects a grid encoding");
+        assert!(
+            PyHexgBuffer::new(8, "v6", 128).is_err(),
+            "HexgBuffer rejects a grid encoding"
+        );
     }
 
     #[test]

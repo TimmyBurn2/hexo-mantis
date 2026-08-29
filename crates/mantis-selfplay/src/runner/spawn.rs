@@ -119,7 +119,9 @@ impl SelfPlayRunner {
 
     /// Build the per-worker capture prototype (4 bundles cloned once per worker
     /// spawn). Extracted so `start_impl` stays under the clippy line threshold.
-    fn build_worker_prototypes(&self) -> (WorkerStats, WorkerAtomics, WorkerChannels, WorkerParams) {
+    fn build_worker_prototypes(
+        &self,
+    ) -> (WorkerStats, WorkerAtomics, WorkerChannels, WorkerParams) {
         let c = &self.config;
         let stats_proto = WorkerStats {
             games_completed: self.games_completed.clone(),

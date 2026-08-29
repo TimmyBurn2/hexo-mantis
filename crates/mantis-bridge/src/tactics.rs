@@ -36,7 +36,11 @@ impl PyTacticalSolver {
     #[pyo3(signature = (window_half = Some(9), cand_cap = 40, neighbor_dist = None))]
     pub fn new(window_half: Option<i32>, cand_cap: usize, neighbor_dist: Option<i32>) -> Self {
         PyTacticalSolver {
-            inner: TacticalSolver::new(TacticalConfig { cand_cap, window_half, neighbor_dist }),
+            inner: TacticalSolver::new(TacticalConfig {
+                cand_cap,
+                window_half,
+                neighbor_dist,
+            }),
         }
     }
 

@@ -97,11 +97,19 @@ fn build_leaf_corpus() -> Vec<LeafRequest> {
             let r = draw_range(&mut s, -COORD_HALF, COORD_HALF);
             if seen.insert((q, r)) {
                 // Alternate players by placement order (P1 first).
-                let player = if stones.len().is_multiple_of(2) { 1 } else { -1 };
+                let player = if stones.len().is_multiple_of(2) {
+                    1
+                } else {
+                    -1
+                };
                 stones.push((q, r, player));
             }
         }
-        let current_player = if splitmix64_step(&mut s) & 1 == 0 { 1 } else { -1 };
+        let current_player = if splitmix64_step(&mut s) & 1 == 0 {
+            1
+        } else {
+            -1
+        };
         let moves_remaining = draw_range(&mut s, 1, 200);
         corpus.push(LeafRequest {
             stones,
@@ -135,8 +143,7 @@ fn assert_one_build_per_leaf(corpus: &[LeafRequest]) {
         builds += 1;
     }
     assert_eq!(
-        builds,
-        LEAF_CORPUS_SIZE,
+        builds, LEAF_CORPUS_SIZE,
         "F-19: exactly one build per leaf (corpus size)"
     );
 }

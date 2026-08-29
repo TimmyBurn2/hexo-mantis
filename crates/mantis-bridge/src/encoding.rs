@@ -8,8 +8,8 @@
 //! pyclass sets `module = "mantis._engine"` explicitly (PyO3's default is the
 //! `'builtins'` wart).
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
 use mantis_encoding::{PolicyPool, RegistrySpec as RustRegistrySpec, ValuePool};
@@ -31,20 +31,54 @@ pub struct PyRegistrySpec {
 
 #[pymethods]
 impl PyRegistrySpec {
-    #[getter] pub fn name(&self) -> &'static str { self.inner.name }
-    #[getter] pub fn board_size(&self) -> usize { self.inner.board_size }
-    #[getter] pub fn trunk_size(&self) -> usize { self.inner.trunk_size }
-    #[getter] pub fn cluster_window_size(&self) -> Option<usize> { self.inner.cluster_window_size }
-    #[getter] pub fn cluster_threshold(&self) -> Option<usize> { self.inner.cluster_threshold }
-    #[getter] pub fn legal_move_radius(&self) -> usize { self.inner.legal_move_radius }
-    #[getter] pub fn n_planes(&self) -> usize { self.inner.n_planes }
-    #[getter] pub fn plane_layout(&self) -> Vec<&'static str> { self.inner.plane_layout.to_vec() }
-    #[getter] pub fn policy_logit_count(&self) -> usize { self.inner.policy_logit_count }
-    #[getter] pub fn has_pass_slot(&self) -> bool { self.inner.has_pass_slot }
-    #[getter] pub fn is_multi_window(&self) -> bool { self.inner.is_multi_window }
+    #[getter]
+    pub fn name(&self) -> &'static str {
+        self.inner.name
+    }
+    #[getter]
+    pub fn board_size(&self) -> usize {
+        self.inner.board_size
+    }
+    #[getter]
+    pub fn trunk_size(&self) -> usize {
+        self.inner.trunk_size
+    }
+    #[getter]
+    pub fn cluster_window_size(&self) -> Option<usize> {
+        self.inner.cluster_window_size
+    }
+    #[getter]
+    pub fn cluster_threshold(&self) -> Option<usize> {
+        self.inner.cluster_threshold
+    }
+    #[getter]
+    pub fn legal_move_radius(&self) -> usize {
+        self.inner.legal_move_radius
+    }
+    #[getter]
+    pub fn n_planes(&self) -> usize {
+        self.inner.n_planes
+    }
+    #[getter]
+    pub fn plane_layout(&self) -> Vec<&'static str> {
+        self.inner.plane_layout.to_vec()
+    }
+    #[getter]
+    pub fn policy_logit_count(&self) -> usize {
+        self.inner.policy_logit_count
+    }
+    #[getter]
+    pub fn has_pass_slot(&self) -> bool {
+        self.inner.has_pass_slot
+    }
+    #[getter]
+    pub fn is_multi_window(&self) -> bool {
+        self.inner.is_multi_window
+    }
     /// Wire-format pool enums exposed as strings (matches the Python `Literal`
     /// shape returned by the retired @dataclass `value_pool` / `policy_pool` fields).
-    #[getter] pub fn value_pool(&self) -> &'static str {
+    #[getter]
+    pub fn value_pool(&self) -> &'static str {
         match self.inner.value_pool {
             ValuePool::None => "none",
             ValuePool::Min => "min",
@@ -52,7 +86,8 @@ impl PyRegistrySpec {
             ValuePool::Mean => "mean",
         }
     }
-    #[getter] pub fn policy_pool(&self) -> &'static str {
+    #[getter]
+    pub fn policy_pool(&self) -> &'static str {
         match self.inner.policy_pool {
             PolicyPool::None => "none",
             PolicyPool::ScatterMax => "scatter_max",
@@ -60,53 +95,114 @@ impl PyRegistrySpec {
             PolicyPool::LegalSetScatterMax => "legal_set_scatter_max",
         }
     }
-    #[getter] pub fn sym_table_id(&self) -> &'static str { self.inner.sym_table_id }
-    #[getter] pub fn schema_version(&self) -> u32 { self.inner.schema_version }
-    #[getter] pub fn notes(&self) -> &'static str { self.inner.notes }
+    #[getter]
+    pub fn sym_table_id(&self) -> &'static str {
+        self.inner.sym_table_id
+    }
+    #[getter]
+    pub fn schema_version(&self) -> u32 {
+        self.inner.schema_version
+    }
+    #[getter]
+    pub fn notes(&self) -> &'static str {
+        self.inner.notes
+    }
     /// Physical source-plane indices retained by wire format.
-    #[getter] pub fn kept_plane_indices(&self) -> Vec<usize> {
+    #[getter]
+    pub fn kept_plane_indices(&self) -> Vec<usize> {
         self.inner.kept_plane_indices.to_vec()
     }
     /// Source tensor plane count before the `kept_plane_indices` slice.
-    #[getter] pub fn n_source_planes(&self) -> usize { self.inner.n_source_planes }
+    #[getter]
+    pub fn n_source_planes(&self) -> usize {
+        self.inner.n_source_planes
+    }
     /// Multi-window cluster-count upper bound per position emitted by
     /// `Board::get_cluster_views()`. = 1 for single-window encodings.
-    #[getter] pub fn k_max(&self) -> u32 { self.inner.k_max }
+    #[getter]
+    pub fn k_max(&self) -> u32 {
+        self.inner.k_max
+    }
 
     // ── GNN-integration schema — representation discriminant + graph geom.
     /// "grid" (dense CNN planes) | "graph" (axis-graph GNN). Grid for every
     /// pre-graph encoding.
-    #[getter] pub fn representation(&self) -> &'static str { self.inner.representation.as_str() }
+    #[getter]
+    pub fn representation(&self) -> &'static str {
+        self.inner.representation.as_str()
+    }
     /// Convenience mirror of `representation == "graph"`.
-    #[getter] pub fn is_graph(&self) -> bool { self.inner.is_graph() }
+    #[getter]
+    pub fn is_graph(&self) -> bool {
+        self.inner.is_graph()
+    }
     /// Per-node feature width (graph only; `None` for grid). = 11.
-    #[getter] pub fn node_feat_dim(&self) -> Option<usize> { self.inner.node_feat_dim }
+    #[getter]
+    pub fn node_feat_dim(&self) -> Option<usize> {
+        self.inner.node_feat_dim
+    }
     /// Per-edge feature width (graph only). = 5.
-    #[getter] pub fn edge_feat_dim(&self) -> Option<usize> { self.inner.edge_feat_dim }
+    #[getter]
+    pub fn edge_feat_dim(&self) -> Option<usize> {
+        self.inner.edge_feat_dim
+    }
     /// GNN win-length (graph only). = 6.
-    #[getter] pub fn win_length(&self) -> Option<usize> { self.inner.win_length }
+    #[getter]
+    pub fn win_length(&self) -> Option<usize> {
+        self.inner.win_length
+    }
     /// GNN legal-move / axis-walk radius (graph only). = 6.
-    #[getter] pub fn graph_radius(&self) -> Option<usize> { self.inner.graph_radius }
+    #[getter]
+    pub fn graph_radius(&self) -> Option<usize> {
+        self.inner.graph_radius
+    }
     /// Number of win axes (graph only). = 3.
-    #[getter] pub fn win_axes(&self) -> Option<usize> { self.inner.win_axes }
+    #[getter]
+    pub fn win_axes(&self) -> Option<usize> {
+        self.inner.win_axes
+    }
     /// Ragged-payload contract version this encoding speaks (graph only). = 1.
-    #[getter] pub fn contract_version(&self) -> Option<u32> { self.inner.contract_version }
+    #[getter]
+    pub fn contract_version(&self) -> Option<u32> {
+        self.inner.contract_version
+    }
     /// Required native builder tag the resolver asserts (graph only). = 1.
-    #[getter] pub fn builder_impl_required(&self) -> Option<u8> { self.inner.builder_impl_required }
+    #[getter]
+    pub fn builder_impl_required(&self) -> Option<u8> {
+        self.inner.builder_impl_required
+    }
 
     /// Alias for `policy_logit_count` — matches the retired Python @dataclass
     /// `n_actions` @property.
-    #[getter] pub fn n_actions(&self) -> usize { self.inner.policy_logit_count }
+    #[getter]
+    pub fn n_actions(&self) -> usize {
+        self.inner.policy_logit_count
+    }
     /// Cells per trunk input tensor = trunk_size². Semantic: trunk_size, not board_size.
-    #[getter] pub fn n_cells(&self) -> usize { self.inner.n_cells() }
+    #[getter]
+    pub fn n_cells(&self) -> usize {
+        self.inner.n_cells()
+    }
     /// State plane stride = n_planes × n_cells.
-    #[getter] pub fn state_stride(&self) -> usize { self.inner.state_stride() }
+    #[getter]
+    pub fn state_stride(&self) -> usize {
+        self.inner.state_stride()
+    }
     /// Chain plane stride = n_chain_planes × n_cells.
-    #[getter] pub fn chain_stride(&self) -> usize { self.inner.chain_stride() }
+    #[getter]
+    pub fn chain_stride(&self) -> usize {
+        self.inner.chain_stride()
+    }
     /// Aux plane stride = n_cells (single aux plane).
-    #[getter] pub fn aux_stride(&self) -> usize { self.inner.aux_stride() }
+    #[getter]
+    pub fn aux_stride(&self) -> usize {
+        self.inner.aux_stride()
+    }
     /// Policy logit count = `policy_logit_count` (mirror of the field).
-    #[getter] pub fn policy_stride(&self) -> usize { self.inner.policy_stride() }
+    #[getter]
+    pub fn policy_stride(&self) -> usize {
+        self.inner.policy_stride()
+    }
 
     pub fn __repr__(&self) -> String {
         format!(
@@ -124,8 +220,7 @@ impl PyRegistrySpec {
         if let Some(spec) = mantis_encoding::lookup(name) {
             Ok(PyRegistrySpec { inner: spec })
         } else {
-            let mut known: Vec<&str> =
-                mantis_encoding::all_specs().map(|s| s.name).collect();
+            let mut known: Vec<&str> = mantis_encoding::all_specs().map(|s| s.name).collect();
             known.sort_unstable();
             Err(PyValueError::new_err(format!(
                 "RegistrySpec.from_registry: unknown encoding {name:?}; registered: {known:?}"

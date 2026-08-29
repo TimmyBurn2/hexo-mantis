@@ -21,9 +21,8 @@ use mantis_core::{Board, Player};
 use mantis_graph::{build_axis_graph, BuildParams, StoneList};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::records::{
-    aggregate_policy, aggregate_policy_ls, aggregate_policy_to_local,
-    aggregate_policy_to_local_ls, assemble_ls_from_gnn_probs, finalize_graph_outcome,
-    record_position_graph,
+    aggregate_policy, aggregate_policy_ls, aggregate_policy_to_local, aggregate_policy_to_local_ls,
+    assemble_ls_from_gnn_probs, finalize_graph_outcome, record_position_graph,
 };
 
 // ── Pinned constants (CAPTURE_LOG §B/§C) ────────────────────────────────────
@@ -248,14 +247,25 @@ fn produce_g5(mutate: bool) -> Vec<u8> {
     for q in 30..35i32 {
         stones.push((q, 0, -1));
     }
-    let params = BuildParams { win_length: 6, radius: 6, current_player: 1, moves_remaining: 2, trunk_size: 19 };
+    let params = BuildParams {
+        win_length: 6,
+        radius: 6,
+        current_player: 1,
+        moves_remaining: 2,
+        trunk_size: 19,
+    };
     let g = build_axis_graph(&StoneList { stones }, &params);
     let slots = g.policy_scatter_index.0.clone();
     let n_legal = slots.len();
     let mut coords: Vec<(i32, i32)> = g
         .legal_node_gather
         .iter()
-        .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+        .map(|&row| {
+            (
+                g.node_coords[row as usize * 2],
+                g.node_coords[row as usize * 2 + 1],
+            )
+        })
         .collect();
     let raw = fill_stream(WORKER_GOLDEN_SEED ^ 0x20, n_legal);
     let s: f32 = raw.iter().sum();
@@ -303,7 +313,10 @@ fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
         dense[idx] = stream[i];
         raw_sum += f64::from(stream[i]);
     }
-    let ls = LegalSetPolicy { dense: dense.clone(), overflow: FxHashMap::default() };
+    let ls = LegalSetPolicy {
+        dense: dense.clone(),
+        overflow: FxHashMap::default(),
+    };
     let refusal_sum = match record_position_graph(
         &board,
         &ls,
@@ -336,7 +349,10 @@ fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
             expected_visits.push((q as i16, r as i16, p));
         }
     }
-    let norm_ls = LegalSetPolicy { dense: norm_dense, overflow: FxHashMap::default() };
+    let norm_ls = LegalSetPolicy {
+        dense: norm_dense,
+        overflow: FxHashMap::default(),
+    };
     let rec = record_position_graph(
         &board,
         &norm_ls,
@@ -399,7 +415,10 @@ fn pin_g1_aggregate_policy() {
 }
 #[test]
 fn pin_g2_aggregate_policy_to_local() {
-    assert_eq!(produce_g2(false), read_golden("aggregate_policy_to_local.bin"));
+    assert_eq!(
+        produce_g2(false),
+        read_golden("aggregate_policy_to_local.bin")
+    );
 }
 #[test]
 fn pin_g3_aggregate_policy_ls() {
@@ -407,11 +426,17 @@ fn pin_g3_aggregate_policy_ls() {
 }
 #[test]
 fn pin_g4_aggregate_policy_to_local_ls() {
-    assert_eq!(produce_g4(false), read_golden("aggregate_policy_to_local_ls.bin"));
+    assert_eq!(
+        produce_g4(false),
+        read_golden("aggregate_policy_to_local_ls.bin")
+    );
 }
 #[test]
 fn pin_g5_assemble_ls_from_gnn_probs() {
-    assert_eq!(produce_g5(false), read_golden("assemble_ls_from_gnn_probs.bin"));
+    assert_eq!(
+        produce_g5(false),
+        read_golden("assemble_ls_from_gnn_probs.bin")
+    );
 }
 #[test]
 fn pin_g6_record_position_graph() {
@@ -423,7 +448,10 @@ fn pin_g6_record_position_graph() {
     // outlawed semantics + zero consumers; non-R20-dense — this is the GRAPH
     // record producer, no dense planes).
     let (refusal_sum, ok_bytes) = produce_g6(false);
-    assert!(refusal_sum > 1.0, "the raw stream planting must overshoot unity");
+    assert!(
+        refusal_sum > 1.0,
+        "the raw stream planting must overshoot unity"
+    );
     assert!(!ok_bytes.is_empty());
 }
 #[test]
@@ -438,7 +466,10 @@ fn mut_g1_diverges() {
 }
 #[test]
 fn mut_g2_diverges() {
-    assert_ne!(produce_g2(true), read_golden("aggregate_policy_to_local.bin"));
+    assert_ne!(
+        produce_g2(true),
+        read_golden("aggregate_policy_to_local.bin")
+    );
 }
 #[test]
 fn mut_g3_diverges() {
@@ -446,11 +477,17 @@ fn mut_g3_diverges() {
 }
 #[test]
 fn mut_g4_diverges() {
-    assert_ne!(produce_g4(true), read_golden("aggregate_policy_to_local_ls.bin"));
+    assert_ne!(
+        produce_g4(true),
+        read_golden("aggregate_policy_to_local_ls.bin")
+    );
 }
 #[test]
 fn mut_g5_diverges() {
-    assert_ne!(produce_g5(true), read_golden("assemble_ls_from_gnn_probs.bin"));
+    assert_ne!(
+        produce_g5(true),
+        read_golden("assemble_ls_from_gnn_probs.bin")
+    );
 }
 #[test]
 fn mut_g6_diverges() {
@@ -458,8 +495,15 @@ fn mut_g6_diverges() {
     // refusal sum and the normalized record bytes.
     let (sum_a, bytes_a) = produce_g6(false);
     let (sum_b, bytes_b) = produce_g6(true);
-    assert_ne!(sum_a.to_bits(), sum_b.to_bits(), "refusal sum must feel the flip");
-    assert_ne!(bytes_a, bytes_b, "normalized record bytes must feel the flip");
+    assert_ne!(
+        sum_a.to_bits(),
+        sum_b.to_bits(),
+        "refusal sum must feel the flip"
+    );
+    assert_ne!(
+        bytes_a, bytes_b,
+        "normalized record bytes must feel the flip"
+    );
 }
 #[test]
 fn mut_g7_diverges() {

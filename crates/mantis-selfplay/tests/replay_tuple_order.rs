@@ -41,7 +41,10 @@ const EXPECTED_TAGS_9: [TypeTag; 9] = [U16, U16, F32, F32, U8, U8, U8, U16, U8];
 
 #[test]
 fn crate_consts_equal_dispatcher_captured_order() {
-    assert_eq!(SAMPLE_ORDER_V1, EXPECTED_NAMES_8, "8-tuple field order drifted from capture");
+    assert_eq!(
+        SAMPLE_ORDER_V1, EXPECTED_NAMES_8,
+        "8-tuple field order drifted from capture"
+    );
     assert_eq!(
         SAMPLE_WITH_POS_ORDER_V1, EXPECTED_NAMES_9,
         "9-tuple field order drifted from capture"

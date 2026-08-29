@@ -40,7 +40,9 @@ fn flat(q: i32, r: i32, bs: i32, half: i32) -> usize {
 /// rotate out of the window under any of the 12 symmetries → the round-trip is a
 /// clean identity on them.
 fn interior_coords() -> Vec<(i32, i32)> {
-    (-3..=3).flat_map(|q| (-3..=3).map(move |r| (q, r))).collect()
+    (-3..=3)
+        .flat_map(|q| (-3..=3).map(move |r| (q, r)))
+        .collect()
 }
 
 /// Site-1 forward-scatter ∘ site-2 inverse-scatter is the identity on the interior
@@ -83,7 +85,11 @@ fn rotate_axial_forward_inverse_is_identity() {
             for r in -6..=6 {
                 let (rq, rr) = rotate_axial(q, r, s);
                 let (bq, br) = rotate_axial(rq, rr, inv_sym(s));
-                assert_eq!((bq, br), (q, r), "sym {s}: rotate_axial not inverted by inv_sym({s})");
+                assert_eq!(
+                    (bq, br),
+                    (q, r),
+                    "sym {s}: rotate_axial not inverted by inv_sym({s})"
+                );
             }
         }
     }
@@ -124,7 +130,10 @@ fn desynced_inverse_site_diverges() {
     apply_symmetry_state(&buf, &mut fwd, s, &t);
     let mut wrong = vec![0u32; n];
     apply_symmetry_state(&fwd, &mut wrong, s, &t); // WRONG index (desync)
-    assert_ne!(wrong, buf, "a desynced inverse site must diverge from the canonical frame");
+    assert_ne!(
+        wrong, buf,
+        "a desynced inverse site must diverge from the canonical frame"
+    );
 }
 
 /// Graph-path inference is ROTATION-FREE: `build_leaf_graph` takes NO `sym_idx`
@@ -133,12 +142,27 @@ fn desynced_inverse_site_diverges() {
 /// byte-identical, and no rotation state can perturb the coords/edges.
 #[test]
 fn graph_build_is_rotation_free_and_deterministic() {
-    let stones = vec![(0i64, 0, 1), (2, 0, 1), (0, 3, -1), (30, 0, -1), (31, 0, -1)];
+    let stones = vec![
+        (0i64, 0, 1),
+        (2, 0, 1),
+        (0, 3, -1),
+        (30, 0, -1),
+        (31, 0, -1),
+    ];
     let g1 = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("leaf builds");
     let g2 = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("leaf builds");
-    assert_eq!(g1.node_coords, g2.node_coords, "graph build must be deterministic (rotation-free)");
-    assert_eq!(g1.edge_index, g2.edge_index, "graph edges must be rotation-free");
-    assert_eq!(g1.window_center, g2.window_center, "graph window centre must be rotation-free");
+    assert_eq!(
+        g1.node_coords, g2.node_coords,
+        "graph build must be deterministic (rotation-free)"
+    );
+    assert_eq!(
+        g1.edge_index, g2.edge_index,
+        "graph edges must be rotation-free"
+    );
+    assert_eq!(
+        g1.window_center, g2.window_center,
+        "graph window centre must be rotation-free"
+    );
 }
 
 // ── source-presence of the 3 rotation sites + graph rotation-free ───────────────

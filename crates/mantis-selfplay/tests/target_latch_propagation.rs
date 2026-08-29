@@ -90,7 +90,11 @@ fn dispersed_prefix(n_plies: usize) -> Vec<(i32, i32)> {
 
 /// Mock graph producer: uniform probs over each request's legal nodes through the
 /// PRODUCTION `assemble_ls_from_gnn_probs` (the target_wire_carry harness pattern).
-fn spawn_graph_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
+fn spawn_graph_producer(
+    queue: GraphQueue,
+    n_actions: usize,
+    served: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_graph_batch(4, 5);
         if batch.is_empty() {
@@ -105,12 +109,18 @@ fn spawn_graph_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicU
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
-            let res = assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                .map(|ls| (ls, 0.0f32));
+            let res =
+                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
+                    .map(|ls| (ls, 0.0f32));
             ids.push(id);
             results.push(res);
         }
@@ -162,7 +172,10 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
     .expect("gnn runner must construct");
 
     // LAW-18 idle posture: the latch surface is VISIBLE at rest.
-    assert!(runner.fatal_defect().is_none(), "fresh runner carries no defect");
+    assert!(
+        runner.fatal_defect().is_none(),
+        "fresh runner carries no defect"
+    );
     assert_eq!(runner.stats_snapshot().target_integrity_defects, 0);
 
     let served = Arc::new(AtomicUsize::new(0));
@@ -186,7 +199,10 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
     runner.stop();
     producer.join().expect("mock graph producer exits on close");
 
-    assert!(served.load(Ordering::Relaxed) > 0, "no graph inference served — vacuous drive");
+    assert!(
+        served.load(Ordering::Relaxed) > 0,
+        "no graph inference served — vacuous drive"
+    );
     let msg = defect.expect(
         "the TargetIntegrityError never reached the drain face — the production store site \
          swallowed the Err (M-STORE, the M-N shape one seam further up): the LAW-14 latch \
@@ -202,8 +218,14 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
          pre-fix death said `192 cells exceed capacity 57` and named neither the failed \
          search nor its cause, which is what cost this defect its diagnosis: {msg}"
     );
-    assert!(halted, "store-then-halt: running must be false once the latch stores (LAW-14)");
-    assert!(fires >= 1, "the latch fire-count must be visible on the stats surface");
+    assert!(
+        halted,
+        "store-then-halt: running must be false once the latch stores (LAW-14)"
+    );
+    assert!(
+        fires >= 1,
+        "the latch fire-count must be visible on the stats surface"
+    );
     assert!(
         drained.is_empty(),
         "the refused record must never reach the drain queue ({} records leaked)",

@@ -7,8 +7,8 @@
 //! under the `solver_enabled` / seeded branches, so an OFF (default) run leaves
 //! the bench-gated hot path byte-identical.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::Arc;
 
 use super::record::K_CLUSTER_HISTOGRAM_BUCKETS;
 

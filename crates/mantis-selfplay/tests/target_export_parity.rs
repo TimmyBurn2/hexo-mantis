@@ -48,13 +48,19 @@ fn fixture_text(name: &str) -> String {
 
 fn value_of<'a>(src: &'a str, key: &str) -> &'a str {
     let needle = format!("\"{key}\":");
-    let at = src.find(&needle).unwrap_or_else(|| panic!("fixture key {key:?} absent"));
+    let at = src
+        .find(&needle)
+        .unwrap_or_else(|| panic!("fixture key {key:?} absent"));
     let rest = src[at + needle.len()..].trim_start();
     if let Some(inner) = rest.strip_prefix('[') {
-        let end = inner.find(']').unwrap_or_else(|| panic!("unterminated array for {key:?}"));
+        let end = inner
+            .find(']')
+            .unwrap_or_else(|| panic!("unterminated array for {key:?}"));
         &inner[..end]
     } else if let Some(inner) = rest.strip_prefix('"') {
-        let end = inner.find('"').unwrap_or_else(|| panic!("unterminated string for {key:?}"));
+        let end = inner
+            .find('"')
+            .unwrap_or_else(|| panic!("unterminated string for {key:?}"));
         &inner[..end]
     } else {
         let end = rest.find([',', '\n', '}']).unwrap_or(rest.len());
@@ -65,25 +71,37 @@ fn value_of<'a>(src: &'a str, key: &str) -> &'a str {
 fn ints(src: &str, key: &str) -> Vec<i64> {
     value_of(src, key)
         .split(',')
-        .map(|t| t.trim().parse::<i64>().unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})")))
+        .map(|t| {
+            t.trim()
+                .parse::<i64>()
+                .unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})"))
+        })
         .collect()
 }
 
 fn floats(src: &str, key: &str) -> Vec<f64> {
     value_of(src, key)
         .split(',')
-        .map(|t| t.trim().parse::<f64>().unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})")))
+        .map(|t| {
+            t.trim()
+                .parse::<f64>()
+                .unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})"))
+        })
         .collect()
 }
 
 fn scalar(src: &str, key: &str) -> i64 {
     let raw = value_of(src, key);
-    raw.trim().parse::<i64>().unwrap_or_else(|e| panic!("{key:?}: {raw:?} ({e})"))
+    raw.trim()
+        .parse::<i64>()
+        .unwrap_or_else(|e| panic!("{key:?}: {raw:?} ({e})"))
 }
 
 fn pairs(flat: &[i64]) -> Vec<(i32, i32)> {
     assert_eq!(flat.len() % 2, 0, "coord array must be pairs");
-    flat.chunks_exact(2).map(|c| (c[0] as i32, c[1] as i32)).collect()
+    flat.chunks_exact(2)
+        .map(|c| (c[0] as i32, c[1] as i32))
+        .collect()
 }
 
 /// One fixture position, fully decoded + honesty-checked against a replayed board.
@@ -110,12 +128,26 @@ fn load_pos(src: &str, i: usize) -> Pos {
     };
     let mut board = Board::with_geometry(geom);
     for (q, r) in pairs(&ints(src, &key("moves"))) {
-        board.apply_move(q, r).unwrap_or_else(|e| panic!("{id}: move ({q},{r}) rejected: {e}"));
+        board
+            .apply_move(q, r)
+            .unwrap_or_else(|e| panic!("{id}: move ({q},{r}) rejected: {e}"));
     }
     // Fixture honesty: re-derive every recorded claim from the replayed board.
-    assert_eq!(board.legal_moves().len() as i64, scalar(src, &key("n_legal")), "{id}: n_legal drift");
-    assert_eq!(i64::from(board.current_player as i8), scalar(src, &key("current_player")), "{id}: player drift");
-    assert_eq!(i64::from(board.moves_remaining), scalar(src, &key("moves_remaining")), "{id}: mr drift");
+    assert_eq!(
+        board.legal_moves().len() as i64,
+        scalar(src, &key("n_legal")),
+        "{id}: n_legal drift"
+    );
+    assert_eq!(
+        i64::from(board.current_player as i8),
+        scalar(src, &key("current_player")),
+        "{id}: player drift"
+    );
+    assert_eq!(
+        i64::from(board.moves_remaining),
+        scalar(src, &key("moves_remaining")),
+        "{id}: mr drift"
+    );
     let wc = pairs(&ints(src, &key("window_center")));
     assert_eq!(board.window_center(), wc[0], "{id}: window_center drift");
 
@@ -125,14 +157,24 @@ fn load_pos(src: &str, i: usize) -> Pos {
         .chunks_exact(3)
         .map(|c| (c[0] as i16, c[1] as i16, c[2] as i8))
         .collect();
-    assert_eq!(stones.len(), board.cells_iter().count(), "{id}: stone-count drift");
+    assert_eq!(
+        stones.len(),
+        board.cells_iter().count(),
+        "{id}: stone-count drift"
+    );
 
     let coords = pairs(&ints(src, &key("expected_coords")));
     let mass = floats(src, &key("expected_mass"));
     assert_eq!(coords.len(), mass.len(), "{id}: pair arrays misaligned");
     let sum: f64 = mass.iter().sum();
-    assert!((sum - 1.0).abs() < 1e-4, "{id}: fixture pairs must sum to 1, got {sum}");
-    assert!(mass.len() <= 128, "{id}: fixture pairs exceed the suite's 128-slot test geometry");
+    assert!(
+        (sum - 1.0).abs() < 1e-4,
+        "{id}: fixture pairs must sum to 1, got {sum}"
+    );
+    assert!(
+        mass.len() <= 128,
+        "{id}: fixture pairs exceed the suite's 128-slot test geometry"
+    );
 
     Pos {
         id,
@@ -151,7 +193,10 @@ fn load_pos(src: &str, i: usize) -> Pos {
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
-    let mut ls = LegalSetPolicy { dense: vec![0.0; n_actions], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; n_actions],
+        overflow: Default::default(),
+    };
     for (q, r) in legal {
         let idx = board.window_flat_idx(q, r);
         if idx < n_actions {
@@ -173,8 +218,10 @@ fn searched_tree(pos: &Pos) -> MCTSTree {
         if boards.is_empty() {
             break;
         }
-        let policies: Vec<LegalSetPolicy> =
-            boards.iter().map(|b| no_drop_uniform(b, pos.n_actions)).collect();
+        let policies: Vec<LegalSetPolicy> = boards
+            .iter()
+            .map(|b| no_drop_uniform(b, pos.n_actions))
+            .collect();
         let values = vec![0.0_f32; boards.len()];
         let centers: Vec<(i32, i32)> = boards.iter().map(|b| b.window_center()).collect();
         tree.expand_and_backup_ls_at(&policies, &values, &centers, pos.trunk);
@@ -196,14 +243,19 @@ fn export_map(pos: &Pos, ls: &LegalSetPolicy) -> Vec<((i32, i32), f64)> {
             out.push(((q, r), m));
         }
     }
-    out.sort_unstable_by_key(|&((q, r), _)| (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF));
+    out.sort_unstable_by_key(|&((q, r), _)| {
+        (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
+    });
     out
 }
 
 fn assert_pairs_match(id: &str, got: &[((i32, i32), f64)], want: &[((i32, i32), f64)]) {
     let g: Vec<(i32, i32)> = got.iter().map(|&(c, _)| c).collect();
     let w: Vec<(i32, i32)> = want.iter().map(|&(c, _)| c).collect();
-    assert_eq!(g, w, "{id}: exported nonzero coord set != frozen fixture pairs");
+    assert_eq!(
+        g, w,
+        "{id}: exported nonzero coord set != frozen fixture pairs"
+    );
     for (&(c, gm), &(_, wm)) in got.iter().zip(want) {
         assert!(
             (gm - wm).abs() <= PAIR_TOL,
@@ -211,7 +263,10 @@ fn assert_pairs_match(id: &str, got: &[((i32, i32), f64)], want: &[((i32, i32), 
         );
     }
     let total: f64 = got.iter().map(|&(_, m)| m).sum();
-    assert!((total - 1.0).abs() <= PAIR_TOL, "{id}: exported mass {total} != 1");
+    assert!(
+        (total - 1.0).abs() <= PAIR_TOL,
+        "{id}: exported mass {total} != 1"
+    );
 }
 
 fn check_export(src: &str, i: usize) {
@@ -241,7 +296,8 @@ fn check_roundtrip(src: &str, i: usize) {
         game_length: 0,
     };
     let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
-    buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push refused: {e}", pos.id));
+    buf.push_record_impl(&rec, 1)
+        .unwrap_or_else(|e| panic!("{}: push refused: {e}", pos.id));
     let (graphs, targets) = buf
         .sample_graph_batch_impl(1, false, 0.0)
         .unwrap_or_else(|e| panic!("{}: sample failed (mass_drop_check?): {e}", pos.id));
@@ -256,7 +312,9 @@ fn check_roundtrip(src: &str, i: usize) {
             got.push(((q, r), m));
         }
     }
-    got.sort_unstable_by_key(|&((q, r), _)| (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF));
+    got.sort_unstable_by_key(|&((q, r), _)| {
+        (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
+    });
     assert_pairs_match(&pos.id, &got, &pos.expected);
 }
 
@@ -281,8 +339,14 @@ fn o1r_export_matches_dispersed_fixture() {
     assert_eq!(n, 3, "dispersed companion is pre-registered at 3 positions");
     // Band preconditions (flip-set rows 1-2 as amended at T-2): p0 in the 193-235
     // n_legal band; p1 the HIGH-magnitude degenerate row; p2 the >=5000-legal row.
-    assert!((193..=235).contains(&scalar(&src, "p0_n_legal")), "p0 left the 193-235 band");
-    assert!(scalar(&src, "p2_n_legal") >= 5000, "p2 left the >=5000-legal regime");
+    assert!(
+        (193..=235).contains(&scalar(&src, "p0_n_legal")),
+        "p0 left the 193-235 band"
+    );
+    assert!(
+        scalar(&src, "p2_n_legal") >= 5000,
+        "p2 left the >=5000-legal regime"
+    );
     for i in 0..n as usize {
         check_export(&src, i);
     }
@@ -328,7 +392,8 @@ fn o1r_record_chain_full_mass() {
             )
             .unwrap_or_else(|e| panic!("{}: a full-mass export must record: {e}", pos.id));
             let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
-            buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push: {e}", pos.id));
+            buf.push_record_impl(&rec, 1)
+                .unwrap_or_else(|e| panic!("{}: push: {e}", pos.id));
             let (graphs, targets) = buf
                 .sample_graph_batch_impl(1, false, 0.0)
                 .unwrap_or_else(|e| panic!("{}: sample: {e}", pos.id));
