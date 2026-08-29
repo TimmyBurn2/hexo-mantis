@@ -27,6 +27,10 @@ from mantis.model import arch_from_spec_and_config  # noqa: E402
 from mantis.train.coordinator.dispatch import run_declared_train_step  # noqa: E402
 from mantis.train.trainer.core import Trainer  # noqa: E402
 
+class _SkipFill(Exception):
+    """Control-flow marker: the ring came from disk, so no fill drive runs."""
+
+
 TIMES: dict[str, list[float]] = defaultdict(list)
 ACTIVE = {"on": False}
 
@@ -60,10 +64,25 @@ def timed_sync(name: str, fn: Any) -> Any:
     return wrapper
 
 
-def install_wrappers(model: Any, buffer: Any, trainer: Any) -> None:
+class TimedBuffer:
+    """Proxy that times `sample_graph_batch` and forwards everything else.
+
+    A proxy rather than an attribute assignment: `HexgBuffer` is a pyclass and its methods are
+    read-only, so the wrapper has to sit in front of it. `_graph_step` reaches the ring only
+    through `getattr(buffer, "sample_graph_batch")`, so this is the whole surface it sees.
+    """
+
+    def __init__(self, raw: Any) -> None:
+        self._raw = raw
+        self.sample_graph_batch = timed("sample_ring", raw.sample_graph_batch)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._raw, name)
+
+
+def install_wrappers(model: Any, trainer: Any) -> None:
     from mantis.selfplay import graph_collate, graph_wire_split
 
-    buffer.sample_graph_batch = timed("sample_ring", buffer.sample_graph_batch)
     graph_collate.graph_wire_from_rust = timed(
         "wire_copyout", graph_collate.graph_wire_from_rust)
     graph_collate.collate_graph_batch = timed(
@@ -88,6 +107,8 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=25)
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt-dir", default="/workspace/perfbase/ckpt_throwaway")
+    ap.add_argument("--load-ring", default=None,
+                    help="load a persisted ring and SKIP the fill drive entirely")
     ap.add_argument("--save-ring", default=None,
                     help="persist the filled ring so a re-run need not pay the fill again")
     args = ap.parse_args()
@@ -118,7 +139,16 @@ def main() -> int:
             "fill_sec": args.fill_sec,
         },
     }
+    if args.load_ring:
+        loaded = buffer.load_from_path(args.load_ring)
+        record["ring_loaded_from"] = args.load_ring
+        record["ring_len_after_fill"] = int(buffer.get_buffer_stats()[0])
+        record["ring_load_return"] = int(loaded)
+        print(f"ring loaded from {args.load_ring}: "
+              f"{record['ring_len_after_fill']} samples (fill drive SKIPPED)")
     try:
+        if args.load_ring:
+            raise _SkipFill
         pool.start()
         time.sleep(args.fill_sec)
         pool.check_producer_health()
@@ -129,12 +159,16 @@ def main() -> int:
         if args.save_ring:
             buffer.save_to_path(args.save_ring)
             record["ring_saved_to"] = args.save_ring
+    except _SkipFill:
+        pass
     finally:
-        pool.stop()
-    print(f"ring holds {record['ring_len_after_fill']} samples after fill")
+        if not args.load_ring:
+            pool.stop()
+    print(f"ring holds {record['ring_len_after_fill']} samples")
 
     trainer = Trainer(pool.model, raw, arch=arch, checkpoint_dir=args.ckpt_dir, device=device)
-    install_wrappers(trainer.model, buffer, trainer)
+    install_wrappers(trainer.model, trainer)
+    buffer = TimedBuffer(buffer)
 
     def caps_provider() -> Any:
         return config.train.microbatch_caps
