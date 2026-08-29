@@ -23,7 +23,7 @@
 //! F-42: every pyclass sets `module = "mantis._engine"`.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use numpy::{
@@ -800,13 +800,22 @@ impl PyInferenceBatcher {
 }
 
 /// Block-diagonal ragged graph wire — the fuse-out of `next_graph_batch` /
-/// `HexgBuffer.sample_graph_batch`. Owns the moved-out `GraphWireArrays`; the 13
-/// per-array getters COPY into a fresh numpy array (repeatable, old behaviour
-/// PRESERVED). The Python `take()` is a single-read latch over these arrays.
+/// `HexgBuffer.sample_graph_batch`. Owns the moved-out `GraphWireArrays`.
+///
+/// `take()` MOVES every array into numpy (`IntoPyArray`, which "consumes `self` and moves
+/// its data into a NumPy array") rather than copying it — PERF-TRANCHE-1 A2, against ledger
+/// §10.1 #4, `wire_copyout` 12.43 ms/pop of pure memcpy-plus-first-touch. The production
+/// serve loop reads this face exactly once (`graph_wire_from_rust`), so the copy it used to
+/// pay bought nothing.
+///
+/// CONTRACT CHANGE, deliberate: the 13 per-array getters still COPY and are still freely
+/// repeatable, but only UNTIL `take()`. After `take()` the buffers are gone — they belong to
+/// numpy — and every getter raises `WireAlreadyConsumed`. The single-read latch is now the
+/// `Option` itself rather than a flag beside the data, so there is no state in which a getter
+/// can hand back an empty array and have it read as a measurement.
 #[pyclass(name = "GraphWire", module = "mantis._engine")]
 pub struct PyGraphWire {
-    arrays: GraphWireArrays,
-    taken: AtomicBool,
+    arrays: Option<GraphWireArrays>,
 }
 
 impl PyGraphWire {
@@ -814,110 +823,117 @@ impl PyGraphWire {
     /// internal Rust `take()` at fuse time).
     pub(crate) fn from_arrays(arrays: GraphWireArrays) -> Self {
         PyGraphWire {
-            arrays,
-            taken: AtomicBool::new(false),
+            arrays: Some(arrays),
         }
+    }
+
+    /// The arrays, or the named refusal if `take()` already moved them into numpy.
+    fn arrays(&self) -> PyResult<&GraphWireArrays> {
+        self.arrays.as_ref().ok_or_else(|| {
+            WireAlreadyConsumed::new_err(
+                "GraphWire arrays already consumed (take() MOVED them into numpy; the \
+                 per-array getters read the wire's own buffers and there are none left)",
+            )
+        })
     }
 }
 
 #[pymethods]
 impl PyGraphWire {
     #[getter]
-    fn contract_version(&self) -> u32 {
-        self.arrays.contract_version
+    fn contract_version(&self) -> PyResult<u32> {
+        Ok(self.arrays()?.contract_version)
     }
     #[getter]
-    fn builder_impl(&self) -> u8 {
-        self.arrays.builder_impl
+    fn builder_impl(&self) -> PyResult<u8> {
+        Ok(self.arrays()?.builder_impl)
     }
     #[getter]
-    fn n_graphs(&self) -> usize {
-        self.arrays.n_graphs
+    fn n_graphs(&self) -> PyResult<usize> {
+        Ok(self.arrays()?.n_graphs)
     }
     #[getter]
-    fn node_feat<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        PyArray1::from_slice(py, &self.arrays.node_feat)
+    fn node_feat<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.node_feat))
     }
     #[getter]
-    fn node_coords<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i32>> {
-        PyArray1::from_slice(py, &self.arrays.node_coords)
+    fn node_coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.node_coords))
     }
     #[getter]
-    fn edge_index<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
-        PyArray1::from_slice(py, &self.arrays.edge_index)
+    fn edge_index<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i64>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.edge_index))
     }
     #[getter]
-    fn edge_attr<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        PyArray1::from_slice(py, &self.arrays.edge_attr)
+    fn edge_attr<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.edge_attr))
     }
     #[getter]
-    fn node_offsets<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
-        PyArray1::from_slice(py, &self.arrays.node_offsets)
+    fn node_offsets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i64>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.node_offsets))
     }
     #[getter]
-    fn edge_offsets<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
-        PyArray1::from_slice(py, &self.arrays.edge_offsets)
+    fn edge_offsets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i64>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.edge_offsets))
     }
     #[getter]
-    fn legal_offsets<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
-        PyArray1::from_slice(py, &self.arrays.legal_offsets)
+    fn legal_offsets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i64>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.legal_offsets))
     }
     #[getter]
-    fn legal_node_gather<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i64>> {
-        PyArray1::from_slice(py, &self.arrays.legal_node_gather)
+    fn legal_node_gather<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i64>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.legal_node_gather))
     }
     #[getter]
-    fn policy_dst_slot<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i32>> {
-        PyArray1::from_slice(py, &self.arrays.policy_dst_slot)
+    fn policy_dst_slot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.policy_dst_slot))
     }
     #[getter]
-    fn n_nodes_checksum<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u32>> {
-        PyArray1::from_slice(py, &self.arrays.n_nodes_checksum)
+    fn n_nodes_checksum<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.n_nodes_checksum))
     }
     #[getter]
-    fn n_stones<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u16>> {
-        PyArray1::from_slice(py, &self.arrays.n_stones)
+    fn n_stones<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u16>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.n_stones))
     }
     #[getter]
-    fn window_center<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i32>> {
-        PyArray1::from_slice(py, &self.arrays.window_center)
+    fn window_center<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i32>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.window_center))
     }
     #[getter]
-    fn current_player<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<i8>> {
-        PyArray1::from_slice(py, &self.arrays.current_player)
+    fn current_player<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<i8>>> {
+        Ok(PyArray1::from_slice(py, &self.arrays()?.current_player))
     }
 
-    /// Single-read latch: yields all wire fields once as a dict; a second call
-    /// raises `WireAlreadyConsumed` (the WP6 wire single-read guarantee, enforced
-    /// at the Python boundary). The per-array getters above remain repeatable.
-    fn take<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        if self
-            .taken
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return Err(WireAlreadyConsumed::new_err(
+    /// Single-read latch: MOVES all wire fields out once as a dict; a second call — and
+    /// every per-array getter afterwards — raises `WireAlreadyConsumed`.
+    ///
+    /// `into_pyarray` hands numpy the `Vec`'s own allocation instead of memcpying it into a
+    /// fresh one, which is the whole of A2. numpy's `resize` cannot be used on an array
+    /// built this way; nothing in this repo resizes a wire array.
+    fn take<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let a = self.arrays.take().ok_or_else(|| {
+            WireAlreadyConsumed::new_err(
                 "GraphWire arrays already consumed (single-read take() called twice)",
-            ));
-        }
-        let a = &self.arrays;
+            )
+        })?;
         let d = PyDict::new(py);
         d.set_item("contract_version", a.contract_version)?;
         d.set_item("builder_impl", a.builder_impl)?;
         d.set_item("n_graphs", a.n_graphs)?;
-        d.set_item("node_feat", PyArray1::from_slice(py, &a.node_feat))?;
-        d.set_item("node_coords", PyArray1::from_slice(py, &a.node_coords))?;
-        d.set_item("edge_index", PyArray1::from_slice(py, &a.edge_index))?;
-        d.set_item("edge_attr", PyArray1::from_slice(py, &a.edge_attr))?;
-        d.set_item("node_offsets", PyArray1::from_slice(py, &a.node_offsets))?;
-        d.set_item("edge_offsets", PyArray1::from_slice(py, &a.edge_offsets))?;
-        d.set_item("legal_offsets", PyArray1::from_slice(py, &a.legal_offsets))?;
-        d.set_item("legal_node_gather", PyArray1::from_slice(py, &a.legal_node_gather))?;
-        d.set_item("policy_dst_slot", PyArray1::from_slice(py, &a.policy_dst_slot))?;
-        d.set_item("n_nodes_checksum", PyArray1::from_slice(py, &a.n_nodes_checksum))?;
-        d.set_item("n_stones", PyArray1::from_slice(py, &a.n_stones))?;
-        d.set_item("window_center", PyArray1::from_slice(py, &a.window_center))?;
-        d.set_item("current_player", PyArray1::from_slice(py, &a.current_player))?;
+        d.set_item("node_feat", a.node_feat.into_pyarray(py))?;
+        d.set_item("node_coords", a.node_coords.into_pyarray(py))?;
+        d.set_item("edge_index", a.edge_index.into_pyarray(py))?;
+        d.set_item("edge_attr", a.edge_attr.into_pyarray(py))?;
+        d.set_item("node_offsets", a.node_offsets.into_pyarray(py))?;
+        d.set_item("edge_offsets", a.edge_offsets.into_pyarray(py))?;
+        d.set_item("legal_offsets", a.legal_offsets.into_pyarray(py))?;
+        d.set_item("legal_node_gather", a.legal_node_gather.into_pyarray(py))?;
+        d.set_item("policy_dst_slot", a.policy_dst_slot.into_pyarray(py))?;
+        d.set_item("n_nodes_checksum", a.n_nodes_checksum.into_pyarray(py))?;
+        d.set_item("n_stones", a.n_stones.into_pyarray(py))?;
+        d.set_item("window_center", a.window_center.into_pyarray(py))?;
+        d.set_item("current_player", a.current_player.into_pyarray(py))?;
         Ok(d)
     }
 }

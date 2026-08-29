@@ -113,14 +113,49 @@ def test_wire_already_consumed_second_take_raises():
         wire.take()
 
 
-def test_wire_getters_repeatable_after_take():
-    """The per-array COPY getters stay freely-repeatable (frozen behaviour) even
-    after the single-read take() latch fires."""
+def test_wire_getters_repeatable_until_take():
+    """The per-array COPY getters are freely repeatable BEFORE the single-read latch."""
     wire = _one_graph_wire()
-    _ = wire.take()
     a = np.asarray(wire.node_feat)
     b = np.asarray(wire.node_feat)
     assert np.array_equal(a, b) and a.size > 0
+
+
+def test_wire_getters_refuse_after_take():
+    """PERF-TRANCHE-1 A2 contract change: `take()` MOVES the buffers into numpy, so after
+    it there are none left to copy and every getter raises the NAMED error.
+
+    The old contract kept the getters readable after `take()` because `take()` copied.
+    Moving is the whole of A2 (ledger §10.1 #4, `wire_copyout` 12.43 ms/pop), and the
+    alternative to raising here is a getter that hands back an EMPTY array — a silent zero
+    a caller would read as a measurement.
+    """
+    wire = _one_graph_wire()
+    taken = wire.take()
+    moved = np.asarray(taken["node_feat"])
+    assert moved.size > 0
+    for name in ("node_feat", "edge_index", "edge_attr", "legal_offsets", "n_graphs"):
+        with pytest.raises(_engine.WireAlreadyConsumed):
+            getattr(wire, name)
+
+
+def test_take_moves_rather_than_copies():
+    """The moved array must carry the wire's own bytes — the move is not a truncation.
+
+    Compares the pre-take getter copy against the post-take moved array, on a wire built
+    twice from the same deterministic push, so a move that silently produced a fresh empty
+    or a differently-ordered buffer cannot pass.
+    """
+    copied = _one_graph_wire().node_feat
+    moved = _one_graph_wire().take()["node_feat"]
+    assert np.array_equal(np.asarray(copied), np.asarray(moved))
+    # The MECHANISM, not a proxy for it: `from_slice` makes numpy allocate and own the
+    # buffer (`base is None`); `into_pyarray` hands numpy Rust's own allocation behind a
+    # container base object. A regression to copying would flip both of these.
+    assert copied.base is None and copied.flags["OWNDATA"], (
+        "the getter still COPIES into a numpy-owned buffer")
+    assert moved.base is not None and not moved.flags["OWNDATA"], (
+        "take() must hand numpy the Rust allocation, not a copy of it")
 
 
 def test_builder_impl_native_handshake():

@@ -252,9 +252,42 @@ def _graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
 # Rust GraphWire → GraphWirePayload adapter (the step-6 wiring reads the pyclass).
 # ---------------------------------------------------------------------------
 def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
-    """Read the Rust `GraphWire` pyclass getters into a payload. The resolver is
-    duck-typed, so this is only needed where a caller wants an explicit
-    dataclass; `collate_graph_batch` accepts the pyclass directly."""
+    """Read one Rust `GraphWire` into a payload, through its single-read `take()`.
+
+    `take()` MOVES the wire's buffers into numpy instead of copying them out getter by
+    getter (PERF-TRANCHE-1 A2, ledger §10.1 #4). It consumes the wire: after this call the
+    pyclass's per-array getters raise `WireAlreadyConsumed`, which is why this is the ONE
+    place production reads a wire. A duck-typed object without `take` — a payload replayed
+    from a fixture, a stub in a test — is read through the getters as before.
+
+    Raises:
+        WireAlreadyConsumed: the wire was already taken (a second read of one wire).
+    """
+    if not hasattr(gw, "take"):
+        return _payload_from_getters(gw)
+    d = gw.take()
+    return GraphWirePayload(
+        contract_version=int(d["contract_version"]),
+        builder_impl=int(d["builder_impl"]),
+        n_graphs=int(d["n_graphs"]),
+        node_feat=d["node_feat"],
+        node_coords=d["node_coords"],
+        edge_index=d["edge_index"],
+        edge_attr=d["edge_attr"],
+        node_offsets=d["node_offsets"],
+        edge_offsets=d["edge_offsets"],
+        legal_offsets=d["legal_offsets"],
+        legal_node_gather=d["legal_node_gather"],
+        policy_dst_slot=d["policy_dst_slot"],
+        n_nodes_checksum=d["n_nodes_checksum"],
+        n_stones=d["n_stones"],
+        window_center=d["window_center"],
+        current_player=d["current_player"],
+    )
+
+
+def _payload_from_getters(gw: Any) -> GraphWirePayload:
+    """The per-array getter read — for duck-typed wires that carry no `take()`."""
     return GraphWirePayload(
         contract_version=int(gw.contract_version),
         builder_impl=int(gw.builder_impl),
