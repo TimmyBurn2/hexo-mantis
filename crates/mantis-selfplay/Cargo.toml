@@ -46,3 +46,8 @@ harness = false
 [[bench]]
 name = "graph_build_bench"
 harness = false
+
+# PERF-TRANCHE-1 A1 — the block-diagonal fuse at run5's measured pop shape.
+[[bench]]
+name = "queue_fuse_bench"
+harness = false

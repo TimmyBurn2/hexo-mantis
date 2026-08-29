@@ -3,10 +3,18 @@
 //! pyo3 STRIPPED.
 //!
 //! A plain-Rust flat-`Vec` type (the `#[pyclass]` + per-field `#[getter]` numpy
-//! copies are WP7). `from_axis_graphs` is the VERBATIM block-diagonal fuse
+//! copies are WP7). `from_axis_graphs` computes the block-diagonal fuse
 //! (`inference_bridge.rs:1207`, offset accumulation `:1230-1262`): index arrays
 //! come out ALREADY globally offset (`i64`); `edge_index` is
 //! `[src_global (E) ‖ dst_global (E)]`.
+//!
+//! The fuse's ARITHMETIC is the frozen one; its WRITE PATTERN is not, since
+//! PERF-TRANCHE-1 A1 (ledger §10.1 #2 — 33.78 ms/pop at a derived 1.35 GB/s of output).
+//! Every array is reserved from a sizing pass, `edge_index` is one `2E` buffer written
+//! once instead of an `edge_src`/`edge_dst` pair plus a terminal concat, and the widening
+//! `u32 -> i64 + offset` runs through `extend` over a `TrustedLen` iterator rather than a
+//! per-element `push`. Byte-equality with the pre-A1 write path is pinned by
+//! `tests/queue_fuse_reserve_parity.rs`, which carries that path transcribed.
 //!
 //! WP6 makes single-read a TYPE guarantee the frozen getters lacked: `take()`
 //! moves every array out exactly once (inner `Option::take()`); a second call is
@@ -16,7 +24,7 @@
 
 use std::fmt;
 
-use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
+use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE, EDGE_FEAT_DIM, NODE_FEAT_DIM};
 
 /// The owned flat arrays of one fused batch, yielded exactly once by
 /// [`GraphWire::take`]. All index arrays are already globally offset.
@@ -68,17 +76,33 @@ impl GraphWire {
     /// `edge_index` is `[src_global ‖ dst_global]`. Assumes each graph's
     /// `builder_impl == BUILDER_IMPL_NATIVE` (the caller runs the handshake).
     ///
-    /// Verbatim port of `from_axis_graphs` (`inference_bridge.rs:1207`).
+    /// Arithmetic is the verbatim port of `from_axis_graphs`
+    /// (`inference_bridge.rs:1207`); the write path is A1's — see the module docs.
     #[must_use]
     pub fn from_axis_graphs(graphs: &[AxisGraph], contract_version: u32) -> GraphWire {
         let b = graphs.len();
-        let mut node_feat: Vec<f32> = Vec::new();
-        let mut node_coords: Vec<i32> = Vec::new();
-        let mut edge_attr: Vec<f32> = Vec::new();
-        let mut edge_src: Vec<i64> = Vec::new();
-        let mut edge_dst: Vec<i64> = Vec::new();
-        let mut legal_node_gather: Vec<i64> = Vec::new();
-        let mut policy_dst_slot: Vec<i32> = Vec::new();
+        // Sizing pass. `num_nodes`/`num_edges` are O(1) reads of a `len()`, so this costs
+        // B accessor calls and buys every array below an exact single allocation.
+        let mut n_total: usize = 0;
+        let mut e_total: usize = 0;
+        let mut lg_total: usize = 0;
+        let mut ps_total: usize = 0;
+        for g in graphs {
+            n_total += g.num_nodes();
+            e_total += g.num_edges();
+            lg_total += g.legal_node_gather.len();
+            ps_total += g.policy_scatter_index.0.len();
+        }
+
+        let mut node_feat: Vec<f32> = Vec::with_capacity(n_total * NODE_FEAT_DIM);
+        let mut node_coords: Vec<i32> = Vec::with_capacity(n_total * 2);
+        let mut edge_attr: Vec<f32> = Vec::with_capacity(e_total * EDGE_FEAT_DIM);
+        // ONE `2E` buffer, written once. The src half fills in the first graph walk, the
+        // dst half in the second: no `edge_src`/`edge_dst` pair, and no terminal
+        // `extend` that reallocates and re-moves the src half.
+        let mut edge_index: Vec<i64> = Vec::with_capacity(e_total * 2);
+        let mut legal_node_gather: Vec<i64> = Vec::with_capacity(lg_total);
+        let mut policy_dst_slot: Vec<i32> = Vec::with_capacity(ps_total);
         let mut node_offsets: Vec<i64> = Vec::with_capacity(b + 1);
         let mut edge_offsets: Vec<i64> = Vec::with_capacity(b + 1);
         let mut legal_offsets: Vec<i64> = Vec::with_capacity(b + 1);
@@ -101,15 +125,15 @@ impl GraphWire {
             node_feat.extend_from_slice(&g.node_feat.0);
             node_coords.extend_from_slice(&g.node_coords);
             edge_attr.extend_from_slice(&g.edge_attr.0);
-            for &s in &g.edge_index.src {
-                edge_src.push(node_off + i64::from(s));
-            }
-            for &d in &g.edge_index.dst {
-                edge_dst.push(node_off + i64::from(d));
-            }
-            for &row in &g.legal_node_gather {
-                legal_node_gather.push(node_off + i64::from(row));
-            }
+            // `extend` over a mapped slice iterator: `TrustedLen`, so the widening
+            // `u32 -> i64 + offset` runs as a sized bulk write, not a per-element push
+            // with a capacity check.
+            edge_index.extend(g.edge_index.src.iter().map(|&s| node_off + i64::from(s)));
+            legal_node_gather.extend(
+                g.legal_node_gather
+                    .iter()
+                    .map(|&row| node_off + i64::from(row)),
+            );
             policy_dst_slot.extend_from_slice(&g.policy_scatter_index.0);
             n_nodes_checksum.push(g.n_nodes_checksum);
             n_stones.push(g.n_stones);
@@ -124,9 +148,18 @@ impl GraphWire {
             edge_offsets.push(edge_off);
             legal_offsets.push(legal_off);
         }
-        // edge_index = [src_global (E) | dst_global (E)] → reshape (2, E).
-        let mut edge_index = edge_src;
-        edge_index.extend(edge_dst);
+        // edge_index = [src_global (E) | dst_global (E)] → reshape (2, E). The dst half
+        // is appended into the SAME reserved buffer, re-walking only the dst slices.
+        let mut node_off_dst: i64 = 0;
+        for g in graphs {
+            edge_index.extend(
+                g.edge_index
+                    .dst
+                    .iter()
+                    .map(|&d| node_off_dst + i64::from(d)),
+            );
+            node_off_dst += g.num_nodes() as i64;
+        }
 
         GraphWire {
             arrays: Some(GraphWireArrays {
