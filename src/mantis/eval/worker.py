@@ -130,9 +130,19 @@ class _RoundProgress:
     RECAL-SITTING-3 spent two 3600 s drives unable to make that distinction, and the gap is
     what let a hardcoded `games_total: 0` be read as a measurement (§8.1 of the sitting record).
 
-    PLAIN COUNTERS AND TIMESTAMPS ONLY — no moves, no positions, no trajectory hash. The
-    redaction discipline is satisfied by construction rather than by filtering: nothing here
-    can carry a position, so there is nothing to redact.
+    PLAIN COUNTERS, LABELS AND TIMESTAMPS ONLY — no moves, no positions, no trajectory hash.
+    The redaction discipline is satisfied by construction rather than by filtering: nothing
+    here can carry a position, so there is nothing to redact.
+
+    THE OUTCOME FIELDS (R320(c)). `terminal`, `winner`, `candidate_color` and `margin` ride the
+    same row because the round R320 sends to measure asks for the margin DISTRIBUTION — at what
+    margins capped games decide, and with what seat balance — and the adjudicator's own tally
+    is four counters (`adjudicated`/`candidate`/`opponent`/`draw`), which reads the decisive
+    RATE and nothing about its shape. Every one of these four is already in hand at the sink;
+    before this they were dropped on the floor and no consumer could recover them. `margin` is
+    `None` whenever no adjudicator was armed or the game did not reach the cap — a real absence,
+    never a `0`, because `0` is a MEASURED margin (the two sides exactly level) and the two must
+    not collide (R319(e)'s no-default-readable-as-a-measurement order, one field over).
 
     OBSERVABILITY MUST NOT BECOME A NEW FAILURE MODE. A write error is reported ONCE on stderr
     and then disables further writes; it never raises. That is deliberately NOT LAW-14's
@@ -150,11 +160,17 @@ class _RoundProgress:
         """A `play_paired_match(record_sink=...)` callable for one phase of the round."""
         def _record(game_record: Any) -> None:
             self._games += 1
+            adjudication = getattr(game_record, "adjudication", None)
+            colors = getattr(game_record, "colors", None) or {}
             self._write({
                 "game_index": self._games,
                 "phase": phase,
                 "plies": int(getattr(game_record, "plies", 0)),
                 "t_wall": round(time.time(), 3),
+                "terminal": getattr(game_record, "terminal", None),
+                "winner": getattr(game_record, "winner", None),
+                "candidate_color": colors.get("candidate"),
+                "margin": None if adjudication is None else int(adjudication.margin),
             })
         return _record
 

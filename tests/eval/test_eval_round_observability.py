@@ -1,5 +1,10 @@
 """R319(e) — an eval round says how far it got, and never reports a default as a measurement.
 
+>300 justify (R8). ONE UNIT because every row here pins one surface — the round's self-report — and the two
+defects that surface carried were the SAME defect at two call sites. Splitting the sentinel
+from the progress file would let one half be edited to agree with a change the other half
+exists to refuse, which is how `games_total: 0` survived beside a progress field nothing wrote.
+
 **THE TWO DEFECTS, both measured at RECAL-SITTING-3 and both in the same blind spot.**
 
 (i) `emit_round_complete` was called with a HARDCODED `games_total=0` on every broken path,
@@ -53,9 +58,20 @@ class _Sink:
         self.events.append(payload)
 
 
-def _game(plies: int = 40):
-    """A duck-typed GameRecord stand-in: the writer reads `.plies` and nothing else."""
-    return SimpleNamespace(plies=plies, moves=[(1, 2)], trajectory_hash="deadbeef")
+def _game(plies: int = 40, *, winner: str = "draw", terminal: str = "ply_cap",
+          candidate_color: int = 1, margin: int | None = None):
+    """A duck-typed GameRecord stand-in, carrying every field the writer reads.
+
+    `margin=None` models BOTH the disarmed posture and a game that never reached the cap:
+    `_play_one_game` attaches `adjudication` on the cap branch alone.
+    """
+    adjudication = None if margin is None else SimpleNamespace(margin=margin)
+    return SimpleNamespace(
+        plies=plies, moves=[(1, 2)], trajectory_hash="deadbeef",
+        winner=winner, terminal=terminal, colors={"candidate": candidate_color,
+                                                  "opponent": -candidate_color},
+        adjudication=adjudication,
+    )
 
 
 # ── (e)(i) the sentinel ──────────────────────────────────────────────────────────────────
@@ -123,10 +139,121 @@ def test_the_child_writes_one_row_per_game_with_counters_only(tmp_path: Path) ->
     assert [r["phase"] for r in rows] == ["gate_screen", "gate_screen", "rung"]
     assert [r["plies"] for r in rows] == [40, 52, 31]
     for row in rows:
-        assert set(row) == {"game_index", "phase", "plies", "t_wall"}, (
-            f"progress rows carry counters and a timestamp ONLY — no moves, no positions, no "
-            f"trajectory hash, so there is nothing for the redaction pass to catch. Got {row}"
+        assert set(row) == {"game_index", "phase", "plies", "t_wall",
+                            "terminal", "winner", "candidate_color", "margin"}, (
+            f"progress rows carry counters, LABELS and a timestamp ONLY — no moves, no "
+            f"positions, no trajectory hash, so there is nothing for the redaction pass to "
+            f"catch. The set is asserted EXACTLY: a row that grew a `moves` or a "
+            f"`trajectory_hash` would satisfy any subset check. Got {row}"
         )
+
+
+# ── R320(c) the margin DISTRIBUTION is readable, not just the decisive rate ──────────────
+def test_each_row_carries_the_outcome_facts_the_margin_distribution_needs(
+    tmp_path: Path,
+) -> None:
+    """R320(c) sends a round to measure HOW capped games decide — at what margins, with what
+    seat balance. The adjudicator's own tally is four counters, so it reads the decisive RATE
+    and nothing about its shape; these four per-game fields are what a histogram and a seat
+    split are computed from, and every one was already in hand at the sink."""
+    path = tmp_path / "r1_progress.txt"
+    sink = _RoundProgress(path).sink("gate_screen")
+    sink(_game(plies=128, winner="candidate", candidate_color=1, margin=2))
+    sink(_game(plies=128, winner="opponent", candidate_color=-1, margin=-3))
+    sink(_game(plies=128, winner="draw", candidate_color=1, margin=0))
+
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [r["margin"] for r in rows] == [2, -3, 0], (
+        f"the SIGNED candidate-minus-opponent margin must survive to the row — its sign is the "
+        f"seat-neutrality evidence and its size is the histogram. Got {rows}"
+    )
+    assert [r["winner"] for r in rows] == ["candidate", "opponent", "draw"]
+    assert [r["candidate_color"] for r in rows] == [1, -1, 1], (
+        "the seat split is computed from this field; without it the two legs of a colour pair "
+        "are indistinguishable in the progress file"
+    )
+    assert [r["terminal"] for r in rows] == ["ply_cap"] * 3
+
+
+def test_a_ZERO_margin_and_an_ABSENT_one_do_not_collide(tmp_path: Path) -> None:
+    """R319(e)'s order, one field over: a default must not be readable as a measurement.
+    `margin: 0` is the two sides measured EXACTLY LEVEL — the single most interesting bin,
+    because it is the residual-draw bin at `min_margin: 1`. `margin: null` is NO MEASUREMENT
+    (posture disarmed, or the game never reached the cap). A writer that emitted `0` for the
+    absent case would move every unarmed game into the tie bin and read as a hard measurement
+    of perfect balance."""
+    path = tmp_path / "r1_progress.txt"
+    sink = _RoundProgress(path).sink("gate_screen")
+    sink(_game(plies=128, winner="draw", margin=0))
+    sink(_game(plies=128, winner="draw", margin=None))
+    sink(_game(plies=61, winner="candidate", terminal="win", margin=None))
+
+    margins = [json.loads(line)["margin"] for line in
+               path.read_text(encoding="utf-8").splitlines()]
+    assert margins == [0, None, None], (
+        f"expected [0, None, None] — a measured tie, a disarmed posture, and a game that never "
+        f"reached the cap. Got {margins}; a 0 in position 2 or 3 is the default-as-measurement "
+        f"defect, and it would inflate the tie bin the min_margin decision is read from."
+    )
+
+
+def test_the_disarmed_posture_still_writes_a_complete_row(tmp_path: Path) -> None:
+    """Every shipped config runs disarmed, so the disarmed row is the COMMON case: it must
+    still carry `terminal`, `winner` and the seat, or the shipped tree loses the one instrument
+    that says every game is hitting the cap."""
+    path = tmp_path / "r1_progress.txt"
+    _RoundProgress(path).sink("gate_confirm")(
+        _game(plies=128, winner="draw", terminal="ply_cap", candidate_color=-1, margin=None)
+    )
+    row = json.loads(path.read_text(encoding="utf-8").strip())
+    assert row["terminal"] == "ply_cap" and row["winner"] == "draw"
+    assert row["candidate_color"] == -1 and row["margin"] is None
+
+
+def test_a_record_missing_the_new_fields_degrades_and_never_raises(tmp_path: Path) -> None:
+    """The writer must not become a way to kill a round. A record shape it does not recognise
+    writes nulls, exactly as the OSError arm keeps the round alive — observability must not
+    become a new failure mode, and that promise covers the reader too, not only the disk."""
+    path = tmp_path / "r1_progress.txt"
+    _RoundProgress(path).sink("rung")(SimpleNamespace(plies=17))
+    row = json.loads(path.read_text(encoding="utf-8").strip())
+    assert row["plies"] == 17
+    assert row["terminal"] is None and row["winner"] is None
+    assert row["candidate_color"] is None and row["margin"] is None
+
+
+def test_the_sink_reads_the_REAL_GameRecord_shape_not_only_the_stand_in() -> None:
+    """The rows above run against a `SimpleNamespace`, which would keep passing if
+    `GameRecord`'s field NAMES changed underneath them — the stand-in-drift class. This one
+    builds the real dataclass and asserts the writer's four field names are its own."""
+    from dataclasses import fields as dataclass_fields
+
+    from mantis.arena.match import GameRecord
+
+    names = {f.name for f in dataclass_fields(GameRecord)}
+    assert {"terminal", "winner", "plies", "colors", "adjudication"} <= names, (
+        f"the progress writer reads these off a GameRecord; GameRecord now has {sorted(names)}. "
+        f"A rename here writes silent nulls into every progress row."
+    )
+
+
+def test_the_verdict_margin_the_writer_reads_is_the_ADJUDICATORS_OWN() -> None:
+    """End to end through the real adjudicator, so the row's `margin` is pinned to the object
+    that produces it rather than to a hand-built stand-in: a sign flip or a unit change in
+    `PlyCapVerdict` must red here."""
+    from mantis.arena.adjudicate import PlyCapVerdict
+
+    verdict = PlyCapVerdict(winner="opponent", criterion="longest_run_margin", margin=-2)
+    record = SimpleNamespace(plies=128, winner="opponent", terminal="ply_cap",
+                             colors={"candidate": 1, "opponent": -1}, adjudication=verdict)
+    captured: list[dict] = []
+
+    class _Capture(_RoundProgress):
+        def _write(self, row: dict) -> None:
+            captured.append(row)
+
+    _Capture("unused").sink("gate_screen")(record)
+    assert captured[0]["margin"] == -2 and captured[0]["winner"] == "opponent"
 
 
 def test_the_parent_reads_the_LAST_row_back(tmp_path: Path) -> None:
