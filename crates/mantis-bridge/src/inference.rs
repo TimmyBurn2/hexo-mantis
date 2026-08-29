@@ -1026,7 +1026,7 @@ mod tests {
 
     #[test]
     fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None)
+        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None, 0)
             .expect("graph batcher constructs");
         assert_eq!(b.lock_recoveries(), 0, "a fresh batcher has recovered nothing");
 
@@ -1063,7 +1063,7 @@ mod tests {
 
     #[test]
     fn grid_batcher_derives_shapes_and_is_grid() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(v6_spec())), None, None, None)
+        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(v6_spec())), None, None, None, 0)
             .expect("v6 batcher constructs");
         assert!(!b.is_graph);
         assert_eq!(b.representation, "grid");
@@ -1073,7 +1073,7 @@ mod tests {
 
     #[test]
     fn explicit_lens_without_spec_construct() {
-        let b = PyInferenceBatcher::new(None, Some(2888), Some(362), None)
+        let b = PyInferenceBatcher::new(None, Some(2888), Some(362), None, 0)
             .expect("explicit lens construct");
         assert_eq!(b.feature_len, 2888);
         assert_eq!(b.policy_len, 362);
@@ -1081,13 +1081,13 @@ mod tests {
 
     #[test]
     fn no_spec_no_lens_errors() {
-        assert!(PyInferenceBatcher::new(None, None, None, None).is_err());
-        assert!(PyInferenceBatcher::new(None, Some(2888), None, None).is_err());
+        assert!(PyInferenceBatcher::new(None, None, None, None, 0).is_err());
+        assert!(PyInferenceBatcher::new(None, Some(2888), None, None, 0).is_err());
     }
 
     #[test]
     fn graph_batcher_reads_graph_params() {
-        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None)
+        let b = PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(gnn_spec())), None, None, None, 0)
             .expect("graph batcher constructs");
         assert!(b.is_graph);
         assert_eq!(b.representation, "graph");
@@ -1099,7 +1099,7 @@ mod tests {
 
     #[test]
     fn model_version_own_bump_and_get() {
-        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None).unwrap();
+        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0).unwrap();
         assert_eq!(b.model_version(), 0);
         assert_eq!(b.bump_model_version(), 1);
         assert_eq!(b.bump_model_version(), 2);
@@ -1108,7 +1108,7 @@ mod tests {
 
     #[test]
     fn grid_batcher_rejects_graph_seam_methods() {
-        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None).unwrap();
+        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0).unwrap();
         assert!(b.require_graph().is_err());
         assert!(b.check_graph_request(vec![(0, 0, 1)], 1, 2).is_err());
         assert!(b.spawn_mock_graph_games(1).is_err());
@@ -1129,21 +1129,29 @@ mod tests {
         let arrays = wire.take().expect("first fuse take");
         let gw = PyGraphWire::from_arrays(arrays);
 
-        // Repeatable scalar getter serves regardless of the latch (numpy-free).
-        assert_eq!(gw.n_graphs(), 1);
-        // The single-read latch: acquire once, second acquisition fails.
+        // The NUMPY-FREE half of the latch, which is all this interpreter can witness: a
+        // fresh wire serves its scalars, and a wire whose arrays are gone refuses them.
+        // `take()` itself materialises numpy arrays and PANICS here on the absent module,
+        // so the consumed-wire path is driven from Python, where numpy exists:
+        // `tests/bridge/test_graph_wire_adv.py::test_wire_getters_refuse_after_take` and
+        // `::test_take_moves_rather_than_copies`.
+        assert_eq!(gw.n_graphs().expect("a fresh wire serves its scalars"), 1);
+
+        // A2 made the latch the `Option` itself rather than a flag beside the data, so
+        // "consumed" is constructible without going through numpy at all.
+        let consumed = PyGraphWire { arrays: None };
         assert!(
-            gw.taken.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok(),
-            "a fresh wire's latch is acquirable"
+            consumed.n_graphs().is_err(),
+            "after take() the buffers belong to numpy, so every getter must refuse rather \
+             than serve an empty array"
         );
-        assert!(
-            gw.taken.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err(),
-            "the latch is single-read"
-        );
-        // take() on an already-consumed wire maps to WireAlreadyConsumed.
         Python::initialize();
         Python::attach(|py| {
-            assert!(gw.take(py).is_err(), "a consumed wire's take() raises WireAlreadyConsumed");
+            let mut consumed = PyGraphWire { arrays: None };
+            assert!(
+                consumed.take(py).is_err(),
+                "a consumed wire's take() raises WireAlreadyConsumed"
+            );
         });
     }
 }

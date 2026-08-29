@@ -1,3 +1,7 @@
+# Exceeds the 300-line soft cap (R8): one harness for the micro-batch legs, and its
+# pieces are load-bearing on each other — the fixed-pair buffer exists so two arms see
+# ONE sample, and the caps helpers derive their bounds from that same wire. Split up,
+# an arm could silently be compared against a different draw.
 """Shared rig for the WP12-R F2 micro-batch oracles (OF2-*, DESIGN_DFIX §5.2).
 
 Not a test module (leading underscore, no `test_` prefix): pytest does not collect it, and
@@ -98,22 +102,36 @@ def ragged_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 class ReplayWireBuffer:
     """A buffer double that samples the REAL buffer ONCE and then returns that same
-    `(wire, targets)` pair on every later call.
+    `(payload, targets)` pair on every later call.
 
     The two-arm parity legs (OF2-3b/c/d) compare an M=1 step against an M=k step and the
     comparison is only meaningful if BOTH arms see the same graphs; `sample_graph_batch`
     draws randomly through the Rust RNG, which `torch.manual_seed` does not reach. Nothing
-    else is faked — the wire, the targets and every downstream call are the real ones."""
+    else is faked — the arrays, the targets and every downstream call are the real ones.
+
+    THE PAIR HOLDS A PAYLOAD, NOT THE PYCLASS, and that is required rather than tidy since
+    PERF-TRANCHE-1 A2: `GraphWire.take()` now MOVES its buffers into numpy, so a wire can be
+    read exactly once and handing the same pyclass to two arms raises `WireAlreadyConsumed`
+    on the second. Reading it into a `GraphWirePayload` here — through the same
+    `graph_wire_from_rust` the dispatcher uses — makes the pair repeatable, and the
+    dispatcher then reads the payload through the duck-typed getter path. Both arms still
+    see one sample of the real buffer, which is the whole point of the double.
+    """
 
     def __init__(self, real: HexgBuffer, batch_size: int, augment: bool = False) -> None:
+        from mantis.selfplay.graph_collate import graph_wire_from_rust
+
         self._real = real
         self.size = real.size
         self.capacity = real.capacity
         self.calls = 0
-        self._pair = real.sample_graph_batch(batch_size, augment=augment, recent_frac=0.0)
+        wire, targets = real.sample_graph_batch(batch_size, augment=augment, recent_frac=0.0)
+        self._pair = (graph_wire_from_rust(wire), targets)
 
     def sample_graph_batch(self, batch_size: int, augment: bool = False,
-                           recent_frac: float = 0.0):
+                           recent_frac: float = 0.0, n_threads: int = 1):
+        # `n_threads` is B1's rebuild width. The double accepts it because the dispatcher
+        # now passes it on every graph step; it has no rebuild of its own to widen.
         self.calls += 1
         return self._pair
 

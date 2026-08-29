@@ -240,9 +240,13 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
     production statements `dispatch.py::_graph_step` executes."""
     buf = H.ragged_graph_buffer(8)
     wire, targets = buf.sample_graph_batch(6, augment=False, recent_frac=0.0)
+    # ONE read of the wire, then everything off the payload: `take()` MOVES the buffers into
+    # numpy since PERF-TRANCHE-1 A2, so a second read of the pyclass raises. The payload
+    # carries the same arrays and is freely re-readable, which is what the production serve
+    # loop relies on too (it reads the wire once and slices the payload per part).
     payload = graph_wire_from_rust(wire)
-    ec, nc = H.per_graph_counts(wire)
-    b = int(wire.n_graphs)
+    ec, nc = H.per_graph_counts(payload)
+    b = int(payload.n_graphs)
     parts = plan_microbatches(payload.edge_offsets, payload.node_offsets,
                               int(ec.max()) * 2, int(nc.sum()) + 1)
     assert len(parts) >= 2, "the fixture must actually split or this row is vacuous"
@@ -251,7 +255,10 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
               win_length=H.GSPEC.win_length, node_feat_dim=H.GSPEC.node_feat_dim,
               edge_feat_dim=H.GSPEC.edge_feat_dim, device="cpu", semantic="full")
     with H.deterministic_algorithms():
-        full = collate_graph_batch(wire, target_argmax_cells=targets.target_argmax_cells, **kw)
+        # The PAYLOAD, not the pyclass: the wire was consumed by the read above, and this
+        # is what `_graph_step` collates too — it never hands the raw wire to the collate.
+        full = collate_graph_batch(payload, target_argmax_cells=targets.target_argmax_cells,
+                                   **kw)
         no = payload.node_offsets
         eo = payload.edge_offsets
         lo = payload.legal_offsets
@@ -422,7 +429,7 @@ def test_of2_3a_prime_bin_logits_row_count_is_asserted_at_the_call(tmp_path) -> 
     with pytest.raises(ValueError, match="bin_logits"):
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
+            recent_buffer=None, sample_threads_provider=lambda: 1,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 
 
@@ -495,12 +502,12 @@ def _two_arm_step(tmp_path, m: int):
         for _ in range(_WARMUP_STEPS):
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-                recent_buffer=None,
+                recent_buffer=None, sample_threads_provider=lambda: 1,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=non_binding[0],
                                                          max_nodes=non_binding[1]))
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
+            recent_buffer=None, sample_threads_provider=lambda: 1,
             caps_provider=lambda c=caps: MicrobatchCapsSpec(max_edges=c[0], max_nodes=c[1]))
         out.append((info, H.grad_vector(trainer.model), H.param_vector(trainer.model)))
     return out
@@ -569,7 +576,7 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
     try:
         info = run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
+            recent_buffer=None, sample_threads_provider=lambda: 1,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     finally:
         torch.nn.utils.clip_grad_norm_ = real_clip
@@ -637,7 +644,7 @@ def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: 
     before = trainer.step
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-        recent_buffer=None,
+        recent_buffer=None, sample_threads_provider=lambda: 1,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert trainer.step - before == 1
     assert len(updates) == 1, (
@@ -704,7 +711,7 @@ def test_of2_6_the_dense_event_carries_none_of_the_five_keys(tmp_path) -> None:
                       arch=arch, checkpoint_dir=tmp_path / "dense", device=torch.device("cpu"),
                       train_hparams=H.graph_hparams(), sink=sink)
     run_declared_train_step(trainer, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None,
+                            recency_weight=0.0, recent_buffer=None, sample_threads_provider=lambda: 1,
                             caps_provider=_never_called_provider)
     ev = sink.named("trainer_step")[0]
     assert ev["representation"] == "grid"
@@ -756,7 +763,7 @@ def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_pa
     with pytest.raises(GraphMicroBatchOverCap) as exc:
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
+            recent_buffer=None, sample_threads_provider=lambda: 1,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     message = str(exc.value)
     assert "graph 0" in message or "graph index 0" in message, message
@@ -802,7 +809,7 @@ def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, c
             trainer = H.tiny_graph_trainer(tmp_path)
             run_declared_train_step(
                 trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-                recent_buffer=None,
+                recent_buffer=None, sample_threads_provider=lambda: 1,
                 caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0],
                                                          max_nodes=caps[1]))
     except RuntimeError as exc:                      # noqa: BLE001 — recorded, then re-read
@@ -828,7 +835,7 @@ def test_of2_13_a_nonzero_forbidden_weight_raises_before_any_state_moves(tmp_pat
     with pytest.raises(ValueError, match="ownership_weight"):
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None,
+            recent_buffer=None, sample_threads_provider=lambda: 1,
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
     assert trainer.step == before
     assert spy.zero_grads == 0 and spy.steps == 0
@@ -898,6 +905,13 @@ def test_of2_15a_the_grid_arm_does_not_take_the_provider_at_all() -> None:
     assert "caps_provider" not in grid_params, (
         "_grid_step accepts caps_provider — under the design the grid arm is not GIVEN the "
         "provider, so a grid run structurally cannot reach the caps (DESIGN_DFIX §3.11.1)")
+    # PERF-TRANCHE-1 B1's thread budget rides the same call-graph property, and for the same
+    # reason: `resolve_sample_threads` reads `full_config["selfplay"]`, which a trainless
+    # grid coordinator does not have.
+    assert "sample_threads_provider" in graph_params
+    assert "sample_threads_provider" not in grid_params, (
+        "_grid_step accepts sample_threads_provider — the grid arm has no rebuild to widen "
+        "and no `selfplay` section to derive a budget from")
     top = inspect.signature(run_declared_train_step).parameters["caps_provider"]
     assert top.default is inspect.Parameter.empty, (
         "caps_provider has a default — a default is a code-side default for a config-derived "
@@ -929,7 +943,7 @@ def test_of2_15b_the_graph_route_propagates_the_named_absence(tmp_path) -> None:
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(8), 4)
     with pytest.raises(MissingMicrobatchCapsError):
         run_declared_train_step(trainer, replay, H.GSPEC, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None,
+                                recency_weight=0.0, recent_buffer=None, sample_threads_provider=lambda: 1,
                                 caps_provider=coord._microbatch_caps)
 
 

@@ -109,10 +109,13 @@ def test_next_graph_batch_fuse_releases_the_gil() -> None:
     """
     spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
     batcher = _engine.InferenceBatcher(encoding_spec=spec)
-    # 256 mock leaves, not a handful: the fuse is the window under test and a batch too
-    # small to resolve would leave this test permanently skipping — a green that means
-    # nothing. Measured on this shape, pop+fuse runs on the order of tens of milliseconds.
-    n_mock = 256
+    # 1024 mock leaves, not a handful: the fuse is the window under test and a batch too
+    # small to resolve would leave this test SKIPPING on a fast host — a green that means
+    # nothing, which is the whole defect this file exists to prevent. Sized by measurement,
+    # not by guess: at 256 the pop+fuse ran 16.7 ms on an idle host, inside the 20 ms
+    # resolution floor below; at 1024 it runs ~43 ms, clear of it with room for a host
+    # faster than this one.
+    n_mock = 1024
     batcher.spawn_mock_graph_games(n_mock)
     for _ in range(400):
         if batcher.has_pending_graph_requests():
