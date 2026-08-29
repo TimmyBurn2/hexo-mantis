@@ -317,7 +317,16 @@ impl SelfPlayRunner {
         // for a graph spec; grid specs are `None` → 1) for the batch-level die-loud
         // handshake in `submit_graph_and_wait` (frozen `inference_bridge.rs:425`).
         let dense_queue = DenseQueue::new(spec.state_stride());
-        let graph_queue = GraphQueue::with_contract_version(spec.contract_version.unwrap_or(1));
+        // The collector's saturation threshold is DERIVED from what this run can supply
+        // (ledger F-1): a worker blocks on its whole submitted batch, so `n_workers x
+        // leaf_batch_size` is a hard cap on queue depth and the threshold is clamped to it.
+        let max_in_flight = config
+            .n_workers
+            .saturating_mul(config.leaf_batch_size);
+        let graph_queue = GraphQueue::with_contract_version_and_supply(
+            spec.contract_version.unwrap_or(1),
+            max_in_flight,
+        );
 
         Ok(Self {
             spec,

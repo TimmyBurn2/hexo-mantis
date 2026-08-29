@@ -55,10 +55,45 @@ struct GraphInner {
     /// `submit_batch_and_wait_graph_rust` rejects the whole batch on a non-1 value
     /// (`inference_bridge.rs:425`).
     contract_version: u32,
+    /// The most graphs that can EVER be queued at once: `n_workers x leaf_batch_size`,
+    /// because a worker blocks on its whole submitted batch. `0` means "not declared" and
+    /// leaves the threshold at the raw half-batch — see [`saturation_threshold`].
+    max_in_flight: usize,
+}
+
+/// The queue depth at which [`GraphInner::pop_graph_batch_blocking`] returns BEFORE its
+/// deadline — the collector's saturation threshold, DERIVED from what the run can supply.
+///
+/// The frozen threshold was `batch_size / 2` alone, a number with no relation to what the
+/// configured workers can put in flight. Ledger F-1 measured the consequence: at
+/// `inference_batch_size = 64` the threshold is 32, `dev`'s minted `n_workers = 1 x
+/// leaf_batch_size = 8` supplies at most 8, so the threshold was structurally unreachable
+/// and EVERY pop ran to the 10 ms deadline — `queue_pop_wait` a measured mean of 10.064 ms
+/// over 8 116 pops, 16 % of the card's cost and 40 % of the round trip uncontended, and
+/// 33 % of the single-stream eval path.
+///
+/// This is R263's mechanism one level up. R263 fixed "one leaf in flight per worker" so the
+/// threshold COULD be reached; the threshold itself was still free to sit above the ceiling.
+/// Deriving it from `max_in_flight` closes the class rather than the instance: a threshold
+/// clamped to the supply is reachable on every config by construction, so there is no
+/// configuration left for a schema rule to refuse.
+///
+/// Clamping can only LOWER the threshold, and never below what is achievable — a worker
+/// blocks until its whole batch is answered, so `n_workers x leaf_batch_size` is a hard cap
+/// on queue depth. A pop that returns at the cap returns with the largest batch that could
+/// ever have been there, having waited less for it.
+#[must_use]
+pub fn saturation_threshold(batch_size: usize, max_in_flight: usize) -> usize {
+    let half = batch_size / 2;
+    if max_in_flight == 0 {
+        half
+    } else {
+        half.min(max_in_flight)
+    }
 }
 
 impl GraphInner {
-    fn new(contract_version: u32) -> Self {
+    fn new(contract_version: u32, max_in_flight: usize) -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
             queue_cv: Condvar::new(),
@@ -66,6 +101,7 @@ impl GraphInner {
             next_id: AtomicU64::new(1),
             closed: AtomicBool::new(false),
             contract_version,
+            max_in_flight,
         }
     }
 
@@ -78,7 +114,7 @@ impl GraphInner {
     ) -> Vec<PendingGraphRequest> {
         let deadline = Instant::now() + Duration::from_millis(max_wait_ms);
         let mut queue = self.queue.lock().expect("graph queue lock poisoned");
-        let threshold = batch_size / 2;
+        let threshold = saturation_threshold(batch_size, self.max_in_flight);
         while queue.len() < threshold && !self.closed.load(Ordering::SeqCst) {
             let now = Instant::now();
             if now >= deadline {
@@ -133,9 +169,25 @@ impl GraphQueue {
     /// (`inference_bridge.rs:425`).
     #[must_use]
     pub fn with_contract_version(contract_version: u32) -> Self {
+        Self::with_contract_version_and_supply(contract_version, 0)
+    }
+
+    /// A queue that also knows the run's achievable supply (`n_workers x leaf_batch_size`),
+    /// from which the collector's saturation threshold is DERIVED. `max_in_flight = 0`
+    /// declares no supply and keeps the raw half-batch threshold; the production runner
+    /// always declares one.
+    #[must_use]
+    pub fn with_contract_version_and_supply(contract_version: u32, max_in_flight: usize) -> Self {
         Self {
-            inner: Arc::new(GraphInner::new(contract_version)),
+            inner: Arc::new(GraphInner::new(contract_version, max_in_flight)),
         }
+    }
+
+    /// The supply this queue was told about (`0` = undeclared). Read by the seam tests and
+    /// by the bridge's readout, so the relation is observable rather than inferred.
+    #[must_use]
+    pub fn max_in_flight(&self) -> usize {
+        self.inner.max_in_flight
     }
 
     /// CONSUMER (worker): enqueue one pre-built leaf graph, block on its waiter,
