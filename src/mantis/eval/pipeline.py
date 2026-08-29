@@ -143,13 +143,24 @@ def emit_round_started(
 
 
 def emit_round_complete(
-    sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int,
-    promoted: bool, wr_sealbot: float | None,
+    sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int | None,
+    promoted: bool, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """R319(e)(i): `games_total` is `int | None`, and `None` is the BROKEN-round value.
+
+    It used to be a hardcoded `0` on every broken path, which is a DEFAULT WEARING A
+    MEASUREMENT'S CLOTHES: a reader cannot tell "the round played no games" from "the round
+    was killed before it could report", and RECAL-SITTING-3 published the former having
+    measured only the latter (§8.1 of the sitting record). `None` is unreadable as a count, so
+    the mistake is not available to make twice.
+
+    `progress` carries the child's last per-game progress row when one exists (R319(e)(ii)) —
+    so a broken round now says HOW FAR it got instead of nothing at all.
+    """
     payload = {
         "event": "eval_round_complete", "round_id": round_id, "step": step,
         "wall_sec": wall_sec, "games_total": games_total, "promoted": promoted,
-        "wr_sealbot": wr_sealbot,
+        "wr_sealbot": wr_sealbot, "progress": progress,
     }
     _emit(sink, payload)
     return payload
@@ -342,6 +353,37 @@ def _drop_result_tmp_if_writer_gone(inflight: dict[str, Any]) -> None:
     if spec is None or proc is None or proc.is_alive():
         return
     _remove_result_tmp(spec.result_path)
+
+
+def read_progress(spec: Any) -> dict[str, Any] | None:
+    """R319(e)(ii): the CHILD's last per-game progress row, or `None` if it wrote none.
+
+    Read-only and total: any failure to read returns `None`. This is reporting, and a
+    diagnostic file must never be able to fail a round that was otherwise fine — the same
+    reasoning the child's writer disables itself on `OSError` rather than raising.
+
+    ESCALATION SEMANTICS ARE UNCHANGED BY THIS FUNCTION AND MUST STAY SO (R319(e)(ii)): no
+    caller may branch on the value. It exists so a killed round can say how far it got, which
+    is exactly what nobody could tell during RECAL-SITTING-3's two 3600 s drives.
+    """
+    path = getattr(spec, "progress_path", None)
+    if not path:
+        return None
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            return row
+    return None
 
 
 def _worker_entry(spec_path: str, result_path: str) -> None:
@@ -866,7 +908,10 @@ class EvalPipeline:
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
-            games_total=0, promoted=False, wr_sealbot=result["wr_sealbot"],
+            # R319(e)(i): None, never 0 — a broken round MEASURED nothing, and a count here is
+            # a default a reader will mistake for one (it already was, §8.1).
+            games_total=None, promoted=False, wr_sealbot=result["wr_sealbot"],
+            progress=read_progress(inflight.get("spec")),
         )
         return result
 
@@ -955,6 +1000,7 @@ class EvalPipeline:
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             games_total=games_total, promoted=result["promoted"], wr_sealbot=result["wr_sealbot"],
+            progress=read_progress(inflight.get("spec")),
         )
         emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
         device_memory = raw.get("device_memory")
@@ -1096,5 +1142,6 @@ __all__ = [
     "emit_round_started",
     "emit_rung_skip_events",
     "emit_strength_floor",
+    "read_progress",
     "SKIP_REASON_CLASSES",
 ]

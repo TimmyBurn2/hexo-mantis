@@ -26,6 +26,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +118,60 @@ def _assert_value_pool_implemented(spec: EncodingSpec) -> None:
         f"value channel was pooled differently from the encoding's own declaration "
         f"(ADJ-WP12R-6)."
     )
+
+
+class _RoundProgress:
+    """R319(e)(ii) — per-game progress, written by the CHILD as the round plays.
+
+    THE DEFECT THIS CLOSES. `RoundSpec.progress_path` was constructed, threaded across the
+    spawn seam and declared on the dataclass, and NOTHING wrote or read it — a declared field
+    with no consumer. So an eval round was observable only as *started* and *finished/killed*,
+    with no way to tell "most of the way through the screen block" from "stuck on game 1".
+    RECAL-SITTING-3 spent two 3600 s drives unable to make that distinction, and the gap is
+    what let a hardcoded `games_total: 0` be read as a measurement (§8.1 of the sitting record).
+
+    PLAIN COUNTERS AND TIMESTAMPS ONLY — no moves, no positions, no trajectory hash. The
+    redaction discipline is satisfied by construction rather than by filtering: nothing here
+    can carry a position, so there is nothing to redact.
+
+    OBSERVABILITY MUST NOT BECOME A NEW FAILURE MODE. A write error is reported ONCE on stderr
+    and then disables further writes; it never raises. That is deliberately NOT LAW-14's
+    persistence-is-fatal posture, and the distinction is that this file is diagnostic: losing
+    it costs visibility, while raising here would turn a progress line into a way to kill a
+    round that was otherwise healthy.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+        self._games = 0
+        self._disabled = False
+
+    def sink(self, phase: str) -> Callable[[Any], None]:
+        """A `play_paired_match(record_sink=...)` callable for one phase of the round."""
+        def _record(game_record: Any) -> None:
+            self._games += 1
+            self._write({
+                "game_index": self._games,
+                "phase": phase,
+                "plies": int(getattr(game_record, "plies", 0)),
+                "t_wall": round(time.time(), 3),
+            })
+        return _record
+
+    def _write(self, row: dict[str, Any]) -> None:
+        if self._disabled:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            with self._path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+        except OSError as exc:
+            self._disabled = True
+            print(
+                f"eval progress writes DISABLED after {exc!r} on {self._path} — the round "
+                f"continues; only its progress visibility is lost (R319(e)(ii))",
+                file=sys.stderr, flush=True,
+            )
 
 
 def _agg_record(game_record: Any) -> dict[str, Any]:
@@ -209,6 +265,7 @@ def _build_adjudicator(spec: RoundSpec) -> PlyCapAdjudicator | None:
 def _play_floor_probe(
     spec: RoundSpec, probe_games: int, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
+    progress: _RoundProgress,
 ) -> list:
     """Play the strength-floor probe: `probe_games` games against the CHEAPEST opponent.
 
@@ -236,7 +293,7 @@ def _play_floor_probe(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("floor_probe"), adjudicator=adjudicator,
     )
     return list(records[:probe_games])
 
@@ -248,6 +305,7 @@ def _play_gate_block(
     *,
     encoding_spec: EncodingSpec,
     adjudicator: PlyCapAdjudicator | None,
+    progress: _RoundProgress,
 ) -> dict | None:
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
@@ -285,7 +343,7 @@ def _play_gate_block(
         )
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
-            board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+            board_factory=board_factory, record_sink=progress.sink("gate_screen"), adjudicator=adjudicator,
         )
         screen_agg = [_agg_record(r) for r in screen_records]
 
@@ -299,7 +357,7 @@ def _play_gate_block(
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
-                board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+                board_factory=board_factory, record_sink=progress.sink("gate_confirm"), adjudicator=adjudicator,
             )
             confirm_agg = [_agg_record(r) for r in confirm_records]
         return {"screen": screen_agg, "confirm": confirm_agg}
@@ -318,6 +376,7 @@ def _draw_aware_wr(records: list[dict[str, Any]]) -> float | None:
 def _play_rung_block(
     spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
+    progress: _RoundProgress,
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
@@ -343,7 +402,7 @@ def _play_rung_block(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("rung"), adjudicator=adjudicator,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 
@@ -351,6 +410,7 @@ def _play_rung_block(
 def _play_random_floor(
     spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
+    progress: _RoundProgress,
 ) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
@@ -372,7 +432,7 @@ def _play_random_floor(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=None, adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("random_floor"), adjudicator=adjudicator,
     )
     return [_agg_record(r) for r in records[: spec.random_floor_games]]
 
@@ -439,6 +499,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     # assertion but never excuse one.
     assert_posture_token(spec.allocator_posture, device_type=spec.worker_device)
     probe = make_probe(spec.worker_device, round_id=spec.round_id)
+    # R319(e)(ii): per-game progress, written as the round plays. Constructed HERE, beside the
+    # memory probe, because both are round-scoped observability the phases below share.
+    progress = _RoundProgress(spec.progress_path)
     probe.mark("round_start")
 
     # ONE resolution of the round's DECLARED encoding. Board geometry and the inference
@@ -469,7 +532,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         if spec.strength_floor is not None:
             probe_records = _play_floor_probe(
                 spec, spec.strength_floor.probe_games, candidate_engine, board_factory,
-                encoding_spec=enc_spec, adjudicator=adjudicator,
+                encoding_spec=enc_spec, adjudicator=adjudicator, progress=progress,
             )
             verdict = evaluate_strength_floor(probe_records, spec.strength_floor)
             floor_payload = verdict.as_payload()
@@ -489,7 +552,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
         gate_records = _play_gate_block(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
-            adjudicator=adjudicator,
+            adjudicator=adjudicator, progress=progress,
         )
         # The one phase that puts a SECOND model and a SECOND engine on the card, and the one
         # that is skipped WHOLE while there is no anchor. Marked whichever branch it took, so
@@ -515,7 +578,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             try:
                 records = _play_rung_block(
                     spec, rung_job, candidate_engine, board_factory, encoding_spec=enc_spec,
-                    adjudicator=adjudicator,
+                    adjudicator=adjudicator, progress=progress,
                 )
             except RungUnresolvable as exc:
                 skipped_rungs.append({"rung": rung_job.name, "reason": exc.reason})
@@ -539,7 +602,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
         random_records = _play_random_floor(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
-            adjudicator=adjudicator,
+            adjudicator=adjudicator, progress=progress,
         )
         probe.mark("random_floor")
         random_agg = (
