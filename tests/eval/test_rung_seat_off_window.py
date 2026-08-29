@@ -36,6 +36,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board
 from mantis.bots.random_bot import RandomBot
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
@@ -96,7 +97,8 @@ def graph_engine():
     net = _RuleNet()
     net.eval()
     engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
-                                  fused_graph_caps=_CAPS)
+                                  fused_graph_caps=_CAPS,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
     try:
         yield engine, spec
     finally:

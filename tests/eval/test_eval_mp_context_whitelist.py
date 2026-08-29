@@ -80,6 +80,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             guarded_load=lambda *a, **k: None,
         ),
         fused_graph_caps=None,
+        inference_batching=None,
     )
     kwargs.update(overrides)
     return kwargs

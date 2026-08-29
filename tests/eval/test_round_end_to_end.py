@@ -145,6 +145,7 @@ def _build_pipeline(tmp_path: Path):
         # allocator on the same card that no in-process bound can see. `None` is the
         # GRID arm, written out rather than omitted.
         fused_graph_caps=None,
+        inference_batching=None,
     )
 
 

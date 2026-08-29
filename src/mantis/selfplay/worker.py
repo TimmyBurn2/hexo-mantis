@@ -121,6 +121,11 @@ class SelfPlayWorker:
             # which has no fused graph forward to bound. Written out so a reader sees the
             # decision instead of a silence (F-816-10 D-1).
             fused_graph_caps=None,
+            # EXPLICIT `None` / `0` on the same grounds as the line above: the graph
+            # representation is refused by name at this constructor, so this engine opens no
+            # graph collector and there is no batching geometry or supply for it to carry.
+            inference_batching=None,
+            max_in_flight=0,
         )
         self.tree = MCTSTree(c_puct=self.c_puct)
 

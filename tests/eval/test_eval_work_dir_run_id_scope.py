@@ -50,6 +50,7 @@ def _pipeline(tmp_path: Path, run_id: str, spool_name: str = "spool") -> Any:
         encoding=cfg.identity.encoding, run_id=run_id, spool_dir=spool,
         ladder_state_path=tmp_path / f"ladder_{run_id}.json", promotion=None, sink=None,
         fused_graph_caps=None,
+        inference_batching=None,
     )
 
 

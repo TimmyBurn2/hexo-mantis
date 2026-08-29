@@ -92,6 +92,7 @@ def test_poller_thread_beats_eval_round() -> None:
         # drive never builds an engine, so the value is inert here — but the parameter
         # carries no default, so the decision is written rather than omitted.
         fused_graph_caps=None,
+        inference_batching=None,
     )
     try:
         import time

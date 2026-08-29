@@ -61,6 +61,7 @@ from mantis.config.resolve.fused_graph_caps import (
     FusedGraphCapsSpec,
     MissingFusedGraphCapsError,
 )
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
@@ -155,7 +156,8 @@ def test_fg6_05_a_grid_engine_passes_none_explicitly_and_constructs() -> None:
     omitted argument. `None` here means "this route has no fused graph forward to bound", and
     it is written at the call site so a reader sees the decision rather than a silence."""
     engine = LocalInferenceEngine(torch.nn.Linear(1, 1), _CPU,
-                                  encoding_spec=H.GRID_SPEC, fused_graph_caps=None)
+                                  encoding_spec=H.GRID_SPEC, fused_graph_caps=None,
+ inference_batching=None, max_in_flight=0)
     assert engine._graph_server is None, "a grid engine constructs no graph server"
 
 
@@ -168,7 +170,8 @@ def test_fg6_06_the_threaded_caps_reach_the_engines_own_server() -> None:
     net.eval()
     caps = FusedGraphCapsSpec(max_fused_edges=1_234_567, max_fused_nodes=89_012)
     engine = LocalInferenceEngine(net, _CPU, encoding_spec=H.GRAPH_SPEC,
-                                  fused_graph_caps=caps)
+                                  fused_graph_caps=caps,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
     try:
         assert engine._graph_server is not None
         assert engine._graph_server.batch_timing_snapshot()["fusion"]["caps"] == {
@@ -243,7 +246,8 @@ def test_fg6_08_the_round_spec_carries_the_caps_across_the_process_seam() -> Non
         "process boundary and the eval child (its OWN allocator, `eval.worker_device: cuda`) "
         "runs unbounded")
     caps = FusedGraphCapsSpec(max_fused_edges=4_500_000, max_fused_nodes=170_000)
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=caps, leaf_batch_size=1)
+    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=caps, leaf_batch_size=1,
+                     inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10))
     back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
     assert isinstance(back.fused_graph_caps, FusedGraphCapsSpec), (
         f"the caps came back as {type(back.fused_graph_caps).__name__}, not the dataclass — "
@@ -256,7 +260,8 @@ def test_fg6_08_a_grid_round_carries_none_across_the_same_seam() -> None:
     """FG6-08 second limb — the `None` arm survives unchanged, exactly as the two posture
     members' disarmed arm does. A grid eval round has no fused graph forward to bound, and
     `None` must round-trip as `None` rather than as a rehydration failure."""
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=None, leaf_batch_size=1)
+    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=None, leaf_batch_size=1,
+                     inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
     assert back.fused_graph_caps is None
     assert back == spec

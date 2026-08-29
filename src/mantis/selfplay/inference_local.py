@@ -42,6 +42,7 @@ from torch.amp.autocast_mode import autocast
 
 from mantis._engine import Board
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import EncodingSpec
 from mantis.env.game_state import GameState
 from mantis.selfplay.hparams import is_graph_representation
@@ -70,15 +71,31 @@ class LocalInferenceEngine:
     worker ever spawns. Handing a graph-built model a dense spec (or the inverse) is a
     wiring error and fails loudly rather than decoding garbage.
 
-    `fused_graph_caps` is REQUIRED and keyword-only on exactly that precedent (F-816-10 D-1).
+    `fused_graph_caps` and `inference_batching` are REQUIRED and keyword-only on exactly that
+    precedent (F-816-10 D-1; PERF-TRANCHE-1 G-2 for the second). The batching pair carried
+    the same defect the cap was fixed for, one field over: the dict literal below wrote
+    `inference_batch_size: 64` and `inference_max_wait_ms: 10` as numbers nobody minted. The
+    ledger measured that at the single-stream deploy head — supply 8 against a collector
+    threshold of 32 — **1.76 of the eval path's 5.30 ms/sim, 33 %**, is the collector's own
+    deadline, on the one path LAW-15 reads a promotion bar off (ledger F-2).
     This class hand-builds its `InferenceServer` config from a dict literal with no
     `RunConfig`, so it is the ONE graph-server construction site that cannot resolve the
     memory bound from a config — and a default here would be the R1 defect in its purest form:
     a value nobody minted, on the one path that has no config to mint it from. The spec is
     RESOLVED ONCE IN THE PARENT and threaded in, the way `RoundSpec` already carries
     `ply_cap_adjudication`/`strength_floor` across the eval process seam. GRID callers pass
-    `None` EXPLICITLY — it means "this route has no fused graph forward to bound", and it is
-    written at the call site so a reader sees the decision rather than a silence.
+    `None` EXPLICITLY for both — "this route has no fused graph forward to bound" and "this
+    route builds no graph collector" — written at the call site so a reader sees the decision
+    rather than a silence. A GRAPH engine handed `inference_batching=None` raises.
+
+    `max_in_flight` is the most graphs this engine's caller can ever have in flight at once
+    (the deploy head's leaf-batch width). The collector's saturation threshold is DERIVED
+    from it, which is what stops a single-stream head paying the pop deadline on every
+    forward — ledger F-1's relation, on the eval route. `0` declares no supply and keeps the
+    frozen half-batch threshold; grid callers pass `0` because they open no graph queue.
+
+    Raises:
+        ValueError: a graph engine was constructed with `inference_batching=None`.
     """
 
     def __init__(
@@ -88,6 +105,8 @@ class LocalInferenceEngine:
         *,
         encoding_spec: EncodingSpec,
         fused_graph_caps: FusedGraphCapsSpec | None,
+        inference_batching: InferenceBatchingSpec | None,
+        max_in_flight: int,
     ) -> None:
         self.model = model
         self.device = device
@@ -105,16 +124,33 @@ class LocalInferenceEngine:
             from mantis._engine import InferenceBatcher
             from mantis.selfplay.inference_server import InferenceServer
 
-            self._graph_batcher = InferenceBatcher(encoding_spec=self.encoding_spec)
+            if inference_batching is None:
+                raise ValueError(
+                    "LocalInferenceEngine: a GRAPH engine was constructed with "
+                    "`inference_batching=None`. `None` is the GRID arm — it means 'this "
+                    "route builds no graph server' — and there is no literal to fall back "
+                    "to here (R1/LAW-11). Resolve it in the parent through "
+                    "`mantis.config.resolve.inference_batching` and thread it in."
+                )
+
+            # `max_in_flight` is the most graphs this engine's caller can ever have in
+            # flight at once; the collector's saturation threshold is DERIVED from it, so a
+            # single-stream deploy head stops paying the pop deadline on every forward
+            # (ledger F-1/F-2). Threaded, never guessed here.
+            self._graph_batcher = InferenceBatcher(
+                encoding_spec=self.encoding_spec, max_in_flight=max_in_flight)
             # WPSC Phase 2 SC-A2: InferenceHParams.from_config reads config["inference"]
             # directly (no top-level-namespace fallback) — this standalone caller has no
-            # RunConfig to draw from, so it hands the `InferenceHParams` dataclass defaults
-            # explicitly (zero-behavior-change: these are the same values `{"selfplay": {}}`
-            # used to resolve to via the old `.get(k, default)` fallback chain).
+            # RunConfig to draw from, so the remaining keys are the `InferenceHParams`
+            # dataclass defaults, handed explicitly. The two BATCHING keys are no longer
+            # among them (G-2): they are threaded from the parent's resolved spec.
             self._graph_server = InferenceServer(
                 model, device,
                 {"inference": {
-                    "inference_batch_size": 64, "inference_max_wait_ms": 10,
+                    # G-2: THREADED, never hardcoded — the same argument the
+                    # `fused_graph_caps` note below makes, on the batching geometry.
+                    "inference_batch_size": inference_batching.inference_batch_size,
+                    "inference_max_wait_ms": inference_batching.inference_max_wait_ms,
                     "trace_inference": True, "compile_inference": False,
                     "compile_inference_mode": "default", "compile_inference_dynamic": True,
                     "perf_timing": False, "perf_sync_cuda": False,

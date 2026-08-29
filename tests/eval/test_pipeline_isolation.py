@@ -128,6 +128,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
         # forward to bound — and it is written out rather than omitted (the parameter
         # is required for that reason).
         fused_graph_caps=None,
+        inference_batching=None,
     )
     kwargs.update(overrides)
     return kwargs

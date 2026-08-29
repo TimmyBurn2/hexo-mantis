@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval import worker
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
@@ -78,6 +79,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         ladder_bootstrap_seed=1234,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=_caps_for(enc_name),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
 
 

@@ -34,6 +34,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import all_specs, lookup
 from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
@@ -120,6 +121,7 @@ def _round_spec(
         ladder_bootstrap_seed=1234,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=_caps_for(enc_name),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
 
 

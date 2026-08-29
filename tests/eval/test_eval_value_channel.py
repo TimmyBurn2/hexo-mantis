@@ -36,6 +36,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
@@ -140,7 +141,8 @@ def _engine(sign: float) -> LocalInferenceEngine:
     net = _ValueVisibleNet(sign)
     net.eval()
     return LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=lookup(_ENC),
-                                fused_graph_caps=_CAPS)
+                                fused_graph_caps=_CAPS,
+                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
 
 
 @pytest.fixture

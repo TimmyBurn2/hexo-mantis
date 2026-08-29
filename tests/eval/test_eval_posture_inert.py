@@ -130,6 +130,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
         # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec.
         # These fixtures assert the POSTURE fields, so the bound is `None` here.
         fused_graph_caps=None,
+        inference_batching=None,
     )
     try:
         spec, _alloc, _gate, _path = pipeline._build_round_spec(
@@ -184,7 +185,8 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
                          leaf_batch_size=1,
-                         fused_graph_caps=None)
+                         fused_graph_caps=None,
+                         inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
     assert back.ply_cap_adjudication is None and back.strength_floor is None
     assert back == disarmed
@@ -197,6 +199,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         strength_floor=StrengthFloorSpec(probe_games=4, min_decisive_rate=0.5,
                                          min_winrate=0.5),
            fused_graph_caps=None,
+           inference_batching=None,
     )
     back_armed = RoundSpec.from_dict(json.loads(json.dumps(armed.to_dict())))
     assert back_armed == armed

@@ -321,6 +321,10 @@ def _play_gate_block(
         # This child has its OWN CUDA context and its own allocator, so the in-process bound
         # the parent's server carries is blind to it — this is how the cap gets here.
         fused_graph_caps=spec.fused_graph_caps,
+        # `None` on a grid round is CORRECT and travels: the engine refuses it only on
+        # the graph branch, which is the one place that knows the route.
+        inference_batching=spec.inference_batching,
+        max_in_flight=spec.leaf_batch_size,
     )
     try:
         candidate = _build_candidate_player(
@@ -518,6 +522,10 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     candidate_engine = LocalInferenceEngine(
         candidate_model, _device(spec.worker_device), encoding_spec=enc_spec,
         fused_graph_caps=spec.fused_graph_caps,
+        # `None` on a grid round is CORRECT and travels: the engine refuses it only on
+        # the graph branch, which is the one place that knows the route.
+        inference_batching=spec.inference_batching,
+        max_in_flight=spec.leaf_batch_size,
     )
 
     adjudicator = _build_adjudicator(spec)

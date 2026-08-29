@@ -60,6 +60,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board, MCTSTree
 from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.bots.random_bot import RandomBot
@@ -169,7 +170,8 @@ def graph_engine():
     net = _RuleNet()
     net.eval()
     engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
-                                  fused_graph_caps=_CAPS)
+                                  fused_graph_caps=_CAPS,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
     try:
         yield engine, spec
     finally:
@@ -583,6 +585,8 @@ def test_infer_batch_ls_refuses_a_dense_spec() -> None:
     engine = LocalInferenceEngine(
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
+        inference_batching=None,
+        max_in_flight=0,
     )
     try:
         with pytest.raises(NotImplementedError):
@@ -608,6 +612,8 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
     engine = LocalInferenceEngine(
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
+        inference_batching=None,
+        max_in_flight=0,
     )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
@@ -637,6 +643,8 @@ def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) 
     dense_engine = LocalInferenceEngine(
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
+        inference_batching=None,
+        max_in_flight=0,
     )
     try:
         with pytest.raises(NotImplementedError) as single:

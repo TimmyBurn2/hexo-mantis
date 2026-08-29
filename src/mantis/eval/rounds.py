@@ -17,6 +17,7 @@ from typing import Any
 from mantis.bots.protocol import RungUnresolvable
 from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthFloorSpec
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
 __all__ = [
@@ -69,6 +70,7 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     ("ply_cap_adjudication", PlyCapAdjudicationSpec),
     ("strength_floor", StrengthFloorSpec),
     ("fused_graph_caps", FusedGraphCapsSpec),
+    ("inference_batching", InferenceBatchingSpec),
 )
 
 
@@ -156,6 +158,17 @@ class RoundSpec:
     #: silently restore the k=1 train/deploy mismatch this field exists to close. A plain int,
     #: so it round-trips through `asdict`/`from_dict` with no rehydration entry.
     leaf_batch_size: int
+    #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
+    #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
+    #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph
+    #: server from a hand-made dict with no `RunConfig` to resolve against, and before this
+    #: field those two knobs were LITERALS in that dict. The ledger measured the cost of a
+    #: literal that is wrong for the route (F-2): at the single-stream deploy head, 33 % of the
+    #: eval path's ms/sim was the collector's own deadline. NOT defaulted, for
+    #: `leaf_batch_size`' reason — no consumer can refuse a bad value on this axis, so a
+    #: default would silently restore the hardcode. `None` is the GRID arm: a grid eval round
+    #: builds no graph server, so there is no collector geometry to carry.
+    inference_batching: InferenceBatchingSpec | None
     #: The CUDA caching allocator REGIME the round's caps were fitted under (RECAL-PREP,
     #: R308(g)(i)), as the config's own minted token. Here for `fused_graph_caps`' reason and
     #: on the same seam: the child is a SECOND allocator on the same card, in its own process,

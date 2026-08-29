@@ -260,6 +260,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
         # allocator on the same card that no in-process bound can see. `None` is the
         # GRID arm, written out rather than omitted.
         fused_graph_caps=None,
+        inference_batching=None,
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt", run_id="oracle_test_run",

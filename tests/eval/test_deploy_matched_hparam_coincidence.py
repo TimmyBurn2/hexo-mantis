@@ -51,17 +51,51 @@ def _pyo3_mctstree_defaults() -> dict[str, Any]:
     return out
 
 
-def _inline_inference_literal() -> dict[str, Any]:
-    """Extract the `{"inference": {...}, "train": {...}}` dict literal that
+def _inline_inference_dict() -> ast.Dict:
+    """The `{"inference": {...}, "train": {...}}` dict node that
     `LocalInferenceEngine.__init__` hands to the graph `InferenceServer`."""
-    tree = ast.parse(_INFERENCE_PY.read_text())
+    tree = ast.parse(_INFERENCE_PY.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):
             continue
         keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
         if "inference" in keys and "train" in keys:
-            return ast.literal_eval(node)
+            return node
     pytest.fail("could not locate the inline inference dict literal")
+
+
+def _split_literal_and_threaded(section: str) -> tuple[dict[str, Any], set[str]]:
+    """`(constant entries, keys whose value is NOT a constant)` for one section.
+
+    The split IS the distinction this file polices. A key whose value is an `ast.Constant`
+    is a code-side literal and can drift from the config; a key whose value is any other
+    expression is READ from something, and there is no coincidence left to pin. Deriving the
+    two sets structurally means a key that gets threaded later moves sides on its own rather
+    than needing this file edited to stay honest.
+    """
+    outer = _inline_inference_dict()
+    for key_node, val_node in zip(outer.keys, outer.values):
+        if not (isinstance(key_node, ast.Constant) and key_node.value == section):
+            continue
+        assert isinstance(val_node, ast.Dict), f"the {section!r} entry is not a dict literal"
+        literals: dict[str, Any] = {}
+        threaded: set[str] = set()
+        for k, v in zip(val_node.keys, val_node.values):
+            assert isinstance(k, ast.Constant), f"a non-constant key in the {section!r} dict"
+            if isinstance(v, ast.Constant):
+                literals[k.value] = v.value
+            else:
+                threaded.add(k.value)
+        return literals, threaded
+    pytest.fail(f"the inline dict has no {section!r} section")
+
+
+def _inline_inference_literal() -> dict[str, dict[str, Any]]:
+    """The CONSTANT entries of both sections, keyed as before."""
+    return {
+        "inference": _split_literal_and_threaded("inference")[0],
+        "train": _split_literal_and_threaded("train")[0],
+    }
 
 
 # ── D-15: the deploy head's MCTS hyper-parameters ────────────────────────────────────
@@ -96,9 +130,8 @@ def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) ->
 
 # ── D-23: the eval engine's InferenceServer hyper-parameters ─────────────────────────
 _INFERENCE_KEYS = [
-    "inference_batch_size", "inference_max_wait_ms", "trace_inference",
-    "compile_inference", "compile_inference_mode", "compile_inference_dynamic",
-    "perf_timing", "perf_sync_cuda",
+    "trace_inference", "compile_inference", "compile_inference_mode",
+    "compile_inference_dynamic", "perf_timing", "perf_sync_cuda",
 ]
 
 #: Keys run5 declares that the inline literal DELIBERATELY does not mirror, each with the
@@ -117,6 +150,22 @@ _INFERENCE_KEYS = [
 #: standalone_construction_site` is the AST census that makes writing one here impossible,
 #: and it is the row that would red if someone "fixed" this exception by adding the key.
 _DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps"}
+
+#: Keys that ARE in the inline dict but are THREADED rather than written — so there is no
+#: literal to drift and nothing for the coincidence rows above to pin. Each carries the
+#: ruling that moved it here, and `test_the_literal_covers_every_key_run5_declares` proves
+#: the move STRUCTURALLY (the value is not an `ast.Constant`) rather than on this comment.
+#:
+#: `inference_batch_size` / `inference_max_wait_ms` (PERF-TRANCHE-1 G-2, ledger F-2). These
+#: were the two rows this file was written to police, and policing them was always the
+#: second-best option the queue offered — it detects the drift, it does not prevent it. The
+#: ledger measured what the un-threaded pair costs on the arm LAW-15 reads a promotion bar
+#: off: at the single-stream deploy head, supply 8 against a collector threshold the literal
+#: set to 32, **1.76 of the eval path's 5.30 ms/sim — 33 %** — is the collector's own
+#: deadline. They are now resolved in the parent through
+#: `mantis.config.resolve.inference_batching` and carried across the process seam on
+#: `RoundSpec`, exactly as `fused_graph_caps` is.
+_THREADED_NOT_LITERAL = {"inference_batch_size", "inference_max_wait_ms"}
 
 
 @pytest.mark.parametrize("key", _INFERENCE_KEYS)
@@ -138,19 +187,30 @@ def test_the_literal_covers_every_key_run5_declares() -> None:
     The exception set is CLOSED and each member carries its ruling: a key is excused from the
     coincidence only by a ruling that says the literal must NOT carry it, never by a key
     quietly appearing on one side."""
-    assert set(_INFERENCE_KEYS) | _DELIBERATELY_NOT_IN_THE_LITERAL == set(
-        _run5()["inference"]
-    ), "run5's inference block and this oracle's key list have diverged"
-    assert not (set(_INFERENCE_KEYS) & _DELIBERATELY_NOT_IN_THE_LITERAL), (
-        "a key is listed as BOTH mirrored and deliberately-absent; the two lists must "
-        "partition run5's inference block, or the coverage claim above is vacuous"
+    sets = [set(_INFERENCE_KEYS), _DELIBERATELY_NOT_IN_THE_LITERAL, _THREADED_NOT_LITERAL]
+    assert set().union(*sets) == set(_run5()["inference"]), (
+        "run5's inference block and this oracle's key lists have diverged"
     )
-    literal = _inline_inference_literal()["inference"]
+    for i, a in enumerate(sets):
+        for b in sets[i + 1:]:
+            assert not (a & b), (
+                "a key is listed in two of {mirrored, deliberately-absent, threaded}; the "
+                "three lists must PARTITION run5's inference block, or the coverage claim "
+                "above is vacuous"
+            )
+    literals, threaded = _split_literal_and_threaded("inference")
     for key in _DELIBERATELY_NOT_IN_THE_LITERAL:
-        assert key not in literal, (
+        assert key not in literals and key not in threaded, (
             f"{key!r} is excused from the coincidence BECAUSE the literal must not carry it "
             f"(F-816-10 D-1) — and it now does. Either the ruling changed or a second "
             f"authority over one byte budget was just written into inference_local.py."
+        )
+    for key in _THREADED_NOT_LITERAL:
+        assert key in threaded, (
+            f"{key!r} is recorded as THREADED (G-2) but the inline dict now writes it as a "
+            f"constant. That is the hardcode the threading removed, put back: the eval "
+            f"path's collector geometry would again be a number nobody minted, on the one "
+            f"arm LAW-15 reads a promotion bar off (ledger F-2)."
         )
 
 

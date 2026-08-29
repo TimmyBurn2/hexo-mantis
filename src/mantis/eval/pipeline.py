@@ -35,6 +35,7 @@ from mantis.config.resolve.eval_posture import (
     resolve_strength_floor,
 )
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.bt import fit_bt, predict_p
 from mantis.eval.child_memory import EVENT as EVAL_DEVICE_MEMORY_EVENT
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
@@ -415,6 +416,7 @@ class EvalPipeline:
         caps: DrainCaps,
         encoding: str,
         fused_graph_caps: FusedGraphCapsSpec | None,
+        inference_batching: InferenceBatchingSpec | None,
         leaf_batch_size: int,
         run_id: str,
         spool_dir: str | Path,
@@ -460,6 +462,11 @@ class EvalPipeline:
         #: `selfplay.leaf_batch_size`, and a default here would be a search regime nobody
         #: minted standing in for the one the net was trained under.
         self._leaf_batch_size = int(leaf_batch_size)
+        #: The graph collector's batching geometry (PERF-TRANCHE-1 G-2, ledger F-2), resolved
+        #: ONCE in the parent and carried to every round's `RoundSpec`. NOT defaulted, for
+        #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
+        #: server dict, and a default here would put them straight back.
+        self._inference_batching = inference_batching
         #: The allocator REGIME the round's caps were fitted under (RECAL-PREP, R308(g)(i)),
         #: resolved ONCE in the parent and carried to every round's `RoundSpec`. Unlike
         #: `fused_graph_caps` this one carries a DEFAULT, and the reason is stated rather than
@@ -694,6 +701,10 @@ class EvalPipeline:
             # R318(b), same seam and same reason: the deploy head must search at the width the
             # net's targets were generated at, and the child cannot read the config to find it.
             leaf_batch_size=self._leaf_batch_size,
+            # G-2, same seam and same reason: the child's graph server wrote its pop width
+            # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
+            # deadline one of them set (ledger F-2).
+            inference_batching=self._inference_batching,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's, and the child has no
             # config to resolve one from.
@@ -1106,6 +1117,7 @@ def build_eval_pipeline(
     coordinator_cfg_caps: DrainCaps,
     encoding: str,
     fused_graph_caps: FusedGraphCapsSpec | None,
+    inference_batching: InferenceBatchingSpec | None,
     leaf_batch_size: int,
     run_id: str,
     spool_dir: str | Path,
@@ -1122,7 +1134,8 @@ def build_eval_pipeline(
     `run_evaluation`'s protocol args and are IMMEDIATELY serialized-and-dropped)."""
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
-        fused_graph_caps=fused_graph_caps, leaf_batch_size=leaf_batch_size, run_id=run_id,
+        fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
+        leaf_batch_size=leaf_batch_size, run_id=run_id,
         allocator_posture=allocator_posture,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,

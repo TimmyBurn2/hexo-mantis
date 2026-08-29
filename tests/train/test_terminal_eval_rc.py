@@ -570,6 +570,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
         # F-816-10 D-1: the GRID arm (`v6_live2_ls` has no fused graph forward to
         # bound), stated because the parameter carries no default.
         fused_graph_caps=None,
+        inference_batching=None,
     )
     # The persistent poller would finalize a round the drive is about to finalize itself;
     # its own survival is `tests/eval/test_round_completion_error.py`'s subject, and a race

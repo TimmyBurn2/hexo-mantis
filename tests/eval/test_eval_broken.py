@@ -126,6 +126,7 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: EvalConfig | None = None, **ov
         # forward to bound — and it is written out rather than omitted (the parameter
         # is required for that reason).
         fused_graph_caps=None,
+        inference_batching=None,
     )
     kwargs.update(overrides)
     return kwargs

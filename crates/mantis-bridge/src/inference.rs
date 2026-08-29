@@ -291,13 +291,21 @@ impl PyInferenceBatcher {
     /// `encoding_spec` derivation > error (the frozen legacy-v6 fallback arms are
     /// retired). `pool_size` is accepted for signature compat but inert — the WP6
     /// queues own no feature-buffer pool (the frozen flume pool is dropped).
+    ///
+    /// `max_in_flight` declares the most graphs this batcher's callers can ever have queued
+    /// at once — `n_workers x leaf_batch_size` for a pool, the leaf-batch width for a
+    /// single-stream deploy head. The collector's saturation threshold is DERIVED from it
+    /// (ledger F-1/F-2). `0` is the UNDECLARED posture, not a supply of zero: it keeps the
+    /// frozen half-batch threshold, which is what every construction that has no pool
+    /// behind it wants.
     #[new]
-    #[pyo3(signature = (encoding_spec = None, feature_len = None, policy_len = None, pool_size = None))]
+    #[pyo3(signature = (encoding_spec = None, feature_len = None, policy_len = None, pool_size = None, max_in_flight = 0))]
     pub fn new(
         encoding_spec: Option<PyRegistrySpec>,
         feature_len: Option<usize>,
         policy_len: Option<usize>,
         pool_size: Option<usize>,
+        max_in_flight: usize,
     ) -> PyResult<Self> {
         let _ = pool_size; // no feature-buffer pool over the WP6 queues (dropped).
         let spec_static: Option<&'static RegistrySpec> =
@@ -320,7 +328,7 @@ impl PyInferenceBatcher {
             spec_static.map_or((0, 0, 0, 1), graph_params);
         Ok(Self::from_parts(
             DenseQueue::new(feature_len),
-            GraphQueue::with_contract_version(contract_version),
+            GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
             feature_len,
             policy_len,
             is_graph,
@@ -523,6 +531,15 @@ impl PyInferenceBatcher {
     /// Spawn N mock graph games on native threads. Each builds a FIXED mixed
     /// spread board (two far clusters → in- + off-window legal nodes) and blocks
     /// on `submit_graph_and_wait`.
+    /// The graph queue's DECLARED supply — the most graphs its callers can ever have in
+    /// flight (`0` = undeclared). The collector's saturation threshold is derived from it,
+    /// so exposing it is what makes the relation observable from a test rather than
+    /// inferred from a timing.
+    #[getter]
+    fn graph_max_in_flight(&self) -> usize {
+        self.graph.max_in_flight()
+    }
+
     pub fn spawn_mock_graph_games(&self, n_games: usize) -> PyResult<()> {
         self.require_graph()?;
         let (win_length, radius, trunk_size) =

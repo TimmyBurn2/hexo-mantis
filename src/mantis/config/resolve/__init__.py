@@ -42,6 +42,11 @@ from mantis.config.resolve.encoding import (
     normalize_stamp,
     reconcile_encoding,
 )
+from mantis.config.resolve.inference_batching import (
+    InferenceBatchingSpec,
+    MissingInferenceBatchingError,
+    resolve_inference_batching,
+)
 from mantis.config.resolve.eval_posture import (
     PlyCapAdjudicationSpec,
     StrengthFloorSpec,
@@ -70,8 +75,10 @@ __all__ = [
     "EncodingConflictError",
     "EncodingResolution",
     "FusedGraphCapsSpec",
+    "InferenceBatchingSpec",
     "MissingAllocatorPostureError",
     "MissingFusedGraphCapsError",
+    "MissingInferenceBatchingError",
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
@@ -92,6 +99,7 @@ __all__ = [
     "resolve_draw_rate_abort",
     "resolve_eval_model_sims",
     "resolve_fused_graph_caps",
+    "resolve_inference_batching",
     "resolve_max_train_steps",
     "resolve_monitor_config",
     "resolve_ply_cap_adjudication",

@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 import torch
 
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis._engine import Board
 from mantis.encoding import lookup
 from mantis.model import CnnArch, GnnArch, build_net
@@ -146,7 +147,8 @@ class _ArchTrappingNet(torch.nn.Module):
 
 def _engine_with(model: torch.nn.Module) -> LocalInferenceEngine:
     return LocalInferenceEngine(model, _CPU, encoding_spec=_GRID_SPEC,
-                                fused_graph_caps=None)
+                                fused_graph_caps=None,
+                                inference_batching=None, max_in_flight=0)
 
 
 def _graph_engine() -> LocalInferenceEngine:
@@ -163,7 +165,8 @@ def _graph_engine() -> LocalInferenceEngine:
     ).to(_CPU)
     net.eval()
     return LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC,
-                                fused_graph_caps=_CAPS)
+                                fused_graph_caps=_CAPS,
+                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
 
 
 # ══ I-01 — the four dense-decode invariants, numerically ═════════════════════════
@@ -354,7 +357,8 @@ def test_dense_engine_constructs_no_graph_server() -> None:
                 res_blocks=1)
     )
     engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
-                                  fused_graph_caps=None)
+                                  fused_graph_caps=None,
+                                  inference_batching=None, max_in_flight=0)
     try:
         assert engine._is_graph is False
         assert engine._graph_server is None
@@ -400,7 +404,8 @@ def test_engine_reads_no_arch_attributes_off_the_model() -> None:
     probs[:, 0] = 1.0
     net = _ArchTrappingNet(probs, np.array([0.0, 0.0]))
     engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
-                                  fused_graph_caps=None)
+                                  fused_graph_caps=None,
+                                  inference_batching=None, max_in_flight=0)
     engine.infer_batch([board])
     engine.infer_batch_per_cluster([board])
     assert net.sniffed == [], f"arch attributes were read off the model: {net.sniffed}"
@@ -418,7 +423,8 @@ def test_graph_model_with_dense_spec_fails_loud() -> None:
     engine = None
     try:
         engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRID_SPEC,
-                                  fused_graph_caps=None)
+                                  fused_graph_caps=None,
+                                  inference_batching=None, max_in_flight=0)
         with pytest.raises(Exception) as err:
             engine.infer_batch([Board()])
         assert not isinstance(err.value, AssertionError)
@@ -434,7 +440,8 @@ def test_dense_model_with_graph_spec_fails_loud() -> None:
                 res_blocks=1)
     )
     engine = LocalInferenceEngine(net, _CPU, encoding_spec=_GRAPH_SPEC,
-                                  fused_graph_caps=_CAPS)
+                                  fused_graph_caps=_CAPS,
+                                  inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
     try:
         board = Board()
         board.apply_move(0, 0)

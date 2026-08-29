@@ -103,6 +103,7 @@ from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
+from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
@@ -892,6 +893,16 @@ def compose_run(
                     # graph-only key a grid dependency.
                     fused_graph_caps=(
                         resolve_fused_graph_caps(config.model_dump())
+                        if config.identity.representation == "graph"
+                        else None
+                    ),
+                    # PERF-TRANCHE-1 G-2 (ledger F-2): the collector's pop width and pop
+                    # deadline, resolved through their ONE read path here and carried to the
+                    # child, whose `LocalInferenceEngine` used to write both as literals.
+                    # Graph-only for `fused_graph_caps`' reason: a grid round builds no graph
+                    # server, so there is no collector geometry to carry.
+                    inference_batching=(
+                        resolve_inference_batching(config.model_dump())
                         if config.identity.representation == "graph"
                         else None
                     ),
