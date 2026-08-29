@@ -572,9 +572,12 @@ impl PyInferenceBatcher {
         if batch_size == 0 {
             return Err(PyValueError::new_err("batch_size must be > 0"));
         }
+        let perf_span = mantis_selfplay::perf::Span::start(mantis_selfplay::perf::QUEUE_POP_WAIT);
         let pulled = py.detach(|| self.graph.pop_graph_batch(batch_size, max_wait_ms));
+        perf_span.stop();
         decrement_pending(&self.graph_pending, pulled.len());
 
+        let perf_span = mantis_selfplay::perf::Span::start(mantis_selfplay::perf::WIRE_INFLIGHT);
         let mut ids: Vec<u64> = Vec::with_capacity(pulled.len());
         let mut graphs: Vec<AxisGraph> = Vec::with_capacity(pulled.len());
         {
@@ -623,9 +626,13 @@ impl PyInferenceBatcher {
                 graphs.push(graph);
             }
         }
+        perf_span.stop();
+        let perf_span = mantis_selfplay::perf::Span::start(mantis_selfplay::perf::WIRE_FUSE);
         let mut wire = GraphWire::from_axis_graphs(&graphs, self.graph_contract_version);
         let arrays = wire.take().expect("a freshly fused wire always has arrays");
-        Ok((ids, PyGraphWire::from_arrays(arrays)))
+        let out = PyGraphWire::from_arrays(arrays);
+        perf_span.stop();
+        Ok((ids, out))
     }
 
     /// Ragged OUTPUT: wake each graph waiter with its assembled

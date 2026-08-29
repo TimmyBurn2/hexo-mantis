@@ -51,6 +51,9 @@ static ACC: [StageAcc; N_STAGES] = [
     StageAcc::new(),
     StageAcc::new(),
     StageAcc::new(),
+    StageAcc::new(),
+    StageAcc::new(),
+    StageAcc::new(),
 ];
 
 static LEAVES_TOTAL: AtomicU64 = AtomicU64::new(0);
