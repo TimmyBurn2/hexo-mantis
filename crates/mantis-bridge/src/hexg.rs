@@ -124,22 +124,40 @@ impl PyHexgBuffer {
     /// Sample `batch_size` records, rebuild + align each graph, and block-diagonal
     /// fuse them into `(GraphWire, GraphTargets)`. `recent_frac` (default 0.0)
     /// draws that fraction from the newest ring slots.
+    ///
+    /// GIL-FREE (B2). This call is the trainer's single longest — 1 386 ms of a 2 769 ms
+    /// step, measured — and it is pure Rust CPU. Held under the GIL it stopped the
+    /// in-process inference-server thread DEAD: the PERF-TRANCHE-1 M-1 joint drive measured
+    /// the GIL unavailable for 99.9 % of every sample window and the server serving ZERO
+    /// graphs across 16.85 s of them, against 79.9 requests/s outside. The twelve self-play
+    /// workers keep building leaves through that; nothing answers them.
+    ///
+    /// Releasing it is sound because `&mut self` is exclusive: pyo3 hands out a `PyRefMut`,
+    /// so a second Python thread touching this same buffer is refused by the borrow check
+    /// rather than racing the released section. `HexgBuffer` holds no Python object.
     #[pyo3(signature = (batch_size, augment = false, recent_frac = 0.0))]
     pub fn sample_graph_batch(
         &mut self,
+        py: Python<'_>,
         batch_size: usize,
         augment: bool,
         recent_frac: f32,
     ) -> PyResult<(PyGraphWire, PyGraphTargets)> {
-        let (graphs, targets) = self
-            .inner
-            .sample_graph_batch_impl(batch_size, augment, recent_frac)
-            .map_err(PyValueError::new_err)?;
-        // Single-source block-diagonal fuse (shared with the inference seam so the
-        // C3/C8 union arithmetic never drifts). For a single graph local == global.
-        let mut wire = GraphWire::from_axis_graphs(&graphs, self.inner.contract_version);
-        let arrays = wire.take().expect("a freshly fused wire always has arrays");
-        Ok((PyGraphWire::from_arrays(arrays), PyGraphTargets { inner: targets }))
+        let inner = &mut self.inner;
+        let sampled = py.detach(move || {
+            let (graphs, targets) =
+                inner.sample_graph_batch_impl(batch_size, augment, recent_frac)?;
+            // Single-source block-diagonal fuse (shared with the inference seam so the
+            // C3/C8 union arithmetic never drifts). For a single graph local == global.
+            let mut wire = GraphWire::from_axis_graphs(&graphs, inner.contract_version);
+            let arrays = wire.take().expect("a freshly fused wire always has arrays");
+            Ok::<_, String>((arrays, targets))
+        });
+        let (arrays, targets) = sampled.map_err(PyValueError::new_err)?;
+        Ok((
+            PyGraphWire::from_arrays(arrays),
+            PyGraphTargets { inner: targets },
+        ))
     }
 
     /// Grow to `new_capacity`, preserving all records.

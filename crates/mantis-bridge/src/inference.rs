@@ -617,8 +617,15 @@ impl PyInferenceBatcher {
                 graphs.push(graph);
             }
         }
-        let mut wire = GraphWire::from_axis_graphs(&graphs, self.graph_contract_version);
-        let arrays = wire.take().expect("a freshly fused wire always has arrays");
+        // GIL-FREE, like the pop above it (A5). The fuse is 25.3 % of the card and pure
+        // Rust CPU (ledger §10.1 #2); holding the GIL through it blocks every other Python
+        // thread in the process for its whole duration. `&[AxisGraph]` carries no Python
+        // object, so the closure is `Ungil`.
+        let contract_version = self.graph_contract_version;
+        let arrays = py.detach(move || {
+            let mut wire = GraphWire::from_axis_graphs(&graphs, contract_version);
+            wire.take().expect("a freshly fused wire always has arrays")
+        });
         Ok((ids, PyGraphWire::from_arrays(arrays)))
     }
 
