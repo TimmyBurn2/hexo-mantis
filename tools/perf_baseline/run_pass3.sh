@@ -28,4 +28,15 @@ sleep 5
 echo "=== E2: eval single-stream, DEEPER game (graph size grows with ply) ==="
 $PY tools/perf_baseline/eval_stream.py --out "$OUT/eval_stream_deep.json" --max-moves 64 2>&1 | tail -6
 
+sleep 5
+
+echo "=== SYNC PROBE: is the forward wall its own work or a pipeline drain? ==="
+$PY tools/perf_baseline/sync_probe.py --wire-dir "$OUT/wires_rep" \
+    --out "$OUT/sync_probe.json" 2>&1 | tail -10
+sleep 5
+
+echo "=== D: trainer step ==="
+$PY tools/perf_baseline/trainer_step.py --out "$OUT/trainer_step.json" \
+    --fill-sec 240 --fill-workers 12 --steps 25 2>&1 | tail -40
+
 echo "=== PASS 3 DONE ==="

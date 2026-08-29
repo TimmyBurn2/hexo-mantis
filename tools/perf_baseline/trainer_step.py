@@ -24,7 +24,7 @@ from mantis.config.resolve.coordinator import resolve_coordinator_knobs  # noqa:
 from mantis.selfplay.hparams import resolve_pool_encoding  # noqa: E402
 from mantis.diagnostics.worker_sweep import build_sweep_pool  # noqa: E402
 from mantis.model import arch_from_spec_and_config  # noqa: E402
-from mantis.train.coordinator.dispatch import train_one_batch  # noqa: E402
+from mantis.train.coordinator.dispatch import run_declared_train_step  # noqa: E402
 from mantis.train.trainer.core import Trainer  # noqa: E402
 
 TIMES: dict[str, list[float]] = defaultdict(list)
@@ -111,7 +111,7 @@ def main() -> int:
         return config.train.microbatch_caps
 
     def one_step() -> dict[str, float]:
-        return train_one_batch(
+        return run_declared_train_step(
             trainer, buffer, spec, batch_size=knobs.batch_size, augment=knobs.augment,
             recency_weight=knobs.recency_weight, recent_buffer=None,
             caps_provider=caps_provider)
