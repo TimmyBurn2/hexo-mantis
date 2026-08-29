@@ -1,3 +1,8 @@
+# Exceeds the 300-line soft cap (R8): the round contract and its rehydration are ONE
+# unit — every field carried across the eval process seam, the table that says which of
+# them must be rebuilt as a dataclass on the far side, and the result-shape validation
+# the child answers with. A field split from its rehydration row arrives in the child as
+# a raw mapping and fails at the first attribute read, in a subprocess nobody is reading.
 """RoundSpec + build_round_result + resolve_ladder_rungs (design §a.3 rounds.py).
 
 `RoundSpec` is PATHS AND PRIMITIVES ONLY — a torch module is not a representable field

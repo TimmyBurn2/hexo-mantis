@@ -1,3 +1,7 @@
+# Exceeds the 300-line soft cap (R8): one defect, three routes. The poller thread, the
+# drain and the never-silent assertion are the same failure observed where it can reach
+# the run from, and a route moved to another file stops sharing the harness that proves
+# the other two see the same exception.
 """RED-TEAM-FIX WP11-A F1 (BLOCKER), layer 2 — the poller/round-completion thread must be
 exception-proof (mantis-migration/wp/WP11A/RED_TEAM.md Finding F1; isolation law 2: "a
 timeout/crash/garbage-result ALWAYS escalates to a named `eval_broken` event + a routed
