@@ -42,15 +42,6 @@ from mantis.config.resolve.encoding import (
     normalize_stamp,
     reconcile_encoding,
 )
-from mantis.config.resolve.inference_batching import (
-    InferenceBatchingSpec,
-    MissingInferenceBatchingError,
-    resolve_inference_batching,
-)
-from mantis.config.resolve.sample_threads import (
-    MissingSampleThreadsInputError,
-    resolve_sample_threads,
-)
 from mantis.config.resolve.eval_posture import (
     PlyCapAdjudicationSpec,
     StrengthFloorSpec,
@@ -63,9 +54,18 @@ from mantis.config.resolve.fused_graph_caps import (
     UncalibratedFusedGraphCapsError,
     resolve_fused_graph_caps,
 )
+from mantis.config.resolve.inference_batching import (
+    InferenceBatchingSpec,
+    MissingInferenceBatchingError,
+    resolve_inference_batching,
+)
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.config.resolve.run_length import resolve_max_train_steps
+from mantis.config.resolve.sample_threads import (
+    MissingSampleThreadsInputError,
+    resolve_sample_threads,
+)
 
 __all__ = [
     "UNSPECIFIED",

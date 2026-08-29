@@ -53,6 +53,7 @@ def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
         trainer, buffer, H.GSPEC,
         batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
+        sample_threads_provider=lambda: 1,
     )
 
 

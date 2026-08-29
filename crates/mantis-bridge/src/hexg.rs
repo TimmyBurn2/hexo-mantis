@@ -338,7 +338,13 @@ mod tests {
             .expect("push ok");
         assert_eq!(b.size(), 1);
 
-        let (_wire, targets) = b.sample_graph_batch(1, false, 0.0).expect("sample ok");
+        // `sample_graph_batch` releases the GIL around the rebuild (B2), so it needs the
+        // token; `n_threads = 1` is the serial path, which is what a one-record ring wants.
+        Python::initialize();
+        let targets = Python::attach(|py| {
+            let (_wire, targets) = b.sample_graph_batch(py, 1, false, 0.0, 1).expect("sample ok");
+            targets
+        });
         // One sampled record → one per-graph argmax cell decoded.
         assert_eq!(targets.target_argmax_cells().len(), 1);
     }

@@ -1,3 +1,8 @@
+// Exceeds the 300-line soft cap (R8): the sample path is ONE unit — the weighted index
+// draw, the RNG hoist that feeds it, the parallel rebuild that consumes the hoist, and
+// the per-record align whose mass check refuses the batch. The hoist and the rebuild in
+// particular are a determinism pair: split apart, a reader can change the draw order in
+// one file and the parallel reassembly in another and see neither break the other.
 //! HEXG sample path — rebuild-at-sample via the native builder.
 //!
 //! Weighted-sample record indices, then per sampled record: draw a uniform D6

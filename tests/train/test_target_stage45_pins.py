@@ -73,7 +73,8 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
         size = real.size
         capacity = real.capacity
 
-        def sample_graph_batch(self, batch_size: int, augment: bool = False, recent_frac: float = 0.0):
+        def sample_graph_batch(self, batch_size: int, augment: bool = False,
+                               recent_frac: float = 0.0, n_threads: int = 1):
             wire, targets = real.sample_graph_batch(batch_size, augment=augment, recent_frac=recent_frac)
             sampled.append(targets)
             return wire, targets
@@ -81,7 +82,7 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
     rec = _RecordingTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC, batch_size=3, augment=False,
                             recency_weight=0.0, recent_buffer=None,
-                            caps_provider=lambda: _S4_CAPS)
+                            caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1)
     assert len(rec.calls) == 1 and len(sampled) == 1
     # G-DFIX-1 (WP12-R F2): after the micro-batch split the trainer receives a PARTITION, not
     # a `policy_target` kwarg. The pin is UNCHANGED in what it claims and STRICTLY STRONGER in

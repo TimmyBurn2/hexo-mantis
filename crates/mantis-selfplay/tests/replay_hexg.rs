@@ -261,7 +261,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     let rec = sample_record();
     buf.push_record_impl(&rec, 0).unwrap();
 
-    let (graphs, targets) = buf.sample_graph_batch_impl(1, false, 0.0).unwrap();
+    let (graphs, targets) = buf.sample_graph_batch_impl(1, false, 0.0, 1).unwrap();
     assert_eq!(graphs.len(), 1);
     let sg = &graphs[0];
     assert_eq!(sg.builder_impl, 1, "sampled graph must carry builder_impl=1 (F7)");
@@ -324,7 +324,7 @@ fn augmented_sample_target_is_coherent_every_element() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for _ in 0..48 {
-        let (graphs, targets) = buf.sample_graph_batch_impl(1, true, 0.0).unwrap();
+        let (graphs, targets) = buf.sample_graph_batch_impl(1, true, 0.0, 1).unwrap();
         if targets.argmax_valid[0] == 0 {
             continue;
         }
@@ -378,7 +378,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
-        buf.sample_graph_batch_impl(1, true, 0.0)
+        buf.sample_graph_batch_impl(1, true, 0.0, 1)
             .expect("empty-board record must survive D6-augmented sample-align (sym forced to identity)");
     }
 }
@@ -423,7 +423,7 @@ fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
         assert_eq!(victim.game_ids[s], *gid, "game_id {s} unchanged");
         assert_eq!(victim.weights[s], *w, "weight {s} unchanged");
     }
-    let (_, targets) = victim.sample_graph_batch_impl(4, false, 0.0).unwrap();
+    let (_, targets) = victim.sample_graph_batch_impl(4, false, 0.0, 1).unwrap();
     assert_eq!(targets.outcomes.len(), 4);
 
     let _ = std::fs::remove_file(&good_path);
@@ -448,7 +448,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(
-        buf.sample_graph_batch_impl(1, false, 0.0).is_err(),
+        buf.sample_graph_batch_impl(1, false, 0.0, 1).is_err(),
         "illegal-cell visit mass drop must raise, not silently under-weight"
     );
 }
@@ -473,7 +473,7 @@ fn legit_push_sample_roundtrip_does_not_trip_mass_drop_guard() {
     buf.push_record_impl(&sample_record(), 0).unwrap();
     for aug in [false, true] {
         for _ in 0..24 {
-            buf.sample_graph_batch_impl(1, aug, 0.0).expect("legit round-trip must not trip the guard");
+            buf.sample_graph_batch_impl(1, aug, 0.0, 1).expect("legit round-trip must not trip the guard");
         }
     }
 }

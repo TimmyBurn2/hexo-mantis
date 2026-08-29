@@ -1230,7 +1230,7 @@ class StepCoordinator:
             batch_size=batch_size, augment=cfg.augment,
             recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
             caps_provider=self._microbatch_caps,
-            sample_threads=self._sample_threads(),
+            sample_threads_provider=self._sample_threads,
         )
 
     def _step_spec(self) -> Any:

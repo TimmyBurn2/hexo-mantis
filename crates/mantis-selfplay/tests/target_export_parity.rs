@@ -243,7 +243,7 @@ fn check_roundtrip(src: &str, i: usize) {
     let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push refused: {e}", pos.id));
     let (graphs, targets) = buf
-        .sample_graph_batch_impl(1, false, 0.0)
+        .sample_graph_batch_impl(1, false, 0.0, 1)
         .unwrap_or_else(|e| panic!("{}: sample failed (mass_drop_check?): {e}", pos.id));
     assert_eq!(graphs.len(), 1);
     let g = &graphs[0];
@@ -330,7 +330,7 @@ fn o1r_record_chain_full_mass() {
             let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
             buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push: {e}", pos.id));
             let (graphs, targets) = buf
-                .sample_graph_batch_impl(1, false, 0.0)
+                .sample_graph_batch_impl(1, false, 0.0, 1)
                 .unwrap_or_else(|e| panic!("{}: sample: {e}", pos.id));
             let g = &graphs[0];
             let mut got: Vec<((i32, i32), f64)> = Vec::new();

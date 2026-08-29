@@ -1,3 +1,7 @@
+# Exceeds the 300-line soft cap (R8): the declared route and both of its arms are ONE
+# unit. The route decision, the graph arm and the grid arm have to be read together to
+# see the property they exist for — that a graph-only input reaches the graph arm ALONE,
+# and reaches it as a provider so it is never even evaluated on the grid route.
 """The DECLARED training-step dispatcher — TD-1 / CARD-TRAINSTEP-ADAPTER (WPTS Phase T, R102).
 
 The straight self-play arm's route from a replay buffer to ONE gradient update. Dispatch is
@@ -87,7 +91,7 @@ def run_declared_train_step(
     recency_weight: float,
     recent_buffer: Any | None,
     caps_provider: Callable[[], Any],
-    sample_threads: int,
+    sample_threads_provider: Callable[[], int],
 ) -> dict[str, float]:
     """One straight self-play gradient update through the typed route for ``spec``.
 
@@ -104,18 +108,23 @@ def run_declared_train_step(
     config-derived value — the exact class R1 kills — and a caller that forgot it would
     silently get an UNCAPPED step, which is the defect this whole card exists to close.
 
-    ``sample_threads`` rides the SAME shape and for a related reason (PERF-TRANCHE-1 B1): it
-    is the ring rebuild's width, DERIVED from the run's own keys by
-    `mantis.config.resolve.sample_threads`, and it is handed to the GRAPH arm alone because
-    the dense sampler has no rebuild to widen. Required and undefaulted, because a default
-    here would be a thread budget nobody derived, silently taking cores from the self-play
-    workers on whatever box the run lands on.
+    ``sample_threads_provider`` rides the SAME shape and for the SAME reason, not merely a
+    related one (PERF-TRANCHE-1 B1). It is the ring rebuild's width, DERIVED from the run's
+    own keys by `mantis.config.resolve.sample_threads`, and it is a PROVIDER because that
+    resolver reads `full_config["selfplay"]` — which the four frozen grid coordinators do not
+    have. Passing the resolved VALUE here evaluated it on both representations and raised
+    `MissingSampleThreadsInputError` on every grid step; the laziness is what keeps a
+    graph-only input out of the grid route, exactly as it does for the caps.
+
+    Required and undefaulted, because a default would be a thread budget nobody derived,
+    silently taking cores from the self-play workers on whatever box the run lands on.
     """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
                            recency_weight=recency_weight, recent_buffer=recent_buffer,
-                           caps_provider=caps_provider, sample_threads=sample_threads)
+                           caps_provider=caps_provider,
+                           sample_threads_provider=sample_threads_provider)
     if representation == "grid":
         return _grid_step(trainer, buffer, batch_size=batch_size, augment=augment,
                           recency_weight=recency_weight, recent_buffer=recent_buffer)
@@ -128,7 +137,7 @@ def run_declared_train_step(
 def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
-    caps_provider: Callable[[], Any], sample_threads: int,
+    caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
 ) -> dict[str, float]:
     """graph: `sample_graph_batch` → wire payload (ONCE) → `plan_microbatches` →
     per-part `collate_graph_batch` (semantic="full", the trainer's every-batch posture) +
@@ -188,7 +197,7 @@ def _graph_step(
     # 1 386 ms of a 2 769 ms step and 88 % of that is a serial loop over independent items
     # (ledger §10.5 #1, split by PERF-TRANCHE-1 M-2).
     wire, targets = sampler(batch_size, augment=augment, recent_frac=recency_weight,
-                            n_threads=sample_threads)
+                            n_threads=sample_threads_provider())
     payload = graph_wire_from_rust(wire)
     plan = plan_microbatches(payload.edge_offsets, payload.node_offsets,
                              max_edges, max_nodes)

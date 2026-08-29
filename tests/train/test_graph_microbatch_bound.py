@@ -209,7 +209,7 @@ def _max_concurrently_live_parts(trainer, replay, caps, batch_size: int) -> int:
     trainer.train_step_from_graph_batch = _wrapped
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=batch_size, augment=False, recency_weight=0.0,
-        recent_buffer=None, caps_provider=lambda: caps)
+        recent_buffer=None, caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
     return peak
 
 
@@ -429,7 +429,7 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
     before = int(torch.cuda.max_memory_allocated())
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=n_graphs, augment=False, recency_weight=0.0,
-        recent_buffer=None, caps_provider=lambda: caps)
+        recent_buffer=None, caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
     torch.cuda.synchronize()
     peak_delta = int(torch.cuda.max_memory_allocated()) - before
     margin = (_SIZING_BUDGET_BYTES - peak_delta) / _SIZING_BUDGET_BYTES
@@ -520,7 +520,7 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
         before = int(torch.cuda.max_memory_allocated())
         run_declared_train_step(
             trainer, replay, H.GSPEC, batch_size=batch_size, augment=False,
-            recency_weight=0.0, recent_buffer=None, caps_provider=lambda: caps)
+            recency_weight=0.0, recent_buffer=None, caps_provider=lambda: caps, sample_threads_provider=lambda: 1)
         torch.cuda.synchronize()
         peak = int(torch.cuda.max_memory_allocated()) - before
         del trainer
