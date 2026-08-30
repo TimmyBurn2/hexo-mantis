@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 9496aae, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 4b9fbba, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.27, 2026-08-30. Created under R271 (register hygiene: archive/index split);
+# v3.28, 2026-08-30. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -614,6 +614,40 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # as the proving tenant. Perf tranche-2 slots after A's geometry decision (the operator's
 # WAIT-until-geometry ruling); Lane C after tranche-2 re-baselines. **RUN6 WAITS ON LANE B** —
 # standing direction, unchanged.
+# **v3.28 = R322 folded in — the curation where THE SEAM'S FIRST TENANT GETS A DOOR, THE CONFIG
+# PARTITION GETS ITS REPAIR, AND TWO COMPONENTS LAND WITHOUT BEING ARMED.** **SEAM-B0's extras and
+# SEAM-B1 are RATIFIED IN FULL**: the run-fatal PyRefMut race fix (`4ee60d6`) with its mutation
+# self-test pattern COMMENDED INTO PRACTICE; the three suite v2 sections with their planted breaks;
+# `GnnNetV2` proven behind the contract; the witness results INCLUDING **W-A1's disclosed instrument
+# defect** — a witness that fired against its own first implementation and was diagnosed rather than
+# smoothed. **W-C1 IS NAMED THE LEG'S FINDING:** GNN-3's size-generalization hazard is MEASURED for
+# the first time in-tree — V1's dummy-aggregation norm grows **78.5x** over a 64x node increase
+# against V2's **2.49x** — so C(i) is motivated by measurement rather than by argument.
+# **RESEARCH-SCOUT-1 IS ACCEPTED as evidence on disk.**
+# **R257 IS ANNOTATED, NEVER REPAIRED** (ANNOTATION 10, register foot): strix curriculum stage **S5
+# is `win_length 6` / `placement_radius 6` / unbounded — this project's exact rule set**, so the
+# `[r8]` fence NARROWS to their published figures and non-S5 stages. S5-stage material transfers
+# DIRECTLY — still behind the seam, still with witnesses. The acting-scheme lock is untouched.
+# **THE FIVE SCOUT-FLAGGED ITEMS ARE CORRECTED IN PLACE**, one disclosed line each, per
+# docs-follow-reality; **the scout was RIGHT to flag and not fix**, and that division of labour is
+# the reusable half.
+# **SEAM-B2 IS ADOPTED AS THREE LEGS.** **LEG 1:** T9's **eight** red config-partition rows DIE BY
+# REPAIR — the graph-only cap keys become properly arch-scoped and LEAVE the grid configs; **the
+# ratchet rows must be DELETED by the fix, never widened**; and **a repair that would touch a MINTED
+# row is a HALT, not a judgment call**. Candidate **D** lands beside it: an arch selector makes V2
+# SELECTABLE and suite-proven through a THROWAWAY diagnostic config, with **every shipped production
+# config still selecting its current arch, byte-unchanged**. **LEG 2:** migration per `SEAM_V1_DESIGN`
+# §4 — reachability DERIVED STRUCTURALLY (structure, not text); a dense-lineage arch with no
+# production config selecting it and no non-test consumer reaching it is **ARCHIVED** (goldens
+# captured, grave note written, code fenced from `build_net`'s dispatch), and anything load-bearing
+# is **SURFACED WITH ITS CONSUMERS NAMED**, never archived. Redundancy harvest is **BOUNDED to what
+# repair and archive expose**. **LEG 3 (severable):** two components land **UNARMED** behind the
+# contract with the scout's witnesses — the **lambda-return value-target CODEC** (pure-function
+# golden + mover-sign pair; no checkpoint, no box) and **S-HLGAUSS** re-binning into `dist65` — plus
+# the **S-CODEBOOK reachability census** (3^11 patterns at run5 density, no training) as a
+# measurement that updates its card in place. **LANDING IS NOT ARMING, and arming is the operator's
+# run6 prereg.**
+# **NOTHING TRAINS, THE BOX IS UNTOUCHED, GRAVES STAY DEAD.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1773,6 +1807,25 @@ Verbatim text in the register; one-liners here are index only.
   posture and the ply-cap matrix all REMAIN OPERATOR-HELD. **The 500-1000 g/h ledger is a LEDGER,
   not a promise** — every row DERIVED until its witness lands, and **the strength-at-fewer-sims
   witness is the BINDING constraint** on any row that trades search for speed.
+  **AMENDED by R322 (2026-08-30), not expired.** B0 landed and `GnnNetV2` landed, so the
+  row's stated expiry event has HALF occurred: the tenant exists and is proven, and it is
+  **NOT YET SELECTABLE FROM A MINTED CONFIG** — B1's own disclosed limitation. R322(d)
+  carries that gap as **candidate D** and makes the arch selector Leg 1's second half, so
+  this row stays LIVE until a config can select V2. R322 arms nothing either.
+
+- **R322 — SEAM-B2's THREE LEGS. LIVE, expires at the leg exits.** **LEG 1** repairs T9's
+  eight red rows — the graph-only cap keys become arch-scoped and leave the grid configs;
+  **the ratchet rows must be DELETED by the fix, never widened**; **a repair that would
+  touch a MINTED row is a HALT** — and lands **candidate D**, the arch selector, proven
+  through a throwaway diagnostic config with every shipped production config still
+  selecting its current arch **byte-unchanged**. **LEG 2** migrates per `SEAM_V1_DESIGN`
+  §4 with reachability **DERIVED STRUCTURALLY**: no production config selecting it and no
+  non-test consumer reaching it ⇒ **ARCHIVE** (goldens, grave note, dispatch fence);
+  load-bearing ⇒ **SURFACE WITH CONSUMERS NAMED**. `gnn_axis_v1` is production and is NOT
+  a migration target. **LEG 3 (severable)** lands the lambda-return value-target CODEC and
+  **S-HLGAUSS** **UNARMED** behind the contract, plus the **S-CODEBOOK reachability
+  census**. **LANDING IS NOT ARMING** — arming is the operator's run6 prereg, and this
+  ruling touches no minted row, no arming value and no box.
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4013,3 +4066,53 @@ Verbatim text in the register; one-liners here are index only.
   `SEAM_V1_DESIGN.md` §6 from a fixture g/h target to a **FRONTIER** — throughput, average sims
   and strength-at-fixed-nodes tracked JOINTLY, no single g/h number enshrined — amends the design
   of record this ruling adopts, and is noted in one line in the document itself per the direction.
+
+- 2026-08-30 — **v3.28** curated by the SEAM-B2 dispatcher, landing **R322**, authored in the
+  ARCH-ERA architect session under R303(d) and forwarded by the operator (the forwarding IS the
+  authorization; no operator lock consumed). **Landing checks, each re-run rather than inherited:**
+  census before `R23–R321, 292 sections / 292 distinct / 0 duplicates, excluded set 53`, after
+  `R23–R322, 293 / 293 / 0, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`
+  both times; `--stamp` read `STAMP OK: stamp v3.27 == §8 last entry v3.27` before this edit;
+  `--self-test` all four controls fire. **The LIVE-placeholder check is `^> *R{next}` under
+  `plan/` and it returned EXACTLY ONE hit before substitution — the packet's own canonical block —
+  and zero after**, which is the R321-corrected form of the check rather than the self-falsifying
+  literal R316 recorded. Canonical text extracted by `awk` from `PACKET_R322_SEAM_B2.md`, never
+  retyped; substitution line-addressed (packet `25,29`; register `7436,7442`), the disclosure prose
+  at register `:7438` deliberately LEFT carrying the placeholder as a reference; post-substitution
+  byte-diff of both copies de-marked and whitespace-normalized under `set -o pipefail` — **36 lines
+  each, `sha256 270e5b25…` identical**.
+  **Referents re-derived at point of use, not transcribed.** `4ee60d6` is the PyRefMut race fix on
+  `dev` (4 files, `tests/bridge/test_gil_release_on_native_calls.py` added); B1's sections are
+  `9ce0a06`/`5269074`/`cf096e6`, `GnnNetV2` is `c5c25cb`, the floor ratchet `4043 → 4117` is
+  `2e25633`. W-C1's curve is read at `plan/SEAM_B1_TASKS.md:136-140`. **The "eight red rows" is
+  DERIVED**: `ARCH_SCOPED` carries **four** keys and `DECLARED_RED_ROWS` is their product with
+  **two** red classes.
+  **Index edits, four and no more:** the v3.28 header block; the stamp (which rides it, R284(f));
+  an **amendment appended to §5's R321 row** recording that its expiry event half-occurred — the
+  tenant landed, the door did not; and a **new §5 LIVE row for R322**. No existing row was widened
+  and nothing was deleted.
+  **Spot-checks (R271(d)/R272(b), ≥5) against verbatim register text: R307(b)** (register
+  :6443-6445 — "extends R304(a)'s derive-not-store from two fields to the CLASS: where the engine
+  holds a per-record authority, no per-arch field summarises it" — accurate, and it is the rule
+  Leg 1's repair must not violate when it scopes a key by arch), **R257** (:3884-3890 — fence (i)
+  "Shrimp-Bot is the radius-8 game; mantis run5 is radius-6 … Architecture and loop patterns
+  transfer; corpora, checkpoints, and any radius-dependent arithmetic do not" — accurate, and it is
+  exactly the premise ANNOTATION 10 narrows without touching the holding), **R119** (:1539-1542 —
+  HARD STOPS include "any change to run5's armed values (0.25 / 25000 / 50 — mint-prereg-only)" —
+  accurate, and it is the standing text behind R322(d)'s MINTED-row HALT), **R85** (:926-929 —
+  "min_step revisable at mint prereg once a real boot measures early-run draw distribution" —
+  accurate; cited because `MicrobatchCapsConfig`'s docstring names R85/R179 as the authority making
+  its members RUN-SCOPED CONSTANTS fixed at mint prereg, which is what makes Leg 1 a scoping repair
+  and not a re-mint), **R295(c)** (:5521 — "Parallel execution is permitted exactly where the
+  packets' collision tables say it is — re-measured at dispatch, never inherited" — accurate, and
+  it is why this leg re-measured the branch tip rather than trusting the handoff). All five
+  accurate as indexed; **no overclaim found, and no index line was widened by this curation.**
+  **WHAT THIS RULING SETTLES.** B1 proved an arch could land behind the contract; B2 asks whether
+  anything can *select* it, whether the tree still carries arches nobody can reach, and whether a
+  component can be *proven* without being *armed*. The third question is the one with force beyond
+  this leg: if landing and arming are genuinely separable, the run6 prereg stops being a bottleneck
+  on engineering and becomes what it should be — a decision about what to turn on.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, sets
+  no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
+  ply-cap matrix row, and **touches no minted row** — R322(d) makes a repair that would do so a
+  HALT. **RUN6 REMAINS HELD**, behind lane B.

@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 9496aae, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 4b9fbba, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -5290,6 +5290,38 @@ written is exactly what the annotation form exists for: the reader who follows R
 must find the qualification attached to it, and must not find a text quietly different from the
 one the operator ratified.
 
+**ANNOTATION 10 — R257's `[r8]` FENCE IS NARROWED IN SCOPE, not lifted, and R257 is NOT repaired.
+Ordered by R322(b), appended 2026-08-30 by the R322 landing.** R257's fence (i) reads as a blanket:
+*"Shrimp-Bot is the radius-8 game; mantis run5 is radius-6 (R26/R238). Architecture and loop
+patterns transfer; corpora, checkpoints, and any radius-dependent arithmetic do not."* Read
+blanket-wise — and it has been, in every derived doc that tags a reference quantity `[r8]` — it
+says every quantity from a radius-8 reference must be re-derived before it grounds anything.
+
+**What RESEARCH-SCOUT-1 measured, and it cuts the other way.** The strix curriculum is not a
+board-size ladder; it walks `win_length` and `placement_radius` on an unbounded board, and its
+**stage S5 is `win_length 6`, `placement_radius 6`, unbounded — this project's exact rule set.**
+The ground is `plan/research/SCOUT_2026-08-30_CANDIDATES.md` §1 G6, which states the stage's own
+knobs; our half of the match was re-derived at its producer this session and again at this landing:
+`crates/mantis-encoding/src/registry.toml` `[encodings.gnn_axis_v1]` gives `win_length = 6`,
+`graph_radius = 6`, `legal_move_radius = 6`. Per R287(a) the stage's figures are cited to that
+record and deliberately not copied here.
+
+**The narrowing, stated so it cannot be over-read.** The fence attaches to their **published
+figures** — every one of which is taken at radius 8 or on synthetic planes — and to their
+**non-S5 stages**. It does NOT attach to S5-stage material, which is stated at our rules and
+transfers without a radius re-derivation. `[r6-MATCH]` is the label for that class. Three things
+the annotation does not do: it does not lift the fence for any figure, because no strix figure is
+published at S5; it does not touch fence (ii), the acting-scheme divergence, which remains an
+operator lock (R254/R258, and ANNOTATION 9's qualification of its premise); and it licenses no
+transfer that skips the seam — S5-stage material enters behind the contract with its witnesses,
+like anything else.
+
+**Why an annotation and not a repair, restated for this instance.** R257's holding is unchanged and
+correct; what has changed is that a reference we knew only at radius 8 turns out to have a stage at
+radius 6. That is a fact about the reference, not an error in the ruling, and the reader who
+follows R257 to its fence must find the narrowing attached to it rather than a text quietly
+different from the one the operator ratified (R9/R289(v), and ANNOTATION 9's own stated reason).
+
 # R291 — architect adjudication response, operator-ratified by forwarding, 2026-08-20 (R290's execution ratified; F-816-24 RATIFIED MINT-BLOCKING with a fix packet ORDERED; the LAW-08 citation-prose defect fixed as a CLASS; R289(c) slotted; R289(v) matured into read-from-the-register) [INLINE]
 
 **Provenance: [INLINE], verbatim.** Text supplied in the R291 follow-up packet under its own
@@ -7436,3 +7468,46 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > ON LANE B — standing direction, unchanged.
 > ROUTE: land this, census, ACTIVE next version, then B0 as its own dispatch;
 > one plain exit screen.
+
+# R322 — architect ruling, ARCH-ERA session, 2026-08-30 (SEAM-B0's extras and SEAM-B1 RATIFIED in full, W-C1 named as the leg's finding; R257's [r8] fence NARROWED by annotation on strix stage S5; the five scout-flagged reference-row items corrected in place; SEAM-B2 ADOPTED as three legs — the eight red config-partition rows die by repair with candidate D beside them, the dense-lineage migration derives reachability structurally, and two components land UNARMED behind the contract because LANDING IS NOT ARMING) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to this SEAM-B2 dispatcher, whose authorization is the operator's forwarding; one canonical home: `PACKET_R322_SEAM_B2.md` §1, and no competing text exists under `plan/`. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The packet carried the placeholder `R{next}`**, substituted to `R322` after verifying the head is R321 — census `R23–R321, 292 sections / 292 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.27 == §8 last entry v3.27`; `--self-test` all four controls fire; last register header `R321`, no `R322` heading present. **The LIVE-placeholder check `grep -rn '^> *R{next}' plan/` returns EXACTLY ONE hit — this packet's own canonical block** (R321's correction, applied rather than re-discovered). The substitution is the ONLY edit to the canonical text and was applied to the canonical home as well as to this entry, so the two are byte-identical; the `R322` occurrences in the packet's filename and preamble are REFERENCES, not canonical text, and were left untouched.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the packet.** **Clause (a)'s** race fix is `4ee60d6` on `dev` — *"the graph ring excludes by mutex, not by a PyRefMut held across the GIL release"*, 4 files, `tests/bridge/test_gil_release_on_native_calls.py` added; SEAM-B1's three sections are `9ce0a06` (T7), `5269074` (T8), `cf096e6` (T9), GnnNetV2 is `c5c25cb`, and the floor ratchet `4043 → 4117` is `2e25633`, the branch tip. **W-C1's figures are read at their producer**, `plan/SEAM_B1_TASKS.md:136-140`: node counts (16, 128, 1024) — an **8× and then a 64×** node increase — V1 `‖agg[dummy]‖` 4.11 → 47.5 → 322.9 (**78.5×**), V2 0.46 → 0.82 → 1.14 (**2.49×**). **Clause (b)'s** subject: R257's text is `plan/rulings_register.md:3882` and its fence (i) names *"radius-8 game … radius-dependent arithmetic do not [transfer]"*; the narrowing ground is `plan/research/SCOUT_2026-08-30_CANDIDATES.md:143` and `:922`, which measures stage **S5 = `win_length 6`, `placement_radius 6`, unbounded**. **Clause (c)'s** five items are enumerated at `plan/research/SCOUT_2026-08-30_CANDIDATES.md:899-928`; four land in `plan/SEAM_V1_DESIGN.md` §6.4's reference row (`:268-317`) and its neighbour list, the fifth in `inputs/klent_assessment.md:91-93`. Item **4 is R257's fence and is discharged by clause (b)'s annotation, not by an in-place edit** — the two clauses partition the five, they do not overlap. **Clause (d)'s "eight red rows" is DERIVED, not counted from prose**: `tests/model/conformance/test_config_partition_shared_vs_arch_scoped.py` declares `ARCH_SCOPED` with **four** `ArchScopedKey` rows (`train.microbatch_caps.{max_edges,max_nodes}`, `inference.fused_graph_caps.{max_fused_edges,max_fused_nodes}`) and `DECLARED_RED_ROWS` is their product with the **two** red classes — 4 × 2 = **8**. **Candidate D's premise** is B1's own disclosed limitation at `plan/SEAM_B1_TASKS.md:120-123` (*"V2 is not yet selectable from a minted config"*), and the site is `arch_from_spec_and_config` in `src/mantis/model/arch.py`, which returns `CnnArch` or `GnnArch` and can return `GnnArchV2` on no input. **Clause (d)'s "§4 policy"** is `plan/SEAM_V1_DESIGN.md:173-186` — *"Migrate what we will ablate against. Archive the rest with their goldens and a one-line grave note."* **Leg 3's two components** are the scout's λ-return CODEC row (`plan/research/SCOUT_2026-08-30_CANDIDATES.md:288`, whose witness sketch is the pure-function golden plus the mover-sign pair) and card 1 `S-HLGAUSS` (`:551-598`); the census is card 6 `S-CODEBOOK`'s witness (i) (`:790-844`).
+
+> R322 — (a) RATIFIED: SEAM-B0's extras — the run-fatal PyRefMut race fix
+> (4ee60d6) with its mutation self-test pattern commended into practice — and
+> SEAM-B1 in full: the three suite sections with their planted breaks, GnnNetV2
+> proven behind the contract, the witness results including W-A1's disclosed
+> instrument defect, and W-C1 as the leg's finding: GNN-3's size-generalization
+> hazard is measured (V1 dummy-aggregation norm 78.5× over a 64× node increase;
+> V2 2.49×). RESEARCH-SCOUT-1 is ACCEPTED as evidence on disk.
+> (b) R257 is ANNOTATED at the register foot, never repaired: strix stage S5 is
+> win_length 6 / placement radius 6 / unbounded — this project's exact rule
+> set. The [r8] fence NARROWS to their published figures and non-S5 stages;
+> S5-stage material transfers directly, still behind the seam with witnesses.
+> (c) The five reference-row items the scout flagged are corrected IN PLACE per
+> docs-follow-reality, one disclosed line each; the scout was right to flag and
+> not fix.
+> (d) B2 SCOPE ADOPTED, three legs. LEG 1: T9's eight red rows die by repair —
+> the graph-only cap keys become properly arch-scoped and leave the grid
+> configs; the ratchet rows must be deleted by the fix, never widened; a repair
+> that would touch a MINTED row is a HALT, not a judgment call. Candidate D
+> lands: an arch selector makes V2 selectable and suite-proven via a throwaway
+> diagnostic config; every shipped production config still selects its current
+> arch, byte-unchanged. LEG 2: migration per the §4 policy — derive
+> reachability structurally (structure, not text): a dense-lineage arch with no
+> production config selecting it and no non-test consumer reaching it is
+> ARCHIVED (goldens captured, grave note written, code fenced from build_net's
+> dispatch); anything load-bearing is SURFACED with its consumers named, not
+> archived. Redundancy harvest is BOUNDED to what repair and archive expose;
+> larger unifications are surfaced with measured scope for a later packet.
+> LEG 3 (severable): two components land UNARMED behind the contract with the
+> scout's witnesses — the λ-return value-target CODEC (pure-function golden +
+> mover-sign pair; no checkpoint, no box) and S-HLGAUSS re-binning into dist65.
+> Proven by the suite, selected by nothing, armed by nothing: LANDING IS NOT
+> ARMING, and arming is the operator's run6 prereg. The S-CODEBOOK reachability
+> census (3^11 patterns at run5 density, no training) runs as a measurement and
+> updates its card in place.
+> (e) Nothing trains, the box is untouched, graves stay dead. ROUTE: land this,
+> census, ACTIVE next version; execute the legs; one plain exit screen.
