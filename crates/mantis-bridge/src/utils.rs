@@ -14,6 +14,7 @@ use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_search::{pool_overflow_count, take_pool_overflow_count};
+use mantis_selfplay::records::finalize_graph_outcome;
 use mantis_selfplay::replay::sample::apply_symmetry_state;
 use mantis_selfplay::replay::sym::{SymTables, N_SYMS};
 
@@ -107,10 +108,61 @@ pub(crate) fn take_mcts_pool_overflow_count() -> u64 {
     take_pool_overflow_count()
 }
 
-/// Register the three utility free fns into `_engine`. Called by Slice ASM.
+/// The `(outcome, value_valid)` a graph training row carries, from THE authority.
+///
+/// NIGHTRUN-1 Leg 3. A bootstrap corpus encoder has to stamp the same value target
+/// self-play stamps, and the rule — `+1` iff the winner IS this row's player, `-1` if not,
+/// the ply-cap value with `value_valid = 0` on a truncation, the draw reward otherwise — is
+/// `mantis_selfplay::records::finalize_graph_outcome`. Exposing it is what stops a second
+/// Python transcription of a sign convention whose §178 split is already pinned by a Rust
+/// test; a transcription would agree today and drift the first time the split moves.
+///
+/// `winner` is `1` / `-1` for a decided game and `0` for none — the `Option<Player>` the
+/// Rust side takes, in the shape a corpus record actually carries. `terminal_reason` is the
+/// runner's own code and `2` is the ply-cap branch.
+///
+/// # Errors
+/// `ValueError` if `rec_player` or `winner` is outside its declared set. Refused rather
+/// than coerced: a silently-mapped player is a value target with the wrong sign, which no
+/// downstream check can see.
+#[pyfunction]
+#[pyo3(signature = (rec_player, winner, terminal_reason, ply_cap_value, draw_reward))]
+pub(crate) fn graph_row_outcome(
+    rec_player: i8,
+    winner: i8,
+    terminal_reason: u8,
+    ply_cap_value: f32,
+    draw_reward: f32,
+) -> PyResult<(f32, u8)> {
+    if rec_player != 1 && rec_player != -1 {
+        return Err(PyValueError::new_err(format!(
+            "graph_row_outcome: rec_player {rec_player} out of range (expected +1 / -1)"
+        )));
+    }
+    let winner_player = match winner {
+        1 => Some(mantis_core::Player::One),
+        -1 => Some(mantis_core::Player::Two),
+        0 => None,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "graph_row_outcome: winner {other} out of range (expected +1 / -1 / 0)"
+            )))
+        }
+    };
+    Ok(finalize_graph_outcome(
+        rec_player,
+        winner_player,
+        terminal_reason,
+        ply_cap_value,
+        draw_reward,
+    ))
+}
+
+/// Register the utility free fns into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(apply_symmetries_batch, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;
+    m.add_function(wrap_pyfunction!(graph_row_outcome, m)?)?;
     Ok(())
 }

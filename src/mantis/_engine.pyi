@@ -699,6 +699,13 @@ def apply_symmetries_batch(
 ) -> numpy.ndarray: ...
 def mcts_pool_overflow_count() -> int: ...
 def take_mcts_pool_overflow_count() -> int: ...
+def graph_row_outcome(
+    rec_player: int,
+    winner: int,
+    terminal_reason: int,
+    ply_cap_value: float,
+    draw_reward: float,
+) -> tuple[float, int]: ...
 
 # --------------------------------------------------------------------------- #
 # Module functions (encoding registry — NEW-BUILD, LOCKED #8)
