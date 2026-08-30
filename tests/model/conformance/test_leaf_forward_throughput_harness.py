@@ -448,6 +448,10 @@ _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
             "test_arch_states_its_perf_floor.py",
             "test_report_the_per_arch_floor_and_serving_overhead",
         ),
+        (
+            "test_arch_states_its_memory_envelope.py",
+            "test_report_the_per_arch_memory_envelope",
+        ),
     }
 )
 
