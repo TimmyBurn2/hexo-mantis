@@ -579,9 +579,8 @@ def test_an_UNKNOWN_marker_is_refused_rather_than_ignored(tmp_path):
     # rule7-gate: ok -- the `\n@pytest.mark.flaky` in this planted source reads as user@host to
     # the ssh-userhost pattern: the "user" is the n of an escaped newline and the "domain" is a
     # pytest marker path. No account, no machine, and the string is a fixture this test writes.
-    module.write_text(
-        'import pytest\n\n@pytest.mark.flaky\ndef test_x(): assert True\n', encoding="utf-8"
-    )
+    planted = 'import pytest\n\n@pytest.mark.flaky\ndef test_x(): assert True\n'
+    module.write_text(planted, encoding="utf-8")
     with pytest.raises(MarkerOutsideTheDeclaredSet, match="flaky"):
         require_declared_tier_placement(marker_census(module), _SLOW_TIER_MEMBERS)
 
