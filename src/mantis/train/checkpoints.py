@@ -33,7 +33,6 @@ from mantis.model import (
     ARCH_KINDS,
     CnnArch,
     GnnArch,
-    GnnArchV2,
     ModelArch,
     RepresentationMismatch,
     arch_from_spec_and_config,
