@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 8e94497, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 4ecdad6, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.29, 2026-08-31. Created under R271 (register hygiene: archive/index split);
+# v3.30, 2026-08-31. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -673,6 +673,34 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # **THIS RULING ARMS NOTHING AND MINTS NOTHING.** No `strength_floor` term, no `min_margin`, no
 # gate stage value, no bootstrap posture, no ply-cap matrix row, no minted row moved.
 # **RUN6 REMAINS HELD.**
+# **v3.30 = R324 folded in — the curation where A RATIFICATION IS EARNED RATHER THAN INHERITED.**
+# **SITTING4-PREP-1 IS RATIFIED**: the pool verdicts (`sealbot` repaired at mechanism
+# `BUILD_ABSENT`; `kraken` and `strix` remain R139 loud-skips AS RULINGS, strix's blocker narrowed
+# to its PIN by ANNOTATION 10), `strength_floor` with four biting planted breaks, and F-816-25's
+# field ruling with its honest census — **eleven sites, not five**, `eta_min`'s 50× divergence
+# included. **SITTING 3's STATED SEALBOT CAUSE IS CORRECTED ON THE RECORD:** the pin was always
+# present; the BUILD was absent.
+# **THE "FOUR PLANTED BREAKS" WERE ASSERTED ONCE AND NEVER SHOWN, AND THE LANDING DROVE THEM.**
+# The leg record states the figure in its summary table only; §2.3 describes three test ROWS,
+# which is a different object. Four breaks were planted against `run_round`'s PHASE 0 and driven:
+# all four bite. A clause ratified on a re-derivation is worth more than one ratified on a
+# summary line, and this is the shape the next ratification should take.
+# **THE `~50 s` FIGURE IS CORRECTED AT ITS THREE CARRY SITES IN PLACE** (R311(c),
+# docs-follow-reality): the divisor was a 20-worker pooled SELF-PLAY rate; at the measured
+# single-eval-worker rate the probe costs **~341 s**, and the mechanism's case is unchanged
+# because the 0.343 % overhead ratio never depended on the rate.
+# **THE SEALBOT REPAIR BECOMES REPRODUCIBLE FROM THE TREE.** `make vendor` already fetched AND
+# patched; the step that lived only in a leg record was the COMPILE. **Strix's adapter does not
+# exist at contact, so clause (c)'s conditional takes its ELSE arm by construction:** scope
+# reported, loud-skip stands.
+# **THE `strength_floor` VALUES STAND PROPOSED AND NOT ARMED**, and their deciding ground —
+# candidate-vs-`random` decisiveness, **never measured in any era** — is ordered MEASURED this
+# mission. The `strength_floor_refused` reason branch IS implemented, because a mechanism edit on
+# an armed monitor path is not an armed value.
+# **NIGHTRUN SCOPE ADOPTED, five severable legs in order:** hygiene; perf tranche-2 (PROFILE
+# BEFORE FIX); the floor lane (`S-INCR-GRAPH` under its external witness, then a TIME-BOXED kernel
+# feasibility spike behind a parity oracle); bootstrap CAPABILITY only, unarmed; box measurements.
+# **NOTHING TRAINS. LANDING IS NOT ARMING. GRAVES STAY DEAD.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1895,6 +1923,35 @@ Verbatim text in the register; one-liners here are index only.
   and a BC-pretrain execution, so the operator's bootstrap adjudication lands on known ground.
   **THIS RULING ARMS NOTHING AND MINTS NOTHING**, and the box is untouched by it: every item here
   is engine-side. **RUN6 REMAINS HELD.**
+  **RATIFIED IN FULL by R324(a) (2026-08-31); this row EXPIRES.** All three items stand as
+  recorded, with two amendments the ratification makes rather than inherits. **(i)** `sealbot`'s
+  repair is ratified AND made reproducible by R324(c); `kraken` and `strix` are ratified as
+  R139 LOUD-SKIPS-AS-RULINGS rather than as unrepaired defects — the distinction matters because a
+  dispatcher cannot repair a ruling. **(ii)** the "four planted breaks" claim was DRIVEN at the
+  landing rather than inherited (all four bite); the `~50 s` figure is corrected to **~341 s** at
+  its three carry sites; the values remain the OPERATOR's. **(iii)** F-816-25 is ratified with its
+  census WIDENED — eleven sites, not five — and with the honest finding that it was the SMALLEST
+  of the four things between the certified corpus and a BC-pretrain.
+
+- **R324 — NIGHTRUN-1: five severable legs, nothing armed. LIVE, expires at the mission's exit
+  screen.** **(a)–(d) are the ratification and the hygiene**, discharged at Leg 0 and recorded
+  above. **(e) IS THE SCOPE, and its ordering principle is PROFILE BEFORE FIX (LAW-01):** the
+  eval game loop is decomposed at 64 moves before any tranche-2 fix is chosen, because the project
+  holds an ACCOUNT of the 5.78 ms/sim residual and not an ATTRIBUTION. **Leg 1** — perf tranche-2:
+  the geometry-independent eval concurrency lever (the ~85 % idle card is a multiple that survives
+  any gate design), `collate_h2d`'s non-copy 81 %, the fuse's source-side reads IF AND ONLY IF the
+  profile confirms the attribution, and the 7.2 % pre-control/ledger discrepancy found or bounded.
+  **Leg 2** — the floor lane, TIME-BOXED HARD: `S-INCR-GRAPH` under F-19's own inequality as its
+  pre-registered falsifier, with byte-identity of the incremental graph as the gate; then a **2 h
+  maximum** kernel feasibility SPIKE behind a parity harness, where *"parity holds, X ns/edge,
+  here is the gap list"* is a FULL SUCCESS and **nothing lands from the spike itself**.
+  **Leg 3** — bootstrap CAPABILITY only: the three named gaps built, suite-proven, **selected by
+  nothing and armed by nothing**, with the actual cost recorded as an input to the operator's
+  bootstrap adjudication. **Leg 4** — box measurements: candidate-vs-`random` decisiveness (the
+  ground R324(d)'s values turn on, never measured in any era) and a post-fix re-baseline.
+  **NOTHING TRAINS, NO MINTED ROW MOVES, NO POSTURE IS DECIDED.** A net-hash control flip is a
+  HALT of its leg, not a note; a failed witness BANKS its finding and the leg moves on.
+  **RUN6 REMAINS HELD.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4245,6 +4302,62 @@ Verbatim text in the register; one-liners here are index only.
   may MEASURE and PROPOSE an arming value in full, on the record, with grounds — and still not arm
   it. If that separation holds, the operator's forwarding stops being a bottleneck on measurement
   and becomes what it should be: the moment a measured proposal becomes a decision.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, sets
+  no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
+  ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
+
+- 2026-08-31 — **v3.30** curated by the NIGHTRUN-1 dispatcher, landing **R324**, authored in the
+  ARCH-ERA architect session under R303(d) and forwarded by the operator (the forwarding IS the
+  authorization; **no operator lock consumed** — `strength_floor` values stay PROPOSED, nothing is
+  minted, no prereg row moves, and the box grant covers legs 1, 2 and 4 only).
+  **Landing checks, each re-run rather than inherited:** census before `R23–R323, 294 sections /
+  294 distinct / 0 duplicates, excluded set 53`, after `R23–R324, 295 / 295 / 0, excluded set 53`,
+  missing-in-range `{24, 29, 32, 33, 227, 228, 267}` both times; `--stamp` read
+  `STAMP OK: stamp v3.29 == §8 last entry v3.29` before this edit; `--self-test` all four controls
+  fire. Live-placeholder check returned ZERO, the correct reading for a prompt-forwarded text (the
+  register's provenance paragraph says why, in its own words rather than by copying R323's).
+  Second independent transcription with `R{next}` intact, `sed`-substituted, diffed de-marked and
+  whitespace-normalized under `set -o pipefail` — **IDENTICAL, 26 lines** (`wc -l` at the check).
+  `diff` of the two `awk`-extracted blocks — register entry vs canonical home — is EMPTY.
+  **THE CURATION'S OWN FINDING: A RATIFIED CLAIM WAS ASSERTED, NOT SHOWN, AND WAS DRIVEN HERE.**
+  `SITTING4_PREP1_EXIT.md` states "four planted breaks" once, in its §0 summary table, and §2.3
+  enumerates three test ROWS instead — a different object. Rather than ratify the sentence, the
+  landing planted four breaks against `run_round`'s PHASE 0 and drove them: **all four bite**,
+  enumerated in `plan/NIGHTRUN1_EVIDENCE/leg0_planted_breaks_strength_floor.md`. This is the shape
+  R311(c) implies for a ratification and it is worth naming: **a ratification that re-derives its
+  own subject is stronger than one that quotes it**, and the cost here was minutes.
+  **Spot-checks, SIX index lines against the verbatim register text** (protocol asks ≥5):
+  **R139** (`:2052-2061` — "krakenbot SKIPPED (weights not cleanly accessible), strix-bot repo
+  SKIPPED (actively changing) — loud-skip with these grounds per rung" — accurate, and it is what
+  makes "a dispatcher cannot repair a ruling" the right verdict rather than an excuse);
+  **R296(b)** (`:5597-5601` — "the shadowing flags are removed or become config-only; the fix is a
+  mission item SEQUENCED BEFORE any BC-pretrain execution" — accurate, and R324(a) ratifies the
+  execution while recording that the sequencing's PREMISE was wrong: F-816-25 was the smallest of
+  four blockers, not the binding one); **R311(a)** (`:6934-6944` — the four field-ruling conditions
+  plus "Operator locks (armed values, prereg rows, box grants, the mint word, owed texts) are never
+  field-ruled" — accurate, and it is what keeps R324(d)'s values out of this mission's hands while
+  letting its reason BRANCH land); **R288(e)** (`:4902-4908` — "incremental axis-graph construction
+  from parent — the last registered as candidate INCR-GRAPH, gated on Q4d's box measurement,
+  pre-registered falsifier = the F-19 inequality at run5's measured depth distribution" — accurate,
+  and it is Leg 2's entire licence); **ANNOTATION 10** (`:5289-5300` — "stage S5 is `win_length 6`,
+  `placement_radius 6`, unbounded — this project's exact rule set", narrowing not lifting — accurate,
+  and it is why strix's blocker is now purely its PIN); **R98 / derive-or-delete** (`:1209`,
+  `:1219` — "derive-or-delete for mechanical facts" — accurate, and it is the ground on which a
+  make-target census test lost the count from its own NAME this leg).
+  **All six accurate as indexed; no overclaim found, and no index line was widened by this
+  curation.**
+  **Index edits, four and no more:** the v3.30 header block; the stamp (which rides it, R284(f));
+  an **amendment appended to §5's R323 row** — RATIFIED IN FULL, the row EXPIRES, with the two
+  amendments the ratification MAKES rather than inherits named there; and a **new §5 LIVE row for
+  R324**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** R323 established that a value may be MEASURED and PROPOSED without
+  being armed. R324 tests whether the same separation survives contact with a mechanism EDIT on an
+  armed monitor path, and answers yes with a distinction that had not been drawn before: **a
+  refusal REASON is not an armed value.** Implementing `strength_floor_refused` changes what a
+  disarmed run reports by exactly nothing — every committed config mints `null`, so the branch is
+  unreachable until the operator arms the floor — while leaving the operator a gate path that can
+  actually name the thing they are being asked to arm. Arming a lever whose refusal is
+  indistinguishable from silence is arming it blind.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, sets
   no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
   ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
