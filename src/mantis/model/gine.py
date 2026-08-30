@@ -52,7 +52,20 @@ class _GINEConv(nn.Module):
         )
         self.lin = nn.Linear(edge_in, hidden)
 
-    def forward(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+        agg_divisor: Tensor | None = None,
+    ) -> Tensor:
+        """`agg_divisor` is `(N, 1)` and divides the aggregated messages per node when given.
+
+        The one aggregation authority stays here rather than being copied into an arch that
+        wants a degree-normalized node: this block is dtype-critical under autocast (LAW-06)
+        and a second copy of it is a second place for that care to drift. `None` — every v1
+        call — skips the division entirely, so the v1 arithmetic is unchanged.
+        """
         n = x.shape[0]
         if edge_index.shape[1] > 0:
             src = edge_index[0]
@@ -74,6 +87,8 @@ class _GINEConv(nn.Module):
             agg.index_add_(0, dst, msg)
         else:
             agg = x.new_zeros((n, x.shape[1]))
+        if agg_divisor is not None:
+            agg = agg / agg_divisor.to(agg.dtype)
         out = agg + (1.0 + self.eps) * x
         return self.nn(out)
 

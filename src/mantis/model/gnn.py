@@ -105,12 +105,27 @@ class GnnNet(nn.Module):
 
     def __init__(self, arch: GnnArch) -> None:
         super().__init__()
-        self.representation = RepresentationNetwork(
-            arch.in_dim, arch.hidden, arch.num_layers, arch.edge_dim
-        )
+        self.representation = self.build_representation(arch)
         head_in = self.representation.output_dim
         self.policy_head = PolicyHead(head_in, arch.policy_hidden)
-        self.value_head = GnnDist65ValueHead(head_in, arch.value_hidden, arch.n_value_bins)
+        # `pooled_width` is the readout seam: a subclass whose readout concatenates more than
+        # one statistic widens the value head here rather than rebuilding it afterwards, which
+        # would leave a wrongly-shaped module constructed for one moment and in the state dict
+        # if construction then raised. Called from `__init__` deliberately, and it reads no
+        # instance state, so the override is a pure function of `head_in`.
+        self.value_head = GnnDist65ValueHead(
+            self.pooled_width(head_in), arch.value_hidden, arch.n_value_bins
+        )
+
+    @staticmethod
+    def build_representation(arch: GnnArch) -> RepresentationNetwork:
+        """The trunk this arch declares. The second of the two seams a graph arch swaps."""
+        return RepresentationNetwork(arch.in_dim, arch.hidden, arch.num_layers, arch.edge_dim)
+
+    @staticmethod
+    def pooled_width(head_in: int) -> int:
+        """Width of the vector the value head consumes. V1 pools ONE statistic (the mean)."""
+        return head_in
 
     def node_embeddings(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor) -> Tensor:
         """(N, L*H) node embeddings for a (possibly batched/disjoint) graph."""

@@ -1,8 +1,8 @@
 """mantis.model — nets (GNN + CNN), dist65 value codec, build_net authority.
 
 Public API: `build_net` + the declared arch dataclasses (`ModelArch`/`CnnArch`/
-`GnnArch`) + `RepresentationMismatch`; the nets `HexTacToeNet` / `GnnNet` / `HeXONet`;
-the dist65 primitives; `amp_dtype_for`.
+`GnnArch`/`GnnArchV2`) + `RepresentationMismatch`; the nets `HexTacToeNet` / `GnnNet` /
+`GnnNetV2` / `HeXONet`; the dist65 primitives; `amp_dtype_for`; `net_param_hash`.
 """
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from mantis.model.amp import amp_dtype_for
 from mantis.model.arch import (
     CnnArch,
     GnnArch,
+    GnnArchV2,
     ModelArch,
     RepresentationMismatch,
     arch_from_spec_and_config,
@@ -29,6 +30,7 @@ from mantis.model.gnn import (
     GnnNet,
     load_representation_policy_from_bc,
 )
+from mantis.model.gnn_v2 import GnnNetV2
 from mantis.model.identity import net_param_hash
 
 __all__ = [
@@ -36,8 +38,10 @@ __all__ = [
     "VALUE_SUPPORT",
     "CnnArch",
     "GnnArch",
+    "GnnArchV2",
     "GnnDist65ValueHead",
     "GnnNet",
+    "GnnNetV2",
     "HeXONet",
     "HexTacToeNet",
     "ModelArch",

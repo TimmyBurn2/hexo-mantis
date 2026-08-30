@@ -42,7 +42,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.model.arch import CnnArch, GnnArch
+from mantis.model.arch import CnnArch, GnnArch, GnnArchV2
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, roster
@@ -273,8 +273,10 @@ def _trainer_term(net, loss_of) -> MemoryTerm:
     )
 
 
-def _gnn_arch(spec, hidden: int) -> GnnArch:
-    return GnnArch(
+def _gnn_arch(spec, hidden: int, arch_cls=GnnArch):
+    """The graph arch under measurement. `arch_cls` is the ONLY difference between the V1 and
+    V2 envelopes — the three probes below are the arch's, not the version's."""
+    return arch_cls(
         in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
         hidden=hidden, num_layers=1, policy_hidden=8, value_hidden=8,
     )
@@ -304,9 +306,9 @@ def _gnn_batch(spec):
     return batch, stone_mask
 
 
-def _gnn_envelope(hidden: int) -> dict[str, Callable[[Any], MemoryTerm]]:
+def _gnn_envelope(hidden: int, arch_cls=GnnArch) -> dict[str, Callable[[Any], MemoryTerm]]:
     def build(spec):
-        return build_net(_gnn_arch(spec, hidden))
+        return build_net(_gnn_arch(spec, hidden, arch_cls))
 
     def run(net, batch, stone_mask):
         return net.forward_batch(
@@ -379,12 +381,13 @@ def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
     width = _NARROW if narrow else _WIDE
     return {
         "GnnArch": MemoryEnvelope("GnnArch", _gnn_envelope(width)),
+        "GnnArchV2": MemoryEnvelope("GnnArchV2", _gnn_envelope(width, GnnArchV2)),
         "CnnArch": MemoryEnvelope("CnnArch", _cnn_envelope(width)),
     }
 
 
 def _spec_for(arch_kind: str):
-    graph = arch_kind == "GnnArch"
+    graph = arch_kind.startswith("GnnArch")
     for spec in roster():
         if bool(spec.is_graph) is graph:
             return spec
@@ -411,9 +414,10 @@ def test_EVERY_arch_build_net_dispatches_HAS_a_registered_memory_envelope(derive
 
 def test_a_MISSING_envelope_is_refused_by_name():
     """PB-T8a. The state a third arch lands in until it states an envelope."""
-    with pytest.raises(ArchDeclaresNoMemoryEnvelope, match="GnnArchV2"):
+    with pytest.raises(ArchDeclaresNoMemoryEnvelope, match="GnnArchNext"):
         check_envelope_manifest(
-            frozenset({"CnnArch", "GnnArch", "GnnArchV2"}), frozenset(registered_envelopes())
+            frozenset({*registered_envelopes(), "GnnArchNext"}),
+            frozenset(registered_envelopes()),
         )
 
 

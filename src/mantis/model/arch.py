@@ -70,7 +70,37 @@ class GnnArch:
     representation: Literal["graph"] = "graph"
 
 
-ModelArch = CnnArch | GnnArch
+@dataclass(frozen=True)
+class GnnArchV2:
+    """Declared graph architecture, V2 — the `gnn_axis_v1` WIRE, two model-side mechanisms.
+
+    A SIBLING of `GnnArch`, never a subclass. `build.build_net` and
+    `train.checkpoints._arch_from_dict` both dispatch by type/kind, and a subclass would
+    satisfy `isinstance(arch, GnnArch)` and silently build V1 — the hazard filed against the
+    `_arch_from_dict` twin and never closed until this landed.
+
+    The two mechanisms, which is what V2 IS (WP-AXIS2 candidates A and C(i), model-side half):
+    a `concat(stone-masked mean, max over real nodes)` value readout, and a degree-normalized
+    dummy aggregation. NO FIELD NAMES A PROPERTY V2 CLAIMS — fields name mechanisms or widths,
+    because a per-arch field summarising a per-position fact is a lie with a type (R307(b)), and
+    the conformance suite reads this union structurally.
+
+    The field set matches `GnnArch` exactly, which is the point: the swap is the ARCH, not a
+    knob on one. `representation` stays `"graph"` because the wire is unchanged — V2 consumes
+    `gnn_axis_v1` and adds no registry row.
+    """
+
+    in_dim: int
+    edge_dim: int
+    hidden: int = 128
+    num_layers: int = 4
+    policy_hidden: int = 128
+    value_hidden: int = 32
+    n_value_bins: int = 65
+    representation: Literal["graph"] = "graph"
+
+
+ModelArch = CnnArch | GnnArch | GnnArchV2
 
 # Grid hparam config keys → CnnArch field names (config override wins; absent →
 # the dataclass field default, which is the sole default authority — R1).

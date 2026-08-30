@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from mantis.model.arch import CnnArch, GnnArch, ModelArch, RepresentationMismatch
+from mantis.model.arch import CnnArch, GnnArch, GnnArchV2, ModelArch, RepresentationMismatch
 from mantis.model.cnn import HexTacToeNet
 from mantis.model.gnn import GnnNet
+from mantis.model.gnn_v2 import GnnNetV2
 
 __all__ = ["build_net", "RepresentationMismatch"]
 
@@ -39,13 +40,21 @@ def build_net(arch: ModelArch) -> nn.Module:
     net: nn.Module
     if isinstance(arch, CnnArch):
         net = HexTacToeNet(arch)
+    # GnnArchV2 IS TESTED BEFORE GnnArch, and the order is load-bearing rather than stylistic:
+    # were V2 ever made a subclass of V1, `isinstance(arch, GnnArch)` would match it and this
+    # function would silently build V1's net for a V2 arch. V2 is a SIBLING dataclass so the
+    # order is not what saves us today — it is the second line of defence, and the pair is
+    # pinned by tests/model/test_arch_v2_dispatch.py.
+    elif isinstance(arch, GnnArchV2):
+        net = GnnNetV2(arch)
     # Defensive runtime check: the declared type is a closed union, but a caller can
     # still pass a non-arch at runtime (build_net(object()) → RepresentationMismatch).
     elif isinstance(arch, GnnArch):  # pyright: ignore[reportUnnecessaryIsInstance]
         net = GnnNet(arch)
     else:
         raise RepresentationMismatch(
-            f"build_net: arch is neither CnnArch nor GnnArch (got {type(arch).__name__})."
+            f"build_net: arch is none of CnnArch, GnnArch, GnnArchV2 "
+            f"(got {type(arch).__name__})."
         )
     # THE declared instance, never a copy or a re-derivation: a copy would be a second
     # authority for the run's identity. Plain attribute assignment, so the handle lands in

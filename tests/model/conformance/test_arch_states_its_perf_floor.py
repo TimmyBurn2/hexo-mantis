@@ -54,7 +54,7 @@ from typing import Any
 import pytest
 
 import mantis.model.build as build_module
-from mantis.model.arch import CnnArch, GnnArch
+from mantis.model.arch import CnnArch, GnnArch, GnnArchV2
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, build_board, roster
@@ -177,16 +177,22 @@ def serving_overhead(floor: Measurement, served: Measurement) -> float:
 # --------------------------------------------------------------------------------------- #
 # The registered probes — one per arch kind `build_net` dispatches
 # --------------------------------------------------------------------------------------- #
-def _gnn_probe_arms(spec):
-    """GnnArch: floor = `forward_batch` on an already-collated batch; served = the same forward
-    reached from the wire, through `collate_graph_batch` and the ragged softmax."""
+def _gnn_probe_arms(spec, arch_cls=GnnArch):
+    """Graph arches: floor = `forward_batch` on an already-collated batch; served = the same
+    forward reached from the wire, through `collate_graph_batch` and the ragged softmax.
+
+    `arch_cls` is the only thing that differs between the V1 and V2 probes, which is the seam's
+    own claim in miniature: the serving path is the arch's, and swapping the arch swaps nothing
+    else. A second copy of these arms for V2 would have been a second serving path to keep in
+    step, and the first divergence would have been invisible.
+    """
     import torch
 
     from mantis._engine import HexgBuffer
     from mantis.selfplay.graph_collate import collate_graph_batch, segment_softmax
 
     net = build_net(
-        GnnArch(
+        arch_cls(
             in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
             hidden=8, num_layers=1, policy_hidden=8, value_hidden=8,
         )
@@ -289,6 +295,11 @@ def registered_probes() -> dict[str, FloorProbe]:
             floor_arm=lambda spec: _gnn_probe_arms(spec)[0](spec),
             served_arm=lambda spec: _gnn_probe_arms(spec)[1](spec),
         ),
+        "GnnArchV2": FloorProbe(
+            arch_kind="GnnArchV2",
+            floor_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2)[0](spec),
+            served_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2)[1](spec),
+        ),
         "CnnArch": FloorProbe(
             arch_kind="CnnArch",
             floor_arm=lambda spec: _cnn_probe_arms(spec)[0](spec),
@@ -299,7 +310,7 @@ def registered_probes() -> dict[str, FloorProbe]:
 
 def _spec_for(arch_kind: str):
     """A registered encoding whose representation the arch kind serves. Read off the roster."""
-    graph = arch_kind == "GnnArch"
+    graph = arch_kind.startswith("GnnArch")
     for spec in roster():
         if bool(spec.is_graph) is graph:
             return spec
@@ -323,18 +334,20 @@ def test_EVERY_arch_build_net_dispatches_HAS_a_registered_floor_probe(derived):
 
 def test_the_dispatch_census_SEES_a_third_arch_branch(derived):
     """PB-T7a. The manifest is only load-bearing if adding an arch to `build_net` moves the
-    required set — otherwise it is a fixed pair of literals agreeing with each other."""
+    required set — otherwise it is a fixed set of literals agreeing with itself. The planted
+    name is deliberately one no registry knows: an arch that HAS landed cannot demonstrate the
+    refusal, which is exactly what happened when `GnnArchV2` stood here and then registered."""
     planted = (
         "def build_net(arch):\n"
         "    if isinstance(arch, CnnArch):\n        return A()\n"
         "    elif isinstance(arch, GnnArch):\n        return B()\n"
-        "    elif isinstance(arch, GnnArchV2):\n        return C()\n"
+        "    elif isinstance(arch, GnnArchNext):\n        return C()\n"
         "    raise RepresentationMismatch('no')\n"
     )
     seen = arch_kinds_dispatched(planted)
     derived("t7.dispatch.planted", sorted(seen))
-    assert "GnnArchV2" in seen
-    with pytest.raises(ArchDeclaresNoFloor, match="GnnArchV2"):
+    assert "GnnArchNext" in seen
+    with pytest.raises(ArchDeclaresNoFloor, match="GnnArchNext"):
         check_floor_manifest(seen, frozenset(registered_probes()))
 
 
@@ -369,6 +382,23 @@ def test_the_manifest_does_NOT_fire_on_the_REAL_pair():
     """Negative control for claim 1. A manifest that is red at HEAD measures nothing."""
     dispatched = arch_kinds_dispatched(BUILD_SOURCE)
     assert check_floor_manifest(dispatched, dispatched) == dispatched
+
+
+def test_the_CHECKPOINT_LOADERS_arch_registry_matches_the_same_dispatch(derived):
+    """PK3, third registry. `train.checkpoints._ARCH_KINDS` is what rehydrates a stamp, and an
+    arch missing from it is a checkpoint that cannot come back — the LAW-12 half of the same
+    manifest. Checked against THIS census rather than a second walk, so the three registries
+    (floor probes, memory envelopes, loader kinds) are all held to one reading of `build_net`.
+    """
+    from mantis.train.checkpoints import _ARCH_KINDS
+
+    dispatched = arch_kinds_dispatched(BUILD_SOURCE)
+    derived("t7.loader.arch_kinds", sorted(_ARCH_KINDS))
+    assert check_floor_manifest(dispatched, frozenset(_ARCH_KINDS)) == dispatched
+    assert all(cls.__name__ == kind for kind, cls in _ARCH_KINDS.items()), (
+        "a loader row is keyed by a name that is not its class's — `_arch_to_dict` writes "
+        "`type(arch).__name__`, so a mismatched key is a stamp that cannot be read back"
+    )
 
 
 # --------------------------------------------------------------------------------------- #

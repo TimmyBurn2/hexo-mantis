@@ -32,6 +32,7 @@ from mantis.encoding import lookup
 from mantis.model import (
     CnnArch,
     GnnArch,
+    GnnArchV2,
     ModelArch,
     RepresentationMismatch,
     arch_from_spec_and_config,
@@ -122,28 +123,78 @@ def _now_iso() -> str:
     )
 
 
+#: The serialized discriminator's key, and the registry it selects on.
+#:
+#: `representation` ALONE STOPPED BEING A DISCRIMINATOR the moment a second graph arch existed:
+#: `GnnArchV2` declares `representation="graph"` because it consumes the same wire, so a V2
+#: stamp read through the old dispatch rehydrated as `GnnArch`, silently, and the loader then
+#: rebuilt V1's net for a V2 checkpoint. That is a provenance defect of exactly the class LAW-12
+#: exists for, and it is why this is a REGISTRY keyed by the arch's own name rather than another
+#: branch: the next arch adds a row, and `tests/model/test_arch_v2_dispatch.py` holds this
+#: registry set-equal to `build_net`'s dispatch in both directions.
+_ARCH_KIND_KEY = "arch_kind"
+_ARCH_KINDS: dict[str, type] = {
+    "CnnArch": CnnArch,
+    "GnnArch": GnnArch,
+    "GnnArchV2": GnnArchV2,
+}
+
+#: What a stamp written BEFORE the discriminator existed resolves to, by representation. Sound
+#: because it is a fact about history rather than a default: at the time those stamps were
+#: written `GnnArch` and `CnnArch` were the only members of the union, so a legacy graph stamp
+#: IS a V1 stamp. A legacy dict whose fields do not fit its target raises rather than being
+#: coerced — LAW-11's no-silent-fallback, applied to the loader.
+_LEGACY_BY_REPRESENTATION: dict[str, type] = {"grid": CnnArch, "graph": GnnArch}
+
+
 def _arch_to_dict(arch: ModelArch) -> dict[str, Any]:
     """Serialize a declared arch dataclass to a plain dict of primitives (J14) so the whole
     v2 payload round-trips under `torch.load(weights_only=True)` — NOT a pickled dataclass.
-    The `representation` field is the on-load discriminator ("grid"→CnnArch, "graph"→GnnArch)."""
-    return dataclasses.asdict(arch)
+
+    Carries `arch_kind` beside the dataclass fields: `representation` is no longer unique
+    across the union, so it can no longer be the discriminator on load.
+    """
+    return {**dataclasses.asdict(arch), _ARCH_KIND_KEY: type(arch).__name__}
 
 
 def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
-    """Rehydrate a serialized arch dict back to CnnArch|GnnArch, dispatching on the
-    `representation` discriminator (no shape-inference — the SOLE arch source is this dict)."""
+    """Rehydrate a serialized arch dict, dispatching on `arch_kind` (no shape-inference — the
+    SOLE arch source is this dict).
+
+    Raises:
+        RepresentationMismatch: the dict names an unknown `arch_kind`; or it carries no
+            `arch_kind` and its `representation` is neither 'grid' nor 'graph'; or a legacy
+            dict does not fit the arch its representation names.
+    """
     d = dict(d)
-    rep = d.get("representation")
-    if rep == "graph":
-        return GnnArch(**d)
-    if rep == "grid":
+    kind = d.pop(_ARCH_KIND_KEY, None)
+    if kind is not None:
+        cls = _ARCH_KINDS.get(str(kind))
+        if cls is None:
+            raise RepresentationMismatch(
+                f"serialized arch has {_ARCH_KIND_KEY}={kind!r}, which this build does not "
+                f"know — known kinds are {sorted(_ARCH_KINDS)}. A checkpoint from a newer arch "
+                "is REFUSED rather than rebuilt as the nearest thing that fits."
+            )
+    else:
+        rep = d.get("representation")
+        cls = _LEGACY_BY_REPRESENTATION.get(str(rep))
+        if cls is None:
+            raise RepresentationMismatch(
+                f"serialized arch has representation={rep!r} and no {_ARCH_KIND_KEY} — "
+                "expected 'grid' or 'graph'."
+            )
+    if cls is CnnArch:
         ic = d.get("input_channels")
         if ic is not None:
             d["input_channels"] = tuple(int(x) for x in ic)
-        return CnnArch(**d)
-    raise RepresentationMismatch(
-        f"serialized arch has representation={rep!r} — expected 'grid' or 'graph'."
-    )
+    try:
+        return cls(**d)
+    except TypeError as exc:
+        raise RepresentationMismatch(
+            f"serialized arch does not fit {cls.__name__}: {exc}. A stamp is rehydrated as what "
+            "it says it is or not at all — never coerced into the nearest member of the union."
+        ) from exc
 
 
 def _stamp_name(value: Any) -> Any:
@@ -236,7 +287,7 @@ def _build_stamped_metadata(metadata_kwargs: Mapping[str, Any], step: int) -> di
         raise CheckpointStampError(f"unstampable: metadata.run_id is required, got {run_id!r}.")
     arch = md.get("arch")
     if arch is None:
-        raise CheckpointStampError("unstampable: metadata.arch (the declared CnnArch/GnnArch) is required.")
+        raise CheckpointStampError("unstampable: metadata.arch (the declared arch dataclass) is required.")
     return {
         "encoding_name": enc,
         "run_id": run_id,
