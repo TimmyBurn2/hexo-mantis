@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 65df208, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 8e94497, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.28, 2026-08-30. Created under R271 (register hygiene: archive/index split);
+# v3.29, 2026-08-31. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -648,6 +648,31 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # measurement that updates its card in place. **LANDING IS NOT ARMING, and arming is the operator's
 # run6 prereg.**
 # **NOTHING TRAINS, THE BOX IS UNTOUCHED, GRAVES STAY DEAD.**
+# **v3.29 = R323 folded in — the curation where THE SEAM LANE CLOSES AND THE BOX LANE OPENS.**
+# **SEAM-B2 IS RATIFIED IN FULL**: the eight-row repair with its ratchet DELETED BY THE FIX and
+# the defect the repair itself introduced caught by an EXISTING oracle and fixed at the
+# serializer; candidate D's mechanism with the incumbent pinned against every minted config; the
+# archive verdicts (`HeXONet` + `ValueHead` archived with goldens and the fence proven,
+# `HexTacToeNet` KEPT with its consumers named); both codecs UNARMED with unarmedness asserted
+# STRUCTURALLY; the S-CODEBOOK census's pre-registered LARGE branch firing. **THE WITHDRAWN W-L2
+# CORRECTION IS COMMENDED** — the witness was right and the construction was wrong, and a wrong
+# fix withdrawn before shipping is the discipline working rather than a near-miss to apologise for.
+# **CANDIDATE D IS DISPOSED, NOT LEFT OPEN:** the arch-selector key enters production configs only
+# as a MINTED ROW AT RUN6'S MINT — the record's own recommended shape, which makes the row free
+# because that mint rewrites those files anyway. The `RunConfig` shape finding — **no arch width or
+# depth is a live schema leaf, so no config can vary the model's shape** — is RECORDED and PARKED
+# for the ablation era, where it belongs and where it is the larger half.
+# **THE BOX LANE IS ORDERED, three items, and the ordering principle is stated once:** a promotion
+# gate is only as meaningful as its opponents. **(i) THE OPPONENT POOL IS REPAIRED** — sitting 3
+# recorded `sealbot`, `kraken` and `strix` all UNRESOLVABLE at HEAD, and sitting 4 does not forward
+# against an empty ladder. **(ii) `eval.strength_floor` IS PROVEN WITH A PLANTED BREAK**, and its
+# arming VALUES are PROPOSED from EVAL-CHANNEL-1's measured data, pre-stated in the record, and
+# **RESERVED TO THE OPERATOR'S SITTING-4 FORWARDING** — proposing a value is not arming it.
+# **(iii) F-816-25 EXECUTES IF FIELD-RULABLE, ELSE ITS MEASURED SCOPE RETURNS**, so the BC-pretrain
+# path stands unblocked pending the operator's bootstrap adjudication.
+# **THIS RULING ARMS NOTHING AND MINTS NOTHING.** No `strength_floor` term, no `min_margin`, no
+# gate stage value, no bootstrap posture, no ply-cap matrix row, no minted row moved.
+# **RUN6 REMAINS HELD.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1812,6 +1837,11 @@ Verbatim text in the register; one-liners here are index only.
   **NOT YET SELECTABLE FROM A MINTED CONFIG** — B1's own disclosed limitation. R322(d)
   carries that gap as **candidate D** and makes the arch selector Leg 1's second half, so
   this row stays LIVE until a config can select V2. R322 arms nothing either.
+  **AMENDED AGAIN by R323 (2026-08-31), and this is the amendment that CLOSES the gap without
+  closing the row.** The selector landed at B2, so V2 is selectable FROM CODE; R323(b) disposes
+  the remaining half — the config KEY — to **run6's mint**, which re-mints those files anyway and
+  therefore makes the row free. So the gap is no longer OPEN, it is SCHEDULED, and this row stays
+  LIVE only until that mint writes the key. R323 arms nothing either.
 
 - **R322 — SEAM-B2's THREE LEGS. LIVE, expires at the leg exits.** **LEG 1** repairs T9's
   eight red rows — the graph-only cap keys become arch-scoped and leave the grid configs;
@@ -1837,6 +1867,34 @@ Verbatim text in the register; one-liners here are index only.
   record's §2 and the recommendation is to let the key ride run6's mint, which re-mints those
   files anyway. Filed beside it: **no arch width/depth key is a live `RunConfig` leaf**, so no
   config can vary the model's shape — the same operator decision, and it is the larger half.
+  **RATIFIED IN FULL by R323(a) (2026-08-31); this row EXPIRES.** Every leg verdict above stands
+  as recorded, and the withdrawn W-L2 correction is COMMENDED by name. **The reported HALT is
+  DISPOSED, not inherited:** R323(b) sends candidate D's config key to run6's mint — the record's
+  own recommended shape — and RECORDS the arch-width finding as PARKED for the ablation era. What
+  survives this row is therefore two scheduled items, not two open questions.
+
+- **R323 — THE BOX LANE, three items. LIVE, expires at the sitting-4 forwarding.**
+  **(i) THE OPPONENT POOL IS REPAIRED.** Sitting 3 recorded `sealbot`, `kraken` and `strix` all
+  UNRESOLVABLE at HEAD; the mechanism is DERIVED AT SOURCE per rung, never guessed. `sealbot` is
+  repaired to a SMOKE-PROVEN state — the adapter resolves, one game runs end to end at current
+  `dev`, the result parses. `kraken`/`strix` are repaired only if the mechanism is the same class
+  and small; otherwise their scope is REPORTED per rung. **R139's loud-skip discipline stays**: a
+  rung that stays broken stays LOUDLY broken, never silently absent.
+  **(ii) `eval.strength_floor` IS PROVEN.** The mechanism is verified AT HEAD (EVAL-CHANNEL-1's
+  `~50 s` refusal figure is read at ITS PRODUCER, not trusted). A synthetic no-signal round must
+  REFUSE CHEAPLY and a synthetic decisive round must PASS, with planted breaks biting on both.
+  The arming VALUES — refusal criterion, probe size, refusal reason string on the LAW-15 gate path
+  — are PROPOSED from the measured 0/40 data with grounds, pre-stated in the record.
+  **THE VALUES ARE RESERVED TO THE OPERATOR'S SITTING-4 FORWARDING. PROPOSING IS NOT ARMING**, and
+  this row is the place that says so, because a proposal sitting in a record is exactly what a
+  later reader mistakes for a decision.
+  **(iii) F-816-25 EXECUTES IF FIELD-RULABLE** under R311(a)'s four conditions — already RULED by
+  **R296(b)** (R79 duplicate-authority; the shadowing flags are removed or become config-only;
+  sequenced BEFORE any BC-pretrain execution) — **else its MEASURED SCOPE RETURNS and it stops
+  there**. Either way the record must state plainly what remains between the R279-certified corpus
+  and a BC-pretrain execution, so the operator's bootstrap adjudication lands on known ground.
+  **THIS RULING ARMS NOTHING AND MINTS NOTHING**, and the box is untouched by it: every item here
+  is engine-side. **RUN6 REMAINS HELD.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4127,3 +4185,66 @@ Verbatim text in the register; one-liners here are index only.
   no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
   ply-cap matrix row, and **touches no minted row** — R322(d) makes a repair that would do so a
   HALT. **RUN6 REMAINS HELD**, behind lane B.
+
+- 2026-08-31 — **v3.29** curated by the SITTING4-PREP-1 dispatcher, landing **R323**, authored in
+  the ARCH-ERA architect session under R303(d) and forwarded by the operator (the forwarding IS
+  the authorization; **no operator lock consumed** — `strength_floor` values are PROPOSED by this
+  sitting and armed only by the operator's later forwarding of the sitting-4 block).
+  **Landing checks, each re-run rather than inherited:** census before `R23–R322, 293 sections /
+  293 distinct / 0 duplicates, excluded set 53`, after `R23–R323, 294 / 294 / 0, excluded set 53`,
+  missing-in-range `{24, 29, 32, 33, 227, 228, 267}` both times; `--stamp` read
+  `STAMP OK: stamp v3.28 == §8 last entry v3.28` before this edit; `--self-test` all four controls
+  fire.
+  **THE LIVE-PLACEHOLDER CHECK RETURNED ZERO, AND THE CURATION SAYS SO RATHER THAN COPYING R322's
+  LINE.** R321's correction expects `grep -rn '^> *R{next}' plan/` to return exactly the packet's
+  own block, because a packet is normally authored upstream and substituted at landing. **This
+  landing has a different shape:** the text arrived in a prompt, so the landing session AUTHORED
+  the canonical home `PACKET_R323_SITTING4_PREP.md` after substituting, and there was no
+  un-landed placeholder under `plan/` to find. The first draft of this entry and of the register's
+  provenance paragraph asserted "EXACTLY ONE hit" — inherited wording, not a re-derived check —
+  and **both were corrected in place before the commit**. What stands in the check's place is
+  stronger: the forwarded text was transcribed a SECOND time, independently, with `R{next}`
+  intact, substituted mechanically by `sed`, and diffed de-marked and whitespace-normalized
+  against the landed entry under `set -o pipefail` — **IDENTICAL, 23 lines**. Canonical text
+  extracted by `awk` from the packet, never retyped; `diff` of the two `awk`-extracted blocks is
+  EMPTY, so register entry and canonical home are byte-identical.
+  **Referents re-derived at point of use, not transcribed from `SEAM_B2_EXIT.md`.**
+  `DECLARED_RED_ROWS` is `frozenset()` at
+  `tests/model/conformance/test_config_partition_shared_vs_arch_scoped.py:184` — the ratchet was
+  DELETED by the fix, and the vacuity guard is driven against a synthetic row at `:439`. The
+  serializer fix is `model_serializer(mode="wrap")` at `src/mantis/config/schema/core.py:441`; the
+  existing oracle that caught the defect is
+  `tests/config/test_armed_abort_manifest.py:589`. `INCUMBENT_ARCH_KIND` is
+  `{"grid": "CnnArch", "graph": "GnnArch"}` at `src/mantis/model/arch.py:153`, `select_arch` is
+  keyword-only with no default at `:207`. The grave's `param_count` is **914** and
+  `value_head_buried_with_it` is a FIELD of the fixture, so `ValueHead`'s transitive burial is
+  data rather than prose. Unarmedness is asserted by an `ast` import census, not a grep.
+  **Spot-checks (R271(d)/R272(b), ≥5) against verbatim register and law text: R139** (register
+  :2052-2061 — "krakenbot SKIPPED (weights not cleanly accessible), strix-bot repo SKIPPED
+  (actively changing) — loud-skip with these grounds per rung" — accurate, and it is the row that
+  makes two thirds of R323(c)(i)'s pool an OPERATOR DECISION rather than a defect a dispatcher may
+  repair), **R133** (:1784-1786 — "rc 0 does not certify eval health" — accurate, and its MERGE
+  APPEND at :1839 records the caveat DISCHARGED by Phase B, so it is cited here as history, not as
+  a live caveat), **R296(b)** (:5570 block — "R79 duplicate-authority class; the shadowing flags
+  are removed or become config-only; the fix is a mission item SEQUENCED BEFORE any BC-pretrain
+  execution" — accurate, and it is why R323(c)(iii) is an execution question and not an
+  adjudication one), **R311(a)** (:6934-6944 — the four conditions verbatim, plus "Operator locks
+  (armed values, prereg rows, box grants, the mint word, owed texts) are never field-ruled" —
+  accurate, and the second sentence is what keeps (c)(ii)'s values out of this sitting's hands),
+  **LAW-15** (`docs/registers/laws.md:82-87` — "Strength bars must be reproducible instruments
+  (fixed-depth, not wall-clock)" — accurate, and it is why a `sealbot` rung with no `depth` is a
+  config defect rather than an environment skip), **LAW-07** (`:LAW-07` — "No gate or monitor input
+  without a live producer test … the checker carries a mutation self-test proving it bites" —
+  accurate, and it is the standard (c)(ii)'s planted breaks are held to). All six accurate as
+  indexed; **no overclaim found, and no index line was widened by this curation.**
+  **Index edits, four and no more:** the v3.29 header block; the stamp (which rides it, R284(f));
+  **amendments appended to §5's R321 and R322 rows** — R321's gap is now SCHEDULED rather than
+  open, R322 is RATIFIED and EXPIRES; and a **new §5 LIVE row for R323**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** B2 asked whether a component can be proven without being armed and
+  answered yes. R323 asks the adjacent question and answers it the same way for VALUES: a sitting
+  may MEASURE and PROPOSE an arming value in full, on the record, with grounds — and still not arm
+  it. If that separation holds, the operator's forwarding stops being a bottleneck on measurement
+  and becomes what it should be: the moment a measured proposal becomes a decision.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, sets
+  no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
+  ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
