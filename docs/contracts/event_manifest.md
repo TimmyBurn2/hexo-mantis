@@ -73,6 +73,7 @@ producers is a phantom-armed abort chain waiting to happen).
 | an eval-result shape the seam cannot consume is recorded | `train/coordinator/drain.py::_route_eval_result` (`eval_result_unroutable`) | `tests/train/test_run_safety_wiring.py::test_an_unroutable_eval_result_is_recorded_loudly` |
 | an inert gate is loud, not silent (skip counter) | `step.py::on_eval_round_complete` (`sealbot_wr_gate_skipped`) | `tests/train/test_coordinator_gates.py::test_sealbot_absent_key_skips_and_counts` |
 | a gate skipped because the round BROKE is distinguishable from one skipped because the round carried no number (F-RESIT-14) | `step.py::on_eval_round_complete` (`sealbot_wr_gate_skipped` with `reason: eval_round_broken` + the typed `eval_broken_reason`) | `tests/train/test_eval_broken_reaches_the_gate.py::test_a_broken_round_reaches_the_gate_and_is_NAMED_there` |
+| a gate skipped because the strength floor REFUSED the round is distinguishable from both of the above (F-RESIT-14 in a third form, R324(d)) | `step.py::on_eval_round_complete` (`sealbot_wr_gate_skipped` with `reason: strength_floor_refused` + `strength_floor_failed_bars`) | `tests/train/test_strength_floor_refusal_reaches_the_gate.py::test_a_floor_refused_round_is_NAMED_at_the_gate` |
 
 ## Shipped rows (WP13-A)
 

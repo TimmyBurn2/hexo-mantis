@@ -1007,6 +1007,12 @@ class EvalPipeline:
             schedule_next=schedule_next, eval_round_wall_sec=wall_sec, reason=None,
             detail=None, random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
+            # R324(d). The floor's verdict has to reach the LAW-15 gate, and the ONLY route
+            # from the worker child to that gate is this mapping. `_emit_posture_events`
+            # below reads the same `raw` key for the event channel; neither is the other's
+            # source, so a floor payload that stops arriving silences BOTH rather than
+            # leaving one of them reporting a stale verdict.
+            strength_floor=raw.get("strength_floor"),
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,

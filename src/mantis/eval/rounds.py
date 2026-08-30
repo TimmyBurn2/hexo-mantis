@@ -275,6 +275,7 @@ def build_round_result(
     random_wr: float | None,
     worker_pid: int | None = None,
     candidate_snapshot_path: str | None = None,
+    strength_floor: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the coordinator-facing round-result mapping (§c.2). `wr_sealbot` is
     UNCONDITIONALLY present — success, broken, and all-skip rounds alike.
@@ -309,4 +310,11 @@ def build_round_result(
         result["worker_pid"] = worker_pid
     if candidate_snapshot_path is not None:
         result["candidate_snapshot_path"] = candidate_snapshot_path
+    # R324(d): PRESENCE is the arming evidence, exactly as it is on the worker payload this
+    # copies from. A disarmed round — every committed config — produces no key here, so the
+    # routed mapping is byte-identical to what it was before the floor existed. A key
+    # written unconditionally as `None` would report "armed, and it passed nothing" for a
+    # round the worker never applied the floor to.
+    if strength_floor is not None:
+        result["strength_floor"] = dict(strength_floor)
     return result

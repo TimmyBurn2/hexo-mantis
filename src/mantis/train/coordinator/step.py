@@ -1086,7 +1086,10 @@ class StepCoordinator:
         runtime MUST route every completed round here (Appendix B handshake).
 
         `wr_sealbot` absent/None ⇒ ONE `sealbot_wr_gate_skipped` event + skip counter
-        (LAW-18: an inert gate is loud, never silently dead). That path appends NOTHING and
+        (LAW-18: an inert gate is loud, never silently dead), carrying ONE of THREE reasons
+        — `eval_round_broken`, `strength_floor_refused`, `wr_sealbot_absent` — in that
+        precedence, so the three distinct causes of "this gate has no number" are never the
+        same observable (F-RESIT-14, R324(d)). That path appends NOTHING and
         must never trim either: a skipped observation that clipped the ring would let an
         evidence blackout shorten a tail the config asked for (R92/BUG-1's contract, this
         axis's version, driven by `tests/train/test_wr_gate_capacity.py`).
@@ -1128,16 +1131,43 @@ class StepCoordinator:
         # `KeyError` raised in this method kills the poller thread — converting a VISIBLE skip
         # into a silent hang, which is the F1 failure mode the eval pipeline is built against.
         broken = payload.get("eval_broken_reason")
+        # R324(d): F-RESIT-14's HOLE IN A THIRD FORM. A round the strength floor REFUSED is
+        # not broken and is not healthy-but-metric-less — it is deliberately not played, and
+        # before this branch it reached here as `wr_sealbot_absent`, indistinguishable from a
+        # quiet healthy round. Exactly the defect closed above, arriving by a new cause.
+        # `.get` chained through the same absence-tolerant route as `broken`, and PRESENCE is
+        # the arming evidence: a disarmed round carries no `strength_floor` key at all, so
+        # `floor_refused` is False and this gate behaves as it did before the floor existed.
+        floor = payload.get("strength_floor")
+        floor_refused = False
+        # `None` on every arm but a refusal, so a consumer reads one key rather than
+        # inferring the case from a string — the same shape `eval_broken_reason` already has.
+        floor_failed_bars: list[Any] | None = None
+        if isinstance(floor, Mapping) and floor.get("passed") is False:
+            floor_refused = True
+            floor_failed_bars = list(floor.get("failed_bars") or [])
         wr = payload.get("wr_sealbot")
         if wr is None:
             stats["skips"] += 1
+            # PRECEDENCE, stated rather than incidental: broken outranks refused. A round
+            # that broke may carry a floor payload from before the break, and "this round
+            # could not run" is the stronger fact about why the gate has no number.
+            if broken is not None:
+                reason = "eval_round_broken"
+            elif floor_refused:
+                reason = "strength_floor_refused"
+            else:
+                reason = "wr_sealbot_absent"
             emit_via(self._sink, {
                 "event": "sealbot_wr_gate_skipped",
                 "step": step,
-                "reason": "eval_round_broken" if broken is not None else "wr_sealbot_absent",
+                "reason": reason,
                 # Present on EVERY skip, `None` on the healthy-but-metric-less arm, so a
                 # consumer reads one key rather than inferring the case from a string.
                 "eval_broken_reason": broken,
+                # The refusal's own evidence, on the same terms: the bars that failed, or
+                # `None` when the floor did not refuse this round.
+                "strength_floor_failed_bars": floor_failed_bars,
                 "skipped_total": stats["skips"],
                 "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })
