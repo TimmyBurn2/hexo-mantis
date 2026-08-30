@@ -11,6 +11,7 @@ RED at `973822d`: both functions returned "v6" instead of raising.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import pytest
 
@@ -107,11 +108,19 @@ def test_pretrain_cli_boundary_converts_the_class_error_to_a_clean_message():
 
     This is what makes raising the class error at the resolver compatible with CLI
     ergonomics — the conversion happens once, at the boundary, not at the seam.
+
+    The argv moved at F-816-25 and the assertion did not. It used to read
+    `["--corpus", "/nonexistent"]`, which reached the boundary only because argparse's prefix
+    matching silently expanded `--corpus` to `--corpus-npz`; `allow_abbrev=False` — the guard
+    that stops a DELETED flag re-entering as a live one — ends that, and `--config` is now
+    required. A real config path is passed rather than a fake one so this row does not depend
+    on the encoding check happening before the config load, which is not what it tests.
     """
     from mantis.train.pretrain.cli import pretrain
 
+    config = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
     with pytest.raises(SystemExit) as exc:
-        pretrain(["--corpus", "/nonexistent"])
+        pretrain(["--config", str(config)])
     assert "no encoding specified" in str(exc.value)
 
 
