@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.schema import InferenceConfig, SelfplayConfig
+from mantis.config.schema import ARCH_SCOPED_KEYS, InferenceConfig, SelfplayConfig
 
 VALID_MCTS: dict = {
     "n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
@@ -144,12 +144,29 @@ def test_inference_valid_payload_constructs_clean():
     assert cfg.inference_batch_size == 64
 
 
-@pytest.mark.parametrize("field", INFERENCE_FIELDS)
+#: ARCH-SCOPED blocks are omittable at the SECTION level by design (R322(d)); their
+#: required-ness depends on `identity.representation`, which `InferenceConfig` cannot see, so
+#: it is a `RunConfig` fact and is executed by the conformance suite's T9 section. Derived.
+_ARCH_SCOPED_INFERENCE_FIELDS = frozenset(
+    key.field for key in ARCH_SCOPED_KEYS if key.section == "inference"
+)
+REQUIRED_INFERENCE_FIELDS = [f for f in INFERENCE_FIELDS
+                             if f not in _ARCH_SCOPED_INFERENCE_FIELDS]
+
+
+@pytest.mark.parametrize("field", REQUIRED_INFERENCE_FIELDS)
 def test_inference_missing_field_rejected(field: str):
     payload = _inference()
     del payload[field]
     with pytest.raises(ValidationError, match=field):
         InferenceConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize("field", sorted(_ARCH_SCOPED_INFERENCE_FIELDS))
+def test_an_arch_scoped_inference_field_is_OMITTABLE_at_the_section_level(field: str):
+    payload = _inference()
+    del payload[field]
+    assert getattr(InferenceConfig.model_validate(payload), field) is None
 
 
 def test_inference_extra_key_rejected():
@@ -164,6 +181,20 @@ def test_inference_bound_violation_rejected(field: str, bad_value: object):
         InferenceConfig.model_validate(_inference(**{field: bad_value}))
 
 
-def test_inference_has_no_pydantic_level_default():
+def test_inference_has_no_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
+    """R1, with the one exception DERIVED from `ARCH_SCOPED_KEYS` rather than typed (R322(d)).
+
+    The `= None` on an arch-scoped block is not a fallback: `RunConfig` refuses a graph config
+    that omits it and any other config that carries it, so no key's absence silently yields a
+    value. A hand-added default on any other field is still a red.
+    """
+    assert _ARCH_SCOPED_INFERENCE_FIELDS, (
+        "no inference key is arch-scoped, so this exemption is unused and should go"
+    )
     for name, field in InferenceConfig.model_fields.items():
+        if name in _ARCH_SCOPED_INFERENCE_FIELDS:
+            assert not field.is_required(), (
+                f"InferenceConfig.{name} is arch-scoped, so it must be omittable"
+            )
+            continue
         assert field.is_required(), f"InferenceConfig.{name} has a code-side default"

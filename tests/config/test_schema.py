@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import (
+    ARCH_SCOPED_KEYS,
     SCHEMA_VERSION,
     DiskGuardConfig,
     DrainCapsConfig,
@@ -224,9 +225,14 @@ def test_representation_closed_set_rejects_dense():
 
 
 def test_representation_grid_now_accepted():
-    # "grid" is in the closed set — accepted for a GRID encoding (v6w25).
+    # "grid" is in the closed set — accepted for a GRID encoding (v6w25). The ARCH-SCOPED
+    # blocks go with the arch (R322(d)): `_valid_payload` is a GRAPH payload, and a grid config
+    # carrying graph-only cap blocks is refused by name — which is the point of this repair and
+    # is executed by the conformance suite's T9 section, not re-asserted here.
     payload = _valid_payload()
     payload["identity"] = {"encoding": "v6w25", "representation": "grid"}
+    for key in ARCH_SCOPED_KEYS:
+        payload[key.section].pop(key.field, None)
     cfg = RunConfig.model_validate(payload)
     assert cfg.identity.representation == "grid"
 
@@ -408,13 +414,34 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # or `run_id` reds it, which a signature census cannot see (wrong instrument).
     # `TrainConfig` is reached too, so `train.device` is covered — and now with zero edits for
     # every FUTURE block as well, which is the point of deriving the set instead of listing it.
+    # THE ONE EXEMPT CLASS IS DERIVED (R322(d)): an ARCH-SCOPED block carries `= None` so a
+    # config of another representation may OMIT it, and that `None` is not a fallback —
+    # `RunConfig._arch_scoped_keys_are_present_iff_their_arch` refuses a config of the owning
+    # arch that omits it AND one of any other arch that carries it. R1's force is intact: no
+    # key's absence silently yields a value. Read off `ARCH_SCOPED_KEYS` so a hand-added
+    # default anywhere else is still a red, and asserted in BOTH directions so a scoped block
+    # that quietly became required is a red too.
+    exempt = {f"{key.section}.{key.field}" for key in ARCH_SCOPED_KEYS}
+    assert exempt, "no key is arch-scoped, so this exemption is unused and should go"
+    seen: set[str] = set()
     for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():
             key = f"{path}.{name}" if path else name
+            if key in exempt:
+                seen.add(key)
+                assert not field.is_required(), (
+                    f"{model.__name__}.{name} (config key `{key}`) is arch-scoped, so it must "
+                    "be omittable — a required arch-scoped block forces every arch to mint it"
+                )
+                continue
             assert field.is_required(), (
                 f"{model.__name__}.{name} (config key `{key}`) has a code-side default; "
                 "R1 puts a default in the schema field or nowhere"
             )
+    assert seen == exempt, (
+        f"ARCH_SCOPED_KEYS names {sorted(exempt - seen)} which the census never reached — an "
+        "exemption for a key nobody walks is an exemption nobody can see go stale"
+    )
 
 
 def test_o16_every_schema_block_is_strict():

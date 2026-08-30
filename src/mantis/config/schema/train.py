@@ -221,10 +221,16 @@ class MicrobatchCapsConfig(StrictModel):
     fix off. The bound is the mechanism's own range: a micro-batch of zero edges (or zero
     nodes) is not a micro-batch.
 
-    GRAPH-ROUTE ONLY: the dense batch is a fixed-shape tensor already bounded by `batch_size`,
-    so there is no unbounded quantity there for a cap to bound. (No in-repo precedent is
-    claimed for the scoping shape: `amp_dtype`'s consumer runs on every route and only its
-    EFFECT is grid-scoped, which is a different thing.)
+    GRAPH-ROUTE ONLY, AND NOW SCOPED BY THE SCHEMA RATHER THAN BY A CALL SITE (R322(d)). The
+    dense batch is a fixed-shape tensor already bounded by `batch_size`, so there is no
+    unbounded quantity there for a cap to bound. Until B2 the call sites were gated and the
+    SCHEMA was not: `RunConfig` is `extra="forbid"` with every key required, so a grid config
+    was REQUIRED to carry this block and the mint had to invent a number for a quantity that
+    run has none of. The scoping now lives in `core.ARCH_SCOPED_KEYS` and is enforced by
+    `RunConfig._arch_scoped_keys_are_present_iff_their_arch`: on a graph config the block is
+    REQUIRED, on any other it is REFUSED. (No in-repo precedent is claimed for the scoping
+    shape: `amp_dtype`'s consumer runs on every route and only its EFFECT is grid-scoped,
+    which is a different thing.)
 
     RUN-SCOPED CONSTANTS (R85/R179), sized from a measured headroom curve and fixed at mint
     prereg — never chosen, never hand-edited in a minted file. The five non-run5 configs mint
@@ -425,7 +431,13 @@ class TrainConfig(StrictModel):
     # both. Consumed by mantis.config.resolve.microbatch.resolve_microbatch_caps ->
     # StepCoordinator._microbatch_caps (threaded as caps_provider) ->
     # train/coordinator/dispatch.py::_graph_step, on the GRAPH route only.
-    microbatch_caps: MicrobatchCapsConfig
+    # ARCH-SCOPED (R322(d)): `None` here is the ABSENCE of the key, never a value. The
+    # default exists so a grid config may omit the block; it is not a fallback, because
+    # `RunConfig._arch_scoped_keys_are_present_iff_their_arch` refuses a graph config that
+    # omits it and a non-graph config that carries it — including one that carries an
+    # explicit `null`, which is a different fact from absence and is read off
+    # `model_fields_set`, not off the value.
+    microbatch_caps: MicrobatchCapsConfig | None = None
     # `augment` — 12-fold hex-symmetry augmentation of every sampled batch. A first-order
     # "what is this run" fact: it multiplies the effective dataset, so two runs that differ
     # only here are not comparable.

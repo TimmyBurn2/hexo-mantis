@@ -36,6 +36,12 @@ that silently becomes absent-and-unbounded is worse than no cap, because it repo
 present** — the phantom-gate shape R4/LAW-07 exist to kill. An `ast` census over this module
 enforces all three.
 
+ARCH FIRST, THEN ABSENCE, THEN THE PLACEHOLDER (R322(d)). `inference.fused_graph_caps` is
+ARCH-SCOPED to `representation="graph"` in `mantis.config.schema.core.ARCH_SCOPED_KEYS`, and a
+config of any other representation is refused BY NAME before the block is looked for. The three
+refusals are ordered by how specific they are and they answer three different operator
+questions: "this key is not yours", "you never minted this", "you never measured this".
+
 RUN-SCOPED CONSTANTS (R85/R119): both members are sized together from ONE measured fit against
 ONE budget at the box sitting, and are never hand-edited in a minted file.
 """
@@ -45,7 +51,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-_KEY = "inference.fused_graph_caps"
+from mantis.config.resolve.arch_scope import refuse_outside_its_arch
+
+_SECTION, _FIELD = "inference", "fused_graph_caps"
+_KEY = f"{_SECTION}.{_FIELD}"
 _MEMBERS = ("max_fused_edges", "max_fused_nodes")
 #: The entry point that PRODUCES the value, named in the refusal so the operator is not left
 #: to guess where a measured cap comes from (R69: a number without its producing mechanism is
@@ -96,7 +105,18 @@ class FusedGraphCapsSpec:
 
 
 def resolve_fused_graph_caps(full_config: Any) -> FusedGraphCapsSpec:
-    """Return the declared fused-graph-inference caps. Absence raises, naming the level."""
+    """Return the declared fused-graph-inference caps.
+
+    A config of the WRONG ARCH is refused FIRST and by name; then absence, naming the level;
+    then the R119 placeholder.
+
+    Raises:
+        ArchScopedKeyOutsideItsArchError: the config declares a representation other than
+            `graph` (R322(d)).
+        MissingFusedGraphCapsError: the block, or one of its members, is not declared.
+        UncalibratedFusedGraphCapsError: a member is the R119 `null` placeholder.
+    """
+    refuse_outside_its_arch(full_config, _SECTION, _FIELD)
     if not isinstance(full_config, Mapping):
         raise MissingFusedGraphCapsError(
             f"{_KEY}: the config is not a mapping ({type(full_config).__name__}), so no "

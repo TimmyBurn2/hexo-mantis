@@ -162,21 +162,12 @@ train:
   training_steps_per_game: 1.0
   max_train_burst: 1
   batch_size: 256
-  # `microbatch_caps` — the GRAPH training step's memory bound (WP12-R F2,
-  # CARD-RUN5-GPU-OOM, R179). `batch_size` above bounds the number of GRAPHS and bounds
-  # neither quantity that drives memory; these two bound both terms of the measured cost
-  # model `peak ~ a + b*E + c*N`. The sampled batch is SPLIT at graph boundaries under both
-  # members and gradients are ACCUMULATED, so the optimizer result is the un-split step's.
-  # THE TEMPLATE VALUES ARE NON-BINDING BY CONSTRUCTION and that is deliberate: the largest
-  # batch ever measured in this repository is run5's `batch_size: 256` collate at
-  # E = 18 735 930 / N = 699 533, so 100 000 000 / 4 000 000 sit 5.3x and 5.7x above it and
-  # cannot split any batch a smoke config produces. A smoke config whose cap BOUND would make
-  # CI exercise a split BY ACCIDENT, and the split's coverage has to come from the oracles,
-  # where the micro-batch count is asserted rather than incidental. run5 overrides both
-  # members with the operator's sized values at mint (R119/R85).
-  microbatch_caps:
-    max_edges: 100000000
-    max_nodes: 4000000
+  # `microbatch_caps` and `inference.fused_graph_caps` are DELIBERATELY ABSENT from this
+  # template (R322(d)). Both are ARCH-SCOPED to `representation: graph` in
+  # `mantis.config.schema.core.ARCH_SCOPED_KEYS`, and a grid config that carries either is
+  # REFUSED by `RunConfig` — a grid run bounds no graph batch and builds no fused forward, so
+  # minting a number here would be inventing one for a quantity the run has none of. The
+  # graph template (`dev.yaml`) carries both, with their derivations.
   augment: false
   recency_weight: 0.0
   mixing_initial_w: 0.0
@@ -273,31 +264,6 @@ inference:
   compile_inference_dynamic: true
   perf_timing: false
   perf_sync_cuda: false
-  # `fused_graph_caps` — the GRAPH inference forward's memory bound (F-816-10, R276(f)).
-  # `inference_batch_size` above bounds the number of GRAPHS in one fused pop and bounds
-  # neither quantity that drives memory: E and N are SUMS over the fused graphs, and the
-  # fuse had no bound at all before this block. Both members are sized TOGETHER from ONE
-  # measured fit `peak ~ a + b*E + c*N` against ONE budget, so they are one block and not
-  # two keys. `null` is NOT an off state: it is the R119 placeholder, schema-valid and
-  # REFUSED at runtime, and the two production configs mint it until the operator measures
-  # the value with `python -m mantis.diagnostics.fusion_calibrate` at the box.
-  #
-  # THE VALUES BELOW ARE DERIVED, NOT CHOSEN — they are NON-BINDING BY CONSTRUCTION, so a
-  # smoke or preflight config can BOOT and can never exercise a split by accident (MB-24;
-  # the split's coverage must come from the oracles, where its M is asserted). One fused
-  # pop holds at most `inference_batch_size` graphs; one graph holds at most
-  # `N_ceiling = max_game_moves * (3r(r+1)+1) + max_game_moves + 1` nodes (a hex ball of
-  # legal-move radius `r` around each stone, plus the stones and the dummy node) and at
-  # most `32 * N` edges (3 axes x 2 signs x 5 depths x 2 directions = 60 directed edges per
-  # node, halved by the `(src, dst, axis)` dedup, plus 2 dummy edges per node). Evaluated at
-  # this template's own `max_game_moves: 128` and `inference_batch_size: 64`, and at the
-  # registry's WIDEST `legal_move_radius` (8, `v6w25`) so a config that overrides the
-  # encoding stays covered:  N_ceiling = 128*217 + 129 = 27905
-  #   max_fused_nodes = 64 * 27905 + 1        = 1785921
-  #   max_fused_edges = 64 * 32 * 27905 + 1   = 57149441
-  fused_graph_caps:
-    max_fused_edges: 57149441
-    max_fused_nodes: 1785921
 monitor:
   # R242 (ADJ-D12): the ARMING cadence — the stride, in training steps, at which the live
   # hard-abort gates run and the LAW-18 `monitor_gates` summary emits. Minted EQUAL to this

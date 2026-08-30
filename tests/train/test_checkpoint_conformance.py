@@ -30,6 +30,7 @@ import pytest
 import torch
 
 from mantis.config.loader import load_config
+from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import EncodingRegistryError
 from mantis.model import CnnArch, GnnArch, RepresentationMismatch  # noqa: F401 (arch types)
 
@@ -691,9 +692,9 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
             "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
             "compile_inference": False, "compile_inference_mode": "default",
             "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
-            # F-816-10: the REQUIRED fused-forward memory bound, non-binding by construction
-            # (this envelope fixture never builds an inference server).
-            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+            # (`fused_graph_caps` is ARCH-SCOPED to graph and this fixture is a GRID envelope,
+            # so it is absent rather than non-binding — R322(d). The drop below removes it and
+            # `train.microbatch_caps` from the dev-template blocks this payload borrows.)
         },
         "monitor": {
             # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
@@ -721,6 +722,13 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_ls_net, full_ls_sta
                 "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
+    # R322(d): this is a GRID envelope, and the `train:` block above is borrowed from a GRAPH
+    # config's dump, so it arrives carrying `microbatch_caps`. Both arch-scoped blocks are
+    # dropped through `ARCH_SCOPED_KEYS` — the schema's own partition — rather than by name,
+    # so a third scoped block needs no edit here.
+    for _key in ARCH_SCOPED_KEYS:
+        if valid_config["identity"]["representation"] != _key.arch:
+            valid_config[_key.section].pop(_key.field, None)
     payload = {  # the real FULL-v1 top-level shape (7 keys) + captured metadata scalars
         "step": fv1["step"],
         "model_state": full_ls_state,

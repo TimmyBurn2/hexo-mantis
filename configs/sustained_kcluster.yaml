@@ -117,9 +117,6 @@ train:
   training_steps_per_game: 1.0
   max_train_burst: 1
   batch_size: 256
-  microbatch_caps:
-    max_edges: 100000000
-    max_nodes: 4000000
   augment: false
   recency_weight: 0.0
   mixing_initial_w: 0.0
@@ -200,9 +197,6 @@ inference:
   compile_inference_dynamic: true
   perf_timing: false
   perf_sync_cuda: false
-  fused_graph_caps:
-    max_fused_edges: 57149441
-    max_fused_nodes: 1785921
 monitor:
   gate_interval: 1000
   alert_entropy_min: 1.0

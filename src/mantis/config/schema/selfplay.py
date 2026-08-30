@@ -162,7 +162,11 @@ class FusedGraphCapsConfig(StrictModel):
     the difference — and it is an improvement on both — is that this one RAISES instead of
     running.
 
-    GRAPH-ROUTE ONLY: the dense batch is a fixed-shape tensor already bounded by
+    GRAPH-ROUTE ONLY, AND NOW SCOPED BY THE SCHEMA RATHER THAN BY A CALL SITE (R322(d)): the
+    scoping lives in `core.ARCH_SCOPED_KEYS` and is enforced by
+    `RunConfig._arch_scoped_keys_are_present_iff_their_arch`, so a non-graph config carrying
+    this block is REFUSED at validation instead of being required to mint one. The dense batch
+    is a fixed-shape tensor already bounded by
     `inference_batch_size`, so there is no unbounded quantity there for a cap to bound. The
     five non-production configs mint values that are NON-BINDING BY CONSTRUCTION (derived
     from each template's own `max_game_moves` and the registry's widest legal-move radius,
@@ -197,4 +201,9 @@ class InferenceConfig(StrictModel):
     compile_inference_dynamic: bool
     perf_timing: bool
     perf_sync_cuda: bool
-    fused_graph_caps: FusedGraphCapsConfig
+    # ARCH-SCOPED (R322(d)): `None` is the ABSENCE of the key, never a value — see
+    # `TrainConfig.microbatch_caps` for the shape and `RunConfig` for the enforcement.
+    # It does NOT collide with the R119 `null` PLACEHOLDER, which lives on the two
+    # MEMBERS and means "minted but uncalibrated"; absence of the BLOCK means "this arch
+    # has no such key", and the two are distinguished by `model_fields_set`.
+    fused_graph_caps: FusedGraphCapsConfig | None = None

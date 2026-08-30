@@ -14,6 +14,14 @@ defect this indirection exists to prevent (DESIGN_DFIX §3.11.1). "Eager for the
 for the routed" is the rule: `spec` is resolved eagerly because it DECIDES the route; the caps
 are meaningful only on one branch OF that decision.
 
+ARCH FIRST, THEN ABSENCE (R322(d)). `train.microbatch_caps` is ARCH-SCOPED to
+`representation="graph"` in `mantis.config.schema.core.ARCH_SCOPED_KEYS`, and this resolver
+refuses a config of any other representation BY NAME before it looks for the block at all.
+Until B2 the only thing standing between a grid config and an answer was the call-site gate
+described above; the schema required the key on every arch and this function served it to
+either. The gate was one `if` at one call site, and the class it belongs to is the one where
+the NEXT call site forgets it.
+
 ABSENCE IS A NAMED RAISE, NEVER A DEFAULT (LAW-11, R1). `MissingMicrobatchCapsError` names the
 level that is missing — `full_config` not a mapping, no `train` section, `train` not a mapping,
 no `microbatch_caps`, `microbatch_caps` not a mapping, or a member absent. This is the
@@ -34,7 +42,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-_KEY = "train.microbatch_caps"
+from mantis.config.resolve.arch_scope import refuse_outside_its_arch
+
+_SECTION, _FIELD = "train", "microbatch_caps"
+_KEY = f"{_SECTION}.{_FIELD}"
 
 
 class MissingMicrobatchCapsError(ValueError):
@@ -65,7 +76,19 @@ class MicrobatchCapsSpec:
 
 
 def resolve_microbatch_caps(full_config: Any) -> MicrobatchCapsSpec:
-    """Return the declared graph micro-batch caps. Absence raises, naming the level."""
+    """Return the declared graph micro-batch caps.
+
+    A config of the WRONG ARCH is refused FIRST and by name; after that, absence raises,
+    naming the level.
+
+    Raises:
+        ArchScopedKeyOutsideItsArchError: the config declares a representation other than
+            `graph` (R322(d)). Refused ahead of every presence check on purpose: a resolver
+            that only refuses ABSENCE is green by accident on a grid config — green because the
+            block happens not to be there — and turns red the moment anyone re-adds it.
+        MissingMicrobatchCapsError: the block, or one of its members, is not declared.
+    """
+    refuse_outside_its_arch(full_config, _SECTION, _FIELD)
     if not isinstance(full_config, Mapping):
         raise MissingMicrobatchCapsError(
             f"{_KEY}: the config is not a mapping ({type(full_config).__name__}), so no "

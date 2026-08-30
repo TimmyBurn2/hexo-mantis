@@ -28,6 +28,7 @@ import pytest
 import torch
 
 from mantis.config.loader import load_config
+from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import CnnArch, arch_from_spec_and_config, build_net
 
@@ -250,8 +251,15 @@ def _make_monitor_block(**over: Any) -> dict[str, Any]:
 # ── schema-valid / invalid config snapshots (validated against config-schema v1 on write) ─
 def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
                     run_id: str = "run5") -> dict[str, Any]:
-    """A complete, schema-v1-valid RunConfig dict (the envelope `config` snapshot)."""
-    return {
+    """A complete, schema-v1-valid RunConfig dict (the envelope `config` snapshot).
+
+    ARCH-SCOPED BLOCKS ARE DROPPED FOR THE REPRESENTATION THAT DOES NOT HAVE THEM (R322(d)).
+    The factory's default is `grid`, and its `train` block is derived from a GRAPH config's
+    dump, so before B2 it produced a grid config carrying two graph-only cap blocks — exactly
+    the shape `RunConfig` now refuses. Driven from `ARCH_SCOPED_KEYS` rather than by deleting
+    two names, so a third scoped block needs no edit here.
+    """
+    config = {
         "schema_version": 1,
         "eval_enabled": True,
         # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
@@ -267,6 +275,10 @@ def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
         "inference": _make_inference_block(),
         "monitor": _make_monitor_block(),
     }
+    for key in ARCH_SCOPED_KEYS:
+        if representation != key.arch:
+            config[key.section].pop(key.field, None)
+    return config
 
 
 # ── shared TrainHParams factory (DESIGN_P2.md §2.1 recommendation) — every TrainHParams

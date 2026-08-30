@@ -27,9 +27,10 @@ from typing import Any
 
 import torch
 
-from mantis.config.schema import RunConfig
+from mantis.config.schema import ARCH_SCOPED_KEYS, RunConfig
 from mantis.encoding import lookup
 from mantis.model import (
+    ARCH_KINDS,
     CnnArch,
     GnnArch,
     GnnArchV2,
@@ -133,11 +134,11 @@ def _now_iso() -> str:
 #: branch: the next arch adds a row, and `tests/model/test_arch_v2_dispatch.py` holds this
 #: registry set-equal to `build_net`'s dispatch in both directions.
 _ARCH_KIND_KEY = "arch_kind"
-_ARCH_KINDS: dict[str, type] = {
-    "CnnArch": CnnArch,
-    "GnnArch": GnnArch,
-    "GnnArchV2": GnnArchV2,
-}
+#: THE registry, imported rather than restated (R322(d)): a kind vocabulary is a MODEL fact
+#: and this loader is one of its consumers. It was authored here at B1 because the loader is
+#: where the need first bit; candidate D's selector needs the same vocabulary, and two copies
+#: of a discriminator is the duplicate-authority class this file's own docstring warns about.
+_ARCH_KINDS = ARCH_KINDS
 
 #: What a stamp written BEFORE the discriminator existed resolves to, by representation. Sound
 #: because it is a fact about history rather than a default: at the time those stamps were
@@ -145,6 +146,19 @@ _ARCH_KINDS: dict[str, type] = {
 #: IS a V1 stamp. A legacy dict whose fields do not fit its target raises rather than being
 #: coerced — LAW-11's no-silent-fallback, applied to the loader.
 _LEGACY_BY_REPRESENTATION: dict[str, type] = {"grid": CnnArch, "graph": GnnArch}
+
+#: The NON-BINDING placeholder pair for each arch-scoped block, for the synthetic config
+#: `strip_and_restamp` writes (R322(d)). A separate table rather than inline literals so the
+#: splice loop stays a loop over `ARCH_SCOPED_KEYS` — the schema's own partition — and a block
+#: added to that registry without a placeholder here fails by `KeyError` at the write, which is
+#: the loud outcome. These are the templates' own values and are never a sized cap: nothing
+#: trains or serves from a stripped artifact's snapshot.
+_SYNTH_ARCH_SCOPED: dict[tuple[str, str], dict[str, int]] = {
+    ("train", "microbatch_caps"): {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+    ("inference", "fused_graph_caps"): {
+        "max_fused_edges": 57149441, "max_fused_nodes": 1785921,
+    },
+}
 
 
 def _arch_to_dict(arch: ModelArch) -> dict[str, Any]:
@@ -787,15 +801,11 @@ def strip_and_restamp(
             "eval_interval": 1000, "log_interval": 1000,
             "min_buf_size": 1, "replay_capacity": 100_000, "replay_capacity_schedule": [],
             "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
-            # WP12-R F2 / R179: `train.microbatch_caps` is a REQUIRED block, so this
-            # synthetic config must carry it. Placeholder posture, same as `seed=0` and
-            # `device="cpu"` above and for the same measured reason — the field is
-            # required-with-no-default by construction, so there is no schema default to
-            # derive from, and NOTHING EVER TRAINS FROM A STRIPPED ARTIFACT'S SNAPSHOT,
-            # so no graph step ever reads these numbers. They are the template's own
-            # non-binding pair, which is the value that cannot mislead a reader into
-            # thinking a cap was sized here.
-            "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+            # (`train.microbatch_caps` is ARCH-SCOPED and is spliced in below, on the graph
+            # route only — R322(d). It used to be an unconditional literal here, which was
+            # correct while the schema required the block on every arch and is a REFUSAL now
+            # that it does not: this payload's representation is `new_spec`'s, so a strip to
+            # a GRID encoding would have written a graph-only cap into a grid config.)
             "augment": False, "recency_weight": 0.0, "mixing_initial_w": 0.0,
             "mixing_min_w": 0.0, "mixing_decay_steps": 1.0, "hard_gn_threshold": 1e9,
             "hard_gn_min_steps": 3, "terminal_eval_enabled": True, "bot_batch_share": 0.0,
@@ -835,11 +845,8 @@ def strip_and_restamp(
             "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
             "compile_inference": False, "compile_inference_mode": "default",
             "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
-            # F-816-10: `inference.fused_graph_caps` is a new REQUIRED nested block.
-            # Placeholder pair, same posture as the rest of this synthetic payload — it is
-            # a weights-strip fixture, not a run, and nothing here builds an inference
-            # server. Non-binding by construction so it can never read as a real cap.
-            "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
+            # (`inference.fused_graph_caps` is ARCH-SCOPED and is spliced in below, on the
+            # graph route only — R322(d), for `train.microbatch_caps`' reason.)
         },
         # WPSC Phase 2 SC-A3: `monitor:` is now a required RunConfig section — placeholder
         # values, same posture as the eval/train/selfplay blocks above (DESIGN_P2.md §4.2).
@@ -878,6 +885,18 @@ def strip_and_restamp(
             "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
+    # THE ARCH-SCOPED BLOCKS, spliced on the route that has them (R322(d)). `ARCH_SCOPED_KEYS`
+    # is the ONE authority on which blocks belong to which representation, so this loop cannot
+    # drift from the schema's own partition — adding a third arch-scoped block adds nothing
+    # here, and RENAMING one breaks loudly at the `_SYNTH_ARCH_SCOPED` lookup rather than
+    # silently writing a config the schema then refuses. The values are the templates' own
+    # NON-BINDING pairs, and their posture is the rest of this payload's: nothing ever trains
+    # or serves from a stripped artifact's snapshot, so no step reads these numbers.
+    for key in ARCH_SCOPED_KEYS:
+        if new_spec.representation == key.arch:
+            synth_config[key.section][key.field] = dict(
+                _SYNTH_ARCH_SCOPED[(key.section, key.field)]
+            )
     return _write_v2_payload(
         model_state=model_state,
         optimizer_state=None,

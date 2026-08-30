@@ -11,9 +11,10 @@ defaults — a default lives in exactly one place: the schema field (repo_design
 keys carry no terminal defaults at all; representation is the closed set {grid, graph}
 (registry.toml + repo_design §3 ground truth — LAW-11).
 """
+from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_serializer, model_validator
 
 from mantis.config.schema._base import StrictModel
 from mantis.config.schema.monitor import MonitorSchemaConfig
@@ -35,6 +36,71 @@ SCHEMA_VERSION = 1
 #: constants were DELETED at WPMINT K-A) since these two bound a single eval round /
 #: kill-grace, never a whole drain budget — a named constant, never an inline literal (R1).
 _EVAL_TIMEOUT_CEILING_SEC = 86400.0
+
+
+@dataclass(frozen=True)
+class ArchScopedKey:
+    """One config block that belongs to exactly ONE representation (R322(d)).
+
+    `section` names the `RunConfig` field holding it and `field` the block inside that
+    section; `arch` is the one `identity.representation` on which the block is legal, and on
+    which it is REQUIRED. `grounds` says why the key means something only on that arch — a
+    scoping with no grounds is indistinguishable from an oversight waved through, the standard
+    gate 17's exemptions are held to.
+
+    A frozen DATACLASS and deliberately NOT a `StrictModel`: this is metadata ABOUT config, not
+    a config block, and the O16 census walks `StrictModel` subclasses asserting every one is
+    reachable from `RunConfig` and has no code-side default. A registry record that satisfied
+    neither would have to be exempted from an exactness check whose whole value is having no
+    exemptions.
+
+    Raises:
+        ValueError: any field is empty, or `arch` is outside the closed representation set.
+    """
+
+    section: str
+    field: str
+    arch: str
+    grounds: str
+
+    def __post_init__(self) -> None:
+        for name in ("section", "field", "arch", "grounds"):
+            if not getattr(self, name):
+                raise ValueError(f"ArchScopedKey.{name} is empty")
+        if self.arch not in ("grid", "graph"):
+            raise ValueError(
+                f"ArchScopedKey.arch={self.arch!r} is outside the closed representation set "
+                "{'grid', 'graph'} (LAW-11)"
+            )
+
+
+#: THE ARCH-SCOPED HALF OF THE SCHEMA PARTITION — the ONE authority (R322(d),
+#: `SEAM_V1_DESIGN` §3: "The schema splits shared vs arch-scoped. An arch-scoped key reachable
+#: outside its arch is a red row").
+#:
+#: This registry did not exist before B2, and its absence WAS the defect: the call sites were
+#: arch-gated by hand and the schema was not, so a grid run was REQUIRED to carry two graph-only
+#: cap blocks counted in EDGES and NODES, and the mint had to invent a number for a quantity
+#: that run has none of. The gate was one `if` at one call site, and the class this exists for
+#: is the one where the NEXT call site forgets it.
+#:
+#: DECLARED, not derived, and that is argued rather than assumed: whether a key belongs to one
+#: representation is a judgment about what the key MEANS, and there is no producer in the tree
+#: to read it off. What IS derived is everything it is checked against — the live schema, the
+#: presence facts, and both reachability answers (the conformance suite's T9 section).
+ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
+    ArchScopedKey(
+        section="train", field="microbatch_caps", arch="graph",
+        grounds="the members are counted in EDGES and NODES of a sampled graph batch; the "
+                "dense batch is a fixed-shape tensor already bounded by train.batch_size, so "
+                "a grid run has no quantity for this block to bound",
+    ),
+    ArchScopedKey(
+        section="inference", field="fused_graph_caps", arch="graph",
+        grounds="the members bound one FUSED GRAPH forward in edges and nodes; a grid round "
+                "builds no graph server, so a grid run has no fused forward to cap",
+    ),
+)
 
 
 class IdentityConfig(StrictModel):
@@ -371,6 +437,85 @@ class RunConfig(StrictModel):
         if v != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}, got {v}")
         return v
+
+    @model_serializer(mode="wrap")
+    def _drop_arch_scoped_keys_this_arch_does_not_have(self, handler) -> dict:
+        """Serialize, then DELETE every arch-scoped block this config did not carry (R322(d)).
+
+        WHY THIS IS PART OF THE SCOPING AND NOT A COSMETIC. An arch-scoped block is
+        `Block | None`, and pydantic emits an unset field as `None` — so without this, a grid
+        config's `model_dump()` carried `train.microbatch_caps: None` and **would not
+        re-validate**, because the validator above reads presence off `model_fields_set` and a
+        dump has no `model_fields_set` to read. The round trip
+        `RunConfig.model_validate(config.model_dump())` is load-bearing: `mantis.run` hands the
+        dump to every resolver, and the mint preflight re-validates it.
+
+        The absent/explicit-null distinction survives INPUT and is deliberately NOT
+        representable in OUTPUT: on the way in, an explicit `null` on a foreign arch is refused
+        by name; on the way out, "this arch does not have this key" is expressed the only way a
+        plain mapping can express it — the key is not there.
+
+        Driven from `ARCH_SCOPED_KEYS` so it cannot drift from the rule it serves.
+        """
+        data = handler(self)
+        for key in ARCH_SCOPED_KEYS:
+            section = data.get(key.section)
+            if isinstance(section, dict) and key.field not in getattr(
+                self, key.section
+            ).model_fields_set:
+                section.pop(key.field, None)
+        return data
+
+    @model_validator(mode="after")
+    def _arch_scoped_keys_are_present_iff_their_arch(self) -> "RunConfig":
+        """R322(d) / `SEAM_V1_DESIGN` §3 — every `ARCH_SCOPED_KEYS` block is REQUIRED on its
+        own representation and REFUSED on any other.
+
+        THE DEFECT THIS CLOSES. `RunConfig` is `extra="forbid"` with every key required, so
+        before this validator a grid config was not merely ALLOWED to carry the two graph-only
+        cap blocks — it was REQUIRED to, and `tools/mint_config.py` had to write a number for a
+        quantity a grid run has none of. The call sites were gated by hand (`run.py` resolves
+        `fused_graph_caps` only on the graph branch; `coordinator/step.py` hands
+        `microbatch_caps` to the graph arm as a thunk), and everything BELOW the call site was
+        not: the schema demanded the key and the resolver served it to a config of either arch.
+
+        PRESENCE IS READ OFF `model_fields_set`, NOT OFF THE VALUE, and the distinction is
+        load-bearing on `inference.fused_graph_caps`: an explicit `null` there is the R119
+        PLACEHOLDER on the block's MEMBERS ("minted but uncalibrated", refused at boot by
+        `resolve_fused_graph_caps`), which is a different fact from the block being ABSENT
+        ("this arch has no such key"). A value test would collapse the two and let a grid config
+        satisfy this rule by minting a placeholder.
+
+        Raises:
+            ValueError: a config carries an arch-scoped block that its representation does not
+                have, or omits one that its representation requires.
+        """
+        for key in ARCH_SCOPED_KEYS:
+            section = getattr(self, key.section)
+            carried = key.field in section.model_fields_set
+            valued = getattr(section, key.field) is not None
+            if self.identity.representation == key.arch:
+                if not (carried and valued):
+                    raise ValueError(
+                        f"{key.section}.{key.field} is REQUIRED on "
+                        f"representation={key.arch!r} and this config "
+                        f"{'sets it to null' if carried else 'omits it'} "
+                        f"(identity.representation={self.identity.representation!r}). "
+                        f"Grounds: {key.grounds}. Absent is an ERROR, never a default (R1/"
+                        "LAW-11) — a cap that silently became absent-and-unbounded would still "
+                        "report as present."
+                    )
+            elif carried:
+                raise ValueError(
+                    f"{key.section}.{key.field} is ARCH-SCOPED to "
+                    f"representation={key.arch!r} and this config declares "
+                    f"identity.representation={self.identity.representation!r}, so the block "
+                    "must be ABSENT, not minted. Grounds: "
+                    f"{key.grounds}. Delete the block from the file (R322(d), "
+                    "`SEAM_V1_DESIGN` §3: an arch-scoped key reachable outside its arch is a "
+                    "red row)."
+                )
+        return self
 
     @model_validator(mode="after")
     def _policy_target_completed_q_consistency(self) -> "RunConfig":

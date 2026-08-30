@@ -91,11 +91,32 @@ def _all_config_names() -> list[str]:
     return sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
 
 
+def _names_by_arch(arch: str) -> list[str]:
+    """The shipped configs that SELECT `arch`, read off each file through the one loader.
+
+    R322(d) scoped `inference.fused_graph_caps` to `representation="graph"`, so the rows below
+    that assert the block is present, complete and non-binding are GRAPH rows: on a grid config
+    the block is not merely unread, it is REFUSED. Derived rather than listed, so re-minting a
+    config to the other representation moves it between these sets instead of leaving a stale
+    name behind (the same reason `_all_config_names` walks `discover_configs`).
+    """
+    return [name for name in _all_config_names()
+            if load_config(_CONFIGS / name).identity.representation == arch]
+
+
+_GRAPH_CONFIGS = _names_by_arch("graph")
+_GRID_CONFIGS = _names_by_arch("grid")
+
+
 # ═══ FG5-01/02 — every config carries it; production carries the placeholder ═════════════
-@pytest.mark.parametrize("name", sorted(_PRODUCTION + _NON_PRODUCTION))
-def test_fg5_01_every_config_mints_the_block_through_the_real_loader(name: str) -> None:
-    """FG5-01 — the block is present, complete and typed in every shipped config, read back
-    through the REAL loader rather than by parsing YAML here."""
+@pytest.mark.parametrize("name", _GRAPH_CONFIGS)
+def test_fg5_01_every_GRAPH_config_mints_the_block_through_the_real_loader(name: str) -> None:
+    """FG5-01 — the block is present, complete and typed in every shipped GRAPH config, read
+    back through the REAL loader rather than by parsing YAML here.
+
+    "Every config" until R322(d); "every GRAPH config" after it, and the narrowing is not a
+    weakening — the complement is asserted directly below, where a grid config carrying the
+    block is a refusal rather than an unread key."""
     cfg = load_config(_CONFIGS / name)
     block = cfg.inference.fused_graph_caps
     assert block is not None, f"{name}: `inference.fused_graph_caps` is absent"
@@ -105,6 +126,34 @@ def test_fg5_01_every_config_mints_the_block_through_the_real_loader(name: str) 
             f"{name}: {member} is {value!r} ({type(value).__name__}); the schema admits "
             "`int >= 1` or the `null` placeholder and nothing else")
         assert value is None or value >= 1, f"{name}: {member}={value} is below the range"
+
+
+@pytest.mark.parametrize("name", _GRID_CONFIGS)
+def test_fg5_01b_no_GRID_config_carries_the_block_at_all(name: str) -> None:
+    """The complement of FG5-01, and the half R322(d) added.
+
+    Before B2 a grid config was REQUIRED to carry this graph-only cap and the mint had to
+    invent a number for a quantity a grid run has none of. Now the schema refuses the block on
+    a grid config, so "absent" is the only legal state — and this row is what notices if one
+    comes back. Both directions matter: the row above would stay green on a tree where every
+    config carried it.
+    """
+    cfg = load_config(_CONFIGS / name)
+    assert cfg.inference.fused_graph_caps is None, (
+        f"{name} selects representation='grid' and carries `inference.fused_graph_caps`; the "
+        "block is ARCH-SCOPED to graph (R322(d))")
+    assert "fused_graph_caps" not in cfg.inference.model_fields_set, (
+        f"{name} carries the key explicitly (as null); absence and an explicit null are "
+        "different facts and both are refused on a foreign arch")
+
+
+def test_fg5_01c_the_arch_split_covers_every_shipped_config(name=None) -> None:
+    """Vacuity guard for the two rows above: a parametrize list that went empty would make one
+    of them assert nothing, and both lists are DERIVED so that is a live possibility."""
+    assert _GRAPH_CONFIGS, "no shipped config selects graph; FG5-01 asserts nothing"
+    assert _GRID_CONFIGS, "no shipped config selects grid; FG5-01b asserts nothing"
+    assert sorted(_GRAPH_CONFIGS + _GRID_CONFIGS) == _all_config_names(), (
+        "the two arch lists do not partition the shipped configs")
 
 
 @pytest.mark.parametrize("name", _PRODUCTION)
@@ -348,7 +397,13 @@ def _n_ceiling(cfg) -> int:
     return moves * (3 * r * (r + 1) + 1) + moves + 1
 
 
-@pytest.mark.parametrize("name", _NON_PRODUCTION)
+#: The non-production sweep's GRAPH half — the only configs that carry the block after
+#: R322(d). Intersected rather than re-listed, so `_NON_PRODUCTION` stays the one place the
+#: production/non-production split is stated and FG5-08's partition check still sees it whole.
+_NON_PRODUCTION_GRAPH = [n for n in _NON_PRODUCTION if n in _GRAPH_CONFIGS]
+
+
+@pytest.mark.parametrize("name", _NON_PRODUCTION_GRAPH)
 def test_fg5_07_the_non_production_caps_are_non_binding_by_construction(name: str) -> None:
     """FG5-07 — DESIGN §3.4's "non-binding by construction" claim is a DERIVATION, and this
     row re-runs it. A smoke config whose cap BOUND would make CI exercise a split by accident,
@@ -360,9 +415,11 @@ def test_fg5_07_the_non_production_caps_are_non_binding_by_construction(name: st
     `inference_batch_size x 32 x N_ceiling` in edges and `inference_batch_size x N_ceiling` in
     nodes for the config's own worst-case saturated pop.
 
-    For the two GRID configs the block has NO live consumer at all — the grid branch never
-    reads it (design §3.3) — so the check there is an UPPER BOUND on a route those configs
-    never take, and it is labelled as one rather than dressed up as a route drive."""
+    THE GRID CONFIGS ARE NOT IN THIS SWEEP ANY MORE (R322(d)). They used to be, with the
+    check labelled an UPPER BOUND on a route those configs never take — an honest label on a
+    row that was checking an invented number. The block is now ARCH-SCOPED and absent from
+    them entirely, so there is nothing left to bound and FG5-01b asserts that absence
+    directly. Scoping this sweep is the repair arriving, not coverage being dropped."""
     cfg = load_config(_CONFIGS / name)
     block = cfg.inference.fused_graph_caps
     assert block.max_fused_edges is not None and block.max_fused_nodes is not None, (
@@ -377,11 +434,10 @@ def test_fg5_07_the_non_production_caps_are_non_binding_by_construction(name: st
     assert block.max_fused_nodes > batch * n_ceiling, (
         f"{name}: max_fused_nodes={block.max_fused_nodes} does not exceed the config's own "
         f"worst-case pop of {batch * n_ceiling} nodes")
-    if cfg.identity.representation != "graph":
-        assert cfg.identity.representation == "grid"   # never read on this route
+    assert cfg.identity.representation == "graph"   # the sweep's own premise, executed
 
 
-@pytest.mark.parametrize("name", _NON_PRODUCTION)
+@pytest.mark.parametrize("name", _NON_PRODUCTION_GRAPH)
 def test_fg5_07_the_non_production_caps_never_split_their_own_worst_case_pop(
     name: str
 ) -> None:
@@ -414,6 +470,11 @@ def test_fg5_08_production_is_excluded_deliberately_and_the_set_is_the_directory
     while staying visible to everyone else."""
     assert _all_config_names() == sorted(_PRODUCTION + _NON_PRODUCTION), (
         "a config was added or renamed; both sweeps above now have a stale premise")
+    assert _NON_PRODUCTION_GRAPH, (
+        "no non-production config selects graph, so FG5-07's two limbs assert nothing")
+    assert set(_NON_PRODUCTION) - set(_NON_PRODUCTION_GRAPH) == set(_GRID_CONFIGS), (
+        "the configs FG5-07 skips must be EXACTLY the grid ones — a graph config dropping out "
+        "of that sweep for any other reason is a coverage hole, not a scoping")
 
 
 # ═══ FG5-09 — the off state is unrepresentable ═══════════════════════════════════════════

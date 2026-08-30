@@ -73,7 +73,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mantis.config.loader import discover_configs
+from mantis.config.loader import discover_configs, load_config
+from mantis.config.schema import ARCH_SCOPED_KEYS
 
 _REPO = Path(__file__).resolve().parents[2]
 _LIVE = _REPO / "configs"
@@ -162,6 +163,47 @@ _ADDED_LEAVES = {
     "inference.fused_graph_caps.max_fused_nodes",
 }
 
+#: The subset of `_ADDED_LEAVES` that is ARCH-SCOPED (R322(d)) — added only to the configs
+#: whose representation HAS the block, and added to no other.
+#:
+#: **This is a NARROWING of an allowance, not a widening**, and that is why it needs no ruled
+#: deletion beside it. Both blocks arrived AFTER the `b482243` baseline, so on a grid config
+#: they are not removals at all — they are additions that no longer happen, and the re-mint
+#: stays PURELY INSERT-ONLY on every config. `_REMOVED_LEAVES` and `_REMOVED_LINES` are
+#: untouched and still closed at one element each.
+#:
+#: NO MINTED ROW IS TOUCHED, and that is a precondition rather than a remark: the two grid
+#: configs are not in `PRODUCTION_CONFIGS` (`run5.yaml` + `shakedown_20260807.yaml`, both
+#: GRAPH), no armed value moves, and the four values that stop being written are the
+#: templates' own NON-BINDING-BY-CONSTRUCTION numbers — never a sized cap. R322(d) makes a
+#: repair that would touch a minted row a HALT; this one does not reach one.
+#:
+#: DERIVED from the schema's own partition, not typed: `ARCH_SCOPED_KEYS` is the ONE authority
+#: on which block belongs to which arch, so a third scoped block needs no edit here and a
+#: block that stopped being scoped cannot leave a stale entry behind.
+_ARCH_SCOPED_ADDED_LEAVES: dict[str, frozenset[str]] = {
+    f"{key.section}.{key.field}": frozenset(
+        leaf for leaf in _ADDED_LEAVES
+        if leaf.startswith(f"{key.section}.{key.field}.")
+    )
+    for key in ARCH_SCOPED_KEYS
+}
+
+
+def _added_leaves_for(name: str) -> frozenset[str]:
+    """`_ADDED_LEAVES`, minus every arch-scoped block this config's representation lacks.
+
+    The representation is read off the LIVE config through the one loader — structure, not a
+    name list — so re-minting a config to the other representation moves its expectation with
+    it instead of leaving a stale entry behind.
+    """
+    arch = load_config(_LIVE / name).identity.representation
+    excluded: set[str] = set()
+    for key in ARCH_SCOPED_KEYS:
+        if arch != key.arch:
+            excluded |= _ARCH_SCOPED_ADDED_LEAVES[f"{key.section}.{key.field}"]
+    return frozenset(_ADDED_LEAVES) - excluded
+
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted
 #: (WP12-R, assigned to its dispatcher by R183(a); grounds R116/LAW-08 + the F-CS-2
 #: measurement that the replay-buffer save is production-dead on every leg). A closed set of
@@ -173,6 +215,7 @@ _REMOVED_LEAVES = {"train.buffer_save_interval"}
 #: the text costs nothing and buys the guarantee that the tolerated deletion is the ruled one
 #: and not merely a deletion of the same SIZE somewhere else in the file.
 _REMOVED_LINES = ["  buffer_save_interval: 0"]
+
 
 #: Exactly which BODY leaves a re-mint may MOVE, by (config, dotted key). A closed set of one,
 #: and the THIRD non-insertion this file has ever admitted.
@@ -411,9 +454,11 @@ def test_the_remint_adds_the_new_keys_and_moves_nothing_else(name: str) -> None:
         f"ruled dead-knob deletion); got {sorted(removed)}"
     )
     added = set(live) - set(baseline)
-    assert added == _ADDED_LEAVES, (
-        f"{name}: the re-mint may add exactly {sorted(_ADDED_LEAVES)} (R120 + R122 + R126); "
-        f"got {sorted(added)}"
+    allowed_added = _added_leaves_for(name)
+    assert added == allowed_added, (
+        f"{name}: the re-mint may add exactly {sorted(allowed_added)} (R120 + R122 + R126, "
+        f"minus the arch-scoped blocks this config's representation does not have — "
+        f"R322(d)); got {sorted(added)}"
     )
     ruled = {path for config_name, path in _MOVED_LEAVES if config_name == name}
     moved = {path: (baseline[path], live[path])
@@ -491,6 +536,43 @@ def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
     )
     assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
         "a leaf cannot be both added and removed by one re-mint"
+    )
+
+
+def test_the_arch_scoped_narrowing_is_exactly_the_schema_partition() -> None:
+    """The new allowance's own guard (R322(d)), in the shape the two above already have.
+
+    MUTATION THAT REDS IT: a later phase that wants a leaf to stop appearing in some config and
+    writes it into `_ARCH_SCOPED_ADDED_LEAVES` by hand instead of scoping the key in the
+    schema. The mapping is DERIVED from `ARCH_SCOPED_KEYS`, so the only way to narrow this
+    instrument is to make the schema itself refuse the key on that arch — which is the change
+    the narrowing is supposed to be recording.
+
+    Both directions: every scoped block must actually contribute leaves (a scoped block that
+    contributes none is an entry that can never go stale, i.e. a dead allowance), and the
+    narrowing must never reach a leaf that is not inside a scoped block."""
+    assert _ARCH_SCOPED_ADDED_LEAVES, (
+        "no key is arch-scoped, so this narrowing is unused and should go"
+    )
+    for block, leaves in _ARCH_SCOPED_ADDED_LEAVES.items():
+        assert leaves, (
+            f"{block} is arch-scoped but contributes no ADDED leaf, so excluding it narrows "
+            "nothing and the entry cannot be seen to go stale"
+        )
+        assert all(leaf.startswith(f"{block}.") for leaf in leaves), block
+    narrowed = set().union(*_ARCH_SCOPED_ADDED_LEAVES.values())
+    assert narrowed <= _ADDED_LEAVES, (
+        "the narrowing names leaves the re-mint never added; it can only subtract from "
+        f"`_ADDED_LEAVES`, and {sorted(narrowed - _ADDED_LEAVES)} is outside it"
+    )
+    assert _REMOVED_LEAVES == {"train.buffer_save_interval"}, (
+        "R322(d) is a NARROWING of an addition, not a deletion — it must not have widened the "
+        "ruled-deletion set on its way through"
+    )
+    graph = {n for n in _CONFIGS if load_config(_LIVE / n).identity.representation == "graph"}
+    assert graph and graph != set(_CONFIGS), (
+        "the baselined configs no longer span both representations, so `_added_leaves_for` "
+        "returns one answer for every config and the narrowing is untested"
     )
 
 

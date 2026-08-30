@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.schema import TrainConfig
+from mantis.config.schema import ARCH_SCOPED_KEYS, TrainConfig
 
 # Zero-behavior-change mint values (DESIGN_P2.md §1.1/§2): every value is the CURRENT
 # `TrainHParams` dataclass default, carried over verbatim.
@@ -175,12 +175,30 @@ def test_valid_payload_constructs_clean():
     assert cfg.scheduler_t_max is None
 
 
-@pytest.mark.parametrize("field", FIELD_NAMES)
+#: The section-level missing-key oracle skips the ARCH-SCOPED blocks (R322(d)): they are
+#: omittable AT THIS LEVEL by design, and their required-ness is a `RunConfig` fact because it
+#: depends on `identity.representation`, which `TrainConfig` cannot see. Derived, not listed.
+_ARCH_SCOPED_TRAIN_FIELDS = frozenset(
+    key.field for key in ARCH_SCOPED_KEYS if key.section == "train"
+)
+REQUIRED_FIELD_NAMES = [f for f in FIELD_NAMES if f not in _ARCH_SCOPED_TRAIN_FIELDS]
+
+
+@pytest.mark.parametrize("field", REQUIRED_FIELD_NAMES)
 def test_missing_field_rejected(field: str):
     payload = _payload()
     del payload[field]
     with pytest.raises(ValidationError, match=field):
         TrainConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize("field", sorted(_ARCH_SCOPED_TRAIN_FIELDS))
+def test_an_arch_scoped_field_is_OMITTABLE_at_the_section_level(field: str):
+    """The complement, asserted rather than left as a gap in the parametrize list: the block
+    must actually be omittable here, or a grid `RunConfig` could not be built at all."""
+    payload = _payload()
+    del payload[field]
+    assert getattr(TrainConfig.model_validate(payload), field) is None
 
 
 def test_extra_key_rejected():
@@ -203,11 +221,30 @@ def test_literal_out_of_enum_rejected(field: str, bad_value: object):
         TrainConfig.model_validate(_payload(**{field: bad_value}))
 
 
-def test_no_field_has_a_pydantic_level_default():
+def test_no_field_has_a_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
     # R1: a default lives ONLY in the minted config, never in the schema field itself —
     # every TrainConfig field must be required (is_required()==True).
+    #
+    # THE ONE EXCEPTION IS DERIVED, NOT LISTED (R322(d)). An arch-scoped block carries
+    # `= None` so a config of another representation may OMIT it, and that `None` is not a
+    # fallback: `RunConfig._arch_scoped_keys_are_present_iff_their_arch` REFUSES a config of
+    # the owning arch that omits the block, and refuses one of any other arch that carries it.
+    # So R1's force is intact — there is still no key whose absence silently yields a value —
+    # and the exempt set is read off `ARCH_SCOPED_KEYS` rather than typed here, so a
+    # hand-added default on any other field is still a red. The other side of the rule —
+    # that omitting the block on its OWN arch is an error — is executed by the conformance
+    # suite's T9 section, against a real minted file rather than a payload built here.
+    exempt = {key.field for key in ARCH_SCOPED_KEYS if key.section == "train"}
+    assert exempt, "no train key is arch-scoped, so this exemption is unused and should go"
     for name, field in TrainConfig.model_fields.items():
+        if name in exempt:
+            assert not field.is_required(), (
+                f"TrainConfig.{name} is arch-scoped, so it must be omittable — a required "
+                "arch-scoped block would force every arch to mint it, which is the defect"
+            )
+            continue
         assert field.is_required(), f"TrainConfig.{name} has a code-side default"
+
 
 
 def test_scheduler_t_max_and_min_lr_none_is_a_real_value_not_a_missing_key():
