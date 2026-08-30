@@ -29,6 +29,7 @@ from mantis.model.gnn import (
     GnnNet,
     load_representation_policy_from_bc,
 )
+from mantis.model.identity import net_param_hash
 
 __all__ = [
     "N_VALUE_BINS",
@@ -48,5 +49,6 @@ __all__ = [
     "compile_model",
     "decode_binned_value",
     "load_representation_policy_from_bc",
+    "net_param_hash",
     "scalar_to_two_hot",
 ]

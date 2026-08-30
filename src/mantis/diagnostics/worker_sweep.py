@@ -145,6 +145,7 @@ from mantis.diagnostics.eval_child_memory import (
     classify,
 )
 from mantis.eval.child_memory import make_probe
+from mantis.model.identity import net_param_hash
 from mantis.selfplay.buffers import BufferKind
 from mantis.selfplay.hparams import resolve_pool_encoding
 from mantis.selfplay.pool import WorkerPool
@@ -898,24 +899,6 @@ def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
     return build_net(arch).to(device)
 
 
-def _net_param_hash(model: torch.nn.Module) -> str:
-    """SHA-256 over the constructed net's parameters, POST-SEED PRE-PLAY (R317(c)(i)).
-
-    This is the gate F-RESIT-10's repair claimed and the throughput band could only proxy:
-    same seed must mean the SAME net, exactly, not "close on a throughput reading that also
-    carries OS scheduling noise". Sorted by name so dict/state_dict ordering is not load-bearing;
-    raw parameter bytes, not a repr, so two numerically-identical tensors under a different
-    dtype or layout would still be caught by their own dtype/shape difference.
-    """
-    digest = hashlib.sha256()
-    for name, tensor in sorted(model.state_dict().items()):
-        digest.update(name.encode("utf-8"))
-        digest.update(str(tuple(tensor.shape)).encode("utf-8"))
-        digest.update(str(tensor.dtype).encode("utf-8"))
-        digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
-    return digest.hexdigest()
-
-
 def _hash_gate(pairs: list[tuple[str, str | None]]) -> dict[str, Any]:
     """R317(c)(i), THE GATE: net-parameter hash equality, no band, over whichever drives built
     a net. `pairs` is (label, hash-or-None) per drive; a drive that never reached a built net
@@ -1028,7 +1011,7 @@ def drive_rung(
             pool = build_sweep_pool(config, n_workers=n_workers, device=device)
             # R317(c)(i): hashed POST-SEED, PRE-PLAY — before `pool.start()` lets any worker
             # touch the net, so a later divergence cannot be blamed on this read.
-            net_hash = _net_param_hash(pool.model)
+            net_hash = net_param_hash(pool.model)
             sampler = CardSampler(device_str, plan.sampler_interval_sec) if counters else None
             pool.start()
             started = True
