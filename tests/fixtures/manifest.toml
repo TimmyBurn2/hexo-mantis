@@ -404,3 +404,21 @@ added_by = "WP12-R"
 path = "bf16_nulldist/measurement_raw_R181_NULLDIST.json"
 sha256 = "b149659d1d423a05caf55a86371183e51dbe3d7b8a5d4249494b809d19dc72fb"
 added_by = "WP12-R R181"
+
+[[required]]
+# SEAM-B2 Leg 2 (R322(d)): the GRAVE goods for `HeXONet` and `ValueHead` — state-dict
+# shapes, parameter count and a seeded forward digest, captured from the live classes in
+# the commit that buried them. A grave with no golden is a deletion; this is what lets a
+# resurrection be proved bit-identical to what went in.
+path = "model_graves/hexonet_grave_v1.json"
+sha256 = "543fc137be20e0c4961b96d53f4d3ba7582875d90aae47cfd3d6521664dc121b"
+added_by = "SEAM-B2"
+
+[[required]]
+# SEAM-B2 Leg 3 (R322(d)): W-L1's byte-frozen golden for the lambda-return value-target CODEC —
+# a fixed trajectory in, a fixed fp64 target vector out, plus both known endpoints. The
+# trajectory carries COMPOUND two-stone turns and one single-stone final turn, which is the
+# case a codec transcribed from a single-stone-per-turn source gets wrong by construction.
+path = "value_targets/lambda_return_golden_v1.json"
+sha256 = "f3b26261fad685c253799f653eea03c54bcf30ca04c515cbe90a0fca02f3925f"
+added_by = "SEAM-B2"

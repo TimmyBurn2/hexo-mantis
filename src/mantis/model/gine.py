@@ -1,10 +1,19 @@
 """Self-contained pure-PyTorch GINE axis-graph net definition (no torch_geometric).
 
 This is the graph net DEFINITION — `_GINEConv`, `RepresentationNetwork`,
-`PolicyHead`, `ValueHead`, `HeXONet`. It lives in `model/` (the definition's
-home); `gnn.py` imports `RepresentationNetwork`/`PolicyHead` sideways from here,
-and a downstream bot wraps `HeXONet` (bots → model, DAG-correct). This inverts
-the old latent model → bots import edge.
+`PolicyHead`. It lives in `model/` (the definition's home); `gnn.py` and
+`gnn_v2.py` import `RepresentationNetwork`/`PolicyHead` sideways from here.
+
+GRAVE (R322(d), SEAM-B2 Leg 2): `HeXONet` and `ValueHead` were BURIED here on
+2026-08-30. The structural reachability census found `HeXONet` in no `build_net`
+dispatch branch and referenced nowhere in `src/`, `tools/` or `tests/`;
+`ValueHead` was reachable only from it. This docstring used to say "a downstream
+bot wraps `HeXONet` (bots → model, DAG-correct)" — that bot does not exist in
+`src/mantis/bots/` and the sentence is corrected rather than kept. Their goldens
+are frozen at `tests/fixtures/model_graves/hexonet_grave_v1.json` (state-dict
+shapes, parameter count, and a seeded forward digest), so a resurrection can be
+proved bit-identical to what was buried; the grave is held dead by the
+conformance suite's T11 section.
 
 The message passing is a small sum-scatter, reimplemented in plain torch:
     m_{i<-j} = ReLU(x_j + lin(e_{j->i}))
@@ -18,8 +27,10 @@ conv_type=gine, pre_norm=True, use_jk=True, jk_mode=cat (heads see L*hidden=512)
 policy_hidden=128, value_hidden=32, graph_type=axis; node feature dim = 11,
 edge_attr dim = 5.
 
-Attribution: representation/policy/value modules follow the public
-SootyOwl/hexo-strix HeXONet forward pass (MIT), reimplemented pure-torch.
+Attribution: the representation and policy modules follow the public
+SootyOwl/hexo-strix HeXONet forward pass (MIT), reimplemented pure-torch. The
+attribution is licence-required and STAYS: the modules it covers are still here,
+and only the value module and the top-level net were buried.
 """
 from __future__ import annotations
 
@@ -141,53 +152,3 @@ class PolicyHead(nn.Module):
             nn.ReLU(),
             nn.Linear(policy_hidden, 1),
         )
-
-
-class ValueHead(nn.Module):
-    def __init__(self, in_dim: int, value_hidden: int) -> None:
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(in_dim, value_hidden),
-            nn.ReLU(),
-            nn.Linear(value_hidden, 1),
-            nn.Tanh(),
-        )
-
-
-class HeXONet(nn.Module):
-    """HeXONet — representation + policy + scalar-tanh value.
-
-    forward() consumes a single graph and returns
-    `(policy_logits_over_legal_nodes, value_scalar)`:
-      - policy: PolicyHead MLP over the LEGAL-move node embeddings (legal-node order).
-      - value:  ValueHead MLP over the MEAN of STONE-node embeddings, tanh scalar.
-    """
-
-    EDGE_DIM = 5
-
-    def __init__(self, in_dim: int = 11, hidden: int = 128, num_layers: int = 4,
-                 policy_hidden: int = 128, value_hidden: int = 32) -> None:
-        super().__init__()
-        self.representation = RepresentationNetwork(in_dim, hidden, num_layers, self.EDGE_DIM)
-        head_in = self.representation.output_dim
-        self.policy_head = PolicyHead(head_in, policy_hidden)
-        self.value_head = ValueHead(head_in, value_hidden)
-
-    @torch.inference_mode()
-    def forward(
-        self,
-        x: Tensor,
-        edge_index: Tensor,
-        edge_attr: Tensor,
-        legal_mask: Tensor,
-        stone_mask: Tensor,
-    ) -> tuple[Tensor, Tensor]:
-        emb = self.representation(x, edge_index, edge_attr)   # (N, L*H)
-        legal_emb = emb[legal_mask]
-        policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)  # (num_legal,)
-        if stone_mask.any():
-            pooled = emb[stone_mask].mean(dim=0)
-        else:
-            pooled = emb.mean(dim=0)
-        value = self.value_head.mlp(pooled).squeeze(-1)       # scalar
-        return policy_logits, value

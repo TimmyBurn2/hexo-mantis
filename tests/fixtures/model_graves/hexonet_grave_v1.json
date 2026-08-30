@@ -1,0 +1,158 @@
+{
+  "buried_by": "SEAM-B2 Leg 2, R322(d), 2026-08-30",
+  "ctor": {
+    "hidden": 8,
+    "in_dim": 11,
+    "num_layers": 2,
+    "policy_hidden": 8,
+    "value_hidden": 8
+  },
+  "edge_dim": 5,
+  "forward_digest": "2827d5a415d4f8d42c8a954c8f17b94623b1ff61c1cc208622b20b5bd2440b35",
+  "graph": {
+    "n_edges": 24,
+    "n_nodes": 13,
+    "n_real": 12,
+    "n_stones": 3
+  },
+  "grave": "HeXONet",
+  "grounds": "structural reachability census: not in build_net's dispatch, zero references in src/, tools/ or tests/, and the module docstring's claimed downstream-bot consumer does not exist in src/mantis/bots/",
+  "module_at_burial": "src/mantis/model/gine.py",
+  "param_count": 914,
+  "policy_shape": [
+    9
+  ],
+  "seed": 20260830,
+  "state_dict_digest": "a151eb271a2d975259067622a75f5ff3819a3adc51e0b22c595b8d141a917b6f",
+  "state_dict_shapes": {
+    "policy_head.mlp.0.bias": [
+      8
+    ],
+    "policy_head.mlp.0.weight": [
+      8,
+      16
+    ],
+    "policy_head.mlp.2.bias": [
+      1
+    ],
+    "policy_head.mlp.2.weight": [
+      1,
+      8
+    ],
+    "representation.convs.0.eps": [
+      1
+    ],
+    "representation.convs.0.lin.bias": [
+      8
+    ],
+    "representation.convs.0.lin.weight": [
+      8,
+      8
+    ],
+    "representation.convs.0.nn.0.bias": [
+      8
+    ],
+    "representation.convs.0.nn.0.weight": [
+      8,
+      8
+    ],
+    "representation.convs.0.nn.2.bias": [
+      8
+    ],
+    "representation.convs.0.nn.2.weight": [
+      8,
+      8
+    ],
+    "representation.convs.1.eps": [
+      1
+    ],
+    "representation.convs.1.lin.bias": [
+      8
+    ],
+    "representation.convs.1.lin.weight": [
+      8,
+      8
+    ],
+    "representation.convs.1.nn.0.bias": [
+      8
+    ],
+    "representation.convs.1.nn.0.weight": [
+      8,
+      8
+    ],
+    "representation.convs.1.nn.2.bias": [
+      8
+    ],
+    "representation.convs.1.nn.2.weight": [
+      8,
+      8
+    ],
+    "representation.edge_proj.bias": [
+      8
+    ],
+    "representation.edge_proj.weight": [
+      8,
+      5
+    ],
+    "representation.final_norm.bias": [
+      8
+    ],
+    "representation.final_norm.weight": [
+      8
+    ],
+    "representation.input_proj.bias": [
+      8
+    ],
+    "representation.input_proj.weight": [
+      8,
+      11
+    ],
+    "representation.norms.0.bias": [
+      8
+    ],
+    "representation.norms.0.weight": [
+      8
+    ],
+    "representation.norms.1.bias": [
+      8
+    ],
+    "representation.norms.1.weight": [
+      8
+    ],
+    "value_head.mlp.0.bias": [
+      8
+    ],
+    "value_head.mlp.0.weight": [
+      8,
+      16
+    ],
+    "value_head.mlp.2.bias": [
+      1
+    ],
+    "value_head.mlp.2.weight": [
+      1,
+      8
+    ]
+  },
+  "value_head_buried_with_it": {
+    "grave": "ValueHead",
+    "grounds": "reachable ONLY from HeXONet; a transitive grave, not an independent one",
+    "state_dict_shapes": {
+      "mlp.0.bias": [
+        8
+      ],
+      "mlp.0.weight": [
+        8,
+        16
+      ],
+      "mlp.2.bias": [
+        1
+      ],
+      "mlp.2.weight": [
+        1,
+        8
+      ]
+    }
+  },
+  "value_shape": []
+}
