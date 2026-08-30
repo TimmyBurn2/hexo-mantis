@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 376c6d4, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c9af200, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -1826,6 +1826,17 @@ Verbatim text in the register; one-liners here are index only.
   **S-HLGAUSS** **UNARMED** behind the contract, plus the **S-CODEBOOK reachability
   census**. **LANDING IS NOT ARMING** — arming is the operator's run6 prereg, and this
   ruling touches no minted row, no arming value and no box.
+  **EXECUTED 2026-08-30, branch `seam-b2`, record `plan/SEAM_B2_EXIT.md`.** Leg 1 GREEN — the
+  eight rows died by the repair and the ratchet is empty. Leg 2 GREEN — `HeXONet` + `ValueHead`
+  ARCHIVED, `HexTacToeNet` KEPT and SURFACED. Leg 3 GREEN — both codecs UNARMED, all registered
+  witnesses PASS, and the S-CODEBOOK census answers **LARGE** (66 896 reversal-canonical = 75.2 %
+  of the canonical space in contested play, unsaturated) with run5 density exposed as the wrong
+  denominator to size against. **ONE HALF OPEN AND IT IS A REPORTED HALT, not an omission:
+  candidate D's CONFIG KEY.** A `RunConfig` selector is required under R1, so it puts a minted row
+  into both PRODUCTION configs, which this ruling makes a HALT — three shapes are costed in the
+  record's §2 and the recommendation is to let the key ride run6's mint, which re-mints those
+  files anyway. Filed beside it: **no arch width/depth key is a live `RunConfig` leaf**, so no
+  config can vary the model's shape — the same operator decision, and it is the larger half.
 
 ## 6. Dispatch & autopilot governance — LAW
 
