@@ -444,6 +444,10 @@ _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
             "test_window_frame_midpoint_translation_boundary.py",
             "test_report_the_graph_node_feature_translation_residual",
         ),
+        (
+            "test_arch_states_its_perf_floor.py",
+            "test_report_the_per_arch_floor_and_serving_overhead",
+        ),
     }
 )
 
