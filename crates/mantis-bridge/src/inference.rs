@@ -113,7 +113,10 @@ struct InFlightGraph {
 ///
 /// Every recovery bumps `counter`, which is what makes this observable rather than a silent
 /// swallow (LAW-18: a lever under test logs its own fire-rate in-run).
-fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, counter: &AtomicUsize) -> MutexGuard<'a, T> {
+pub(crate) fn lock_or_recover<'a, T>(
+    mutex: &'a Mutex<T>,
+    counter: &AtomicUsize,
+) -> MutexGuard<'a, T> {
     match mutex.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {

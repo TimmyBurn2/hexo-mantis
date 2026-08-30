@@ -8,6 +8,9 @@
 //! WP6 `from_axis_graphs`), pairing it with a `GraphTargets` pyclass whose getters
 //! COPY out. `Send + Sync` (default derive). F-42: `module = "mantis._engine"`.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+
 use numpy::PyArray1;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -18,7 +21,7 @@ use mantis_selfplay::replay::hexg::{
     derived_visit_capacity as derived_visit_capacity_impl, GraphRecord, GraphTargets, HexgBuffer,
 };
 
-use crate::inference::PyGraphWire;
+use crate::inference::{lock_or_recover, PyGraphWire};
 
 /// WP12-R Phase T loop 2 (F-RT-2): `push_graph_position` is the SECOND public
 /// graph-record constructor (the Python production route,
@@ -55,7 +58,25 @@ fn refuse_non_distribution_row(
 /// Graph-position replay ring (parallel to `ReplayBuffer`), exposed to Python.
 #[pyclass(name = "HexgBuffer", module = "mantis._engine")]
 pub struct PyHexgBuffer {
-    inner: HexgBuffer,
+    /// INTERIOR MUTABILITY, not `&mut self`. Every pymethod below takes `&self` and locks
+    /// here, because a `&mut self` pymethod holds pyo3's `PyRefMut` for its whole body — and
+    /// `sample_graph_batch` releases the GIL inside that body for ~1.4 s. Any other Python
+    /// thread touching this buffer in that window was refused with
+    /// `RuntimeError: Already mutably borrowed`, which killed the sole self-play producer
+    /// (`pool_drain.run_stats_loop` reads `.size`). The lock makes a contending caller WAIT
+    /// instead, and it waits GIL-free, so the in-process inference server keeps serving.
+    inner: Mutex<HexgBuffer>,
+    /// Times `inner` was found poisoned and recovered — non-zero means a panic happened under
+    /// the guard on an earlier call. Read from Python via `lock_recoveries` (LAW-18), the same
+    /// contract `InferenceBatcher` carries for its in-flight map.
+    lock_recoveries: Arc<AtomicUsize>,
+}
+
+impl PyHexgBuffer {
+    /// The ring, or a recovered guard over it. Never panics on a poisoned lock.
+    fn ring(&self) -> MutexGuard<'_, HexgBuffer> {
+        lock_or_recover(&self.inner, &self.lock_recoveries)
+    }
 }
 
 #[pymethods]
@@ -73,8 +94,11 @@ impl PyHexgBuffer {
     #[pyo3(signature = (capacity, encoding, visit_capacity))]
     pub fn new(capacity: usize, encoding: &str, visit_capacity: usize) -> PyResult<Self> {
         Ok(PyHexgBuffer {
-            inner: HexgBuffer::new(capacity, encoding, visit_capacity)
-                .map_err(PyValueError::new_err)?,
+            inner: Mutex::new(
+                HexgBuffer::new(capacity, encoding, visit_capacity)
+                    .map_err(PyValueError::new_err)?,
+            ),
+            lock_recoveries: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -91,7 +115,8 @@ impl PyHexgBuffer {
     #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1))]
     pub fn push_graph_position(
-        &mut self,
+        &self,
+        py: Python<'_>,
         stones: Vec<(i16, i16, i8)>,
         visits: Vec<(i16, i16, f32)>,
         current_player: i8,
@@ -116,8 +141,10 @@ impl PyHexgBuffer {
             value_valid,
             game_length,
         };
-        self.inner
-            .push_record_impl(&rec, game_id)
+        // GIL-FREE WAIT. This is the sole producer's write path; the trainer holds the ring
+        // for the length of a sample, so this call can block for over a second. Waiting under
+        // the GIL would re-stall the inference server that B2 freed.
+        py.detach(|| self.ring().push_record_impl(&rec, game_id))
             .map_err(PyValueError::new_err)
     }
 
@@ -132,9 +159,15 @@ impl PyHexgBuffer {
     /// graphs across 16.85 s of them, against 79.9 requests/s outside. The twelve self-play
     /// workers keep building leaves through that; nothing answers them.
     ///
-    /// Releasing it is sound because `&mut self` is exclusive: pyo3 hands out a `PyRefMut`,
-    /// so a second Python thread touching this same buffer is refused by the borrow check
-    /// rather than racing the released section. `HexgBuffer` holds no Python object.
+    /// CORRECTED 2026-08-30. This paragraph used to argue the release was sound *because*
+    /// `&mut self` is exclusive — pyo3 hands out a `PyRefMut`, so a second Python thread
+    /// "is refused by the borrow check rather than racing the released section". That refusal
+    /// is memory-safe and RUN-FATAL: the `PyRefMut` was held across the whole GIL-free window,
+    /// so `pool_drain.run_stats_loop`'s `.size` read raised
+    /// `RuntimeError: Already mutably borrowed`, the guard logged `selfplay_producer_died`,
+    /// and the run's only producer stopped. Exclusion is now held by the `inner` mutex with
+    /// every pymethod on `&self`, so a contending caller WAITS, GIL-free, instead of raising.
+    /// `HexgBuffer` holds no Python object, so the closure is still `Ungil`.
     ///
     /// `n_threads` is the rebuild's width (B1). `1` is the serial path and the exact-parity
     /// control; the caller derives the budget from the run's own keys
@@ -142,15 +175,15 @@ impl PyHexgBuffer {
     /// the threads it may take are the ones the self-play workers are not already using.
     #[pyo3(signature = (batch_size, augment = false, recent_frac = 0.0, n_threads = 1))]
     pub fn sample_graph_batch(
-        &mut self,
+        &self,
         py: Python<'_>,
         batch_size: usize,
         augment: bool,
         recent_frac: f32,
         n_threads: usize,
     ) -> PyResult<(PyGraphWire, PyGraphTargets)> {
-        let inner = &mut self.inner;
-        let sampled = py.detach(move || {
+        let sampled = py.detach(|| {
+            let inner = &mut *self.ring();
             let (graphs, targets) =
                 inner.sample_graph_batch_impl(batch_size, augment, recent_frac, n_threads)?;
             // Single-source block-diagonal fuse (shared with the inference seam so the
@@ -167,63 +200,75 @@ impl PyHexgBuffer {
     }
 
     /// Grow to `new_capacity`, preserving all records.
-    pub fn resize(&mut self, new_capacity: usize) -> PyResult<()> {
-        self.inner.resize_impl(new_capacity).map_err(PyValueError::new_err)
+    pub fn resize(&self, py: Python<'_>, new_capacity: usize) -> PyResult<()> {
+        py.detach(|| self.ring().resize_impl(new_capacity)).map_err(PyValueError::new_err)
     }
 
     /// Set the game-length weight schedule (identical semantics to `ReplayBuffer`).
     pub fn set_weight_schedule(
-        &mut self,
+        &self,
+        py: Python<'_>,
         thresholds: Vec<u16>,
         weights: Vec<f32>,
         default_weight: f32,
     ) -> PyResult<()> {
-        self.inner
-            .set_weight_schedule_impl(thresholds, weights, default_weight)
-            .map_err(PyValueError::new_err)
+        py.detach(|| {
+            self.ring().set_weight_schedule_impl(thresholds, weights, default_weight)
+        })
+        .map_err(PyValueError::new_err)
     }
 
     /// `(size, capacity, weight_histogram)` for dashboard display.
-    pub fn get_buffer_stats(&self) -> (usize, usize, Vec<u64>) {
-        self.inner.get_buffer_stats_impl()
+    pub fn get_buffer_stats(&self, py: Python<'_>) -> (usize, usize, Vec<u64>) {
+        py.detach(|| self.ring().get_buffer_stats_impl())
     }
 
     /// Fresh monotonic game id.
-    pub fn next_game_id(&mut self) -> i64 {
-        self.inner.next_game_id()
+    pub fn next_game_id(&self, py: Python<'_>) -> i64 {
+        py.detach(|| self.ring().next_game_id())
     }
 
     /// Save records to a binary file (HEXG on-disk format).
-    pub fn save_to_path(&self, path: &str) -> PyResult<()> {
-        self.inner.save_to_path_impl(path).map_err(PyValueError::new_err)
+    pub fn save_to_path(&self, py: Python<'_>, path: &str) -> PyResult<()> {
+        py.detach(|| self.ring().save_to_path_impl(path)).map_err(PyValueError::new_err)
     }
 
     /// Load records written by `save_to_path`; returns the number loaded.
-    pub fn load_from_path(&mut self, path: &str) -> PyResult<usize> {
-        self.inner.load_from_path_impl(path).map_err(PyValueError::new_err)
+    pub fn load_from_path(&self, py: Python<'_>, path: &str) -> PyResult<usize> {
+        py.detach(|| self.ring().load_from_path_impl(path)).map_err(PyValueError::new_err)
+    }
+
+    /// The getters detach too. They are cheap ONCE the lock is held, but acquiring it can
+    /// wait out a whole sample, and waiting under the GIL is the stall this class exists to
+    /// avoid — `.size` on the stats loop is the exact caller the borrow race killed.
+    #[getter]
+    pub fn size(&self, py: Python<'_>) -> usize {
+        py.detach(|| self.ring().size())
     }
 
     #[getter]
-    pub fn size(&self) -> usize {
-        self.inner.size()
+    pub fn capacity(&self, py: Python<'_>) -> usize {
+        py.detach(|| self.ring().capacity())
     }
 
     #[getter]
-    pub fn capacity(&self) -> usize {
-        self.inner.capacity()
+    pub fn encoding_name(&self, py: Python<'_>) -> &'static str {
+        py.detach(|| self.ring().encoding_name())
     }
 
+    /// Poisoned-lock recoveries (LAW-18). Non-zero means a panic happened under the ring
+    /// guard and the seam kept going; a run alerts on it instead of finding it post-mortem.
     #[getter]
-    pub fn encoding_name(&self) -> &'static str {
-        self.inner.encoding_name()
+    pub fn lock_recoveries(&self) -> usize {
+        self.lock_recoveries.load(Ordering::SeqCst)
     }
 
     /// The DERIVED per-record visit-slot capacity this ring was composed with
     /// (R255/ADJ-D34) — read back by the composition pin so a literal on the
     /// compose path cannot survive unobserved.
     #[getter]
-    pub fn visit_capacity(&self) -> usize {
-        self.inner.visit_capacity
+    pub fn visit_capacity(&self, py: Python<'_>) -> usize {
+        py.detach(|| self.ring().visit_capacity)
     }
 }
 
@@ -317,10 +362,14 @@ mod tests {
 
     #[test]
     fn construct_and_getters() {
-        let b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).expect("graph buffer constructs");
-        assert_eq!(b.size(), 0);
-        assert_eq!(b.capacity(), 16);
-        assert_eq!(b.encoding_name(), "gnn_axis_v1");
+        Python::initialize();
+        Python::attach(|py| {
+            let b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).expect("graph buffer constructs");
+            assert_eq!(b.size(py), 0);
+            assert_eq!(b.capacity(py), 16);
+            assert_eq!(b.encoding_name(py), "gnn_axis_v1");
+            assert_eq!(b.lock_recoveries(), 0, "a fresh ring has never been poisoned");
+        });
     }
 
     /// Push a graph position, then sample_graph_batch rebuilds + fuses the graph
@@ -330,18 +379,18 @@ mod tests {
     /// O-side tests post-ASM (the embedded interpreter cannot load numpy).
     #[test]
     fn push_then_sample_fuses_wire_and_targets() {
-        let mut b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).unwrap();
+        let b = PyHexgBuffer::new(16, "gnn_axis_v1", 128).unwrap();
         // A small in-window board (3 stones) with a 1-cell visit target.
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
         let visits = vec![(2i16, 0i16, 1.0f32)];
-        b.push_graph_position(stones, visits, 1, 2, 0, true, 1.0, true, 4, -1)
-            .expect("push ok");
-        assert_eq!(b.size(), 1);
-
-        // `sample_graph_batch` releases the GIL around the rebuild (B2), so it needs the
-        // token; `n_threads = 1` is the serial path, which is what a one-record ring wants.
+        // Every method takes the token now: each detaches around its own ring acquisition,
+        // so a contending caller waits GIL-free instead of hitting a borrow refusal.
         Python::initialize();
         let targets = Python::attach(|py| {
+            b.push_graph_position(py, stones, visits, 1, 2, 0, true, 1.0, true, 4, -1)
+                .expect("push ok");
+            assert_eq!(b.size(py), 1);
+            // `n_threads = 1` is the serial path, which is what a one-record ring wants.
             let (_wire, targets) = b.sample_graph_batch(py, 1, false, 0.0, 1).expect("sample ok");
             targets
         });
@@ -353,9 +402,13 @@ mod tests {
     // Rust leg (the Python leg is tests/bridge/test_target_push_refusal.py).
     // Killer: M-Q (refusal removed → these red). ──────────────────────────────
 
-    fn push_row(b: &mut PyHexgBuffer, visits: Vec<(i16, i16, f32)>) -> PyResult<()> {
+    fn push_row(
+        py: Python<'_>,
+        b: &PyHexgBuffer,
+        visits: Vec<(i16, i16, f32)>,
+    ) -> PyResult<()> {
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
-        b.push_graph_position(stones, visits, 1, 2, 3, true, 0.0, true, 4, -1)
+        b.push_graph_position(py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1)
     }
 
     #[test]
@@ -365,24 +418,24 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let text = |e: PyErr| e.value(py).to_string();
-            let mut b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
+            let b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
             // Σ = 0.5 → MassNotUnity (variant name must lead the message).
-            let e = text(push_row(&mut b, vec![(2, 0, 0.5)]).unwrap_err());
+            let e = text(push_row(py, &b, vec![(2, 0, 0.5)]).unwrap_err());
             assert!(e.contains("MassNotUnity") && e.contains("0.5"), "{e}");
             // Σ = 2.0 (over-unity) → MassNotUnity.
-            let e = text(push_row(&mut b, vec![(2, 0, 1.5), (3, 0, 0.5)]).unwrap_err());
+            let e = text(push_row(py, &b, vec![(2, 0, 1.5), (3, 0, 0.5)]).unwrap_err());
             assert!(e.contains("MassNotUnity"), "{e}");
             // Σ = 1.5 single positive entry (the F-RT-1 shipped quantity, at the
             // second constructor) → MassNotUnity.
-            let e = text(push_row(&mut b, vec![(2, 0, 1.5)]).unwrap_err());
+            let e = text(push_row(py, &b, vec![(2, 0, 1.5)]).unwrap_err());
             assert!(e.contains("MassNotUnity") && e.contains("1.5"), "{e}");
             // all-zero row → EmptyTarget (no value-only form on the graph face).
-            let e = text(push_row(&mut b, vec![(2, 0, 0.0), (3, 0, 0.0)]).unwrap_err());
+            let e = text(push_row(py, &b, vec![(2, 0, 0.0), (3, 0, 0.0)]).unwrap_err());
             assert!(e.contains("EmptyTarget"), "{e}");
             // EMPTY visit list → EmptyTarget.
-            let e = text(push_row(&mut b, vec![]).unwrap_err());
+            let e = text(push_row(py, &b, vec![]).unwrap_err());
             assert!(e.contains("EmptyTarget"), "{e}");
-            assert_eq!(b.size(), 0, "no refused row may reach the ring");
+            assert_eq!(b.size(py), 0, "no refused row may reach the ring");
         });
     }
 
@@ -390,10 +443,13 @@ mod tests {
     fn push_admits_within_tol_and_exact_unity() {
         // F-RT-3 admit-side pin: the TOL window is the intended width — a
         // within-TOL row is ADMITTED (contract-conformant), unity likewise.
-        let mut b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
-        push_row(&mut b, vec![(2, 0, 1.0)]).expect("exact unity admitted");
-        push_row(&mut b, vec![(2, 0, 0.6), (3, 0, 0.4 + 5.0e-5)])
-            .expect("a within-TOL (1 + 5e-5) row is ADMITTED — the documented window");
-        assert_eq!(b.size(), 2);
+        Python::initialize();
+        Python::attach(|py| {
+            let b = PyHexgBuffer::new(8, "gnn_axis_v1", 128).unwrap();
+            push_row(py, &b, vec![(2, 0, 1.0)]).expect("exact unity admitted");
+            push_row(py, &b, vec![(2, 0, 0.6), (3, 0, 0.4 + 5.0e-5)])
+                .expect("a within-TOL (1 + 5e-5) row is ADMITTED — the documented window");
+            assert_eq!(b.size(py), 2);
+        });
     }
 }

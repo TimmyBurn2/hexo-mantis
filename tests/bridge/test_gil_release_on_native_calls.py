@@ -133,3 +133,86 @@ def test_next_graph_batch_fuse_releases_the_gil() -> None:
         f"a second Python thread advanced {ticks} times during a {elapsed_ms:.1f} ms "
         "next_graph_batch (A5 regressed)"
     )
+
+
+# ── The half the two tests above could not see ────────────────────────────────────────────
+# `_Observer` only counts; it never TOUCHES the ring. So it witnessed the GIL release while
+# staying blind to what the release exposed: `sample_graph_batch` took pyo3's `PyRefMut` for
+# its whole body and held it across the GIL-free window, so any other Python thread that
+# touched the same buffer was refused with `RuntimeError: Already mutably borrowed`. The sole
+# self-play producer does exactly that — `pool_drain.run_stats_loop` reads `.size` — so the
+# guard logged `selfplay_producer_died` and the run ended. Measured on dev at 2026-08-30:
+# one successful `.size` read, then the refusal. These tests are the LAW-07 producer for the
+# repair: exclusion moved to a mutex with every pymethod on `&self`, so a contender WAITS.
+
+
+class _RingToucher(threading.Thread):
+    """A second thread that READS the ring, which is what the observer above never did."""
+
+    def __init__(self, ring: object) -> None:
+        super().__init__(daemon=True, name="ring-toucher")
+        self._ring = ring
+        self._halt = threading.Event()
+        self.reads = 0
+        self.error: BaseException | None = None
+
+    def run(self) -> None:
+        while not self._halt.is_set():
+            try:
+                _ = self._ring.size
+                _ = self._ring.capacity
+                self.reads += 1
+            except BaseException as exc:  # noqa: BLE001 - the refusal is the whole subject
+                self.error = exc
+                return
+            time.sleep(0)
+
+    def stop(self) -> None:
+        self._halt.set()
+
+
+def _read_ring_during_samples(ring: object, n_samples: int) -> _RingToucher:
+    toucher = _RingToucher(ring)
+    toucher.start()
+    time.sleep(0.02)
+    for _ in range(n_samples):
+        ring.sample_graph_batch(_BATCH)
+    toucher.stop()
+    toucher.join(timeout=5.0)
+    return toucher
+
+
+def test_a_concurrent_reader_is_NOT_refused_while_the_ring_is_sampled() -> None:
+    """The regression guard. Before the repair this raised on the reader's second read."""
+    ring = _mk_ring()
+    toucher = _read_ring_during_samples(ring, n_samples=12)
+    assert toucher.error is None, (
+        "a second Python thread reading the ring during sample_graph_batch was refused "
+        f"({type(toucher.error).__name__}: {toucher.error}). 'Already mutably borrowed' here "
+        "means a pymethod is holding pyo3's PyRefMut across the GIL release again; that "
+        "refusal kills the sole self-play producer, which reads .size on its stats loop"
+    )
+    assert toucher.reads > 0, "the toucher never read the ring; the guard proves nothing"
+
+
+def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
+    """Vacuity control for the guard above.
+
+    If the reader finished before the first sample started, a refusal could not have fired
+    and a green would mean nothing. This pins that reads land while sampling is in flight.
+    """
+    ring = _mk_ring()
+    toucher = _read_ring_during_samples(ring, n_samples=12)
+    assert toucher.error is None
+    assert toucher.reads > _MIN_OBSERVER_TICKS, (
+        f"only {toucher.reads} ring reads landed across 12 samples — too few to have "
+        "overlapped the sample windows, so the refusal guard above is not being exercised"
+    )
+
+
+def test_the_ring_reports_no_poisoned_lock_recoveries() -> None:
+    """LAW-18: the mutex that replaced the borrow is observable, not silent. A non-zero count
+    means a panic happened under the guard and the seam kept going."""
+    ring = _mk_ring()
+    _read_ring_during_samples(ring, n_samples=4)
+    assert ring.lock_recoveries == 0
