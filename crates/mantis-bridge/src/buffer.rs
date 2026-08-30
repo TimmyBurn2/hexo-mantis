@@ -158,8 +158,14 @@ impl PyReplayBuffer {
         value_target_valid: Option<PyReadonlyArray1<u8>>,
     ) -> PyResult<()> {
         let ifs = is_full_search.as_ref().map(|a| a.as_slice()).transpose()?;
-        let pidx = position_indices.as_ref().map(|a| a.as_slice()).transpose()?;
-        let vtv = value_target_valid.as_ref().map(|a| a.as_slice()).transpose()?;
+        let pidx = position_indices
+            .as_ref()
+            .map(|a| a.as_slice())
+            .transpose()?;
+        let vtv = value_target_valid
+            .as_ref()
+            .map(|a| a.as_slice())
+            .transpose()?;
         self.inner
             .push_game_impl(PushGameConfig {
                 states: states.as_slice()?,
@@ -193,8 +199,14 @@ impl PyReplayBuffer {
         position_indices: Option<PyReadonlyArray1<u16>>,
         value_target_valid: Option<PyReadonlyArray1<u8>>,
     ) -> PyResult<()> {
-        let pidx = position_indices.as_ref().map(|a| a.as_slice()).transpose()?;
-        let vtv = value_target_valid.as_ref().map(|a| a.as_slice()).transpose()?;
+        let pidx = position_indices
+            .as_ref()
+            .map(|a| a.as_slice())
+            .transpose()?;
+        let vtv = value_target_valid
+            .as_ref()
+            .map(|a| a.as_slice())
+            .transpose()?;
         self.inner
             .push_many_impl(PushManyConfig {
                 states: states.as_slice()?,
@@ -312,7 +324,9 @@ impl PyReplayBuffer {
 
     /// Grow the buffer to `new_capacity`, preserving all data.
     pub fn resize(&mut self, new_capacity: usize) -> PyResult<()> {
-        self.inner.resize(new_capacity).map_err(PyValueError::new_err)
+        self.inner
+            .resize(new_capacity)
+            .map_err(PyValueError::new_err)
     }
 
     /// Count valid outcomes in the half-open interval `[lo, hi)` (live prefix
@@ -340,7 +354,9 @@ impl PyReplayBuffer {
 
     /// Load buffer contents written by `save_to_path`; returns the number loaded.
     pub fn load_from_path(&mut self, path: &str) -> PyResult<usize> {
-        self.inner.load_from_path(path).map_err(PyValueError::new_err)
+        self.inner
+            .load_from_path(path)
+            .map_err(PyValueError::new_err)
     }
 
     #[getter]
@@ -419,7 +435,10 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let mut b = PyReplayBuffer::new(8, "v6");
-            assert!(b.sample_batch(py, 4, false).is_err(), "empty buffer sample errors");
+            assert!(
+                b.sample_batch(py, 4, false).is_err(),
+                "empty buffer sample errors"
+            );
         });
     }
 }

@@ -44,13 +44,24 @@ fn refuse_non_distribution_row(
 ) -> Result<(), TargetIntegrityError> {
     let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum();
     if !sum.is_finite() {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     if visits.is_empty() || sum.abs() <= TARGET_MASS_TOL {
-        return Err(TargetIntegrityError::EmptyTarget { ply_index, n_legal: visits.len() });
+        return Err(TargetIntegrityError::EmptyTarget {
+            ply_index,
+            n_legal: visits.len(),
+        });
     }
     if (sum - 1.0).abs() > TARGET_MASS_TOL {
-        return Err(TargetIntegrityError::MassNotUnity { sum, ply_index, n_cells: visits.len() });
+        return Err(TargetIntegrityError::MassNotUnity {
+            sum,
+            ply_index,
+            n_cells: visits.len(),
+        });
     }
     Ok(())
 }
@@ -201,7 +212,8 @@ impl PyHexgBuffer {
 
     /// Grow to `new_capacity`, preserving all records.
     pub fn resize(&self, py: Python<'_>, new_capacity: usize) -> PyResult<()> {
-        py.detach(|| self.ring().resize_impl(new_capacity)).map_err(PyValueError::new_err)
+        py.detach(|| self.ring().resize_impl(new_capacity))
+            .map_err(PyValueError::new_err)
     }
 
     /// Set the game-length weight schedule (identical semantics to `ReplayBuffer`).
@@ -213,7 +225,8 @@ impl PyHexgBuffer {
         default_weight: f32,
     ) -> PyResult<()> {
         py.detach(|| {
-            self.ring().set_weight_schedule_impl(thresholds, weights, default_weight)
+            self.ring()
+                .set_weight_schedule_impl(thresholds, weights, default_weight)
         })
         .map_err(PyValueError::new_err)
     }
@@ -230,12 +243,14 @@ impl PyHexgBuffer {
 
     /// Save records to a binary file (HEXG on-disk format).
     pub fn save_to_path(&self, py: Python<'_>, path: &str) -> PyResult<()> {
-        py.detach(|| self.ring().save_to_path_impl(path)).map_err(PyValueError::new_err)
+        py.detach(|| self.ring().save_to_path_impl(path))
+            .map_err(PyValueError::new_err)
     }
 
     /// Load records written by `save_to_path`; returns the number loaded.
     pub fn load_from_path(&self, py: Python<'_>, path: &str) -> PyResult<usize> {
-        py.detach(|| self.ring().load_from_path_impl(path)).map_err(PyValueError::new_err)
+        py.detach(|| self.ring().load_from_path_impl(path))
+            .map_err(PyValueError::new_err)
     }
 
     /// The getters detach too. They are cheap ONCE the lock is held, but acquiring it can
@@ -357,7 +372,10 @@ mod tests {
 
     #[test]
     fn grid_encoding_is_loud_error() {
-        assert!(PyHexgBuffer::new(8, "v6", 128).is_err(), "HexgBuffer rejects a grid encoding");
+        assert!(
+            PyHexgBuffer::new(8, "v6", 128).is_err(),
+            "HexgBuffer rejects a grid encoding"
+        );
     }
 
     #[test]
@@ -368,7 +386,11 @@ mod tests {
             assert_eq!(b.size(py), 0);
             assert_eq!(b.capacity(py), 16);
             assert_eq!(b.encoding_name(py), "gnn_axis_v1");
-            assert_eq!(b.lock_recoveries(), 0, "a fresh ring has never been poisoned");
+            assert_eq!(
+                b.lock_recoveries(),
+                0,
+                "a fresh ring has never been poisoned"
+            );
         });
     }
 
@@ -391,7 +413,9 @@ mod tests {
                 .expect("push ok");
             assert_eq!(b.size(py), 1);
             // `n_threads = 1` is the serial path, which is what a one-record ring wants.
-            let (_wire, targets) = b.sample_graph_batch(py, 1, false, 0.0, 1).expect("sample ok");
+            let (_wire, targets) = b
+                .sample_graph_batch(py, 1, false, 0.0, 1)
+                .expect("sample ok");
             targets
         });
         // One sampled record → one per-graph argmax cell decoded.
@@ -402,11 +426,7 @@ mod tests {
     // Rust leg (the Python leg is tests/bridge/test_target_push_refusal.py).
     // Killer: M-Q (refusal removed → these red). ──────────────────────────────
 
-    fn push_row(
-        py: Python<'_>,
-        b: &PyHexgBuffer,
-        visits: Vec<(i16, i16, f32)>,
-    ) -> PyResult<()> {
+    fn push_row(py: Python<'_>, b: &PyHexgBuffer, visits: Vec<(i16, i16, f32)>) -> PyResult<()> {
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
         b.push_graph_position(py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1)
     }

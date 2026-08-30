@@ -13,15 +13,15 @@
 use pyo3::prelude::*;
 
 mod board;
+mod buffer;
 mod encoding;
+mod graph_contract;
+mod hexg;
+mod inference;
 mod mcts;
+mod runner;
 mod tactics;
 mod utils;
-mod graph_contract;
-mod runner;
-mod inference;
-mod buffer;
-mod hexg;
 
 /// Compiled mantis engine bridge (PyO3). All Python-facing Rust lives here.
 ///

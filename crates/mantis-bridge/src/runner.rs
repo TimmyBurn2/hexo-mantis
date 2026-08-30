@@ -93,7 +93,10 @@ fn derived_mean_f64(accum: u64, count: u64) -> Option<f32> {
 fn cluster_means(s: &RunnerStatsSnapshot) -> (Option<f32>, Option<f32>) {
     (
         derived_mean_f64(s.cluster_value_std_accum, s.cluster_variance_samples),
-        derived_mean_f64(s.cluster_policy_disagreement_accum, s.cluster_variance_samples),
+        derived_mean_f64(
+            s.cluster_policy_disagreement_accum,
+            s.cluster_variance_samples,
+        ),
     )
 }
 
@@ -417,7 +420,9 @@ impl PySelfPlayRunner {
     /// `RuntimeError` when the runner's fatal-defect latch is set.
     pub fn collect_data<'py>(&self, py: Python<'py>) -> PyResult<CollectDataOut<'py>> {
         if let Some(msg) = self.inner.fatal_defect() {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(fatal_defect_message(&msg)));
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                fatal_defect_message(&msg),
+            ));
         }
         let feat_len = self.spec.state_stride();
         let n_cells = self.spec.n_cells();
@@ -438,7 +443,8 @@ impl PySelfPlayRunner {
         let mut position_index = Vec::with_capacity(n);
         let mut value_valid_v = Vec::with_capacity(n);
 
-        for (feat, chain, pol, outcome, plies, aux_u8, full_search, ply_index, value_valid) in rows {
+        for (feat, chain, pol, outcome, plies, aux_u8, full_search, ply_index, value_valid) in rows
+        {
             flat_feats.extend_from_slice(&feat);
             flat_chain.extend_from_slice(&chain);
             flat_pols.extend_from_slice(&pol);
@@ -481,7 +487,9 @@ impl PySelfPlayRunner {
     /// `RuntimeError` when the runner's fatal-defect latch is set.
     pub fn collect_graph_data(&self) -> PyResult<Vec<GraphRecordRow>> {
         if let Some(msg) = self.inner.fatal_defect() {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(fatal_defect_message(&msg)));
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                fatal_defect_message(&msg),
+            ));
         }
         Ok(self
             .inner
@@ -710,7 +718,6 @@ impl PySelfPlayRunner {
     pub fn set_model_version(&self, version: u64) {
         self.inner.set_model_version(version);
     }
-
 }
 
 impl PySelfPlayRunner {
@@ -756,9 +763,41 @@ mod tests {
         // The killed knobs are absent from the ctor; the mapped native config
         // carries the supplied identity key and the get/set defaults.
         let cfg = PySelfPlayRunnerConfig::new(
-            2, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5,
-            false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false,
-            Some("v6".to_string()), None,
+            2,
+            64,
+            30,
+            8,
+            1.5,
+            0.25,
+            0.0,
+            50,
+            0,
+            0,
+            -0.1,
+            -0.1,
+            true,
+            0.3,
+            0.5,
+            false,
+            16,
+            5,
+            false,
+            50.0,
+            1.0,
+            false,
+            16,
+            10,
+            0.3,
+            0.25,
+            true,
+            10_000,
+            0.0,
+            0,
+            0,
+            0,
+            false,
+            Some("v6".to_string()),
+            None,
         );
         let rust = cfg.to_rust();
         assert_eq!(rust.n_workers, 2);
@@ -798,17 +837,24 @@ mod tests {
         let b = r.batcher();
         assert_eq!(b.model_version(), 5);
         assert_eq!(b.bump_model_version(), 6);
-        assert_eq!(r.model_version(), 6, "batcher bump reaches the runner atomic");
+        assert_eq!(
+            r.model_version(),
+            6,
+            "batcher bump reaches the runner atomic"
+        );
     }
 
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
             1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5,
-            false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false,
-            None, None,
+            false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false, None,
+            None,
         );
-        assert!(PySelfPlayRunner::new(&cfg).is_err(), "absent encoding_name is an error (LAW-11)");
+        assert!(
+            PySelfPlayRunner::new(&cfg).is_err(),
+            "absent encoding_name is an error (LAW-11)"
+        );
     }
 
     /// O19 — the derived-mean formulae on seeded accum/count.
