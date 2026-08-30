@@ -55,6 +55,7 @@ import yaml
 import _microbatch_harness as H
 from mantis.monitor.config import MonitorConfig
 from mantis.config.loader import discover_configs, load_config
+from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.encoding import lookup
 from mantis.model import CnnArch, build_net
@@ -560,7 +561,23 @@ _NON_RUN5 = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
              "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
 
-@pytest.mark.parametrize("name", _NON_RUN5)
+def _names_by_arch(arch: str) -> list[str]:
+    """The configs in `_NON_RUN5` that SELECT `arch`, read off each file through the one loader.
+
+    R322(d) scoped `train.microbatch_caps` to `representation="graph"`, so the non-binding sweep
+    below is a GRAPH sweep: on a grid config the block is not merely unread, it is ABSENT and
+    its read path REFUSES. Derived rather than re-listed, so `_NON_RUN5` stays the one place the
+    run5/non-run5 split is stated and the premise row below still checks the whole directory.
+    """
+    return [n for n in _NON_RUN5
+            if load_config(_CONFIGS / n).identity.representation == arch]
+
+
+_NON_RUN5_GRAPH = _names_by_arch("graph")
+_NON_RUN5_GRID = _names_by_arch("grid")
+
+
+@pytest.mark.parametrize("name", _NON_RUN5_GRAPH)
 def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     """OF2-14 — DESIGN_DFIX §7.4 claims the five non-run5 configs are "non-binding by
     construction". Rev-1 asserted that and tested nothing; this row is its producer.
@@ -570,9 +587,12 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     deliberate and its M is asserted. The probe batch is built at the config's OWN
     `train.batch_size`.
 
-    For the two GRID configs the caps have no live consumer at all — `_grid_step` is never
-    given the provider — so the check there is an UPPER BOUND on a route those configs never
-    take, and it is labelled as one rather than dressed up as a route drive."""
+    THE TWO GRID CONFIGS ARE NOT IN THIS SWEEP ANY MORE (R322(d)). They used to be, with the
+    check labelled an UPPER BOUND on a route those configs never take — an honest label on a row
+    that was checking an invented number. The block is now ARCH-SCOPED and absent from them
+    entirely, so there is nothing left to bound; the row below asserts that absence and the
+    read path's refusal directly. Scoping this sweep is the repair arriving, not coverage being
+    dropped."""
     cfg = load_config(_CONFIGS / name)
     caps = resolve_microbatch_caps(cfg.model_dump())
     batch_size = int(cfg.train.batch_size)
@@ -586,8 +606,35 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
         f"{name}: the minted caps ({caps.max_edges}, {caps.max_nodes}) SPLIT its own "
         f"batch_size={batch_size} batch into {len(parts)} micro-batches (E={int(ec.sum())}, "
         f"N={int(nc.sum())}) — CI would be exercising a split by accident (MB-24)")
-    if cfg.identity.representation != "graph":
-        assert cfg.identity.representation == "grid"   # the caps are never read on this route
+    assert cfg.identity.representation == "graph"   # the sweep's own premise, executed
+
+
+@pytest.mark.parametrize("name", _NON_RUN5_GRID)
+def test_of2_14b_no_GRID_config_carries_the_caps_and_the_read_path_REFUSES(name: str) -> None:
+    """The complement of OF2-14, and the half R322(d) added.
+
+    Before B2 a grid config was REQUIRED to carry a cap counted in EDGES and NODES, and the mint
+    had to invent a number for a quantity a grid run has none of. Now the schema refuses the
+    block on a grid config and the resolver refuses a grid config BY NAME — the second is what
+    keeps the first from being green only for as long as nobody re-adds the block by hand.
+    """
+    cfg = load_config(_CONFIGS / name)
+    assert cfg.train.microbatch_caps is None, (
+        f"{name} selects representation='grid' and carries `train.microbatch_caps`")
+    assert "microbatch_caps" not in cfg.train.model_fields_set, (
+        f"{name} carries the key explicitly (as null); absence and an explicit null are "
+        "different facts and both are refused on a foreign arch")
+    with pytest.raises(ArchScopedKeyOutsideItsArchError, match="ARCH-SCOPED"):
+        resolve_microbatch_caps(cfg.model_dump())
+
+
+def test_of2_14c_the_arch_split_covers_the_whole_non_run5_set() -> None:
+    """Vacuity guard for the two rows above: a parametrize list that went empty would make one
+    of them assert nothing, and both lists are DERIVED so that is a live possibility."""
+    assert _NON_RUN5_GRAPH, "no non-run5 config selects graph; OF2-14 asserts nothing"
+    assert _NON_RUN5_GRID, "no non-run5 config selects grid; OF2-14b asserts nothing"
+    assert sorted(_NON_RUN5_GRAPH + _NON_RUN5_GRID) == sorted(_NON_RUN5), (
+        "the two arch lists do not partition `_NON_RUN5`")
 
 
 def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:

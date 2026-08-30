@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import CnnArch, build_net
@@ -71,11 +72,29 @@ _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
+#: Every config this file builds is a GRID config, and it says so once. The block builders read
+#: it so the arch-scoped blocks are dropped AT SOURCE (R322(d)) — which matters here beyond
+#: validity: these oracles compare an OVERRIDE block against the BAKED one, so a block builder
+#: that emitted a key the assembled config had stripped would make the two differ and the
+#: comparison would be measuring this file's own inconsistency.
+_REPRESENTATION = "grid"
+
+
+def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
+    """`block` without the arch-scoped keys `_REPRESENTATION` does not have."""
+    for key in ARCH_SCOPED_KEYS:
+        if key.section == section and key.arch != _REPRESENTATION:
+            block.pop(key.field, None)
+    return block
+
+
 def _train_block(*, lr: float = 1e-3) -> dict:
     # This file's own deltas: `fp16=False` (CPU) and `lr_schedule="none"` — the resume
     # oracles below compare optimizer/LR state across a save→load, and a live schedule
     # would move the number they compare.
-    return dict(_MINTED_TRAIN, lr=lr, fp16=False, lr_schedule="none")
+    return _drop_foreign_arch_keys(
+        "train", dict(_MINTED_TRAIN, lr=lr, fp16=False, lr_schedule="none")
+    )
 
 
 def _selfplay_block() -> dict:
@@ -100,16 +119,15 @@ def _selfplay_block() -> dict:
 
 
 def _inference_block() -> dict:
-    return {
+    return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and every config here is GRID,
+        # so it is stripped by the helper above rather than minted and ignored. Left in the
+        # literal so the strip is visible at the site it applies to.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
+    })
 
 
 def _monitor_block() -> dict:
@@ -139,7 +157,7 @@ def _monitor_block() -> dict:
 
 
 def _full_config(*, lr: float = 1e-3) -> dict:
-    return {
+    config = {
         "schema_version": 1, "run_id": "resume_wiring", "seed": 20260725,
         "eval_enabled": True,
         # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
@@ -153,6 +171,8 @@ def _full_config(*, lr: float = 1e-3) -> dict:
         "inference": _inference_block(),
         "monitor": _monitor_block(),
     }
+    assert config["identity"]["representation"] == _REPRESENTATION
+    return config
 
 
 def _save(tmp_path: Path, *, lr: float, tiny_net, optim_scaler_sched, metadata_kwargs) -> Path:
