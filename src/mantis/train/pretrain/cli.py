@@ -1,15 +1,17 @@
+# >300 justify (R8). ONE entry point over ONE linear act — parse, resolve the encoding, read
+# the training terms from the config, load the corpus, build the net, train, save, validate.
+# Splitting it forks the argv namespace and the assembled config dict into two modules that
+# must agree about every term, which is the duplicate-authority shape F-816-25 was filed for.
 """Bootstrap pretrain CLI (WP10 §a.7 IMPROVE of `bootstrap/pretrain_cli.py`).
 
 The `python -m mantis.train.pretrain` entry: argparse surface + config resolution + corpus load +
-model build + train/save/validate orchestration. Well under the soft cap (the old CLI was 558 L)
-because the KILLED-branch flags are gone.
+model build + train/save/validate orchestration.
 
 Ratified WP10 amendments over a pure relocation:
   * **Personal/hardcoded config paths → explicit params.** The old CLI hardcoded
     `configs/model.yaml` / `configs/training.yaml` / `configs/corpus.yaml`; those files do not
-    exist in the new repo. Training knobs are now explicit CLI flags (R-TRAINCONFIG-SCHEMA: a
-    training knob is an explicit construction param, not a WP8 config key) assembled into a plain
-    config dict; the corpus NPZ path is `--corpus-npz` or the registry `resolve_corpus_path`.
+    exist in the new repo. The corpus NPZ path is `--corpus-npz` or the registry
+    `resolve_corpus_path`.
   * **KILLED-branch flags removed** — `--gpool-sites` / `--head-no-gpool` / `--pool-type` /
     `--pool-attn-dropout` / `--canvas-realness` / `--gpool-bias-active` / `--policy-only-bias`
     (v8 / pma / pma_global / gpool-bias / canvas_realness are all KILLED — F-04/F-05, v8 never
@@ -18,6 +20,11 @@ Ratified WP10 amendments over a pure relocation:
     a missing NPZ is now a loud error, not a silent raw-JSON re-scan.
   * Model construction via `build_net(arch_from_spec_and_config(...))` (WP9 authority); events via
     the injected `EventSink`.
+
+F-816-25 / R296(b): the five flags that shadowed minted `train.*` keys are GONE and `--config`
+is REQUIRED in their place — see `training_terms`, the one read path. R-TRAINCONFIG-SCHEMA, the
+old ground for a CLI-side training knob, is DEAD: that schema extension landed (WPSC SC-A1) and
+all six are live `train.*` leaves today.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+from mantis.config import TrainConfig, load_config
 from mantis.encoding import all_specs as _all_specs
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.encoding import resolve_corpus_path as _resolve_corpus_path
@@ -50,22 +58,32 @@ _LOG = logging.getLogger(__name__)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Bootstrap pretrain pipeline (mantis)")
+    # `allow_abbrev=False` is LOAD-BEARING, not tidiness (found by this fix's own oracle).
+    # With argparse's default prefix matching, the DELETED `--lr` is an unambiguous abbreviation
+    # of the surviving `--lr-peak`, so an old command line `--lr 0.002` would silently set the
+    # cosine restart peak instead of erroring — a deleted shadow re-entering as a different
+    # knob, which is worse than the shadow this fix removed.
+    parser = argparse.ArgumentParser(
+        description="Bootstrap pretrain pipeline (mantis)", allow_abbrev=False
+    )
+    parser.add_argument("--config", type=str, required=True,
+                        help="Run config (schema-validated). THE authority for lr, weight_decay, "
+                             "batch_size, aux_opp_reply_weight, aux_chain_weight and eta_min — "
+                             "this CLI states none of them (F-816-25, R296(b)/R79).")
     parser.add_argument("--epochs", type=int, default=5, help="Full passes over the dataset")
     parser.add_argument("--steps", type=int, default=None,
                         help="Hard step budget (overrides epochs; for smoke runs)")
-    parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints/pretrain")
     parser.add_argument("--no-compile", action="store_true",
                         help="Disable torch.compile even on CUDA")
     parser.add_argument("--resume", type=str, default=None,
                         help="Resume from a full pretrain checkpoint (restarts the cosine schedule)")
     parser.add_argument("--lr-peak", type=float, default=None,
-                        help="Peak LR (cosine restart peak; default 2e-3)")
+                        help="Peak LR for a --resume cosine restart; absent = the config's train.lr")
     parser.add_argument("--inference-out", type=str, default=None,
                         help="Override the bare inference-weights output path")
     parser.add_argument("--eta-min", type=float, default=None,
-                        help="Override CosineAnnealingLR eta_min (default 1e-5)")
+                        help="Override CosineAnnealingLR eta_min; absent = the config's train.eta_min")
     _registered = tuple(s.name for s in _all_specs())
     parser.add_argument("--encoding", choices=_registered, default=None,
                         help="Encoding (registry-routed). Registered: " + ", ".join(_registered))
@@ -78,13 +96,42 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--unfreeze-blocks", type=str, default=None,
                         help="CSV trunk.tower block indices to keep trainable (others freeze)")
     parser.add_argument("--label-smoothing", type=float, default=0.05)
-    parser.add_argument("--aux-weight", type=float, default=0.15,
-                        help="Opponent-reply auxiliary loss weight")
-    parser.add_argument("--aux-chain-weight", type=float, default=0.0,
-                        help="Q13 chain-length aux head weight (0 disables it)")
-    parser.add_argument("--lr", type=float, default=0.002, help="Peak/base LR")
-    parser.add_argument("--weight-decay", type=float, default=0.0001)
     return parser
+
+
+#: The `train.*` leaves this CLI is NOT allowed to have an opinion about (F-816-25, R296(b)).
+#: Named as data rather than spelled out in the reader below so the oracle can assert the SET,
+#: not a hand-listed copy of it that would stay green while a seventh shadow was added.
+SHADOWED_TRAIN_KEYS: tuple[str, ...] = (
+    "lr", "weight_decay", "batch_size", "aux_opp_reply_weight", "aux_chain_weight", "eta_min",
+)
+
+
+def training_terms(train_cfg: TrainConfig) -> dict[str, float | int]:
+    """The training terms a bootstrap pretrain runs on, read from the minted config.
+
+    THE ONE READ PATH, and that is the whole of F-816-25's fix. Each of these six was a
+    code-side literal on the argparse surface — three of them DIVERGENT from `configs/run5.yaml`
+    — so a bootstrap pretrain ran on the parser's numbers while the minted ones sat inert. Two
+    authorities over one number is R79; here there is one, and it is the config.
+
+    `pretrain_eta_min` is the one renamed key: `BootstrapTrainer` reads that name, and the
+    rename happens HERE rather than at the trainer so the mapping is visible at the seam that
+    performs it.
+
+    Raises:
+        AttributeError: if `train_cfg` lacks a key this reads. Not defended against — a
+            validated `TrainConfig` cannot, and a caller passing something else is a defect
+            that should surface by name rather than as a silently-defaulted number.
+    """
+    return {
+        "lr": float(train_cfg.lr),
+        "weight_decay": float(train_cfg.weight_decay),
+        "batch_size": int(train_cfg.batch_size),
+        "aux_opp_reply_weight": float(train_cfg.aux_opp_reply_weight),
+        "aux_chain_weight": float(train_cfg.aux_chain_weight),
+        "pretrain_eta_min": float(train_cfg.eta_min),
+    }
 
 
 def _resolve_encoding_name(args: argparse.Namespace) -> str:
@@ -132,13 +179,11 @@ def pretrain(argv: list[str] | None = None) -> None:
         raise SystemExit(str(e)) from e
     spec = _lookup_encoding(encoding)  # loud raise on an unregistered name
 
-    # Plain config dict (training knobs are explicit params — R-TRAINCONFIG-SCHEMA; no yaml files).
+    train_cfg = load_config(args.config).train
     config: dict = {
         "encoding": encoding,
         "in_channels": int(spec.n_planes),
-        "lr": float(args.lr),
-        "weight_decay": float(args.weight_decay),
-        "batch_size": int(args.batch_size),
+        **training_terms(train_cfg),
     }
     if args.filters is not None:
         config["filters"] = int(args.filters)
@@ -174,7 +219,7 @@ def pretrain(argv: list[str] | None = None) -> None:
     )
     loader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=int(args.batch_size),
+        batch_size=int(config["batch_size"]),
         sampler=sampler,
         num_workers=0,
         pin_memory=(device.type == "cuda"),
@@ -199,7 +244,7 @@ def pretrain(argv: list[str] | None = None) -> None:
     total_pretrain_steps = step_budget if step_budget is not None else args.epochs * len(loader)
     config["pretrain_total_steps"] = total_pretrain_steps
     if args.eta_min is not None:
-        config["pretrain_eta_min"] = float(args.eta_min)
+        config["pretrain_eta_min"] = float(args.eta_min)  # an EXPLICIT operator override
 
     trainer = BootstrapTrainer(
         model, config, device, checkpoint_dir, arch=arch, sink=NullEventSink(),
@@ -221,12 +266,12 @@ def pretrain(argv: list[str] | None = None) -> None:
 
     trainer.step = -total_pretrain_steps
     start_step = trainer.step
-    chain_weight = float(args.aux_chain_weight)
+    chain_weight = float(config["aux_chain_weight"])
     for epoch in range(1, args.epochs + 1):
         metrics = trainer.train_epoch(
             loader,
             label_smoothing=float(args.label_smoothing),
-            aux_weight=float(args.aux_weight),
+            aux_weight=float(config["aux_opp_reply_weight"]),
             chain_weight=chain_weight,
             step_budget=step_budget,
             start_step=start_step,
@@ -255,8 +300,11 @@ def _resume_into(trainer: BootstrapTrainer, args: argparse.Namespace, total_step
         trainer.optimizer.load_state_dict(resume_ckpt["optimizer_state"])
         if resume_ckpt.get("scaler_state") is not None:
             trainer.scaler.load_state_dict(resume_ckpt["scaler_state"])
-    new_peak = float(args.lr_peak) if args.lr_peak is not None else float(trainer.config.get("lr", 0.002))
-    new_eta_min = float(args.eta_min) if args.eta_min is not None else 1e-5
+    new_peak = float(args.lr_peak) if args.lr_peak is not None else float(trainer.config["lr"])
+    new_eta_min = (
+        float(args.eta_min) if args.eta_min is not None
+        else float(trainer.config["pretrain_eta_min"])
+    )
     for g in trainer.optimizer.param_groups:
         g["lr"] = new_peak
         g["initial_lr"] = new_peak

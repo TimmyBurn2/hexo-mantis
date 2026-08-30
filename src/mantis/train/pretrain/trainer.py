@@ -71,13 +71,13 @@ class BootstrapTrainer:
 
         self.optimizer = optim.AdamW(
             self.model.parameters(),
-            lr=float(config.get("lr", 0.002)),
-            weight_decay=float(config.get("weight_decay", 0.0001)),
+            lr=float(config["lr"]),
+            weight_decay=float(config["weight_decay"]),
         )
         self.scaler = GradScaler(device=device.type, enabled=fp16)
 
-        total_steps = int(config.get("pretrain_total_steps", 50_000))
-        eta_min = float(config.get("pretrain_eta_min", 1e-5))
+        total_steps = int(config["pretrain_total_steps"])
+        eta_min = float(config["pretrain_eta_min"])
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer, T_max=max(1, total_steps), eta_min=eta_min,
         )
