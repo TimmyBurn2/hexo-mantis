@@ -91,10 +91,14 @@ VENDOR_ABSENT_REASON = (
     f"{VENDOR_ABSENT_MARKER}: no ancestor of the installed package holds vendor/pins.toml, "
     "so there is nowhere for the pinned engine to live; run `make vendor` from the repo root"
 )
+#: The ONE tracked step that builds the extension. The reason names the SCRIPT, not the raw
+#: invocation, so a box runs the repair from the tree rather than from a record (R324(c)).
+BUILD_SCRIPT = "tools/vendor_build_sealbot.sh"
 BUILD_ABSENT_REASON = (
     f"{BUILD_ABSENT_MARKER}: no {_EXTENSION_GLOB} under vendor/external/sealbot/current/; "
-    "fetch the pin, then run `uv run --with pybind11 --with setuptools python setup.py "
-    "build_ext --inplace` in that directory"
+    f"fetch the pin, then run `bash {BUILD_SCRIPT}` from the repo root (it verifies the pinned "
+    "sha and the applied patch, then runs `python setup.py build_ext --inplace` in that "
+    "directory)"
 )
 
 #: The module object this loader installed at `sys.modules["game"]`, or None. Identity, not a
@@ -437,6 +441,7 @@ class SealBotAdapter:
 __all__ = [
     "BUILD_ABSENT_MARKER",
     "BUILD_ABSENT_REASON",
+    "BUILD_SCRIPT",
     "LOAD_FAILED_MARKER",
     "NON_BINDING_TIME_LIMIT",
     "VENDOR_ABSENT_MARKER",

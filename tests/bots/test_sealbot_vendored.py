@@ -110,8 +110,9 @@ def _require_built_extension() -> Any:
     if not sorted(_CURRENT.glob("minimax_cpp*.so")):
         pytest.skip(
             "not_run (Tier 2b) — the vendored extension is not built; run "
-            "`uv run --with pybind11 --with setuptools python setup.py build_ext --inplace` "
-            f"inside vendor/external/sealbot/current/. {tier_2b_boxes}"
+            "`bash tools/vendor_build_sealbot.sh` from the repo root, which verifies the "
+            "pinned sha and the applied patch and then runs `python setup.py build_ext "
+            f"--inplace` inside vendor/external/sealbot/current/. {tier_2b_boxes}"
         )
     from mantis.bots.sealbot import load_sealbot_modules
 

@@ -9,7 +9,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-pins = tomllib.loads(Path("vendor/pins.toml").read_text()).get("pins", {})
+pins = tomllib.loads(Path("vendor/pins.toml").read_text(encoding="utf-8")).get("pins", {})
 if not pins:
     print("vendor: no pins declared; nothing to fetch")
     sys.exit(0)

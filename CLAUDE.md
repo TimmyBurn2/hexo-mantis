@@ -128,7 +128,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   This sets WHEN gates run, never WHAT they check.
 - `make bench` / `make bench.baseline` — criterion smoke bench (baseline saves locally).
 - `make check.wasm` — mantis-graph must stay wasm32-clean.
-- `make vendor` — fetch vendor pins. `make clean` — cargo clean + dist removal.
+- `make vendor` — fetch vendor pins. `make vendor.sealbot` — build the fetched sealbot
+  extension (verifies the pinned sha and the applied patch first; `vendor/external/` is
+  gitignored, so this is PER-CHECKOUT state every clone and the box must re-run).
+  `make clean` — cargo clean + dist removal.
 - Entry points are `python -m mantis.*` or console scripts — no loose script files.
 - Python floor is 3.11 (CI pins 3.11; local interpreters may be newer).
 - Rust toolchain is PINNED by `rust-toolchain.toml` (channel 1.97.1 + clippy, rustfmt,

@@ -7,17 +7,24 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_makefile_has_exactly_the_ten_dispatched_targets():
-    """Nine → ten at WPCLEAN Phase LG: `lint` joins as CI gate 14's local runner (R98) —
-    the same settled-class re-point as the gate itself; the set stays EXACT so a stray
-    target still reds this pin."""
-    text = (REPO_ROOT / "Makefile").read_text()
+def test_the_makefile_dispatches_exactly_the_declared_target_set():
+    """The set stays EXACT so a stray target still reds this pin.
+
+    `lint` joined at WPCLEAN Phase LG as CI gate 14's local runner (R98); `vendor.sealbot`
+    joined at R324(c), because a vendor BUILD step reachable only by hand is a second
+    vendoring mechanism beside `make vendor`, which CLAUDE.md declares to be the one.
+
+    THE COUNT LEFT THIS NAME at R324(c) and the reason is the repo's own (R192(e),
+    derive-or-delete): a name that transcribes a tally must be re-edited on every change to
+    the thing it counts, and is then read as evidence by someone who did not re-derive it.
+    The SET below is the authority; nothing states its size."""
+    text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     targets = {
         m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_.]*):", text, flags=re.MULTILINE)
     }
     assert targets == {
         "build", "build.native", "test", "test.integration", "lint",
-        "bench", "bench.baseline", "check.wasm", "vendor", "clean",
+        "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "clean",
     }
 
 

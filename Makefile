@@ -1,4 +1,4 @@
-.PHONY: build build.native test test.integration lint bench bench.baseline check.wasm vendor clean
+.PHONY: build build.native test test.integration lint bench bench.baseline check.wasm vendor vendor.sealbot clean
 
 UV ?= uv
 
@@ -32,6 +32,9 @@ check.wasm:
 
 vendor:
 	bash tools/vendor_fetch.sh
+
+vendor.sealbot:
+	bash tools/vendor_build_sealbot.sh
 
 clean:
 	cargo clean
