@@ -37,7 +37,10 @@ use pyo3::types::PyDict;
 use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
-use mantis_selfplay::queues::{build_leaf_graph, DenseQueue, GraphQueue, GraphWire, GraphWireArrays};
+use mantis_selfplay::queues::{
+    build_leaf_graph, DenseQueue, GraphQueue, GraphWire, GraphWireArrays,
+    WireAlreadyConsumed as WireConsumedGuard,
+};
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::SelfPlayRunner;
 
@@ -49,6 +52,45 @@ pyo3::create_exception!(
     pyo3::exceptions::PyException,
     "Raised when GraphWire.take() is called a second time (the single-read latch)."
 );
+
+/// What a GIL-free (`py.detach`) section on the graph seam can fail with, carried across
+/// the detach boundary as plain data and mapped to its Python face once the GIL is back.
+///
+/// `WireConsumed` is why this type exists. Both production fuse sites — the trainer's
+/// `HexgBuffer::sample_graph_batch` and the server's `next_graph_batch` — used to
+/// `expect()` the single-read guard, so a wire that had already yielded its arrays would
+/// cross the FFI as a PanicException. Under `panic = "unwind"` that is caught rather than
+/// aborting (R2/LAW-13), but the house rule is upstream of that: a production path fails
+/// through a NAMED error that propagates, never through a panic.
+pub(crate) enum SeamFailure {
+    /// An impl-layer failure that already carries its own message.
+    Message(String),
+    /// The wire's single-read guard fired: the arrays were already taken.
+    WireConsumed(WireConsumedGuard),
+}
+
+impl From<String> for SeamFailure {
+    fn from(message: String) -> Self {
+        SeamFailure::Message(message)
+    }
+}
+
+impl From<WireConsumedGuard> for SeamFailure {
+    fn from(guard: WireConsumedGuard) -> Self {
+        SeamFailure::WireConsumed(guard)
+    }
+}
+
+impl SeamFailure {
+    /// Map to the Python face: an impl message keeps the `ValueError` the seam has always
+    /// raised; the single-read guard routes as the named `WireAlreadyConsumed`.
+    pub(crate) fn into_pyerr(self) -> PyErr {
+        match self {
+            SeamFailure::Message(message) => PyValueError::new_err(message),
+            SeamFailure::WireConsumed(guard) => WireAlreadyConsumed::new_err(guard.to_string()),
+        }
+    }
+}
 
 /// Model-version source for a batcher. A standalone batcher (the `new(...)` ctor)
 /// owns its counter; a runner-produced batcher (`SelfPlayRunner.batcher`) writes
@@ -642,10 +684,11 @@ impl PyInferenceBatcher {
         // thread in the process for its whole duration. `&[AxisGraph]` carries no Python
         // object, so the closure is `Ungil`.
         let contract_version = self.graph_contract_version;
-        let arrays = py.detach(move || {
+        let fused = py.detach(move || {
             let mut wire = GraphWire::from_axis_graphs(&graphs, contract_version);
-            wire.take().expect("a freshly fused wire always has arrays")
+            wire.take().map_err(SeamFailure::from)
         });
+        let arrays = fused.map_err(SeamFailure::into_pyerr)?;
         Ok((ids, PyGraphWire::from_arrays(arrays)))
     }
 
@@ -1154,6 +1197,40 @@ mod tests {
             assert!(
                 consumed.take(py).is_err(),
                 "a consumed wire's take() raises WireAlreadyConsumed"
+            );
+        });
+    }
+
+    /// The routing both production fuse sites now use (SEAM-B1 §1(a)). A wire whose arrays
+    /// are gone yields the guard as a VALUE that `SeamFailure` maps to the named
+    /// `WireAlreadyConsumed`; the impl channel keeps its `ValueError`. Before this, the
+    /// same state met `expect()` and crossed the FFI as a PanicException.
+    #[test]
+    fn consumed_wire_routes_named_rather_than_panicking() {
+        let stones: Vec<(i64, i64, i64)> =
+            (0..5i64).map(|q| (q, 0, 1)).chain((30..35i64).map(|q| (q, 0, -1))).collect();
+        let graph = build_leaf_graph(&stones, 1, 2, 6, 6, 19).expect("valid graph");
+        let mut wire = GraphWire::from_axis_graphs(&[graph], 1);
+        wire.take().expect("the first take yields the fused arrays");
+
+        // The exact expression both production sites run, on an already-consumed wire.
+        let routed = wire.take().map_err(SeamFailure::from);
+        let Err(failure) = routed else {
+            panic!("a consumed wire must not yield arrays a second time");
+        };
+
+        Python::initialize();
+        Python::attach(|py| {
+            let named = failure.into_pyerr();
+            assert!(
+                named.is_instance_of::<WireAlreadyConsumed>(py),
+                "the single-read guard routes as the named exception, not as a panic or a \
+                 bare ValueError"
+            );
+            let message = SeamFailure::Message("ring said no".to_string()).into_pyerr();
+            assert!(
+                message.is_instance_of::<PyValueError>(py),
+                "the impl channel keeps the ValueError face the seam has always raised"
             );
         });
     }

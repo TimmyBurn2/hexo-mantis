@@ -21,7 +21,7 @@ use mantis_selfplay::replay::hexg::{
     derived_visit_capacity as derived_visit_capacity_impl, GraphRecord, GraphTargets, HexgBuffer,
 };
 
-use crate::inference::{lock_or_recover, PyGraphWire};
+use crate::inference::{lock_or_recover, PyGraphWire, SeamFailure};
 
 /// WP12-R Phase T loop 2 (F-RT-2): `push_graph_position` is the SECOND public
 /// graph-record constructor (the Python production route,
@@ -189,10 +189,10 @@ impl PyHexgBuffer {
             // Single-source block-diagonal fuse (shared with the inference seam so the
             // C3/C8 union arithmetic never drifts). For a single graph local == global.
             let mut wire = GraphWire::from_axis_graphs(&graphs, inner.contract_version);
-            let arrays = wire.take().expect("a freshly fused wire always has arrays");
-            Ok::<_, String>((arrays, targets))
+            let arrays = wire.take()?;
+            Ok::<_, SeamFailure>((arrays, targets))
         });
-        let (arrays, targets) = sampled.map_err(PyValueError::new_err)?;
+        let (arrays, targets) = sampled.map_err(SeamFailure::into_pyerr)?;
         Ok((
             PyGraphWire::from_arrays(arrays),
             PyGraphTargets { inner: targets },
