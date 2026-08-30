@@ -59,6 +59,7 @@ from mantis.config.resolve.inference_batching import (
     MissingInferenceBatchingError,
     resolve_inference_batching,
 )
+from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.nsims import resolve_eval_model_sims
 from mantis.config.resolve.run_length import resolve_max_train_steps
@@ -105,6 +106,7 @@ __all__ = [
     "resolve_eval_model_sims",
     "resolve_fused_graph_caps",
     "resolve_inference_batching",
+    "resolve_leaf_build_threads",
     "resolve_sample_threads",
     "resolve_max_train_steps",
     "resolve_monitor_config",

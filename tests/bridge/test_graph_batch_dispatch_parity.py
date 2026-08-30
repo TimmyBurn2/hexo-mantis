@@ -23,6 +23,7 @@ the width.
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import numpy as np
@@ -97,9 +98,19 @@ def _round_trip(
 
     pops = 0
     served = 0
-    for _ in range(200):
-        if served >= len(positions):
-            break
+    # BUDGETED BY WALL TIME, NOT BY ITERATION COUNT (NIGHTRUN-1 E1). This loop used to run
+    # a fixed 200 iterations, and it worked only because `submit_graphs_and_wait` held the
+    # GIL from entry through the enqueue: the submitter had always queued its graphs before
+    # this thread could poll once. E1 moved the leaf BUILD inside `py.detach`, which is the
+    # correct thing for a pure-Rust span on a 30 ms path — and an empty pop returns
+    # IMMEDIATELY, so all 200 iterations burned in microseconds while the submitter was
+    # still building, and every round trip then blocked forever with nothing left to pop.
+    # The harness was resting on an ordering the GIL happened to provide. Production never
+    # was: `InferenceServer.run` loops on `next_graph_batch` for the life of the server and
+    # `continue`s on an empty pop, which is what this now does. Every assertion below is
+    # byte-unchanged.
+    deadline = time.monotonic() + 30.0
+    while served < len(positions) and time.monotonic() < deadline:
         ids, wire = batcher.next_graph_batch(len(positions), 200)
         ids = list(ids)
         if not ids:

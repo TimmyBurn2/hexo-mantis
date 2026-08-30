@@ -18,5 +18,5 @@ pub mod graph;
 pub mod wire;
 
 pub use dense::DenseQueue;
-pub use graph::{build_leaf_graph, saturation_threshold, GraphQueue};
+pub use graph::{build_leaf_graph, build_leaf_graphs_batch, saturation_threshold, GraphQueue};
 pub use wire::{GraphWire, GraphWireArrays, WireAlreadyConsumed};

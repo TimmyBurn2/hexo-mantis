@@ -107,6 +107,7 @@ class LocalInferenceEngine:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         max_in_flight: int,
+        leaf_build_threads: int = 1,
     ) -> None:
         self.model = model
         self.device = device
@@ -118,6 +119,13 @@ class LocalInferenceEngine:
         # value-identical on every reachable input — and a genuine model/spec
         # disagreement now fails loudly instead of silently decoding down the other arm.
         self._is_graph = is_graph_representation(self.encoding_spec)
+        # NIGHTRUN-1 E1. `1` is the SERIAL path and the exact-parity control — the same
+        # identity default `HexgBuffer.sample_graph_batch`'s `n_threads` carries, and for the
+        # same reason: this layer must not invent a host reservation. The EVAL round derives
+        # one in the parent and threads it on `RoundSpec`; the SELF-PLAY worker deliberately
+        # keeps the serial width, because each worker is already one of `n_workers` threads
+        # and widening one worker's build takes threads from the others.
+        self._leaf_build_threads = max(1, int(leaf_build_threads))
         self._graph_batcher = None
         self._graph_server = None
         if self._is_graph:
@@ -405,7 +413,7 @@ class LocalInferenceEngine:
                 "LocalInferenceEngine.infer_batch_ls: graph batcher is gone — the engine "
                 "was closed before this inference call."
             )
-        results = batcher.submit_graphs_and_wait_ls(positions)
+        results = batcher.submit_graphs_and_wait_ls(positions, self._leaf_build_threads)
         dense = [d for d, _overflow, _value, _center in results]
         overflow = [list(o) for _dense, o, _value, _center in results]
         values = [float(v) for _dense, _overflow, v, _center in results]

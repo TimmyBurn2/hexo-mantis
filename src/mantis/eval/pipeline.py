@@ -418,6 +418,7 @@ class EvalPipeline:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         leaf_batch_size: int,
+        leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
         allocator_posture: str | None = None,
@@ -467,6 +468,16 @@ class EvalPipeline:
         #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
         #: server dict, and a default here would put them straight back.
         self._inference_batching = inference_batching
+        #: The eval leaf-graph build's WIDTH (NIGHTRUN-1 E1), derived ONCE in the parent by
+        #: `resolve_leaf_build_threads` and carried to every round's `RoundSpec`.
+        #: DEFAULTED TO 1, and the reason is the same one `HexgBuffer.sample_graph_batch`'s
+        #: `n_threads` carries: 1 is the SERIAL path — the exact-parity control and the
+        #: behaviour that shipped — not a host reservation this layer invented. What keeps
+        #: that from becoming a silently-disabled lever is a PRODUCER TEST over `run.py`'s
+        #: own AST (`tests/eval/test_leaf_build_threads_wiring.py`), because a widened build
+        #: that stopped being threaded would show up as nothing at all: correct results,
+        #: 95 % of the eval path back in a serial loop.
+        self._leaf_build_threads = max(1, int(leaf_build_threads))
         #: The allocator REGIME the round's caps were fitted under (RECAL-PREP, R308(g)(i)),
         #: resolved ONCE in the parent and carried to every round's `RoundSpec`. Unlike
         #: `fused_graph_caps` this one carries a DEFAULT, and the reason is stated rather than
@@ -705,6 +716,9 @@ class EvalPipeline:
             # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
             # deadline one of them set (ledger F-2).
             inference_batching=self._inference_batching,
+            # NIGHTRUN-1 E1, same seam and same reason: the leaf build's width is a HOST
+            # reservation and the child has no config to derive one from.
+            leaf_build_threads=self._leaf_build_threads,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's, and the child has no
             # config to resolve one from.
@@ -1129,6 +1143,7 @@ def build_eval_pipeline(
     spool_dir: str | Path,
     ladder_state_path: str | Path,
     promotion: DeployTagHooks,
+    leaf_build_threads: int = 1,
     allocator_posture: str | None = None,
     sink: Any = None,
     heartbeat: Callable[[str], None] | None = None,
@@ -1141,7 +1156,8 @@ def build_eval_pipeline(
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
-        leaf_batch_size=leaf_batch_size, run_id=run_id,
+        leaf_batch_size=leaf_batch_size, leaf_build_threads=leaf_build_threads,
+        run_id=run_id,
         allocator_posture=allocator_posture,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,

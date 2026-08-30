@@ -341,6 +341,10 @@ def _play_gate_block(
         # the graph branch, which is the one place that knows the route.
         inference_batching=spec.inference_batching,
         max_in_flight=spec.leaf_batch_size,
+        # NIGHTRUN-1 E1, same seam and same reason as the three above: the child has no
+        # `RunConfig` to derive a host reservation from, and a serial leaf build is 95 % of
+        # this path's measured cost.
+        leaf_build_threads=spec.leaf_build_threads,
     )
     try:
         candidate = _build_candidate_player(
@@ -542,6 +546,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         # the graph branch, which is the one place that knows the route.
         inference_batching=spec.inference_batching,
         max_in_flight=spec.leaf_batch_size,
+        # NIGHTRUN-1 E1 — see the gate block's site for the reason.
+        leaf_build_threads=spec.leaf_build_threads,
     )
 
     adjudicator = _build_adjudicator(spec)

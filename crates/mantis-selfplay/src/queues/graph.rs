@@ -501,3 +501,62 @@ pub fn build_leaf_graph(
     }
     Ok(graph)
 }
+
+/// Build one leaf graph per position across at most `n_threads` OS threads, returning them
+/// IN INDEX ORDER.
+///
+/// NIGHTRUN-1 E1, against the eval profile's own 95 %. `submit_graphs_and_wait_ls` built its
+/// leaves in a serial loop on the calling thread while holding the GIL; the measured split at
+/// a 64-move board is a slope of 5.2 ms per leaf against a 2.4 ms round-trip intercept, so
+/// the whole of the eval path's cost is this loop. Each leaf touches only its own stone list,
+/// so nothing had to move for this to be safe.
+///
+/// The idiom is `build_and_align_batch`'s, deliberately identical (`replay/hexg/sample.rs`,
+/// tranche-1 B1): `std::thread::scope` with static chunking rather than a work-stealing pool,
+/// because rayon is absent from this workspace and adding it is a `vendor/pins.toml` event.
+/// Leaves in one expansion are near-uniform in size (one position each), so static chunking
+/// loses little to imbalance.
+///
+/// `n_threads <= 1` runs the serial path IN THIS THREAD — the exact-parity control, and the
+/// posture for any caller with no threads to spare.
+///
+/// # Errors
+/// Returns the FIRST error in index order, so a build failure names the same position it
+/// named on the serial path. A panicking worker becomes a named error rather than a panic
+/// crossing the FFI (R2/LAW-13).
+pub fn build_leaf_graphs_batch(
+    positions: &[(Vec<(i64, i64, i64)>, i64, i64)],
+    win_length: u8,
+    radius: u16,
+    trunk_size: i32,
+    n_threads: usize,
+) -> Result<Vec<AxisGraph>, String> {
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    let build_one = |p: &(Vec<(i64, i64, i64)>, i64, i64)| {
+        build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size)
+    };
+    let threads = n_threads.max(1).min(positions.len());
+    if threads == 1 {
+        return positions.iter().map(build_one).collect();
+    }
+    let chunk = positions.len().div_ceil(threads);
+    let mut per_chunk: Vec<Result<Vec<AxisGraph>, String>> = Vec::new();
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = positions
+            .chunks(chunk)
+            .map(|slice| scope.spawn(move || slice.iter().map(build_one).collect()))
+            .collect();
+        for h in handles {
+            per_chunk.push(h.join().unwrap_or_else(|_| {
+                Err("graph request: a leaf-build worker thread panicked".to_string())
+            }));
+        }
+    });
+    let mut out = Vec::with_capacity(positions.len());
+    for chunk_result in per_chunk {
+        out.extend(chunk_result?);
+    }
+    Ok(out)
+}

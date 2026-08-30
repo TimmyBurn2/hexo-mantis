@@ -246,7 +246,7 @@ def test_fg6_08_the_round_spec_carries_the_caps_across_the_process_seam() -> Non
         "process boundary and the eval child (its OWN allocator, `eval.worker_device: cuda`) "
         "runs unbounded")
     caps = FusedGraphCapsSpec(max_fused_edges=4_500_000, max_fused_nodes=170_000)
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=caps, leaf_batch_size=1,
+    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=caps, leaf_batch_size=1, leaf_build_threads=1,
                      inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10))
     back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
     assert isinstance(back.fused_graph_caps, FusedGraphCapsSpec), (
@@ -260,7 +260,7 @@ def test_fg6_08_a_grid_round_carries_none_across_the_same_seam() -> None:
     """FG6-08 second limb — the `None` arm survives unchanged, exactly as the two posture
     members' disarmed arm does. A grid eval round has no fused graph forward to bound, and
     `None` must round-trip as `None` rather than as a rehydration failure."""
-    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=None, leaf_batch_size=1,
+    spec = RoundSpec(**_round_spec_base(), fused_graph_caps=None, leaf_batch_size=1, leaf_build_threads=1,
                      inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(spec.to_dict())))
     assert back.fused_graph_caps is None

@@ -286,10 +286,14 @@ class InferenceBatcher:
         self, request_ids: list[int], error_msg: str
     ) -> None: ...
     def submit_graphs_and_wait(
-        self, positions: list[tuple[list[tuple[int, int, int]], int, int]]
+        self,
+        positions: list[tuple[list[tuple[int, int, int]], int, int]],
+        n_threads: int = 1,
     ) -> list[tuple[list[float], list[tuple[tuple[int, int], float]], float]]: ...
     def submit_graphs_and_wait_ls(
-        self, positions: list[tuple[list[tuple[int, int, int]], int, int]]
+        self,
+        positions: list[tuple[list[tuple[int, int, int]], int, int]],
+        n_threads: int = 1,
     ) -> list[
         tuple[list[float], list[tuple[tuple[int, int], float]], float, tuple[int, int]]
     ]: ...

@@ -38,7 +38,8 @@ use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::queues::{
-    build_leaf_graph, DenseQueue, GraphQueue, GraphWire, GraphWireArrays,
+    build_leaf_graph, build_leaf_graphs_batch, DenseQueue, GraphQueue, GraphWire,
+    GraphWireArrays,
     WireAlreadyConsumed as WireConsumedGuard,
 };
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
@@ -804,13 +805,15 @@ impl PyInferenceBatcher {
     /// the frame-carrying driver and this one cannot drift (WP12-R D-22). The
     /// 3-tuple output is byte-identical to the pre-WP12-R implementation.
     #[allow(clippy::type_complexity)]
+    #[pyo3(signature = (positions, n_threads = 1))]
     pub fn submit_graphs_and_wait(
         &self,
         py: Python<'_>,
         positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
+        n_threads: usize,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32)>> {
         Ok(self
-            .submit_graphs_and_wait_ls(py, positions)?
+            .submit_graphs_and_wait_ls(py, positions, n_threads)?
             .into_iter()
             .map(|(dense, overflow, value, _center)| (dense, overflow, value))
             .collect())
@@ -828,26 +831,29 @@ impl PyInferenceBatcher {
     /// guards against ("never trust a Python-supplied order", `mcts.rs:152-153`).
     /// `MCTSTree.expand_and_backup_ls_graph` cross-checks what this returns
     /// against the pending board with an always-on `PyValueError`.
+    ///
+    /// `n_threads` is the LEAF BUILD's width (NIGHTRUN-1 E1). `1` is the serial path and
+    /// the exact-parity control; a production caller passes a DERIVED budget
+    /// (`mantis.config.resolve.sample_threads`) rather than this layer inventing one. The
+    /// build also runs INSIDE `py.detach` now: it is pure Rust over data already copied
+    /// out of Python, and holding the GIL across it blocked the inference-server thread
+    /// for the whole of it — tranche-1's own M-1 mechanism in a second place.
     #[allow(clippy::type_complexity)]
+    #[pyo3(signature = (positions, n_threads = 1))]
     pub fn submit_graphs_and_wait_ls(
         &self,
         py: Python<'_>,
         positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
+        n_threads: usize,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
         self.require_graph()?;
-        let mut graphs = Vec::with_capacity(positions.len());
-        for (stones, current_player, moves_remaining) in &positions {
-            let g = build_leaf_graph(
-                stones,
-                *current_player,
-                *moves_remaining,
-                self.graph_win_length,
-                self.graph_radius,
-                self.graph_trunk_size,
-            )
+        let (win_length, radius, trunk_size) =
+            (self.graph_win_length, self.graph_radius, self.graph_trunk_size);
+        let graphs = py
+            .detach(|| {
+                build_leaf_graphs_batch(&positions, win_length, radius, trunk_size, n_threads)
+            })
             .map_err(PyValueError::new_err)?;
-            graphs.push(g);
-        }
         // The builder's own centre, captured BEFORE the graphs are moved into the
         // detached submit loop; index-aligned with `positions` and therefore with
         // the results below.

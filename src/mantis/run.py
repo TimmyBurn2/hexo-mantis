@@ -104,6 +104,7 @@ from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
+from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.schema import RunConfig
@@ -913,6 +914,18 @@ def compose_run(
                     # mismatch; threading the config's own value is what makes eval
                     # deploy-matched by construction rather than by assertion.
                     leaf_batch_size=config.selfplay.leaf_batch_size,
+                    # NIGHTRUN-1 E1: the eval leaf-graph build's WIDTH, derived here through
+                    # its ONE read path and carried to the child, which has no `RunConfig` to
+                    # derive a host reservation from. Graph-only for `fused_graph_caps`'
+                    # reason: a grid round builds no leaf graphs at all. The Leg 1 profile put
+                    # 95.3 % of the eval game loop inside the serial build this widens; the
+                    # derivation RESERVES `selfplay.n_workers` threads plus the server thread,
+                    # so it takes only what the run has not already promised.
+                    leaf_build_threads=(
+                        resolve_leaf_build_threads(config.model_dump())
+                        if config.identity.representation == "graph"
+                        else 1
+                    ),
                     # RECAL-PREP / R308(g)(i): the eval child is a SECOND allocator on the same
                     # card, in its own process with its own CUDA context, so it asserts the
                     # posture FOR ITSELF at round start — the parent's verdict says nothing

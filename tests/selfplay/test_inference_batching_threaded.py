@@ -160,7 +160,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=10,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=_CAPS,
-        inference_batching=batching, leaf_batch_size=8,
+        inference_batching=batching, leaf_batch_size=8, leaf_build_threads=1,
     )
     back = RoundSpec.from_dict(json.loads(json.dumps(dataclasses.asdict(spec))))
     assert isinstance(back.inference_batching, InferenceBatchingSpec), (

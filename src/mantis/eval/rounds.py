@@ -154,6 +154,12 @@ class RoundSpec:
     #: has no fused graph forward to bound, and `None` must round-trip as `None` rather than
     #: as a rehydration failure.
     fused_graph_caps: FusedGraphCapsSpec | None
+    #: The EVAL leaf-graph build's width (NIGHTRUN-1 E1), derived ONCE in the parent by
+    #: `mantis.config.resolve.leaf_build_threads` and carried here for `fused_graph_caps`'
+    #: reason: the child has no `RunConfig` to derive a host reservation from. A plain int,
+    #: so it needs no `_REHYDRATED_SPEC_FIELDS` row — `asdict`/`from_dict` round-trip it as
+    #: itself. `1` is the serial path and the exact-parity control.
+    leaf_build_threads: int
     #: The deploy head's MCTS leaf-batch width (R318(b)) — the config's OWN
     #: `selfplay.leaf_batch_size`, carried across the process seam so the eval child searches
     #: under the SAME regime the net's policy/value targets were generated in. Here for
