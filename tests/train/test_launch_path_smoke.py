@@ -18,6 +18,7 @@ import pytest
 import torch
 
 from mantis.config.loader import load_config
+from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
 from mantis.model import CnnArch, arch_from_spec_and_config, build_net
 from mantis.train.checkpoints import CHECKPOINT_SCHEMA_VERSION, resume_trainer
@@ -73,10 +74,25 @@ _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
+#: Every config this file builds is a GRID config, and it says so once. The block builders read
+#: it so the arch-scoped blocks are dropped AT SOURCE (R322(d)): `train:` here is derived from a
+#: GRAPH config's dump, so it arrives carrying `microbatch_caps`, which a grid `RunConfig`
+#: refuses. Driven from `ARCH_SCOPED_KEYS` — the schema's own partition — rather than by name.
+_REPRESENTATION = "grid"
+
+
+def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
+    """`block` without the arch-scoped keys `_REPRESENTATION` does not have."""
+    for key in ARCH_SCOPED_KEYS:
+        if key.section == section and key.arch != _REPRESENTATION:
+            block.pop(key.field, None)
+    return block
+
+
 def _train_block():
     # WPSC Phase 2 SC-A1: `train:` is now a required RunConfig section (DESIGN_P2.md §2).
     # `fp16=False` is this file's own delta: the smoke path runs on CPU.
-    return dict(_MINTED_TRAIN, fp16=False)
+    return _drop_foreign_arch_keys("train", dict(_MINTED_TRAIN, fp16=False))
 
 
 def _selfplay_block():
@@ -103,13 +119,14 @@ def _selfplay_block():
 
 
 def _inference_block():
-    return {
+    return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
         "compile_inference": False, "compile_inference_mode": "default",
         "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
-        # F-816-10: the REQUIRED fused-forward memory bound, non-binding by construction.
+        # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and this is a GRID config, so it
+        # is stripped by the helper above. Left in the literal so the strip is visible here.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
-    }
+    })
 
 
 def _monitor_block():
@@ -148,7 +165,7 @@ def _config():
         # placeholder — refused at boot on a cuda process, valued only by the
         # re-calibration sitting under R282(b).
         "allocator_posture": None,
-        "identity": {"encoding": ENCODING, "representation": "grid"},
+        "identity": {"encoding": ENCODING, "representation": _REPRESENTATION},
         "eval": _eval_block(),
         "train": _train_block(),
         "selfplay": _selfplay_block(),
