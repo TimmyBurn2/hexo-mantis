@@ -102,6 +102,56 @@ class GnnArchV2:
 
 ModelArch = CnnArch | GnnArch | GnnArchV2
 
+
+class UnknownArchKind(ValueError):
+    """A requested arch kind is not in `ARCH_KINDS`, or is not available on that representation.
+
+    A `ValueError` for `RepresentationMismatch`'s reason: naming an arch this build does not
+    have is a configuration ERROR, and the nearest member of the union is never substituted.
+    """
+
+
+#: THE ARCH-KIND VOCABULARY — the ONE naming authority for "which model kind is this"
+#: (R322(d), candidate D). Keyed by the declared dataclass's own name, so the token and the
+#: type cannot drift apart and a new arch adds exactly one row.
+#:
+#: It lives HERE and not in `mantis.train.checkpoints`, which is where B1 first needed it: a
+#: kind vocabulary is a MODEL fact, and the loader is one of its consumers rather than its
+#: owner. `checkpoints` imports this — the import direction the repo DAG requires anyway,
+#: since `mantis.model` may not import `mantis.train`.
+ARCH_KINDS: dict[str, type] = {
+    "CnnArch": CnnArch,
+    "GnnArch": GnnArch,
+    "GnnArchV2": GnnArchV2,
+}
+
+#: Which kinds a representation admits — the pairing rule `SEAM_V1_DESIGN` §2.1 names as the
+#: missing half of encoder/arch identity, stated for the arch side. `graph` admits TWO kinds
+#: since GnnNetV2 landed, which is exactly why a selector has to exist.
+ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
+    "grid": ("CnnArch",),
+    "graph": ("GnnArch", "GnnArchV2"),
+}
+
+#: THE INCUMBENT KIND PER REPRESENTATION — a statement about HISTORY, not a default, and the
+#: distinction is the whole reason this table is named and pinned rather than inlined.
+#:
+#: A default answers "what should we build when nobody said?"; this answers "what has this
+#: tree always built?", which is a fact with a witness: every shipped config selects it, and
+#: `tests/model/test_arch_selector.py` executes that against the real minted files rather than
+#: asserting it here. `arch_from_spec_and_config` resolves through this so its behaviour is
+#: byte-for-byte what it was before the selector existed, and `select_arch` — which takes the
+#: kind EXPLICITLY and has no default at all — is the surface a caller uses to build anything
+#: else.
+#:
+#: **WHAT IS DELIBERATELY MISSING, and it is reported rather than papered over (R322(d) §2):
+#: there is no CONFIG KEY that names a kind.** A `RunConfig` selector would be a required key
+#: under R1 (explicit + complete, no code-side defaults), so every shipped config — including
+#: the two PRODUCTION ones — would gain a minted row, and R322(d) makes a repair that touches a
+#: minted row a HALT rather than a judgment call. The mechanism lands; its config surface is
+#: the operator's, and the shape is written up in the leg's exit.
+INCUMBENT_ARCH_KIND: dict[str, str] = {"grid": "CnnArch", "graph": "GnnArch"}
+
 # Grid hparam config keys → CnnArch field names (config override wins; absent →
 # the dataclass field default, which is the sole default authority — R1).
 _GRID_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
@@ -123,17 +173,78 @@ _GRAPH_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
 
 
 def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch:
-    """Resolved encoding spec + plain config mapping → declared arch dataclass.
+    """Resolved encoding spec + plain config mapping → the representation's INCUMBENT arch.
+
+    Behaviour is byte-for-byte what it was before the selector existed: this is
+    `select_arch(..., arch_kind=INCUMBENT_ARCH_KIND[representation])` with the incumbent
+    looked up rather than branched on. Callers that want a NON-incumbent kind call
+    `select_arch` and name it; there is no way to reach one from here, which is deliberate —
+    every production call site routes through this function, so the incumbent is what
+    production builds until a config can say otherwise.
 
     Mapping-typed (NOT config-schema-typed) so the model layer is self-contained
-    and testable without the config package. NO representation default (LAW-11):
-    absent `spec.representation` → `RepresentationMismatch`.
+    and testable without the config package.
+
+    Raises:
+        RepresentationMismatch: `spec.representation` is absent or unknown (LAW-11: no
+            dense-by-default), or the encoding is incompatible with the requested config.
     """
     rep = getattr(spec, "representation", None)
     if rep is None:
         raise RepresentationMismatch(
             f"spec {getattr(spec, 'name', spec)!r} has no representation attribute "
             "— cannot infer a model arch (no dense-by-default, LAW-11)."
+        )
+    incumbent = INCUMBENT_ARCH_KIND.get(str(rep))
+    if incumbent is None:
+        raise RepresentationMismatch(
+            f"spec.representation={rep!r} for encoding "
+            f"{getattr(spec, 'name', '?')!r} — expected 'grid' or 'graph'."
+        )
+    return select_arch(spec, config, arch_kind=incumbent)
+
+
+def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> ModelArch:
+    """Resolved encoding spec + plain config mapping + an EXPLICIT arch kind → declared arch.
+
+    THE SELECTOR (R322(d), candidate D). `arch_kind` is keyword-only and has NO default: a
+    caller that does not know which kind it wants is not entitled to one, and the absence of a
+    default is what keeps this from becoming a second answer to "what does production build".
+
+    Args:
+        spec: a resolved encoding spec carrying `representation` and the geometry fields.
+        config: a plain config mapping; per-arch width/depth keys are read from it where
+            present, and an absent key falls to the dataclass field's own default, which is
+            the sole default authority (R1).
+        arch_kind: a member of `ARCH_KINDS`, admitted by `spec.representation` per
+            `ARCH_KINDS_BY_REPRESENTATION`.
+
+    Raises:
+        UnknownArchKind: `arch_kind` is not a known kind, or the representation does not
+            admit it. Named separately from `RepresentationMismatch` because "you asked for an
+            arch that does not exist" and "your encoding and your model disagree" send a reader
+            to two different places.
+        RepresentationMismatch: `spec.representation` is absent or unknown, the graph geometry
+            fields are missing, or a non-`dist65` value head was requested on a graph arch.
+    """
+    rep = getattr(spec, "representation", None)
+    if rep is None:
+        raise RepresentationMismatch(
+            f"spec {getattr(spec, 'name', spec)!r} has no representation attribute "
+            "— cannot infer a model arch (no dense-by-default, LAW-11)."
+        )
+    if arch_kind not in ARCH_KINDS:
+        raise UnknownArchKind(
+            f"arch_kind={arch_kind!r} is not a known model kind; this build has "
+            f"{sorted(ARCH_KINDS)}. An unknown kind is REFUSED, never resolved to the nearest "
+            "member of the union."
+        )
+    admitted = ARCH_KINDS_BY_REPRESENTATION.get(str(rep), ())
+    if arch_kind not in admitted:
+        raise UnknownArchKind(
+            f"arch_kind={arch_kind!r} is not admitted by representation={rep!r}, which admits "
+            f"{sorted(admitted)}. The pairing rule is `ARCH_KINDS_BY_REPRESENTATION` and it is "
+            "closed: an arch and an encoding that disagree do not silently build."
         )
     if rep == "grid":
         kw: dict[str, Any] = {}
@@ -148,7 +259,7 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
             in_channels=int(spec.n_planes),
             **kw,
         )
-    if rep == "graph":
+    if rep == "graph":  # noqa: RET503 — the closed set is exhausted by the guards above
         node_feat_dim = getattr(spec, "node_feat_dim", None)
         edge_feat_dim = getattr(spec, "edge_feat_dim", None)
         if node_feat_dim is None or edge_feat_dim is None:
@@ -166,7 +277,10 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
         for cfg_key, field in _GRAPH_CONFIG_KEYS:
             if cfg_key in config and config[cfg_key] is not None:
                 kw[field] = config[cfg_key]
-        return GnnArch(in_dim=int(node_feat_dim), edge_dim=int(edge_feat_dim), **kw)
+        # The kind chooses the dataclass; the FIELDS are identical, which is the point of V2
+        # being a sibling rather than a knob (see `GnnArchV2`'s own docstring).
+        cls = ARCH_KINDS[arch_kind]
+        return cls(in_dim=int(node_feat_dim), edge_dim=int(edge_feat_dim), **kw)
     raise RepresentationMismatch(
         f"spec.representation={rep!r} for encoding "
         f"{getattr(spec, 'name', '?')!r} — expected 'grid' or 'graph'."
