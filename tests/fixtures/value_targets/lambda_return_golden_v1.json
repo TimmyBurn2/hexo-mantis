@@ -1,0 +1,56 @@
+{
+  "endpoints": {
+    "lam_0": [
+      -0.2,
+      -0.35,
+      0.05,
+      0.45,
+      0.6,
+      -0.15,
+      1.0
+    ],
+    "lam_1": [
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      -1.0,
+      -1.0,
+      1.0
+    ]
+  },
+  "inputs": {
+    "lam": 0.7,
+    "movers": [
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      1
+    ],
+    "terminal_z": 1.0,
+    "values": [
+      0.1,
+      -0.2,
+      0.35,
+      0.05,
+      -0.45,
+      0.6,
+      0.15
+    ]
+  },
+  "note": "byte-frozen fp64. The mover column takes TWO stones per turn and the last turn is a single stone, because a real game can end mid-turn and a codec that assumes a clean alternation is wrong exactly there.",
+  "registered_in": "plan/SEAM_B2_LEG3_PREREG.md \u00a71",
+  "targets": [
+    -0.26914915,
+    -0.2987845,
+    0.276835,
+    0.37405,
+    -0.3414999999999999,
+    -0.745,
+    1.0
+  ],
+  "witness": "W-L1 \u2014 the lambda-return codec's pure-function golden"
+}
