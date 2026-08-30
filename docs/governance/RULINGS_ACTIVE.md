@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 77b2671, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 9496aae, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.26, 2026-08-29. Created under R271 (register hygiene: archive/index split);
+# v3.27, 2026-08-30. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -555,6 +555,65 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # **draw increments DEFINED THEN** (a Wald SPRT's LLR increment is undefined on a 0.5 score, so
 # the withdrawn text's p0/p1/alpha/beta could not have been armed even in a healthy channel).
 # **The sealbot rung repair RIDES UNCHANGED.**
+# **v3.27 = R321 folded in — the curation where THE SEAM BECOMES A CONTRACT AND ITS SUITE GETS A
+# BASE.** **THE UNIVERSAL MODEL CONTRACT IS ADOPTED AS THE DESIGN OF RECORD** —
+# `plan/SEAM_V1_DESIGN.md`, its seven parts, its governing principle **contract, not call graph**
+# (boundaries at BATCH level, hot paths compiled per-arch with **ZERO RUNTIME INDIRECTION**,
+# conformance proven OFFLINE by the suite). **PLANC Phase-2 is RE-SCOPED to it** and **`GnnNetV2`
+# is RE-CAST as the FIRST TENANT rather than the purpose** — the product is the CONTRACT it
+# proves. **The accept bar for the whole mission is ONE TESTABLE SENTENCE:** after V1, adding a
+# model kind means writing the arch behind the contract, letting the suite prove it, and training
+# it after the mint; **if a second arch still needs edits to the trainer, the server, the arena or
+# the config schema outside its own scope, THE SEAM DID NOT SHIP.**
+# **TWO CARRIED FIGURES ARE CORRECTED ON THE RECORD**, both found by the verify-at-HEAD pass that
+# preceded the design and **NEITHER by a reviewer**. **(i) The "44% floor" was STALE BY ONE
+# TRANCHE:** 44% was the floor's share of a **3.396** ms/sim card; PERF-TRANCHE-1 moved the served
+# level to **2.805**, so **the floor is 53% of the card** — the correction runs FAVOURABLE and
+# strengthens the fused-kernel row, which now addresses a MAJORITY of self-play cost. **(ii)
+# "~80% idle card" UNDERSTATED its own measurement:** eval-path GPU utilisation is **12.7% /
+# 14.5%** mean with **96.8% of samples below 25%**, so the card is **~85-87% idle**; the 80% was
+# the operator's own conservative phrasing, so **no decision built on it moves**. Both are
+# RECORDED rather than quietly restated — a figure that travels is corrected in the artifact
+# readers open.
+# **LANE B0 IS ORDERED and it is the FIRST ACT of the seam lane:** the conformance suite exists
+# ONLY on `planc-conformance`, measured **33 ahead / 35 behind `dev`**. Rebase it onto `dev`, run
+# the full local gate set, land it. **SUITE V2 HAS NO BASE UNTIL THIS DOES**, and the design
+# brief's omission of it is **ON THE ARCHITECT'S LEDGER**. Standing conjuncts are UNCHANGED and
+# are **re-measured at the moment the work starts, never inherited** (R295(c)): collision table
+# clear, full local green, floor ratcheted in its own commit.
+# **IDENTITY (part 6) CARRIES A PRECONDITION, NOT A CONSEQUENCE:** R317(c)(i)'s exact observable
+# lives at `_net_param_hash` in `src/mantis/diagnostics/worker_sweep.py`, and **a determinism
+# gate, a mint denomination and a provenance primitive DO NOT LIVE IN A DIAGNOSTIC MODULE** —
+# promote it into the model contract with its callers re-pointed, as bounded work, **BEFORE** part
+# 6 is specified against it.
+# **THE AUX-HEAD BAN IS HELD.** `GRAPH_FORBIDDEN_NONZERO_WEIGHTS`
+# (`src/mantis/train/trainer/core.py`) is a trainer-side tripwire standing in for a property, and
+# the property is the refbot evidence's **ZERO-SERVE-COST RULE** — train-only heads are free
+# behind the seam because **the serving wire is fixed by contract**. Replace the assertion WITH
+# the rule, in ONE act. **Retiring the ban ahead of its replacement is NOT LICENSED by this
+# ruling**, and a seam that cannot yet fix the serving wire by contract has not earned the
+# retirement.
+# **THE STAGED EVAL GATE is PRE-REGISTERED** as in `SEAM_V1_DESIGN.md` §7, **values
+# operator-held**, on EVAL-CHANNEL-1's finding as its ground: **BOTH shipped criteria are
+# DEGENERATE at this maturity**, so no `min_margin` and no choice inside the closed criterion set
+# decides anything. **R320(c)'s sequencing INVERTS ONCE MORE and the inversion HOLDS:
+# adjudication is NECESSARY BUT NOT SUFFICIENT — the BINDING precondition is A CHECKPOINT MATURE
+# ENOUGH TO PRODUCE A DECIDABLE POSITION.** **BOOTSTRAP BC-PRETRAIN IS THEREBY ELEVATED**: it is
+# both the early-strength fix AND the earliest path to a calibratable gate. Its own precondition
+# is unchanged and is the operator's — **F-816-25's fix precedes any BC-pretrain**. The
+# adjudication doc is the architect's next deliverable.
+# **THE 500-1000 g/h LEDGER IS ADOPTED AS A LEDGER AND NOTHING MORE** — every row is DERIVED
+# until its witness lands, and the product ~5-15x makes the goal feasible **ON PAPER** and
+# promises nothing. Strength is held by **fixed-node gates**. **THE BINDING CONSTRAINT IS THE
+# STRENGTH-AT-FEWER-SIMS WITNESS**, which is exactly what the gate work makes measurable — so **no
+# row that trades search for speed is acceptable before the gate can tell two checkpoints apart**,
+# and sequencing follows from that rather than from convenience.
+# **SEQUENCE: lane A (box) and lane B (no box) run in PARALLEL and DO NOT COLLIDE.** A:
+# `strength_floor` arming values → sealbot rung repair → sitting 4 re-fits and mints ONCE (terms,
+# geometry, gate stage-1 values in one act). B: B0 → contract spec → suite v2 sections → GnnNetV2
+# as the proving tenant. Perf tranche-2 slots after A's geometry decision (the operator's
+# WAIT-until-geometry ruling); Lane C after tranche-2 re-baselines. **RUN6 WAITS ON LANE B** —
+# standing direction, unchanged.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1697,6 +1756,23 @@ Verbatim text in the register; one-liners here are index only.
   `mantis-migration` is the SANCTIONED home for box content.** Rule 7 governs the **public engine
   repo**; provider terms, IPs and ssh invocations *here* are **by design, not leaks**. The pushed
   evidence **STANDS**. **Operator residue: rotation, immediate.**
+- **R321 — THE SEAM LANE'S STANDING FORCE. LIVE, expires when `GnnNetV2` lands as the proving
+  tenant.** The design of record is `plan/SEAM_V1_DESIGN.md` (committed `d0c3321`), ADOPTED whole
+  — seven parts, governing principle **contract, not call graph**. PLANC Phase-2 is RE-SCOPED to
+  it and **`GnnNetV2` is its FIRST TENANT, not its purpose**; the accept bar is that a SECOND arch
+  needs no edits to the trainer, the server, the arena or the config schema outside its own scope.
+  **B0 — rebase and land `planc-conformance` onto `dev` — is the FIRST ACT, and nothing else in
+  lane B has a base until it lands.** **THE AUX-HEAD BAN HOLDS:**
+  `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` retires ONLY in the same act that ships the zero-serve-cost
+  rule replacing it — a seam that cannot yet fix the serving wire by contract has not earned the
+  retirement. **Part 6 (identity) is BLOCKED on promoting `_net_param_hash` out of
+  `diagnostics/`** — a PRECONDITION, not a consequence. **RUN6 WAITS ON LANE B** (standing
+  direction, unchanged). **BOOTSTRAP BC-PRETRAIN IS ELEVATED** — both the early-strength fix and
+  the earliest path to a calibratable gate — and still sits behind **F-816-25** (R296(b)).
+  **THIS RULING ARMS NOTHING:** `strength_floor` values, gate stage-2/3 values, the bootstrap
+  posture and the ply-cap matrix all REMAIN OPERATOR-HELD. **The 500-1000 g/h ledger is a LEDGER,
+  not a promise** — every row DERIVED until its witness lands, and **the strength-at-fewer-sims
+  witness is the BINDING constraint** on any row that trades search for speed.
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -2160,6 +2236,14 @@ Verbatim text in the register; one-liners here are index only.
   existing grant · NOTHING touches the mint path · the R257 fences and R26 hold. No new authority is
   created: Phase 2 runs on the **existing R306 grant** with its scope extended, and deferred
   ratification covers it in full. Packet: `plan/PACKET_PLANC_SEAM_M1_AMEND1.md`.
+  **RE-SCOPED BY R321(a), 2026-08-30 — PHASE 2's DESTINATION IS THE UNIVERSAL MODEL CONTRACT.**
+  The pipeline shape, the deferred-ratification frame, the three ABSOLUTE exclusions and the
+  R307(f) conjuncts are all UNTOUCHED; what changes is what Phase 2 builds toward —
+  `plan/SEAM_V1_DESIGN.md`, with `GnnNetV2` as the tenant that PROVES the contract rather than a
+  net shipped for its own sake. **R321(c) INSERTS B0 AHEAD of the Phase-2 work:**
+  `planc-conformance`, measured **33 ahead / 35 behind `dev`**, rebases onto `dev` and lands
+  first, because suite v2 has no base until it does — an omission the design brief made and the
+  architect ledgered.
 - **R307(b) — DERIVE-NOT-STORE, extended from two fields to a CLASS. LAW, standing.** **Where the
   engine holds a PER-RECORD authority, no per-arch field summarises it** — not as a set, not as a
   summary, **not as a gate pointer**, because routing is already carried by the representation
@@ -3860,3 +3944,72 @@ Verbatim text in the register; one-liners here are index only.
   and sets no `min_margin`, no `strength_floor` term, no ply-cap matrix row and no gate
   geometry. **RUN6 REMAINS HELD** (R319), now behind the measurement round rather than behind
   an adjudication that could not be fitted.
+- 2026-08-30 — **v3.27** curated by the SEAM-B0 dispatcher, landing **R321**, authored in the
+  ARCH-ERA architect session (R303(d)) and routed here by the operator's forwarding, which IS the
+  authorization. **Governance commits LOCAL ONLY** (R301(c)).
+  **HEAD VERIFIED FIRST:** census `R23-R320, 291/291/0`, excluded 53, `missing-in-range`
+  `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.26 == §8 last entry
+  v3.26`; `--self-test` all four controls fire; last header `R320`, no `R321` heading present.
+  **THE LIVE-PLACEHOLDER CHECK IS `^> *R{next}` AND IT RETURNED EXACTLY ONE HIT — the packet's own
+  canonical block.** That is the condition `PACKET_R321_SEAM_V1.md` §0 states for its own
+  landability, and it is the R312-onward correction applied rather than re-discovered: a zero-hit
+  reading would refuse the very file being landed. Numbered **R321**; the substitution is the ONLY
+  edit to the canonical text and was applied to the canonical home as well, so the two are
+  byte-identical. **The `R321` occurrences in the packet's filename and preamble are REFERENCES,
+  not canonical text, and were LEFT UNTOUCHED** — R316's over-broad-substitution near-miss applied
+  as the standing caution, and the substitution was line-addressed (packet 25/29, register
+  7358/7364) rather than global, so the disclosure prose that names the placeholder survives.
+  **ONE-TEXT satisfied by construction:** the packet was already on disk as the canonical home and
+  no competing text exists under `plan/`.
+  **Byte-diff, R306(a), under `set -o pipefail` (R313(c)): 71 lines compared, 0 mismatches**
+  (`diff` rc 0, `cmp` rc 0, md5 equal; extraction by `awk` over the canonical home, never retyped,
+  `${PIPESTATUS[*]}` read on both extractions). **Re-run POST-substitution on de-marked text
+  alone** — still 71/71, `diff` rc 0, `cmp` rc 0, md5 equal — so byte-identity is asserted about
+  the text that actually shipped, not only about the placeholder-bearing draft.
+  **Census after: R23–R321, 292 sections / 292 distinct / 0 duplicates, excluded 53,
+  `missing-in-range` UNCHANGED.**
+  **EVERY REFERENT RE-DERIVED AT POINT OF USE BEFORE LANDING, not transcribed from the packet.**
+  Clause (a)'s design of record `plan/SEAM_V1_DESIGN.md` @ `d0c3321`. Clause (b)(i):
+  `PERF_TRANCHE1_RESULTS.md:144` gives floor **1.494** and post **2.805**, so **53.26%**; the
+  superseded 44% sits at `PERF_RESEARCH.md:828` against the **3.396** pre-tranche card, and
+  1.494 ÷ 3.396 = **43.99%** — measured confirmation that the stale figure was right for its own
+  era and wrong only by a tranche, which is the difference between a correction and an erratum.
+  Clause (b)(ii): `PERF_BASELINE_LEDGER.md:474,511` — **12.7%** mean on the 25-move arm, **14.5%**
+  mean with **96.8%** of samples below 25% on the 64-move arm. **Clause (c)'s divergence MEASURED,
+  not carried:** `git rev-list --left-right --count dev...planc-conformance` reports `35 33` —
+  **33 ahead / 35 behind**, the packet's figure exactly — and the suite is **nine** files under
+  `tests/model/conformance/`, **seven** of them test modules. Clause (d): `_net_param_hash` at
+  `src/mantis/diagnostics/worker_sweep.py:901`, its in-module caller at `:1031`, the R81 oracle
+  naming it at `tests/diagnostics/test_worker_sweep_determinism.py:57`. Clause (e):
+  `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` at `src/mantis/train/trainer/core.py:81`, raised at
+  `:547-552` — **one named site to retire**, as (e) says.
+  **Index edits, three and no more:** the v3.27 header block; a new **§5 LIVE row** for the seam
+  lane's standing force; and an **amendment appended to §6's R306(b) row** recording the Phase-2
+  re-scope and B0's insertion ahead of it. No existing row was widened, and nothing was deleted.
+  **Spot-checks (R271(d)/R272(b), ≥5) against verbatim register text: R306(b)** (register :6376 —
+  "MISSION PLANC-SEAM-M1 is ESTABLISHED per its packet: Leaf 0 the ArchCaps design review, then
+  the conformance-suite pipeline in the R262 shape" — accurate, and the row this curation amends
+  rather than rewrites), **R307(b)** (:6443-6448 — "extends R304(a)'s derive-not-store from two
+  fields to the CLASS: where the engine holds a per-record authority, no per-arch field …", and
+  the "per-arch property" → "per-record and per-site" correction — accurate; it is the rule
+  `SEAM_V1_DESIGN` §2.5 rests on), **R308(e) via R309(d)** (:6701 — "the R308(e) witness-stamp is
+  a CONSTRUCTION PRECONDITION for v2 — no GnnNetV2 constructs anywhere before mis-dispatch raises
+  with a named error" — accurate, and it is §2.7's first proof-kit item), **R295(c)** (:5521 —
+  "Parallel execution is permitted exactly where the packets' collision tables say it is —
+  re-measured at dispatch, never inherited" — accurate, and R321(c) cites it correctly for the
+  standing conjuncts), **R296(b)** (:5565-5570 — F-816-25 "is a mission item SEQUENCED BEFORE any
+  BC-pretrain execution" — accurate, and load-bearing here because R321(f) elevates BC-pretrain
+  without touching that precedence). All five accurate as indexed; **no overclaim found, and no
+  index line was widened by this curation.**
+  **WHAT THIS RULING SETTLES.** The seam stops being a net and becomes a contract, and the accept
+  bar stops being a judgement and becomes a sentence you can fail. The two corrected figures are
+  the more instructive half: both were found by the author re-deriving his own carried numbers
+  before writing, **neither by a reviewer**, and one of them ran favourable — which is the
+  evidence that the verify-at-HEAD discipline is not a formality tax.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, and
+  sets no `strength_floor` term, no `min_margin`, no gate stage-2/3 value, no bootstrap posture and
+  no ply-cap matrix row. **RUN6 REMAINS HELD**, now behind lane B. **A RIDER LANDS IN ITS OWN
+  COMMIT, disclosed here rather than folded in:** the operator's direction to re-denominate
+  `SEAM_V1_DESIGN.md` §6 from a fixture g/h target to a **FRONTIER** — throughput, average sims
+  and strength-at-fixed-nodes tracked JOINTLY, no single g/h number enshrined — amends the design
+  of record this ruling adopts, and is noted in one line in the document itself per the direction.

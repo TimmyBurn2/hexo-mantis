@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 77b2671, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 9496aae, regenerated 2026-08-30.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7358,3 +7358,81 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > then. The sealbot rung repair rides unchanged.
 > ROUTE: land this, census, ACTIVE next version; execute the measurement
 > round; one plain exit screen.
+
+# R321 — architect ruling, ARCH-ERA session, 2026-08-30 (the universal model contract ADOPTED as the design of record, GnnNetV2 re-cast as its first tenant rather than its purpose; two carried perf figures CORRECTED on the record, both found by the verify-at-HEAD pass and one of them favourable; lane B0 ORDERED — the conformance suite is 33 ahead / 35 behind dev and nothing in the seam lane has a base until it lands; the identity primitive's promotion out of diagnostics made a PRECONDITION of the identity part; the aux-head ban HELD until its replacement rule ships; the staged eval gate pre-registered with bootstrap ELEVATED) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), routed to this SEAM-B0 dispatcher, whose authorization is the operator's forwarding; one canonical home: `PACKET_R321_SEAM_V1.md` §1, and no competing text exists under `plan/`. Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The packet carried the placeholder `R{next}`**, substituted to `R321` after verifying the head is R320 — census R23–R320, 291 sections / 291 distinct / 0 duplicates, excluded set 53, missing-in-range {24, 29, 32, 33, 227, 228, 267}; `--stamp` reported `STAMP OK: stamp v3.26 == §8 last entry v3.26`; `--self-test` all four controls fire; last register header `R320`, no `R321` heading present. **The LIVE-placeholder check is `^> *R{next}` under `plan/` and it returns EXACTLY ONE hit — this packet's own canonical block**, which is the condition the packet's §0 states for its own landability; a zero-hit reading would refuse the very file being landed, and that is the R312-onward correction applied rather than re-discovered. The substitution is the ONLY edit to the canonical text and was applied to the canonical home as well as to this entry, so the two are byte-identical; the `R321` occurrences in the packet's filename and preamble are REFERENCES, not canonical text, and were left untouched.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the packet.** Clause (a)'s design of record is `plan/SEAM_V1_DESIGN.md`, committed `d0c3321`. **Clause (b)(i)** against `plan/research/PERF_TRANCHE1_RESULTS.md:144` — floor **1.494**, post-tranche served **2.805**, so 1.494 ÷ 2.805 = **53.26 %**; the superseded 44 % sits at `plan/research/PERF_RESEARCH.md:828` against the pre-tranche **3.396** card, and 1.494 ÷ 3.396 = **43.99 %** confirms the stale figure was correct for its own era and stale only by a tranche. **Clause (b)(ii)** against `plan/research/PERF_BASELINE_LEDGER.md:474,511` — **12.7 %** mean GPU utilisation on the 25-move arm, **14.5 %** mean with **96.8 %** of samples below 25 % on the 64-move arm, i.e. ~85–87 % idle. **Clause (c)'s divergence measured, not carried:** `git rev-list --left-right --count dev...planc-conformance` reports `35 33` at landing — **33 ahead / 35 behind**, the packet's figure exactly — and the suite is **nine** files under `tests/model/conformance/`, **seven** of them test modules. **Clause (d)'s observable** is `_net_param_hash` at `src/mantis/diagnostics/worker_sweep.py:901`, its one in-module caller at `:1031`, and the R81 oracle naming it at `tests/diagnostics/test_worker_sweep_determinism.py:57`. **Clause (e)'s tripwire** is `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` at `src/mantis/train/trainer/core.py:81`, raised at `:547-552` — one named site to retire, as (e) states.
+
+> R321 — (a) THE UNIVERSAL MODEL CONTRACT is ADOPTED as the design of
+> record: `plan/SEAM_V1_DESIGN.md`, its seven parts, its governing principle
+> (contract, not call graph — boundaries at batch level, hot paths compiled
+> per-arch with zero runtime indirection, conformance proven offline). PLANC
+> Phase-2 is RE-SCOPED to it. GnnNetV2 is the first TENANT; the product is the
+> CONTRACT it proves. The accept bar for the whole mission is one sentence and
+> it is testable: after V1, adding a model kind means writing the arch behind
+> the contract, letting the suite prove it, and training it after the mint —
+> if a second arch still needs edits to the trainer, the server, the arena, or
+> the config schema outside its own scope, the seam did not ship.
+> (b) TWO CARRIED FIGURES ARE CORRECTED ON THE RECORD, both found by the
+> verify-at-HEAD pass that preceded the design and neither by a reviewer.
+> (i) "the 44% floor" was stale by one tranche: 44% was the floor's share of a
+> 3.396 ms/sim card; PERF-TRANCHE-1 moved the served level to 2.805, so the
+> floor is 53% of the card. The correction runs FAVOURABLE and strengthens the
+> fused-kernel row — the lever now addresses a majority of self-play cost.
+> (ii) "~80% idle card" understated its own measurement: eval-path GPU
+> utilisation is 12.7% / 14.5% mean with 96.8% of samples below 25%, so the
+> card is ~85-87% idle. The 80% figure is the operator's own conservative
+> phrasing, so no decision built on it moves. Both are recorded rather than
+> quietly restated, per the dispatcher-correction discipline: a figure that
+> travels is corrected in the artifact readers open.
+> (c) LANE B0 IS ORDERED, and it is the first act of the seam lane: the
+> conformance suite exists ONLY on `planc-conformance`, measured 33 ahead /
+> 35 behind `dev`. Rebase it onto `dev`, run the full local gate set, land it.
+> Suite v2 has no base until this does. The design brief omitted this and the
+> omission is on the architect's ledger. Standing conjuncts are UNCHANGED and
+> are re-measured at the moment the work starts, never inherited (R295(c)):
+> the collision table clear, full local green, floor ratcheted in its own
+> commit.
+> (d) IDENTITY (part 6) carries a PRECONDITION, not a consequence: R317(c)(i)'s
+> exact observable lives at `_net_param_hash` in
+> `src/mantis/diagnostics/worker_sweep.py`. A determinism gate, a mint
+> denomination and a provenance primitive do not live in a diagnostic module.
+> Promote it into the model contract with its callers re-pointed, as bounded
+> work, BEFORE part 6 is specified against it.
+> (e) THE AUX-HEAD BAN IS HELD. `GRAPH_FORBIDDEN_NONZERO_WEIGHTS`
+> (`src/mantis/train/trainer/core.py`) is a trainer-side tripwire standing in
+> for a property; the property is the refbot evidence's zero-serve-cost rule —
+> train-only heads are free behind the seam because the serving wire is fixed
+> by contract. Replace the assertion WITH the rule, in one act. Retiring the
+> ban ahead of its replacement is NOT licensed by this ruling, and a seam that
+> cannot yet fix the serving wire by contract has not earned the retirement.
+> (f) THE STAGED EVAL GATE is pre-registered as in `SEAM_V1_DESIGN.md` §7,
+> values operator-held. EVAL-CHANNEL-1's finding stands as its ground and is
+> restated for the record: both shipped criteria are degenerate at this
+> maturity, so no `min_margin` and no choice inside the closed criterion set
+> decides anything. R320(c)'s sequencing inverts once more and the inversion
+> HOLDS: adjudication is necessary but NOT sufficient; the binding
+> precondition is a checkpoint mature enough to produce a decidable position.
+> BOOTSTRAP BC-PRETRAIN IS THEREBY ELEVATED — it is both the early-strength
+> fix and the earliest path to a calibratable gate. Its own precondition is
+> unchanged and is the operator's: F-816-25's fix precedes any BC-pretrain.
+> The adjudication doc is the architect's next deliverable.
+> (g) THE 500-1000 g/h LEDGER is ADOPTED AS A LEDGER AND NOTHING MORE. Every
+> row is DERIVED until its witness lands; the product ~5-15x makes the goal
+> feasible ON PAPER and promises nothing. Strength is held by fixed-node
+> gates. THE BINDING CONSTRAINT IS THE STRENGTH-AT-FEWER-SIMS WITNESS, which
+> is what (f) makes measurable — so no row that trades search for speed is
+> acceptable before the gate can tell two checkpoints apart. Sequencing
+> follows from that, not from convenience.
+> (h) SEQUENCE. Lane A (box) and lane B (no box) run in parallel and do not
+> collide. A: `strength_floor` arming values proposed by the architect, then
+> the sealbot rung repair, then sitting 4 re-fits and mints ONCE — terms,
+> geometry and gate stage-1 values in one act. B: B0 per (c), then the
+> contract spec, then the suite v2 sections, then GnnNetV2 as the proving
+> tenant. Perf tranche-2 slots after A's geometry decision, per the operator's
+> WAIT-until-geometry ruling; Lane C after tranche-2 re-baselines. RUN6 WAITS
+> ON LANE B — standing direction, unchanged.
+> ROUTE: land this, census, ACTIVE next version, then B0 as its own dispatch;
+> one plain exit screen.
