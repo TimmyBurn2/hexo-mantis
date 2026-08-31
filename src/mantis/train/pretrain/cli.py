@@ -56,6 +56,11 @@ from mantis.util.device import best_device
 
 _LOG = logging.getLogger(__name__)
 
+#: The dense arm's label smoothing. The parser's default is `None` so "was it supplied?" is
+#: answerable — the graph route refuses flags it would ignore, and it cannot refuse a value it
+#: cannot distinguish from a default. THIS is the one default authority for the term.
+DEFAULT_LABEL_SMOOTHING = 0.05
+
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     # `allow_abbrev=False` is LOAD-BEARING, not tidiness (found by this fix's own oracle).
@@ -91,11 +96,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--res-blocks", type=int, default=None, help="Trunk depth")
     parser.add_argument("--corpus-npz", type=str, default=None,
                         help="Corpus NPZ path (default: registry resolve_corpus_path)")
+    parser.add_argument("--corpus-hexg", type=str, default=None,
+                        help="Corpus .hexg ring for the GRAPH route (default: registry "
+                             "resolve_corpus_path). Ignored on the dense route.")
     parser.add_argument("--freeze-trunk-entry", action="store_true",
                         help="Freeze trunk.input_conv + trunk.input_gn (staged fine-tune)")
     parser.add_argument("--unfreeze-blocks", type=str, default=None,
                         help="CSV trunk.tower block indices to keep trainable (others freeze)")
-    parser.add_argument("--label-smoothing", type=float, default=0.05)
+    parser.add_argument("--label-smoothing", type=float, default=None,
+                        help=f"Dense-arm label smoothing (default: {DEFAULT_LABEL_SMOOTHING})")
     return parser
 
 
@@ -179,7 +188,8 @@ def pretrain(argv: list[str] | None = None) -> None:
         raise SystemExit(str(e)) from e
     spec = _lookup_encoding(encoding)  # loud raise on an unregistered name
 
-    train_cfg = load_config(args.config).train
+    run_config = load_config(args.config)
+    train_cfg = run_config.train
     config: dict = {
         "encoding": encoding,
         "in_channels": int(spec.n_planes),
@@ -192,6 +202,36 @@ def pretrain(argv: list[str] | None = None) -> None:
 
     device = best_device()
     _LOG.info("pretrain_device device=%s encoding=%s", device, encoding)
+
+    # The GRAPH arm is a REROUTE, not a second pipeline: it hands a loaded `.hexg` ring to the
+    # SAME declared train-step seam the self-play loop uses (R325(c)). Everything below this
+    # branch — the NPZ reader, the augmented dense collate, `BootstrapTrainer` — is the dense
+    # arm and stays dense. `--no-compile` has no subject here: production does not compile the
+    # graph net, so this route does not either.
+    if getattr(spec, "representation", None) == "graph":
+        from mantis.train.pretrain.graph_route import GraphPretrainError, run_graph_pretrain
+
+        ring_path = (Path(args.corpus_hexg) if args.corpus_hexg is not None
+                     else Path(_resolve_corpus_path(spec)))
+        try:
+            written = run_graph_pretrain(
+                spec=spec, full_config=run_config.model_dump(), train_section=train_cfg,
+                ring_path=ring_path, checkpoint_dir=Path(args.checkpoint_dir), device=device,
+                steps=args.steps, epochs=args.epochs,
+                dense_arm_flags={
+                    "--filters": args.filters, "--res-blocks": args.res_blocks,
+                    "--resume": args.resume, "--lr-peak": args.lr_peak,
+                    "--eta-min": args.eta_min,
+                    "--freeze-trunk-entry": args.freeze_trunk_entry,
+                    "--unfreeze-blocks": args.unfreeze_blocks,
+                    "--inference-out": args.inference_out,
+                    "--label-smoothing": args.label_smoothing,
+                },
+            )
+        except GraphPretrainError as e:
+            raise SystemExit(str(e)) from e
+        _LOG.info("pretrain_complete route=graph checkpoint=%s", written)
+        return
 
     # ── Corpus (mmap'd NPZ; the raw-JSON fallback is KILLED — 0 config consumers) ──
     npz_path = Path(args.corpus_npz) if args.corpus_npz is not None else Path(_resolve_corpus_path(spec))
@@ -270,7 +310,8 @@ def pretrain(argv: list[str] | None = None) -> None:
     for epoch in range(1, args.epochs + 1):
         metrics = trainer.train_epoch(
             loader,
-            label_smoothing=float(args.label_smoothing),
+            label_smoothing=(DEFAULT_LABEL_SMOOTHING if args.label_smoothing is None
+                             else float(args.label_smoothing)),
             aux_weight=float(config["aux_opp_reply_weight"]),
             chain_weight=chain_weight,
             step_budget=step_budget,
