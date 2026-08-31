@@ -18,6 +18,18 @@ BOOTSTRAP-CORPUS prereg row (an operator-owed, mint-critical choice between BC p
 corpus-mix and no warm start), so removing it would delete one arm of a decision that has not
 been taken. Queue row RQ-19; wire-or-retire is a pre-mint design question, not hygiene.
 
+UNREACHABLE ON A GRAPH RUN, IN THREE INDEPENDENT PLACES (R325(b), verified at 3bde2d1). The
+un-wiring above is the RUN5 reading and it understates the fact. (1) `StepCoordinator`'s mixed
+arm refuses a non-`grid` representation at the route. (2) `load_pretrained_buffer` is
+dense-only — an NPZ read, a dense plane-count check and `ReplayBuffer.push_game` — and a graph
+run's `<auto>` corpus resolves to a `.hexg` ring it cannot read. (3) Nothing calls it. So
+`train.bot_batch_share: 0.0` and the `train.mixing.*` values in every shipped config are
+STRUCTURAL FACT, not a tuning preference: on a graph run there is nothing for a non-zero value
+to reach. The R325(c) disposition DERIVED that this path is NOT obsoleted by the BC-pretrain
+reroute — that reroute serves a different posture — and that R289(q) forbids deleting it while
+the decision stands untaken. What landed instead is (2)'s refusal made EXPLICIT and NAMED below,
+so the dense-only-ness is a contract the loader states rather than an assumption it makes.
+
 Scope note (DESIGN deviation, documented): the bot-corpus ATOMIC-SWAP machinery
 (`swap_bot_corpus_atomic` / `BotCorpusSwapError` / `load_bot_corpus_buffer`) is bot-refresh-
 adjacent (the KILLED `bot_refresh` subprocess family swaps the bot NPZ) — it is NOT ported. The
@@ -126,11 +138,30 @@ def load_pretrained_buffer(
     """Load a corpus NPZ into a Rust `ReplayBuffer` with neutral aux padding (ownership=1,
     winning_line=0 — the `n_pretrain` row-slice masks them from aux losses). Behaviour-exact:
     launch-pin sha gate, held-out contamination gate, plane-count check, §102.a chain-plane
-    recompute. Returns None when no corpus path is configured (unpinned)."""
+    recompute. Returns None when no corpus path is configured (unpinned).
+
+    Raises:
+        RepresentationRouteError: the declared encoding is not `grid`. This feed is dense-only
+            and its graph arm is deliberately unbuilt — see the module docstring.
+        ValueError: an `<auto>` corpus without a sha pin, a pinned corpus that is missing or
+            unresolved, a sha mismatch against the launch pin, or a plane count that disagrees
+            with the declared encoding.
+    """
     from mantis._engine import ReplayBuffer  # engine only available post-build
+    from mantis.train.coordinator.dispatch import RepresentationRouteError  # lazy: no new DAG edge
 
     pretrained_path = mixing_cfg.get("pretrained_buffer_path")
     _spec = _lookup_encoding(_normalize_encoding_name(config.get("encoding")))
+    # R325(c): the dense-only-ness is stated at the contract, not discovered inside `np.load`.
+    if getattr(_spec, "representation", None) != "grid":
+        raise RepresentationRouteError(
+            f"the corpus-mix loader is a dense-only feed; declared representation "
+            f"{getattr(_spec, 'representation', None)!r} (encoding {_spec.name!r}) has no "
+            "corpus-mix route. A graph run's corpus resolves to a .hexg ring this loader "
+            "cannot read, and the mixed-batch arm refuses the route above it. The graph arm "
+            "is unbuilt on purpose: it is one side of the operator-owed BOOTSTRAP POSTURE "
+            "row and R289(q) holds this path RESERVED until that decision is taken."
+        )
     _pin = resolve_corpus_sha_pin(_spec)
     _auto_resolved = bool(mixing_cfg.get("_pretrained_buffer_path_auto_resolved"))
 
