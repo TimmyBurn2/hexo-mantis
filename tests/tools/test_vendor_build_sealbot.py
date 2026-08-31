@@ -106,6 +106,29 @@ def test_the_script_carries_no_sha_literal_and_reads_the_pin_instead() -> None:
     )
 
 
+def test_the_build_never_re_syncs_the_PROJECT_environment() -> None:
+    """FOUND THE EXPENSIVE WAY, NIGHTRUN-1 Leg 4. `uv run` executed from inside the repo tree
+    re-syncs the project venv, and on this project that swaps the CUDA torch wheel for the CPU
+    one. This script runs from inside the tree by construction (it `cd`s to the repo root),
+    so a bare `uv run` here silently changes the environment of every measurement that comes
+    after it — which is exactly what happened: a box arm fell back to CPU between two halves
+    of an A/B and only a GPU-utilisation reading of 0 % showed it.
+
+    The vendored engine's build has nothing to do with the mantis environment. Asserted on the
+    COMMAND rather than on an outcome, because the outcome is invisible until something else
+    is measured.
+    """
+    body = _SCRIPT.read_text(encoding="utf-8")
+    runs = [ln for ln in body.splitlines()
+            if "uv run" in ln and not ln.lstrip().startswith("#")]
+    assert runs, "the script no longer invokes uv run at all"
+    for line in runs:
+        assert "--no-project" in line, (
+            f"`uv run` without `--no-project` inside the repo tree re-syncs the project venv "
+            f"and can swap the torch wheel underneath a measurement: {line.strip()}"
+        )
+
+
 def test_the_refusal_reason_names_this_script_and_this_script_exists() -> None:
     """The reason and the tracked step must not drift apart: the reason is what an operator
     reads at the refusal, and a named path that does not exist is worse than none."""

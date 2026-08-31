@@ -39,7 +39,13 @@ if ! grep -q 'WIN_THRESHOLD' "$CURRENT/minimax_bot.cpp"; then
   exit 4
 fi
 
-( cd "$CURRENT" && uv run --with pybind11 --with setuptools python setup.py build_ext --inplace )
+# `--no-project` IS LOAD-BEARING, and it was found the expensive way. Without it, `uv run`
+# executed from inside the repo tree RE-SYNCS THE PROJECT VENV — which on this project swaps
+# the CUDA torch wheel for the CPU one (the standing torch-select hazard). A NIGHTRUN-1 box
+# measurement silently fell back to CPU mid-mission because this line ran between two arms of
+# an A/B. The vendored engine's build has nothing to do with the mantis environment, so it
+# must not touch it.
+( cd "$CURRENT" && uv run --no-project --with pybind11 --with setuptools python setup.py build_ext --inplace )
 
 SO="$(find "$CURRENT" -maxdepth 1 -name 'minimax_cpp*.so' -print -quit)"
 if [ -z "$SO" ]; then
