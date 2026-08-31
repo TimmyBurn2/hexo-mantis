@@ -20,7 +20,7 @@
 //!    different position on a bad input, and a build error is a diagnostic.
 
 use mantis_graph::AxisGraph;
-use mantis_selfplay::queues::{build_leaf_graph, build_leaf_graphs_batch};
+use mantis_selfplay::queues::{build_leaf_graph, build_leaf_graphs_batch, LeafRequest};
 
 const WIN_LENGTH: u8 = 6;
 const RADIUS: u16 = 6;
@@ -36,7 +36,7 @@ fn splitmix64(s: &mut u64) -> u64 {
 
 /// `n` distinct positions of VARYING stone count, so a chunked split is non-trivial and the
 /// chunks are not interchangeable. A corpus of identical positions cannot see a reordering.
-fn corpus(n: usize) -> Vec<(Vec<(i64, i64, i64)>, i64, i64)> {
+fn corpus(n: usize) -> Vec<LeafRequest> {
     let mut s = 0x51AF_0E01_u64;
     (0..n)
         .map(|i| {

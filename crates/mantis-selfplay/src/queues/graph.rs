@@ -502,6 +502,12 @@ pub fn build_leaf_graph(
     Ok(graph)
 }
 
+/// One leaf-inference request as it crosses the FFI: `(stones, current_player,
+/// moves_remaining)`. Named rather than `#[allow]`ed past `clippy::type_complexity`, because
+/// the shape appears in three signatures and a reader meeting the bare tuple has to infer
+/// which `i64` is which.
+pub type LeafRequest = (Vec<(i64, i64, i64)>, i64, i64);
+
 /// Build one leaf graph per position across at most `n_threads` OS threads, returning them
 /// IN INDEX ORDER.
 ///
@@ -525,7 +531,7 @@ pub fn build_leaf_graph(
 /// named on the serial path. A panicking worker becomes a named error rather than a panic
 /// crossing the FFI (R2/LAW-13).
 pub fn build_leaf_graphs_batch(
-    positions: &[(Vec<(i64, i64, i64)>, i64, i64)],
+    positions: &[LeafRequest],
     win_length: u8,
     radius: u16,
     trunk_size: i32,
@@ -534,7 +540,7 @@ pub fn build_leaf_graphs_batch(
     if positions.is_empty() {
         return Ok(Vec::new());
     }
-    let build_one = |p: &(Vec<(i64, i64, i64)>, i64, i64)| {
+    let build_one = |p: &LeafRequest| {
         build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size)
     };
     let threads = n_threads.max(1).min(positions.len());
