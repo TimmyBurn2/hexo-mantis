@@ -1203,9 +1203,12 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         # flip to REQUIRED must stay the one-field data edit S8.5 claims it is.
         cadence=Cadence.CONSTRUCTION_TIME,
         cadence_paths=(),
-        status=Status.DEFERRED,
+        status=Status.REQUIRED,
         exit_code=None,
-        owner="the re-calibration sitting (R308(g)(i)); architect ratifies at its mint",
+        # F-RESIT-5: `owner` is NOT dropped on the flip, it is set to None. The dataclass takes
+        # it positionally, so removing the keyword is a TypeError at import — which is how this
+        # sitting rediscovered it, exactly where Δ8 said it would.
+        owner=None,
         source_pin=(
             "src/mantis/config/resolve/allocator_posture.py",
             "raise UncalibratedAllocatorPostureError(",
@@ -1233,13 +1236,15 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "DISARMED, which is the truth, and any member of the closed regime set as ARMED. "
             "exit_code is None, truthfully: this is a CONSTRUCTION-TIME refusal on the "
             "`UncalibratedFusedGraphCapsError` shape, not a `_fire_hard_abort` rule. "
-            "TO CLOSE THIS ROW: decide the posture at the box (the procedure's STEP 1b), mint "
-            "it into every production config IN THE SAME ACT as the caps it is fitted under -- "
-            "the posture and the pair are one regime and a config carrying one without the "
-            "other describes a machine state nobody measured -- and flip status to REQUIRED, "
-            "dropping `owner` as the dataclass then demands. The pin binds the resolver's own "
-            "placeholder refusal, so deleting it, renaming the error or softening the null "
-            "check to a default all break the R56 scan."
+            "CLOSED 2026-08-31 by RECAL-SITTING-5's mint under R326. The posture was decided "
+            "at the box -- `expandable_segments`, the regime the frag probe measured "
+            "1.2487863035511424 under -- and minted into all seven configs IN THE SAME ACT as "
+            "the caps fitted under it, because the posture and the pair are one regime and a "
+            "config carrying one without the other describes a machine state nobody measured. "
+            "Status is REQUIRED and `owner` is None -- NOT dropped: the dataclass takes it "
+            "positionally and removing the keyword is a TypeError at import (F-RESIT-5). The pin "
+            "binds the resolver's own placeholder refusal, so deleting it, renaming the error "
+            "or softening the null check to a default all break the R56 scan."
         ),
     ),
 )

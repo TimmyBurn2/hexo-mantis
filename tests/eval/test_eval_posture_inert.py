@@ -7,16 +7,31 @@
 # is exactly how an inertness suite rots into a suite that passes against dead code.
 """THE INERTNESS PROOF for the two early-strength eval postures (F-R-P2B-5).
 
-The claim under test is narrow and total: **with `eval.ply_cap_adjudication: null` and
+The claim under test WAS narrow and total: **with `eval.ply_cap_adjudication: null` and
 `eval.strength_floor: null` — the value every committed config mints — the run's observable
-behaviour is identical to the tree before these keys existed.** "Observable" is enumerated
-rather than gestured at, one test per surface:
+behaviour is identical to the tree before these keys existed.**
 
-  1. the SHIPPED VALUE — every config under `configs/` states both postures and states them
-     `null`, so the claim is about the tree as committed and not about a hypothetical config;
-  2. the RESOLVERS — both return `None` for every committed config, so nothing downstream is
-     ever handed a spec;
-  3. the ROUND SPEC — the pipeline's own `_build_round_spec` puts `None` on both fields;
+**ONE HALF OF THAT IS NO LONGER TRUE, AND THE ROWS BELOW SAY SO BY NAME RATHER THAN BY GOING
+QUIET.** RECAL-SITTING-5's mint (R326, values R324(d), scope Δ10.5) ARMED `eval.strength_floor`
+on the PRODUCTION PAIR — `run5.yaml` and `shakedown_20260807.yaml` — and on nothing else.
+`ply_cap_adjudication` is untouched and still inert everywhere. So the claim splits:
+
+  * `ply_cap_adjudication` — INERT on all seven, the original claim, unchanged;
+  * `strength_floor` — ARMED on exactly `_ARMED_STRENGTH_FLOOR`, INERT on the rest.
+
+**THE ARMED SET IS A CLOSED, NAMED CONSTANT AND NOT A PREDICATE OVER THE FILES.** That is the
+whole value of this suite: a row that simply read whatever the configs happen to say would go
+green on an arming that arrived without a ruling, which is the exact event it exists to refuse.
+Widening `_ARMED_STRENGTH_FLOOR` is a mint act with a ruling behind it, not a maintenance edit.
+
+"Observable" is enumerated rather than gestured at, one test per surface:
+
+  1. the SHIPPED VALUE — every config under `configs/` STATES both postures, and states them
+     `null` except where the ruling arms one, so the claim is about the tree as committed and
+     not about a hypothetical config;
+  2. the RESOLVERS — they return `None` for every committed config except the armed pair, where
+     they must return a real spec, so nothing downstream is ever handed a spec by accident;
+  3. the ROUND SPEC — the pipeline's own `_build_round_spec` carries what the config states;
   4. the RESULT JSON — the worker's sidecar payload carries EXACTLY the six required keys,
      no `strength_floor` and no `ply_cap_adjudication`, so a consumer iterating the key set
      sees the same set it saw before;
@@ -38,6 +53,7 @@ import pytest
 import yaml
 
 from mantis.config.loader import discover_configs, load_config
+from mantis.config.schema.core import StrengthFloorConfig
 from mantis.config.resolve.eval_posture import (
     PlyCapAdjudicationSpec,
     StrengthFloorSpec,
@@ -74,15 +90,49 @@ def test_every_committed_config_states_both_postures_and_states_them_disarmed(pa
         f"operator-owned values; this suite is the instrument that refuses one arriving "
         f"without a ruling."
     )
-    assert raw["eval"]["strength_floor"] is None, f"{path.name} arms the strength floor"
+    floor = raw["eval"]["strength_floor"]
+    if path.name in _ARMED_STRENGTH_FLOOR:
+        assert isinstance(floor, dict), (
+            f"{path.name} is in the RULED armed set (R326 / Δ10.5) and must carry a real "
+            f"block; got {floor!r}. A ruled arming that silently reverted to `null` would "
+            "disarm the gate-integrity guard with nothing announcing it"
+        )
+        assert set(floor) == set(StrengthFloorConfig.model_fields), (
+            f"{path.name}: an armed floor states ALL of its terms — the set is read off the "
+            f"schema, so a fourth term cannot arrive half-minted; got {sorted(floor)}"
+        )
+    else:
+        assert floor is None, (
+            f"{path.name} arms the strength floor, and it is NOT in the ruled armed set "
+            f"{sorted(_ARMED_STRENGTH_FLOOR)}. Arming is a MINT-PREREG event with "
+            "operator-owned values; this row is what refuses one arriving without a ruling"
+        )
 
 
 # ── 2. the resolvers ───────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("path", _config_paths(), ids=lambda p: p.name)
-def test_both_resolvers_return_none_for_every_committed_config(path) -> None:
+def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> None:
     cfg = load_config(path)
     assert resolve_ply_cap_adjudication(cfg.eval) is None
-    assert resolve_strength_floor(cfg.eval) is None
+    floor = resolve_strength_floor(cfg.eval)
+    if path.name in _ARMED_STRENGTH_FLOOR:
+        assert floor is not None, (
+            f"{path.name} is in the ruled armed set but its resolver still answers None — the "
+            "value would be minted and inert, which is the silently-disabled-knob class R1 and "
+            "LAW-08 exist to kill"
+        )
+    else:
+        assert floor is None
+
+
+#: The configs a RULING has armed `eval.strength_floor` on. CLOSED, NAMED, and widened only by
+#: a mint act with a ruling behind it — R326 / the RECAL-SITTING-5 forwarding §0.3, values
+#: R324(d) (`probe_games 4`, `min_decisive_rate 0.25`, `min_winrate 0.0`), scope Δ10.5 (the
+#: production pair only, because no armed-abort row exists for `strength_floor`).
+#:
+#: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
+#: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
+_ARMED_STRENGTH_FLOOR = frozenset({"run5.yaml", "shakedown_20260807.yaml"})
 
 
 def _armed_config():
@@ -150,13 +200,20 @@ class _StubModel:
         return {}
 
 
-def test_the_production_round_spec_carries_none_for_both_postures(tmp_path, monkeypatch) -> None:
+def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monkeypatch) -> None:
+    """`run5.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
+    process seam. A spec that dropped it would leave the value minted, audited and inert — the
+    knob reporting armed while nothing reads it."""
     monkeypatch.setattr(
         "mantis.eval.pipeline.write_model_snapshot", lambda model, path: str(path)
     )
     spec = _spec_from("run5.yaml", tmp_path)
     assert spec.ply_cap_adjudication is None
-    assert spec.strength_floor is None
+    assert "run5.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
+    assert spec.strength_floor is not None, (
+        "run5's armed floor did not reach the round spec — minted and inert"
+    )
+    assert spec.strength_floor.probe_games >= 1
 
 
 def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:

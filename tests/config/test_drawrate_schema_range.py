@@ -67,6 +67,14 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
+#: run5's OWN evidence ceiling, `DRAW_RATE_WINDOW * selfplay.n_workers`, read off the live
+#: config. Derived here once so every arm below follows a re-minted `n_workers` instead of
+#: asserting a literal that was only true at a particular pick (R192(e), and RECAL-SITTING-5's
+#: mint is the event that proved it).
+_RUN5_EVIDENCE_CEILING = DRAW_RATE_WINDOW * load_config(
+    CONFIGS_DIR / "run5.yaml").selfplay.n_workers
+
+
 def _with_block(payload):
     """run5's own minted dump with `train.draw_rate_abort` REPLACED WHOLESALE, re-validated.
 
@@ -137,8 +145,13 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "threshold .inf — the same class at the limit":
             ({**armed, "threshold": float("inf")}, "threshold"),
         "threshold true — a bool is not a fraction": ({**armed, "threshold": True}, "threshold"),
-        "N_pool_min 51 — unreachable evidence on a 1-worker pool (R92's fourth axis)":
-            ({**armed, "N_pool_min": 51}, "N_pool_min"),
+        # DERIVED, not transcribed. This read `51` while run5 was a one-worker pool; the
+        # RECAL-SITTING-5 mint took `selfplay.n_workers` to the Phase W pick and 51 became
+        # perfectly reachable, so the literal stopped describing the defect it names. The
+        # ceiling is `DRAW_RATE_WINDOW * n_workers` read off the LIVE config, so this arm
+        # follows any future pick instead of going quietly green (R192(e)).
+        "N_pool_min one above the pool's OWN ceiling — unreachable evidence (R92's 4th axis)":
+            ({**armed, "N_pool_min": _RUN5_EVIDENCE_CEILING + 1}, "N_pool_min"),
         "N_pool_min 0 — no pool ever banks fewer than zero games, so the bar is inert":
             ({**armed, "N_pool_min": 0}, "N_pool_min"),
         "min_step 0 — the ADJ-14 hair-trigger the R80 guards exist to close":
@@ -208,18 +221,22 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     count is raised. The behaviour the bound describes is
     `tests/selfplay/test_drawrate_pooled_statistic.py`.
     """
-    assert load_config(CONFIGS_DIR / "run5.yaml").selfplay.n_workers == 1, (
-        "harness precondition: run5 is a ONE-worker pool, which is what makes 50 the ceiling "
-        "here. If this ever changes the two boundary arms below move with it"
-    )
-    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW})
-    assert at_ceiling.train.draw_rate_abort.N_pool_min == DRAW_RATE_WINDOW, (
-        "AT the ceiling the bar is satisfiable (the deque saturates exactly there), so it "
+    # THE PRECONDITION IS DERIVED, NOT PINNED. It used to assert `n_workers == 1` and say "if
+    # this ever changes the two boundary arms below move with it". It changed — RECAL-SITTING-5
+    # minted the Phase W pick — so the arms move WITH the config instead of pinning the value
+    # that made the old arithmetic convenient. The property under test never depended on the
+    # pool being one worker; only the literals did.
+    ceiling = _RUN5_EVIDENCE_CEILING
+    assert ceiling == DRAW_RATE_WINDOW * load_config(
+        CONFIGS_DIR / "run5.yaml").selfplay.n_workers, "the ceiling is derived, never assumed"
+    at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": ceiling})
+    assert at_ceiling.train.draw_rate_abort.N_pool_min == ceiling, (
+        "AT the ceiling the bar is satisfiable (the deques saturate exactly there), so it "
         "must load — a bound that also forbade the reachable value would disarm the abort"
     )
 
     with pytest.raises(ValidationError) as caught:
-        _with_block({**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1})
+        _with_block({**RUN5_PREREG, "N_pool_min": ceiling + 1})
     assert "N_pool_min" in str(caught.value) and "n_workers" in str(caught.value), (
         "one game above the ceiling must be REJECTED, and the message must name BOTH keys: "
         "the operator cannot act on 'too big' without knowing what it is too big FOR; got "
@@ -227,13 +244,13 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     )
 
     wider = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
-    wider["selfplay"]["n_workers"] = 2
-    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": DRAW_RATE_WINDOW + 1}
-    assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == (
-        DRAW_RATE_WINDOW + 1), (
-        "the SAME value must be accepted on a two-worker pool: the bound is the PRODUCT "
-        "`DRAW_RATE_WINDOW * selfplay.n_workers`, not a re-spelled `le=DRAW_RATE_WINDOW`. "
-        "Without this arm the cross-section rule is indistinguishable from a field bound"
+    wider["selfplay"]["n_workers"] = wider["selfplay"]["n_workers"] + 1
+    wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": ceiling + 1}
+    assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == ceiling + 1, (
+        "the SAME value must be accepted once the pool is ONE worker wider: the bound is the "
+        "PRODUCT `DRAW_RATE_WINDOW * selfplay.n_workers`, not a re-spelled "
+        "`le=DRAW_RATE_WINDOW`. Without this arm the cross-section rule is indistinguishable "
+        "from a field bound"
     )
 
 

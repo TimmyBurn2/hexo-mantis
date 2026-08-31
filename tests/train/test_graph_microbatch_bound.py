@@ -282,12 +282,29 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
 #:                 [measured 24ae93e, POST-Design-A, DEFAULT allocator posture]
 #:   = 9.850 GiB   allocatable
 #:
-#: **THE RE-FIT CONFIRMS THIS CONSTANT RATHER THAN MOVING IT.** 9.431 sits 0.419 GiB under the
-#: 9.850 the measured terms now admit, so the trainer's half of the partition is unchanged and
-#: `train.microbatch_caps` does not move. What changed is that the two terms the old derivation
-#: could not see are now SUBTRACTED EXPLICITLY instead of being hidden inside a margin: the
-#: eval child is measured, and the self-play term is measured WITH fusion active at the caps
-#: actually minted.
+#: **THE RE-FIT CONFIRMED THIS CONSTANT RATHER THAN MOVING IT** — 9.431 sat 0.419 GiB under the
+#: 9.850 the measured terms admitted — and **R326(b) HAS NOW MOVED IT ANYWAY, on a different
+#: ground: the permission was never DERIVED from what the trainer needs.** Both derivations above
+#: compute what the CARD can spare; neither asks what the step DRAWS. Measured across two
+#: sittings on two shas, the step draws **7 992 252 928 B = 7.443 GiB**, byte-identical. The
+#: cap-permitted ceiling was `9.431 x frag = 11.777 GiB`, **77.4 % of the whole card for a step
+#: that uses 7.443** — a 4.33 GiB gap between permitted and drawn, and it is that gap, not any
+#: measurement, that refused the partition at sittings 3 and 4.
+#:
+#:     7.443 GiB   MEASURED trainer peak, this oracle, reproduced to the byte
+#:                 [RECAL_SITTING3_RECORD:354 and RECAL_SITTING4_RECORD:275]
+#:   x 1.129       stated allowance, +12.9 %
+#:   = 8.40 GiB    the permission, ARMED by the operator's RECAL-SITTING-5 forwarding
+#:
+#: **THE CEILING CONVENTION IS UNCHANGED:** the partition term is still `budget x frag`, the
+#: PERMISSION and not the draw. Only the permission shrank. The closing boundary — the largest
+#: budget at which conjunct-2 headroom still equals M — was re-derived independently at
+#: pre-flight as **8.4669** against the sitting's 8.4666, and 8.40 clears it by 0.067.
+#:
+#: **WHAT THIS COSTS THIS ROW, so the next reader is not surprised by it:** the margin below is
+#: budget-relative, so 7.443 under 8.40 reads **11.4 %** where it read 21.1 % under 9.431. That
+#: is under `_REQUIRED_MARGIN` and the row therefore reports PASS-WITH-DISCLOSURE. It is
+#: arithmetic, not a regression: 12.9 % over the NEED is 11.4 % of the BUDGET.
 #:
 #: **On the old 0.85 margin, which is no longer applied here.** It was sized for two NAMED
 #: unknowns. One — the eval child — is now a measured, subtracted term. The other — a
@@ -311,7 +328,12 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
 #:
 #: Transcribed ONCE, here, with the arithmetic beside it so a reader can re-derive it rather
 #: than trust it. If the operator re-sizes, this constant and the EDGE-CAP row move together.
-_SIZING_BUDGET_GIB = 9.431
+#:
+#: **AND A SECOND CONSTANT DOES NOT MOVE WITH IT — READ `test_graph_microbatch_authority.py`
+#: BEFORE ASSUMING IT SHOULD.** That file carries its own `_SIZING_BUDGET_BYTES` for the SIZING
+#: FRONTIER, and R326(b) deliberately left it where it was. The two are the same nominal
+#: quantity in two different denominations, and the disagreement is recorded there, not resolved.
+_SIZING_BUDGET_GIB = 8.40
 _SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)
 
 #: PREREG_DFIX §4, OF2-10 leg 2: PASS is "<= the budget with >= 15% margin".
@@ -379,7 +401,8 @@ def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
 @pytest.mark.skipif(not torch.cuda.is_available(),
                     reason="OF2-10 leg 2 measures the max_memory_allocated DELTA over one real "
                            "graph training step at (E, N) ~ the MINTED caps, with run5's own "
-                           "arch, against the sizing pass's 9.431 GiB budget; it needs the CUDA "
+                           f"arch, against the sizing pass's {_SIZING_BUDGET_GIB} GiB budget; "
+                           "it needs the CUDA "
                            "device the sizing pass measured. LOUD SKIP: the MEASURED half does "
                            "NOT run here and this phase claims no peak-allocation measurement "
                            "from CI. What DOES run device-free: leg 1's structural bound, the "
@@ -494,8 +517,11 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
     under the dispatcher's pre-commit review.
 
     RENAMED AND TIGHTENED. The first version asserted only `peak <= budget` while its name
-    promised a comparison against the 1x step — and at the predicted 9.318 GiB against a 9.431
-    GiB budget that left **~14% (1.161 GiB) of slack a leak could hide in**. It now measures
+    promised a comparison against the 1x step — and at the predicted 9.318 GiB against the
+    9.431 GiB budget OF THAT TIME that left **~14% (1.161 GiB) of slack a leak could hide in**.
+    (R326(b) has since re-derived the budget to 8.40; the figure above is left at the value the
+    defect was measured against, because re-computing a historical slack at a later budget would
+    describe a comparison nobody ran.) It now measures
     BOTH steps in the same process and compares them directly, so the name and the assertion
     say the same thing. A leak that scales peak with the INPUT reads ~2.0 and cannot hide in
     the budget's headroom.

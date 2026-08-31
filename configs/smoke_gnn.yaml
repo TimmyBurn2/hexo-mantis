@@ -3,11 +3,13 @@
 # delta: run_id: template_dev -> smoke_gnn
 # delta: seed: 20260716 -> 20260719
 # delta: train.max_train_steps: 1000000 -> 2000
+# delta: allocator_posture: null -> expandable_segments
+# delta: selfplay.n_workers: 1 -> 14
 schema_version: 1
 run_id: smoke_gnn
 seed: 20260719
 eval_enabled: true
-allocator_posture: null
+allocator_posture: expandable_segments
 identity:
   encoding: gnn_axis_v1
   representation: graph
@@ -146,7 +148,7 @@ train:
   ply_index_weight: 0.0
   threat_pos_weight: 1.0
 selfplay:
-  n_workers: 1
+  n_workers: 14
   leaf_batch_size: 8
   max_game_moves: 128
   inference_pool_size: null

@@ -189,6 +189,28 @@ def _template_caps_of(config_name: str) -> dict:
 #: correct (the model says it would exceed the budget) but leaves little room, and it means a
 #: re-sized BUDGET must move these constants in step. They are transcribed together for that
 #: reason.
+#:
+#: **AND A BUDGET WAS RE-SIZED, AND THIS CONSTANT DID NOT MOVE WITH IT. R326(b), 2026-08-31.**
+#: `test_graph_microbatch_bound.py`'s `_SIZING_BUDGET_GIB` went 9.431 → **8.40**, re-derived as
+#: the trainer's MEASURED peak (7.443 GiB, byte-identical across two sittings) plus a stated
+#: 12.9 %. The sentence above says these constants move in step. **They did not, and the reason
+#: is that they are the same nominal quantity in two DIFFERENT DENOMINATIONS:**
+#:
+#:   * that file's budget bounds a MEASURED `max_memory_allocated` delta — 7.443 GiB observed;
+#:   * this one bounds a MODELLED per-micro-batch peak — `a + b·E + c·N`, which for the shipped
+#:     pair predicts **9.318 GiB**, i.e. the model runs **25.2 % ABOVE the measurement** on
+#:     current code. Model and budget were fitted together at `528eb37` and are stale together.
+#:
+#: Moving this constant to 8.40 would red the row below on the SHIPPED, measured-green pair
+#: (predicted 9.318 against 8.400 = −10.9 % headroom) and demand a re-fit of
+#: `train.microbatch_caps` — which is **circular**, because shrinking those caps lowers the very
+#: peak 8.40 was derived from.
+#:
+#: **THIS IS RECORDED, NOT RULED.** The question — one quantity with two instruments, or two
+#: quantities that coincided by history — is the architect's, filed at
+#: `plan/RECAL_SITTING5_RECORD_2026-08-31.md` §2.6 with both arms measured. Until it is answered
+#: this row keeps asserting the shipped pair is sized under the frontier's OWN budget, which is
+#: a true statement about the model; it is no longer a statement about the trainer's permission.
 _FIT_INTERCEPT_BYTES = 34_752_164
 _FIT_BYTES_PER_EDGE = 1_620.96
 _FIT_BYTES_PER_NODE = 15_741.05

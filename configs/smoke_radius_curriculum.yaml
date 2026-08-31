@@ -4,11 +4,13 @@
 # delta: seed: 20260716 -> 20260721
 # delta: identity.encoding: v6_live2_ls -> v6w25
 # delta: train.max_train_steps: 1000000 -> 2000
+# delta: allocator_posture: null -> expandable_segments
+# delta: selfplay.n_workers: 1 -> 14
 schema_version: 1
 run_id: smoke_radius_curriculum
 seed: 20260721
 eval_enabled: true
-allocator_posture: null
+allocator_posture: expandable_segments
 identity:
   encoding: v6w25
   representation: grid
@@ -144,7 +146,7 @@ train:
   ply_index_weight: 0.0
   threat_pos_weight: 1.0
 selfplay:
-  n_workers: 1
+  n_workers: 14
   leaf_batch_size: 8
   max_game_moves: 128
   inference_pool_size: null

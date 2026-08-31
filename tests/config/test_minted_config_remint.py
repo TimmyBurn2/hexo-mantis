@@ -75,6 +75,7 @@ import yaml
 
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
+from mantis.config.schema.core import StrengthFloorConfig
 
 _REPO = Path(__file__).resolve().parents[2]
 _LIVE = _REPO / "configs"
@@ -145,6 +146,12 @@ _ADDED_LEAVES = {
     # a mint-prereg row, and this instrument is the thing that would catch an arming that
     # arrived without one.
     "eval.ply_cap_adjudication",
+    # ARMED at RECAL-SITTING-5's mint (R326 / §0.3, values R324(d)) on the PRODUCTION PAIR only,
+    # Δ10.5's derived scope. An armed block turns the one `null` leaf into THREE, so the
+    # allowance is per-config: `_ARMED_STRENGTH_FLOOR_CONFIGS` names exactly where the three
+    # replace the one, and every other config still gains the single disarmed scalar. Widening
+    # that set is a mint act with a ruling behind it, not an edit — the same sentence
+    # `_MOVED_LEAVES` and `_REMOVED_LEAVES` carry.
     "eval.strength_floor",
     # F-816-10 (R276(f)): `inference.fused_graph_caps` is a REQUIRED schema block, so every
     # config necessarily gains both leaves and the re-mint stays purely ADDITIVE — the textual
@@ -190,8 +197,20 @@ _ARCH_SCOPED_ADDED_LEAVES: dict[str, frozenset[str]] = {
 }
 
 
+#: The configs whose `eval.strength_floor` is ARMED, and the three leaves an armed block has.
+#: R326 / the RECAL-SITTING-5 forwarding §0.3; scope derived at Δ10.5 (the production pair only,
+#: because no armed-abort row exists for `strength_floor`, so a disarmed one reds no audit).
+#: DERIVED from the schema rather than typed, so a fourth term added to `StrengthFloorConfig`
+#: cannot leave a stale three-element list behind.
+_ARMED_STRENGTH_FLOOR_CONFIGS = frozenset({"run5.yaml", "shakedown_20260807.yaml"})
+_STRENGTH_FLOOR_LEAVES = frozenset(
+    f"eval.strength_floor.{field}" for field in StrengthFloorConfig.model_fields
+)
+
+
 def _added_leaves_for(name: str) -> frozenset[str]:
-    """`_ADDED_LEAVES`, minus every arch-scoped block this config's representation lacks.
+    """`_ADDED_LEAVES`, minus every arch-scoped block this config's representation lacks, with
+    the ARMED `eval.strength_floor` block expanded to its own leaves where it is armed.
 
     The representation is read off the LIVE config through the one loader — structure, not a
     name list — so re-minting a config to the other representation moves its expectation with
@@ -202,7 +221,12 @@ def _added_leaves_for(name: str) -> frozenset[str]:
     for key in ARCH_SCOPED_KEYS:
         if arch != key.arch:
             excluded |= _ARCH_SCOPED_ADDED_LEAVES[f"{key.section}.{key.field}"]
-    return frozenset(_ADDED_LEAVES) - excluded
+    allowed = frozenset(_ADDED_LEAVES) - excluded
+    if name in _ARMED_STRENGTH_FLOOR_CONFIGS:
+        # `_leaves` stops at a `None`, so a DISARMED block is one leaf and an ARMED one is its
+        # three fields. The swap is exactly that, never a widening: the disarmed name goes.
+        allowed = (allowed - {"eval.strength_floor"}) | _STRENGTH_FLOOR_LEAVES
+    return allowed
 
 #: Exactly what a re-mint may REMOVE, ever — the one dead knob R178(a) ORDERED deleted
 #: (WP12-R, assigned to its dispatcher by R183(a); grounds R116/LAW-08 + the F-CS-2

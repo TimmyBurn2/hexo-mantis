@@ -78,7 +78,12 @@ class DrawRateAbortConfig(StrictModel):
       `DRAW_RATE_WINDOW * selfplay.n_workers` (measured — `Sum(len(dq))` saturates there),
       which spans two sections and so cannot live on this field. That cross-validator is
       what re-establishes the load-bearing bound `min_samples: le=DRAW_RATE_WINDOW` carried;
-      for every config on this tree (`n_workers: 1`) it evaluates to the same number.
+      the ceiling is now PER CONFIG. (Corrected in the same act as RECAL-SITTING-5's mint,
+      R311(h)/F-WS-4. The sentence here used to read "for every config on this tree
+      (`n_workers: 1`) it evaluates to the same number" — which Δ10.6 found was ALREADY false
+      before this mint, because `shakedown_20260807.yaml` minted `n_workers: 20`. The mint takes
+      every config to the Phase W pick, so the ceiling now varies with a leaf the operator sets
+      and a single number cannot describe it.)
 
     * `consec` — WPMINT Phase K-B (R78/R80, adjudication call K-b). The FOURTH term, and it
       is authored HERE rather than as a flat `train.*` key because R80's "the terms travel

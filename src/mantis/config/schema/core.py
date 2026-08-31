@@ -679,11 +679,18 @@ class RunConfig(StrictModel):
         It does **NOT** assert that the bar is REACHABLE. This validator used to be called
         `_draw_rate_evidence_bar_is_reachable`, and that name was an OVERCLAIM (ADJ-22):
         reachability depends on how many workers actually report, which load time cannot
-        see. At the ceiling (`N_pool_min == DRAW_RATE_WINDOW * n_workers`, which is run5's
-        posture — 50 == 50 x 1) EVERY configured worker must fill its entire window before
-        the bar is met, so a single silent worker leaves it unmet for the whole run while
-        the config validates clean. No config-time arithmetic can close that, because the
-        missing input is a runtime one.
+        see. At the ceiling (`N_pool_min == DRAW_RATE_WINDOW * n_workers`) EVERY configured
+        worker must fill its entire window before the bar is met, so a single silent worker
+        leaves it unmet for the whole run while the config validates clean. No config-time
+        arithmetic can close that, because the missing input is a runtime one.
+
+        RUN5 IS NO LONGER AT THAT CEILING, and the example is corrected rather than deleted
+        (R311(h)/F-WS-4, same act as RECAL-SITTING-5's mint). This paragraph read "which is
+        run5's posture — 50 == 50 x 1"; the mint takes `selfplay.n_workers` to the Phase W
+        pick, so run5's ceiling is `DRAW_RATE_WINDOW * 14` and `N_pool_min: 50` now sits far
+        below it. THE WARNING IS UNCHANGED AND IS NOT WEAKENED BY THAT: off the ceiling, the
+        bar needs a smaller FRACTION of the configured workers to report, but it still needs
+        some of them to, and load time still cannot see which do.
 
         R95 settles it by fixing the CLAIM rather than widening the check: **a validator's
         name and message may assert only what its inputs can witness.** Evidence sufficiency

@@ -2,19 +2,21 @@
 # template: dev
 # delta: run_id: template_dev -> shakedown-20260807
 # delta: seed: 20260716 -> 20260807
-# delta: selfplay.n_workers: 1 -> 20
+# delta: selfplay.n_workers: 1 -> 14
 # delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: train.microbatch_caps: {max_edges: 100000000, max_nodes: 4000000} -> {max_edges: 4500000, max_nodes: 170000}
 # delta: train.checkpoint_interval: 0 -> 25
 # delta: monitor.gate_interval: 1000 -> 100
 # delta: train.log_interval: 1000 -> 100
-# delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: 1708894, max_fused_nodes: 77781}
+# delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: 1165056, max_fused_nodes: 53028}
+# delta: allocator_posture: null -> expandable_segments
+# delta: eval.strength_floor: null -> {probe_games: 4, min_decisive_rate: 0.25, min_winrate: 0.0}
 schema_version: 1
 run_id: shakedown-20260807
 seed: 20260807
 eval_enabled: true
-allocator_posture: null
+allocator_posture: expandable_segments
 identity:
   encoding: gnn_axis_v1
   representation: graph
@@ -28,7 +30,10 @@ eval:
   round_timeout_sec: 3600.0
   worker_kill_grace_sec: 10.0
   ply_cap_adjudication: null
-  strength_floor: null
+  strength_floor:
+    probe_games: 4
+    min_decisive_rate: 0.25
+    min_winrate: 0.0
   gate:
     stride: 1
     screen_games: 80
@@ -157,7 +162,7 @@ train:
   ply_index_weight: 0.0
   threat_pos_weight: 1.0
 selfplay:
-  n_workers: 20
+  n_workers: 14
   leaf_batch_size: 8
   max_game_moves: 128
   inference_pool_size: null
@@ -213,8 +218,8 @@ inference:
   perf_timing: false
   perf_sync_cuda: false
   fused_graph_caps:
-    max_fused_edges: 1708894
-    max_fused_nodes: 77781
+    max_fused_edges: 1165056
+    max_fused_nodes: 53028
 monitor:
   gate_interval: 100
   alert_entropy_min: 1.0

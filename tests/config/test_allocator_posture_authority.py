@@ -98,16 +98,38 @@ def test_ap01_both_mint_templates_declare_the_posture_key():
         assert "allocator_posture" in data, path.name
 
 
-def test_ap03_every_committed_config_mints_the_null_placeholder():
-    """R308(g)(i): the posture VALUE mints at the re-sit, never in this dispatch.
+def test_ap03_every_committed_config_MINTS_A_MEASURED_POSTURE():
+    """The RE-SIT'S OWN MINT ACT, arriving. R326 / RECAL-SITTING-5, 2026-08-31.
 
-    This row is the one that fails the day someone mints a posture without a measurement, and
-    it is EXPECTED to be edited by the re-sit's own mint act — with a value beside it.
+    THE ROW IS INVERTED, NOT RELAXED, and its own predecessor asked for exactly this: it read
+    *"every committed config mints the `null` placeholder"* and said in its docstring that it
+    *"is EXPECTED to be edited by the re-sit's own mint act — with a value beside it."* The
+    value is beside it now: **`expandable_segments`**, the regime the fragmentation ratio
+    1.2487863035511424 was measured under at the box, and the regime the fitted
+    `inference.fused_graph_caps` are therefore only valid under.
+
+    WHAT THIS STILL CATCHES, which is why inverting is not weakening: a config that reverts to
+    `null` reds (the run would refuse to boot and nobody would know until it did), and a config
+    that mints a token OUTSIDE the closed vocabulary reds (a regime nobody measured, which is
+    the original defect wearing a different value). The set is read off `AllocatorPosture`
+    itself, so a third regime added to the enum needs no edit here.
+
+    WHAT IT DELIBERATELY DOES NOT DO: pin WHICH member. R119 keeps the value the operator's,
+    and a row asserting `== "expandable_segments"` would make a future re-calibration edit this
+    file to change a measurement.
     """
+    vocabulary = {p.value for p in AllocatorPosture}
     for path in discover_configs(CONFIGS_DIR):
-        assert load_config(path).allocator_posture is None, (
-            f"{path.name} mints a posture value. R308(g)(i) reserves that act for the "
-            "re-calibration sitting under R282(b); a token here is a regime nobody measured."
+        posture = load_config(path).allocator_posture
+        assert posture is not None, (
+            f"{path.name} carries the R119 `null` placeholder again. RECAL-SITTING-5 minted a "
+            "measured posture into all seven under R326; a cuda process REFUSES to boot on a "
+            "null, so this reverting is a run-fatal regression that no other row would see"
+        )
+        assert posture in vocabulary, (
+            f"{path.name} mints {posture!r}, which is not in the closed regime vocabulary "
+            f"{sorted(vocabulary)} — a token nobody measured is the defect this row was "
+            "written for, and it survives the inversion"
         )
 
 
@@ -510,13 +532,23 @@ def test_ap08_the_row_exists_and_names_the_top_level_key():
     assert row.cadence_paths == ()
 
 
-def test_ap08_the_row_is_deferred_and_therefore_owned_and_pinned():
-    """DEFERRED because the VALUE is a measurement nobody has taken (the class R84 refused).
-    A deferred row prints loudly on every gate-12 run and gates nothing."""
+def test_ap08_the_row_is_REQUIRED_and_therefore_unowned_and_still_pinned():
+    """FLIPPED at RECAL-SITTING-5's mint (R326). The measurement the row was waiting for exists.
+
+    `owner` is **None, not absent** — F-RESIT-5: `ArmedAbort` takes it positionally, so dropping
+    the keyword is a `TypeError` at import rather than a green gate. This sitting rediscovered
+    that by doing it, exactly where Δ8 said it would happen.
+
+    The pin STAYS. A REQUIRED row is more tamper-sensitive than a deferred one, not less: it now
+    gates every push, so a resolver refusal that was deleted or renamed would turn this row into
+    the phantom gate input LAW-07 exists to prevent."""
     row = _row("allocator_posture_minted")
-    assert row.status is Status.DEFERRED
-    assert row.owner, "a deferred row with no owner is debt nobody is chasing (R56)"
-    assert row.source_pin, "a deferred row that is not tamper-evident rots into the status quo"
+    assert row.status is Status.REQUIRED
+    assert row.owner is None, (
+        "a REQUIRED row has no owner — the debt is discharged; and it must be None rather than "
+        "removed, because the dataclass takes it positionally (F-RESIT-5)"
+    )
+    assert row.source_pin, "a required row that is not tamper-evident is worse, not better"
     assert row.exit_code is None
 
 
@@ -553,17 +585,20 @@ def test_ap08_the_existing_predicates_are_byte_unchanged_by_the_new_member(mecha
     assert mechanism.is_armed(value) is expected
 
 
-def test_ap08_gate_12_audit_still_passes_with_the_deferred_row(tmp_path):
-    """The row must not gate while it is DEFERRED — measured by running the gate, not
-    reasoned about (`${PIPESTATUS[0]}` discipline: rc read directly, never through a pipe)."""
+def test_ap08_gate_12_audit_passes_with_the_row_now_REQUIRED(tmp_path):
+    """The row now GATES, and the gate must be green — measured by running it, not reasoned
+    about (`${PIPESTATUS[0]}` discipline: rc read directly, never through a pipe).
+
+    THE ASSERTION MOVED FROM "IT PRINTS" TO "IT PASSES", and that is the whole point of the
+    flip. While DEFERRED the row printed loudly and gated nothing, so the only thing worth
+    asserting was that it printed. REQUIRED means every production config must carry an armed
+    posture or this gate reds — so rc 0 is now a statement about the CONFIGS, and a config that
+    reverted to `null` would fail here rather than being announced."""
     proc = subprocess.run(
         [sys.executable, "tools/ci_gates/preflight_mint.py", "--audit-only"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "allocator_posture_minted" in proc.stdout + proc.stderr, (
-        "a deferred row that prints nothing is a deferred row nobody sees"
-    )
 
 # ── the boot sites, derived from the tree rather than asserted in prose ──────────────────
 def test_the_run_process_asserts_before_its_first_cuda_allocation():
