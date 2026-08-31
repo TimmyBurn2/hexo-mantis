@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ f47a201, regenerated 2026-08-31.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 0ffe052, regenerated 2026-08-31.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.32, 2026-08-31. Created under R271 (register hygiene: archive/index split);
+# v3.33, 2026-08-31. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -770,6 +770,48 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # NINE-ACT MINT; and then **THE OWED BURST at the fitted caps — the `--source synthetic`
 # substitution's price (R303(c)), unpaid since 2026-08-22, paid before anything is called done.**
 # **MINT OR CARD-LEVEL FACT. NOTHING IN BETWEEN.**
+# **v3.33 = R327 folded in — the curation where THE MINT STOPS BEING A BRANCH.**
+# **RECAL-SITTING-5 AND THE MINT ARE BOTH RATIFIED.** Conjunct 2 closed at **+0.362485** against
+# `M = 0.350000` under the honestly derived cap — the first pass in three sittings, and it passes
+# because the permission was derived from what the trainer NEEDS rather than from what the card
+# could spare. **THE OWED BURST IS PAID:** joint peak **13.0596 GiB** against a declared partition
+# of 14.8555 and a usable card of 15.2180, the edge cap BINDING at exactly 1 165 056 throughout,
+# zero OOMs. **R303(c)'s price, unpaid since 2026-08-22, is DISCHARGED.**
+# **THE FROZEN-FILE GRANT IS ISSUED**, on the two-file diff presented at
+# `SITTING5_EVIDENCE/frozen_diff_presented.md` and nothing wider; `sitting5-mint` merges to `dev`,
+# full local sweep, push, `dev == origin/dev` verified. **The grant's evidentiary standard is met
+# for FILE 1 and not for FILE 2** — the presentation reserved file 2's exact text to the grant, so
+# the design choice falls to the executing session and is DERIVED there, on the record.
+# **`--margin` STAYS 0.85, PINNED AS PROCEDURE.** The partition's affordability edge is 0.8568 and
+# `k` turned out to BE the margin knob rather than a search outcome; moving the pin to the edge
+# AFTER observing it would be criterion movement. **The 0.86-refuses fact is RECORDED as the
+# partition being tight and honest** — which is what a bar that binds looks like.
+# **THE SECOND BUDGET AUTHORITY STAYS UNMOVED.** `_SIZING_BUDGET_BYTES = 10_126_561_000` in
+# `test_graph_microbatch_authority.py` is 9.431 GiB spelled in bytes and now disagrees with the
+# minted 8.40; consolidating to ONE authority is FILED as debt to the config-partition lane with
+# both measured arms attached, because moving it in step reds a frontier row and makes the
+# trainer's cap pair a tenth mint act — circular, since shrinking those caps lowers the very peak
+# 8.40 was derived from.
+# **THE CORPUS-INTEGRITY ORPHANS RE-HOME AGAINST THE LIVING BOOTSTRAP PATH, BY DERIVATION.** One
+# ruled deletion orphaned THREE symbols and the export census sees ONE, because it is scoped to
+# names beginning `resolve_`. The R279 sha-certification checks OUTLIVE the deleted loader — a
+# manifest handshake proves a file is the file it claims to be, NOT that it is outside the eval
+# hold-out set, and those are different properties. **The census sees three of three, or a grave
+# line says why not.**
+# **BC-EXEC-1 IS AUTHORIZED, AND THE RECIPE IS ARMED BY ENVELOPE RATHER THAN BY VALUE** — epochs
+# ≤ 5, peak lr ≤ 1e-3, batch = the trainer's minted 256, held-out ≥ 5 %, early-stop on held-out
+# policy loss. Pre-flight DERIVES the recipe from corpus statistics and RECORDS it before
+# execution; a recipe outside the envelope HALTs. **This is the R119 lock preserved in substance
+# while delegating the arithmetic** — the operator still owns the values, expressed as a boundary.
+# **THE ACCEPTANCE WITNESS IS PRE-REGISTERED BY THIS CURATION, NOT BY THE DOCUMENT THE CLAUSE
+# CITES.** R327(f) points at the filed adjudication's §4; §4 is THE CARRIED CAVEATS and that
+# document arms nothing by its own §7. The witness's two halves are real and each has a home —
+# the decisive rate at `ADJUDICATION_BOOTSTRAP_POSTURE.md` §2.2 (production `_play_floor_probe`,
+# `random_model_sims: 96`, measured 0/20 with an IDENTICAL fresh-init control) and the diffusion
+# signature at `EVAL_CHANNEL_1_RECORD.md` §5.2 (longest runs (1,1) every game, zero same-colour
+# adjacent pairs, 0.32–0.43 % density). **A failed witness RE-ADJUDICATES the recipe and returns
+# to the architect; the posture never silently degrades to (C).** NOTHING ELSE TRAINS; RUN6 DOES
+# NOT START.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -2096,6 +2138,50 @@ Verbatim text in the register; one-liners here are index only.
   `strength_floor` values); then **THE OWED BURST at the fitted caps — R303(c)'s unpaid price for
   the `--source synthetic` substitution, paid before anything is called done**.
   **MINT OR CARD-LEVEL FACT, NOTHING IN BETWEEN. RUN6 REMAINS HELD until the mint stands.**
+  **RATIFIED IN FULL by R327(a) (2026-08-31); this row EXPIRES.** The sequence ran to MINT: (f)'s
+  inheritance held (box HEAD `3e7fc54`, zero commits on top, STEP 1a re-run as a control and EXACT
+  on all three terms), (b)'s cap closed the partition, (c)/(d)/(e) all landed with their planted
+  breaks biting, and the burst paid R303(c). **The two amendments R327 MAKES:** (b)'s second
+  parenthetical is measured `M + 0.0125` and is superseded by the measurement, not by a re-ruling;
+  and (d)'s deletion is confirmed correct but INCOMPLETE in its census — it orphaned three symbols
+  where the instrument sees one, which R327(e) sends back.
+
+- **R327 — the mint closes, and the pretrain runs against a witness. LIVE, expires at
+  MINT-CLOSE + BC-EXEC-1's exit screen.** **(a) RATIFIES sitting 5 AND the mint**, and DISCHARGES
+  **R303(c)** — conjunct 2 `+0.362485` vs `M 0.350000`, joint peak `13.0596` vs declared `14.8555`
+  and usable `15.2180`, edge cap binding at exactly `1 165 056`, zero OOMs. The R318(e)/R319(g)
+  mis-citation carried by two sittings is **corrected of record**; the sitting's five self-caught
+  errors and its LAW-03 plies/turns catch stand on its ledger.
+  **(b) FROZEN-FILE GRANT** — `tests/config/test_armed_abort_manifest.py` and
+  `tests/tools/test_preflight_mint_process.py`, exactly the presented diff and **nothing wider**;
+  no subset leaves both green and none is attempted; **same-act re-pin (R290(e)) is a term of it**.
+  `sitting5-mint` merges to `dev`, full local sweep, push, `dev == origin/dev` verified.
+  **(c) `--margin` STAYS 0.85, PINNED AS PROCEDURE.** The affordability edge is 0.8568 and `k` IS
+  the margin knob; moving the pin after observing the edge would be **criterion movement**. The
+  `0.86`-refuses fact is RECORDED as the partition being tight and honest.
+  **(d) THE SECOND BUDGET AUTHORITY STAYS UNMOVED** — `_SIZING_BUDGET_BYTES = 10_126_561_000`
+  (`test_graph_microbatch_authority.py:217`) against the minted `_SIZING_BUDGET_GIB = 8.40`.
+  Consolidation to ONE authority is **FILED as debt to the config-partition lane** with both
+  measured arms as grounds; moving it in step is circular and would make the cap pair a tenth mint
+  act.
+  **(e) THE CORPUS-INTEGRITY ORPHANS RE-HOME against the living bootstrap path BY DERIVATION** —
+  the R279 sha-certification checks OUTLIVE the deleted loader, because a manifest handshake proves
+  identity and NOT hold-out exclusion. **The census sees three of three, or a grave line says why
+  not.**
+  **(f) BC-EXEC-1 AUTHORIZED under an ENVELOPE-ARMED recipe** — epochs ≤ 5, peak lr ≤ 1e-3, batch =
+  the minted `train.batch_size: 256`, held-out ≥ 5 %, early-stop on held-out policy loss; pre-flight
+  DERIVES and RECORDS the recipe before execution and a recipe outside the envelope **HALTs**. The
+  supervised phase runs on the box against the minted configs, through the seam's graph route — the
+  rerouted pretrain CLI's **first production execution**. **THE ACCEPTANCE WITNESS:** the post-BC
+  checkpoint, vs random, clears the armed `strength_floor` decisive rate (`probe_games: 4`,
+  `min_decisive_rate: 0.25`, `min_winrate: 0.0`, `configs/run5.yaml:31-34`), and its longest-run
+  distribution shows CONTESTED play — the measured diffusion signature ABSENT. **The clause cites
+  the filed adjudication's §4 and the witness is not there** (§4 is THE CARRIED CAVEATS; that
+  document arms nothing, §7); the two halves live at `ADJUDICATION_BOOTSTRAP_POSTURE.md` §2.2 and
+  `EVAL_CHANNEL_1_RECORD.md` §5.2, and the witness is pre-registered by THIS curation.
+  **A failed witness RE-ADJUDICATES the recipe and returns to the architect; the posture never
+  silently degrades to (C).** The checkpoint is an artifact with provenance (corpus sha, recipe,
+  net hash). **NOTHING ELSE TRAINS; RUN6 DOES NOT START.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4652,3 +4738,80 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing (the mint is a box act, on a branch,
   after conjunct 2 clears), moves no committed config, changes no `armed_aborts.py` row, and
   writes no value into `configs/`. **RUN6 REMAINS HELD.**
+
+- 2026-08-31 — **v3.33** curated by the MINT-CLOSE + BC-EXEC-1 execution session, landing **R327**,
+  authored in the ARCH-ERA architect session under R303(d) and forwarded by the operator (the
+  forwarding IS the authorization, and this one **DOES consume operator locks**: it issues the
+  FROZEN-FILE grant on two paths, orders `sitting5-mint` to `dev` and the push, and arms the BC
+  recipe **BY ENVELOPE** rather than by value — epochs ≤ 5, peak lr ≤ 1e-3, batch = the minted 256,
+  held-out ≥ 5 %, early-stop on held-out policy loss).
+  **Landing checks, each re-run rather than inherited:** census before `R23–R326, 297 sections /
+  297 distinct / 0 duplicates, excluded set 53`, after `R23–R327, 298 / 298 / 0, excluded set 53`,
+  missing-in-range `{24, 29, 32, 33, 227, 228, 267}` both times; `--stamp` read
+  `STAMP OK: stamp v3.32 == §8 last entry v3.32` before this edit; `--self-test` all four controls
+  fire. **`grep -rn 'R327' plan/` returned NOTHING AT ALL and the live-placeholder check likewise**
+  — the R323–R325 formula holds verbatim here, unlike at R326, and both greps were read with
+  `set -o pipefail` and their hit counts derived from a file rather than from a pipeline's exit
+  code, which is the `${PIPESTATUS[0]}` class sitting 5 disclosed as its own second error. Second
+  independent transcription with `R{next}` intact, diffed against the first BEFORE substitution —
+  **IDENTICAL, 32 lines** — then `sed`-substituted and diffed again; `diff` of the two
+  `awk`-extracted blocks (register entry vs canonical home `PACKET_R327_MINT_CLOSE_BC_EXEC.md`) is
+  **EMPTY**.
+  **THE CURATION'S OWN FINDING: CLAUSE (f)'S WITNESS CITATION IS WRONG, AND IT IS THE CLAUSE THAT
+  CARRIES THE ACCEPTANCE CRITERION.** R327(f) calls the witness *"the filed adjudication's §4,
+  pre-registered"*. `plan/ADJUDICATION_BOOTSTRAP_POSTURE.md` §4 is **"THE CARRIED CAVEATS"** — the
+  zero-draw-mass F-07 adjacency, the ≥20-move selection floor, the ~1100-Elo label noise — and that
+  document's §7 says of itself *"It arms nothing, mints nothing … no `strength_floor` term."* So
+  the witness is not pre-registered there and §4 is not where any half of it lives. **Both halves
+  are real and each has a home:** the decisive-rate half at §**2.2** (the production
+  `_play_floor_probe` at run5's own `random_model_sims: 96`, 20 games per arm, `0` decisive for the
+  step-25 candidate and `0` for the fresh-init CONTROL — the control reading identically is the
+  finding), and the longest-run half at `plan/EVAL_CHANNEL_1_RECORD.md` §**5.2**, where the
+  diffusion signature is measured: longest runs `(1, 1)` in every game, same-colour adjacent pairs
+  `0, 0` in every game, 128 stones at `0.32–0.43 %` density across spans of 117–301 cells. **The
+  witness is EXECUTABLE exactly as the clause words it** — it is self-contained — so nothing is
+  blocked; what is false is the pointer and the word *pre-registered*. **It is pre-registered by
+  THIS curation**, against those two instruments and the armed floor at `configs/run5.yaml:31-34`.
+  This is the same class as the R318(e)/R319(g) mis-citation clause (a) corrects, one ruling later,
+  caught before it was carried into an execution.
+  **A SECOND FINDING, ON THE GRANT ITSELF, AND IT CHANGES WHAT THE EXECUTION OWES.** R310(f) adds a
+  conjunct to R308(f): *a presented diff is a MEASURED diff* — applied, driven, a planted break per
+  new assertion. Sitting 5 met that for **FILE 1** and could not for **FILE 2**: its presentation
+  says in its own words that the exact diff *"is not written out here because it depends on a design
+  choice inside a frozen file … and R308(f) reserves that to the grant."* R327(b) nonetheless states
+  the complete diff satisfies the evidentiary standard, which is the architect's call to make.
+  **The consequence is booked rather than waived:** the reserved design choice falls to the
+  executing session and must be DERIVED with its ground stated, and R310(f)'s drive — planted break
+  per new assertion, red before, green after, neighbours untouched — is owed **at execution** since
+  it could not be paid at presentation. **And the file-2 red is wider than the presentation says:**
+  measured at `1203f74`, the mint adds **three** deltas the twin does not carry
+  (`eval.strength_floor`, which diverges the KEY SET and fires first; `allocator_posture`;
+  `selfplay.n_workers`), so the row fails one assertion EARLIER than the line the presentation
+  names. RED BEFORE is nevertheless **exactly two rows**, independently measured
+  (`2 failed, 171 passed, 6 deselected`), which confirms the sitting's central claim.
+  **Five index lines spot-checked against the verbatim register (R271(d)/R272(b)), chosen because
+  this landing leans on all five:** **R308(f)** (`rulings_register.md:6604-6606` — present the exact
+  diff with the verbatim frozen rows, grant issues then, naming the path, same-act re-pin; index
+  `:318`, accurate), **R310(f)** (`:6867` — a presented diff is a MEASURED diff; index `:1217`,
+  accurate and quoted rather than paraphrased), **R290(e)** (`:5768`, `:6584` — same-act re-pin is a
+  TERM; index `:1127`, accurate, and it quotes its own lesson verbatim), **R279(b)** (index `:4623`
+  carries the certification's words in quotes — accurate), and **R119** (index `:1403` — armed
+  values are MINT-PREREG ONLY, no dispatcher touches them; accurate, and it is exactly the lock
+  R327(f) preserves by arming an ENVELOPE instead of values). **No index line was widened by this
+  curation, and none was found overclaiming.**
+  **Index edits, four and no more:** the v3.33 header block; the stamp (which rides it, R284(f));
+  an **amendment appended to §5's R326 row** — RATIFIED, the row EXPIRES, carrying the two
+  amendments R327 makes (its (b) partition margin superseded by measurement; its (d) census
+  INCOMPLETE, three orphans against one instrument); and a **new §5 LIVE row for R327**. Nothing
+  was deleted.
+  **WHAT THIS RULING SETTLES.** Two things, and they pull in opposite directions on purpose.
+  **First, a bar that binds is not a bar to move.** (c) refuses to shift `--margin` from 0.85 to the
+  0.8568 the card turned out to afford, having seen the number — the whole content of conjunct 2's
+  pass is that 0.79 %, and a criterion adjusted after reading the measurement it gates is not a
+  criterion. **Second, a lock can be preserved by delegating its arithmetic if the delegation is
+  bounded in advance.** R119 says no dispatcher authors an armed value; (f) does not breach it by
+  letting pre-flight derive the recipe, because the operator armed a BOUNDARY and anything outside
+  it HALTs. The distinction that makes both hold: **(c) moves a criterion after seeing data and is
+  refused; (f) fixes a criterion before seeing data and is allowed.**
+  **WHAT THIS CURATION DOES NOT DO:** it merges nothing (Leg 1 does), trains nothing (Leg 2 does),
+  writes no recipe value, and starts no run6. **RUN6 REMAINS HELD.**

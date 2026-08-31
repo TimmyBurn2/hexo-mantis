@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ f47a201, regenerated 2026-08-31.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 0ffe052, regenerated 2026-08-31.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7664,4 +7664,116 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > — the synthetic substitution's price is paid before anything is called
 > done. Mint or card-level fact.
 > ROUTE: land this, census, ACTIVE next version; execute §2–§4; one plain
+> exit screen.
+
+# R327 — architect ruling, ARCH-ERA session, 2026-08-31 (RECAL-SITTING-5 and THE MINT RATIFIED, R303(c) DISCHARGED; the FROZEN-FILE GRANT issued on the presented two-file diff and `sitting5-mint` ORDERED to `dev`; `--margin` PINNED at 0.85 as procedure rather than moved to the observed affordability edge; the second budget authority left UNMOVED and FILED as debt; the corpus-integrity orphans ORDERED re-homed against the living bootstrap path with a three-of-three census; BC-EXEC-1 AUTHORIZED under an envelope-armed recipe with a pre-registered acceptance witness) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into this MINT-CLOSE + BC-EXEC-1 execution session's prompt
+rather than as a file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R327_MINT_CLOSE_BC_EXEC.md` §1. Byte-diff on append per R306(a) (de-marked,
+whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never
+retyped; extraction and diff under `set -o pipefail`, R313(c)). **The forwarded text carried the
+placeholder `R{next}`**, substituted to `R327` after verifying the head is R326 — census
+`R23–R326, 297 sections / 297 distinct / 0 duplicates, excluded set 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.32 == §8 last entry
+v3.32`; `--self-test` all four controls fire; last register header `R326`, no `R327` heading
+present. **`grep -rn 'R327' plan/` returned NOTHING AT ALL (rc 1, 0 hits) and the live-placeholder
+check `grep -rn '^> *R{next}' plan/` likewise (rc 1, 0 hits)** — both read with `set -o pipefail`
+and their counts derived from a file rather than from a pipeline's exit code, which is the
+`${PIPESTATUS[0]}` class sitting 5 disclosed as its own second self-caught error. The R323–R325
+formula holds here verbatim, unlike at R326. Double transcription IDENTICAL at 32 lines before
+substitution and again after `sed`; canonical home's `awk`-extracted block diffed against the
+substituted transcription — EMPTY.
+
+**The ruling's referents re-derived at point of use, and ONE CITATION IS MEASURED WRONG — it is
+in clause (f), the clause that carries the acceptance criterion, so it is stated here rather
+than carried forward.** **Clause (a)'s figures all reproduce** against
+`plan/RECAL_SITTING5_EXIT.md`: conjunct-2 headroom `+0.362485` against `M 0.350000` (§3.3
+partition block), joint peak `13.0596` against declared `14.8555` and usable `15.2180` (§3.5
+table), `fused_batch_edges.max` **exactly** `1 165 056` with `bound_hits.nodes = 0`, and OOM
+`0 / 0 / 0`. **R303(c)'s price** is read at `rulings_register.md` R303(c) verbatim — the
+strengthened STEP 4, *"the validation burst includes training steps at the minted caps, not
+games alone … peak memory is read across both phases against both partition shares"* — and
+sitting 5's burst is that: `223` training steps at the minted caps with peak read on both
+shares. DISCHARGED is the correct word. The **five self-caught errors** are `RECAL_SITTING5_EXIT.md`
+§4.1 (five enumerated) and the **LAW-03 plies/turns catch** is §4.2's last bullet, distinct from
+them. **Clause (b)'s "the complete diff satisfies the evidentiary standard" is TRUE OF FILE 1 AND
+NOT OF FILE 2, and the departure is named rather than smoothed over.**
+`plan/SITTING5_EVIDENCE/frozen_diff_presented.md` presents `tests/config/test_armed_abort_manifest.py`
+as an EXACT diff (one fixture line plus its comment) and presents
+`tests/tools/test_preflight_mint_process.py` as a measured failure plus the Δ8-ruled SHAPE,
+saying in its own words *"The exact diff is not written out here because it depends on a design
+choice inside a frozen file … and R308(f) reserves that to the grant."* The grant is now issued,
+so the reserved design choice falls to this session and is DERIVED, not assumed — recorded in
+this session's exit with its deciding ground. **And the file-2 red is WIDER than the presentation
+states:** the presentation says *"the delta SET is transcribed and this mint adds to it"*;
+measured at `1203f74`, the mint adds **THREE** deltas the twin does not carry —
+`eval.strength_floor` (which diverges the KEY SET, `null` against a three-leaf block, and is
+therefore the assertion that fires first), `allocator_posture` and `selfplay.n_workers`. The
+default-tier row fails at `base.keys() == other.keys()`, one assertion EARLIER than the
+`differing == {"run_id", "train.device"}` line the presentation names. **RED BEFORE is measured
+and it is EXACTLY TWO** — `2 failed, 171 passed, 6 deselected` over the two paths at the default
+tier — which is the sitting's claim confirmed independently. **Clause (c)'s `0.8568`** is
+`RECAL_SITTING5_EXIT.md` §3.3: `predicted_peak / budget = 0.849998` against `--margin 0.85`, so
+`k` IS the margin and the largest margin the partition affords is `0.8568`. **Clause (d)'s second
+authority** is `tests/train/test_graph_microbatch_authority.py:217`,
+`_SIZING_BUDGET_BYTES = 10_126_561_000` (**9.431 GiB spelled in bytes**), against the moved
+`tests/train/test_graph_microbatch_bound.py:336` `_SIZING_BUDGET_GIB = 8.40`. Two files, two
+authorities, one quantity. **Clause (e)'s three** are `resolve_corpus_sha_pin` (`resolvers.py:176`),
+`assert_not_heldout_sha` (`:207`) and `heldout_size_bytes` (`:232`); the instrument that sees one
+is `tests/encoding/test_no_dead_resolver_export.py:58`, whose census is scoped to names beginning
+`resolve_` and says so in its own comment at `:42-46`. The **living bootstrap path** is
+`mantis.data.bootstrap_encode`, named at `:49-53`. **The R279 sha-certification** is the corpus
+audit's exit-0 CLEAN sha match, recorded at `ADJUDICATION_BOOTSTRAP_POSTURE.md` §6 row 1.
+**CLAUSE (f)'S CITATION IS WRONG AND THE WITNESS IS NOT WHERE IT SAYS.**
+`plan/ADJUDICATION_BOOTSTRAP_POSTURE.md` §4 is **"THE CARRIED CAVEATS"** — the zero-draw-mass
+F-07 adjacency, the ≥20-move selection floor, the ~1100-Elo label noise — and it pre-registers no
+acceptance witness at all; that document's §7 states in terms that *"It arms nothing, mints
+nothing … no `strength_floor` term."* **The witness's two halves are real and each has a home,
+just not that one:** the decisive-rate half is §**2.2** (the production `_play_floor_probe` at
+run5's own `random_model_sims: 96`, 20 games per arm, measuring `0` decisive for the step-25
+candidate AND `0` for the fresh-init control), and the longest-run half is
+`plan/EVAL_CHANNEL_1_RECORD.md` §**5.2**, where the diffusion signature is measured — longest runs
+`(1, 1)` in every game, same-colour adjacent pairs `0, 0` in every game, 128 stones at
+`0.32–0.43 %` density across spans of 117–301 cells. **The armed floor** the witness fires is
+`configs/run5.yaml:31-34`, `probe_games: 4 / min_decisive_rate: 0.25 / min_winrate: 0.0`. So the
+witness is EXECUTABLE exactly as the clause words it and nothing is blocked; what is false is
+"pre-registered" and "§4". It is pre-registered **by this landing**, in the Leg-2 prereg written
+before execution, against the two instruments above. This is the same class as the R318(e)/R319(g)
+mis-citation clause (a) corrects, one ruling later and caught before it was carried. **Clause
+(f)'s envelope batch** — *"the trainer's existing minted batch"* — is `configs/run5.yaml:134`,
+`train.batch_size: 256`.
+
+> R327 — (a) RECAL-SITTING-5 is RATIFIED and THE MINT IS RATIFIED: conjunct
+> 2 closed at +0.362 against M under the honestly derived cap; the owed burst
+> PAID (joint peak 13.0596 against partition 14.8555, edge cap binding at its
+> fitted value, zero OOMs) — R303(c) is DISCHARGED. The R318(e)/R319(g)
+> mis-citation carried by two sittings is corrected of record; the session's
+> five self-caught errors and the LAW-03 plies/turns catch stand on its
+> ledger.
+> (b) FROZEN-FILE GRANT: exactly the two rows of the presented mint diff; the
+> complete diff satisfies the evidentiary standard; no subset leaves both
+> green and none is attempted. sitting5-mint merges to dev, full local sweep,
+> push, dev == origin/dev verified.
+> (c) --margin STAYS 0.85 as procedure-pinned. Moving to the measured
+> affordability edge (0.8568) after observing it would be criterion movement;
+> the 0.86-refuses fact is RECORDED as the partition being tight and honest.
+> (d) The second budget authority STAYS UNMOVED; consolidation to one
+> authority is FILED as debt to the config-partition lane, its two measured
+> arms attached as grounds.
+> (e) The corpus-integrity orphans RE-HOME against the living bootstrap path
+> by derivation — the R279 sha-certification checks outlive the deleted
+> loader; the census sees three of three, or a grave line says why not.
+> (f) BC-EXEC-1 IS AUTHORIZED under the §0.3 envelope: pre-flight derives the
+> recipe from corpus statistics and records it BEFORE execution; the
+> supervised phase runs on the box against the minted configs; the ACCEPTANCE
+> WITNESS is the filed adjudication's §4, pre-registered: the post-BC
+> checkpoint, vs random, clears the armed strength_floor decisive rate, and
+> its longest-run distribution shows contested play — the measured diffusion
+> signature absent. A failed witness RE-ADJUDICATES the recipe and returns
+> here; the posture never silently degrades to (C). The checkpoint is an
+> artifact with provenance (corpus sha, recipe, net hash); NOTHING ELSE
+> TRAINS; run6 does not start.
+> ROUTE: land this, census, ACTIVE next version; Leg 1 then Leg 2; one plain
 > exit screen.
