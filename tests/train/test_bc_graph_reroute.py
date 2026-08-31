@@ -18,6 +18,7 @@ Three groups, each for a defect the others cannot see:
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -25,6 +26,7 @@ from typing import Any
 
 import pytest
 
+from mantis.encoding import resolvers
 from mantis.train.pretrain import graph_route
 from mantis.train.pretrain.graph_route import (
     BC_RECENCY_WEIGHT,
@@ -125,6 +127,76 @@ def test_the_buffer_is_built_at_the_SIDECARS_geometry(tmp_path: Path, monkeypatc
     monkeypatch.setattr(_engine, "HexgBuffer", _Buf, raising=False)
     load_ring(ring, encoding="gnn_axis_v1")
     assert seen == {"capacity": 4096, "encoding": "gnn_axis_v1", "visit_capacity": 13}
+
+
+# ── the launch pin, RE-HOMED here at R327(e) ─────────────────────────────────────────────
+def _stub_buffer(monkeypatch, records: int = 40) -> None:
+    class _Buf:
+        def __init__(self, *_a, **_k) -> None: ...
+        def load_from_path(self, _p: str) -> int:
+            return records
+
+    import mantis._engine as _engine
+    monkeypatch.setattr(_engine, "HexgBuffer", _Buf, raising=False)
+
+
+def test_an_encoding_with_NO_launch_pin_is_not_enforced(tmp_path: Path, monkeypatch) -> None:
+    """`resolve_corpus_sha_pin` returning `None` means NOT ENFORCED — the registry's documented
+    contract, and the reason the sha stream is conditional. This is the arm that runs at HEAD:
+    no graph encoding registers a pin today, so a green BC run proves nothing about the check
+    unless this arm is stated beside the one below."""
+    ring = _write_ring(tmp_path)
+    _stub_buffer(monkeypatch)
+    monkeypatch.setattr(resolvers, "_CORPUS_SHA_PINS", {}, raising=True)
+    load_ring(ring, encoding="gnn_axis_v1")
+
+
+def test_a_ring_that_is_not_the_PINNED_corpus_is_refused(tmp_path: Path, monkeypatch) -> None:
+    """THE PRODUCER (LAW-07). The pin registry outlived the dense loader that read it; a launch
+    pin says two hosts train on byte-identical bytes, and BC pretrain is the surviving path that
+    trains on a corpus. Registered synthetically because no graph encoding is pinned at HEAD —
+    which is exactly why the check needs a driven witness rather than an inert call site."""
+    ring = _write_ring(tmp_path)
+    _stub_buffer(monkeypatch)
+    monkeypatch.setattr(resolvers, "_CORPUS_SHA_PINS", {"gnn_axis_v1": "f" * 64}, raising=True)
+    with pytest.raises(GraphPretrainError, match="not the launch-pinned corpus"):
+        load_ring(ring, encoding="gnn_axis_v1")
+
+
+def test_the_pin_is_taken_over_the_RING_BYTES_not_the_sidecar(tmp_path: Path, monkeypatch) -> None:
+    """A sidecar can be rewritten beside a swapped ring, so a pin read off provenance would
+    certify the swap. MUTATION SELF-TEST: the ring's true digest passes, and rewriting the
+    sidecar to claim anything at all does not move the verdict."""
+    ring = _write_ring(tmp_path)
+    true_sha = hashlib.sha256(ring.read_bytes()).hexdigest()
+    _stub_buffer(monkeypatch)
+    monkeypatch.setattr(resolvers, "_CORPUS_SHA_PINS", {"gnn_axis_v1": true_sha}, raising=True)
+    load_ring(ring, encoding="gnn_axis_v1")
+
+    sidecar = ring.with_name(ring.name + ".provenance.json")
+    prov = json.loads(sidecar.read_text(encoding="utf-8"))
+    prov["source_sha256"] = "0" * 64
+    sidecar.write_text(json.dumps(prov), encoding="utf-8")
+    load_ring(ring, encoding="gnn_axis_v1")
+
+    ring.write_bytes(b"a-different-ring-entirely")
+    with pytest.raises(GraphPretrainError, match="not the launch-pinned corpus"):
+        load_ring(ring, encoding="gnn_axis_v1")
+
+
+def test_the_pin_check_runs_INSIDE_load_ring_and_not_only_in_a_helper() -> None:
+    """The seam, asserted structurally. A guard reachable only by calling it directly is a
+    guard nobody calls — the class this whole re-homing exists to end."""
+    src = (_REPO / "src" / "mantis" / "train" / "pretrain" / "graph_route.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "load_ring")
+    called = {n.func.id for n in ast.walk(fn)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "_assert_launch_pin" in called, (
+        "load_ring no longer calls the launch-pin guard — the corpus it loads is unchecked"
+    )
 
 
 # ── the step budget, on the dense arm's own convention ───────────────────────────────────

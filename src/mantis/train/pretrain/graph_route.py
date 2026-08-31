@@ -24,6 +24,7 @@ would pass. An absent or disagreeing sidecar is therefore a REFUSAL, not a fallb
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -33,6 +34,8 @@ from typing import Any
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
+from mantis.encoding import lookup as _lookup_encoding
+from mantis.encoding import resolve_corpus_sha_pin
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.emit import NullEventSink
@@ -89,6 +92,37 @@ def read_ring_provenance(ring_path: Path, *, encoding: str) -> dict[str, Any]:
     return prov
 
 
+def _assert_launch_pin(ring_path: Path, *, encoding: str) -> None:
+    """Refuse a corpus that is not the encoding's launch-pinned bytes, when one is pinned.
+
+    RE-HOMED HERE BY R327(e). The pin registry outlived the dense corpus-mix loader that used
+    to read it: a launch pin says two hosts must train on the byte-identical corpus, and BC
+    pretrain is the surviving path that trains on one. `resolve_corpus_sha_pin` returns `None`
+    when the encoding registers no pin, and `None` means NOT ENFORCED — the documented
+    contract, and the reason the stream below is conditional rather than unconditional.
+
+    Distinct from `read_ring_provenance`'s checks, which read the SIDECAR: a sidecar can be
+    rewritten beside a swapped ring, so the pin is taken over the artifact's own bytes.
+
+    Raises:
+        GraphPretrainError: a pin is registered for `encoding` and the ring does not match it.
+    """
+    pin = resolve_corpus_sha_pin(_lookup_encoding(encoding))
+    if pin is None:
+        return
+    digest = hashlib.sha256()
+    with ring_path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if actual != pin:
+        raise GraphPretrainError(
+            f"{ring_path}: sha256 {actual[:12]}… is not the launch-pinned corpus for "
+            f"{encoding!r} ({pin[:12]}…). Both hosts must read the byte-identical launch "
+            "corpus; sync it rather than re-exporting one that happens to load."
+        )
+
+
 def load_ring(ring_path: Path, *, encoding: str) -> tuple[Any, dict[str, Any]]:
     """Reconstruct the `.hexg` ring at its recorded geometry and load it.
 
@@ -111,6 +145,7 @@ def load_ring(ring_path: Path, *, encoding: str) -> tuple[Any, dict[str, Any]]:
             "`python -m mantis.data.bootstrap_encode`, or pass --corpus-hexg."
         )
     prov = read_ring_provenance(ring_path, encoding=encoding)
+    _assert_launch_pin(ring_path, encoding=encoding)
     buf = HexgBuffer(int(prov["ring_capacity"]), encoding, int(prov["ring_visit_capacity"]))
     loaded = buf.load_from_path(str(ring_path))
     if loaded == 0:

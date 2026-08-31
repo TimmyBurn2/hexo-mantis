@@ -50,6 +50,8 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
+from mantis.encoding import assert_not_heldout_sha
+
 #: The runner's terminal-reason code for a normal decided/drawn end. `2` is the ply-cap
 #: branch, which a completed human game never takes — a corpus game ended, it was not
 #: truncated by our search budget.
@@ -266,6 +268,10 @@ def encode_corpus(
             "R279's certification handshake; a corpus that does not match its pin is a "
             "different corpus."
         )
+    # The handshake above proves the file is the file the manifest names. It does NOT prove the
+    # file is outside the evaluation hold-out set — different properties, and a corpus that
+    # passes the first and fails the second is contaminated training data (R327(e)).
+    assert_not_heldout_sha(actual_sha, path=record_path)
 
     buf = HexgBuffer(capacity, encoding, visit_capacity)
     games = plies = 0

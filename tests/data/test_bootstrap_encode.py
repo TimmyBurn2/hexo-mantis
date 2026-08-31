@@ -31,12 +31,14 @@ from pathlib import Path
 
 import pytest
 
+from mantis.data import bootstrap_encode
 from mantis.data.bootstrap_encode import (
     CorpusEncodeError,
     encode_corpus,
     encode_game,
     sha256_of,
 )
+from mantis.encoding import resolvers
 
 _REPO = Path(__file__).resolve().parents[2]
 _ENC = "gnn_axis_v1"
@@ -236,6 +238,58 @@ def test_a_source_sha_MISMATCH_is_REFUSED(tmp_path: Path) -> None:
     d = _dataset(tmp_path, _records(2), corrupt_sha=True)
     with pytest.raises(CorpusEncodeError, match="certification handshake"):
         encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC, capacity=64, visit_capacity=8)
+
+
+def test_a_HELD_OUT_corpus_is_REFUSED_even_though_it_matches_its_manifest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """THE PRODUCER for the contamination gate re-homed here at R327(e) (LAW-07).
+
+    The manifest handshake above proves the file is the file the manifest NAMES. This proves
+    the second property, which the handshake cannot: that the file is outside the evaluation
+    hold-out set. The distinction is the whole point — the dataset below has a PERFECTLY VALID
+    manifest and is still refused. Registered synthetically, because no fixture can be made to
+    hash to the real held-out sha.
+    """
+    d = _dataset(tmp_path, _records(3))
+    sha = json.loads((d / "dataset_metadata.json").read_text(encoding="utf-8"))["sha256"]
+    monkeypatch.setattr(
+        resolvers, "_HELDOUT_CORPUS_SHAS", {"synthetic_holdout": (sha, 0)}, raising=True)
+    with pytest.raises(ValueError, match="HELD-OUT set"):
+        encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC,
+                      capacity=64, visit_capacity=8)
+
+
+def test_the_hold_out_gate_is_the_thing_that_refuses_and_not_the_handshake(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """MUTATION SELF-TEST for the row above. The SAME dataset encodes cleanly with the hold-out
+    registry empty, so the refusal is attributable to the gate rather than to anything else the
+    encoder does with a sha — which is what a green run would otherwise leave ambiguous."""
+    d = _dataset(tmp_path, _records(3))
+    monkeypatch.setattr(resolvers, "_HELDOUT_CORPUS_SHAS", {}, raising=True)
+    prov = encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC,
+                         capacity=64, visit_capacity=8)
+    assert prov["games"] == 3
+
+
+def test_the_gate_fires_BEFORE_a_single_record_is_read(tmp_path: Path, monkeypatch) -> None:
+    """Ordering, not just presence. `assert_not_heldout_sha`'s own docstring says to call it
+    BEFORE using the file's contents; a gate that runs after the encode has already happened
+    protects nothing it was written to protect."""
+    d = _dataset(tmp_path, _records(3))
+    sha = json.loads((d / "dataset_metadata.json").read_text(encoding="utf-8"))["sha256"]
+    monkeypatch.setattr(
+        resolvers, "_HELDOUT_CORPUS_SHAS", {"synthetic_holdout": (sha, 0)}, raising=True)
+    reads: list[int] = []
+    real = bootstrap_encode._iter_records
+    monkeypatch.setattr(bootstrap_encode, "_iter_records",
+                        lambda p: (reads.append(1), real(p))[1])
+    out = tmp_path / "out.hexg"
+    with pytest.raises(ValueError, match="HELD-OUT set"):
+        encode_corpus(d, out, encoding=_ENC, capacity=64, visit_capacity=8)
+    assert reads == [], "records were read before the hold-out gate refused"
+    assert not out.exists(), "an artifact was written for a held-out corpus"
 
 
 def test_the_provenance_sidecar_makes_the_artifact_checkable(tmp_path: Path) -> None:

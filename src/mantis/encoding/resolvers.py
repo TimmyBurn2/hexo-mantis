@@ -229,14 +229,14 @@ def assert_not_heldout_sha(actual_sha: str, *, path: Any) -> None:
             )
 
 
-def heldout_size_bytes() -> frozenset[int]:
-    """On-disk byte sizes of every registered held-out artifact.
-
-    Cheap (stat-only) pre-filter for callers that want to skip the
-    `assert_not_heldout_sha` sha256 stream unless a candidate file's size
-    could possibly match.
-    """
-    return frozenset(size for _sha, size in _HELDOUT_CORPUS_SHAS.values())
+# GRAVE (R327(e), 2026-08-31): `heldout_size_bytes` stood here — a stat-only pre-filter whose
+# whole purpose was letting a caller SKIP the `assert_not_heldout_sha` sha256 stream. Its one
+# caller was the dense corpus-mix loader R326(d) deleted, which streamed the sha only when the
+# size matched. On the surviving BC path the stream is UNCONDITIONAL — `encode_corpus` needs the
+# sha for R279's manifest handshake before it needs it for the hold-out gate — so the filter can
+# only skip the assertion, never the stream, and skipping the assertion is strictly worse than
+# making it. The sizes stay in `_HELDOUT_CORPUS_SHAS` as the registry's record of the artifact;
+# what went is the accessor with nothing left to accelerate. Zero call sites when it went.
 
 
 def _assert_no_registry_overlap() -> None:

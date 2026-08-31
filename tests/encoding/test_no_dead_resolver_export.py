@@ -11,6 +11,7 @@ The general assertion (no dead `resolve_*` export) is the one that survives this
 """
 from __future__ import annotations
 
+import inspect
 import subprocess
 from pathlib import Path
 
@@ -33,29 +34,33 @@ _REPO = Path(__file__).resolve().parents[2]
 #: MODULE, which hid a sibling consumer. That is fixed here: reachability is now measured by
 #: CALL SITE, never by file exclusion.
 #:
-#: `resolve_corpus_sha_pin` JOINS THE QUEUE at R326(d), and its grounds are that the deletion
-#: which orphaned it was RULED — not that nobody got round to wiring it. R326(d) deleted
-#: `load_pretrained_buffer`, the dense corpus feed, because posture (A) is signed and posture
-#: (B) is excluded by definition. That loader was this resolver's ONLY caller.
+#: `expand_auto_paths` JOINS THE QUEUE at R327(e), and NOT because anything about it changed —
+#: because the census below stopped being scoped to `resolve_*` and can now see it. It is the
+#: ROOT of the transitively-dead cluster `test_transitively_dead_cluster_is_recorded_not_
+#: silently_deleted` already pins: `resolve_anchor_path` is live only through it, and it has no
+#: caller of its own. That test remains the row's grounds and its anti-rot; this entry exists so
+#: the widened census reports the cluster once rather than twice.
 #:
-#: **THREE symbols were orphaned by that one deletion, and this row sees ONE of them.** The
-#: other two are `assert_not_heldout_sha` and `heldout_size_bytes` — same family, same zero
-#: call sites (`git grep '<name>(' -- src tools crates`, measured at this landing) — and they
-#: are invisible here because the census is scoped to names beginning `resolve_`. **That
-#: scoping is a real coverage gap and it is recorded rather than fixed in this act**, because
-#: widening the census is a change to an instrument R326 does not name and it would need all
-#: three queued in the same breath.
+#: **`resolve_corpus_sha_pin` LEFT THIS SET at R327(e)** — it is wired, at
+#: `mantis.train.pretrain.graph_route._assert_launch_pin`, and the anti-rot test below is what
+#: forced the removal rather than a memory of having done it.
 #:
-#: **WHY THE FAMILY IS NOT DELETED WITH THE LOADER.** `assert_not_heldout_sha` is the held-out
+#: **THE `resolve_` SCOPING WAS A REAL COVERAGE GAP AND IT IS CLOSED HERE.** R326(d)'s one
+#: deletion orphaned THREE symbols and the census saw ONE, because two of them
+#: (`assert_not_heldout_sha`, `heldout_size_bytes`) do not begin `resolve_`. A census that
+#: measures a NAME PREFIX measures its own naming convention; this one measures the export
+#: surface. All three are now accounted for: the contamination gate is wired into
+#: `mantis.data.bootstrap_encode.encode_corpus`, the launch pin into `graph_route`, and
+#: `heldout_size_bytes` is BURIED with a grave line — its stat-only pre-filter could only ever
+#: skip a sha stream, and the surviving path streams unconditionally.
+#:
+#: **WHY THE FAMILY WAS NOT DELETED WITH THE LOADER.** `assert_not_heldout_sha` is the held-out
 #: CONTAMINATION gate, and the armed posture still cares about it: BC-pretrain reads a corpus
-#: too. Its integrity path (`mantis.data.bootstrap_encode`) has its own manifest handshake with
-#: a streaming sha256 that hard-fails on disagreement — but that proves the file is the file it
-#: claims to be, NOT that the file is outside the evaluation hold-out set. Those are different
-#: properties, and deleting the family would remove the second one with nothing standing in its
-#: place. So the family stays, this one entry keeps the export census honest about why, and the
-#: DISPOSITION is the architect's at BC-EXEC-1, where the recipe rows decide what the pretrain
-#: corpus path actually gates.
-_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch", "resolve_corpus_sha_pin"})
+#: too. Its integrity path has a manifest handshake with a streaming sha256 that hard-fails on
+#: disagreement — but that proves the file is the file it claims to be, NOT that it is outside
+#: the evaluation hold-out set. Those are different properties, and only one of them had a
+#: guard.
+_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch", "expand_auto_paths"})
 
 
 def _call_sites(name: str) -> list[str]:
@@ -94,20 +99,58 @@ def test_no_reference_to_the_deleted_resolver_survives_anywhere() -> None:
     assert hits == [], "the deleted resolver is still referenced:\n" + "\n".join(hits)
 
 
-def test_every_exported_resolver_has_a_call_site() -> None:
+def _exported_callables() -> list[str]:
+    """Every FUNCTION `mantis.encoding` exports, derived from the module, never listed here.
+
+    The classes and exception types in `__all__` are excluded because `_call_sites` matches
+    `name(` and a class is legitimately named without being constructed (annotations, `except`
+    clauses, `isinstance`). Deriving the split with `inspect` rather than transcribing a name
+    list is what lets the census grow with the package instead of going stale against it.
+    """
+    return sorted(
+        name for name in enc.__all__
+        if inspect.isfunction(getattr(enc, name))
+    )
+
+
+def test_every_exported_function_has_a_call_site() -> None:
     """THE GENERAL PRODUCER — the law, not the instance (LAW-08 live-consumer).
 
-    Every `resolve_*` in `__all__` must be called somewhere outside its own definition
-    module and outside `__init__`'s re-export. This is what would have caught ADJ-WP12R-2
-    before it shipped, and what catches the next one.
+    Every function in `__all__` must be called somewhere outside its own definition module and
+    outside `__init__`'s re-export. This is what would have caught ADJ-WP12R-2 before it
+    shipped, and what catches the next one.
+
+    WIDENED AT R327(e), from `resolve_*` to the export surface. The prefix scoping was measured
+    blind: one ruled deletion (R326(d)) orphaned `resolve_corpus_sha_pin`, `assert_not_heldout_
+    sha` and `heldout_size_bytes` in a single act, and this census reported ONE of the three. A
+    census that keys on a naming convention measures the convention, not the surface.
     """
     dead = [
-        name for name in sorted(n for n in enc.__all__ if n.startswith("resolve_"))
+        name for name in _exported_callables()
         if name not in _QUEUED_DEAD_EXPORTS and not _call_sites(name)
     ]
     assert dead == [], (
-        f"exported resolvers with zero call sites outside their own module: {dead} "
+        f"exported functions with zero call sites outside their own module: {dead} "
         "— dead weight (R116); delete or wire before exporting"
+    )
+
+
+def test_the_census_covers_the_whole_export_surface_not_a_name_prefix() -> None:
+    """ANTI-REGRESSION on the widening itself (R327(e)).
+
+    The gap this closes was invisible for exactly as long as every dead export happened to be
+    called `resolve_*`. If the census ever narrows back to a prefix, the family that proved the
+    gap goes unwatched again — so the property is asserted rather than trusted to the diff.
+    """
+    covered = set(_exported_callables())
+    assert "assert_not_heldout_sha" in covered and "held_out_shas" in covered, (
+        "the corpus-integrity family is outside the census again — the R326(d) orphans are "
+        f"exactly the members that do not begin `resolve_`; covered: {sorted(covered)}"
+    )
+    non_prefixed = {n for n in covered if not n.startswith("resolve_")}
+    assert len(non_prefixed) >= 2, (
+        "the census is watching a name prefix, not the export surface; that is the scoping "
+        f"R327(e) removed. Non-`resolve_` members seen: {sorted(non_prefixed)}"
     )
 
 
