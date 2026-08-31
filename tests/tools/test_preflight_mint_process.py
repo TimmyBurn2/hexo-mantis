@@ -129,6 +129,14 @@ def _load_tool():
 
 TOOL = _load_tool()
 
+#: `tools/mint_config.py` as a module, so the twin below reads the header separator from the
+#: generator that stamps it instead of restating the format (R1: one authority).
+_MINT_SPEC = importlib.util.spec_from_file_location(
+    "_mint_config_for_run5_twin", REPO_ROOT / "tools" / "mint_config.py")
+assert _MINT_SPEC is not None and _MINT_SPEC.loader is not None
+MINT_CONFIG = importlib.util.module_from_spec(_MINT_SPEC)
+_MINT_SPEC.loader.exec_module(MINT_CONFIG)
+
 
 def _run_tool(*args, cwd: Path = REPO_ROOT, tool: Path = TOOL_PATH, timeout: int = 300,
               env: dict[str, str] | None = None):
@@ -154,13 +162,11 @@ def _cuda_is_available() -> bool:
 _CUDA_BOX = _cuda_is_available()
 
 
-def _yaml_scalar(value: object) -> str:
-    """A Python scalar as the YAML token `mint_config.py --set` will parse back to it.
-
-    Only `None` needs the translation (`str(None)` is `"None"`, which YAML reads as the STRING
-    "None" and the schema then rejects), but the helper is written over the general case so a
-    future delta reading a bool off a config does not hit the same trap one type later."""
-    return "null" if value is None else str(value)
+# GRAVE (R327(b), 2026-08-31): `_yaml_scalar` stood here — a Python scalar re-rendered as the
+# YAML token `--set` parses back to it, for the `null` fused-caps delta. The header-derived
+# delta set obsoletes it: the header's new slot is ALREADY that token, round-trip-checked by
+# `mint_config._render_value` at stamp time, so re-rendering from the loaded value is a second
+# authority for a string the minter already wrote. Zero call sites when it went.
 
 
 def _flat_leaves(config) -> dict[str, object]:
@@ -207,6 +213,54 @@ def _mint_run5_cpu_bootable_twin(out_dir: Path) -> Path:
     return dest
 
 
+def _run5_header_deltas() -> list[str]:
+    """run5's OWN stamped `# delta:` lines, re-issued as `mint_config.py --set` arguments.
+
+    DERIVED, NEVER TRANSCRIBED — this is Q-DFIX-3's repair. The list below used to be a
+    hand-written copy of run5's delta SET (values read off the config, keys restated), and the
+    file filed against itself that it "goes stale on any new delta". It did: the R326 mint added
+    `allocator_posture`, `selfplay.n_workers` and `eval.strength_floor`, and the twin stopped
+    being run5 in three places at once.
+
+    WHY THE HEADER AND NOT A TEMPLATE DIFF. Diffing run5's leaves against the template cannot
+    produce a replayable delta set: `mint_config._resolve_parent` requires every path segment to
+    exist in the template, so a leaf inside a template block that ships `null` — run5 has three
+    (`train.draw_rate_abort`, `eval.strength_floor`, and the fused caps) — is not addressable by
+    `--set` at all. `tools/config_diff.py:_covers` states that same constraint from the other
+    side. A leaf diff would therefore need schema knowledge of which nodes are optional blocks;
+    the header already carries the answer, at BLOCK granularity, written by the minter.
+
+    WHY THE HEADER CAN BE TRUSTED, which is what makes this a derivation rather than a second
+    transcription. Two live instruments stand behind it: `tools/config_diff.py --from-header` is
+    armed structurally over every shipped config in the CI test tier
+    (`tests/config/test_config_diff_from_header.py`), so a header can neither claim a delta it
+    did not make nor hide one; and `mint_config._render_value` round-trips every stamped value
+    through `yaml.safe_load` at write time and REFUSES to stamp a header it cannot replay, so
+    `--set <key>=<new slot>` is guaranteed to parse back to the identical value. The separator
+    is imported from the generator, and the generator rejects any rendered value containing it,
+    which is what makes partitioning on its first occurrence exact.
+
+    Raises:
+        AssertionError: if run5's header carries no delta lines, or a line does not carry the
+            separator — either means the stamped provenance is unreadable, and a twin minted
+            from an unreadable header is not run5's twin.
+    """
+    deltas: list[str] = []
+    for line in RUN5.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("# delta:"):
+            continue
+        key, _, rest = line[len("# delta:"):].strip().partition(": ")
+        old, sep, new = rest.partition(MINT_CONFIG.HEADER_SEP)
+        assert sep, f"unreadable delta line (no {MINT_CONFIG.HEADER_SEP!r}): {line!r}"
+        assert key and old, f"unreadable delta line (no key or old slot): {line!r}"
+        deltas.append(f"{key}={new}")
+    assert deltas, (
+        f"{RUN5} carries no `# delta:` header lines — the twin has nothing to replay, and a "
+        "config minted from the bare template is not run5"
+    )
+    return deltas
+
+
 def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
                         extra_deltas: list[str] | None = None) -> Path:
     """MINT (never hand-vary) run5's CPU twin — R130's re-point target, the R103 pattern.
@@ -219,9 +273,13 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     drives re-point onto a config that says cpu ITSELF.
 
     Minted by `tools/mint_config.py` from the same `dev` template run5 is minted from,
-    replaying run5's own header deltas — READ OFF THE LOADED `configs/run5.yaml`, never
-    restated here (the file's §14-item-17 discipline; run5's armed values 0.25 / 25000 / 50
-    are carried, not copied) — plus exactly one more: `train.device: cuda -> cpu`.
+    replaying run5's own header deltas — every one of them, DERIVED from the stamped header by
+    `_run5_header_deltas` rather than restated here (run5's armed values are carried, never
+    copied) — plus exactly two more: `run_id` and `train.device: cuda -> cpu`.
+
+    The prose above used to say "read off the loaded config" while the code restated the delta
+    KEY LIST and read only the values; the R326 mint added three deltas the list did not carry
+    and the claim became false. Re-derived in the same act as the repair (R311(h)).
 
     Not a committed `configs/` resident, deliberately: a near-clone of run5 sitting in the
     audit root is the exact artefact an operator could preflight BELIEVING it was run5, which
@@ -235,32 +293,12 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     draw = run5.train.draw_rate_abort
     assert draw is not None, "premise: run5 arms the draw-rate abort (the tier-full floor row)"
     dest = out_dir / f"{name}.yaml"
+    # Q-DFIX-3 CLOSED (R327(b)): run5's delta SET is DERIVED from its own stamped header, so a
+    # mint that adds a delta needs no edit here. `run_id` and `train.device` follow the replay
+    # and win by application order, which is exactly the two-leaf difference asserted below.
     deltas = [
+        *_run5_header_deltas(),
         "run_id=run5_cpu_boot",
-        f"seed={run5.seed}",
-        f"eval.random_floor_games={run5.eval.random_floor_games}",
-        f"monitor.actor_lag_abort_enabled={str(bool(run5.monitor.actor_lag_abort_enabled)).lower()}",
-        (f"train.draw_rate_abort={{threshold: {draw.threshold}, min_step: {draw.min_step}, "
-         f"N_pool_min: {draw.N_pool_min}, consec: {draw.consec}}}"),
-        # G-DFIX-3 (WP12-R F2): run5 overrides `train.microbatch_caps` too, so the twin has to
-        # carry it or it stops being run5. Read OFF run5, like the five deltas above — not
-        # transcribed. The `differing` assertion below is UNCHANGED and still reads
-        # {"run_id", "train.device"}: that is the point of repairing the input rather than the
-        # check. (Q-DFIX-3: this list is itself a transcription of run5's delta SET and goes
-        # stale on any new delta — deriving it is a separate change with its own census.)
-        (f"train.microbatch_caps={{max_edges: {run5.train.microbatch_caps.max_edges}, "
-         f"max_nodes: {run5.train.microbatch_caps.max_nodes}}}"),
-        # F-816-10: run5 overrides `inference.fused_graph_caps` too — to the R119 `null`
-        # PLACEHOLDER, which is the whole posture: schema-valid so the repo ships a complete
-        # config, runtime-refused so an uncalibrated production config cannot construct its
-        # graph inference server. The twin must carry it for the same reason it carries the
-        # caps above: without it, this drive boots a config that differs from run5 in a
-        # memory bound and stops being evidence about run5's own boot. Read OFF run5, never
-        # transcribed — including the `null`, so the day the operator mints a real pair this
-        # delta follows without an edit here.
-        (f"inference.fused_graph_caps={{"
-         f"max_fused_edges: {_yaml_scalar(run5.inference.fused_graph_caps.max_fused_edges)}, "
-         f"max_fused_nodes: {_yaml_scalar(run5.inference.fused_graph_caps.max_fused_nodes)}}}"),
         "train.device=cpu",
         *(extra_deltas or ()),
     ]
