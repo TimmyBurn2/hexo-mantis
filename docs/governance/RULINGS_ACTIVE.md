@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c49ddaa, regenerated 2026-08-31.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ f47a201, regenerated 2026-08-31.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.31, 2026-08-31. Created under R271 (register hygiene: archive/index split);
+# v3.32, 2026-08-31. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -736,6 +736,40 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # **THIS RULING ARMS NOTHING AND MINTS NOTHING.** No `strength_floor` term, no bootstrap posture,
 # no ply-cap matrix row, no minted row moved. The PUSH it orders moves no value.
 # **RUN6 REMAINS HELD.**
+# **v3.32 = R326 folded in — the curation where THE SITTING-4 HALT IS RATIFIED ON A REPRODUCED
+# FACT AND THE TRAINER'S SIZING PERMISSION IS FINALLY DERIVED.**
+# **RECAL-SITTING-4 IS RATIFIED.** The card-level fact REPRODUCED: every partition term agrees
+# across two sittings, 93 commits and a changed worker geometry, the loosest of them —
+# conjunct-2 headroom — **within 17 KiB**. So the partition's refusal is a property of the CARD
+# and the PRE-REGISTERED PERMISSION, not of any measurement, and no further re-measurement can
+# make it go away. Phase W's **pick 14** stands by the pre-registered rule. **R317(d)'s
+# carried-noise assumption is MEASURED FALSE and corrected of record** — future ladders use
+# PER-RUNG noise — and the error ran in its own conservative direction.
+# **THE CAP RULING IS THE SUBSTANCE.** `_SIZING_BUDGET_GIB = 9.431` was never derived from
+# anything; it is now RE-DERIVED as **measured need plus a stated allowance** — peak 7.443 GiB
+# (byte-identical, `7 992 252 928 B`, in both sittings) plus 12.9 % → **8.40 GiB PROPOSED**.
+# **THE CEILING CONVENTION IS UNCHANGED**: the term is still the PERMISSION, not the draw. What
+# changes is that the permission shrinks to honesty. **The armed value is the operator's,
+# enacted by the forwarding, and it is CONDITIONAL on pre-flight re-deriving the closing
+# boundary independently — a boundary disagreement HALTs before ssh.**
+# **THE `_MOVED_LEAVES` WIDENING IS GRANTED**, run5-only → the seven R316(f) configs: the
+# instrument's own comment demanded a ruling rather than an edit, and this is it.
+# **GAP-4 IS FINAL, AND IT IS THE MIRROR OF v3.31'S FINDING.** v3.31 REFUSED the delete option
+# because `R289(q)` held the path reserved on the ground that the decision was untaken. **The
+# posture row is now VALUED (A) and CLOSED**, so that ground has moved: (B) is excluded by
+# definition, the loader's (B)-serving rationale is EXPIRED, and `load_pretrained_buffer` is
+# DELETED with a grave line and an import-census oracle pinning the absence. **The same
+# derivation, run twice against a moved premise, gives opposite answers — which is what a
+# derivation is for.**
+# **`sealbot_d6` × 32 IS EXCLUDED FROM THE DEFAULT BATTERY BY RULING** — at the measured
+# 30.9 s per first move it cannot finish inside its own `round_timeout_sec`; loud-skip per R139,
+# revisited at the gate-geometry re-adjudication. **`make vendor` is made idempotent.**
+# **THE SITTING-5 SEQUENCE IS SET:** terms and the pick INHERIT from sitting 4 IFF the box sha is
+# unchanged at `3e7fc54` apart from this packet's own commits — **any other drift re-measures, no
+# exceptions**; fit with the armed cap; conjunct 2 must clear M under the ceiling convention; the
+# NINE-ACT MINT; and then **THE OWED BURST at the fitted caps — the `--source synthetic`
+# substitution's price (R303(c)), unpaid since 2026-08-22, paid before anything is called done.**
+# **MINT OR CARD-LEVEL FACT. NOTHING IN BETWEEN.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -2018,6 +2052,50 @@ Verbatim text in the register; one-liners here are index only.
   consistent with arm (A), where the loop never sees a human game. **The formal word lands with
   the sitting-4 launcher's forwarding, posture named at its top.**
   **NOTHING TRAINS, NOTHING IS MINTED, NO PREREG ROW MOVES. RUN6 REMAINS HELD.**
+  **RATIFIED IN FULL by R326(a) (2026-08-31); this row EXPIRES.** (b)'s FILING stands, (c)'s
+  capability stands UNARMED, and (d)'s posture row is now VALUED (A) and CLOSED — which is what
+  moves R289(q)'s premise and lets R326(d) reach the opposite gap-4 answer this row's ruling
+  refused. **The one amendment R326 MAKES to (c):** the gap-4 disposition is re-run against the
+  signed posture and lands on DELETE.
+
+- **R326 — sitting 4 ratified, THE CAP RULING, and the sequence that ends in a mint or a
+  card-level fact. LIVE, expires at RECAL-SITTING-5's exit screen.** **(a) RATIFIES the
+  sitting-4 HALT on a REPRODUCED fact** — every partition term within 17 KiB across 93 commits
+  (`e3992c0..3e7fc54`, derived) and a changed worker geometry, so **the refusal is a property of
+  the card and the pre-registered permission**. Pick **14** stands by the pre-registered rule;
+  **R317(d)'s carried-noise assumption is MEASURED FALSE** and future ladders use per-rung noise;
+  the flat self-play peak (2.5618 GiB, 2→16 workers) is recorded — **the inference share does not
+  scale with the pick**; the four self-caught errors and the `secret_scan` misuse stand on the
+  sitting's ledger, and **the launcher's missing ruling text is booked as the ARCHITECT'S
+  omission, with refusing to invent one held CORRECT**.
+  **(b) THE CAP RULING — the one substantive act.** The trainer's sizing permission was never
+  derived; it is RE-DERIVED as **measured need plus a stated allowance**: 7.443 GiB + 12.9 % →
+  **`_SIZING_BUDGET_GIB` 8.40 PROPOSED**, armed by the operator's forwarding and **CONDITIONAL on
+  pre-flight's independent boundary re-derivation** (a boundary disagreement HALTs before ssh).
+  **The CEILING convention is UNCHANGED** — the term remains the permission; only the permission
+  shrinks. **Pre-flight's re-derivation REPRODUCED the boundary (8.4669 vs 8.4666, 0.004 %) and
+  the clause's trainer margin exactly (+0.957); it MEASURED the clause's partition margin
+  DIFFERENT — `M + 0.0125`, not `M + 0.083`** — because the architect's figure holds the
+  self-play term fixed while the full expression couples it. The HALT does not fire (it is keyed
+  to the boundary) but **the proposal clears M 6.6× thinner than the clause predicts**, and the
+  register entry carries the derivation and its `k = 1` sensitivity.
+  **(c) GRANTS the `_MOVED_LEAVES` widening** — run5-only → the seven R316(f) configs, one row,
+  flip-one-byte standard, planted break red before and green after, neighbours untouched. The
+  instrument's own comment demanded a ruling rather than an edit; this is it.
+  **(d) GAP-4 FINAL: DELETE.** With posture (A) signed, the loader's (B)-serving rationale is
+  EXPIRED — `load_pretrained_buffer` goes, with a grave line, and an **import-census oracle pins
+  the absence**. **This is R325(c)'s derivation re-run against a moved premise, and it lands on
+  the option v3.31 had to refuse.**
+  **(e) EXCLUDES `sealbot_d6` × 32 from the default battery** — it cannot finish inside its own
+  `round_timeout_sec` at 30.9 s/move; **loud-skip per R139**, revisited at the gate-geometry
+  re-adjudication. **`make vendor` is made idempotent** as ordered hygiene.
+  **(f) SETS THE SITTING-5 SEQUENCE:** inherit terms and pick from sitting 4 **IFF** the box sha
+  is unchanged at `3e7fc54` apart from this packet's own commits — **any other drift re-measures,
+  no exceptions**; fit at the armed cap; conjunct 2 must clear M under the ceiling convention;
+  the **nine-act mint** (cap row, pick, posture row already valued, allocator posture,
+  `strength_floor` values); then **THE OWED BURST at the fitted caps — R303(c)'s unpaid price for
+  the `--source synthetic` substitution, paid before anything is called done**.
+  **MINT OR CARD-LEVEL FACT, NOTHING IN BETWEEN. RUN6 REMAINS HELD until the mint stands.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4494,3 +4572,83 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config,
   sets no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
   ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
+
+- 2026-08-31 — **v3.32** curated by the RECAL-SITTING-5 execution session, landing **R326**,
+  authored in the ARCH-ERA architect session under R303(d) and forwarded by the operator (the
+  forwarding IS the authorization, and this one **DOES consume operator locks**: it arms
+  `_SIZING_BUDGET_GIB = 8.40` conditionally, re-arms `M = 0.35` and the three `strength_floor`
+  values, grants the box, and authorizes the mint step. Nothing is minted BY THIS CURATION —
+  the mint happens on the box, on a branch, after conjunct 2 clears).
+  **Landing checks, each re-run rather than inherited:** census before `R23–R325, 296 sections /
+  296 distinct / 0 duplicates, excluded set 53`, after `R23–R326, 297 / 297 / 0, excluded set
+  53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}` both times; `--stamp` read
+  `STAMP OK: stamp v3.31 == §8 last entry v3.31` before this edit; `--self-test` all four
+  controls fire. Live-placeholder check returned ZERO, the correct reading for a
+  prompt-forwarded text. Second independent transcription with `R{next}` intact, diffed against
+  the first BEFORE substitution — **IDENTICAL, 42 lines** (`wc -l` at the check) — then
+  `sed`-substituted and diffed again, de-marked and whitespace-normalized under
+  `set -o pipefail`, against the appended register block. `diff` of the two `awk`-extracted
+  blocks — register entry vs canonical home `PACKET_R326_SITTING5_LAUNCHER.md` — is EMPTY.
+  **ONE LANDING CHECK CAME BACK DIFFERENT AND IS STATED RATHER THAN SMOOTHED.** R323–R325 each
+  recorded `grep -rn 'R<n>' plan/` returning *nothing at all* before the canonical home was
+  written. For R326 it returns **one** hit — `RECAL_SITTING4_RECORD_2026-08-31.md:12`, sitting
+  4's own §1c line recording that the same grep returned nothing FOR IT. A reference to the
+  check is not competing canonical text and the ONE-TEXT rule is unbroken, but the formula does
+  not hold verbatim and a landing that copied it forward would have asserted something false.
+  **THE CURATION'S OWN FINDING: (b)'s SECOND PARENTHETICAL IS MEASURED DIFFERENT, AND THE CLAUSE
+  IT SITS IN IS THE ONE CARRYING A HALT TRIGGER.** R326(b) orders pre-flight to re-derive the
+  closing boundary independently and states two margins the proposal must clear it by. **The
+  boundary REPRODUCES** — 8.4669 against 8.4666, a 0.004 % disagreement, from an expression
+  reconstructed out of the sitting-4 artifacts and CONTROLLED by re-predicting the sitting's own
+  reported terms at 9.431 (trainer exact, `selfplay_inference` to 16 µGiB, headroom to 17 µGiB).
+  **The trainer margin reproduces exactly (+0.957). The partition margin does not: `M + 0.0125`,
+  not `M + 0.083`.** The `0.083` is the budget slack below the boundary converted at `frag`
+  (`0.0666 × 1.24879`), which holds the self-play term FIXED — precisely the uncoupled reading
+  the sitting's own §7 lever-1 paragraph avoided by bisecting the full expression after a first
+  pass asserted `8.359`. Lowering the trainer's budget RAISES STEP 2's leftover, so only
+  `(1 − k)` of the reduction reaches headroom. **The HALT does not fire** — (b) keys it to a
+  *boundary* disagreement and the boundary agrees — **but the proposal clears M by 3.6 % of M
+  rather than by 24 %, and a sitting that fits without knowing that is fitting blind.**
+  **AND ONE SENSITIVITY THAT IS STRUCTURAL, NOT ARITHMETICAL:** at `k = 1` — a cap search that
+  saturates its budget — headroom collapses to the CONSTANT `M − cuda_context = 0.089` at every
+  budget, and **no value of `_SIZING_BUDGET_GIB` closes the partition at all**. The partition
+  closes only because the discrete search under-fills by ~15 %. That is lever 3's
+  `cuda_context` double-count wearing different clothes, and R316(b) is explicit that correcting
+  it VOIDS M — so it is RECORDED here and corrected nowhere.
+  **Six referenced clauses read at their CANONICAL location before use — and the check found
+  that two of the six have no index line in this file at all, which is stated rather than
+  papered over.** Indexed here and accurate as indexed: **R289(q)** (`:2008`, `:4443` — the
+  reserved path, and its premise is precisely what (d) shows has MOVED), **R303(c)** (`:1279` —
+  the disclosed-synthetic decision whose price (f) finally comes due on), **R139** (`:1940`,
+  `:1960` — loud-skips AS RULINGS, which (e) joins a third rung to), and **R316(b)** (`:4067` —
+  a POINTER line: it cites the block's assertion rather than restating M's denomination, so the
+  void-on-correction rule was read at the register, `rulings_register.md:7140-7143`). **Not
+  indexed in this file, read at the register:** **R316(f)** (`:7178` — *"mints shakedown's
+  n_workers to the Phase W pick with the other six configs"*, which is (c)'s authority, and
+  (c)'s ruling exists precisely because the instrument was written before it) and **R319(g)**
+  (`:7348` — the SEQUENCE clause). **AND THAT SECOND READING FOUND A CARRIED MIS-CITATION.**
+  Sittings 3 and 4 both attribute *"If the measured term refuses the partition at STEP 2 under M,
+  that is a HALT and a card-level fact — no in-sitting knob search"* to **R319(g)**. The string
+  `in-sitting knob search` does not occur in R319 at all — it is **R318(e)**
+  (`rulings_register.md:7277-7280`), and sitting 3's own `:737` cites it correctly before
+  `:1121` gets it wrong. **The RULE was applied correctly in both sittings and no verdict
+  depends on the letter**; only the citation is wrong. Repaired in place at the three
+  non-canonical sites under R311(c) (`RECAL_SITTING3_RECORD:1121`,
+  `RECAL_SITTING4_RECORD:583` and `:657`), one line each, no loop; register text untouched. **No index line was widened by this curation.**
+  **Index edits, four and no more:** the v3.32 header block; the stamp (which rides it,
+  R284(f)); an **amendment appended to §5's R325 row** — RATIFIED, the row EXPIRES, carrying the
+  one amendment the ratification makes (gap-4 re-run against the signed posture lands on
+  DELETE); and a **new §5 LIVE row for R326**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** Three curations running have turned on *derive, don't assume*.
+  v3.30's derivation confirmed an asserted claim; v3.31's refused an offered option; **v3.32's
+  re-runs v3.31's derivation against a premise that MOVED and lands on the opposite answer.**
+  That is the point of deriving rather than remembering: the same question, asked twice, is
+  allowed to have two answers when the world between them changed — and the changed thing is
+  nameable (`RUN5_MINT_PREREG`'s posture row went from OWED to VALUED (A)). The other thing it
+  settles is smaller and sharper: **a permission is not a measurement.** `_SIZING_BUDGET_GIB`
+  has ridden every partition since the first sitting as a number nobody derived, and the whole
+  4.33 GiB gap between what the caps permit and what the step draws was invisible until someone
+  asked where the permission came from.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing (the mint is a box act, on a branch,
+  after conjunct 2 clears), moves no committed config, changes no `armed_aborts.py` row, and
+  writes no value into `configs/`. **RUN6 REMAINS HELD.**
