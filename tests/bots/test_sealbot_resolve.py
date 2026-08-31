@@ -37,6 +37,14 @@ SEAM (frozen here, ORACLE-FIRST — IMPL builds to it or files a grant):
     modules()`), never a from-import binding — the SR-3 property, so `monkeypatch.setattr`
     on the module attribute is seen at call time.
   * `mantis.bots.resolve._R139_SKIP_GROUNDS: dict[str, str]` — DESIGN_A §2.2(3)'s mapping.
+
+>300 justify: one resolver, one file. Every row here is an assertion about the SAME function's
+refusal surface — which reason fires, whether two reasons can be confused for one another, and
+whether the ordering that decides between them holds. Splitting them would put the ruled skips
+(R139's kraken/strix, R326(e)'s excluded sealbot depth) in one file and the environment-state
+refusals in another, and the whole point of the pairwise-distinctness rows is that a reader of
+the log can tell those two classes apart: an oracle that can only see one class at a time
+cannot assert they are distinguishable.
 """
 from __future__ import annotations
 
@@ -196,6 +204,93 @@ def test_operator_authorized_skip_carries_r139_grounds_per_rung(kind: str, direc
             f"{kind}'s skip reason carries {other}'s grounds — the grounds are PER RUNG "
             f"(R139), and a shared string is a false diagnosis: {reason}"
         )
+
+
+# ── R326(e): the depth-6 sealbot rung is EXCLUDED from the default battery ──────────────
+def test_the_excluded_sealbot_depth_refuses_as_an_operator_authorized_skip() -> None:
+    """R326(e). The rung is minted in all seven configs and cannot finish inside
+    `eval.round_timeout_sec` at the measured 30.9 s/move, so it loud-skips per R139 instead of
+    killing a round.
+
+    The refusal must land in the SAME class kraken and strix use — `operator_authorized` —
+    because the in-run skip-class counter (LAW-18/R164) buckets on that marker, and a ruled
+    exclusion that reported as `build_absent` would read to an operator as a broken box.
+
+    MUTATION THAT REDS IT: the exclusion removed, or its reason rewritten without the R139
+    marker."""
+    from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS, resolve_bot
+
+    depth = next(iter(_R326_EXCLUDED_SEALBOT_DEPTHS))
+    with pytest.raises(RungUnresolvable) as exc:
+        resolve_bot("sealbot", depth=depth, opponent_sims=None)
+    reason = exc.value.reason
+    assert "operator-authorized skip (R139)" in reason, reason
+    assert _R326_EXCLUDED_SEALBOT_DEPTHS[depth] in reason, (
+        "the grounds are the deliverable and must arrive VERBATIM, as kraken's and strix's do"
+    )
+    assert exc.value.rung == f"sealbot_d{depth}", (
+        f"the refusal must name the RUNG, not the kind: an operator reading the log has to see "
+        f"which sealbot rung was skipped, since another one is still live. got {exc.value.rung!r}"
+    )
+
+
+def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> None:
+    """The exclusion must be a statement about ONE depth, not about sealbot.
+
+    `sealbot_d5` is the rung that carries `wr_sealbot` — the gate's own sealbot signal — so an
+    exclusion that caught the kind rather than the depth would silently disarm the eval gate's
+    only resolvable opponent while looking like a narrow skip. Driven against the LIVE ladder
+    rather than a literal, so a re-minted ladder moves this row with it.
+
+    MUTATION THAT REDS IT: the guard keyed on `kind == "sealbot"` instead of on the depth."""
+    import yaml
+
+    from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
+
+    rungs = yaml.safe_load((_REPO / "configs" / "run5.yaml").read_text(encoding="utf-8"))
+    sealbot_depths = {r["depth"] for r in rungs["eval"]["ladder"]["rungs"]
+                      if r["bot"] == "sealbot"}
+    excluded = set(_R326_EXCLUDED_SEALBOT_DEPTHS)
+    assert excluded < sealbot_depths, (
+        f"the exclusion must be a PROPER subset of run5's sealbot depths {sorted(sealbot_depths)}; "
+        f"excluding {sorted(excluded)} leaves nothing behind and disarms wr_sealbot"
+    )
+    survivor = min(sealbot_depths - excluded)
+    assert survivor not in _R326_EXCLUDED_SEALBOT_DEPTHS, survivor
+
+
+def test_the_exclusion_fires_BEFORE_the_extension_probe() -> None:
+    """An excluded rung must read the same in a warm checkout and a cold one.
+
+    If the guard sat after `load_sealbot_modules`, the reason on a box without the built
+    extension would be `BUILD_ABSENT` — a broken-box diagnosis for a rung the operator ruled
+    out — and the skip-class counter would bucket it as `build_absent`. Driven by making the
+    probe explode: the ruled reason must still come back.
+
+    MUTATION THAT REDS IT: the guard moved below the `try:`."""
+    import mantis.bots.resolve as resolve_mod
+
+    depth = next(iter(resolve_mod._R326_EXCLUDED_SEALBOT_DEPTHS))
+    original = resolve_mod._sealbot_mod.load_sealbot_modules
+    try:
+        def _explode() -> Any:
+            raise AssertionError("the probe must not be reached for an excluded rung")
+        resolve_mod._sealbot_mod.load_sealbot_modules = _explode
+        with pytest.raises(RungUnresolvable) as exc:
+            resolve_mod.resolve_bot("sealbot", depth=depth, opponent_sims=None)
+    finally:
+        resolve_mod._sealbot_mod.load_sealbot_modules = original
+    assert "operator-authorized skip (R139)" in exc.value.reason, exc.value.reason
+
+
+def test_the_excluded_rungs_grounds_are_not_shared_with_kraken_or_strix() -> None:
+    """The same per-rung discipline R139 imposes on kraken and strix, extended to the third
+    ruled skip: a shared grounds string is a false diagnosis."""
+    from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
+
+    for grounds in _R326_EXCLUDED_SEALBOT_DEPTHS.values():
+        for kind, other in _R139_GROUNDS.items():
+            assert other not in grounds, f"the depth exclusion carries {kind}'s grounds"
 
 
 # ── O-A3: the env channel is GONE — behaviour and source, two observers ─────────────────

@@ -3,7 +3,8 @@
 `kind="random"` resolves to the in-repo `RandomBot` unconditionally. `kind="sealbot"` resolves
 to the vendored fixed-depth engine through `mantis.bots.sealbot`, or refuses with a reason
 naming the ONE step that is missing. `kind in {"kraken","strix"}` refuses with R139's
-OPERATOR-AUTHORIZED grounds, verbatim and per rung.
+OPERATOR-AUTHORIZED grounds, verbatim and per rung, and so does a sealbot rung at a depth
+R326(e) excluded from the default battery.
 
 THE ENV-KEY CHANNEL IS DELETED (WP12-R Phase A, DESIGN_A §2.2(2)), and the deletion is argued
 rather than convenient (R125/R79). For `sealbot` the key became simply WRONG: the authority
@@ -60,6 +61,24 @@ _NO_DEPTH_REASON = (
     "sealbot rung without one names an instrument that does not exist"
 )
 
+#: Sealbot DEPTHS excluded from the default battery by ruling, depth -> grounds. R326(e).
+#:
+#: THE GROUNDS ARE ARITHMETIC. Depth 6 measured 30.900 s per first move (SITTING4-PREP-1, three
+#: book positions, 15.331–42.176); `run5.yaml` mints the rung at `games_max: 32` under
+#: `round_timeout_sec: 3600.0`. The whole round budget buys 116 opponent moves — 3.6 per game
+#: across 32 — before the candidate has moved once. A rung that cannot finish does not produce a
+#: weaker bar; it produces a KILLED round.
+#:
+#: A SKIP RATHER THAN AN UNMINTED RUNG: the rung is a minted row in all seven configs, so
+#: removing it is a config act, and this one is reversible by deleting one row at the
+#: gate-geometry re-adjudication. The strings are EXACT for the same reason kraken's and strix's
+#: are (R143).
+_R326_EXCLUDED_SEALBOT_DEPTHS: dict[int, str] = {
+    6: ("sealbot depth 6 cannot finish its minted games inside eval.round_timeout_sec at the "
+        "measured 30.9 s/move — the whole round budget buys ~3.6 opponent moves per game. "
+        "Revisited at the gate-geometry re-adjudication"),
+}
+
 #: reason-class -> the marker substring that identifies it. ONE authority: every value here is
 #: the same object the reason strings are built from, so a reason cannot drift out of the
 #: classifier's reach without this mapping moving with it. Consumed by
@@ -82,6 +101,14 @@ def _resolve_sealbot(depth: int | None) -> BotFactory:
     """
     if depth is None:
         raise RungUnresolvable(rung="sealbot", reason=_NO_DEPTH_REASON)
+    # R326(e): before the probe, so the skip is a property of the RULING and not of whether the
+    # extension happens to be built on this box — an excluded rung must read the same in a warm
+    # checkout and a cold one, or the log stops distinguishing a ruled skip from a broken box.
+    if depth in _R326_EXCLUDED_SEALBOT_DEPTHS:
+        raise RungUnresolvable(
+            rung=f"sealbot_d{depth}",
+            reason=f"{_R139_SKIP_MARKER}: {_R326_EXCLUDED_SEALBOT_DEPTHS[depth]}",
+        )
     try:
         minimax_module, game_module = _sealbot_mod.load_sealbot_modules()
     except RungUnresolvable:
