@@ -218,6 +218,42 @@ def test_fg8_03_the_help_text_does_not_advertise_a_budget_default(tmp_path) -> N
         "of the budget (R1 applied to a tool)")
 
 
+def test_the_margin_pin_is_0_85_READ_OFF_THE_PARSER_not_the_help(tmp_path) -> None:
+    """R327(c) as a producer, not a memory — and read off the MECHANISM.
+
+    The whole of conjunct 2's pass at the R326 mint is 0.79 % of margin-headroom: the partition
+    closes at `k = 0.849998` and refuses at 0.86. `k` turned out to BE this knob, so the pin is
+    the criterion, and a criterion that drifts to whatever the card afforded AFTER the card was
+    measured has stopped being one.
+
+    The value is taken from the argparse action argparse itself uses, never from the help text
+    or from the `(0.85 when unset.)` note in it — a string an edit can move without moving the
+    default is the proxy-not-mechanism trap. `margin_achieved` in the report would be the other
+    mechanism reading, but it is `None` unless the tool RECOMMENDS, which needs the GPU this
+    suite deliberately does not have.
+    """
+    from mantis.diagnostics.fusion_calibrate import build_parser
+
+    action = next(a for a in build_parser()._actions if "--margin" in a.option_strings)
+    assert action.default == 0.85, (
+        f"the --margin pin moved to {action.default}; R327(c) pins it at 0.85 as PROCEDURE, "
+        "and moving it to the measured affordability edge is criterion movement, not "
+        "calibration"
+    )
+
+
+def test_the_margin_pins_rationale_names_the_value_that_would_refuse(tmp_path) -> None:
+    """The second half, and the one a reader actually meets. A bare `0.85` reads as a round
+    number nobody derived; the operator needs to see that 0.86 REFUSES the same partition on the
+    same card, or the next sitting re-opens a settled question by looking reasonable."""
+    proc = _run("--help", cwd=tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "0.8568" in proc.stdout and "0.86" in proc.stdout, (
+        "the --margin rationale no longer names the affordability edge or the refusing value:\n"
+        + proc.stdout[:2000]
+    )
+
+
 @pytest.mark.parametrize("flag", ["--config", "--budget-bytes", "--shapes-only",
                                   "--source", "--repeats", "--margin"])
 def test_fg8_03_the_designed_interface_exists(tmp_path, flag: str) -> None:

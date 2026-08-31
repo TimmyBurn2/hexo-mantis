@@ -572,7 +572,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Headroom multiplier applied to the budget. 0.85 is INHERITED with its "
              "provenance from the training-side sizing pass, where it covered a >1 GiB "
              "fragmentation swing and the eval child; the eval child OOM'd anyway, so treat "
-             "it as a floor. Whatever is given is stamped into the report. (0.85 when unset.)",
+             "it as a floor. Whatever is given is stamped into the report. (0.85 when unset.) "
+             "R327(c) PINS this value AS PROCEDURE: the R326 partition closes at exactly "
+             "k = predicted_peak/budget = 0.849998, so k IS this knob rather than a search "
+             "outcome, and the largest margin that partition affords is 0.8568 -- 0.86 would "
+             "REFUSE the same partition on the same card. Moving the pin to the measured edge "
+             "after observing it would be criterion movement, so it does not move; the "
+             "0.86-refuses fact is recorded as the partition being tight and honest.",
     )
     parser.add_argument(
         "--shapes-only", action="store_true",
