@@ -229,13 +229,31 @@ _REMOVED_LINES = ["  buffer_save_interval: 0"]
 #: instrument written before the measurement existed. Widening it FURTHER is a ruling, not an
 #: edit — the same sentence `_REMOVED_LEAVES` carries.
 #:
+#: **THE WIDENING, RULED: R326(c), 2026-08-31, enacted by the operator's forwarding of the
+#: RECAL-SITTING-5 launcher.** The 2026-08-27 grant named `run5.yaml` alone; R316(f) then ruled
+#: that the same measurement-derived pick mints into ALL SEVEN configs — *"the corrected block
+#: mints shakedown's `n_workers` to the Phase W pick with the other six configs"* — which
+#: post-dates the grant and collides with it. R326(c) resolves the collision the way this file
+#: demands: by a RULING that names the change, never by relaxing the instrument to "moves are
+#: fine". **The widening is along the CONFIG axis ONLY. The KEY axis stays closed at one**, and
+#: `test_a_second_moved_leaf_still_reds` asserts exactly that, so a second ruled KEY still needs
+#: a second ruling.
+#:
+#: DERIVED from this file's own two config authorities rather than typed as seven pairs: a
+#: config that joins the live set joins it through `_POST_BASELINE_MINTS` with grounds, and
+#: `test_the_committed_baseline_covers_every_minted_config` refuses any live config that is in
+#: neither. A transcribed list of seven would go stale the first time that happened and would
+#: then be read as evidence (R192(e)).
+#:
 #: **SUBSET, not equality, and the difference is deliberate.** `_REMOVED_LEAVES` asserts
 #: equality because its deletion HAS happened and must stay happened. This is a PERMISSION
 #: whose exercise depends on a mint: a clone from before the mint moves nothing and must stay
 #: green; the tree after it moves exactly this leaf. Nothing is given up by the weaker
 #: relation — a move on any key OUTSIDE this set still reds, which is the whole of the "and
 #: only those rows" bite, and `test_a_second_moved_leaf_still_reds` is its producer.
-_MOVED_LEAVES = {("run5.yaml", "selfplay.n_workers")}
+_MOVED_LEAF_KEY = "selfplay.n_workers"
+_MOVED_LEAVES = {(name, _MOVED_LEAF_KEY)
+                 for name in (*_CONFIGS, *(n for n, _t in _POST_BASELINE_MINTS))}
 
 #: Exactly which minted-header delta lines R187's re-mint may RE-RENDER, by (config, key). A
 #: closed set of five, and the second non-insertion this file has ever seen.
@@ -578,21 +596,28 @@ def test_the_arch_scoped_narrowing_is_exactly_the_schema_partition() -> None:
 
 def test_a_second_moved_leaf_still_reds() -> None:
     """The allowance's own guard: this file tolerates a MOVED value at all only because the
-    operator granted ONE on 2026-08-27, and the tolerance must never become "moves are fine".
+    operator granted it, and the tolerance must never become "moves are fine".
 
     MUTATION THAT REDS IT: a later sitting that needs its own leaf moved and widens
-    `_MOVED_LEAVES` instead of getting a grant. The set is closed at one `(config, key)` pair,
-    the key is named, and `_is_ruled_move` refuses any line whose key is not IN it — so the
-    two ways a second move could slip through (a wider set, or a predicate that matched on
-    shape rather than on name) are both closed here.
+    `_MOVED_LEAVES` instead of getting a ruling. **The KEY axis is where the closure lives** —
+    R326(c) widened the CONFIG axis to the seven R316(f) mints and widened nothing else — so
+    this row asserts the key set is exactly one NAMED key, and `_is_ruled_move` refuses any
+    line whose key is not IN it. The two ways a second move could slip through (a second key,
+    or a predicate that matched on shape rather than on name) are both closed here.
 
     The `_is_ruled_move` arms are driven against the LIVE tree rather than against a fixture,
     so they stay true of whatever `configs/run5.yaml` currently holds: before the mint the
     baseline and live values agree and every arm is False for want of a difference; after it
     the ruled pair is the one that passes. Neither state can make an UNNAMED key pass."""
-    assert _MOVED_LEAVES == {("run5.yaml", "selfplay.n_workers")}, (
-        "the ruled-move set is the operator's 2026-08-27 grant and is closed at one "
-        "(config, key) pair; widening it is a grant, not a maintenance edit"
+    assert {path for _c, path in _MOVED_LEAVES} == {"selfplay.n_workers"}, (
+        "the ruled-move KEY set is closed at one named key (R326(c) widened the CONFIG axis "
+        "only); a second key is a ruling, not a maintenance edit"
+    )
+    assert {name for name, _p in _MOVED_LEAVES} == set(_CONFIGS) | {
+        name for name, _t in _POST_BASELINE_MINTS
+    }, (
+        "R326(c) grants the move on the seven configs R316(f) mints the pick into — which is "
+        "this file's own live set, derived; a hand-typed subset or superset is drift"
     )
     assert not {path for _c, path in _MOVED_LEAVES} & _ADDED_LEAVES, (
         "a leaf cannot be both added by the re-mint and moved by it"
@@ -609,9 +634,34 @@ def test_a_second_moved_leaf_still_reds() -> None:
     assert not _is_ruled_move("run5.yaml", "  batch_size: 256", "  batch_size: 128"), (
         "a body line of the tolerated shape on a key nobody named must not pass"
     )
-    # The ruled key in a config the grant does not cover must still fail.
-    assert not _is_ruled_move("dev_example.yaml", "  n_workers: 1", "  n_workers: 8"), (
-        "the grant names (run5.yaml, selfplay.n_workers); the same key elsewhere is unruled"
+    # An UNNAMED key in a config the grant DOES cover must still fail — the replacement for
+    # the pre-R326(c) arm that used `dev_example.yaml`'s `n_workers`, which the widening makes
+    # a ruled pair. The negative control has to move to an axis the ruling did not widen, or
+    # it stops being a control: this one is the KEY axis, checked on a non-run5 config so it
+    # is not merely the `batch_size` arm above wearing a different file name.
+    assert not _is_ruled_move("dev_example.yaml", "  seed: 20260716", "  seed: 20260717"), (
+        "R326(c) names one key on seven configs; a DIFFERENT key on a covered config is unruled"
+    )
+    # THE ARM THAT ISOLATES THE NAME CONJUNCT, and it is here because R326(c)'s flip-one-byte
+    # pass found the docstring's second closure ASSERTED and not driven. Every arm above is
+    # refused by the VALUE conjunct before the name conjunct is ever reached: a predicate that
+    # dropped the `_MOVED_LEAVES` lookup entirely and resolved any unique live leaf still
+    # passed all of them. This one cannot be: it feeds an UNNAMED key carrying its OWN
+    # baseline and live values, so both value conjuncts hold by construction and only the
+    # name lookup can return False. Values are DERIVED from the two configs — a transcribed
+    # pair would stop satisfying "its own values" the moment either config moved.
+    unnamed = "train.batch_size"
+    assert unnamed not in {path for _c, path in _MOVED_LEAVES}, (
+        f"{unnamed} must be OUTSIDE the ruled set for this to be a control at all"
+    )
+    unnamed_base = _baseline_leaves("run5.yaml")[unnamed]
+    unnamed_live = _live_leaves("run5.yaml")[unnamed]
+    leaf = unnamed.rsplit(".", 1)[-1]
+    assert not _is_ruled_move("run5.yaml", f"  {leaf}: {unnamed_base}",
+                              f"  {leaf}: {unnamed_live}"), (
+        "an UNNAMED key carrying its own baseline and live values must be refused BY NAME — "
+        "every other arm here is refused by the value conjunct first, so this is the only one "
+        "that can see a predicate matching on shape instead of on the ruled name"
     )
     # A line that disagrees with the body it claims to describe must still fail, whichever
     # side disagrees — this is the conjunct that makes the predicate DERIVED rather than a
