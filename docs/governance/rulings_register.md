@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 4ecdad6, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ c49ddaa, regenerated 2026-08-31.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7574,3 +7574,45 @@ no `R315` string under `plan/`. **The substitution is the only edit.**
 > bootstrap CAPABILITY only, unarmed; box measurements (the (d) ground and a
 > post-fix re-baseline). Nothing trains; landing is not arming.
 > ROUTE: land, census, ACTIVE next version; execute; one exit screen.
+
+# R325 — architect ruling, ARCH-ERA session, 2026-08-31 (NIGHTRUN-1 RATIFIED and the PUSH ORDERED; the eval-loop attribution and S-INCR-GRAPH's margin recorded as CONVERGING EVIDENCE with INCR-GRAPH elevated to the top of the floor lane; the decisiveness finding recorded and the strength_floor re-read as a gate-integrity guard rather than a training-progress meter; the bootstrap adjudication FILED as its one canonical home with its corrections made at HEAD; BC capability COMPLETES UNARMED on the gap-3 reroute and a DERIVED gap-4 disposition; the posture row remains OPERATOR-ONLY) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), forwarded by the operator into this adjudication-verification session's prompt rather than as a file — so the landing session CREATED the ruling's one canonical home, `PACKET_R325_NIGHT_RATIFIED.md`, and no competing text exists under `plan/` (`grep -rn 'R325' plan/` returned nothing at all before that file was written). Byte-diff on append per R306(a) (de-marked, whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never retyped; extraction and diff under `set -o pipefail`, R313(c)). **The forwarded text carried the placeholder `R{next}`**, substituted to `R325` after verifying the head is R324 — census `R23–R324, 295 sections / 295 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.30 == §8 last entry v3.30`; `--self-test` all four controls fire; last register header `R324`, no `R325` heading present. **The LIVE-placeholder check `grep -rn '^> *R{next}' plan/` returns ZERO hits, and that is the CORRECT reading for this landing's shape** — the same shape as R323's and R324's and for the same reason: the text arrived in a prompt, so the landing session authored the canonical home AFTER substituting and no un-landed placeholder exists under `plan/` to find. What stands in its place: the forwarded text was transcribed a SECOND time, independently, with `R{next}` intact, and the two transcriptions were diffed BEFORE substitution — IDENTICAL, 35 lines (`wc -l` over the extracted block, derived at the check and not carried from the packet); the substitution was then applied mechanically by `sed` to the canonical home and the post-append register block diffed against the second transcription substituted the same way. That substitution is the ONLY edit to the canonical text and was applied to the canonical home as well as to this entry, so the two are byte-identical; the `R325` occurrences in the packet's filename and preamble are REFERENCES, not canonical text, and were left untouched.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the exit screen — and one of them is NARROWER at its producer than the ruling's summary phrasing, which is recorded here rather than corrected in the text.** **Clause (a)'s `×1.905`** is `plan/NIGHTRUN1_EXIT.md` §2 row E1-a: `9.030 → 4.740` ms/sim at 64 moves against a bar of `≥ 1.6×` pre-stated in `NIGHTRUN1_TRANCHE2_PREREG.md`, with the 40-move reading `×1.885` recorded as consistent and not as a second witness. **"byte-exact parity" is E1-b**, whose producer is `crates/mantis-selfplay/tests/leaf_graph_parallel_parity.rs` — 5 rows green, 3 planted breaks all bite, index order preserved — not a phrase from the exit table. **Clause (a)'s `95.3%`** is `plan/NIGHTRUN1_EVIDENCE/leg1_eval64_profile.md:17`, the `submit_graphs_and_wait_ls` row at 9.395 units, and the GIL claim is that file's line 27 (built SERIALLY on the calling thread, holding the GIL, `py.detach`ed only afterwards). **Clause (a)'s `141×` is the SELF-PLAY-build margin, and this is the narrowing:** `leg2_incr_graph_inequality.md:60` states 141× on the self-play build and **58× against the post-E1 eval build**, because E1 moved the eval path's own floor in this same mission (`:90`). The ruling's unqualified `141×` is therefore true of the path it was measured on and NOT of both; the elevation it grounds survives either reading, since `:85` records that even the pessimistic ~30× reading clears. **Clause (a)'s decisiveness pair** is `leg4_decisiveness.md:19-20`: `r000001_25_candidate.pt` 20 games / 0 decisive / winrate 0.5 / `ply_cap ×20` / `failed_bars = ['decisive_rate']`, and the fresh-init CONTROL `r000001_25_best.pt` reading the same on every column — the identity is what makes the finding a statement about the instrument rather than about the checkpoint. **The night's three disclosed defects** are enumerated by reading, not by counting a summary: the Leg-0 `tools/vendor_build_sealbot.sh` `uv run` that re-synced the venv and swapped CUDA torch for CPU mid-A/B (`NIGHTRUN1_EXIT.md` §7, contaminated arm DISCARDED and re-run, fix `--no-project` guarded by a command-asserting row); the eval profiler's GPU sampler returning zero samples with `pynvml` absent, so GPU-idle is a CPU-side attribution and not a device reading (§7 "Also disclosed"); and the exit table asserting a clippy green it had not run (§8.1) — which is the same item clause (a) books as the premature-done pattern, so the three are three and the pattern is not a fourth. **Clause (b)'s three unreachability sites are verified at `3bde2d1` and are independent:** the route guard is `src/mantis/train/coordinator/step.py:1226-1231` (`if spec.representation != "grid": raise RepresentationRouteError(... has no mixed-batch route)`); the dense-only loader is `src/mantis/train/batch_assembly.py:119` `load_pretrained_buffer`, which `np.load`s an NPZ and builds a dense `ReplayBuffer` via `push_game` at `:204-208`; and the absent call site is `src/mantis/run.py:1002`, which passes `pretrained_buffer=None` explicitly, with zero callers of the loader anywhere in `src/`, `tests/` or `tools/`. **Clause (d)'s citation is EXACT:** `plan/RUN5_MINT_PREREG.md:893` is the line `> **BOOTSTRAP POSTURE (BC pretrain / corpus-mix vs no warm start) — R247, made`, the row header itself.
+
+> R325 — (a) NIGHTRUN-1 is RATIFIED: leg verdicts as tabled; E1 MET at
+> ×1.905 with byte-exact parity; the eval-loop attribution (95.3% serial
+> GIL-holding leaf build) and S-INCR-GRAPH's measured 141× margin recorded as
+> CONVERGING EVIDENCE — INCR-GRAPH is elevated to the top of the floor lane;
+> the decisiveness finding recorded (step-25 0/20 vs random, fresh-init 0/20,
+> identical): the strength_floor is a gate-integrity guard, not a
+> training-progress meter, and becomes informative at exactly the moment a
+> checkpoint can finish a game; min_winrate 0.0 is empirically vindicated.
+> The night's three disclosed defects are accepted on the ledger, the
+> premature-done claim noted as a recurring pattern under standing watch. The
+> unpushed dev was the grant read correctly; the PUSH IS NOW ORDERED — verify
+> the sweep green at tip, push, verify dev == origin/dev.
+> (b) The bootstrap adjudication is FILED as
+> plan/ADJUDICATION_BOOTSTRAP_POSTURE.md — §2 and §6 corrected at HEAD
+> (capability gaps 1–2 landed unarmed with their oracle; both open inputs
+> closed), the route-guard finding folded into §3(B): corpus-mix is
+> UNREACHABLE on a graph run in three independent places (route guard at its
+> named site, dense-only loader, no call site) — bot_batch_share 0.0 is
+> structural fact, not preference. Provenance block states: drafted by the
+> architect 2026-08-31, verified and corrected against 3bde2d1. This filing is
+> the one canonical home; the architect's draft is superseded.
+> (c) BC CAPABILITY COMPLETES, UNARMED: the gap-3 reroute (pretrain CLI routed
+> to the main trainer's existing graph step, through the seam, not around it)
+> and the gap-4 disposition (load_pretrained_buffer is dense-only with zero
+> callers — make it arch-agnostic through the contract OR delete it where the
+> reroute obsoletes it; DERIVE which, don't assume). Suite-proven, selected by
+> nothing, armed by nothing. Execution of any pretrain still waits on the
+> operator's posture word and recipe rows.
+> (d) The posture row remains OPERATOR-ONLY DECISION OWED
+> (RUN5_MINT_PREREG:893). The operator's stated direction — no bootstrap games
+> in the self-play loop — is RECORDED as excluding (B) by definition and as
+> consistent with (A), where the loop never sees a human game. The formal word
+> lands with the sitting-4 launcher's forwarding, posture named at its top.
+> ROUTE: land this, census, ACTIVE next version; execute (b) then (a)'s push
+> then (c); one plain exit screen.

@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 4ecdad6, regenerated 2026-08-30.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c49ddaa, regenerated 2026-08-31.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.30, 2026-08-31. Created under R271 (register hygiene: archive/index split);
+# v3.31, 2026-08-31. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -701,6 +701,41 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # BEFORE FIX); the floor lane (`S-INCR-GRAPH` under its external witness, then a TIME-BOXED kernel
 # feasibility spike behind a parity oracle); bootstrap CAPABILITY only, unarmed; box measurements.
 # **NOTHING TRAINS. LANDING IS NOT ARMING. GRAVES STAY DEAD.**
+# **v3.31 = R325 folded in — the curation where THE NIGHT IS RATIFIED, THE BOOTSTRAP
+# ADJUDICATION GETS A CANONICAL HOME, AND A "DELETE IT" OPTION MEETS A LANDED RULING.**
+# **NIGHTRUN-1 IS RATIFIED**: leg verdicts as tabled; **E1 MET at ×1.905** (9.030 → 4.740 ms/sim
+# at 64 moves against a pre-stated ≥1.6×), with E1-b's byte-identical graph parity as its
+# correctness witness — 5 rows green, 3 planted breaks all bite.
+# **THE EVAL-LOOP ATTRIBUTION AND THE FLOOR-LANE MARGIN ARE CONVERGING EVIDENCE**, and the
+# convergence is the point: 95.3 % of the eval leaf term is a SERIAL, GIL-HOLDING graph build,
+# and `S-INCR-GRAPH`'s measured margin sits far above any plausible descent depth. **INCR-GRAPH
+# IS ELEVATED TO THE TOP OF THE FLOOR LANE.** The margin is `141×` ON THE SELF-PLAY BUILD and
+# `58×` on the post-E1 eval build — E1 moved the eval floor in this same mission — so the
+# unqualified figure is true of ONE path; the elevation survives either reading and the register
+# entry carries the narrowing rather than repeating the summary.
+# **THE DECISIVENESS FINDING IS A STATEMENT ABOUT THE INSTRUMENT, NOT ABOUT THE CHECKPOINT.** A
+# step-25 candidate is 0/20 decisive against `random`; **the fresh-init CONTROL reads identically
+# on every column.** So `strength_floor` is a **GATE-INTEGRITY GUARD, NOT A TRAINING-PROGRESS
+# METER**: it becomes informative at exactly the moment a checkpoint can finish a game, and not
+# one round before. **`min_winrate 0.0` is EMPIRICALLY VINDICATED** — at 0.5 winrate on all-draw
+# terminals, any positive winrate bar refuses a checkpoint for a property the games cannot express.
+# **THE NIGHT'S THREE DISCLOSED DEFECTS ARE ACCEPTED ON THE LEDGER**, and the premature-done claim
+# among them is booked as a RECURRING PATTERN under standing watch, not as a one-off.
+# **THE BOOTSTRAP ADJUDICATION IS FILED** as `plan/ADJUDICATION_BOOTSTRAP_POSTURE.md`, its ONE
+# canonical home; the architect's draft is superseded. **Corpus-mix is UNREACHABLE on a graph run
+# in THREE INDEPENDENT PLACES** — the mixed-arm route guard, the dense-only loader, and the absent
+# call site — so **`bot_batch_share: 0.0` is STRUCTURAL FACT, NOT PREFERENCE**, and a reader who
+# takes it for a tuning choice has misread the tree.
+# **BC CAPABILITY COMPLETES, UNARMED.** The gap-3 reroute goes THROUGH the seam, not around it.
+# **THE GAP-4 DISPOSITION IS A DERIVATION, AND IT MEETS `R289(q)` HEAD-ON:** that landed ruling
+# holds the mixed-batch/pretrained-buffer path RESERVED and says it MUST NOT be deleted, because
+# it is one arm of a decision the operator has not taken. R325(d) RECORDS an operator direction
+# and explicitly does NOT take the decision — the formal word lands with the sitting-4 forwarding.
+# **So the arm stays, and "delete it" was the option the derivation had to refuse.**
+# **THE POSTURE ROW REMAINS OPERATOR-ONLY DECISION OWED** (`RUN5_MINT_PREREG.md:893`).
+# **THIS RULING ARMS NOTHING AND MINTS NOTHING.** No `strength_floor` term, no bootstrap posture,
+# no ply-cap matrix row, no minted row moved. The PUSH it orders moves no value.
+# **RUN6 REMAINS HELD.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1952,6 +1987,37 @@ Verbatim text in the register; one-liners here are index only.
   **NOTHING TRAINS, NO MINTED ROW MOVES, NO POSTURE IS DECIDED.** A net-hash control flip is a
   HALT of its leg, not a note; a failed witness BANKS its finding and the leg moves on.
   **RUN6 REMAINS HELD.**
+  **RATIFIED IN FULL by R325(a) (2026-08-31); this row EXPIRES.** Every leg verdict stands as
+  tabled in `plan/NIGHTRUN1_EXIT.md`. **(e)'s ordering principle paid:** the profile RELOCATED
+  Leg 1's target, and the two items it did NOT license (`collate_h2d`'s non-copy share, the
+  fuse's source-side reads) are recorded NOT DONE with their reasons rather than half-done.
+  **Leg 2's spike did not start** and its 19.6 ns/edge input is unchanged. **Leg 3 delivered the
+  cost figure AND a FOURTH gap the scope had not named** — the corpus-mix loader is dense-only
+  AND uncalled — which is the leg's real finding. **Leg 4's ground was measured and inverted the
+  question it was asked:** the value it was to inform turns out to be a property of the gate, not
+  of the checkpoint. **One amendment the ratification MAKES rather than inherits:** the `141×`
+  margin is the SELF-PLAY-build figure; the post-E1 eval build reads `58×`.
+
+- **R325 — the night ratified, the adjudication filed, BC capability completed UNARMED. LIVE,
+  expires at this mission's exit screen.** **(a) is the ratification and the PUSH ORDER** — the
+  unpushed `dev` was the standing grant read correctly, and the order is sweep-green-at-tip, then
+  push, then verify `dev == origin/dev`. **(b) FILES the bootstrap adjudication** at
+  `plan/ADJUDICATION_BOOTSTRAP_POSTURE.md` as its ONE canonical home (R285's ONE-TEXT rule): §2
+  and §6 corrected at HEAD because gaps 1–2 landed unarmed with their oracle and both open inputs
+  are closed, and §3(B) folds the route-guard finding — **corpus-mix is UNREACHABLE on a graph run
+  in three independent places, so `bot_batch_share: 0.0` is structural fact, not preference.**
+  **(c) COMPLETES BC CAPABILITY, UNARMED:** the gap-3 reroute points the pretrain CLI at the main
+  trainer's EXISTING graph step **through the seam, not around it** — a second graph training path
+  beside the one that trains run5 is the thing being refused — and the gap-4 disposition is a
+  DERIVATION, not a preference. **The derivation is bounded by `R289(q)`**, which holds that path
+  RESERVED and NOT deletable while the decision it is an arm of remains untaken. **Suite-proven,
+  selected by nothing, armed by nothing; execution of any pretrain still waits on the operator's
+  posture word and recipe rows.** **(d) leaves the posture row OPERATOR-ONLY DECISION OWED**
+  (`plan/RUN5_MINT_PREREG.md:893`). The operator's stated direction — no bootstrap games in the
+  self-play loop — is **RECORDED, not enacted**: it excludes arm (B) by definition and is
+  consistent with arm (A), where the loop never sees a human game. **The formal word lands with
+  the sitting-4 launcher's forwarding, posture named at its top.**
+  **NOTHING TRAINS, NOTHING IS MINTED, NO PREREG ROW MOVES. RUN6 REMAINS HELD.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4360,4 +4426,71 @@ Verbatim text in the register; one-liners here are index only.
   indistinguishable from silence is arming it blind.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config, sets
   no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
+  ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
+
+- 2026-08-31 — **v3.31** curated by the adjudication-verification session, landing **R325**,
+  authored in the ARCH-ERA architect session under R303(d) and forwarded by the operator (the
+  forwarding IS the authorization; **no operator lock consumed** — the posture row stays OWED,
+  `strength_floor` values stay PROPOSED, nothing is minted, no prereg row moves).
+  **Landing checks, each re-run rather than inherited:** census before `R23–R324, 295 sections /
+  295 distinct / 0 duplicates, excluded set 53`, after `R23–R325, 296 / 296 / 0, excluded set 53`,
+  missing-in-range `{24, 29, 32, 33, 227, 228, 267}` both times; `--stamp` read
+  `STAMP OK: stamp v3.30 == §8 last entry v3.30` before this edit; `--self-test` all four controls
+  fire. Live-placeholder check returned ZERO, the correct reading for a prompt-forwarded text.
+  Second independent transcription with `R{next}` intact, diffed against the first BEFORE
+  substitution — **IDENTICAL, 35 lines** (`wc -l` at the check) — then `sed`-substituted and
+  diffed again, de-marked and whitespace-normalized under `set -o pipefail`, against the appended
+  register block. `diff` of the two `awk`-extracted blocks — register entry vs canonical home
+  `PACKET_R325_NIGHT_RATIFIED.md` — is EMPTY.
+  **THE CURATION'S OWN FINDING: THE RULING OFFERED AN OPTION A LANDED RULING FORBIDS, AND THE
+  DERIVATION IT ORDERED IS WHAT CAUGHT IT.** R325(c) offers "make it arch-agnostic through the
+  contract OR delete it where the reroute obsoletes it; DERIVE which, don't assume." **`R289(q)`
+  already ruled that path RESERVED and NOT deletable**, on the ground that it is one arm of an
+  operator decision not yet taken — and R325(d) itself RECORDS an operator direction while
+  explicitly leaving the formal word to the sitting-4 forwarding. So the ground R289(q) rests on
+  is still standing at this landing, and the delete option is refused by a ruling rather than by
+  taste. **This is the second consecutive curation where "DERIVE, don't assume" earned its cost**,
+  and it is worth naming that the two findings are different in kind: v3.30's was an ASSERTED
+  claim that turned out true; this one is an OFFERED option that turned out foreclosed.
+  **Spot-checks, SIX index lines against the verbatim register text** (protocol asks ≥5):
+  **R247** (`:3754-3766` — "human-only, rated, per-game Elo, sha256'd, encoding-free axial move
+  lists … two recorded selection biases — decisive-only (zero draw mass → value-target bias, F-07
+  adjacency) and ≥20 moves … Whether run5's bootstrap points at it is a prereg row" — accurate,
+  and the last sentence is why (d) can record a direction without taking a decision);
+  **R269** (`:4035-4050` — "draw_rate pinned 1.000 … capped games are maximum-length games, so
+  every game costs cap × sims forwards for zero learning signal … the bootstrap path is promoted
+  to mint-critical" — accurate, and it is the whole reason the filed adjudication exists);
+  **R279(b)** (`:4367-4369` — "CERTIFIED GROUNDS for the bootstrap and ply-cap prereg rows (exit 0,
+  sha match, 8698/8698 distinct, winner convention replay-verified, OPEN-2/5/7 closed with
+  refusal-pinned amendments)" — accurate, and it is what makes the corpus citable in §2 at all);
+  **R289(q)** (`:5008-5012` — "the mixed-batch/pretrained-buffer path is RESERVED, not dead — it is
+  the corpus-mix candidate mechanism of the bootstrap prereg row; it gains a RESERVED marker citing
+  that row and MUST NOT be deleted" — accurate, and it is this curation's finding; **note it is
+  indexed as a POINTER through `plan/RQ_BATCH_2026-08.md` → RQ-19, per the R289 rows' own
+  convention, NOT as a line in this file — checked, and the absence is the convention working, not
+  a gap**); **R306(a)** (`:6399-6403` — "an instrument's measured behavior outranks any packet's
+  prediction of it; the executor proceeds and reports, halting only on the packet's named halt
+  triggers", plus "strip markdown emphasis and blockquote markers BEFORE whitespace normalization"
+  — accurate, and the second half is the exact de-marking this landing's byte-diff performs);
+  **R311(c)** (`:6959-6964` — "A non-canonical working document that disagrees with verified repo
+  or register state is repaired in place by whoever finds the mismatch … Register text still
+  corrects only by annotation" — accurate, and it is the licence under which (b)'s "corrected at
+  HEAD" is a repair rather than a re-litigation).
+  **All six accurate as indexed; no overclaim found, and no index line was widened by this
+  curation.**
+  **Index edits, four and no more:** the v3.31 header block; the stamp (which rides it, R284(f));
+  an **amendment appended to §5's R324 row** — RATIFIED IN FULL, the row EXPIRES, carrying the one
+  amendment the ratification MAKES (the `141×` margin is the self-play-build figure; the post-E1
+  eval build reads `58×`); and a **new §5 LIVE row for R325**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** R323 and R324 established that a value may be MEASURED and
+  PROPOSED without being armed. R325 settles the adjacent question for a CAPABILITY: a path may be
+  BUILT, suite-proven and loaded back through the production loader while being **selected by
+  nothing and armed by nothing** — and the proof of that is structural (an `ast` import census
+  over `src/`, plus no shipped config naming the producer), not a paragraph. The distinction it
+  adds is about EVIDENCE rather than about arming: **a measurement whose control reads identically
+  has measured the instrument, not the subject.** Leg 4 was commissioned to inform a value and
+  instead re-classified the lever the value belongs to. That is a better outcome than the one it
+  was asked for, and it is only visible because a control was run at all.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing in any production config,
+  sets no `strength_floor` term, no `min_margin`, no gate stage value, no bootstrap posture and no
   ply-cap matrix row, and **touches no minted row**. **RUN6 REMAINS HELD.**
