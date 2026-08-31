@@ -32,7 +32,30 @@ _REPO = Path(__file__).resolve().parents[2]
 #: Phase-Q evidence was defective because the check below excluded the whole defining
 #: MODULE, which hid a sibling consumer. That is fixed here: reachability is now measured by
 #: CALL SITE, never by file exclusion.
-_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch"})
+#:
+#: `resolve_corpus_sha_pin` JOINS THE QUEUE at R326(d), and its grounds are that the deletion
+#: which orphaned it was RULED — not that nobody got round to wiring it. R326(d) deleted
+#: `load_pretrained_buffer`, the dense corpus feed, because posture (A) is signed and posture
+#: (B) is excluded by definition. That loader was this resolver's ONLY caller.
+#:
+#: **THREE symbols were orphaned by that one deletion, and this row sees ONE of them.** The
+#: other two are `assert_not_heldout_sha` and `heldout_size_bytes` — same family, same zero
+#: call sites (`git grep '<name>(' -- src tools crates`, measured at this landing) — and they
+#: are invisible here because the census is scoped to names beginning `resolve_`. **That
+#: scoping is a real coverage gap and it is recorded rather than fixed in this act**, because
+#: widening the census is a change to an instrument R326 does not name and it would need all
+#: three queued in the same breath.
+#:
+#: **WHY THE FAMILY IS NOT DELETED WITH THE LOADER.** `assert_not_heldout_sha` is the held-out
+#: CONTAMINATION gate, and the armed posture still cares about it: BC-pretrain reads a corpus
+#: too. Its integrity path (`mantis.data.bootstrap_encode`) has its own manifest handshake with
+#: a streaming sha256 that hard-fails on disagreement — but that proves the file is the file it
+#: claims to be, NOT that the file is outside the evaluation hold-out set. Those are different
+#: properties, and deleting the family would remove the second one with nothing standing in its
+#: place. So the family stays, this one entry keeps the export census honest about why, and the
+#: DISPOSITION is the architect's at BC-EXEC-1, where the recipe rows decide what the pretrain
+#: corpus path actually gates.
+_QUEUED_DEAD_EXPORTS = frozenset({"resolve_arch", "resolve_corpus_sha_pin"})
 
 
 def _call_sites(name: str) -> list[str]:

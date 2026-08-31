@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -261,34 +262,102 @@ def test_the_cli_exposes_a_hexg_corpus_override() -> None:
     assert "--corpus-hexg" in src
 
 
-# ── GAP 4: the corpus-mix loader states its contract instead of assuming it ──────────────
-def test_the_corpus_mix_loader_REFUSES_a_graph_representation_by_name() -> None:
-    """The gap-4 disposition. Before this, a graph run reaching the loader died inside
-    `np.load` on a `.hexg` file; now it dies at the contract with the reason named."""
-    from mantis.train.batch_assembly import load_pretrained_buffer
-    from mantis.train.coordinator.dispatch import RepresentationRouteError
+# ── GAP 4 FINAL (R326(d)): the corpus-mix loader is GONE, and the absence is pinned ──────
+#: The buried symbol. Named ONCE so every row below reads the same string and a rename in one
+#: place cannot leave the census watching for a name nobody uses.
+_BURIED = "load_pretrained_buffer"
 
-    with pytest.raises(RepresentationRouteError, match="no corpus-mix route"):
-        load_pretrained_buffer(
-            {"pretrained_buffer_path": "data/gnn_corpus_v1.hexg"},
-            {"encoding": "gnn_axis_v1"},
-            lambda _e: None, 0, 0,
-        )
+#: Where a resurrection could hide. `tests/` is included deliberately: a test that re-defines
+#: or re-imports the symbol would make the census green while the thing was back.
+_CENSUS_ROOTS = ("src", "tools", "tests")
 
 
-def test_the_corpus_mix_loader_is_STILL_uncalled_and_that_is_deliberate() -> None:
-    """R289(q) holds this path RESERVED: it is one arm of an operator-owed decision, so it is
-    not deleted — and it is not wired either. An `ast` call census, so a docstring mention
-    does not read as a call site."""
+def _census(predicate: Callable[[ast.AST], bool]) -> list[str]:
+    """`path:lineno` for every AST node under the census roots that `predicate` accepts."""
     hits: list[str] = []
-    for path in (_REPO / "src").rglob("*.py"):
-        if path.name == "batch_assembly.py":
-            continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                    and node.func.id == "load_pretrained_buffer":
-                hits.append(f"{path.relative_to(_REPO)}:{node.lineno}")
-    assert not hits, f"corpus-mix is wired at {hits} — that is a posture the operator has not chosen"
+    for root in _CENSUS_ROOTS:
+        for path in sorted((_REPO / root).rglob("*.py")):
+            if path.resolve() == Path(__file__).resolve():
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if predicate(node):
+                    hits.append(f"{path.relative_to(_REPO)}:{node.lineno}")
+    return hits
+
+
+def test_the_corpus_mix_loader_IS_BURIED_and_nothing_defines_it() -> None:
+    """R326(d): posture (A) is signed, so the loader's (B)-serving rationale expired and the
+    symbol was deleted with a grave line.
+
+    STRUCTURE, NOT TEXT (R296(f)): an `ast` census over DEFINITIONS, so the grave comment that
+    names the symbol — and this file's own `_BURIED` literal — cannot read as a resurrection.
+    A grep would red on the grave marker, which is precisely the evidence the grave exists to
+    leave behind.
+
+    MUTATION THAT REDS IT: someone re-adds the function, or a helper of the same name, anywhere
+    under `src/`, `tools/` or `tests/`."""
+    hits = _census(lambda n: isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and n.name == _BURIED)
+    assert not hits, (
+        f"{_BURIED} is DEFINED at {hits}. R326(d) deleted it: posture (A) excludes corpus-mix "
+        "by definition, so a redefinition needs a ruling that un-buries it, not an edit"
+    )
+
+
+def test_nothing_IMPORTS_the_buried_loader() -> None:
+    """The second half of the absence, and the one the ruling names: an IMPORT census.
+
+    A definition census alone would pass while a stale `from mantis.train.batch_assembly
+    import load_pretrained_buffer` sat in a module — an `ImportError` at collection time, which
+    is a worse failure than a red row because it takes a whole tier down with it.
+
+    MUTATION THAT REDS IT: any module re-importing the buried name, by either import form."""
+    def _imports_it(node: ast.AST) -> bool:
+        if isinstance(node, ast.ImportFrom):
+            return any(alias.name == _BURIED for alias in node.names)
+        if isinstance(node, ast.Import):
+            return any(alias.name.rsplit(".", 1)[-1] == _BURIED for alias in node.names)
+        return False
+
+    hits = _census(_imports_it)
+    assert not hits, f"{_BURIED} is imported at {hits} — the symbol does not exist"
+
+
+def test_nothing_CALLS_the_buried_loader_by_either_spelling() -> None:
+    """The census the pre-R326(d) file ran, kept and WIDENED rather than deleted with the row
+    it belonged to.
+
+    It watched bare `Name` calls only, so `batch_assembly.load_pretrained_buffer(...)` would
+    have slipped past it — a gap that did not matter while the function existed and one call
+    shape was the only one anybody wrote, and does matter now that the row's job is to prove a
+    thing is gone. Both spellings are checked.
+
+    MUTATION THAT REDS IT: a call site of either shape."""
+    def _calls_it(node: ast.AST) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        return ((isinstance(func, ast.Name) and func.id == _BURIED)
+                or (isinstance(func, ast.Attribute) and func.attr == _BURIED))
+
+    hits = _census(_calls_it)
+    assert not hits, f"{_BURIED} is called at {hits} — the symbol does not exist"
+
+
+def test_the_grave_line_is_present_and_names_its_ruling() -> None:
+    """The grave is MECHANISM, not commentary (CLAUDE.md's comment carve-out): it is the only
+    thing that tells a future reader why the census rows above exist and what would have to
+    change to un-bury the symbol. A deletion whose reason is not written down gets re-added.
+
+    MUTATION THAT REDS IT: the grave line removed in a tidy-up pass, leaving three rows
+    asserting the absence of something with no record of why it went."""
+    src = (_REPO / "src/mantis/train/batch_assembly.py").read_text(encoding="utf-8")
+    grave = [line for line in src.splitlines() if line.startswith("# GRAVE")]
+    assert grave, "the grave line is gone from batch_assembly.py"
+    joined = "\n".join(grave)
+    assert _BURIED in joined and "R326(d)" in joined, (
+        f"the grave line must name the buried symbol and the ruling that buried it; got {grave}"
+    )
 
 
 # ── unarmedness of the reroute itself ────────────────────────────────────────────────────

@@ -9,26 +9,29 @@ _compute_chain_planes`, `mantis.encoding` slot/pin helpers, `mantis.data.corpus_
 and `mantis._engine` (`ReplayBuffer`, `apply_symmetries_batch`) — the self-play buffer sampling is
 the injected engine seam. train → data / env / encoding are all DAG-legal.
 
-RESERVED, NOT DEAD (R289(q)). At run5 this module's mixing arms receive nothing: `run.py`
-passes `pretrained_buffer=None`, `recent_buffer=None` and `bufs=None` into `StepCoordinator`,
-so the corpus/bot/recent slots are empty and only the self-play rows flow. The config keys and
-resolver stamps that feed those slots ARE live, which is what makes the gap look like dead code
-to a census. **It MUST NOT be deleted:** this is the corpus-mix candidate mechanism of the
-BOOTSTRAP-CORPUS prereg row (an operator-owed, mint-critical choice between BC pretrain /
-corpus-mix and no warm start), so removing it would delete one arm of a decision that has not
-been taken. Queue row RQ-19; wire-or-retire is a pre-mint design question, not hygiene.
+RESERVED, NOT DEAD (R289(q)) — AND THE CORPUS LOADER IS NO LONGER PART OF THE RESERVE
+(R326(d)). At run5 this module's mixing arms receive nothing: `run.py` passes
+`pretrained_buffer=None`, `recent_buffer=None` and `bufs=None` into `StepCoordinator`, so the
+corpus/bot/recent slots are empty and only the self-play rows flow. The config keys and resolver
+stamps that feed those slots ARE live, which is what makes the gap look like dead code to a
+census. R289(q) holds the mixed-batch path RESERVED on the ground that it is one arm of an
+operator decision not yet taken (queue row RQ-19), **and the ASSEMBLY arms below still stand on
+that ground.** What no longer does is the loader that fed them: the operator VALUED the
+BOOTSTRAP POSTURE at (A), BC-pretrain with no anchor, and CLOSED the row, so posture (B) —
+corpus-mix — is excluded by definition and `load_pretrained_buffer`'s reason to exist expired
+with it. R326(d) deleted it; see the grave marker below. **The supersession is PARTIAL and
+deliberate: the loader is gone, the mixing arms are not.**
 
-UNREACHABLE ON A GRAPH RUN, IN THREE INDEPENDENT PLACES (R325(b), verified at 3bde2d1). The
-un-wiring above is the RUN5 reading and it understates the fact. (1) `StepCoordinator`'s mixed
-arm refuses a non-`grid` representation at the route. (2) `load_pretrained_buffer` is
-dense-only — an NPZ read, a dense plane-count check and `ReplayBuffer.push_game` — and a graph
-run's `<auto>` corpus resolves to a `.hexg` ring it cannot read. (3) Nothing calls it. So
-`train.bot_batch_share: 0.0` and the `train.mixing.*` values in every shipped config are
+UNREACHABLE ON A GRAPH RUN, IN THREE INDEPENDENT PLACES (R325(b), verified at 3bde2d1) — two of
+which survive the deletion and one of which the deletion CONSUMED. The un-wiring above is the
+RUN5 reading and it understates the fact. (1) `StepCoordinator`'s mixed arm refuses a non-`grid`
+representation at the route — STANDS. (2) the corpus loader was dense-only, an NPZ read against
+a graph run's `.hexg` ring — GONE WITH THE LOADER, and R326(d) is why the R325(c) contract
+refusal that had just been added to it is not in this file any more. (3) Nothing called it —
+which is what made the deletion a deletion rather than a removal of a feature. So
+`train.bot_batch_share: 0.0` and the `train.mixing.*` values in every shipped config remain
 STRUCTURAL FACT, not a tuning preference: on a graph run there is nothing for a non-zero value
-to reach. The R325(c) disposition DERIVED that this path is NOT obsoleted by the BC-pretrain
-reroute — that reroute serves a different posture — and that R289(q) forbids deleting it while
-the decision stands untaken. What landed instead is (2)'s refusal made EXPLICIT and NAMED below,
-so the dense-only-ness is a contract the loader states rather than an assumption it makes.
+to reach, and now there is not even a loader to reach it with.
 
 Scope note (DESIGN deviation, documented): the bot-corpus ATOMIC-SWAP machinery
 (`swap_bot_corpus_atomic` / `BotCorpusSwapError` / `load_bot_corpus_buffer`) is bot-refresh-
@@ -39,29 +42,13 @@ only the runtime REGEN/SWAP hook (KILL) is dropped.
 from __future__ import annotations
 
 import logging
-import os
-import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from mantis.data.corpus_io import compute_npz_sha256, validate_corpus_sidecar
-from mantis.encoding import (
-    assert_not_heldout_sha,
-    cur_stone_slot,
-    heldout_size_bytes,
-    opp_stone_slot,
-    resolve_corpus_sha_pin,
-)
-from mantis.encoding import (
-    lookup as _lookup_encoding,
-)
-from mantis.encoding import (
-    normalize_encoding_name as _normalize_encoding_name,
-)
+from mantis.encoding import lookup as _lookup_encoding
+from mantis.encoding import opp_stone_slot
 
 _LOG = logging.getLogger(__name__)
 
@@ -127,121 +114,11 @@ def allocate_batch_buffers(
     )
 
 
-# ── Corpus loading ───────────────────────────────────────────────────────────────────────
-def load_pretrained_buffer(
-    mixing_cfg: dict[str, Any],
-    config: dict[str, Any],
-    emit_fn: Callable[[dict[str, Any]], None],
-    buffer_size: int,
-    buffer_capacity: int,
-) -> Any | None:
-    """Load a corpus NPZ into a Rust `ReplayBuffer` with neutral aux padding (ownership=1,
-    winning_line=0 — the `n_pretrain` row-slice masks them from aux losses). Behaviour-exact:
-    launch-pin sha gate, held-out contamination gate, plane-count check, §102.a chain-plane
-    recompute. Returns None when no corpus path is configured (unpinned).
-
-    Raises:
-        RepresentationRouteError: the declared encoding is not `grid`. This feed is dense-only
-            and its graph arm is deliberately unbuilt — see the module docstring.
-        ValueError: an `<auto>` corpus without a sha pin, a pinned corpus that is missing or
-            unresolved, a sha mismatch against the launch pin, or a plane count that disagrees
-            with the declared encoding.
-    """
-    from mantis._engine import ReplayBuffer  # engine only available post-build
-    from mantis.train.coordinator.dispatch import RepresentationRouteError  # lazy: no new DAG edge
-
-    pretrained_path = mixing_cfg.get("pretrained_buffer_path")
-    _spec = _lookup_encoding(_normalize_encoding_name(config.get("encoding")))
-    # R325(c): the dense-only-ness is stated at the contract, not discovered inside `np.load`.
-    if getattr(_spec, "representation", None) != "grid":
-        raise RepresentationRouteError(
-            f"the corpus-mix loader is a dense-only feed; declared representation "
-            f"{getattr(_spec, 'representation', None)!r} (encoding {_spec.name!r}) has no "
-            "corpus-mix route. A graph run's corpus resolves to a .hexg ring this loader "
-            "cannot read, and the mixed-batch arm refuses the route above it. The graph arm "
-            "is unbuilt on purpose: it is one side of the operator-owed BOOTSTRAP POSTURE "
-            "row and R289(q) holds this path RESERVED until that decision is taken."
-        )
-    _pin = resolve_corpus_sha_pin(_spec)
-    _auto_resolved = bool(mixing_cfg.get("_pretrained_buffer_path_auto_resolved"))
-
-    if _auto_resolved and _pin is None:
-        raise ValueError(
-            f"<auto> corpus for encoding {_spec.name!r} requires a sha pin; add a pin or use "
-            "an explicit path.")
-
-    if not pretrained_path or pretrained_path == "<auto>" or not Path(pretrained_path).exists():
-        if _pin is not None:
-            raise ValueError(
-                f"pinned corpus for encoding {_spec.name!r} is missing or unresolved: "
-                f"mixing.pretrained_buffer_path={pretrained_path!r}. This corpus is "
-                "launch-critical — sync the byte-identical corpus; do NOT proceed corpus-less.")
-        if not pretrained_path:
-            return None
-        _LOG.warning("corpus_npz_not_found path=%s — self-play-only", pretrained_path)
-        return None
-
-    # Held-out contamination gate (unconditional; cheap — a metadata stat unless the size matches).
-    if os.path.getsize(pretrained_path) in heldout_size_bytes():
-        _heldout_check_sha = compute_npz_sha256(pretrained_path)
-        assert_not_heldout_sha(_heldout_check_sha, path=pretrained_path)
-    else:
-        _heldout_check_sha = None
-
-    if _pin is not None:
-        _actual_sha = _heldout_check_sha if _heldout_check_sha is not None else compute_npz_sha256(pretrained_path)
-        if _actual_sha != _pin:
-            raise ValueError(
-                f"corpus sha mismatch: {pretrained_path} is {_actual_sha[:12]}…, expected "
-                f"{_pin[:12]}… for encoding {_spec.name!r}. Both hosts must read the byte-identical "
-                "launch corpus; do NOT re-export.")
-        validate_corpus_sidecar(pretrained_path, expected_encoding=_spec.name, actual_sha=_actual_sha)
-
-    t0 = time.time()
-    data = np.load(pretrained_path, mmap_mode="r")
-    board_size = config.get("board_size", _V6_BOARD_SIZE)
-    pre_states = data["states"]
-    pre_policies = data["policies"]
-    pre_outcomes = data["outcomes"]
-    T = len(pre_outcomes)
-
-    _expected_planes = _spec.n_planes
-    if pre_states.shape[1] != _expected_planes:
-        raise ValueError(
-            f"corpus '{pretrained_path}': states.shape[1]={pre_states.shape[1]}, expected "
-            f"{_expected_planes} (encoding {_normalize_encoding_name(config.get('encoding'))!r}).")
-
-    # §102.a: recompute chain planes from stone planes (slots derived from the registry).
-    from mantis.env.game_state import _compute_chain_planes
-    _cur_slot = cur_stone_slot(_spec)
-    _opp_slot = opp_stone_slot(_spec)
-    pre_chain = np.empty((T, 6, board_size, board_size), dtype=np.float16)
-    if T > 0:
-        cur_all = np.asarray(pre_states[:, _cur_slot], dtype=np.float32)
-        opp_all = np.asarray(pre_states[:, _opp_slot], dtype=np.float32)
-        for k in range(T):
-            planes_f32 = _compute_chain_planes(cur_all[k], opp_all[k]).astype(np.float32) / 6.0
-            pre_chain[k] = planes_f32.astype(np.float16)
-
-    max_pre = int(mixing_cfg.get("pretrain_max_samples", 0))
-    if max_pre and T > max_pre:
-        _rng = np.random.default_rng(int(config.get("seed", 42)))
-        idx = np.sort(_rng.choice(T, size=max_pre, replace=False))
-        pre_states, pre_chain = pre_states[idx], pre_chain[idx]
-        pre_policies, pre_outcomes = pre_policies[idx], pre_outcomes[idx]
-        T = max_pre
-
-    _enc = _normalize_encoding_name(config.get("encoding"))
-    pretrained_buffer = ReplayBuffer(capacity=T, encoding=_enc)
-    n_cells = board_size * board_size
-    pre_own = np.ones((T, n_cells), dtype=np.uint8)
-    pre_wl = np.zeros((T, n_cells), dtype=np.uint8)
-    pretrained_buffer.push_game(pre_states, pre_chain, pre_policies, pre_outcomes, pre_own, pre_wl)
-    del pre_states, pre_chain, pre_policies, pre_outcomes, pre_own, pre_wl, data
-    _LOG.info("corpus_loaded positions=%s seconds=%.1f", T, time.time() - t0)
-    emit_fn({"event": "system_stats", "buffer_size": buffer_size, "buffer_capacity": buffer_capacity})
-    return pretrained_buffer
-
+# GRAVE (R326(d), 2026-08-31): `load_pretrained_buffer` stood here — the dense-only corpus-NPZ
+# feed for posture (B), corpus-mix. The operator VALUED the bootstrap posture (A) and CLOSED
+# the row, so (B) is excluded by definition and R289(q)'s reserve, whose ground was that the
+# DECISION was untaken, no longer reaches it. Zero call sites when it went; the absence is
+# pinned by an import census in `tests/train/test_bc_graph_reroute.py`.
 
 # ── recent-row augmentation (Python-side; RecentBuffer skips the Rust sample kernel) ──────
 def _augment_recent_rows(
