@@ -332,7 +332,9 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
 #: **AND A SECOND CONSTANT DOES NOT MOVE WITH IT — READ `test_graph_microbatch_authority.py`
 #: BEFORE ASSUMING IT SHOULD.** That file carries its own `_SIZING_BUDGET_BYTES` for the SIZING
 #: FRONTIER, and R326(b) deliberately left it where it was. The two are the same nominal
-#: quantity in two different denominations, and the disagreement is recorded there, not resolved.
+#: quantity in two different denominations. **R327(d) rules it STAYS UNMOVED** and files the
+#: consolidation as debt at `plan/CARD-BUDGET-AUTHORITY-CONSOLIDATION.md`, with both measured
+#: arms as grounds — so the disagreement is ruled and carried, not open and not resolved.
 _SIZING_BUDGET_GIB = 8.40
 _SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)
 

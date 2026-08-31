@@ -206,11 +206,13 @@ def _template_caps_of(config_name: str) -> dict:
 #: `train.microbatch_caps` — which is **circular**, because shrinking those caps lowers the very
 #: peak 8.40 was derived from.
 #:
-#: **THIS IS RECORDED, NOT RULED.** The question — one quantity with two instruments, or two
-#: quantities that coincided by history — is the architect's, filed at
-#: `plan/RECAL_SITTING5_RECORD_2026-08-31.md` §2.6 with both arms measured. Until it is answered
-#: this row keeps asserting the shipped pair is sized under the frontier's OWN budget, which is
-#: a true statement about the model; it is no longer a statement about the trainer's permission.
+#: **RULED AT R327(d): THIS CONSTANT STAYS UNMOVED**, and the consolidation to one authority is
+#: FILED AS DEBT to the config-partition lane (`plan/CARD-BUDGET-AUTHORITY-CONSOLIDATION.md`),
+#: both arms above attached as its grounds. So this row keeps asserting the shipped pair is
+#: sized under the frontier's OWN budget — a true statement about the model, and no longer a
+#: statement about the trainer's permission. Closing the debt needs the frontier RE-FITTED on
+#: current code; it may not be closed by moving this constant to 8.40, which would red a
+#: measured-green row and re-open the circularity.
 _FIT_INTERCEPT_BYTES = 34_752_164
 _FIT_BYTES_PER_EDGE = 1_620.96
 _FIT_BYTES_PER_NODE = 15_741.05
