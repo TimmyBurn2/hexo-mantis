@@ -438,6 +438,15 @@ def test_flipping_the_deferred_row_to_required_needs_no_code_change() -> None:
         # ARMED, so the disk-guard row never enters `disarmed` and this test's subject (the
         # draw-rate flip) is unchanged.
         return SimpleNamespace(
+            # RECAL-SITTING-5 (R326): the manifest gained a SIXTH REQUIRED row when
+            # `allocator_posture_minted` flipped DEFERRED -> REQUIRED in the same commit as the
+            # minted posture and the caps fitted under it. Its arming surface is the top-level
+            # `allocator_posture`, and a stub that omits a REQUIRED row's surface raises
+            # `ArmingSurfaceMissingError` — the phantom-input guard doing its job, for the
+            # fourth time and for the same reason. The value is the minted
+            # `expandable_segments` and it is ARMED, so the row never enters `disarmed` and this
+            # test's subject (the draw-rate flip) is unchanged.
+            allocator_posture="expandable_segments",
             monitor=SimpleNamespace(actor_lag_abort_enabled=True,
                                     disk_guard=SimpleNamespace(fail_gb=5.0)),
             # F-816-10/-12 box sitting, 2026-08-18: the manifest gained a FIFTH REQUIRED row
