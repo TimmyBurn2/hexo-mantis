@@ -32,6 +32,10 @@ corpus_sha256 = "3813edc2fb10a7c5ab976a0293e38cbba0fd6b84e5295630f339ca421b345c9
 corpus_path = "data/gnn_corpus_v1.hexg"
 anchor_path = "checkpoints/bootstrap_model_gnn_axis_v1.pt"   # placeholder; deliberately unpinned (no corpus_sha256)
 
+[encodings.gnn_axis_r8]                                       # the run6 identity (R328(b))
+corpus_path = "data/gnn_corpus_r8.hexg"
+anchor_path = "checkpoints/bootstrap_model_gnn_axis_r8.pt"    # placeholder; deliberately unpinned (no corpus_sha256)
+
 [[held_out]]                        # held-out set — never enters a training load (assert_not_heldout)
 label = "s5_post20260704"
 sha256 = "88f99c2b5fea7495484e4e9cc1af831d1e053221dc7e0f9c8f5d3ab6f27aa69e"

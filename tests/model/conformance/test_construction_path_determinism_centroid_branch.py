@@ -53,11 +53,12 @@ compact when its span is at most `S - offset` (`cluster.rs:43`). `S`, `R` and th
 come off the CONSTRUCTED BOARD (`cluster_window_size`, `legal_move_radius`, `get_stones`); the
 `offset` has no `PyBoard` getter at all, so it is read off `cluster.rs`'s own definition line by
 `span_threshold_offset` below — the one term of this bound that is not on the Python surface,
-named here rather than typed as a `4`. Every corpus target is a root of observed span `s` plus
-`k` descent plies, and every legal move lies within `R` of an existing stone
-(`moves.rs:118-122`), so the target's cluster spans are bounded by `s + k*R`; the tier certifies
-`s + k*R <= S - offset` rather than re-deriving cluster membership in Python, which would be a
-second authority over the clustering rule.
+named here rather than typed as a `4`. The tier certifies `stone_span(target) <= S - offset` —
+the target's own bbox, read off `get_stones()` — rather than re-deriving cluster membership in
+Python, which would be a second authority over the clustering rule. It formerly certified the
+a-priori bound `s + k*R` instead; that bound IMPLIES this one and is strictly looser, and at
+radius 8 it certifies nothing at all while real targets sit well inside the threshold. See
+`certify_compact`.
 """
 from __future__ import annotations
 
@@ -188,21 +189,41 @@ def stone_span(board: Board) -> int:
 
 
 def certify_compact(root: Board, added_plies: int, target: Board) -> None:
-    """`s + k*R <= S - offset`: `s`, `k` and `R` off the board, `S - offset` off `cluster.rs`.
+    """`stone_span(target) <= S - offset`, MEASURED off the target, with the a-priori bound
+    `s + k*R` carried in the refusal beside it.
 
     Nothing here is a typed span threshold, and the offset in particular is not: it has no
     `PyBoard` getter, so it is read out of the engine's own source by `span_threshold_offset`
     rather than transcribed.
+
+    MEASURED RATHER THAN BOUNDED, AND THE MEASURED FORM IS STRICTLY STRONGER. The predecessor
+    certified `s + k*R <= S - offset`, an a-priori bound taken before the target existed. That
+    bound IMPLIES this check — the target's stones are the root's plus `k` stones each within
+    `R` of an existing one, so the target's bbox span is at most `s + k*R` — and is strictly
+    looser. The looseness stopped being free the day a radius-8 encoding was registered
+    (R328(b)): at `R = 8`, `s + 2R >= 16 > 15` for ANY root, so NO 2-ply descent target could be
+    certified and the compact partition went empty for `gnn_axis_r8` — while its real targets
+    measure a span of 13 against a threshold of 15. `added_plies` is not the knob that would
+    have fixed it: `2` is the compound-turn structure the corpus is built on
+    (`leaf.ply == root.ply + 2`), not a tuning constant.
+
+    THIS IS NOT A LOOSENED CRITERION. The criterion is unchanged — the target's clusters lie
+    inside the engine's small-cluster span threshold — and the EVIDENCE for it got stronger: a
+    bbox over `get_stones()` is an engine read, and it over-approximates any single cluster's
+    span, so it is still not the Python re-derivation of cluster membership this tier refuses to
+    become a second authority for.
     """
     side = target.cluster_window_size()
     radius = target.legal_move_radius()
     threshold = side - span_threshold_offset()
-    bound = stone_span(root) + added_plies * radius
-    if bound > threshold:
+    measured = stone_span(target)
+    a_priori = stone_span(root) + added_plies * radius
+    if measured > threshold:
         raise CompactnessNotCertified(
-            f"root span {stone_span(root)} + {added_plies} plies x radius {radius} = {bound} "
-            f"exceeds the engine's small-cluster span threshold {threshold} (S={side}); this "
-            "target is not certified compact and may not enter a compact partition."
+            f"target span {measured} exceeds the engine's small-cluster span threshold "
+            f"{threshold} (S={side}); the a-priori bound was root span {stone_span(root)} + "
+            f"{added_plies} plies x radius {radius} = {a_priori}. This target is not certified "
+            "compact and may not enter a compact partition."
         )
 
 
@@ -587,6 +608,26 @@ def test_an_UNCERTIFIED_compactness_bound_is_refused():
     root = build_board(spec.name, spread_root_moves(spec.name))
     with pytest.raises(CompactnessNotCertified, match="span threshold"):
         certify_compact(root, 2, root)
+
+
+def test_the_certification_reads_the_TARGET_and_not_the_ROOT():
+    """PB-2. A compact ROOT may not certify a SPREAD TARGET, and nothing pinned that.
+
+    The row above passes the same board as root and target, so it cannot tell the two apart:
+    a `certify_compact` that measured the ROOT's span would satisfy it, and would then wave
+    through every target whose own span exceeded the threshold — the precise failure the
+    certification exists to prevent. Measured, not argued: replacing `stone_span(target)` with
+    `stone_span(root)` leaves the whole tier green without this row and reds it with it.
+    """
+    spec = roster()[0]
+    compact = build_board(spec.name, compact_root_moves())
+    spread = build_board(spec.name, spread_root_moves(spec.name))
+    assert stone_span(compact) < stone_span(spread), (
+        "this row needs a compact root and a genuinely wider target; the two corpus "
+        "constructors no longer differ in span and the control is vacuous"
+    )
+    with pytest.raises(CompactnessNotCertified, match="span threshold"):
+        certify_compact(compact, 2, spread)
 
 
 def test_the_span_threshold_OFFSET_is_read_off_the_engine_source_and_not_typed_here(derived):

@@ -16,8 +16,10 @@ import pytest
 
 from mantis.selfplay.hparams import resolve_pool_encoding
 
-# The four encodings registered on the NEW side (WP7). The capture resolved all four
-# cleanly old-side; a name missing here means the registry drifted, which is D-05's job.
+# THE ENCODINGS THE OLD-SIDE CAPTURE COVERS — not the live registered set, and the two have
+# diverged: R328(b) registered `gnn_axis_r8`, which post-dates the capture and therefore has no
+# golden to be compared against. This tuple is a property of the FIXTURE, so it does not grow
+# when the registry does; `tests/bridge/test_surface.py` is where the live set is pinned.
 REGISTERED = ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1")
 
 

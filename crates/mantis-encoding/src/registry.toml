@@ -5,7 +5,7 @@
 # RegistrySpec records keyed by name. `all_specs()` is the SOLE name source (no
 # hand-synced name list anywhere).
 #
-# Pruned registered set (4 entries): v6, v6w25, v6_live2_ls, gnn_axis_v1.
+# Pruned registered set (5 entries): v6, v6w25, v6_live2_ls, gnn_axis_v1, gnn_axis_r8.
 #
 # Every entry carries `representation` (REQUIRED — no default): "grid" | "graph".
 # An absent representation is a parse error (LAW-11), never a grid/dense default.
@@ -186,3 +186,50 @@ builder_impl_required   = 1           # native tag the resolver asserts
 n_chain_planes          = 6
 schema_version          = 4
 notes                   = "GNN axis-graph encoding. Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy, no off-window drop. Builder = native axis-graph."
+
+# ---------------------------------------------------------------------------
+# gnn_axis_r8 — the RUN6 graph identity: gnn_axis_v1's wire at radius 8 (R328(b)).
+# Adopted because the corpus, the reference bots and the human ladder are radius-8
+# and a strength claim is anchored to the ecosystem it plays in; at radius 6 the
+# encoder refused 3 023 of 8 698 corpus games (34.76%), and the residue is the
+# wide-play tail rather than a random sample.
+# A NEW ROW AND NOT AN EDIT TO gnn_axis_v1: run5's identity is registry-derived
+# (R26) and configs/run5.yaml names gnn_axis_v1, so mutating that row in place
+# would move run5's radius to 8 while typing no 8 into any run5 file. A checkpoint
+# stamp carries encoding_name and NOT the geometry, so nothing could have detected
+# it. run5 was and remains radius 6.
+# EVERY OTHER FIELD IS gnn_axis_v1's, deliberately: this is one knob moved, so the
+# r6/r8 comparison is a comparison. Action space is unchanged — the graph policy
+# head emits per-legal-node logits, and an off-window legal node routes to the
+# record writer's overflow map rather than being dropped, so a wider radius costs
+# overflow entries and not moves.
+# ---------------------------------------------------------------------------
+[encodings.gnn_axis_r8]
+representation          = "graph"
+board_size              = 19          # action-space board (19×19+pass)
+trunk_size              = 19          # window_flat_idx origin for policy_dst_slot
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 8           # matches graph_radius
+n_planes                = 0           # graph carries no dense planes
+plane_layout            = []
+policy_logit_count      = 362         # 19*19 + 1 — UNCHANGED action space
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"   # D6 aug reuses axis_perm
+kept_plane_indices      = []
+n_source_planes         = 0
+k_max                   = 1           # whole-board: one graph per leaf
+# ── schema-v4 graph fields (representation="graph" only) ──
+node_feat_dim           = 11          # relative-7 + threat-4 (mantis_graph::NODE_FEAT_DIM)
+edge_feat_dim           = 5           # axis one-hot(3) + signed_dist + src_player
+win_length              = 6
+graph_radius            = 8
+win_axes                = 3
+contract_version        = 1           # ragged-payload contract this encoding speaks
+builder_impl_required   = 1           # native tag the resolver asserts
+n_chain_planes          = 6
+schema_version          = 4
+notes                   = "GNN axis-graph encoding at radius 8 — the run6 identity (R328(b)). Ragged payload contract v1. Whole-board (no K-cluster); per-legal-node policy. Builder = native axis-graph."

@@ -217,6 +217,7 @@ _CORPUS_FILENAME_HEURISTIC: tuple[tuple[str, str], ...] = (
     # Order matters — most-specific first. Best-effort filename→encoding.
     ("v6w25", "v6w25"),
     ("v6_live2_ls", "v6_live2_ls"),
+    ("gnn_corpus_r8", "gnn_axis_r8"),
     ("gnn", "gnn_axis_v1"),
 )
 

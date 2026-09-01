@@ -300,11 +300,11 @@ mod tests {
             v
         };
         assert_eq!(via_fn, registered_names());
-        // Pin the pruned 4-entry set (registry.toml authority).
+        // Pin the pruned 5-entry set (registry.toml authority; gnn_axis_r8 = R328(b)).
         assert_eq!(
             via_fn,
-            vec!["gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"],
-            "all_specs must expose exactly the 4 registered encodings"
+            vec!["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"],
+            "all_specs must expose exactly the 5 registered encodings"
         );
     }
 

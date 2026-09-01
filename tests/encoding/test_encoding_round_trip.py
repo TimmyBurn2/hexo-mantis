@@ -16,7 +16,10 @@ import pytest
 
 from mantis import _engine
 from mantis.encoding import all_specs, lookup
-from mantis.encoding.resolvers import detect_encoding_from_state_dict
+from mantis.encoding.resolvers import (
+    AmbiguousGraphMarkerError,
+    detect_encoding_from_state_dict,
+)
 
 _REGISTERED: list[str] = sorted(s.name for s in all_specs())
 
@@ -120,15 +123,36 @@ def test_detect_pma_policy_mlp_key_when_policy_fc_absent() -> None:
 # ── 3b. Marker/stamp beats shape (and filename is NOT a signal — the KILL) ───
 
 
-def test_detect_graph_marker_beats_shape() -> None:
+def test_detect_graph_marker_REFUSES_once_more_than_one_graph_encoding_is_registered() -> None:
+    """The marker says GRAPH; it has never said WHICH graph (R328(c)).
+
+    These two rows used to assert `gnn_axis_v1` outright, and they were right for exactly as
+    long as one graph row existed. R328(b) registered `gnn_axis_r8`, and the two differ ONLY in
+    a geometry no checkpoint stamp records — so the branch now REFUSES by name rather than
+    resolving an unstamped checkpoint to whichever graph row was written first.
+    """
+    graph = [s for s in all_specs() if s.representation == "graph"]
+    assert len(graph) > 1, (
+        "this row's subject is the AMBIGUITY; with one graph encoding registered the marker "
+        "is determinate again and `test_detect_graph_marker_resolves_when_unique` is the row "
+        "that applies"
+    )
+    for strict in (False, True):
+        with pytest.raises(AmbiguousGraphMarkerError, match="never said WHICH graph"):
+            detect_encoding_from_state_dict(_gnn_state(), "model.pt", strict=strict)
+
+
+def test_detect_graph_marker_resolves_when_unique(monkeypatch) -> None:
+    """The positive control: pruned back to ONE graph row, the marker resolves again.
+
+    Without this, the row above would pass on a branch that raised unconditionally."""
+    from mantis.encoding import resolvers
+
+    only = [s for s in all_specs() if s.name == "gnn_axis_v1"]
+    monkeypatch.setattr(resolvers, "_graph_specs", lambda: only)
     spec = detect_encoding_from_state_dict(_gnn_state(), "model.pt", strict=False)
     assert spec is not None and spec.name == "gnn_axis_v1"
     assert spec.representation == "graph"
-
-
-def test_detect_graph_marker_wins_strict_too() -> None:
-    spec = detect_encoding_from_state_dict(_gnn_state(), "model.pt", strict=True)
-    assert spec is not None and spec.name == "gnn_axis_v1"
 
 
 def test_detect_stamp_beats_shape() -> None:

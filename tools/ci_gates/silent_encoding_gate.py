@@ -78,7 +78,7 @@ MIN_SCANNED_FILES = 80  # a floor, so "scanned nothing, found nothing" can never
 
 # ── the registered set (registry.toml, pruned to four at WP3) ────────────────────────
 # Longest-first so the alternation cannot match "v6" inside "v6w25".
-ENCODINGS = ("v6_live2_ls", "gnn_axis_v1", "v6w25", "v6")
+ENCODINGS = ("v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8", "v6w25", "v6")
 _ENC = "|".join(ENCODINGS)
 # An optional `f`/`r`/`b` prefix: `return f"v6"` is the same arm with a redundant prefix,
 # and an earlier draft let it through because `_Q` demanded the quote immediately.

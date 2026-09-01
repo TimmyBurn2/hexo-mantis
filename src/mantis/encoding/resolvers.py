@@ -45,6 +45,18 @@ class EncodingDeclarationConflictError(EncodingRegistryError):
     """
 
 
+class AmbiguousGraphMarkerError(EncodingRegistryError):
+    """An unstamped graph state dict cannot be resolved: >1 graph encoding is registered.
+
+    The marker key says the checkpoint is a graph; it has never said WHICH graph. While
+    `gnn_axis_v1` was the only graph row that under-determination was invisible. R328(b) added
+    a second (`gnn_axis_r8`), and the two differ ONLY in a geometry no checkpoint stamp records
+    (`CheckpointMetadata` carries `encoding_name`, not `registry_sha`) — so a guess here is
+    unfalsifiable downstream. Gate 11 cannot catch this shape by its own docstring's admission
+    (affirmative dispatch), which is why the refusal is in the code and not in a gate.
+    """
+
+
 class MissingEncodingError(EncodingRegistryError):
     """Raised when an encoding value is absent (R28, LAW-11).
 
@@ -164,6 +176,7 @@ _CORPUS_PATHS: dict[str, str] = {
     "v6_live2_ls": "data/bootstrap_corpus_v6_live2_ls.npz",
     "v6w25":       "data/bootstrap_corpus_v6w25.npz",
     "gnn_axis_v1": "data/gnn_corpus_v1.hexg",
+    "gnn_axis_r8":  "data/gnn_corpus_r8.hexg",
 }
 
 _CORPUS_SHA_PINS: dict[str, str] = {
@@ -499,6 +512,12 @@ def _grid_specs() -> list[EncodingSpec]:
     return [s for s in all_specs() if getattr(s, "representation", "grid") != "graph"]
 
 
+def _graph_specs() -> list[EncodingSpec]:
+    """Registered GRAPH-representation specs. Derived, so pruning back to one re-arms
+    the marker branch without an edit."""
+    return [s for s in all_specs() if getattr(s, "representation", "grid") == "graph"]
+
+
 def detect_encoding_from_state_dict(
     state: Mapping[str, Any],
     ckpt_label: str,
@@ -534,7 +553,17 @@ def detect_encoding_from_state_dict(
     # 2. MARKER — a graph state dict has no grid conv marker; resolve by marker
     #    BEFORE any shape probe so it beats shape (and filename).
     if _GNN_GRAPH_MARKER_KEY in state:
-        return lookup("gnn_axis_v1")
+        graph = _graph_specs()
+        if len(graph) != 1:
+            raise AmbiguousGraphMarkerError(
+                f"checkpoint {ckpt_label} carries the graph marker key but no encoding stamp, "
+                f"and {len(graph)} graph encodings are registered "
+                f"({', '.join(sorted(s.name for s in graph))}). The marker says GRAPH; it has "
+                "never said WHICH graph. Refusing rather than picking one (LAW-11): an "
+                "unstamped r6 checkpoint resolved as r8 differs only in a geometry no stamp "
+                "records. Stamp the checkpoint or pass the encoding explicitly."
+            )
+        return graph[0]
 
     # 3. Deterministic shape fallback (grid).
     inp_w = state.get("trunk.input_conv.conv.weight")

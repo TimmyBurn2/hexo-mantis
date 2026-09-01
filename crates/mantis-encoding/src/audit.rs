@@ -192,10 +192,10 @@ mod tests {
     #[test]
     fn census_shape_and_rows() {
         let rows = census();
-        assert_eq!(rows.len(), 4, "pruned registered set = 4");
+        assert_eq!(rows.len(), 5, "pruned registered set = 5");
         // sorted by name
         let names: Vec<&str> = rows.iter().map(|r| r[0].as_str()).collect();
-        assert_eq!(names, ["gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
+        assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
         let v6 = rows.iter().find(|r| r[0] == "v6").unwrap();
         assert_eq!(v6, &[
             "v6".to_string(),

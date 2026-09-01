@@ -13,8 +13,9 @@ def test_engine_importable_with_doc():
 def test_all_specs_reprove():
     """`import mantis._engine; all_specs()` under the full pyclass surface."""
     specs = _engine.all_specs()
-    assert len(specs) == 4
-    assert {s.name for s in specs} == {"v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"}
+    assert len(specs) == 5
+    assert {s.name for s in specs} == {
+        "v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"}
 
 
 def test_registry_sha_reprove():

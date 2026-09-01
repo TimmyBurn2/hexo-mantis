@@ -55,7 +55,7 @@ def test_unregistered_encoding_loud(name: str) -> None:
 
     message = str(exc.value)
     assert name in message, "the rejected name must appear in the error"
-    for registered in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"):
+    for registered in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"):
         assert registered in message, (
             f"the error must name the registered set (missing {registered!r}) — an "
             "operator reading it should not have to grep the registry"
@@ -132,7 +132,7 @@ def test_every_registered_encoding_classified() -> None:
     assert not set(graph) & set(grid)
 
 
-@pytest.mark.parametrize("name", ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"])
+@pytest.mark.parametrize("name", ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"])
 def test_pool_resolve_classification_matches_the_spec_representation(name: str) -> None:
     """D-05 (agreement arm) — PASS iff the pool's classification agrees with the spec's
     own `representation` field for every registered encoding. FAIL = the pool dispatches

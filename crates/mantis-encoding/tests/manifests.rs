@@ -14,10 +14,10 @@ const S5_HELDOUT_SHA: &str = "88f99c2b5fea7495484e4e9cc1af831d1e053221dc7e0f9c8f
 // ── the embedded, validated manifest ─────────────────────────────────────────
 #[test]
 fn embedded_manifest_registered_pins() {
-    // The 4 registered blocks present; ARCH/KILL blocks ABSENT.
+    // The 5 registered blocks present; ARCH/KILL blocks ABSENT.
     let mut names = mantis_encoding::manifests::pinned_encoding_names();
     names.sort_unstable();
-    assert_eq!(names, ["gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
+    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
     for absent in ["v6_live2", "v7full", "v8", "v8_canvas_realness", "v7mw", "v6tp"] {
         assert!(corpus_path(absent).is_none(), "{absent} pin block must be ABSENT");
     }

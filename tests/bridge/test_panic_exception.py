@@ -54,13 +54,19 @@ def test_encoding_less_board_to_tensor_panics_catchably(panic_exception):
 def test_process_survives_a_caught_panic(panic_exception):
     """After catching a panic the interpreter is still live and usable —
     proves unwind, not abort."""
+    # DERIVED, not typed: the claim is that the registry SURVIVES the panics, so the
+    # comparison is against the same surface read before them. A typed count made this row a
+    # second authority over the size of the registered set, and it reds on any registry change
+    # while saying nothing about unwinding (R192(e), derive-or-delete).
+    before = len(_engine.all_specs())
+    assert before > 0, "the registry was already empty; this row cannot show survival"
     for _ in range(3):
         try:
             _engine.ReplayBuffer(8, "__still_bogus__")
         except panic_exception:
             pass
     # The engine is still fully functional after repeated caught panics.
-    assert len(_engine.all_specs()) == 4
+    assert len(_engine.all_specs()) == before
     b = _engine.Board.with_encoding_name("v6")
     b.apply_move(0, 0)
     assert b.ply == 1

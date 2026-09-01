@@ -61,7 +61,7 @@ def test_graph_keyset_matches_golden() -> None:
 
 def test_no_killed_branch_keys_on_any_constructed_net() -> None:
     killed = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
-    for enc in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"):
+    for enc in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"):
         arch = arch_from_spec_and_config(lookup(enc), {})
         for k in _keyset(build_net(arch)):
             assert not k.startswith(killed), f"{enc}: killed-branch key {k!r}"

@@ -27,7 +27,7 @@ FREE_FNS = [
     "take_mcts_pool_overflow_count",
 ]
 MODULE_FNS = ["all_specs", "registry_sha", "registry_sha_hex"]
-REGISTERED_NAMES = {"v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"}
+REGISTERED_NAMES = {"v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"}
 
 
 def test_all_11_pyclasses_present():

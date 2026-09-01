@@ -14,7 +14,7 @@ use mantis_encoding::{
     PLY_PARITY_PLANE,
 };
 
-const REGISTERED: [&str; 4] = ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"];
+const REGISTERED: [&str; 5] = ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"];
 const ABSENT: [&str; 8] = [
     "v6_live2", "v8", "v8_canvas_realness", "v7full", "v7", "v7e30", "v7mw", "v6tp",
 ];
@@ -22,10 +22,14 @@ const ABSENT: [&str; 8] = [
 // ── O-4: census exact-N + names + ARCH/KILL absence ──────────────────────────
 #[test]
 fn census_exact_n_and_names() {
-    assert_eq!(all_specs().count(), 4, "pruned registered set must be exactly 4");
+    assert_eq!(
+        all_specs().count(),
+        REGISTERED.len(),
+        "the registered set must be exactly the names REGISTERED lists"
+    );
     let mut names: Vec<&str> = all_specs().map(|s| s.name).collect();
     names.sort_unstable();
-    assert_eq!(names, ["gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
+    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
     for n in REGISTERED {
         assert!(lookup(n).is_some(), "{n} must be registered");
     }

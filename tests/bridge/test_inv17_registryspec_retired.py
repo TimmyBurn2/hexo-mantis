@@ -6,7 +6,7 @@ import pytest
 
 from mantis import _engine
 
-REGISTERED = ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"]
+REGISTERED = ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"]
 
 
 def test_encoding_spec_absent():

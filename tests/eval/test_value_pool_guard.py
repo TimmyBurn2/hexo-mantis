@@ -44,10 +44,10 @@ def _spec_with(name: str, **overrides):
 
 
 def test_every_registered_encoding_declares_an_implemented_value_pool() -> None:
-    """The census: all four registered rows pass the guard today, so arming it changes
+    """The census: all five registered rows pass the guard today, so arming it changes
     NOTHING for any shipped encoding. A guard that refused a live encoding would be a
     regression, not a fix — this is the assertion that distinguishes the two."""
-    for name in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1"):
+    for name in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"):
         spec = lookup(name)
         assert spec.value_pool in _DECODE_IMPLEMENTED_VALUE_POOLS, (
             f"{name} declares value_pool={spec.value_pool!r}, outside the implemented set"
