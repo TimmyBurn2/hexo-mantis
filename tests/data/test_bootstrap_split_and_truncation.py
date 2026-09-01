@@ -158,3 +158,51 @@ def test_the_ply_histogram_is_present_and_ORDERS_NUMERICALLY(tmp_path: Path) -> 
     lows = [int(k.split("-")[0]) for k in keys]
     assert lows == sorted(lows), f"histogram keys do not order numerically under sort_keys: {keys}"
     assert sum(hist.values()) == prov["games"]
+
+
+# ═══ the policy target must actually reach the loss ══════════════════════════════════════
+def test_a_BC_row_CONTRIBUTES_POLICY_GRADIENT_and_is_not_value_only() -> None:
+    """THE DEFECT THIS ROW EXISTS FOR: BC that clones no behaviour.
+
+    `ragged_policy_ce` masks by `is_full_search`, and `graph_loss_denominators` sums the same
+    mask for the policy denominator. `encode_game` wrote FALSE on every row — reading the
+    flag's NAME ("was there a search behind this?", correctly no) rather than its ROLE ("does
+    this row contribute policy gradient?", emphatically yes). The consequence was measured on
+    the box, not argued: after 2 000 steps over 511 145 human positions the held-out policy
+    loss read `0.000000` at every evaluation and the unmasked held-out CE had moved from
+    6.1637 to 6.1249 against a uniform reference of 6.2561 — a policy still at initialisation.
+
+    The row asserts the FLAG, because that is the thing with one value and one meaning; the
+    loss being non-zero is a consequence tested where the loss lives.
+    """
+    from mantis.data.bootstrap_encode import encode_game
+    from mantis._engine import Board
+
+    rows = list(encode_game([(q, r) for q, r in _legal_walk(12, seed=3)], 1,
+                            board_factory=lambda: Board.with_encoding_name(_ENC)))
+    assert rows, "the fixture game encoded no rows"
+    flags = [row[5] for row in rows]
+    assert all(flags), (
+        "a BC row must carry is_full_search=True or its one-hot policy target is masked out "
+        "of the loss and the pretrain trains the value head alone"
+    )
+
+
+def test_the_policy_DENOMINATOR_over_a_BC_batch_is_the_graph_count_not_zero() -> None:
+    """The consequence, at the place that computes it. A zero denominator is the shape that
+    silently turns the whole policy term into 0 for the entire run."""
+    import numpy as np
+
+    from mantis.data.bootstrap_encode import encode_game
+    from mantis.train.losses import graph_loss_denominators
+    from mantis._engine import Board
+
+    rows = list(encode_game([(q, r) for q, r in _legal_walk(12, seed=4)], 1,
+                            board_factory=lambda: Board.with_encoding_name(_ENC)))
+    ifs = np.array([row[5] for row in rows], dtype=np.uint8)
+    vv = np.array([row[7] for row in rows], dtype=np.uint8)
+    policy_den, _value_den = graph_loss_denominators(ifs, vv, len(rows))
+    assert policy_den == float(len(rows)) and policy_den > 0, (
+        f"policy denominator {policy_den} over {len(rows)} BC rows; a 0 here makes every "
+        "policy loss 0 for the whole pretrain"
+    )

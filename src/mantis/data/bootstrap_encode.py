@@ -171,7 +171,16 @@ def encode_game(
             rec_player,
             int(board.moves_remaining),
             ply,
-            False,                             # is_full_search: BC has no search behind it
+            # TRUE, and the flag's ROLE decides this rather than its NAME. Its ONLY semantic
+            # consumer is `ragged_policy_ce`'s `full_search_mask`, where FALSE means "this row
+            # contributes VALUE ONLY" — the quick-search exception; `recency_buffer` defaults
+            # it to 1, so TRUE is the neutral value. A BC row's one-hot IS a policy target
+            # worth learning from, so FALSE here zeroed the policy loss and its denominator on
+            # EVERY row: measured at 2 000 steps over 511 145 human positions, held-out policy
+            # loss read 0.000000 throughout and the unmasked held-out CE moved 6.1637 -> 6.1249
+            # against a uniform reference of 6.2561. Behaviour cloning that cloned no behaviour.
+            True,                              # is_full_search: the policy target is learnable
+
             float(outcome),
             bool(value_valid),
             n,
