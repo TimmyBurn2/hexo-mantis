@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 0ffe052, regenerated 2026-08-31.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ cb67843, regenerated 2026-09-01.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -5322,6 +5322,43 @@ radius 6. That is a fact about the reference, not an error in the ruling, and th
 follows R257 to its fence must find the narrowing attached to it rather than a text quietly
 different from the one the operator ratified (R9/R289(v), and ANNOTATION 9's own stated reason).
 
+**ANNOTATION 11 — R257's FENCE (i) RADIUS CLAUSE INVERTS, and the inversion is dated to the
+registry, not to this annotation. Ordered by R328(b), appended 2026-09-01 by the R328 landing.**
+Fence (i) reads *"Shrimp-Bot is the radius-8 game; mantis run5 is radius-6 (R26/R238).
+Architecture and loop patterns transfer; corpora, checkpoints, and any radius-dependent arithmetic
+do not."* **The thing that made it bite was a MISMATCH, not radius 8 as such** — the fence names
+both radii and holds because they differ. R328(b) adopts radius 8 for the run6 lineage, so from
+the run6 identity forward the mismatch runs the other way and the clause has to be read from the
+other side.
+
+**What inverts.** r8-derived reference material — Shrimp-Bot's published figures, the reference
+bots, the human ladder — is **IN-REGIME** for run6 and no longer carries a radius objection on
+radius grounds alone. **r6-only material now carries the divergence note**, and that includes two
+classes a reader will not expect: ANNOTATION 10's `[r6-MATCH]` S5-stage class, whose whole value
+was that it matched a radius run6 no longer has, and **every mantis run5 quantity read forward into
+run6**. The `[r8]` tag stops being a warning label and the `[r6-MATCH]` tag starts being one.
+
+**Three things this does NOT do.** (1) It does not touch **fence (ii)**, the acting-scheme
+divergence, which remains an operator lock (R254/R258, qualified by ANNOTATION 9). (2) It does not
+license an unmeasured transfer: R328(b)'s own closing sentence holds every carried candidate-set,
+halo and VRAM figure **verify-at-HEAD, re-derived at the new registry and NEVER SCALED**. In-regime
+means the radius objection lapses, not that a number arrives already true — a figure taken on
+another project's card at another project's batch is still that project's figure. (3) It does not
+reach backwards. **R26 stands untouched and run5 was and remains radius 6**; nothing here rewrites
+a run5 quantity, and a run5 figure is in-regime for run5 exactly as it always was.
+
+**THE INVERSION IS DATED TO THE REGISTRY, WHICH IS THE HALF AN ANNOTATION CAN GET WRONG.** It takes
+effect when `crates/mantis-encoding/src/registry.toml` actually carries the run6 lineage at radius
+8 — R328's Leg 1 — and not on the day this text lands. A fence that flips on the strength of an
+intention rather than on a measured registry is exactly the phantom the LAW-07 discipline refuses,
+and until Leg 1 is green at HEAD fence (i) reads as it always did.
+
+**Why an annotation and not a repair, restated for this instance.** R257's holding is unchanged and
+was correct for the world it was written in; what changed is OUR radius. That is a fact about this
+project, not an error in the ruling — the same ground ANNOTATION 10 gave one direction earlier, and
+the reader who follows R257 to its fence must find both narrowings attached to it rather than a
+text quietly different from the one the operator ratified (R9/R289(v)).
+
 # R291 — architect adjudication response, operator-ratified by forwarding, 2026-08-20 (R290's execution ratified; F-816-24 RATIFIED MINT-BLOCKING with a fix packet ORDERED; the LAW-08 citation-prose defect fixed as a CLASS; R289(c) slotted; R289(v) matured into read-from-the-register) [INLINE]
 
 **Provenance: [INLINE], verbatim.** Text supplied in the R291 follow-up packet under its own
@@ -7777,3 +7814,106 @@ mis-citation clause (a) corrects, one ruling later and caught before it was carr
 > TRAINS; run6 does not start.
 > ROUTE: land this, census, ACTIVE next version; Leg 1 then Leg 2; one plain
 > exit screen.
+
+# R328 — architect ruling, ARCH-ERA session, 2026-09-01 (MINT-CLOSE Leg 1 and BOTH Leg-2 HALTS RATIFIED, the envelope defect placed on the ARCHITECT'S ledger and R279's audit gap recorded; **RADIUS 8 ADOPTED for the run6 lineage** by the operator's forwarding, R26 left standing as run5 history and R257/ANNOTATION-10 gaining ANNOTATION 11 — the fence's radius clause INVERTS; the registry change ORDERED THROUGH THE SEAM as an identity-key change with goldens re-captured and the r6 set ARCHIVED; the BC stopping mechanism ORDERED BUILT and suite-proven before any pretrain consumes it; `freeze_verify`'s 16 unexplained rows ORDERED TRIAGED before any box leg; SITTING-6 and BC-EXEC sequenced with the acceptance witness pre-registered as filed) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into this RUN6-IDENTITY-1 execution session's prompt rather
+than as a file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R328_RUN6_IDENTITY.md` §1. Byte-diff on append per R306(a) (de-marked,
+whitespace-normalized, line-by-line; extraction by `awk` over the canonical home, never retyped;
+extraction and diff under `set -o pipefail`, R313(c)). **The forwarded text carried the
+placeholder `R{next}`**, substituted to `R328` after verifying the head is R327 — census
+`R23–R327, 298 sections / 298 distinct / 0 duplicates, excluded set 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.33 == §8 last entry
+v3.33`; `--self-test` all four controls fire; last register header `R327`, no `R328` heading
+present. **`grep -rn 'R328' plan/` returned NOTHING AT ALL (rc 1, 0 hits)**, read under
+`set -o pipefail` with the count taken from a file rather than from a pipeline's exit code.
+Double transcription IDENTICAL at 42 lines before substitution and again after `sed`; exactly
+ONE placeholder occurrence was substituted and the residual-placeholder grep returns rc 1;
+canonical home's `awk`-extracted block diffed against the substituted transcription — EMPTY.
+
+**The ruling's referents re-derived at point of use, and every one reproduces.**
+**Clause (a)'s "three self-caught errors"** is `plan/MINT_CLOSE_BC_EXEC_1_EXIT.md` §4.1, three
+enumerated (the empty test-count floor file committed by an unchecked chained extraction; the
+step budget hand-ceilinged to 2 139 where the shipped resolver gives 2 138; a delta count
+asserted at 11 before deriving 10) — THREE, not the five of the sitting the previous ruling
+ratified, and the clause says three. **Clause (a)'s "R279's audit gap (a replay that never
+builds a `Board`)" is verified AT SOURCE, not read off the exit screen:**
+`grep -n 'Board\|legal_moves' tools/audit_bootstrap_corpus.py` returns **rc 1, zero hits** over
+the whole file, so `audit_conventions` — whose docstring says *"Replay every game and check the
+declared winner against mantis-core's rules"* — reconstructs in pure Python and never reaches the
+production board. The gap is real and the audit is correctly held not-at-fault.
+**Clause (b)'s 34.76 %** is `3 023 / 8 698 = 34.7551 %`, computed here rather than transcribed;
+it rounds to the clause's figure. **R26 is `rulings_register.md:66`** and reads *"run5 radius
+stays registry-derived (gnn_axis_v1 = 6). Never write the number 8 into any config or doc in this
+run."* — **its prohibition is scoped `in this run`, i.e. run5, so R328(b) does not overrule it and
+"stands untouched as run5 history" is exact.** **ANNOTATION 10 is `rulings_register.md:5289`**,
+which NARROWS R257's `[r8]` fence rather than lifting it, so ANNOTATION 11 is an inversion of a
+live clause and not a re-annotation of a dead one. **Clause (f)'s R326(a) correction** is the
+register's R326 blockquote lines 11–13, *"R317(d)'s carried-noise assumption is MEASURED FALSE
+and corrected of record — future ladders use per-rung noise"*; **R326(b)'s derivation pattern** is
+the same blockquote lines 20–24, *"RE-DERIVED as measured need plus a stated allowance"*.
+**THE REGISTRY FACTS the identity change acts on are read at
+`crates/mantis-encoding/src/registry.toml`** (cited whole, per CLAUDE.md's map):
+`[encodings.gnn_axis_v1]` carries `legal_move_radius = 6` at `:166` with the in-source comment
+*"matches graph_radius"*, and `graph_radius = 6` at `:182`, `schema_version = 4` at `:187` —
+**two keys, one geometry, and clause (c)'s "identity-key change" therefore has TWO sites, not
+one.** `v6w25` at `:91` carries `legal_move_radius = 8` and is the widest registered radius, which
+is why the exit screen could measure `0 / 8 698` against it. **Clause (e)'s containment
+precondition is already measured GREEN:** `git log --oneline dev..sitting5-mint` is EMPTY, so the
+branch is fully contained in `dev` and the hygiene deletion is a deletion of nothing unique.
+
+**ONE EXECUTION FORK IS NAMED HERE RATHER THAN DISCOVERED IN THE LEG, because the ruling
+constrains its OUTCOME and not its MECHANISM.** §0.1 says *"Run5's identity is untouched — it was
+and remains radius 6"* while clause (c) orders *"goldens re-captured with the old ones archived as
+r6 lineage"*. Mutating `[encodings.gnn_axis_v1]` in place satisfies (c) literally and puts §0.1
+at risk, because a run5 checkpoint stamped with that encoding name would then denote a geometry it
+was never trained at — the provenance class R3/LAW-12 exist to refuse. Registering a new r8
+encoding satisfies §0.1 literally and leaves (c)'s "archived" without a subject. **The mechanism
+is DERIVED at Leg 1 against the measured coupling — how the stamp, the registry sha handshake and
+the conformance roster actually key — and the deciding ground is recorded there.** It is stated at
+the landing so that it is a derivation on the record and not a silent choice inside an edit.
+
+> R328 — (a) MINT-CLOSE Leg 1 is RATIFIED (grant executed red→green with
+> neighbours untouched; three-of-three census on the export surface; the
+> derived delta-header design accepted). BOTH Leg-2 HALTS are RATIFIED: the
+> encoder refusal is the unarmed-landing and first-run-suspicion discipline
+> working — R279's audit gap (a replay that never builds a Board) is recorded;
+> and the envelope defect was the ARCHITECT'S — an early-stop term specified
+> against a mechanism that exists nowhere, on the architect's ledger. The
+> witness-citation repair is accepted; the session's three self-caught errors
+> stand on its own ledger.
+> (b) RADIUS 8 is ADOPTED for the run6 lineage by the operator's forwarding —
+> grounds: the corpus, the reference bots, and the human ladder are radius-8;
+> a strength claim is anchored to the ecosystem it plays in; the 34.76%
+> refusal with its wide-play bias is unacceptable in a bootstrap. R26 stands
+> untouched as run5 history. R257/ANNOTATION-10 gains ANNOTATION 11: with
+> mantis at radius 8, the fence's radius clause INVERTS — r8-derived
+> reference material is in-regime; r6-only material now carries the
+> divergence note. Every carried candidate-set, halo and VRAM figure remains
+> verify-at-HEAD and is re-derived at the new registry, never scaled.
+> (c) The registry change EXECUTES THROUGH THE SEAM: an identity-key change,
+> both live arches re-proven by the full conformance suite at radius 8
+> (floors re-benched, envelopes re-emitted, goldens re-captured with the old
+> ones archived as r6 lineage); the encoder re-runs against the whole corpus
+> — expected 8,698/8,698, and the readout now carries the ply census it was
+> found not to.
+> (d) The BC stopping mechanism is BUILT: seeded game-level split, held-out
+> policy-loss monitoring, patience stop; suite-proven with planted breaks
+> before any pretrain consumes it.
+> (e) freeze_verify's 16 unexplained rows are TRIAGED before any box leg — a
+> standing red instrument rides to no sitting. Hygiene: sitting5-mint branch
+> deleted post-containment-check; the box's uv/torch +cpu downgrade gets a
+> pinned guard with a matmul assertion.
+> (f) SITTING-6 runs the proven loop at the new identity: Phase W ladder
+> (per-rung noise per R326(a)'s correction), terms, fit under M and the
+> ceiling convention with the R326(b)-derivation pattern re-applied to the
+> cap at r8 need, nine-act mint, burst paid. Then BC-EXEC under the §0.3
+> envelope with the ACCEPTANCE WITNESS pre-registered as filed: post-BC vs
+> random clears the armed strength_floor decisive rate AND the longest-run
+> distribution shows contested play. A failed witness re-adjudicates the
+> recipe here; nothing degrades silently. Run6 does not start; the prereg
+> table is the architect's next text after a passing witness.
+> ROUTE: land this, census, ACTIVE next version; Legs 0–4 in order; one
+> plain exit screen.

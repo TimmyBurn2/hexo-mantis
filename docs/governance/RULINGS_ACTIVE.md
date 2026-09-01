@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 0ffe052, regenerated 2026-08-31.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ cb67843, regenerated 2026-09-01.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.33, 2026-08-31. Created under R271 (register hygiene: archive/index split);
+# v3.34, 2026-09-01. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -812,6 +812,59 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # adjacent pairs, 0.32–0.43 % density). **A failed witness RE-ADJUDICATES the recipe and returns
 # to the architect; the posture never silently degrades to (C).** NOTHING ELSE TRAINS; RUN6 DOES
 # NOT START.
+# **v3.34 = R328 folded in — the curation where THE IDENTITY MOVES.**
+# **MINT-CLOSE LEG 1 IS RATIFIED and BOTH LEG-2 HALTS ARE RATIFIED.** The encoder's refusal is the
+# unarmed-landing and first-run-suspicion discipline WORKING, and **R279's audit gap is recorded**:
+# `audit_bootstrap_corpus.py::audit_conventions` replays in pure Python and never builds a `Board`
+# (verified at source this curation — zero `Board`/`legal_moves` hits in the whole file), so the
+# certification could not have caught a radius refusal and is correctly held not-at-fault. **The
+# envelope defect was the ARCHITECT'S** — an early-stop term specified against a mechanism that
+# exists nowhere — and it goes on the ARCHITECT'S ledger, not the executing session's.
+# **RADIUS 8 IS ADOPTED FOR THE RUN6 LINEAGE**, by the operator's forwarding. Grounds: the corpus,
+# the reference bots and the human ladder are radius-8; **a strength claim is anchored to the
+# ecosystem it plays in**; and a 34.76 % refusal (`3 023 / 8 698`, re-derived here) whose residue is
+# the WIDE-PLAY TAIL is unacceptable in a bootstrap — dropping it would leave every certified corpus
+# statistic describing a corpus nobody trains on. **R26 STANDS UNTOUCHED AS RUN5 HISTORY**, and its
+# prohibition was scoped *"in this run"* from the day it landed, so run6 does not overrule it.
+# **THE MINT IS KNOWINGLY VOIDED IN ITS GEOMETRY HALF.** The fitted cap pair, the terms and the
+# worker pick all depend on graph geometry and are re-measured at Leg 3 on proven machinery.
+# **The non-geometry mints CARRY**: allocator posture, the `strength_floor` values, `M = 0.35`,
+# `--margin 0.85`, posture (A). **Inheritance is DEAD for sitting 6** — the R326(f) inherit-or-
+# re-measure test cannot even be asked, because the thing it keys on is what changed.
+# **R257/ANNOTATION-10 GAINS ANNOTATION 11 — the fence's radius clause INVERTS.** What made fence
+# (i) bite was a MISMATCH, not radius 8 as such; with mantis at radius 8, r8-derived reference
+# material is IN-REGIME and **r6-only material now carries the divergence note** — including
+# ANNOTATION 10's own `[r6-MATCH]` class and every run5 quantity read forward. Three limits, stated
+# so it cannot be over-read: fence (ii) (acting-scheme) is UNTOUCHED and still an operator lock;
+# every carried candidate-set, halo and VRAM figure stays **verify-at-HEAD, re-derived at the new
+# registry and NEVER SCALED**; and **the inversion is dated to the REGISTRY, not to the annotation**
+# — it takes effect when Leg 1's radius-8 registry is green at HEAD, not on the day the text landed.
+# **THE REGISTRY CHANGE EXECUTES THROUGH THE SEAM.** An identity-key change with **TWO sites, not
+# one** (`legal_move_radius` at `registry.toml:166` and `graph_radius` at `:182`, the first
+# annotated in-source *"matches graph_radius"*): both live arches re-proven by the full conformance
+# suite at radius 8, floors re-benched, envelopes re-emitted, **goldens re-captured with the old set
+# ARCHIVED, never overwritten**. The r8 graph-size deltas are MEASURED and REPORTED — the frontier
+# ledger re-denominates against them and the throughput cost is not guessed.
+# **ONE EXECUTION FORK IS NAMED AT THE LANDING RATHER THAN DISCOVERED IN THE LEG.** §0.1 holds
+# run5's identity at radius 6 while (c) orders the old goldens ARCHIVED; mutating `gnn_axis_v1` in
+# place satisfies (c) and risks §0.1 (a run5 checkpoint would name a geometry it never trained at —
+# the provenance class R3/LAW-12 refuse), while registering a new r8 encoding satisfies §0.1 and
+# leaves "archived" without a subject. **The MECHANISM is the executing session's to DERIVE against
+# the measured coupling; the OUTCOME is the ruling's.** Recorded so the choice is a derivation on
+# the record and not a silent decision inside an edit.
+# **THE BC STOPPING MECHANISM IS BUILT, NOT WAIVED** — seeded GAME-level split, held-out policy-loss
+# monitoring, patience stop; **suite-proven with planted breaks BEFORE any pretrain consumes it**.
+# The envelope that halted Leg 2 is re-armed with a real mechanism behind it rather than re-worded
+# to fit what the route already had.
+# **`freeze_verify`'s 16 UNEXPLAINED ROWS ARE TRIAGED BEFORE ANY BOX LEG — a standing red instrument
+# rides to no sitting.** This is the module's own docstring turned on the module: an assertion that
+# always fires and an assertion that can never fire are the same defect from opposite sides.
+# **SITTING-6 THEN BC-EXEC.** The proven loop at the new identity — Phase W ladder with per-rung
+# noise (R326(a)'s correction), terms, fit under M and the ceiling convention with R326(b)'s
+# measured-need-plus-stated-allowance pattern re-applied at the r8 need, the nine-act mint, the
+# burst paid. Then BC-EXEC under the §0.3 envelope with the ACCEPTANCE WITNESS pre-registered as
+# filed at v3.33. **A failed witness RE-ADJUDICATES the recipe and returns to the architect.**
+# **RUN6 DOES NOT START**; the prereg table is the architect's next text after a PASSING witness.
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -967,8 +1020,18 @@ re-confirmed this session — check before relying.
 
 - R238 — radius-8 resurrection watch: Shrimp-Bot docs and both external research
   reviews carry radius-8 framing; every imported number re-derived (R26).
+  **The WATCH survives the inversion, and its reason changes.** Once run6 is radius 8 the framing
+  is no longer foreign, so the watch no longer guards a units mismatch — it guards the second half
+  of its own text, *every imported number re-derived*, which R328(b) restates as verify-at-HEAD,
+  never scaled. **R26 remains the run5 authority and is not the run6 one.** (This note is THIS
+  CURATION'S READING of a consequence; R328(b) annotates R257 only, and R238's own text is
+  unamended.)
 - R257 — Shrimp-Bot reference fences: architecture/loop patterns transferable; rules,
   radius, and search-free deploy are not.
+  **ANNOTATION 11 (R328(b)) INVERTS fence (i)'s radius clause for the run6 lineage** — r8 material
+  is in-regime, r6-only material (including ANNOTATION 10's `[r6-MATCH]` class) carries the
+  divergence note. **Dated to the registry**: in force once Leg 1's radius-8 registry is green at
+  HEAD, not before. Fence (ii) UNTOUCHED; verify-at-HEAD still binds every carried figure.
 - R27 — falsified F-04 scope limit: falsified PMA-as-tested vs min/max only; does NOT
   certify min vs mean+max→attention. Min/max asymmetry is a flagged defect.
 - R37 — entropy knob: nonzero entropy_reg is graph-banned; `−0.005` never existed.
@@ -2182,6 +2245,57 @@ Verbatim text in the register; one-liners here are index only.
   **A failed witness RE-ADJUDICATES the recipe and returns to the architect; the posture never
   silently degrades to (C).** The checkpoint is an artifact with provenance (corpus sha, recipe,
   net hash). **NOTHING ELSE TRAINS; RUN6 DOES NOT START.**
+  **AMENDED by R328(a) (2026-09-01). (a)–(e) RAN AND ARE RATIFIED; (f) RAN TO ITS PRE-FLIGHT AND
+  HALTED TWICE, and BOTH HALTS ARE RATIFIED — this row's execution force is SPENT, its (f) recipe
+  terms SUPERSEDED by R328's §0.3 envelope.** The two halts: the encoder refuses `3 023 / 8 698`
+  (34.76 %) because `gnn_axis_v1` ships radius 6 against a corpus that needs exactly 8; and two of
+  the five envelope terms — the held-out split and the early stop — **name machinery the graph route
+  does not have**, which R328(a) puts on the ARCHITECT'S ledger rather than the executing session's.
+  **The witness pre-registration this row made at v3.33 SURVIVES unchanged** and is what R328(f)
+  means by *"pre-registered as filed"*.
+
+- **R328 — the identity moves to radius 8, and everything geometry-dependent is re-measured on
+  proven machinery. LIVE, expires at RUN6-IDENTITY-1's exit screen.**
+  **(a) RATIFIES MINT-CLOSE Leg 1 AND BOTH LEG-2 HALTS.** The grant executed red→green with
+  neighbours untouched, the census saw three of three on the widened export surface, and the derived
+  delta-header design is ACCEPTED. **R279's audit gap is RECORDED** — a replay that never builds a
+  `Board`. **The envelope defect was the ARCHITECT'S.** The witness-citation repair is accepted; the
+  session's THREE self-caught errors stand on its own ledger.
+  **(b) RADIUS 8 IS ADOPTED FOR THE RUN6 LINEAGE.** Grounds: corpus, reference bots and human ladder
+  are radius-8; a strength claim is anchored to the ecosystem it plays in; a 34.76 % refusal biased
+  to WIDE PLAY is unacceptable in a bootstrap. **R26 stands untouched as run5 history** (its text is
+  scoped *"in this run"*). **R257/ANNOTATION-10 gains ANNOTATION 11** — the fence's radius clause
+  INVERTS, dated to the registry rather than to the annotation. **Every carried candidate-set, halo
+  and VRAM figure stays verify-at-HEAD, re-derived at the new registry, NEVER SCALED.**
+  **The geometry-dependent mints are knowingly VOIDED** (fitted cap pair, terms, worker pick);
+  **the non-geometry mints CARRY** (allocator posture, `strength_floor` values, `M = 0.35`,
+  `--margin 0.85`, posture (A)).
+  **(c) THE REGISTRY CHANGE EXECUTES THROUGH THE SEAM** — an identity-key change with TWO sites
+  (`registry.toml:166` `legal_move_radius`, `:182` `graph_radius`); both live arches re-proven by
+  the FULL conformance suite at radius 8; floors re-benched, envelopes re-emitted, **goldens
+  re-captured with the old ones ARCHIVED as r6 lineage, never overwritten**; the encoder re-runs
+  against the WHOLE corpus — expected `8 698 / 8 698` — and the readout now carries the ply census
+  it was found not to. **The MECHANISM (mutate in place vs register a new r8 encoding) is DERIVED at
+  Leg 1 against the measured coupling, with the deciding ground recorded; §0.1 holds run5's identity
+  at radius 6 and (c) orders the r6 goldens archived, and only a derivation can satisfy both.**
+  **(d) THE BC STOPPING MECHANISM IS BUILT** — seeded GAME-level split, held-out policy-loss
+  monitoring, patience stop; **suite-proven with planted breaks BEFORE any pretrain consumes it**.
+  **(e) `freeze_verify`'s 16 UNEXPLAINED ROWS ARE TRIAGED BEFORE ANY BOX LEG** — a standing red
+  instrument rides to no sitting. Hygiene: `sitting5-mint` deleted post-containment-check (measured
+  green at this landing — `git log dev..sitting5-mint` is EMPTY); the box's `uv`/torch `+cpu`
+  downgrade gets a PINNED GUARD with a **matmul assertion**, not a `torch.cuda.is_available()` one.
+  **(f) SITTING-6 THEN BC-EXEC.** The proven loop at the new identity: Phase W ladder with per-rung
+  noise (R326(a)), terms, fit under M and the ceiling convention with R326(b)'s
+  measured-need-plus-stated-allowance pattern re-applied at the r8 need, the NINE-ACT MINT, the
+  BURST PAID. Then BC-EXEC under the §0.3 envelope — epochs ≤ 5, peak lr ≤ 1e-3, batch = the minted
+  trainer batch, seeded GAME-level held-out ≥ 5 %, stop = held-out policy-loss patience; outside the
+  envelope **HALT and surface**. **THE ACCEPTANCE WITNESS, pre-registered as filed:** post-BC vs
+  random clears the armed `strength_floor` decisive rate **AND** the longest-run distribution shows
+  CONTESTED play. **A failed witness RE-ADJUDICATES the recipe and returns to the architect; nothing
+  degrades silently. RUN6 DOES NOT START**; the prereg table is the architect's next text after a
+  PASSING witness.
+  **Legs are SEVERABLE IN ORDER at gate-green boundaries; NIGHTRUN autonomy rules apply verbatim;
+  HALTS ARE SUCCESSES.**
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -4815,3 +4929,57 @@ Verbatim text in the register; one-liners here are index only.
   refused; (f) fixes a criterion before seeing data and is allowed.**
   **WHAT THIS CURATION DOES NOT DO:** it merges nothing (Leg 1 does), trains nothing (Leg 2 does),
   writes no recipe value, and starts no run6. **RUN6 REMAINS HELD.**
+
+- 2026-09-01 — **v3.34** curated by the RUN6-IDENTITY-1 execution session, landing **R328**,
+  authored in the ARCH-ERA architect session under R303(d) and forwarded by the operator into this
+  session's prompt rather than as a file. **The landing session CREATED the ruling's ONE canonical
+  home** (R285's ONE-TEXT rule), `plan/PACKET_R328_RUN6_IDENTITY.md` §1, and the register entry was
+  built from it by `awk`, never retyped. **Census re-run independently BEFORE and AFTER:**
+  `R23–R327, 298 sections / 298 distinct / 0 duplicates, excluded set 53` before, `R23–R328,
+  299 / 299 / 0, excluded set 53` after, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`
+  unchanged both times; `--stamp` read `STAMP OK: stamp v3.33 == §8 last entry v3.33` before the
+  edits and **FAILED loudly mid-curation** (`header says v3.34, §8's last entry says v3.33`) with
+  this entry unwritten, which is R284(f)'s instrument doing exactly its job on this curation rather
+  than on a remembered one; `--self-test` all four controls fire. **`grep -rn 'R328' plan/` returned
+  NOTHING AT ALL (rc 1, 0 hits)** before the landing, read under `set -o pipefail` with the count
+  taken from a file rather than from a pipeline's exit code. **Double transcription IDENTICAL at 42
+  lines before substitution and again after `sed`**; exactly ONE `R{next}` placeholder was
+  substituted and the residual grep returns rc 1; the canonical home's `awk`-extracted block against
+  the register entry's — **EMPTY**; and the register's pre-append prefix is byte-identical after the
+  append, so no neighbouring section moved.
+  **SPOT-CHECKS, SIX index lines against the verbatim register (R271(d)/R272(b)):** **§1**'s census
+  row (re-derived here, not copied); **§3 R238** (register `:3643` — the index's *"every imported
+  number re-derived"* is the register's *"must be re-derived from `registry.toml` at point of use
+  (R98)"*; accurate, and the note appended here is FLAGGED as this curation's reading because R328
+  annotates R257 only); **§3 R257** (register `:3884-3891` — fence (i) is quoted VERBATIM inside
+  ANNOTATION 11, word for word, and fence (ii) is left untouched); **§5 R326** (register `:7616`,
+  blockquote lines 11–13 and 20–24 — per-rung noise and measured-need-plus-stated-allowance both
+  reproduce, and the row's RATIFIED/EXPIRES status from v3.33 stands); **§5 R327** (its (f) witness
+  pre-registration survives R328 unchanged, which is what R328(f)'s *"pre-registered as filed"*
+  refers to); and **R26** (register `:66` — its prohibition reads *"in this run"*, which is the whole
+  ground on which R328(b) can adopt radius 8 without overruling it). **No index line was widened by
+  this curation, and none was found overclaiming.**
+  **REGISTER EDIT, ONE and by ANNOTATION only (R9):** **ANNOTATION 11** appended at the register foot
+  ahead of R291, ordered by R328(b). It inverts R257 fence (i)'s radius clause for the run6 lineage,
+  names the two r6-only classes that newly carry the divergence note (ANNOTATION 10's `[r6-MATCH]`
+  class and every run5 quantity read forward), and states three limits — fence (ii) untouched,
+  verify-at-HEAD still binding on every carried figure, and **the inversion DATED TO THE REGISTRY**
+  rather than to the annotation, in force only once Leg 1's radius-8 registry is green at HEAD. A
+  fence that flips on an intention rather than on a measured registry is the phantom-gate class.
+  **Index edits, six and no more:** the v3.34 header block; the stamp (which rides it, R284(f)); a
+  note on **§3's R257** row and one on **§3's R238** row; an **amendment appended to §5's R327 row**
+  — (a)–(e) ratified, (f) ran to pre-flight and halted twice, its execution force SPENT and its
+  recipe terms SUPERSEDED by R328's §0.3 envelope; and a **new §5 LIVE row for R328**. Nothing was
+  deleted.
+  **WHAT THIS RULING SETTLES.** **An identity is chosen by the ecosystem the claim is made in, not
+  by the cost of changing it.** The radius was 6 because a registry said so, and every sunk
+  measurement — a fitted cap pair closed six days ago, twenty-eight bench floors, two arches' worth
+  of goldens — argued for keeping it. R328(b) spends all of that instead, on the ground that a
+  strength number measured at a radius the corpus, the reference bots and the human ladder do not
+  play at is a number about nothing. **The corollary is the harder half:** the mint is voided in its
+  geometry and CARRIED everywhere else, and the two halves are enumerated rather than left to the
+  executing session's judgement, because "re-measure what changed" is only a discipline if the list
+  is written down before the measuring starts.
+  **WHAT THIS CURATION DOES NOT DO:** it changes no registry key (Leg 1 does), encodes nothing
+  (Leg 2 does), mints nothing (Leg 3 does), trains nothing (Leg 4 does), and starts no run6.
+  **RUN6 REMAINS HELD.**
