@@ -92,6 +92,13 @@ manifest-vs-roll-up granularity question has no subject.
 ================================================================================
 MAPPING TO mantis-core  (verified in-repo; file:line cited at each constant below)
 ================================================================================
+SCOPE, R328(a): this is a TRANSCRIPTION of mantis-core's rules, not a call into them. The audit
+imports no `mantis` module and never constructs a `Board`, so it verifies the winner convention
+against the constants below and CANNOT observe anything the engine would refuse at run time --
+`legal_moves()` and the encoding registry's `legal_move_radius` are outside its reach by
+construction. R279's CLEAN verdict is therefore about the BYTES and their convention; the first
+thing to push this corpus through the production board was BC-EXEC-1's encoder, which refused
+34.76% of it on a radius this audit had no way to check.
 winner
     ``crates/mantis-core/src/board/state/core.rs:59-64`` -- ``#[repr(i8)] enum Player {
     One = 1, Two = -1 }``. There is NO draw member. ``core.rs:77-84`` -- ``#[repr(i8)]
