@@ -121,22 +121,28 @@ def test_measure_noise_reports_the_SPREAD_of_repeated_readings(monkeypatch) -> N
 
 
 # ═══ PB-8 — the break that would leave every other row green ═════════════════════════════
-def test_pb8_a_monitor_fed_the_TRAIN_ring_is_not_detectable_from_the_losses_alone() -> None:
-    """PB-8, and it is recorded as a LIMIT of this suite rather than a row that passes.
+def test_pb8_the_train_ring_hazard_is_DEFENDED_where_the_ring_is_CHOSEN() -> None:
+    """PB-8, and it is a POINTER now rather than the disclosure it was when written.
 
     A monitor handed the training ring reports a loss that falls forever, and every row above
     still passes: patience arithmetic, cadence, derivation and refusals are all properties of
-    the monitor, not of WHICH ring it holds. The defence is therefore NOT in this file — it is
-    the encoder's partition, which is asserted disjoint and exhaustive by game-hash set in
-    `tests/data/test_bootstrap_split_and_truncation.py`, and the provenance sidecar that
-    records `split_part` on each ring so a caller cannot pass a `train` ring as held-out
-    without the artifact saying so.
+    the monitor, not of WHICH ring it holds. So the defence cannot live here — it lives where
+    the ring is CHOSEN, and it now exists in two places:
 
-    This row exists so the gap is stated in the suite that would otherwise imply it is covered.
+      * the ENCODER's partition, asserted disjoint and exhaustive by game-hash set in
+        `tests/data/test_bootstrap_split_and_truncation.py`; and
+      * the CLI's `split_part` guard, which reads the provenance sidecar and refuses a ring
+        that does not declare itself held-out — driven by
+        `tests/train/test_bc_pretrain_cli_stopflags.py`.
+
+    This row stays as the pointer between them, because a reader who finds the stopping rule
+    first will otherwise assume this file covers the hazard it names.
     """
     m = _monitor()
     assert m.ring is not None
-    assert not hasattr(m, "asserts_ring_is_heldout"), (
-        "if a ring-identity check is ever added to the monitor, this row must become a REAL "
-        "detector rather than a disclosure"
+    import inspect
+
+    from mantis.train.pretrain import cli
+    assert "split_part" in inspect.getsource(cli.pretrain), (
+        "the CLI's held-out ring guard has gone; PB-8 is undefended and this pointer is a lie"
     )

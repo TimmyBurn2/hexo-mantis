@@ -96,6 +96,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--res-blocks", type=int, default=None, help="Trunk depth")
     parser.add_argument("--corpus-npz", type=str, default=None,
                         help="Corpus NPZ path (default: registry resolve_corpus_path)")
+    # ── the held-out stopping rule (R328(d)) — ALL-OR-NONE, like the split that feeds it ──
+    parser.add_argument("--heldout-hexg", type=str, default=None,
+                        help="held-out .hexg ring; enables the held-out policy-loss stop")
+    parser.add_argument("--eval-every", type=int, default=None,
+                        help="training steps between held-out evaluations")
+    parser.add_argument("--patience", type=int, default=None,
+                        help="held-out evaluations without improvement before stopping")
+    parser.add_argument("--min-delta", type=float, default=None,
+                        help="improvement a held-out reading must beat; REFUSED if below the "
+                             "estimator's own measured noise")
     parser.add_argument("--corpus-hexg", type=str, default=None,
                         help="Corpus .hexg ring for the GRAPH route (default: registry "
                              "resolve_corpus_path). Ignored on the dense route.")
@@ -213,11 +223,44 @@ def pretrain(argv: list[str] | None = None) -> None:
 
         ring_path = (Path(args.corpus_hexg) if args.corpus_hexg is not None
                      else Path(_resolve_corpus_path(spec)))
+        # ALL-OR-NONE, the same shape `--split-*` takes in the encoder and for the same reason:
+        # a patience without a ring, or a ring without a cadence, is a stopping rule nobody
+        # declared. Silence is the pre-existing behaviour — budget-bound, no monitor.
+        _stop_flags = (args.heldout_hexg, args.eval_every, args.patience, args.min_delta)
+        if any(f is not None for f in _stop_flags) and not all(f is not None for f in _stop_flags):
+            raise SystemExit(
+                "--heldout-hexg, --eval-every, --patience and --min-delta are all-or-none: a "
+                "partially specified stopping rule is one nobody declared (R328(d))."
+            )
+        monitor = None
+        if args.heldout_hexg is not None:
+            from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+            from mantis.config.resolve.microbatch import resolve_microbatch_caps
+            from mantis.config.resolve.sample_threads import resolve_sample_threads
+            from mantis.train.pretrain.graph_route import load_ring
+            from mantis.train.pretrain.heldout import HeldOutMonitor
+
+            _full = run_config.model_dump()
+            _ho_buf, _ho_prov = load_ring(Path(args.heldout_hexg), encoding=spec.name)
+            if _ho_prov.get("split_part") != "heldout":
+                raise SystemExit(
+                    f"--heldout-hexg names a ring whose provenance says split_part="
+                    f"{_ho_prov.get('split_part')!r}, not 'heldout'. A held-out loss measured "
+                    "over the TRAINING ring falls forever and every other check still passes; "
+                    "the sidecar is what makes that unrepresentable (R328(d), PB-8)."
+                )
+            monitor = HeldOutMonitor.build(
+                ring=_ho_buf, spec=spec, plies=int(_ho_prov["plies"]),
+                batch_size=resolve_coordinator_knobs(train_cfg).batch_size,
+                eval_every=args.eval_every, patience=args.patience, min_delta=args.min_delta,
+                caps_provider=lambda: resolve_microbatch_caps(_full),
+                sample_threads_provider=lambda: resolve_sample_threads(_full),
+            )
         try:
             written = run_graph_pretrain(
                 spec=spec, full_config=run_config.model_dump(), train_section=train_cfg,
                 ring_path=ring_path, checkpoint_dir=Path(args.checkpoint_dir), device=device,
-                steps=args.steps, epochs=args.epochs,
+                steps=args.steps, epochs=args.epochs, monitor=monitor,
                 dense_arm_flags={
                     "--filters": args.filters, "--res-blocks": args.res_blocks,
                     "--resume": args.resume, "--lr-peak": args.lr_peak,
