@@ -359,10 +359,28 @@ impl PyGraphTargets {
 
 /// Register the `HexgBuffer` + `GraphTargets` pyclasses into `_engine`. Called by
 /// Slice ASM.
+/// The ring's per-record stone ceiling, read from the engine rather than transcribed.
+///
+/// `mantis_selfplay::replay::hexg::MAX_STONES` is the fixed width of the record's stone
+/// slots (`stones_qr` is `[capacity * MAX_STONES * 2]`), so a position with more stones
+/// than this cannot be stored and `push_graph_position` refuses it by name. Before this
+/// getter existed the number had no Python surface at all, which meant any consumer that
+/// needed it had to type a `256` — a second authority over a fixed-width allocation, and
+/// the one place a drift would be silent.
+///
+/// Live consumer: the `RunConfig` schema relation `selfplay.max_game_moves <= max_stones()`,
+/// which is what stops a pre-registered ply cap from silently exceeding the ring (R328
+/// amendment, 2026-09-01).
+#[pyfunction]
+pub fn max_stones() -> usize {
+    mantis_selfplay::replay::hexg::MAX_STONES
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHexgBuffer>()?;
     m.add_class::<PyGraphTargets>()?;
     m.add_function(wrap_pyfunction!(derived_hexg_visit_capacity, m)?)?;
+    m.add_function(wrap_pyfunction!(max_stones, m)?)?;
     Ok(())
 }
 

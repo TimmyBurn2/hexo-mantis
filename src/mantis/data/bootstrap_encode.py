@@ -47,6 +47,7 @@ import hashlib
 import json
 import subprocess
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -236,9 +237,72 @@ def _manifest_pin(dataset_dir: Path) -> tuple[Path, str]:
     return path, declared
 
 
+def _ply_histogram(lengths: list[int], bucket: int = 64) -> dict[str, int]:
+    """Game-length histogram in `bucket`-ply bins, as `{"<lo>-<hi>": count}`.
+
+    Carried in the provenance because the truncation's SHAPE is what a reader needs and a
+    single "88 games truncated" cannot show it: the loss is the late phase of the longest
+    games, and only the distribution says how long those are.
+    """
+    out: dict[str, int] = {}
+    width = max((len(str(n)) for n in lengths), default=1)
+    for n in lengths:
+        lo = (n // bucket) * bucket
+        # ZERO-PADDED so lexicographic order IS numeric order. The provenance is written with
+        # `sort_keys=True`, which re-sorts these keys and put "64-127" after "512-575" — a
+        # histogram a reader has to re-sort by eye is one they will read wrong.
+        key = f"{lo:0{width}d}-{lo + bucket - 1:0{width}d}"
+        out[key] = out.get(key, 0) + 1
+    return dict(sorted(out.items()))
+
+
+@dataclass(frozen=True)
+class CorpusSplit:
+    """A seeded, GAME-level partition of the corpus into `train` and `heldout`.
+
+    ONE object rather than three parameters, so the split cannot be half-specified: a seed
+    without a fraction, or a fraction without a part, would each be a partition nobody
+    declared. `None` means no split — the whole corpus, the behaviour that already existed.
+
+    THE SPLIT IS BY GAME AND NOT BY PLY, and that is the whole point. The corpus encodes one
+    row per PLY; a ply-level split puts positions from the SAME game on both sides, and a
+    held-out loss measured over them is measuring memorisation of a game the model has already
+    seen 60 positions of. The encoder is the last place that still knows which plies came from
+    which game.
+
+    ASSIGNMENT IS A KEYED HASH OF THE GAME'S OWN IDENTITY, not a shuffle of an order. Three
+    consequences a shuffle would not give: the partition is INDEPENDENT of record order and of
+    `max_games`, so a truncated smoke run draws the same side for the same game as a full run;
+    it is reproducible from the seed alone, with no permutation to store; and it can never
+    split a game, because the game is the unit being hashed.
+    """
+
+    seed: int
+    heldout_frac: float
+    part: str  # "train" | "heldout"
+
+    def __post_init__(self) -> None:
+        if self.part not in ("train", "heldout"):
+            raise ValueError(f"CorpusSplit.part must be 'train' or 'heldout', got {self.part!r}")
+        if not 0.0 < self.heldout_frac < 1.0:
+            raise ValueError(
+                f"CorpusSplit.heldout_frac must be strictly inside (0, 1), got "
+                f"{self.heldout_frac!r}. A 0 or 1 fraction makes one side empty, which is a "
+                "split nobody can evaluate against."
+            )
+
+    def selects(self, game_hash: str) -> bool:
+        """True iff `game_hash` belongs to THIS part of the partition."""
+        digest = hashlib.blake2b(
+            game_hash.encode("utf-8"), key=str(self.seed).encode("utf-8"), digest_size=8
+        ).digest()
+        draw = int.from_bytes(digest, "big") / 2.0**64
+        return (draw < self.heldout_frac) == (self.part == "heldout")
+
+
 def encode_corpus(
     dataset_dir: Path, out_path: Path, *, encoding: str, capacity: int,
-    visit_capacity: int, max_games: int | None = None,
+    visit_capacity: int, max_games: int | None = None, split: CorpusSplit | None = None,
 ) -> dict[str, Any]:
     """Encode an audited dataset directory into a `.hexg` ring, with provenance.
 
@@ -251,12 +315,16 @@ def encode_corpus(
         visit_capacity: the ring's per-row visit-slot capacity.
         max_games: stop after this many games. For smoke runs; recorded in the provenance so
             a truncated artifact can never read as a whole one.
+        split: a `CorpusSplit` selecting one side of a seeded game-level partition, or None
+            for the whole corpus. Recorded in the provenance, so a split artifact can never
+            read as a whole one either.
 
     Returns:
         The provenance mapping that was written beside the artifact.
 
     Raises:
-        CorpusEncodeError: the manifest, a record, or the source sha fails its check.
+        CorpusEncodeError: the manifest, a record, or the source sha fails its check, or the
+            selected side of a split holds no games at all.
     """
     from mantis._engine import Board, HexgBuffer  # noqa: PLC0415 — extension
 
@@ -273,22 +341,49 @@ def encode_corpus(
     # passes the first and fails the second is contaminated training data (R327(e)).
     assert_not_heldout_sha(actual_sha, path=record_path)
 
+    from mantis._engine import max_stones  # noqa: PLC0415 — extension
+
+    ceiling = max_stones()
     buf = HexgBuffer(capacity, encoding, visit_capacity)
     games = plies = 0
+    rows_over_ceiling = games_truncated = 0
+    game_lengths: list[int] = []
     winners = {1: 0, -1: 0}
     hashes: list[str] = []
     for idx, raw in enumerate(_iter_records(record_path)):
         if max_games is not None and games >= max_games:
             break
         game_hash, winner, moves = _require_record(raw, idx)
+        if split is not None and not split.selects(game_hash):
+            continue
+        lost_here = 0
         for row in encode_game(moves, winner, board_factory=(
                 lambda: Board.with_encoding_name(encoding)), game_hash=game_hash):
+            # THE RING'S STONE CEILING IS CHECKED BEFORE THE PUSH, not caught after it.
+            # `push_graph_position` refuses a wider position by raising, and catching that
+            # would make the count depend on an error STRING; `len(stones)` against the
+            # engine's own `max_stones()` is the same fact read on the near side. Rows are
+            # counted, never dropped silently: R328(c) rules the residue a finding.
+            if len(row[0]) > ceiling:
+                lost_here += 1
+                continue
             buf.push_graph_position(*row, game_id=-1)
             plies += 1
+        if lost_here:
+            games_truncated += 1
+            rows_over_ceiling += lost_here
         games += 1
+        game_lengths.append(len(moves))
         winners[winner] += 1
         hashes.append(game_hash)
 
+    if split is not None and games == 0:
+        raise CorpusEncodeError(
+            f"the {split.part!r} side of the seed-{split.seed} / frac-{split.heldout_frac} "
+            "split selected ZERO games. An empty ring is not a small ring: a held-out loss "
+            "over nothing is a number with no producer, and a training ring of nothing "
+            "trains nothing while reporting steps."
+        )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     buf.save_to_path(str(out_path))
 
@@ -311,6 +406,21 @@ def encode_corpus(
             "\n".join(sorted(hashes)).encode("utf-8")
         ).hexdigest(),
         "truncated_at_max_games": max_games,
+        # NULL when unsplit, so a whole-corpus ring and a split ring are distinguishable by a
+        # reader that knows nothing about how either was produced.
+        # THE ROW-LEVEL TRUTH, carried so that "8 698 / 8 698 games" can never be read alone.
+        # A game whose late positions exceed the ring's fixed-width stone slot is ACCEPTED and
+        # TRUNCATED, by ruling (R328 amendment): MAX_STONES stays 256 because the run's own
+        # games never reach it, and the price is these rows. `plies` above is what LANDED;
+        # `plies_offered` is what the corpus held.
+        "max_stones_ceiling": ceiling,
+        "plies_offered": plies + rows_over_ceiling,
+        "rows_refused_over_max_stones": rows_over_ceiling,
+        "games_truncated": games_truncated,
+        "ply_histogram_64": _ply_histogram(game_lengths),
+        "split_seed": split.seed if split is not None else None,
+        "split_heldout_frac": split.heldout_frac if split is not None else None,
+        "split_part": split.part if split is not None else None,
         "ring_capacity": capacity,
         "ring_visit_capacity": visit_capacity,
         "git_commit": subprocess.run(
@@ -340,10 +450,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--capacity", required=True, type=int)
     ap.add_argument("--visit-capacity", required=True, type=int)
     ap.add_argument("--max-games", type=int, default=None)
+    ap.add_argument("--split-seed", type=int, default=None,
+                    help="seed for the game-level held-out partition (with the two below)")
+    ap.add_argument("--split-heldout-frac", type=float, default=None,
+                    help="held-out share of GAMES, strictly inside (0, 1)")
+    ap.add_argument("--split-part", choices=("train", "heldout"), default=None,
+                    help="which side of the partition to encode")
     args = ap.parse_args(argv)
+    supplied = [args.split_seed, args.split_heldout_frac, args.split_part]
+    if any(x is not None for x in supplied) and not all(x is not None for x in supplied):
+        ap.error("--split-seed, --split-heldout-frac and --split-part are all-or-none: a "
+                 "partially specified split is a partition nobody declared")
+    split = (CorpusSplit(args.split_seed, args.split_heldout_frac, args.split_part)
+             if args.split_seed is not None else None)
     prov = encode_corpus(
         args.dataset_dir, args.out, encoding=args.encoding, capacity=args.capacity,
-        visit_capacity=args.visit_capacity, max_games=args.max_games,
+        visit_capacity=args.visit_capacity, max_games=args.max_games, split=split,
     )
     print(json.dumps(prov, indent=1, sort_keys=True))
     return 0

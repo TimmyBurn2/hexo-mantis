@@ -314,12 +314,32 @@ def test_the_REAL_PATH_control_REDS_on_a_wrong_position():
 
 def test_a_MISMATCHED_radius_is_refused_by_name():
     """PB-34. A grid encoding's Board against a graph spec must refuse, not produce a red set
-    comparison that reads as a completeness bug."""
-    graph_spec = next(s for s in roster() if s.is_graph)
-    grid_spec = next(s for s in roster() if not s.is_graph)
+    comparison that reads as a completeness bug.
+
+    THE PAIR IS SEARCHED FOR, NOT TAKEN AS "THE FIRST OF EACH", and the difference is not
+    cosmetic. `roster()` iterates the registry in an UNORDERED way — observed as
+    `v6w25, v6, gnn_axis_r8, v6_live2_ls, gnn_axis_v1` in one run and differently in another —
+    so "the first grid" and "the first graph" are whichever the iteration happened to yield.
+    While `gnn_axis_v1` (radius 6) was the only graph row, no ordering could collide with a
+    grid row, because none is at 6. R328(b) registered `gnn_axis_r8` at radius 8 and `v6w25` is
+    also at 8, so an ordering that yields that pair made this control fail its own precondition
+    — an ORDER-DEPENDENT red that passes when the file is run alone. Searching for a pair whose
+    radii differ asks for what the control actually needs and is order-independent.
+    """
+    pair = next(
+        ((grid, graph) for graph in roster() if graph.is_graph
+         for grid in roster() if not grid.is_graph
+         and build_board(grid.name, [(0, 0), (1, 0)]).legal_move_radius() != graph.graph_radius),
+        None,
+    )
+    if pair is None:
+        pytest.fail(
+            "no grid/graph pair in the registry has differing radii, so a radius MISMATCH is "
+            "unconstructible and this control has no subject"
+        )
+    grid_spec, graph_spec = pair
     board = build_board(grid_spec.name, [(0, 0), (1, 0)])
-    if board.legal_move_radius() == graph_spec.graph_radius:
-        pytest.fail("this control needs a grid encoding whose radius differs from the graph one")
+    assert board.legal_move_radius() != graph_spec.graph_radius, "the search returned a match"
     with pytest.raises(RadiusDisagreement, match="SAME radius"):
         require_radius_agreement(board, graph_spec)
 

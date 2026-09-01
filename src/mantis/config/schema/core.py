@@ -663,6 +663,53 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _ply_cap_within_the_rings_stone_ceiling(self) -> "RunConfig":
+        """`selfplay.max_game_moves <= mantis._engine.max_stones()` on the GRAPH path.
+
+        WHY THIS EXISTS. The HEXG record stores a position's stones in a FIXED-WIDTH slot —
+        `stones_qr` is `[capacity * MAX_STONES * 2]` — so `push_graph_position` refuses any
+        position with more stones than `MAX_STONES`, by name and at write time. A ply cap
+        above that ceiling therefore configures a run whose own late positions the ring cannot
+        hold, and the refusal arrives per-record in the middle of a run rather than at mint.
+
+        THE MEASURED INSTANCE THAT AUTHORED IT. Encoding the R247 human corpus at radius 8
+        hit this: 88 of 8 698 games exceed 257 plies and 7 866 of 547 251 ply rows (1.4374 %)
+        cannot be stored. The architect ruled `MAX_STONES` STAYS 256 and the corpus truncates
+        with its loss counted — on the ground that the RUN's own games will never reach it,
+        the ply-cap prereg row targeting ~256. **This validator is what makes that ground
+        enforceable instead of assumed**: a later prereg cannot quietly raise the cap past the
+        ring, and if the operator wants a higher cap then `MAX_STONES` rises FIRST, as a
+        mint-class change with its memory cost measured.
+
+        THE CEILING IS READ FROM THE ENGINE, NEVER TYPED. `max_stones()` was added to the
+        bridge for this relation precisely so the number is not transcribed here; a `256` in
+        this file would be a second authority over a fixed-width allocation, which is the one
+        place a drift would be silent.
+
+        GRAPH ONLY, and that is a scope rather than an oversight: the ceiling belongs to the
+        HEXG ring, which the dense path does not use.
+
+        Raises:
+            ValueError: the configured ply cap exceeds the ring's per-record stone ceiling.
+        """
+        if self.identity.representation != "graph":
+            return self
+        from mantis._engine import max_stones
+
+        ceiling = max_stones()
+        cap = self.selfplay.max_game_moves
+        if cap > ceiling:
+            raise ValueError(
+                f"selfplay.max_game_moves = {cap} exceeds the HEXG ring's per-record stone "
+                f"ceiling MAX_STONES = {ceiling}: a position at ply {ceiling + 1} carries "
+                f"{ceiling + 1} stones and push_graph_position REFUSES it, so this run would "
+                "discard its own late positions one record at a time instead of failing here. "
+                "Lower the cap, or raise MAX_STONES as a mint-class change with its ring "
+                "memory cost measured (R328 amendment, 2026-09-01)."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _draw_rate_evidence_bar_within_configured_capacity(self) -> "RunConfig":
         """WPMINT Phase DS (R92), **re-scoped by R95 (ADJ-22)**.
 

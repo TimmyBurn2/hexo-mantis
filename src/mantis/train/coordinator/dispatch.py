@@ -134,12 +134,27 @@ def run_declared_train_step(
     )
 
 
-def _graph_step(
+def _build_graph_parts(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
-) -> dict[str, float]:
-    """graph: `sample_graph_batch` → wire payload (ONCE) → `plan_microbatches` →
+) -> dict[str, Any]:
+    """One sampled graph batch, prepared for a step — the kwargs BOTH step routes take.
+
+    EXTRACTED, NOT DUPLICATED (R328(d)). The forward-only held-out evaluation needs exactly
+    this preparation and must reach it through the SAME code the training step uses: the
+    collate parameterisation here is asserted to be the production one (`semantic="full"`,
+    every batch, every part), and a second copy for the eval path would measure the held-out
+    loss through a different wire than the training loss. The comparison between the two
+    losses is the whole instrument, so they must share their producer.
+
+    THE CAPS ARE READ EXACTLY ONCE, HERE. `tests/train/test_graph_microbatch_authority.py`
+    freezes the reader census by `(module, receiver, enclosing function)`; this extraction
+    MOVES those two reads from `_graph_step` into this function and adds none. Two reads
+    before, two after, one authority throughout — the census expectation moves with them and
+    its own planted break (a THIRD read) still reds.
+
+    graph: `sample_graph_batch` → wire payload (ONCE) → `plan_microbatches` →
     per-part `collate_graph_batch` (semantic="full", the trainer's every-batch posture) +
     `stone_mask_from_batch` → `train_step_from_graph_batch`.
 
@@ -247,15 +262,62 @@ def _graph_step(
     # denominator is the graph count, and the two are different quantities from each other.
     policy_denominator, value_denominator = graph_loss_denominators(
         np.asarray(targets.is_full_search), np.asarray(targets.value_valid), n_graphs)
-    return trainer.train_step_from_graph_batch(
-        parts=tuple(_make(g0, g1) for g0, g1 in plan),
-        policy_denominator=policy_denominator,
-        value_denominator=value_denominator,
-        total_edges=int(payload.edge_offsets[-1]),
-        total_nodes=int(payload.node_offsets[-1]),
-        caps_max_edges=max_edges,
-        caps_max_nodes=max_nodes,
-    )
+    return {
+        "parts": tuple(_make(g0, g1) for g0, g1 in plan),
+        "policy_denominator": policy_denominator,
+        "value_denominator": value_denominator,
+        "total_edges": int(payload.edge_offsets[-1]),
+        "total_nodes": int(payload.node_offsets[-1]),
+        "caps_max_edges": max_edges,
+        "caps_max_nodes": max_nodes,
+    }
+
+
+def _graph_step(
+    trainer: Any, buffer: Any, spec: Any, *,
+    batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
+    caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
+) -> dict[str, float]:
+    """One gradient update from a freshly sampled graph batch."""
+    return trainer.train_step_from_graph_batch(**_build_graph_parts(
+        trainer, buffer, spec, batch_size=batch_size, augment=augment,
+        recency_weight=recency_weight, recent_buffer=recent_buffer,
+        caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+    ))
+
+
+def run_declared_eval_step(
+    trainer: Any, buffer: Any, spec: Any, *,
+    batch_size: int,
+    caps_provider: Callable[[], Any],
+    sample_threads_provider: Callable[[], int],
+) -> dict[str, float]:
+    """One FORWARD-ONLY loss reading over `buffer`, through the declared graph route.
+
+    GRAPH ONLY, and the refusal is the point rather than a gap: BC pretrain is the only
+    consumer and it is a graph-arch route, so a grid caller here is asking for an instrument
+    that was never built. Answering it with a dense forward would produce a number nobody can
+    attribute (LAW-11's shape applied to an evaluation).
+
+    `augment` is fixed FALSE and `recency_weight` fixed 0.0, neither exposed as a knob. An
+    augmented held-out batch measures the loss on positions the held-out set does not contain,
+    and the BC ring carries no time ordering for a recency window to mean anything over — the
+    same reason `graph_route.BC_RECENCY_WEIGHT` is 0.0.
+
+    Raises:
+        RepresentationRouteError: `spec` does not declare the graph representation.
+    """
+    if getattr(spec, "representation", None) != "graph":
+        raise RepresentationRouteError(
+            f"declared representation {getattr(spec, 'representation', None)!r} selects no "
+            "EVALUATION route — the forward-only loss exists on the graph arm only, and a "
+            "dense forward here would be a number with no producer behind its name"
+        )
+    return trainer.eval_step_from_graph_batch(**_build_graph_parts(
+        trainer, buffer, spec, batch_size=batch_size, augment=False,
+        recency_weight=0.0, recent_buffer=None,
+        caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+    ))
 
 
 def _grid_step(

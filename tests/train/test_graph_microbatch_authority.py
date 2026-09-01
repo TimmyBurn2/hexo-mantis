@@ -377,10 +377,18 @@ def _cap_reader_census() -> collections.Counter:
 #: of the three — it calls the resolver and stores the result. Schema and dataclass field
 #: declarations are `AnnAssign` TARGETS, not `Attribute`/`Subscript` loads, so they do not
 #: appear and the block's own definition is not mistaken for a reader.
+#:
+#: THE ARM'S KEY MOVED, AND IT MOVED RATHER THAN GREW (R328(d), 2026-09-01). The graph arm's
+#: two reads used to sit in `_graph_step`; the part-builder they belong to was EXTRACTED into
+#: `_build_graph_parts` so the forward-only held-out evaluation reaches the identical collate
+#: and denominators instead of getting a second copy of them. Two reads before, two after, one
+#: authority throughout — which is precisely the distinction this row's own failure message
+#: asks for before an expectation is edited. A THIRD read anywhere still adds a key and still
+#: reds, and that control is driven in `test_a_second_reader_would_be_caught`.
 _EXPECTED_CENSUS = {
     ("src/mantis/config/resolve/microbatch.py", "train_section", "resolve_microbatch_caps"): 1,
     ("src/mantis/config/resolve/microbatch.py", "block", "resolve_microbatch_caps"): 2,
-    ("src/mantis/train/coordinator/dispatch.py", "caps", "_graph_step"): 2,
+    ("src/mantis/train/coordinator/dispatch.py", "caps", "_build_graph_parts"): 2,
 }
 
 
@@ -408,7 +416,7 @@ def test_of2_9_leg1_totals_match_the_pre_registered_three_and_two() -> None:
         per_site[(module, function)] += n
     assert dict(per_site) == {
         ("src/mantis/config/resolve/microbatch.py", "resolve_microbatch_caps"): 3,
-        ("src/mantis/train/coordinator/dispatch.py", "_graph_step"): 2,
+        ("src/mantis/train/coordinator/dispatch.py", "_build_graph_parts"): 2,
     }
 
 

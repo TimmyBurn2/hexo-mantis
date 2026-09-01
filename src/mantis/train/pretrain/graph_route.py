@@ -1,3 +1,9 @@
+# >300 justify (R8): the ring's provenance handshake, the step budget it feeds, the dense-arm
+# refusal and the loop those three constrain are ONE reroute over ONE artifact. The budget is a
+# function of the ring's own ply count and the refusal exists because the dense arm's flags mean
+# something different here — split them and a caller can reach the loop with a ring whose
+# provenance was checked somewhere else, which is the exact class the sidecar handshake exists
+# to close.
 """BC pretrain on the GRAPH arch — a REROUTE through the declared train-step seam.
 
 WHY A REROUTE AND NOT A SECOND TRAINER. `train/pretrain/`'s dense arm is a dense NPZ reader,
@@ -229,7 +235,7 @@ def refuse_dense_arm_flags(supplied: dict[str, Any]) -> None:
 def run_graph_pretrain(
     *, spec: Any, full_config: dict[str, Any], train_section: Any, ring_path: Path,
     checkpoint_dir: Path, device: Any, steps: int | None, epochs: int,
-    dense_arm_flags: dict[str, Any],
+    dense_arm_flags: dict[str, Any], monitor: Any | None = None,
 ) -> Path:
     """Run a BC pretrain on the graph arch and return the written checkpoint's path.
 
@@ -251,13 +257,18 @@ def run_graph_pretrain(
         dense_arm_flags: the CLI's dense-arm flag values, refused here if any was supplied.
             REQUIRED and undefaulted — a caller that omits it would silently skip the refusal,
             which is the same shape as the flags it exists to catch.
+        monitor: a `heldout.HeldOutMonitor`, or None for no held-out monitoring. `None`
+            DEFAULTS here and nowhere else, because the budget alone is still a valid bound
+            and the pre-existing behaviour is exactly that; what a caller cannot do is ask for
+            a stopping rule and silently get none, since asking means passing one.
 
     Returns:
         The path of the checkpoint written by `Trainer.save_checkpoint`.
 
     Raises:
-        GraphPretrainError: a dense-arm flag was supplied, or the ring or its budget refuses
-            (see `refuse_dense_arm_flags`, `load_ring`, `resolve_step_budget`).
+        GraphPretrainError: a dense-arm flag was supplied, the ring or its budget refuses
+            (see `refuse_dense_arm_flags`, `load_ring`, `resolve_step_budget`), or the
+            held-out estimator's measured noise exceeds the monitor's `min_delta`.
     """
     refuse_dense_arm_flags(dense_arm_flags)
     buf, prov = load_ring(ring_path, encoding=spec.name)
@@ -286,7 +297,22 @@ def run_graph_pretrain(
         "bc_graph_pretrain_start steps=%d batch_size=%d augment=%s ring_records=%s",
         total_steps, knobs.batch_size, knobs.augment, prov["plies"],
     )
+    if monitor is not None:
+        # THE ESTIMATOR'S OWN NOISE, MEASURED BEFORE THE FIRST OPTIMIZER STEP. Any difference
+        # between two readings here is the sampler's, because nothing moved in between. A
+        # patience rule whose `min_delta` sits inside that spread cannot distinguish progress
+        # from resampling, and would stop on noise or never stop at all.
+        noise = monitor.measure_noise(trainer)
+        if monitor.stop.min_delta < noise:
+            raise GraphPretrainError(
+                f"the held-out estimator's spread on an UNCHANGED model is {noise:.6g}, which "
+                f"is WIDER than the configured min_delta {monitor.stop.min_delta:.6g}. The "
+                "stopping rule would be reading sampling noise as progress. Raise min_delta "
+                "above the measured spread, or widen the held-out pass."
+            )
     loss_info: dict[str, float] = {}
+    steps_run = 0
+    stopped_early = False
     for _ in range(total_steps):
         loss_info = run_declared_train_step(
             trainer, buf, spec,
@@ -294,6 +320,19 @@ def run_graph_pretrain(
             recency_weight=BC_RECENCY_WEIGHT, recent_buffer=None,
             caps_provider=_caps, sample_threads_provider=_threads,
         )
+        steps_run += 1
+        if monitor is not None:
+            should_stop, _loss = monitor.maybe_evaluate(trainer, step=steps_run)
+            if should_stop:
+                stopped_early = True
+                break
+    if monitor is not None:
+        # LAW-18: the lever under test reports its own state in-run. A run that hit its
+        # ceiling and a run that stopped early must not be distinguishable only by arithmetic
+        # on the logs.
+        _LOG.info("bc_graph_pretrain_stop steps_run=%d budget=%d stopped_early=%s %s",
+                  steps_run, total_steps, stopped_early, monitor.stop.counters())
     path = trainer.save_checkpoint(loss_info)
-    _LOG.info("bc_graph_pretrain_saved path=%s steps=%d", path, total_steps)
+    _LOG.info("bc_graph_pretrain_saved path=%s steps=%d budget=%d stopped_early=%s",
+              path, steps_run, total_steps, stopped_early)
     return path

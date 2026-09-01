@@ -505,6 +505,90 @@ class Trainer:
         return result
 
     # ── graph (GNN) training step — the numeric core, bench + injected-buffer driver ──────
+    def eval_step_from_graph_batch(
+        self,
+        *,
+        parts: Sequence[Callable[[], Any]],
+        policy_denominator: float,
+        value_denominator: float,
+        total_edges: int,
+        total_nodes: int,
+        caps_max_edges: int,
+        caps_max_nodes: int,
+    ) -> dict[str, float]:
+        """FORWARD-ONLY loss over a partitioned graph batch — no gradient, no state (R328(d)).
+
+        THE SIBLING OF `train_step_from_graph_batch`, sharing its `parts` contract and its
+        denominators so the two numbers are commensurable. What is ABSENT is absent rather
+        than skipped: no `zero_grad`, no `backward`, no `clip_and_step`, no `self.step`
+        increment, no scheduler step, no EMA update, no `_maybe_periodic_checkpoint`. A held-out
+        reading that moved any of those would be a training step wearing an evaluation's name.
+
+        THE MODE IS RESTORED IN A `finally`, and that is load-bearing rather than tidy: an
+        evaluation that left the model in `eval()` would change every LATER training step's
+        dropout and normalisation behaviour, and the loss curve would look BETTER for it —
+        a corruption that reads as an improvement.
+
+        THE RETURN DELIBERATELY OMITS `grad_norm` AND `lr`. `train/coordinator/step.py` reads
+        `loss_info.get("grad_norm", 0.0)` and feeds it to `grad_norm_hard_abort`; an eval dict
+        carrying that key could be routed there by a later edit and would report a gradient
+        that was never computed. Omitting it means such a routing raises rather than silently
+        passing a fabricated zero.
+
+        Args:
+            parts: zero-arg callables, each materialising one micro-batch (lazily, so only one
+                is resident at a time — the same bound the training step relies on).
+            policy_denominator: the whole batch's policy denominator.
+            value_denominator: the whole batch's value denominator.
+            total_edges: edges across the un-split batch, for the caller's records.
+            total_nodes: nodes across the un-split batch, for the caller's records.
+            caps_max_edges: the resolved micro-batch edge cap.
+            caps_max_nodes: the resolved micro-batch node cap.
+
+        Returns:
+            `{"loss", "policy_loss", "value_loss"}`, summed over the parts exactly as the
+            training step sums them.
+
+        Raises:
+            GraphEmptyBatchError: `parts` is empty, so there is nothing to evaluate.
+        """
+        del total_edges, total_nodes, caps_max_edges, caps_max_nodes  # recorded by the caller
+        if len(parts) == 0:
+            raise GraphEmptyBatchError(
+                "eval_step_from_graph_batch: zero micro-batches — the sampled batch holds no "
+                "graphs, so there is no loss to read. Raised rather than returning 0.0, which "
+                "a patience stop would read as the best score ever achieved."
+            )
+        was_training = self.model.training
+        loss_total = policy_total = value_total = 0.0
+        try:
+            self.model.eval()
+            with torch.no_grad():
+                for make in parts:
+                    inputs = make()
+                    with autocast(device_type=self.device.type, dtype=self.amp_dtype,
+                                  enabled=self._autocast_enabled):
+                        policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                            inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                            inputs.stone_mask, node_offsets=inputs.node_offsets)
+                        policy_loss = ragged_policy_ce(
+                            policy_logits, inputs.policy_target, inputs.legal_offsets,
+                            full_search_mask=inputs.is_full_search,
+                            denominator=policy_denominator)
+                        value_loss = _binned_value_loss(
+                            bin_logits, inputs.outcomes, value_mask=inputs.value_valid,
+                            denominator=value_denominator)
+                        loss = policy_loss + value_loss
+                    if torch.isfinite(loss):
+                        loss_total += loss.item()
+                        policy_total += policy_loss.item()
+                        value_total += value_loss.item()
+                    del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
+        finally:
+            if was_training:
+                self.model.train()
+        return {"loss": loss_total, "policy_loss": policy_total, "value_loss": value_total}
+
     def train_step_from_graph_batch(
         self,
         *,
