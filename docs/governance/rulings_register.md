@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ c45936f, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 49026e1, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -7999,3 +7999,44 @@ the landing so that it is a derivation on the record and not a silent choice ins
 > (h) Commit convention: the OPERATOR'S recorded correction governs;
 > CLAUDE.md is updated to match it; existing commits stand.
 > ROUTE: land, census, ACTIVE next; execute; one exit screen.
+
+
+# R331 — architect ruling, ARCH-ERA session, 2026-09-03 (FINISH-1 RATIFIED with the r8 eval_child measured and the 3% allowance now carrying r8 grounds, still PROPOSED and arming only at the operator's mint forwarding; AUDIT-1 ACCEPTED as evidence — fifty-two findings, four risk tiers, the P1–P11 order ADOPTED with three amendments: F-19 DECIDED BUILT with a step-0 net-hash witness, the brief's class-4 MAX_STONES example CORRECTED of record in the tree's favour, and the three session-limited sweeps marked lower-confidence with verify-at-contact; REPAIR-1 ORDERED as four severable legs P1–P4 with F-01/F-05, F-09, F-02 and the doc-only leg leading in turn; the order after this SET) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), forwarded by the operator into this REPAIR-1 execution session's prompt rather than as a file — so the landing session CREATED the ruling's one canonical home, `PACKET_R331_REPAIR_1.md` §1, and no competing text existed under `plan/` before it: `grep -rn 'R331' plan/` returned **rc 1 and 0 hits**. **The forwarded text carried the placeholder `R{next}` in TWO places** — the dispatch's §1 heading and the quote-block lead — both substituted to `R331` after verifying the head is R330: census `R23–R330, 301 sections / 301 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.36 == §8 last entry v3.36`; `--self-test` all four controls fire. The residual-placeholder grep over the canonical home's §1 returns **rc 1**, and §1 carries exactly ONE `R331` token — the quote-block lead — so no clause number was rewritten. Extraction into the register is by heredoc over the canonical home's §1 block, never retyped from the prompt a second time.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the dispatch.** **Clause (a)'s `1.857 GiB`** is `plan/FINISH1_EXIT.md:8` — *"`eval_child` at r8 = 1 902 MiB = 1.857422 GiB"*, card-level per-process, the larger of the two instruments against a child allocator peak of 1.2420 GiB — and **`+0.133`** is that file's boundary table row for the 3% cap `8.334078`, `PASS +0.133202` against M 0.35; the same table gives the boundary NOW as `9.046908` at 11.81%, which is the figure R330(b)'s conditional was waiting on. **Clause (a)'s "still PROPOSED"** is read at its source: FINISH1_EXIT §0 states *"The VALUE is not armed here (R330(b): the operator's next mint forwarding)"* and, unprompted, that *"the r8 variance is n = 1; the 3% floor carries the proposal, not a measured r8 variance"* — so the grounds clause (a) grants are the boundary's, not the variance's, and this ruling does not upgrade n. **Clause (a)'s ANNOTATION 12** is `rulings_register.md:4547`, appended by the R330 landing under R330(f); the clause it annotates is R282(b) at `:4520-4523`, which preserves operator-only *"box grants, run5 mint authorization, judgment-valued prereg rows"* and names pushes nowhere — the reservation lived in the ACTIVE index, which is the overclaiming-index-line class R271(d) warns of. **Clause (b)'s three counts are DERIVED from the audit file, not carried:** `grep -c '^\*\*F-[0-9]'` = **52** with **52 distinct** ids (no id appears twice); the risk-tier headings are exactly `R1`–`R4`, **four**; the §5 packet table carries **11** rows P1–P11. **Clause (b)(ii)'s correction is verified in the tree at HEAD `ba883c9`:** `MAX_STONES` is defined ONCE, `crates/mantis-selfplay/src/replay/hexg/mod.rs:50` (`pub const MAX_STONES: usize = 256`), exported through the bridge at `crates/mantis-bridge/src/hexg.rs:376`, and read by the schema's ply-cap relation at `src/mantis/config/schema/core.py:683-720`, which refuses a cap the slot geometry cannot store. It is a storage ceiling with one Rust owner, not registry geometry — the audit's §6 entry is upheld and the architect's brief example is the thing corrected. **Clause (c)'s "F-09 first" premise** is the audit's GATE-01 row: `clippy` occurs in `.github/workflows/ci.yml` and nowhere under `Makefile`/`tools/`, against CLAUDE.md's *"nothing lives only in workflow YAML"* and R311(b)'s *local green is the gate* — verified again at contact in Leg 2 before repair, per the dispatch's own §0.
+
+> R331 — (a) FINISH-1 is RATIFIED: eval_child at r8 measures 1.857 GiB on
+> its stated denominator and is re-measured at the run6 mint's own cap pair;
+> the 3% allowance now carries r8 grounds (+0.133 against M) and stands
+> PROPOSED, armed by the operator's mint forwarding; the per-rung noise
+> mechanism with its break line; selector plumbing (mint act data-only, two
+> defects closed en route); R282 ANNOTATION 12 — the merge/push reservation
+> lived in the ACTIVE index, never in the clause, both corrected; bare pytest
+> resolves to the default tier; the commit convention. The session's
+> self-caught items stand on its ledger.
+> (b) AUDIT-1 is ACCEPTED as evidence: fifty-two findings, four risk tiers,
+> and the P1–P11 order is ADOPTED with three amendments. (i) F-19 DECIDED: the
+> BC warm-start entry is BUILT — run6's trainer initializes from a checkpoint
+> named in the prereg (path and net hash pinned), resolved through the
+> artifact stamp by the one selector authority; WITNESS: the step-0 net hash
+> equals the checkpoint's and the BC result (20/20 vs random) reproduces at
+> step 0 before any self-play step; sequenced with F-17 as the audit
+> requires. (ii) The brief's class-4 example is CORRECTED of record:
+> MAX_STONES is a storage ceiling with one Rust owner exported through the
+> bridge, not registry geometry — the architect's example was wrong, the tree
+> was right. (iii) Findings from the three session-limited sweeps carry a
+> lower-confidence mark; repairs verify at contact.
+> (c) REPAIR-1 executes P1–P4, four severable legs: P1 with F-01 and F-05
+> first (the only rows producing wrong numbers on artifacts read today);
+> P2 with F-09 first — the local runner brings clippy and the bench targets
+> into the gate set so "full local green" means what R311(b) says; P3 with
+> F-02 first (a production halt with no latched reason); P4 doc-only,
+> gate-free per R311(b), including SEAM_V1_DESIGN §0.3's discharged
+> preconditions and the audit's §6 corrections.
+> (d) ORDER AFTER THIS: REPAIR-2 (P5; P8 with F-16 first and F-19 built;
+> P6), REPAIR-3 (P7, P9), the file-based run dashboard, the tranche-2
+> prereg (P11, the architect's), then the run6 mint. P10 is the architect's
+> design input for lane C, dispatched per sub-item under the seam spec.
+> ROUTE: land, census, ACTIVE next; Legs 1–4; one exit screen.

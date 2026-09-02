@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c45936f, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 49026e1, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.36, 2026-09-02. Created under R271 (register hygiene: archive/index split);
+# v3.37, 2026-09-03. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -918,6 +918,29 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # correction (R330(h)). **R330(f) SETTLES PUSHES by ANNOTATION 12 under R282's foot:** the clause
 # reserves no push; pushes are governed by R311(b); the reservation this index carried from v2.6 was
 # an overclaiming index line, corrected in this curation at every site it appeared.
+# **v3.37 = R331 folded in — the curation where THE AUDIT BECOMES EVIDENCE AND THE REPAIR ORDER
+# BECOMES A DISPATCH.** **R331(a) ratifies FINISH-1**: `eval_child` at r8 measures **1.857422 GiB**
+# (1 902 MiB, card-level per-process; the child allocator peak is 1.2420 GiB), so R330(b)'s
+# conditional is discharged — the boundary re-derives to **9.046908 GiB at 11.81 %** and the 3 %
+# allowance clears it by **+0.133202** against M 0.35. **The VALUE is still PROPOSED, not armed**;
+# it arms at the operator's next mint forwarding, and the r8 variance behind it is n = 1 — the 3 %
+# FLOOR carries the proposal, not a measured r8 spread. The per-rung noise mechanism, the selector
+# plumbing (mint act data-only), ANNOTATION 12, the bare-pytest resolution and the commit convention
+# are all ratified; the FINISH-1 session's self-caught items stand on its ledger.
+# **R331(b) ACCEPTS AUDIT-1 as EVIDENCE** — 52 findings, four risk tiers, and the P1–P11 order
+# ADOPTED with three amendments: **(i)** F-19 is DECIDED **BUILT** (run6's trainer initializes from a
+# prereg-named checkpoint resolved through the artifact stamp by the one selector authority, with a
+# step-0 net-hash witness and the BC 20/20 reproduction before any self-play step), sequenced with
+# F-17; **(ii)** the brief's class-4 `MAX_STONES` example is CORRECTED **of record in the tree's
+# favour** — one Rust owner, exported through the bridge, a storage ceiling and not registry
+# geometry, so it is not to be re-chased; **(iii)** findings from the three session-limited sweeps
+# carry a LOWER-CONFIDENCE mark and verify at contact before repair.
+# **R331(c) DISPATCHES REPAIR-1** as four severable legs — P1 (class 7, F-01/F-05 first), P2 (class 8,
+# F-09 first, so "full local green" covers clippy and the bench targets as R311(b) intends), P3
+# (class 5, F-02 first), P4 (class 11, doc-only and gate-free). **R331(d) SETS THE ORDER AFTER**:
+# REPAIR-2 (P5; P8 with F-16 first and F-19 built; P6), REPAIR-3 (P7, P9), the run dashboard, the
+# tranche-2 prereg, then the run6 mint; P10 is the architect's lane-C design input.
+# **RUN6 REMAINS HELD.**
 # **RUN6 REMAINS HELD. No mint, no arm, no training.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
@@ -969,9 +992,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R330 — **301 sections, 301 distinct numbers, no duplicates** (re-derived at v3.36; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c)) — and **every number
+  R23–R331 — **302 sections, 302 distinct numbers, no duplicates** (re-derived at v3.37; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 331)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 332)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -2458,6 +2481,47 @@ Verbatim text in the register; one-liners here are index only.
   the default tier, gate 3c counts the tree with `-m ''`, the header prints `TIER:`. **(h) landed** —
   CLAUDE.md names the no-trailer rule. **(f) executed** — ANNOTATION 12, index corrected, push per
   the exit screen. **Phase W did not run** (per (d)).
+  **AMENDED by R331(a) (2026-09-03). RATIFIED in full** — (c)'s measurement stands and is to be
+  RE-MEASURED at the run6 mint's own cap pair (a fresh duty, not a re-opening); (b)'s 3 % now
+  carries **r8 grounds** (+0.133202 against the boundary re-derived from the measured term) and
+  **remains PROPOSED, arming at the operator's mint forwarding**; (d), (e), (f), (g), (h) are
+  ratified as landed, (e)'s two en-route defect closures with them. The FINISH-1 session's
+  self-caught items stand on its ledger. **What (b) still does NOT have is a measured r8 variance:
+  n = 1, and the 3 % FLOOR is what carries the proposal** — stated here because the index is where
+  a later session would otherwise read the number as measured.
+
+- **R331 — AUDIT-1 becomes EVIDENCE and the repair order becomes a DISPATCH. LIVE: (b)'s
+  amendments are standing facts; (c) expires on REPAIR-1's exit; (d) is the running order.**
+  **(a) RATIFIES FINISH-1** — see the R330 row's amendment above for the numbers; nothing is
+  re-stated here.
+  **(b) ACCEPTS AUDIT-1 as EVIDENCE** (`plan/AUDIT_2026-09-02.md`, `mantis-migration` `ec30baa`):
+  **52 findings, four risk tiers (R1 live-wrong / R2 live-hole / R3 latent / R4 cost), the P1–P11
+  order ADOPTED** with three amendments.
+  **(b)(i) F-19 is DECIDED — BUILT, not deleted.** Run6's trainer initializes from a checkpoint
+  NAMED IN THE PREREG (path and net hash pinned), resolved through the artifact stamp by the ONE
+  selector authority R330(e) landed. **WITNESS: the step-0 net hash equals the checkpoint's, and
+  the BC result (20/20 vs random) reproduces at step 0 before any self-play step.** Sequenced with
+  F-17 as the audit requires — P8's F-17 and P9's F-19 touch the same anchor/warm-start path and
+  are NOT parallelised.
+  **(b)(ii) The brief's class-4 example is CORRECTED of record, in the TREE'S favour.**
+  `MAX_STONES` is a storage ceiling with ONE Rust owner
+  (`crates/mantis-selfplay/src/replay/hexg/mod.rs:50`) exported through the bridge and read by the
+  schema's ply-cap relation — **not registry geometry, and not to be derived from the registry.**
+  The architect's example was wrong; the audit's §6 entry is upheld. Recorded so it is not
+  re-chased.
+  **(b)(iii) Findings from the three session-limited sweeps carry a LOWER-CONFIDENCE mark**;
+  repairs verify at contact before the repair is made.
+  **(c) REPAIR-1 EXECUTES P1–P4, four severable legs:** P1 class 7 "absent is not zero" (F-01 and
+  F-05 first — the only rows producing wrong numbers on artifacts read today); P2 class 8 "gates
+  that inspect what they pass" (**F-09 FIRST** — the local runner, so "full local green" covers
+  clippy `-D clippy::all` and the bench targets and means what R311(b) says); P3 class 5 "named
+  errors, not panics" (F-02 first — a production halt with no latched reason); P4 class 11
+  "docs follow reality", doc-only and GATE-FREE per R311(b), including SEAM_V1_DESIGN §0.3's
+  discharged preconditions and the audit's §6 corrections.
+  **(d) THE ORDER AFTER THIS IS SET:** REPAIR-2 (P5; P8 with F-16 first and F-19 built; P6),
+  REPAIR-3 (P7, P9), the file-based run dashboard, the tranche-2 prereg (P11, the ARCHITECT'S),
+  then the **run6 mint**. **P10 is not a packet** — it is the architect's design input for lane C,
+  dispatched per sub-item under the seam spec.
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -5256,3 +5320,40 @@ Verbatim text in the register; one-liners here are index only.
   and the four engine landings are EXECUTION under R330, recorded in the FINISH-1 record and
   appended to the R330 row at exit. The R330 row's EXECUTED block was appended at exit, stated here rather
   than left as a silent tenth edit. **RUN6 REMAINS HELD.**
+- 2026-09-03 — **v3.37** curated by the REPAIR-1 execution session, landing **R331**, authored in
+  the ARCH-ERA architect session and forwarded by the operator INLINE (no file), so the landing
+  session created the canonical home `plan/PACKET_R331_REPAIR_1.md` §1.
+  **PRECONDITIONS, run before any edit:** census `R23–R330 — 301 sections / 301 distinct / 0
+  duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp`
+  `STAMP OK: stamp v3.36 == §8 last entry v3.36`; `--self-test` all four controls fire.
+  **`grep -rn 'R331' plan/` returned rc 1 and ZERO hits** before the landing. The forwarded text
+  carried `R{next}` in **TWO** places (the dispatch's §1 heading and the quote-block lead) — both
+  substituted, no other placeholder touched, the residual grep over §1 rc 1 and exactly ONE `R331`
+  token in §1 so no clause number was rewritten. The canonical home's `awk`-extracted block against
+  the register entry's — **EMPTY diff at 33 lines**; the register's pre-append prefix
+  **byte-identical** after the append at 7 997 lines (`dcfcb2b0…`); post-append census
+  `R23–R331 — 302 / 302 / 0, excluded 53`.
+  **REFERENTS RE-DERIVED AT POINT OF USE, not carried from the dispatch:** `1.857 GiB` and `+0.133`
+  read at `plan/FINISH1_EXIT.md:8` and its boundary table (which also gives the boundary NOW,
+  9.046908 at 11.81 %, and the n = 1 caveat the exit screen states unprompted); ANNOTATION 12 at
+  `rulings_register.md:4547` over the R282(b) clause at `:4520-4523`; the audit's three counts
+  DERIVED from the file (52 findings / 52 distinct ids, four risk-tier headings, 11 packet rows);
+  and **(b)(ii) verified in the engine tree at `ba883c9`** — `MAX_STONES` defined ONCE at
+  `crates/mantis-selfplay/src/replay/hexg/mod.rs:50`, exported at
+  `crates/mantis-bridge/src/hexg.rs:376`, consumed by `src/mantis/config/schema/core.py:683-720`.
+  **This is the first curation in which a ruling corrects the ARCHITECT'S OWN worked example
+  against the tree** — the audit checked the brief and the brief was wrong.
+  **REGISTER EDITS, ONE:** the R331 append. **Index edits, FIVE, enumerated:** the v3.37 header
+  block; the stamp (rides the §8 edit, R284(f)); the §1 census sentence re-derived to R331/302 with
+  `range(23, 332)`; an **amendment appended to §5's R330 row** — RATIFIED in full, (c) carrying a
+  fresh re-measure duty at the run6 mint's cap pair, (b) now r8-grounded but still PROPOSED and
+  still n = 1; and a **new §5 LIVE row for R331**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** **An audit is not a work order until someone rules on it.** AUDIT-1
+  returned 52 findings and proposed an order; R331(b) makes the findings EVIDENCE, adopts the order,
+  and pays the three amendments that a ruling — and not a sweep — has to make: a deferred decision
+  taken (F-19 BUILT with its witness), a wrong premise of the architect's own retracted in the
+  tree's favour, and a confidence mark placed on the sweeps that could not finish. **R331(c) then
+  spends it**, four legs deep, F-09 first so that every later packet's "local green" is measured
+  through a runner that actually runs the gates.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing, trains nothing, sets no
+  allowance VALUE, and starts no run. **RUN6 REMAINS HELD.**
