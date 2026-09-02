@@ -182,6 +182,24 @@ def record_runs(record: Any, *, encoding_name: str) -> tuple[int, int]:
     )
 
 
+def _positive_games(raw: str) -> int:
+    """`--games` must be at least 1 (AUDIT-1 F-28/A08).
+
+    Raises:
+        argparse.ArgumentTypeError: the value is not an integer, or is below 1.
+    """
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"--games must be an integer, got {raw!r}") from exc
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            f"--games must be at least 1, got {value}: a witness over zero games measures "
+            "nothing and would print a verdict about it"
+        )
+    return value
+
+
 def measure_arm(records: Sequence[Any], *, encoding_name: str, floor: Any) -> dict[str, Any]:
     """The witness readout for one arm: the floor half and the contested-play half.
 
@@ -213,14 +231,17 @@ def measure_arm(records: Sequence[Any], *, encoding_name: str, floor: Any) -> di
     return {
         "games": games,
         "decisive_games": decisive,
-        "decisive_rate": (decisive / games) if games else 0.0,
+        # AUDIT-1 F-28/A08. A rate over ZERO games is not a rate of zero — and this tool's
+        # whole subject is a decisive-rate bar, so `decisive_rate 0.0` over no games reads as
+        # the strongest possible refusal evidence when nothing was played at all.
+        "decisive_rate": (decisive / games) if games else None,
         "wins": wins,
         "draws": draws,
-        "winrate": (wins / games) if games else 0.0,
+        "winrate": (wins / games) if games else None,
         "terminals": dict(Counter(rec.terminal for rec in records)),
-        "mean_plies": (sum(rec.plies for rec in records) / games) if games else 0.0,
+        "mean_plies": (sum(rec.plies for rec in records) / games) if games else None,
         "runs_candidate_opponent": [list(pair) for pair in runs],
-        "longest_run_max": max((max(pair) for pair in runs), default=0),
+        "longest_run_max": max((max(pair) for pair in runs), default=None),
         "winner_runs": winner_runs,
         "loser_runs": loser_runs,
         "loser_run_histogram": dict(sorted(Counter(loser_runs).items())),
@@ -337,7 +358,8 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrance: `python -m mantis.diagnostics.acceptance_witness`."""
     parser = argparse.ArgumentParser(description="R328(f) BC acceptance witness")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--games", required=True, type=int)
+    # `--games 0` measured nothing and then printed a witness about it (F-28/A08).
+    parser.add_argument("--games", required=True, type=_positive_games)
     parser.add_argument("--device", required=True)
     parser.add_argument("--arm", action="append", required=True,
                         metavar=f"LABEL=CKPT|LABEL={CONTROL_CHECKPOINT}")

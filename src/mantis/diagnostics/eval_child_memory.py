@@ -1,3 +1,8 @@
+# R8 justify: the stopping RULE, the two readers that feed it (the live `--events` path and
+# the `--markers` path over captured child stdout) and the renderer that prints the series are
+# one unit — the rule's whole point is that a verdict is a function of a stated sample, so a
+# reader living apart from the rule could hand it a series shaped differently from the one the
+# rule was pre-registered against, which is the failure this tool exists to end.
 """`python -m mantis.diagnostics.eval_child_memory` — has the eval-child term CONVERGED?
 
 WHAT THIS REPLACES, and why it is a tool rather than a paragraph. `F816_10_BOX_PROCEDURE.md`
@@ -161,11 +166,26 @@ def read_rounds_from_markers(text: str) -> list[RoundReading]:
             available=any(bool(r.get("available")) for r in records),
             peak_bytes=max(measured) if measured else None,
             reserved_peak_bytes=max([r for r in reserved if r is not None], default=None),
-            wall_sec=(max(r["t_mono_sec"] for r in records)
-                      - min(r["t_mono_sec"] for r in records)) if records else None,
+            # AUDIT-1 F-28/A06. `r["t_mono_sec"]` is `None` on a round the child could not
+            # stamp, and `max()` over a list containing `None` raises `TypeError` — which
+            # escaped `--markers` entirely and exited with GROWING's code, so an unreadable
+            # capture presented as a measured growth verdict. Absent stamps are filtered, the
+            # way `_from_phases` above already filters them, and a round with none reports
+            # `wall_sec=None` — which `_render` already prints as `n/a`.
+            wall_sec=_span(r.get("t_mono_sec") for r in records),
             phases=tuple(str(r.get("phase")) for r in records),
         ))
     return rounds
+
+
+def _span(stamps: Any) -> float | None:
+    """`max - min` over the stamps that EXIST, or `None` when fewer than two do.
+
+    One stamp is an instant, not a span; zero is nothing. Both used to be either a `TypeError`
+    (an absent stamp in the sequence) or a fabricated `0.0` (AUDIT-1 F-28/A06).
+    """
+    values = [float(s) for s in stamps if s is not None]
+    return (max(values) - min(values)) if len(values) >= 2 else None
 
 
 def classify(peaks: list[float] | list[int], *, plateau_rounds: int, band_pct: float) -> str:
@@ -206,11 +226,17 @@ def _render(rounds: list[RoundReading], *, plateau_rounds: int, band_pct: float,
             verdict: str | None, refusal: str | None, out: Any) -> None:
     measured = [r for r in rounds if r.available and r.peak_bytes is not None]
     unmeasured = [r for r in rounds if r not in measured]
-    wall = sum(r.wall_sec or 0.0 for r in rounds)
+    # AUDIT-1 F-28/A07. `sum(r.wall_sec or 0.0 ...)` counted every round whose wall could not
+    # be measured as ZERO SECONDS, so the printed total was an understatement presented as a
+    # total. It is summed over the rounds that HAVE a wall, and the count is printed beside
+    # it — a total over 3 of 12 rounds is a different fact from a total over 12.
+    timed = [r.wall_sec for r in rounds if r.wall_sec is not None]
+    wall_str = f"{sum(timed):.1f} over {len(timed)}/{len(rounds)} timed round(s)" if timed \
+        else f"unmeasured (0/{len(rounds)} rounds carry a wall)"
     print(f"rule: plateau_rounds={plateau_rounds} band_pct={band_pct:g}", file=out)
     print(
         f"sample: rounds_observed={len(rounds)} rounds_measured={len(measured)} "
-        f"rounds_unmeasured={len(unmeasured)} wall_sec={wall:.1f}",
+        f"rounds_unmeasured={len(unmeasured)} wall_sec={wall_str}",
         file=out,
     )
     for reading in rounds:

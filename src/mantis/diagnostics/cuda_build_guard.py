@@ -44,7 +44,13 @@ def torch_build() -> dict[str, object]:
         "torch_version": torch.__version__,
         "cuda_toolkit": torch.version.cuda,
         "cuda_available": bool(torch.cuda.is_available()),
-        "device_count": int(torch.cuda.device_count()) if torch.cuda.is_available() else 0,
+        # AUDIT-1 F-28/A11. `... else 0` published a device count nothing counted: on a
+        # CPU-only host the field read `0` exactly as it would on a CUDA host that saw no
+        # device, and `assert_cuda_build`'s third refusal then named the wrong condition
+        # ("reports CUDA available with device_count 0") for a build that reports no CUDA at
+        # all. `None` = the question was not asked, and it is asked whenever it can be.
+        "device_count": (int(torch.cuda.device_count())
+                         if torch.cuda.is_available() else None),
     }
 
 
@@ -70,7 +76,17 @@ def assert_cuda_build() -> dict[str, object]:
             f"torch {build['torch_version']} carries CUDA {build['cuda_toolkit']} but "
             "torch.cuda.is_available() is False: no usable driver or no visible device."
         )
-    if int(build["device_count"]) < 1:  # type: ignore[arg-type]
+    # Reached only past the `cuda_available` refusal above, so the count WAS asked for and
+    # `None` here would mean the two disagree — named as its own refusal rather than crashing
+    # in `int(None)`.
+    count = build["device_count"]
+    if count is None:
+        raise CudaBuildRefusal(
+            f"torch {build['torch_version']} reports CUDA available but no device count was "
+            "taken: `torch.cuda.is_available()` and `torch.cuda.device_count()` disagree "
+            "about whether the question can be asked."
+        )
+    if int(count) < 1:  # type: ignore[arg-type]
         raise CudaBuildRefusal(
             f"torch {build['torch_version']} reports CUDA available with device_count 0: "
             "there is nothing to run on."

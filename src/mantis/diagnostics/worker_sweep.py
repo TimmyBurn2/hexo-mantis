@@ -460,6 +460,20 @@ def load_plan(path: str | Path) -> SweepPlan:
         )
     if int(rounds["warmup_rounds"]) < 0:
         raise ValueError(f"{plan_path}: [rounds].warmup_rounds may not be negative")
+    # AUDIT-1 F-28/A03. The card sampler polls every `sampler_interval_sec` inside a round of
+    # `round_sec`. At an interval at or above the round length a round collects ZERO or ONE
+    # sample, so `sampled_peak_bytes` is absent or is a single instantaneous reading — and the
+    # rung PASSES on the allocator series alone while its card column reads `card_samples=0`.
+    # A plan that cannot produce the card series it declares is refused at LOAD, before the
+    # ladder spends an hour proving it.
+    if float(rounds["sampler_interval_sec"]) >= float(rounds["round_sec"]):
+        raise ValueError(
+            f"{plan_path}: [rounds].sampler_interval_sec "
+            f"({rounds['sampler_interval_sec']}) is not shorter than round_sec "
+            f"({rounds['round_sec']}), so a round collects at most one card sample and the "
+            "card high-water is not a series. The card column would read card_samples<=1 on "
+            "every rung while the rung still PASSED on the allocator series alone."
+        )
     return SweepPlan(
         rungs=rungs,
         extension_step=int(ladder["extension_step"]),
@@ -1464,7 +1478,11 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
         # `None`, not `False`, when git could not answer. `bool(None)` is a POSITIVE CLAIM OF
         # CLEANLINESS about a tree nobody looked at — and the tool will be launched from a
         # scratch directory or a tarball with no `.git` on exactly the host that matters.
-        "git_dirty": None if commit is None else bool(porcelain),
+        # AUDIT-1 F-28/A10: the guard discriminated on `commit`, which is the WRONG command.
+        # A tree where `rev-parse HEAD` succeeds and `status --porcelain` fails (an index
+        # lock, a permissions fault, an interrupted git) took the `else` arm and published
+        # `bool(None)` = clean. It now keys on the answer this field is actually derived from.
+        "git_dirty": None if porcelain is None else bool(porcelain),
         "run_id": getattr(config, "run_id", None),
         # THE SEED EVERY RUNG'S NETWORK WAS BUILT FROM (F-RESIT-10). Carried because a ladder
         # whose rungs are comparable is a CLAIM about how they were built, and R69 says a

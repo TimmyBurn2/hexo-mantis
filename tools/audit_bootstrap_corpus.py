@@ -683,6 +683,24 @@ def audit_conventions(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     lacks = out["winner_lacks_six_run"]
     flipped = out["loser_holds_six_run_when_winner_does_not"]
+    checked = out["winner_holds_six_run"] + lacks
+    if not checked:
+        # AUDIT-1 F-28/A09. With ZERO games in the check the two counters are both 0, `lacks`
+        # is falsy, and the `else` arm below read "CONSISTENT ... on every game replayed" —
+        # a clean bill issued over nothing. An empty corpus, a corpus whose `winner` values
+        # are all outside `WINNER_DOMAIN`, and a corpus that genuinely agrees were one string.
+        out["games_checked"] = 0
+        out["verdict"] = (
+            "WINNER CONVENTION NOT CHECKED: no game entered the six-run comparison (an empty "
+            "corpus, or no record whose `winner` is in the declared domain). This is NOT a "
+            "consistency finding — nothing was compared."
+        )
+        out["known_limit"] = (
+            "a q<->r transposition is UNDETECTABLE by this check: the axis set "
+            "{(1,0),(0,1),(1,-1)} is invariant under it (core.rs:51-55)"
+        )
+        return out
+    out["games_checked"] = checked
     if lacks and flipped == lacks:
         verdict = (
             "WINNER CONVENTION LIKELY INVERTED: in every game where the declared winner "
@@ -698,7 +716,7 @@ def audit_conventions(records: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         verdict = (
             "winner convention CONSISTENT with mantis-core under the identity mapping "
-            "(1 => Player::One, -1 => Player::Two) on every game replayed"
+            f"(1 => Player::One, -1 => Player::Two) on all {checked} game(s) replayed"
         )
     out["verdict"] = verdict
     out["known_limit"] = (

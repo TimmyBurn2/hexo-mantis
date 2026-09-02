@@ -314,6 +314,12 @@ def _measure_point(
     peaks: list[int] = []
     allocated_abs: list[int] = []
     reserved: list[int] = []
+    # F-28/A11: the baseline for the per-point retry/OOM deltas below. `memory_stats()`'s
+    # counters are process-cumulative and `reset_peak_memory_stats` does NOT reset them, so
+    # without this the last point of a sweep reports every OOM the whole sweep ever had.
+    _base = torch.cuda.memory_stats()
+    before_retries = int(_base.get("num_alloc_retries", 0))
+    before_ooms = int(_base.get("num_ooms", 0))
     for _ in range(repeats):
         wire = _wire_for(encoding, max_moves, point.n_graphs, point.label, stones,
                          spread, corpus)
@@ -365,8 +371,15 @@ def _measure_point(
         "peak_bytes_all_repeats": peaks,
         "allocated_bytes_peak_median": int(np.median(allocated_abs)),
         "reserved_bytes_peak_median": int(np.median(reserved)),
-        "num_alloc_retries": int(stats["num_alloc_retries"]),
-        "num_ooms": int(stats["num_ooms"]),
+        # AUDIT-1 F-28/A11. These are `torch.cuda.memory_stats()` counters, which are
+        # PROCESS-CUMULATIVE: a point published every retry and every OOM the sweep had ever
+        # had, under a per-point key. The cumulative reading is kept under its own name and
+        # the per-point DELTA — the number the key was always read as — is published beside
+        # it, taken against the counters read before this point ran.
+        "num_alloc_retries": int(stats["num_alloc_retries"]) - int(before_retries),
+        "num_ooms": int(stats["num_ooms"]) - int(before_ooms),
+        "num_alloc_retries_process_total": int(stats["num_alloc_retries"]),
+        "num_ooms_process_total": int(stats["num_ooms"]),
         "mem_get_info_free_bytes": int(free_b),
         "mem_get_info_total_bytes": int(total_b),
     }
@@ -423,7 +436,8 @@ def _fit(measured: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _recommend(
-    fit: dict[str, Any], budget_bytes: int, margin: float, points: list[dict[str, Any]]
+    fit: dict[str, Any], budget_bytes: int, margin: float, points: list[dict[str, Any]],
+    unmeasured: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Solve `a + b*E + c*N <= budget * margin` with `E/N` pinned to the measured ratio.
 
@@ -460,8 +474,14 @@ def _recommend(
         )
     predicted = (fit["a_bytes"] + fit["b_bytes_per_edge"] * edges
                  + fit["c_bytes_per_node"] * nodes)
-    largest_nodes = max(p["largest_graph_nodes"] for p in points)
-    largest_edges = max(p["largest_graph_edges"] for p in points)
+    # AUDIT-1 F-28/A05. "Seen in this sweep" was taken over the MEASURED points only, so a
+    # point that OOM'd — the biggest shapes, exactly the ones a cap has to refuse or admit —
+    # was not "seen", and the flag read False for a pair that cannot hold a graph the sweep
+    # actually built. The unmeasured points carry their full shape block (`point.as_dict()`
+    # is spread into the record beside `not_measured`), so the maxima are available.
+    seen = list(points) + list(unmeasured or [])
+    largest_nodes = max(p["largest_graph_nodes"] for p in seen)
+    largest_edges = max(p["largest_graph_edges"] for p in seen)
     return {
         "max_fused_edges": edges,
         "max_fused_nodes": nodes,
@@ -481,6 +501,10 @@ def _recommend(
         # its own positions rather than a run that is bounded.
         "largest_single_graph_nodes_seen": largest_nodes,
         "largest_single_graph_edges_seen": largest_edges,
+        # The denominator, published: how many of the sweep's points the "seen" maxima were
+        # taken over, and how many of those the fit could not measure.
+        "seen_points": len(seen),
+        "seen_points_unmeasured": len(unmeasured or []),
         "refuses_a_graph_seen_in_this_sweep": bool(
             edges < largest_edges or nodes < largest_nodes
         ),
@@ -757,7 +781,8 @@ def run(argv: list[str] | None = None) -> int:
         )
     fit = _fit(measured)
     recommendation = (
-        _recommend(fit, int(args.budget_bytes), float(args.margin), measured)
+        _recommend(fit, int(args.budget_bytes), float(args.margin), measured,
+                   unmeasured=unmeasured)
         if recommending else None
     )
     mint_line = None
@@ -788,8 +813,10 @@ def run(argv: list[str] | None = None) -> int:
         "fit": fit,
         "operating_ratio_e_over_n": fit["operating_edges_per_node"],
         "largest_single_graph": {
-            "nodes": max(m["largest_graph_nodes"] for m in measured),
-            "edges": max(m["largest_graph_edges"] for m in measured),
+            # F-28/A05: over every point the sweep BUILT, measured or not — an OOM'd point is
+            # a graph this sweep saw.
+            "nodes": max(m["largest_graph_nodes"] for m in measured + unmeasured),
+            "edges": max(m["largest_graph_edges"] for m in measured + unmeasured),
         },
         "fragmentation_ratio": float(np.median(ratios)),
         # AUDIT-1 F-07: the INPUT under its own name, and the MEASUREMENT under its own name.
