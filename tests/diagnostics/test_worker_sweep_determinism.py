@@ -197,31 +197,36 @@ def test_the_bands_constant_is_SUPERSEDED_but_still_pinned_for_history() -> None
     assert ws.RULED_DETERMINISM_BAND_PCT == 1.0
 
 
-# ── arm 2.5: the noise floor (R317(d)) ────────────────────────────────────────────────────
-def test_the_knee_rule_requires_a_measured_noise_floor_not_a_default() -> None:
-    """R317(d): `select_knee` no longer has an implicit floor. `0.0` recovers the un-amended
-    rule and must be passed explicitly."""
-    with pytest.raises(ValueError, match="noise_floor_rel_std"):
-        ws.select_knee([], knee_pct=ws.RULED_KNEE_PCT, metric=ws.PREREG_METRIC,
-                       noise_floor_rel_std=-0.01)
+# ── arm 2.5: per-rung noise (R330(d), replacing R317(d)'s carried scalar) ────────────────
+def test_the_knee_rule_takes_no_noise_scalar_and_refuses_a_rung_that_cannot_state_its_own() -> None:
+    """R326(a) measured R317(d)'s carried-noise assumption FALSE; R330(d) gives each rung its own
+    rel-SE. There is no scalar parameter left to pass and no default to fall to: a rung row
+    without a measured `rel_se` is refused by name."""
+    import inspect
+    assert "noise_floor_rel_std" not in inspect.signature(ws.select_knee).parameters
+    assert not hasattr(ws, "run_noise_floor") and not hasattr(ws, "read_noise_floor_report")
+    with pytest.raises(ValueError, match="rung 2 carries no measured rel_se"):
+        ws.select_knee([{"n_workers": 2, ws.PREREG_METRIC: 91.0, "verdict": ws.PLATEAU}],
+                       knee_pct=ws.RULED_KNEE_PCT, metric=ws.PREREG_METRIC)
 
 
-def test_the_amendment_can_only_pull_the_pick_toward_FEWER_workers() -> None:
-    """R317(d)'s own safety property, measured over a case where the naive band would exclude
-    rung 2: a positive noise floor must never REMOVE rung 2 from `within` once it already
-    qualifies, and can only ADD smaller-or-equal rungs, never drop the picked rung upward."""
-    rows = [{"n_workers": 2, ws.PREREG_METRIC: 91.0, "verdict": ws.PLATEAU},
-            {"n_workers": 4, ws.PREREG_METRIC: 100.0, "verdict": ws.PLATEAU}]
-    unamended = ws.select_knee(rows, knee_pct=95.0, metric=ws.PREREG_METRIC,
-                               noise_floor_rel_std=0.0)
-    amended = ws.select_knee(rows, knee_pct=95.0, metric=ws.PREREG_METRIC,
-                             noise_floor_rel_std=0.10)
-    assert unamended["picked"] == 4, "91 is below the 95-of-100 threshold under the base rule"
-    assert amended["picked"] == 2, (
-        "a 10% relative noise floor must widen `within` to admit rung 2 and the pick must move "
-        f"to the SMALLER rung; got {amended}"
+def test_the_widening_can_only_pull_the_pick_toward_FEWER_workers() -> None:
+    """R317(d)'s safety property, kept under R330(d): a noisy rung can only ADD rungs to `within`,
+    never remove one, and the pick is still the smallest member — so the pick moves toward fewer
+    workers or stays put, never toward more."""
+    def rows(rel_se_2: float) -> list[dict]:
+        return [{"n_workers": 2, ws.PREREG_METRIC: 91.0, "verdict": ws.PLATEAU,
+                 f"{ws.PREREG_METRIC}_spread": {"rel_se": rel_se_2, "n_rounds": 5}},
+                {"n_workers": 4, ws.PREREG_METRIC: 100.0, "verdict": ws.PLATEAU,
+                 f"{ws.PREREG_METRIC}_spread": {"rel_se": 0.0, "n_rounds": 5}}]
+    quiet = ws.select_knee(rows(0.0), knee_pct=95.0, metric=ws.PREREG_METRIC)
+    noisy = ws.select_knee(rows(0.10), knee_pct=95.0, metric=ws.PREREG_METRIC)
+    assert quiet["picked"] == 4, "91 is below the 95-of-100 threshold with no noise"
+    assert noisy["picked"] == 2, (
+        "a 10% rel-SE at rung 2 must widen `within` to admit it and the pick must move to the "
+        f"SMALLER rung; got {noisy}"
     )
-    assert amended["adjusted_threshold"] < unamended["threshold"]
+    assert noisy["adjusted_threshold"] < quiet["threshold"]
 
 
 # ── arm 3: the CLI modes' refusals ───────────────────────────────────────────────────────
@@ -239,28 +244,3 @@ def test_the_determinism_mode_refuses_inputs_it_does_not_read() -> None:
                                   ["--determinism-control", "4"]])
 def test_the_determinism_mode_refuses_without_both_config_and_plan(argv: list[str]) -> None:
     assert ws.main(argv) == ws.RC_REFUSED
-
-
-def test_the_two_drive_modes_refuse_being_named_together() -> None:
-    """R317(d): --noise-floor is a THIRD drive mode, disjoint from --determinism-control the same
-    way --select-only is disjoint from both."""
-    assert ws.main(["--determinism-control", "4", "--noise-floor", "4",
-                    "--config", "x", "--plan", "y"]) == ws.RC_REFUSED
-
-
-def test_the_noise_floor_mode_refuses_n_workers_1_which_the_prereg_REJECTS() -> None:
-    assert ws.main(["--noise-floor", "1", "--config", "x", "--plan", "y"]) == ws.RC_REFUSED
-
-
-@pytest.mark.parametrize("argv", [["--noise-floor", "4", "--config", "x"],
-                                  ["--noise-floor", "4", "--plan", "y"],
-                                  ["--noise-floor", "4"]])
-def test_the_noise_floor_mode_refuses_without_both_config_and_plan(argv: list[str]) -> None:
-    assert ws.main(argv) == ws.RC_REFUSED
-
-
-def test_the_ladder_refuses_without_a_noise_floor_report() -> None:
-    """R317(d): a ladder that has not measured a noise floor cannot select a pick, so it is
-    refused BEFORE the seventy-minute walk, not after it."""
-    assert ws.main(["--config", "configs/run5.yaml",
-                    "--plan", "tools/worker_sweep_plan.toml"]) == ws.RC_REFUSED

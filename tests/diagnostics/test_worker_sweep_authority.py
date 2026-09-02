@@ -123,8 +123,7 @@ def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
     monkeypatch.setattr(ws, "build_sweep_pool", explode)
     sink = io.StringIO()
     with pytest.raises(ValueError, match="allocator_posture"):
-        ws.run_sweep(config_path=_null_posture_twin(tmp_path), plan_path=_PLAN, out=sink,
-                     noise_floor_rel_std=0.0)
+        ws.run_sweep(config_path=_null_posture_twin(tmp_path), plan_path=_PLAN, out=sink)
 
 
 def test_the_null_posture_refusal_reaches_the_exit_code_as_a_named_refusal(
@@ -173,8 +172,7 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     monkeypatch.setattr(ws, "walk_ladder", record)
     sink = io.StringIO()
     with pytest.raises(_StopAfterPosture):
-        ws.run_sweep(config_path=Path("configs/run5.yaml"), plan_path=_PLAN, out=sink,
-                     noise_floor_rel_std=0.0)
+        ws.run_sweep(config_path=Path("configs/run5.yaml"), plan_path=_PLAN, out=sink)
     assert reached, "run5's minted posture must reach the ladder, not refuse before it"
 
 
@@ -373,8 +371,7 @@ def test_two_rungs_with_different_producers_print_both(plan: ws.SweepPlan, capsy
             "thread_bound": 16, "thread_bound_source": "os.sched_getaffinity(0)",
             "cuda_counters_available": True}
     report = ws.build_report(plan=plan, prov=prov,
-                             results=[rung(2, "run5@aaa"), rung(4, "run5@bbb")], stopped="t",
-                             noise_floor_rel_std=0.0)
+                             results=[rung(2, "run5@aaa"), rung(4, "run5@bbb")], stopped="t")
     ws.render(report, __import__("sys").stdout)
     text = capsys.readouterr().out
     assert "run5@aaa" in text and "run5@bbb" in text
@@ -577,18 +574,16 @@ def test_select_only_refuses_a_report_whose_stated_rule_is_not_the_ruling_s(
 ) -> None:
     base = {"tool": ws.TOOL, "provenance": {"produced_by": "run5@abc"},
             "plan": {"knee_pct": 95.0, "metric": "moves_per_min"},
-            "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0}]}
+            "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0,
+                       # R330(d): the rung states its own noise; a row without it is refused.
+                       "moves_per_min_spread": {"rel_se": 0.0, "n_rounds": 5}}]}
     ok = tmp_path / "ok.json"
     ok.write_text(json.dumps(base), encoding="utf-8")
-    # R317(d): --select-only now needs a measured noise floor to select under.
-    nf_path = tmp_path / "noise_floor.json"
-    nf_path.write_text(json.dumps({"tool": ws.TOOL, "mode": "noise_floor",
-                                   "noise_floor": {"rel_std": 0.0}}), encoding="utf-8")
-    assert ws.main(["--select-only", str(ok), "--noise-floor-report", str(nf_path)]) == 0
+    assert ws.main(["--select-only", str(ok)]) == 0
     for edit in ({"knee_pct": 60.0}, {"knee_pct": 100.0}, {"metric": "games_per_min"}):
         bad = tmp_path / f"bad{tuple(edit)[0]}{tuple(edit.values())[0]}.json"
         bad.write_text(json.dumps({**base, "plan": {**base["plan"], **edit}}), encoding="utf-8")
-        assert ws.main(["--select-only", str(bad), "--noise-floor-report", str(nf_path)]) \
+        assert ws.main(["--select-only", str(bad)]) \
             == ws.RC_REFUSED, (
             f"a one-field edit ({edit}) re-derived a pick with the ruling's own authority"
         )
@@ -732,8 +727,7 @@ def test_the_report_carries_the_card_total_every_peak_is_measured_against(
         for i in range(6))
     rung = ws.RungResult(n_workers=4, verdict=ws.PLATEAU, rounds=rounds, refusal=None,
                          produced_by="run5@abc")
-    report = ws.build_report(plan=plan, prov=prov, results=[rung], stopped="t",
-                             noise_floor_rel_std=0.0)
+    report = ws.build_report(plan=plan, prov=prov, results=[rung], stopped="t")
     assert report["provenance"]["card_total_bytes"] == 16 * 1024 ** 3
     ws.render(report, __import__("sys").stdout)
     assert "card_total=16.0000 GiB" in capsys.readouterr().out, (

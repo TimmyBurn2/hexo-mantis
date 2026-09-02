@@ -135,8 +135,7 @@ def _report(plan: ws.SweepPlan, result: ws.RungResult, *, counters: bool) -> dic
         "declared_allocator_posture": None, "allocator_posture_governs_device": False,
         "live_allocator_conf": "", "live_allocator_conf_source_var": None,
     }
-    return ws.build_report(plan=plan, prov=prov, results=[result], stopped="test",
-                           noise_floor_rel_std=0.0)
+    return ws.build_report(plan=plan, prov=prov, results=[result], stopped="test")
 
 
 def test_every_rung_row_names_its_producing_run_and_its_sampling_limit(

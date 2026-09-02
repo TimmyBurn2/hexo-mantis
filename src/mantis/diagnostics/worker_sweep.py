@@ -109,6 +109,16 @@ something I can answer about", and there is one such code in this family.
 rule, and it prints the arithmetic with its inputs so the sitting record carries the derivation
 rather than the answer alone. Minting is the operator's act (R119) on the sitting's branch
 (R308(b)).
+
+**PER-RUNG NOISE (R330(d)), and the mode it retired.** R317(d) measured ONE coefficient of
+variation at a reference rung (`--noise-floor N`, four same-seed drives) and carried it to every
+rung as the knee rule's 3-sigma widening; R326(a) measured that carry FALSE. Every rung now states
+its own noise — `RungResult.spread` writes `rel_se`, the relative standard error of the rung's own
+scored rounds — and `select_knee` widens by the MAX rel-SE over the passing set (see its docstring
+for why the passing set is the candidate set). The scalar mode, its reader and `--noise-floor-report`
+are DELETED rather than kept beside the new term: two noise authorities over one threshold is the
+duplicate-authority class, and the retired one's only consumer was the rule that no longer reads it.
+A report written before this mechanism is REFUSED at selection, by rung, never re-derived under 0.
 """
 from __future__ import annotations
 
@@ -122,9 +132,9 @@ import threading
 import time
 import tomllib
 from dataclasses import dataclass
-from math import isfinite
+from math import isfinite, sqrt
 from pathlib import Path
-from statistics import median
+from statistics import fmean, median, stdev
 from typing import Any
 
 import torch
@@ -721,9 +731,19 @@ class RungResult:
         """
         values = sorted(getattr(r, metric) for r in self.scored)
         if not values:
-            return {"min": None, "median": None, "max": None, "n_rounds": 0}
+            return {"min": None, "median": None, "max": None, "mean": None, "rel_se": None,
+                    "n_rounds": 0}
+        mean = fmean(values)
+        # R330(d): THIS RUNG'S OWN NOISE — the relative standard error of its per-round rate,
+        # sample std / sqrt(n) / mean. `None` when it cannot be stated (one scored round, or a
+        # non-positive mean), and `select_knee` REFUSES a rung that cannot state it rather than
+        # reading None as zero. R326(a) measured the carried-scalar assumption FALSE: one
+        # reference rung's coefficient of variation does not describe the others.
+        rel_se = ((stdev(values) / sqrt(len(values))) / mean
+                  if len(values) >= 2 and mean > 0 else None)
         return {"min": round(values[0], 4), "median": round(median(values), 4),
-                "max": round(values[-1], 4), "n_rounds": len(values)}
+                "max": round(values[-1], 4), "mean": round(mean, 4), "rel_se": rel_se,
+                "n_rounds": len(values)}
 
     def series(self, sink: str) -> list[int]:
         """One sink's own per-round peaks, oldest first, warm-up and unmeasured rounds excluded."""
@@ -1256,8 +1276,7 @@ def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *,
                        "REPORTED with no band (R317(c)(iii))")}
 
 
-def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str,
-                noise_floor_rel_std: float) -> dict[str, Any]:
+def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> dict[str, Any]:
     """R309(f)'s knee rule, as a pure function over the report's own rung rows.
 
     PURE, so `--select-only` re-derives the pick from a written report through THIS function
@@ -1265,27 +1284,23 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str,
     is the difference between a sitting record that carries the arithmetic and one that carries
     the answer.
 
-    **R317(d): the rule is AMENDED, strictly conservative.** `noise_floor_rel_std` is the
-    coefficient of variation measured from four fresh same-seed drives at a reference rung
-    (`run_noise_floor`) — a MEASURED noise floor, not a guess, and it carries no default: a
-    sitting that has not measured one cannot select a pick under this rule. The `within` set
-    widens by `3 * noise_floor_rel_std * best`, which can only ADD rungs, never remove one, and
-    the pick is still the SMALLEST member of `within` — so the amendment can only move the pick
-    toward FEWER workers, never toward more. Pass `0.0` to recover the un-amended rule exactly
-    (every existing report re-selected before R317 landed does this, disclosed by the value
-    itself rather than by a second code path).
+    **R330(d): the noise term is PER-RUNG, and the widening uses the MAX over the candidate
+    set.** R317(d) widened `within` by `3 × rel_std × best` with ONE coefficient of variation
+    measured at a reference rung and carried to every other; R326(a) measured that carry FALSE.
+    Now every rung states its own noise — `<metric>_spread.rel_se`, the relative standard error
+    of its own scored rounds, written by `RungResult.spread` — and the widening is
+    `3 × max(rel_se over the PASSING rungs) × best`. The candidate set is the passing set
+    because that is the set the pick is drawn from; it is a superset of `within`, so its max is
+    at least `within`'s and this reading is the conservative one. The widening can still only
+    ADD rungs, and the pick is still the SMALLEST member of `within`, so the noise term can only
+    move the pick toward FEWER workers, never toward more. There is NO scalar to pass and NO
+    default to fall to: a passing rung whose row cannot state its own `rel_se` (one scored round,
+    or a report written before this mechanism) is REFUSED by name.
 
     Raises:
-        ValueError: `noise_floor_rel_std` is negative or non-finite, in addition to every
-            pre-existing validation this function performs.
+        ValueError: a passing rung carries no finite, non-negative `rel_se`, in addition to
+            every pre-existing validation this function performs.
     """
-    if not isinstance(noise_floor_rel_std, (int, float)) or isinstance(noise_floor_rel_std, bool) \
-            or not isfinite(noise_floor_rel_std) or noise_floor_rel_std < 0:
-        raise ValueError(
-            f"noise_floor_rel_std is {noise_floor_rel_std!r}; R317(d) requires a measured, "
-            "non-negative, finite coefficient of variation from run_noise_floor — pass 0.0 "
-            "explicitly to select under the un-amended rule, never a default."
-        )
     if knee_pct != RULED_KNEE_PCT:
         raise ValueError(
             f"knee_pct is {knee_pct}; R309(f) fixes the knee rule at {RULED_KNEE_PCT:g} percent. "
@@ -1320,21 +1335,36 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str,
                 "`json.loads`: a NaN row used to vanish from the knee set with no refusal, and "
                 "an inf row used to capture the pick."
             )
-        passing.append({"n_workers": n_workers, "value": float(value)})
+        spread = row.get(f"{metric}_spread")
+        rel_se = spread.get("rel_se") if isinstance(spread, dict) else None
+        if rel_se is None:
+            raise ValueError(
+                f"rung {n_workers} carries no measured rel_se for {metric!r}: its rounds cannot "
+                "state their own noise (fewer than two scored rounds, or a report written before "
+                "R330(d)). A pick is not selected under a noise term nobody measured, and None is "
+                "not read as zero."
+            )
+        if not isinstance(rel_se, (int, float)) or isinstance(rel_se, bool) \
+                or not isfinite(rel_se) or rel_se < 0:
+            raise ValueError(
+                f"rung {n_workers}'s rel_se is {rel_se!r}; R330(d) requires a finite, non-negative "
+                "relative standard error measured from the rung's own rounds."
+            )
+        passing.append({"n_workers": n_workers, "value": float(value), "rel_se": float(rel_se)})
     passing.sort(key=lambda p: p["n_workers"])
     notes = sorted({str(r.get("verdict")) for r in rows
                     if r.get("verdict") in (OOM, RUNG_ERROR, PRODUCER_DEAD, REFUSED)})
     if not rows:
         return {"knee_pct": knee_pct, "metric": metric, "passing": [], "best": None,
-                "threshold": None, "noise_floor_rel_std": noise_floor_rel_std,
-                "noise_floor_adjustment": None, "adjusted_threshold": None,
+                "threshold": None, "per_rung_rel_se": {}, "noise_rel_se_max": None,
+                "noise_source_rung": None, "noise_adjustment": None, "adjusted_threshold": None,
                 "within": [], "picked": None, "notes": notes,
                 "reason": "the report carries NO RUNGS at all — this is a statement about the "
                           "document, not about the card's memory"}
     if not passing:
         return {"knee_pct": knee_pct, "metric": metric, "passing": [], "best": None,
-                "threshold": None, "noise_floor_rel_std": noise_floor_rel_std,
-                "noise_floor_adjustment": None, "adjusted_threshold": None,
+                "threshold": None, "per_rung_rel_se": {}, "noise_rel_se_max": None,
+                "noise_source_rung": None, "noise_adjustment": None, "adjusted_threshold": None,
                 "within": [], "picked": None, "notes": notes,
                 "reason": "no rung PASSED (a PLATEAU memory verdict is required, R309(f))"}
     best = max(passing, key=lambda p: p["value"])
@@ -1345,22 +1375,27 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str,
             "picking the smallest rung off an identically-zero table."
         )
     threshold = best["value"] * (knee_pct / 100.0)
-    # R317(d): the ONLY safe post-hoc direction. Subtracting from the threshold can only ADD
-    # rungs to `within`, and the pick is still the SMALLEST member — so this can only pull the
-    # pick toward fewer workers, never toward more, whatever `noise_floor_rel_std` turns out to be.
-    adjustment = 3.0 * noise_floor_rel_std * best["value"]
+    # R330(d): the MAX rel-SE over the candidate (passing) set, and the ONLY safe post-hoc
+    # direction. Subtracting from the threshold can only ADD rungs to `within`, and the pick is
+    # still the SMALLEST member — so this can only pull the pick toward fewer workers, never
+    # toward more, whichever rung turns out to be the noisiest.
+    noise_source = max(passing, key=lambda p: p["rel_se"])
+    adjustment = 3.0 * noise_source["rel_se"] * best["value"]
     adjusted_threshold = threshold - adjustment
     within = [p for p in passing if p["value"] >= adjusted_threshold]
     picked = min(within, key=lambda p: p["n_workers"])
     return {
         "knee_pct": knee_pct, "metric": metric, "passing": passing, "best": best,
-        "threshold": threshold, "noise_floor_rel_std": noise_floor_rel_std,
-        "noise_floor_adjustment": adjustment, "adjusted_threshold": adjusted_threshold,
+        "threshold": threshold,
+        "per_rung_rel_se": {str(p["n_workers"]): p["rel_se"] for p in passing},
+        "noise_rel_se_max": noise_source["rel_se"], "noise_source_rung": noise_source["n_workers"],
+        "noise_adjustment": adjustment, "adjusted_threshold": adjusted_threshold,
         "within": within, "picked": picked["n_workers"],
         "notes": notes,
         "reason": (f"the smallest passing rung within {knee_pct:g}% of the best passing rung's "
-                   f"{metric}, widened by R317(d)'s 3-sigma noise floor "
-                   f"({noise_floor_rel_std:.4%} rel. std, -{adjustment:.4f} off the threshold)"),
+                   f"{metric}, widened by R330(d)'s 3-sigma per-rung noise term (max rel-SE "
+                   f"{noise_source['rel_se']:.4%} at rung {noise_source['n_workers']}, "
+                   f"-{adjustment:.4f} off the threshold)"),
     }
 
 
@@ -1444,15 +1479,14 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
 
 
 def build_report(*, plan: SweepPlan, prov: dict[str, Any], results: list[RungResult],
-                 stopped: str, noise_floor_rel_std: float) -> dict[str, Any]:
+                 stopped: str) -> dict[str, Any]:
     rows = [r.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
                       band_pct=plan.band_pct) for r in results]
     # R317(c)(i): the ladder-wide gate. Every rung shares one seed and one config, so every net
     # any rung built must hash equal — a divergence here means the ranking column this ladder
     # exists to produce is not comparable, and no knee arithmetic on it can be trusted.
     gate = _hash_gate([(str(r.n_workers), r.net_param_hash) for r in results])
-    selection = select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric,
-                            noise_floor_rel_std=noise_floor_rel_std)
+    selection = select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric)
     if gate["verdict"] == DIVERGED:
         selection = {**selection, "picked": None,
                      "reason": f"VOIDED by R317(c)(i): {gate['reason']} — the ranking column is "
@@ -1610,9 +1644,11 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
           f"@ {selection['best']['value']:.3f}", file=out)
     print(f"  threshold = {selection['best']['value']:.3f} * "
           f"{selection['knee_pct'] / 100.0:g} = {selection['threshold']:.3f}", file=out)
-    print(f"  R317(d) noise floor: {selection['noise_floor_rel_std']:.4%} rel. std -> "
-          f"-{selection['noise_floor_adjustment']:.3f}, adjusted threshold = "
-          f"{selection['adjusted_threshold']:.3f}", file=out)
+    print("  per-rung rel-SE (each rung's own rounds): "
+          + ", ".join(f"{n}@{v:.4%}" for n, v in selection["per_rung_rel_se"].items()), file=out)
+    print(f"  R330(d) noise term: max rel-SE {selection['noise_rel_se_max']:.4%} at rung "
+          f"{selection['noise_source_rung']} x 3 -> -{selection['noise_adjustment']:.3f}, "
+          f"adjusted threshold = {selection['adjusted_threshold']:.3f}", file=out)
     print("  at or above adjusted threshold:"
           + ", ".join(f"{p['n_workers']}@{p['value']:.3f}" for p in selection["within"]),
           file=out)
@@ -1668,85 +1704,7 @@ def run_determinism_control(*, config_path: Path, plan_path: Path, n_workers: in
             "provenance": prov, "drives": rows, "control": control}
 
 
-def run_noise_floor(*, config_path: Path, plan_path: Path, n_workers: int,
-                    out: Any) -> dict[str, Any]:
-    """R317(d): FOUR fresh same-seed drives at one reference rung — the measured noise floor
-    the amended knee rule requires. Walks no ladder and picks nothing, same discipline as
-    `run_determinism_control`.
-
-    The coefficient of variation (population std / mean) of the four drive means is the
-    RELATIVE noise this sitting carries forward under the stated assumption that it holds
-    across every rung of the ladder (R317(d)) — a measured number, not a guess, and one the
-    knee rule (`select_knee`) can no longer be asked to select without.
-
-    Raises:
-        AllocatorPostureMismatchError: the live allocator conf does not match the minted posture.
-        SweepRefusal: the plan file is unreadable, incomplete, or moves a ruled constant.
-    """
-    from statistics import fmean, pstdev
-
-    plan = load_plan(plan_path)
-    config = load_config(config_path)
-    device = torch.device(config.train.device)
-    assert_allocator_posture(config.model_dump(), device_type=device.type)
-    label = f"{getattr(config, 'run_id', 'run')}@{_git('rev-parse', '--short', 'HEAD') or 'no-git'}"
-
-    rows: list[dict[str, Any]] = []
-    for attempt in range(1, 5):
-        result = drive_rung(config, plan, n_workers=n_workers, device=device,
-                            label=f"{label}#noisefloor-{attempt}", out=out)
-        row = result.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
-                             band_pct=plan.band_pct)
-        row["drive"] = attempt
-        rows.append(row)
-    gate = _hash_gate([(f"drive{r['drive']}", r.get("net_param_hash")) for r in rows])
-    means = [row[plan.metric] for row in rows]
-    undecidable = [row.get("verdict") for row in rows
-                   if row.get("verdict") in (REFUSED, OOM, RUNG_ERROR, PRODUCER_DEAD)]
-    if undecidable or min(means) <= 0:
-        noise_floor = {
-            "n_workers": n_workers, "metric": plan.metric, "means": means,
-            "mean_of_means": None, "std": None, "rel_std": None, "n_sigma": 3,
-            "reason": f"a drive is not a measurement to average: verdicts "
-                      f"{[row.get('verdict') for row in rows]}, {plan.metric} {means}",
-        }
-    else:
-        mean_of_means = fmean(means)
-        std = pstdev(means)
-        noise_floor = {
-            "n_workers": n_workers, "metric": plan.metric, "means": means,
-            "mean_of_means": mean_of_means, "std": std,
-            "rel_std": std / mean_of_means if mean_of_means else None, "n_sigma": 3,
-            "reason": f"rung-{n_workers} relative noise (coefficient of variation over "
-                      f"{len(means)} fresh same-seed drives), assumed to carry across every "
-                      "rung of the ladder (R317(d))",
-        }
-    prov = provenance(config, Path(config_path), device=str(device), label=label)
-    return {"tool": TOOL, "mode": "noise_floor", "prereg": dict(plan.provenance),
-            "provenance": prov, "drives": rows, "net_hash_gate": gate,
-            "noise_floor": noise_floor}
-
-
-def render_noise_floor(payload: dict[str, Any], out: Any) -> None:
-    """The noise-floor screen: the four drives, the hash gate, and the derived rel_std."""
-    nf = payload["noise_floor"]
-    gate = payload.get("net_hash_gate", {})
-    print("", file=out)
-    print(f"NOISE FLOOR — rung {nf['n_workers']} driven {len(nf['means'])} times, same seed "
-          "(R317(d))", file=out)
-    for i, value in enumerate(nf["means"], start=1):
-        print(f"  drive {i}         {value:12.4f} {nf['metric']}", file=out)
-    print(f"  net hashes     {gate.get('hashes', {})}  gate={gate.get('verdict')}", file=out)
-    if nf["rel_std"] is None:
-        print(f"  REFUSED — {nf['reason']}", file=out)
-    else:
-        print(f"  mean_of_means  {nf['mean_of_means']:12.4f}", file=out)
-        print(f"  std            {nf['std']:12.4f}", file=out)
-        print(f"  rel_std        {nf['rel_std']:12.4%}   ({nf['reason']})", file=out)
-
-
-def run_sweep(*, config_path: Path, plan_path: Path, out: Any,
-             noise_floor_rel_std: float) -> dict[str, Any]:
+def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]:
     """Load, assert the regime, walk the ladder, build the report. Writes no config, ever."""
     plan = load_plan(plan_path)
     config = load_config(config_path)
@@ -1763,8 +1721,7 @@ def run_sweep(*, config_path: Path, plan_path: Path, out: Any,
 
     results, stopped = walk_ladder(plan, runner=runner, label=label)
     prov = provenance(config, Path(config_path), device=str(device), label=label)
-    return build_report(plan=plan, prov=prov, results=results, stopped=stopped,
-                        noise_floor_rel_std=noise_floor_rel_std)
+    return build_report(plan=plan, prov=prov, results=results, stopped=stopped)
 
 
 def read_report(path: str | Path) -> dict[str, Any]:
@@ -1798,24 +1755,6 @@ def read_report(path: str | Path) -> dict[str, Any]:
     return report
 
 
-def read_noise_floor_report(path: str | Path) -> float:
-    """R317(d): load a `--noise-floor` report and REFUSE anything else, returning `rel_std`.
-
-    A separate reader from `read_report`, deliberately: a noise-floor document has no `rungs` or
-    `plan` block — it is not a ladder report and must not be read as one just because both come
-    from this tool.
-    """
-    report = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(report, dict) or report.get("tool") != TOOL or \
-            report.get("mode") != "noise_floor":
-        raise ValueError(f"{path}: not a --noise-floor report from {TOOL}")
-    rel_std = report.get("noise_floor", {}).get("rel_std")
-    if rel_std is None:
-        raise ValueError(f"{path}: carries no measured rel_std (its own drive was REFUSED) — "
-                         "nothing to select under")
-    return float(rel_std)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog=f"python -m {TOOL}", description=__doc__)
     parser.add_argument("--config", help="a MINTED RunConfig — the run's own, otherwise unchanged")
@@ -1827,19 +1766,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="drive rung N TWICE in one process and report whether the two built "
                              "the SAME net, by hash equality (R317(c)(i)); walks no ladder and "
                              "picks nothing")
-    parser.add_argument("--noise-floor", type=int, metavar="N",
-                        help="drive rung N FOUR times in one process and report the measured "
-                             "relative noise (R317(d)); walks no ladder and picks nothing")
-    parser.add_argument("--noise-floor-report",
-                        help="a report this tool already wrote with --noise-floor, supplying "
-                             "the measured noise floor the amended knee rule requires "
-                             "(R317(d)); required by drive mode and --select-only alike")
     args = parser.parse_args(argv)
-
-    if args.determinism_control is not None and args.noise_floor is not None:
-        print("REFUSED: --determinism-control and --noise-floor are different drive modes; "
-              "naming both describes neither", file=sys.stderr)
-        return RC_REFUSED
 
     if args.determinism_control is not None:
         # Same discipline --select-only carries: an input this mode does not read is refused BY
@@ -1881,42 +1808,6 @@ def main(argv: list[str] | None = None) -> int:
         verdict = report["control"]["verdict"]
         return 0 if verdict == AGREE else (1 if verdict == DIVERGED else RC_REFUSED)
 
-    if args.noise_floor is not None:
-        if args.select_only or args.noise_floor_report:
-            print("REFUSED: --noise-floor drives a rung and the other two read a written "
-                  "report; naming more than one mode describes none of them",
-                  file=sys.stderr)
-            return RC_REFUSED
-        if not args.config or not args.plan:
-            print("REFUSED: --noise-floor needs both --config and --plan, for the reason "
-                  "every drive mode does: a config this tool picked would measure a program "
-                  "nobody asked about, and a plan it picked would be a pre-registration nobody "
-                  "wrote", file=sys.stderr)
-            return RC_REFUSED
-        if args.noise_floor < 2:
-            print(f"REFUSED: --noise-floor {args.noise_floor}; R309(f) REJECTS n_workers = 1 "
-                  "and this tool will not drive a rung it would refuse to pick", file=sys.stderr)
-            return RC_REFUSED
-        try:
-            report = run_noise_floor(config_path=Path(args.config), plan_path=Path(args.plan),
-                                     n_workers=args.noise_floor, out=sys.stderr)
-        except KeyboardInterrupt:
-            print("REFUSED: interrupted; no noise floor was completed", file=sys.stderr)
-            return RC_REFUSED
-        except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
-            print(f"REFUSED: {exc!r}", file=sys.stderr)
-            return RC_REFUSED
-        if args.out is not None:
-            Path(args.out).write_text(json.dumps(report, indent=2, sort_keys=True),
-                                      encoding="utf-8")
-            print(f"{TOOL}: noise floor written to {args.out}", file=sys.stderr)
-        else:
-            print(json.dumps(report, indent=2, sort_keys=True))
-        render_noise_floor(report, sys.stderr)
-        if report["net_hash_gate"]["verdict"] == DIVERGED:
-            return RC_REFUSED
-        return 0 if report["noise_floor"]["rel_std"] is not None else RC_REFUSED
-
     if args.select_only:
         # EVERY input the mode does not read is refused BY NAME. `--out` was silently ignored
         # here while `--config`/`--plan` were refused — one of the two behaviours is wrong, and
@@ -1928,17 +1819,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"REFUSED: --select-only re-derives a pick from a written report and runs no "
                   f"drive; {', '.join(unread)} name inputs it does not read", file=sys.stderr)
             return RC_REFUSED
-        if not args.noise_floor_report:
-            print("REFUSED: --select-only needs --noise-floor-report; R317(d) requires a "
-                  "measured noise floor before a pick can be selected, and this reader will not "
-                  "re-derive one under an implicit 0.0", file=sys.stderr)
-            return RC_REFUSED
         try:
             report = read_report(args.select_only)
-            noise_floor_rel_std = read_noise_floor_report(args.noise_floor_report)
+            # R330(d): the noise term is read off each rung's OWN row; a report that predates
+            # the mechanism refuses inside select_knee by rung, never re-derives under a zero.
             selection = select_knee(report["rungs"], knee_pct=RULED_KNEE_PCT,
-                                    metric=PREREG_METRIC,
-                                    noise_floor_rel_std=noise_floor_rel_std)
+                                    metric=PREREG_METRIC)
             produced_by = report["provenance"].get("produced_by", "<unstated>")
         except (OSError, AttributeError, KeyError, TypeError, ValueError) as exc:
             print(f"REFUSED: cannot re-derive a pick from {args.select_only}: {exc}",
@@ -1955,17 +1841,6 @@ def main(argv: list[str] | None = None) -> int:
               "this tool picked would measure a program nobody asked about, and a plan it "
               "picked would be a pre-registration nobody wrote.", file=sys.stderr)
         return RC_REFUSED
-    if not args.noise_floor_report:
-        print("REFUSED: the ladder needs --noise-floor-report; R317(d) requires a measured "
-              "noise floor before a pick can be selected, and this tool will not walk a "
-              "seventy-minute ladder toward a selection it cannot make at the end",
-              file=sys.stderr)
-        return RC_REFUSED
-    try:
-        noise_floor_rel_std = read_noise_floor_report(args.noise_floor_report)
-    except (OSError, ValueError) as exc:
-        print(f"REFUSED: {exc}", file=sys.stderr)
-        return RC_REFUSED
     if args.out is not None:
         # PROBED BEFORE THE FIRST RUNG, because the destination used to be validated at the moment
         # it is least recoverable: the write sat outside the guard and BEFORE the render, so an
@@ -1979,7 +1854,7 @@ def main(argv: list[str] | None = None) -> int:
             return RC_REFUSED
     try:
         report = run_sweep(config_path=Path(args.config), plan_path=Path(args.plan),
-                           out=sys.stderr, noise_floor_rel_std=noise_floor_rel_std)
+                           out=sys.stderr)
     except KeyboardInterrupt:
         print("REFUSED: interrupted; no complete ladder was measured", file=sys.stderr)
         return RC_REFUSED
@@ -2037,11 +1912,8 @@ __all__ = [
     "run_determinism_control",
     "rc_for",
     "read_report",
-    "read_noise_floor_report",
     "render",
-    "render_noise_floor",
     "render_selection",
-    "run_noise_floor",
     "run_sweep",
     "select_knee",
     "thread_bound",
