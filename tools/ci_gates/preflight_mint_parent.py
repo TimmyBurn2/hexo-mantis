@@ -200,6 +200,31 @@ class PreflightChildSignaledError(PreflightError):
     rc = 35
 
 
+class PreflightInterruptedError(PreflightError):
+    """The run was interrupted before it reached a verdict (AUDIT-1 F-03).
+
+    A `KeyboardInterrupt` during a long burst, or a callee's `SystemExit`, is a
+    `BaseException`: it unwinds straight through `main`'s two `except` arms into the
+    `finally` that writes the report. The artifact then landed carrying the SKELETON's
+    `verdict: "pass", rc: 0` beside assertion blocks that all say `not_run` — a mint sign-off
+    reads that file. rc 36 sits in the parent-side band, not the 42-47 band the run's own
+    machinery reserves.
+    """
+
+    rc = 36
+
+
+class PreflightVerdictUnreachedError(PreflightError):
+    """The report says `pass` but its assertions never reached one (AUDIT-1 F-03).
+
+    Never raised — it is the `failure` NAME `_finalise_verdict` stamps when it downgrades a
+    report whose skeleton verdict outlived the run that was supposed to replace it. Carries
+    an rc so the name and the code come from one place.
+    """
+
+    rc = 37
+
+
 class PreflightTimeoutError(PreflightError):
     rc = 40
 
@@ -649,6 +674,57 @@ def _finalise_tier(report: dict) -> dict:
     return report
 
 
+#: Which assertion blocks a mode's PASS verdict is DERIVED from. Audit mode never boots, so
+#: (a) and (b) are `not_run` by construction and are not its subject; preflight mode owns all
+#: three. A mode with no entry is a named internal failure, on the same grounds as
+#: `_not_run_reason`'s unknown-mode arm: falling back would derive the verdict from ANOTHER
+#: mode's requirements, which is the class this table exists to close.
+MODE_REQUIRED_ASSERTIONS: dict[str, tuple[str, ...]] = {
+    "audit": ("c_arming",),
+    "preflight": ("a_sync", "b_lag", "c_arming"),
+}
+
+
+def _finalise_verdict(report: dict) -> dict:
+    """Derive the top-level verdict from the assertion blocks, at write time.
+
+    AUDIT-1 F-03. `_new_report` constructs the report already saying `verdict: "pass", rc: 0`,
+    and nothing on the success path ever SETS that verdict — the two `except` arms in `main`
+    only overwrite it on failure. So a `BaseException` (a `KeyboardInterrupt` during a long
+    burst, a callee's `SystemExit`) unwinds through both arms, reaches the `finally`, and
+    writes an artifact whose top-level verdict is `pass` while every assertion says `not_run`.
+
+    Contract #10 already says "a verdict that was REACHED is never overwritten". This is its
+    CONVERSE, which did not exist: a verdict that was never reached is never PUBLISHED. The
+    twin of `_finalise_not_run` and `_finalise_tier`, running beside them in `_write_report`
+    for the same reason — everything stamped at construction time is a prediction.
+
+    DOWNGRADE ONLY. A recorded `failure` is left exactly as the raising arm wrote it, and no
+    report is ever promoted to `pass` here; the only edit this makes is turning an unearned
+    `pass` into `not_reached` with the blocks that did not get there named in `failure`.
+    """
+    if report.get("verdict") != "pass":
+        return report
+    mode = report.get("mode")
+    required = MODE_REQUIRED_ASSERTIONS.get(mode)
+    if required is None:
+        raise PreflightInternalError(
+            f"unknown report mode {mode!r} — the top-level verdict is DERIVED from this "
+            f"mode's assertion blocks and there is no code-side default (R1). Known modes: "
+            f"{sorted(MODE_REQUIRED_ASSERTIONS)}"
+        )
+    blocks = report.get("assertions") or {}
+    unreached = [name for name in required
+                 if (blocks.get(name) or {}).get("verdict") != "pass"]
+    if not unreached:
+        return report
+    report["verdict"] = "not_reached"
+    report["rc"] = PreflightVerdictUnreachedError.rc
+    report["failure"] = PreflightVerdictUnreachedError.__name__
+    report["verdict_unreached"] = unreached
+    return report
+
+
 def _report_name(report: dict) -> str:
     run_id = (report.get("config") or {}).get("run_id") or "unknown"
     stamp = report["ts_utc"].replace("-", "").replace(":", "")
@@ -662,7 +738,8 @@ def _write_report(out_dir: Path, report: dict) -> None:
     `_finalise_not_run` runs HERE rather than at the call site so that the invariant — no
     report on disk claims a boot its own `child` block does not record — holds for every write
     path there will ever be, and cannot be lost by a second caller forgetting the step.
-    `_finalise_tier` rides the same rule for the same reason.
+    `_finalise_tier` rides the same rule for the same reason, and `_finalise_verdict` — the
+    converse of contract #10 — joins them under AUDIT-1 F-03.
 
     The tier disclaimer is PRINTED from the finalised report rather than composed for stdout,
     so the sentence on the terminal is byte-identical to the one on disk. A second composition
@@ -671,6 +748,7 @@ def _write_report(out_dir: Path, report: dict) -> None:
     """
     _finalise_not_run(report)
     _finalise_tier(report)
+    _finalise_verdict(report)
     tier_block = report.get("tier")
     if tier_block is not None:
         print(f"preflight: {tier_block['does_not_prove']}")

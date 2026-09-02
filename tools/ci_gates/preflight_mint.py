@@ -344,6 +344,8 @@ PreflightBootFailedError = _parent_half.PreflightBootFailedError
 PreflightWatchdogFiredError = _parent_half.PreflightWatchdogFiredError
 PreflightChildSignaledError = _parent_half.PreflightChildSignaledError
 PreflightTimeoutError = _parent_half.PreflightTimeoutError
+PreflightInterruptedError = _parent_half.PreflightInterruptedError
+PreflightVerdictUnreachedError = _parent_half.PreflightVerdictUnreachedError
 PreflightReportUnwritableError = _parent_half.PreflightReportUnwritableError
 PreflightAssertionsFailedError = _parent_half.PreflightAssertionsFailedError
 PreflightChildOutcomeError = _parent_half.PreflightChildOutcomeError
@@ -365,6 +367,8 @@ _finalise_not_run = _parent_half._finalise_not_run
 _tier_covered = _parent_half._tier_covered
 _tier_disclaimer = _parent_half._tier_disclaimer
 _finalise_tier = _parent_half._finalise_tier
+_finalise_verdict = _parent_half._finalise_verdict
+MODE_REQUIRED_ASSERTIONS = _parent_half.MODE_REQUIRED_ASSERTIONS
 _report_name = _parent_half._report_name
 _write_report = _parent_half._write_report
 _watchdog_reason = _parent_half._watchdog_reason
@@ -1205,6 +1209,15 @@ def _run_child(args, report: dict) -> dict:
     started = time.monotonic()
     proc = subprocess.Popen(_child_argv(args), start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # AUDIT-1 F-03. `report["child"]` is assigned BEFORE the blocking `communicate` — the
+    # ordinary place for an interrupt to land — because `_not_run_reason` discriminates on
+    # `child is None` and would otherwise publish "NO boot was spawned" for a child that was
+    # spawned, is running, and may still be holding the card. The record is REPLACED in place
+    # below once the child's outcome is known, so a completed run's block is unchanged.
+    child: dict = {"rc": None, "rc_convention": RC_CONVENTION, "raised_by": "parent",
+                   "spawned": True, "pid": int(proc.pid), "wall_clock_sec": None,
+                   "timed_out": False, "outcome": "in_flight"}
+    report["child"] = child
     timed_out = False
     try:
         stdout, stderr = proc.communicate(timeout=float(args.timeout_sec))
@@ -1231,15 +1244,15 @@ def _run_child(args, report: dict) -> dict:
     stderr_spool = out_dir / "child_stderr.log"
     stdout_spool.write_text(stdout or "", encoding="utf-8")
     stderr_spool.write_text(stderr or "", encoding="utf-8")
-    child = {"rc": rc, "rc_convention": RC_CONVENTION,
-             "raised_by": "child" if rc in PASS_THROUGH else "parent",
-             "wall_clock_sec": round(time.monotonic() - started, 3), "timed_out": timed_out,
-             "stdout_tail": (stdout or "")[-4000:], "stderr_tail": (stderr or "")[-4000:],
-             "stdout_spool": str(stdout_spool), "stderr_spool": str(stderr_spool)}
+    child.update({"rc": rc, "raised_by": "child" if rc in PASS_THROUGH else "parent",
+                  "wall_clock_sec": round(time.monotonic() - started, 3),
+                  "timed_out": timed_out, "outcome": "exited",
+                  "stdout_tail": (stdout or "")[-4000:],
+                  "stderr_tail": (stderr or "")[-4000:],
+                  "stdout_spool": str(stdout_spool), "stderr_spool": str(stderr_spool)})
     if rc < 0:
         child["signal"] = -rc
         child["signal_name"] = signal.Signals(-rc).name
-    report["child"] = child
     return child
 
 
@@ -1380,6 +1393,22 @@ def main(argv: list[str] | None = None) -> int:
         report.update(verdict="fail", rc=rc, failure="PreflightInternalError")
         print(f"PREFLIGHT NOT GREEN: rc {rc} — PreflightInternalError: {exc!r}",
               file=sys.stderr)
+    except BaseException as exc:  # noqa: BLE001 — AUDIT-1 F-03: stamp, then RE-RAISE
+        # A `KeyboardInterrupt` during a long burst, or a callee's `SystemExit`, used to
+        # unwind past both arms above into the `finally` and land an artifact still carrying
+        # the skeleton's `verdict: "pass", rc: 0`. It is stamped here and RE-RAISED, so the
+        # signal keeps its own semantics at the shell — this arm changes what the report
+        # says, never what the process does.
+        rc = PreflightInterruptedError.rc
+        report.update(verdict="fail", rc=rc,
+                      failure=PreflightInterruptedError.__name__,
+                      interrupted_by=type(exc).__name__)
+        print(f"PREFLIGHT NOT GREEN: rc {rc} — PreflightInterruptedError: "
+              f"{type(exc).__name__}", file=sys.stderr)
+        if out_dir is not None:
+            _write_report(out_dir, report)
+            out_dir = None  # written; the `finally` must not write it twice
+        raise
     finally:
         if out_dir is not None:
             try:
