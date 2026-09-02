@@ -57,8 +57,15 @@ run_pyright_count() {
   # deliberately want the DOWNSTREAM status and pipefail must not reach them.
   ( set -o pipefail
     uv run pyright --outputjson 2>/dev/null \
-      | uv run python -c 'import json,sys; print(json.load(sys.stdin)["summary"]["errorCount"])' )
+      | uv run python -c 'import json,sys; s=json.load(sys.stdin)["summary"]; print(s["errorCount"], s.get("filesAnalyzed", -1))' )
 }
+
+# AUDIT-1 F-26. The gate read `errorCount` ALONE. A pyright that analysed ZERO files reports
+# `errorCount: 0` — a perfect green over nothing analysed — and every way that happens is a
+# host or config condition, not a clean tree: a broken `include`, a pyproject edit that empties
+# the file set, a wrong CWD. The floor is deliberately generous; it exists to catch "nothing",
+# not to track the file count, so it does not need re-editing as the tree grows.
+PYRIGHT_MIN_FILES=100
 
 # ── R289(u): a missing interpreter REFUSES; it is never reported as a failed fixture ──────
 # `uv run pyright` is a shim over node. When node has no selected version the shim writes to
@@ -144,11 +151,23 @@ run_ruff || { echo "lint_gate: RUFF RED" >&2; exit 1; }
 
 echo "lint_gate: pyright (basic, src+tools, zero-error baseline)"
 pyright_preflight || exit "$PYRIGHT_REFUSED_RC"
-ERRS="$(run_pyright_count)"
+PYRIGHT_SUMMARY="$(run_pyright_count)"
+ERRS="${PYRIGHT_SUMMARY%% *}"
+FILES="${PYRIGHT_SUMMARY##* }"
 if [ -z "${ERRS}" ]; then
   echo "lint_gate: REFUSING -- pyright ran but produced no readable errorCount." >&2
   echo "  named cause: --outputjson yielded no parseable summary. Nothing was measured, so" >&2
   echo "  nothing is reported (R289(u)). rc ${PYRIGHT_REFUSED_RC}." >&2
+  exit "$PYRIGHT_REFUSED_RC"
+fi
+# AUDIT-1 F-26: `filesAnalyzed` below the floor is a REFUSAL, not a green. `errorCount: 0`
+# over zero files is the most convincing green this gate can print and it means nothing was
+# checked — the same class as gate 17's empty scope and gate 10's empty glob.
+if [ "${FILES}" -lt "${PYRIGHT_MIN_FILES}" ] 2>/dev/null; then
+  echo "lint_gate: REFUSING -- pyright analysed ${FILES} file(s), below the floor of" >&2
+  echo "  ${PYRIGHT_MIN_FILES}. errorCount ${ERRS} over that scope is a green over nothing:" >&2
+  echo "  a broken include, an emptied file set, or the wrong working directory. Nothing" >&2
+  echo "  was measured, so nothing is reported (R289(u)). rc ${PYRIGHT_REFUSED_RC}." >&2
   exit "$PYRIGHT_REFUSED_RC"
 fi
 if [ "${ERRS}" != "0" ]; then
@@ -156,4 +175,4 @@ if [ "${ERRS}" != "0" ]; then
   exit 1
 fi
 
-echo "lint_gate: GREEN"
+echo "lint_gate: GREEN (pyright analysed ${FILES} file(s), 0 errors)"

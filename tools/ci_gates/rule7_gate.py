@@ -314,11 +314,45 @@ def resolve_base(candidate: str | None) -> str | None:
 
 
 def target_files(base: str | None) -> list[str]:
-    """Tracked text files to scan: the whole tree, or those added/modified vs `base`."""
+    """Tracked text files to scan: the whole tree, or those added/modified vs `base`.
+
+    AUDIT-1 F-26, two defects, both about files this gate silently did not look at.
+
+    **RENAMES.** The filter was `AM`, so a moved-and-edited file arrives as `R0xx` and was
+    DROPPED — `git mv` a fixture and append a box path to it and the gate scanned nothing.
+    `artifact_gate.py` records this exact lesson for itself (WP0 RED-TEAM row A, "a path whose
+    CONTENT enters the tree at HEAD: an add, or the NEW side of a rename") and it did not
+    propagate. `ACMR` with `--name-status` taking the NEW path is the fix.
+
+    **AN EMPTY DIFF.** Scanning zero files printed a green line. A diff that legitimately
+    touches no text file and a `--base` that resolved to the wrong thing are the same
+    observable, and this gate's whole history is a leak that was invisible because nothing
+    looked. The caller is told the scope was empty so it can DEGRADE WIDE.
+    """
     if base is None:
         return [p for p in _git("ls-files").splitlines() if p]
-    out = _git("diff", "--name-only", "--diff-filter=AM", f"{base}...HEAD").splitlines()
     tracked = set(_git("ls-files").splitlines())
+    # `--name-status -z`: a rename row is `R0xx\0<old>\0<new>`, so the paths cannot be read
+    # off `--name-only` without ambiguity, and the NEW side is the one whose bytes are in the
+    # tree now.
+    fields = _git("diff", "--name-status", "-z", "--diff-filter=ACMR",
+                  f"{base}...HEAD").split("\0")
+    out: list[str] = []
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        if not status:
+            i += 1
+            continue
+        if status[0] in {"R", "C"}:
+            # old at i+1, NEW at i+2
+            if i + 2 < len(fields):
+                out.append(fields[i + 2])
+            i += 3
+        else:
+            if i + 1 < len(fields):
+                out.append(fields[i + 1])
+            i += 2
     return [p for p in out if p and p in tracked]
 
 
@@ -478,6 +512,16 @@ def main() -> int:
               "degrading WIDE to the full-tree scan (leak gates fail toward over-scanning)")
         args.full_tree = True
     files = target_files(base)
+    # AUDIT-1 F-26. A diff-scoped run over ZERO files printed a green line. "the diff touched
+    # no text file" and "--base resolved to something with no delta" are the same observable,
+    # and this gate exists because a leak was invisible for as long as nothing looked. Same
+    # posture as the unresolvable-base arm above: a LEAK gate degrades WIDE.
+    if not args.full_tree and not files:
+        print(f"gate 17: the diff vs {base!r} names NO tracked text file -- degrading WIDE to "
+              "the full-tree scan rather than reporting green over an empty scope")
+        args.full_tree = True
+        base = None
+        files = target_files(None)
     violations: list[tuple[str, int, str, str, str]] = []
     scanned = 0
     file_hatched: list[str] = []

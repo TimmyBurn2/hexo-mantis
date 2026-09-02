@@ -1,3 +1,8 @@
+# R8 justify: one drift check over one document, and every arm of it is answered by importing
+# `RunConfig` itself — the leaf walk, the key citations, the reversed "deliberately absent"
+# region, the symbol resolution and the stated leaf count all read the SAME derived key set.
+# An arm living in another file would need its own copy of that derivation, and a transcribed
+# key list is exactly how the doc this gate checks rotted through four schema versions.
 """CI gate 13: docs/contracts/run_config_schema.md may not cite a key or a symbol the
 shipped schema does not have (WPMINT Phase W, R91's design question).
 
@@ -68,6 +73,23 @@ DEFAULT_DOC = REPO_ROOT / "docs" / "contracts" / "run_config_schema.md"
 #: A backticked token that looks like a dotted config key: it starts at a real top-level
 #: section name, so prose words and Python identifiers cannot be mistaken for one.
 _KEY_RE = re.compile(r"`([a-z_]+(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
+#: A citation SHAPED like a config key: an all-lowercase root and snake_case tails.
+_KEY_SHAPED_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+")
+
+#: The dotted roots this doc may cite that are NOT `RunConfig` sections. AUDIT-1 F-26: the
+#: gate did `if key.split(".")[0] not in sections: continue`, which is how a dotted module
+#: path escapes the key check — and equally how a citation whose SECTION was renamed or
+#: deleted escapes it, since a stale key and a module path are structurally identical
+#: (`train.gone_away` vs `torch.dtype`). Shape cannot separate them, so the legitimate
+#: non-config roots are DECLARED and anything else with an unknown root is stale.
+#: Adding a root here is the act of saying "this doc may talk about that namespace", and it
+#: is four entries wide precisely so the diff is the review.
+_NON_CONFIG_ROOTS: frozenset[str] = frozenset({
+    "mantis",  # the package; symbol citations are separately resolved by `_SYMBOL_RE`
+    "torch",   # `torch.dtype` in the amp-dtype rows
+    "spec",    # a local name in prose about a resolved spec object
+    "dict",    # `dict.get` and friends, describing Python behaviour
+})
 #: A backticked or bare dotted symbol rooted at the package.
 _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 #: The doc's own statement of the leaf count, e.g. "**175 leaf key-paths**".
@@ -200,8 +222,23 @@ def check(doc_path: Path) -> list[str]:
                     )
         for match in _KEY_RE.finditer(line):
             key = match.group(1)
-            if key.split(".")[0] not in sections:
-                continue  # not a config key at all (a dotted module, a filename, prose)
+            root = key.split(".")[0]
+            if root not in sections:
+                # AUDIT-1 F-26. This `continue` is how a dotted module path, a filename or
+                # ordinary prose escapes the key check — necessary, and it is also the hole:
+                # a key whose SECTION was renamed or removed has an unknown root too, so a
+                # STALE citation reads exactly like prose and the check that exists to catch
+                # stale citations skips it. The two are separated by shape: `a.b_c` with a
+                # snake_case tail and no file extension is a config-key CITATION, and an
+                # unknown root then means the section is gone.
+                if _KEY_SHAPED_RE.fullmatch(key) and root not in _NON_CONFIG_ROOTS:
+                    failures.append(
+                        f"{doc_path}:{lineno}: cites `{key}`, whose root section `{root}` "
+                        f"does not exist in RunConfig. Known sections: {sorted(sections)}. "
+                        "A renamed or deleted section makes every citation under it read as "
+                        "prose, which is exactly the drift this gate exists to catch."
+                    )
+                continue
             exists = key in valid
             if in_absent and exists:
                 failures.append(

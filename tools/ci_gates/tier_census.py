@@ -142,7 +142,7 @@ def _empty_declaration() -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--tests-root", default=str(TESTS_ROOT))
     parser.add_argument("--declaration", default=str(DECLARATION))
     parser.add_argument("--self-test", action="store_true", help="prove both refusals fire")

@@ -28,14 +28,37 @@ def _git(*args: str) -> str:
     ).stdout
 
 
-def _resolve_base(candidate: str) -> str:
-    if not candidate or set(candidate) == {"0"}:
-        return "HEAD~1"
-    probe = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+#: The widest base the fallback may take. AUDIT-1 F-26: `_resolve_base` returned `"HEAD~1"`
+#: for an empty, all-zeros or unresolvable candidate and PRINTED NOTHING, so a first push or a
+#: force-push — exactly when the candidate is `000…0` — inspected the LAST COMMIT ONLY while
+#: the line above it said the gate had run. `origin/dev` is tried first now, and whichever
+#: base is used is named on stdout.
+_WIDE_FALLBACKS: tuple[str, ...] = ("origin/dev", "dev", "HEAD~1")
+
+
+def _resolves(rev: str) -> bool:
+    return subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
         capture_output=True, text=True, check=False,
-    )
-    return candidate if probe.returncode == 0 else "HEAD~1"
+    ).returncode == 0
+
+
+def _resolve_base(candidate: str) -> tuple[str, str]:
+    """`(base, why)` — the revision to diff against, and how it was chosen.
+
+    The `why` is RETURNED rather than logged here so the caller prints it on the green path
+    too. A fallback nobody can see is the same as no fallback: F-26 measured this arm silently
+    narrowing a whole-branch scan to one commit.
+    """
+    if candidate and set(candidate) != {"0"} and _resolves(candidate):
+        return candidate, "given"
+    reason = ("no --base given" if not candidate
+              else "all-zeros base (a first push or a branch delete)" if set(candidate) == {"0"}
+              else f"base {candidate!r} does not resolve")
+    for fallback in _WIDE_FALLBACKS:
+        if _resolves(fallback):
+            return fallback, f"{reason}; widened to {fallback}"
+    return "HEAD~1", f"{reason}; NO fallback resolved — inspecting the last commit ONLY"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,7 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        mb = _git("merge-base", _resolve_base(args.base), "HEAD").strip()
+        base, why = _resolve_base(args.base)
+        print(f"gate 6: base={base} ({why})")
+        mb = _git("merge-base", base, "HEAD").strip()
         raw = _git("diff", "--name-status", "-z", mb, "HEAD")
     except subprocess.CalledProcessError as exc:
         print(f"git error: {exc.stderr.strip()}", file=sys.stderr)

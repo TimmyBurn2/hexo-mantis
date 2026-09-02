@@ -31,7 +31,6 @@ import ast
 import importlib
 import importlib.util
 import inspect
-import re
 import textwrap
 from collections.abc import Mapping
 from pathlib import Path
