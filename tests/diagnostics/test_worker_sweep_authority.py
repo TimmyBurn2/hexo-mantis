@@ -600,6 +600,58 @@ def test_a_malformed_report_refuses_at_rc_2_and_never_presents_as_rc_1(tmp_path:
     assert ws.main(["--select-only", str(path)]) == ws.RC_REFUSED
 
 
+def test_select_only_REFUSES_a_report_whose_net_hash_gate_DIVERGED(tmp_path: Path) -> None:
+    """AUDIT-1 F-04's reader half, which survives R330(d).
+
+    R330(d) deleted the scalar noise-floor mode, its `--noise-floor-report` reader and the
+    write-before-refuse ordering, so two of F-04's three halves are closed at HEAD. The third
+    was that the READER was gate-blind: a report whose `net_hash_gate` DIVERGED means the
+    rungs were not all measuring the same net, so the RANKING is not comparable and no pick
+    may be re-derived from it. `rc_for` implements that refusal; nothing drove it through
+    `--select-only`, so the arm was correct with no witness.
+
+    A DIVERGED report must refuse at rc 2 and never at rc 0 — an operator re-deriving a pick
+    at a sitting reads the rc, and rc 0 beside a printed PICK is an answer.
+    """
+    base = {"tool": ws.TOOL, "provenance": {"produced_by": "run5@abc"},
+            "plan": {"knee_pct": 95.0, "metric": "moves_per_min"},
+            "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0,
+                       "moves_per_min_spread": {"rel_se": 0.0, "n_rounds": 5}}]}
+    clean = tmp_path / "agree.json"
+    clean.write_text(json.dumps({**base, "net_hash_gate": {"verdict": ws.AGREE}}),
+                     encoding="utf-8")
+    assert ws.main(["--select-only", str(clean)]) == 0, (
+        "the control: an AGREE gate re-derives a pick exactly as before"
+    )
+    diverged = tmp_path / "diverged.json"
+    diverged.write_text(json.dumps({**base, "net_hash_gate": {"verdict": ws.DIVERGED}}),
+                        encoding="utf-8")
+    assert ws.main(["--select-only", str(diverged)]) == ws.RC_REFUSED, (
+        "a pick was re-derived from a ladder whose rungs did not share one net"
+    )
+
+
+def test_the_scalar_noise_floor_mode_and_its_gate_blind_reader_are_GONE(tmp_path: Path) -> None:
+    """AUDIT-1 F-04's other two halves, pinned as ABSENT so they cannot come back.
+
+    The deleted mode wrote its report to disk BEFORE checking the net-hash gate, and its
+    reader kept only `rel_std` — discarding `n_workers`, `net_hash_gate`, the config sha and
+    the seed — so a DIVERGED report with a numeric `rel_std` was read as a usable float.
+    R330(d) deleted all of it. Named here so a re-introduction has to argue with a test.
+    """
+    for gone in ("run_noise_floor", "read_noise_floor_report", "render_noise_floor",
+                 "NoiseFloor"):
+        assert not hasattr(ws, gone), (
+            f"{gone} is back: the scalar noise authority was deleted by R330(d) because two "
+            "noise authorities over one threshold is the duplicate-authority class"
+        )
+    # the flag itself is gone from the parser, so argparse refuses it rather than the tool
+    # accepting it and measuring something under a retired name
+    with pytest.raises(SystemExit) as exc:
+        ws.main(["--noise-floor", "4"])
+    assert exc.value.code != 0
+
+
 def test_select_only_refuses_an_out_it_would_silently_ignore(tmp_path: Path) -> None:
     path = tmp_path / "r.json"
     path.write_text(json.dumps({"tool": ws.TOOL, "provenance": {"produced_by": "x"},
