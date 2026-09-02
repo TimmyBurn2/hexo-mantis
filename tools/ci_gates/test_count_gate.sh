@@ -44,15 +44,34 @@
 # right fix is `fetch-depth: 0` (or an explicit `git fetch origin dev`) on the python job's
 # checkout step, after which arm 1 fires and this script never touches the network.
 #
-# `--collected N` injects the count instead of measuring it. It exists so the producer test
-# (tests/tools/test_test_count_gate.py, LAW-07) can drive THIS script -- not a re-implemented
-# copy of its decision -- inside throwaway git repos. It announces itself on stdout so an
-# injected count can never be mistaken for a measured one in a log, and no CI step passes it
-# (pinned by tests/test_meta_ci.py's parse of every `run:` body).
+# THE SECOND DEFECT, F-816-33, fixed 2026-09-02 and measured on this tree before the fix.
+# The measuring line read
+#     collected=$(uv run pytest --collect-only -q 2>/dev/null | grep -Eo '...collected' ...) || true
+# and pytest, on a module that fails to IMPORT, prints `4414 tests collected, 1 error in 2.08s`
+# and exits 2. BOTH signals were discarded -- the status by the pipeline and the `|| true`, the
+# error text by `2>/dev/null` -- and the grep matched the count inside the very line saying the
+# collection was interrupted. The gate printed `collected=4414 ... GATE_RC=0`: a PASS on a tree
+# whose collection had died. The one case it caught was collection so broken it printed no
+# number at all, i.e. the loud one; the quiet one is the one that loses tests.
+# NOW: both streams go to a LOG, the exit status is captured, and `collection_verdict` refuses
+# a count taken from an interrupted collection. A count is only a count of the tree if the
+# collection that produced it finished.
+#
+# `--collected N` injects the count instead of measuring it, and `--pytest-cmd CMD` replaces
+# the collection command. Both exist so the producer test (tests/tools/test_test_count_gate.py,
+# LAW-07) can drive THIS script -- not a re-implemented copy of its decision -- inside throwaway
+# git repos: the first for the floor comparison, the second so the broken-collection arm can be
+# driven without breaking the real suite. Each announces itself on stdout so an injected value
+# can never be mistaken for a measured one in a log, and no CI step passes either (pinned by
+# tests/tools/test_test_count_gate.py's parse of every `run:` body).
 set -euo pipefail
 
 FLOOR_FILE="tools/ci_gates/test_count_floor.txt"
 MAIN_BRANCH="dev"
+PYTEST_CMD="uv run pytest"
+#: Lines of the collection log echoed on a refusal. Enough to carry pytest's
+#: `short test summary info` block, which is where the failing module is named.
+LOG_TAIL=40
 
 die() { printf 'gate 3c: %s\n' "$*" >&2; exit 2; }
 is_uint() { [[ $1 =~ ^[0-9]+$ ]]; }
@@ -79,6 +98,33 @@ verdict() {
     rc=1
   fi
   return "$rc"
+}
+
+# ---------------------------------------------------------------------------------------
+# The COLLECTION decision, isolated from the collection the same way.
+# args: pytest_rc summary_line ; rc 0 = the count may be trusted, 1 = it may not.
+# Two independent arms on purpose: the exit status is the primary signal, and the summary
+# text catches the case where something between pytest and this script swallows the status
+# -- which is exactly what the predecessor's pipeline did.
+# ---------------------------------------------------------------------------------------
+collection_verdict() {
+  local rc=$1 summary=$2 bad=0
+  if [ "$rc" -ne 0 ]; then
+    printf 'gate 3c FAIL (collection): pytest --collect-only exited %s.\n' "$rc"
+    bad=1
+  fi
+  if printf '%s\n' "$summary" | grep -Eqi '[0-9]+ error'; then
+    printf 'gate 3c FAIL (collection): the summary line reports collection errors: %s\n' \
+      "$summary"
+    bad=1
+  fi
+  if [ "$bad" -ne 0 ]; then
+    printf '  A count from an INTERRUPTED collection is not a count of the tree -- it is the\n'
+    printf '  number of tests that survived whatever broke. A whole file can vanish from the\n'
+    printf '  count this way and leave the number looking clean. Fix the collection first.\n'
+    return 1
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------------------------------
@@ -117,7 +163,27 @@ self_test() {
   _expect_fail  "6 lost tests + lowered floor" 80 90 80 "FAIL (count)"
   _expect_fail  "7 lost tests + lowered floor" 80 90 80 "FAIL (monotonicity)"
 
-  unset -f _expect_clean _expect_fail
+  # Arms 8-11 drive `collection_verdict`. Arm 9 is F-816-33 VERBATIM: the summary line this
+  # tree actually printed under a planted import break, beside the status pytest actually
+  # exited with.
+  _collection_clean() {  # label rc summary
+    if ! out=$(collection_verdict "$2" "$3" 2>&1); then
+      printf '    arm %s: fired on a finished collection -- %s\n' "$1" "$out" >&2
+      failures=$((failures + 1))
+    fi
+  }
+  _collection_fail() {   # label rc summary
+    if out=$(collection_verdict "$2" "$3" 2>&1); then
+      printf '    arm %s: did NOT fire (rc=%s summary=%s)\n' "$1" "$2" "$3" >&2
+      failures=$((failures + 1))
+    fi
+  }
+  _collection_clean "8 finished collection"   0 "4414 tests collected in 2.08s"
+  _collection_fail  "9 F-816-33 shape"        2 "4414 tests collected, 1 error in 2.08s"
+  _collection_fail  "10 status swallowed"     0 "4414 tests collected, 1 error in 2.08s"
+  _collection_fail  "11 no tests collected"   5 "no tests ran in 0.51s"
+
+  unset -f _expect_clean _expect_fail _collection_clean _collection_fail
   if [ "$failures" -ne 0 ]; then
     printf 'gate 3c SELF-TEST FAIL -- the trigger cannot be trusted (%s arm(s)):\n' \
       "$failures" >&2
@@ -147,18 +213,20 @@ resolve_ref() {
 }
 
 main() {
-  local collected="" self_test_only=0
+  local collected="" self_test_only=0 pytest_cmd_injected=0
   while [ $# -gt 0 ]; do
     case $1 in
       --collected) collected=${2:-}; shift 2 ;;
+      --pytest-cmd) PYTEST_CMD=${2:-}; pytest_cmd_injected=1; shift 2 ;;
       --self-test) self_test_only=1; shift ;;
-      *) die "unknown argument: $1 (usage: $0 [--collected N] [--self-test])" ;;
+      *) die "unknown argument: $1 (usage: $0 [--collected N] [--pytest-cmd CMD] \
+[--self-test])" ;;
     esac
   done
 
   self_test || exit 1
   if [ "$self_test_only" -eq 1 ]; then
-    echo "gate 3c self-test: 3 clean arms + 4 firing arms, all correct"
+    echo "gate 3c self-test: 4 clean arms + 7 firing arms, all correct"
     return 0
   fi
 
@@ -196,12 +264,27 @@ main() {
     echo "gate 3c: BOOTSTRAP ARM -- no ref, monotonicity NOT enforced this run"
   fi
 
+  if [ "$pytest_cmd_injected" -eq 1 ]; then
+    echo "gate 3c: collection command INJECTED via --pytest-cmd (test-harness path)"
+  fi
   if [ -n "$collected" ]; then
     is_uint "$collected" || die "--collected wants a non-negative integer, got '$collected'"
     echo "gate 3c: collected count INJECTED via --collected (test-harness path, not measured)"
   else
-    collected=$(uv run pytest --collect-only -q 2>/dev/null \
-      | grep -Eo '[0-9]+ tests? collected' | grep -Eo '^[0-9]+' | tail -1) || true
+    local log pytest_rc=0 summary
+    log=$(mktemp) || die "could not create a temp file for the collection log"
+    # BOTH streams into the log, and the status kept. The predecessor sent stderr to
+    # /dev/null and lost the status to a pipeline; that is the whole of F-816-33.
+    # shellcheck disable=SC2086  # PYTEST_CMD is a command line, deliberately word-split.
+    $PYTEST_CMD --collect-only -q >"$log" 2>&1 || pytest_rc=$?
+    summary=$(grep -Ei '[0-9]+ (tests? collected|errors?)|no tests ran' "$log" | tail -1)
+    if ! collection_verdict "$pytest_rc" "$summary"; then
+      sed -e 's/^/  | /' "$log" | tail -"$LOG_TAIL" >&2
+      rm -f "$log"
+      exit 1
+    fi
+    collected=$(grep -Eo '[0-9]+ tests? collected' "$log" | grep -Eo '^[0-9]+' | tail -1) || true
+    rm -f "$log"
     is_uint "${collected:-}" \
       || die "could not read a collected-test count from pytest (got '${collected:-}'); \
 collection itself is probably broken, which is a worse failure than this gate"

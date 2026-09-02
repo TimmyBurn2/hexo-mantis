@@ -23,6 +23,17 @@ class this repo keeps finding (gate 11's docstring says so in its own words). `-
 is the injection seam that makes this possible without running pytest inside a synthetic repo;
 it announces itself on stdout, and `test_no_ci_step_injects_a_count` pins that no CI step uses
 it.
+
+THE SECOND DEFECT, F-816-33, filed 2026-09-01 and fixed 2026-09-02. The rewrite above repaired
+the REF and left the COLLECTION unguarded: the count was read from
+`uv run pytest --collect-only -q 2>/dev/null | grep ...`, so a module that fails to import made
+pytest print `4414 tests collected, 1 error in 2.08s` and exit 2, and the gate discarded the
+status (pipeline + `|| true`) and the error text (`2>/dev/null`) and matched the count inside
+the very line saying the collection was interrupted. Measured on this tree with a planted
+import break BEFORE the fix: `collected=4414 ... GATE_RC=0` -- a PASS over a dead collection,
+in the gate whose entire purpose is to notice that tests went missing. `--pytest-cmd` is the
+second injection seam, and the `_COLLECT_*` arms below drive the real script's real measuring
+path against a fake pytest that reproduces those exact strings.
 """
 from __future__ import annotations
 
@@ -113,6 +124,34 @@ def run_gate(repo: Path, collected: int, *, script: Path = GATE) -> subprocess.C
 
 def _both(proc: subprocess.CompletedProcess) -> str:
     return proc.stdout + proc.stderr
+
+
+#: Fake collections, as (exit status, stdout). The first two are VERBATIM what this tree
+#: printed on 2026-09-02 with and without a planted import break; the third is the same broken
+#: summary with the status swallowed, which is the shape the predecessor's pipeline produced.
+_COLLECT_CLEAN = (0, "4414 tests collected in 2.08s")
+_COLLECT_BROKEN = (2, "ERROR tests/diagnostics/test_planted.py\n"
+                      "!!!! Interrupted: 1 error during collection !!!!\n"
+                      "4414 tests collected, 1 error in 2.08s")
+_COLLECT_STATUS_SWALLOWED = (0, _COLLECT_BROKEN[1])
+
+
+def run_gate_measuring(
+    repo: Path, collection: tuple[int, str], *, script: Path = GATE
+) -> subprocess.CompletedProcess:
+    """Drive the gate's REAL measuring path with a fake `pytest` standing in for the collection.
+
+    The fake is a shell script rather than a monkeypatch because the gate is a shell script:
+    the thing under test is how it treats a command's status and output, and only a real child
+    process has either.
+    """
+    status, text = collection
+    fake = repo / "fake_pytest.sh"
+    fake.write_text(f"cat <<'EOF'\n{text}\nEOF\nexit {status}\n", encoding="utf-8")
+    return subprocess.run(
+        ["bash", str(script), "--pytest-cmd", f"bash {fake}"],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
 
 
 # --- the two properties -------------------------------------------------------------------
@@ -298,10 +337,53 @@ def test_the_gate_no_longer_names_a_branch_this_repo_does_not_have() -> None:
     assert 'MAIN_BRANCH="dev"' in code
 
 
+# --- F-816-33: a count from an interrupted collection is not a count -----------------------
+
+def test_a_finished_collection_is_measured_and_compared(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path, ref_floor=4396, tree_floor=4396, ref="origin")
+    proc = run_gate_measuring(repo, _COLLECT_CLEAN)
+    assert proc.returncode == 0, _both(proc)
+    assert "collected=4414" in proc.stdout
+
+
+def test_a_broken_collection_is_refused_even_though_it_printed_a_count(tmp_path: Path) -> None:
+    """THE defect, end to end: the count parses, clears the floor, and must still not be
+    trusted -- 4414 of 4414 collected with one file gone is 4414 of 4428."""
+    repo = make_repo(tmp_path, ref_floor=4396, tree_floor=4396, ref="origin")
+    proc = run_gate_measuring(repo, _COLLECT_BROKEN)
+    assert proc.returncode != 0, _both(proc)
+    assert "FAIL (collection)" in _both(proc)
+    assert "exited 2" in _both(proc)
+
+
+def test_the_failing_module_is_named_in_the_refusal(tmp_path: Path) -> None:
+    """A refusal that does not carry pytest's own error block sends the reader back to re-run
+    the collection by hand, which is where the predecessor's silence started."""
+    repo = make_repo(tmp_path, ref_floor=4396, tree_floor=4396, ref="origin")
+    assert "test_planted.py" in _both(run_gate_measuring(repo, _COLLECT_BROKEN))
+
+
+def test_a_swallowed_status_is_caught_by_the_summary_line(tmp_path: Path) -> None:
+    """The second arm of `collection_verdict`, and not redundant: the predecessor's bug WAS a
+    lost exit status, so a guard that only reads the status would have been unreachable there."""
+    repo = make_repo(tmp_path, ref_floor=4396, tree_floor=4396, ref="origin")
+    proc = run_gate_measuring(repo, _COLLECT_STATUS_SWALLOWED)
+    assert proc.returncode != 0, _both(proc)
+    assert "reports collection errors" in _both(proc)
+
+
+def test_an_injected_collection_command_announces_itself(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path, ref_floor=4396, tree_floor=4396, ref="origin")
+    proc = run_gate_measuring(repo, _COLLECT_CLEAN)
+    assert "collection command INJECTED via --pytest-cmd" in proc.stdout
+
+
 def test_no_ci_step_injects_a_count() -> None:
     """`--collected` is a test seam. In a CI `run:` body it would be a way to fake the gate."""
     workflow = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-    assert "--collected" not in workflow.read_text(encoding="utf-8")
+    body = workflow.read_text(encoding="utf-8")
+    assert "--collected" not in body
+    assert "--pytest-cmd" not in body, "the collection seam would fake the gate the same way"
 
 
 def test_the_committed_tree_is_green_against_the_real_ref() -> None:
