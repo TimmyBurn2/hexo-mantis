@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import mantis.data.loss_counters as _data_loss
+import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
 import mantis.train.buffer_persist as _buffer_persist
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
@@ -1065,6 +1066,12 @@ class StepCoordinator:
             # is readable in the ONE channel while the run is alive, not only in the
             # `heartbeat_watchdog_fire_complete` event emitted moments before `os._exit`.
             "watchdog_best_effort": self._watchdog_counters(),
+            # AUDIT-1 F-29 (LAW-18): per-WARN-rule count of the steps at which the rule could
+            # not run because its payload input was absent. `check_selfplay_entropy_collapse`
+            # reads two keys that no producer in `src/` writes, so it has NEVER been able to
+            # fire — and "never fires" and "healthy" were the same observable. Module-attribute
+            # read, never a from-imported dict (the counter-binding rule).
+            "warn_rule_skipped_absent": dict(_rules.WARN_RULE_SKIPS),
             # R-BUFFER-PERSIST-COUNTER (WPCLEAN Phase RES): the best-effort buffer-save
             # swallows are counted and read HERE, live — a module-attribute read, never a
             # from-import of the int (the subsystems.py counter-binding rule).

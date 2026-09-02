@@ -35,6 +35,10 @@ from mantis.encoding.registry import (
 
 _LOG = logging.getLogger(__name__)
 
+#: Anchors the handshake skipped, in order. Appended by `_registry_sha_handshake` and read
+#: through `handshake_skipped` / `handshake_ran` below (AUDIT-1 F-29).
+_skipped: list[str] = []
+
 # On-disk registry, relative to the repo root (dev/test layout). The handshake
 # resolves it by walking up from this file for the crate-source TOML.
 _REGISTRY_TOML_REL = pathlib.PurePosixPath("crates/mantis-encoding/src/registry.toml")
@@ -76,10 +80,22 @@ def _registry_sha_handshake(
     """
     path = toml_path if toml_path is not None else _resolve_registry_toml()
     if path is None or not path.is_file():
-        _LOG.info(
+        # AUDIT-1 F-29. This was `_LOG.info`, and the docstring above says the SKIP is
+        # "NEVER a silent pass". It was silent in practice twice over: `mantis.run` installs
+        # no logging handler at all (F-08), so Python's lastResort handler drops INFO
+        # entirely, and even with one an INFO line is not what a reader scans for. The skip
+        # means the stale-`.so` guard DID NOT RUN — the run is trusting a compiled sha
+        # nothing compared — which is a WARNING about the run's own provenance, not a note.
+        # Only the DEFAULT resolution records into the run's provenance state. An explicit
+        # `toml_path` is a probe — the LAW-07 mutation self-test's own surface — and letting a
+        # probe append here would let a test poison the fact a composition root publishes
+        # about the real run.
+        if toml_path is None:
+            _skipped.append(str(_REGISTRY_TOML_REL))
+        _LOG.warning(
             "registry-sha handshake SKIPPED: on-disk registry.toml not found "
             "(installed-wheel / non-repo layout); trusting compiled "
-            "_engine.registry_sha(). Searched anchor: %s",
+            "_engine.registry_sha() WITHOUT COMPARING IT. Searched anchor: %s",
             _REGISTRY_TOML_REL,
         )
         return
@@ -90,6 +106,21 @@ def _registry_sha_handshake(
             f"_engine registry_sha; the extension was built against a different "
             f"registry. Rebuild the extension (uv sync)."
         )
+
+
+#: Every anchor a handshake SKIPPED on, so a composition root can publish the fact into the
+#: event stream rather than relying on a log line reaching a terminal (AUDIT-1 F-29). A
+#: module attribute read live, never a from-imported value — the counter-binding rule.
+handshake_skipped: list[str] = _skipped
+
+
+def handshake_ran() -> bool:
+    """True iff the registry-sha handshake actually COMPARED a sha this process.
+
+    The LAW-08 live consumer for `handshake_skipped`: a caller that wants to know whether the
+    stale-extension guard ran gets a boolean instead of grepping stderr for a log line.
+    """
+    return not _skipped
 
 
 # Fire the handshake at import (dev/test-scoped; skips cleanly when installed).

@@ -83,6 +83,41 @@ WARN_RULE_NAMES: tuple[str, ...] = (
     "nonfinite_loss",
 )
 
+#: The payload key(s) each WARN rule's verdict is a function of. AUDIT-1 F-29, and LAW-18:
+#: a rule whose INPUT is absent DID NOT RUN, which is a different fact from a rule that ran
+#: and found nothing wrong — and the two were one observable (`None`, no event, no counter).
+#: `check_selfplay_entropy_collapse` has been the first for the whole life of the run:
+#: `selfplay_model_entropy_batch` has no producer anywhere in `src/`, and its fallback
+#: `policy_entropy_selfplay` has none either (it travelled as `NaN`, now as `None` — F-01).
+#: So the rule has never once been able to fire, and its silence read as health.
+#: `loss_increase_window` reads the CALLER's window rather than the payload, so it has no
+#: payload input and is never counted absent.
+WARN_RULE_INPUTS: dict[str, tuple[str, ...]] = {
+    "entropy_collapse": ("policy_entropy",),
+    "selfplay_entropy_collapse": ("selfplay_model_entropy_batch", "policy_entropy_selfplay"),
+    "grad_norm_spike": ("grad_norm",),
+    "loss_increase_window": (),
+    "nonfinite_loss": ("loss_total",),
+}
+
+#: Per-rule count of the steps at which a rule could not run for want of its input. Read live
+#: as a MODULE ATTRIBUTE by the coordinator's `monitor_gates` emit (the counter-binding rule:
+#: never a from-imported int), so "this rule is quiet" and "this rule has never been able to
+#: speak" are two numbers instead of one silence.
+WARN_RULE_SKIPS: dict[str, int] = dict.fromkeys(WARN_RULE_NAMES, 0)
+
+
+def rule_input_absent(name: str, payload: Mapping[str, Any]) -> bool:
+    """True when NONE of `name`'s declared payload inputs carries a value this step.
+
+    A rule with no declared input (`loss_increase_window`) is never absent — it reads state
+    the emitter owns, so there is nothing about the payload that could stop it running.
+    """
+    keys = WARN_RULE_INPUTS.get(name, ())
+    if not keys:
+        return False
+    return all(payload.get(key) is None for key in keys)
+
 
 # ── the 4 training-step WARN rules (decision-parity ports) ────────────────────────────
 def check_entropy_collapse(payload: Mapping[str, Any], cfg: MonitorConfig) -> str | None:
@@ -201,6 +236,9 @@ def emit_training_step_alerts(
     )
     fired: list[str] = []
     for name, message in zip(WARN_RULE_NAMES, results, strict=True):
+        # AUDIT-1 F-29: count the steps a rule could not run at, BEFORE deciding it is quiet.
+        if rule_input_absent(name, payload):
+            WARN_RULE_SKIPS[name] += 1
         if message is None:
             continue
         fired.append(message)
