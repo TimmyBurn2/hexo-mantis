@@ -355,6 +355,26 @@ is silently disabled.
   A negative `positions_generated` delta — the counters are monotone, so it means a reset —
   still clamps the rate at zero but now emits `positions_counter_reset` beside it, so the two
   are distinguishable in the stream.
+- **`eval_round_complete.promoted` is `bool | None` (AUDIT-1 F-28/B04).** `None` means NO
+  PROMOTION DECISION WAS TAKEN — the gate was not scheduled this round, or there was no best
+  anchor to play against, or the round broke before the gate block. `False` means the gate ran
+  and REFUSED. Those are different facts and all three used to read `false`, so a reader
+  counting "rounds that failed the gate" counted every round without one. Derived in
+  `EvalPipeline._success_result` from the worker payload's own `gate` key rather than in
+  `mantis.eval.rounds`, which is a FROZEN producer under R118/A-1 (`PREREG_A` §8 abort 8,
+  guarded by `tests/eval/test_wr_sealbot_config_only.py::test_the_wr_sealbot_producer_file_is_unmodified`).
+- **The `eval_round_wall` pair is emitted by the TERMINAL round too (AUDIT-1 F-28/B05).** The
+  manifest row names `eval_round_started` + `eval_round_complete` as one producer; the terminal
+  round emitted only the second, so the one round whose wall time the drain budget is judged on
+  had no start timestamp to subtract from.
+- **A rung result's `status` is the parent's, and it is the status the rung was PLAYED under
+  (AUDIT-1 F-28/B02).** The worker child has no `LadderState` and used to stamp
+  `"status": "active"` on every rung, so a SATURATED rung's off-cadence calibration games were
+  labelled active. `EvalPipeline._success_result` reads the real status BEFORE `record_round`,
+  because recording this round is what MOVES a status. A rung the ladder does not know carries
+  `None`, never `"active"`. Beside it, only the GATE block claims `deploy_matched` — there both
+  sides play at `spec.gate.deploy_sims`, so the flag is derived from the construction; the
+  random floor plays at `random_model_sims` against a uniform bot and no longer claims it.
 - **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
   encoding does not have is ABSENT from that encoding's stream — never zero, never
   `null`-as-value.** Every `iteration_complete` block subtracted on these grounds (the

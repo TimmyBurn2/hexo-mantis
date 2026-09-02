@@ -165,7 +165,12 @@ class _RoundProgress:
             self._write({
                 "game_index": self._games,
                 "phase": phase,
-                "plies": int(getattr(game_record, "plies", 0)),
+                # AUDIT-1 F-28/B03. `int(getattr(..., "plies", 0))` published a game that
+                # ended at ply ZERO for a record shape carrying no ply count, and
+                # `event_manifest.md`'s row for this writer already says a shape the writer
+                # does not recognise writes NULLS rather than raising.
+                "plies": (None if getattr(game_record, "plies", None) is None
+                          else int(game_record.plies)),
                 "t_wall": round(time.time(), 3),
                 "terminal": getattr(game_record, "terminal", None),
                 "winner": getattr(game_record, "winner", None),
@@ -449,7 +454,12 @@ def _play_random_floor(
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,
         opponent_spec="random:uniform", opening_book=spec.gate.opening_book,
-        deploy_matched=True, encoding=spec.encoding,
+        # AUDIT-1 F-28/B02, and it is M-3's mislabel one block over: the random floor plays
+        # at `random_model_sims` against a uniform bot, which is not the deploy-matched
+        # comparison LAW-15 reserves the term for. Only the GATE block is deploy-matched —
+        # there both sides play at `spec.gate.deploy_sims`, so its `True` is derived from the
+        # construction and stays.
+        deploy_matched=False, encoding=spec.encoding,
     )
     openings = paired_openings(
         spec.gate.opening_book, n_pairs=max(spec.random_floor_games // 2, 1), seed=spec.seed_base,
@@ -627,7 +637,12 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             rungs_result[rung_job.name] = {
                 "games": agg.games, "wins": agg.wins, "losses": agg.losses, "draws": agg.draws,
                 "wr": agg.wr, "wr_ci_lower": agg.wr_ci_lower, "wr_ci_upper": agg.wr_ci_upper,
-                "eff_n": agg.eff_n, "regime_key": agg.regime_key, "status": "active",
+                # AUDIT-1 F-28/B02. `"status": "active"` was a constant here: the CHILD has
+                # no `LadderState`, so it labelled a SATURATED rung's calibration games
+                # "active" every round. The parent stamps the real status in
+                # `EvalPipeline._success_result`, read BEFORE `record_round` so it is the
+                # status the rung was PLAYED under.
+                "eff_n": agg.eff_n, "regime_key": agg.regime_key,
             }
 
         random_records = _play_random_floor(

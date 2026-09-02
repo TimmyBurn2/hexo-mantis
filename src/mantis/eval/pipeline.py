@@ -145,9 +145,14 @@ def emit_round_started(
 
 def emit_round_complete(
     sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int | None,
-    promoted: bool, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
+    promoted: bool | None, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """R319(e)(i): `games_total` is `int | None`, and `None` is the BROKEN-round value.
+
+    AUDIT-1 F-28/B04: `promoted` is `bool | None`, and `None` means NO PROMOTION DECISION WAS
+    TAKEN — the gate was not scheduled this round, or there was no best anchor to play, or the
+    round broke before the gate block. `False` means the gate ran and refused. Those are
+    different facts about the run and both used to be `false`.
 
     It used to be a hardcoded `0` on every broken path, which is a DEFAULT WEARING A
     MEASUREMENT'S CLOTHES: a reader cannot tell "the round played no games" from "the round
@@ -953,6 +958,18 @@ class EvalPipeline:
             name: {"games": info.get("games", 0), "wr": info.get("wr"), "ci_lo": info.get("wr_ci_lower")}
             for name, info in rungs_raw.items()
         }
+        # AUDIT-1 F-28/B02. The worker child has no `LadderState`, so it used to stamp
+        # `"status": "active"` on every rung — including a SATURATED rung playing its
+        # off-cadence calibration games. The status is read HERE, from the one authority, and
+        # BEFORE `record_round`: what a reader wants is the status the rung was PLAYED under,
+        # not the one recording this round's result produced.
+        played_under = self._ensure_ladder_state()
+        for name, info in rungs_raw.items():
+            try:
+                info["status"] = played_under.status(name)
+            except KeyError:
+                # a rung the worker played that the ladder does not know: absent, not "active"
+                info["status"] = None
         self._ensure_ladder_state().record_round(round_idx, ladder_results, sink=self._sink)
         try:
             self._ensure_ladder_state().save(self._ladder_state_path)
@@ -1039,7 +1056,16 @@ class EvalPipeline:
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
-            games_total=games_total, promoted=result["promoted"], wr_sealbot=result["wr_sealbot"],
+            games_total=games_total,
+            # AUDIT-1 F-28/B04. `promoted: False` used to cover three different rounds — the
+            # gate ran and refused, the gate was not scheduled, there was no best anchor to
+            # play against — and a reader counting "rounds that failed the gate" counted all
+            # three. A promotion DECISION was taken iff the worker returned a gate result;
+            # derived HERE from the worker payload, because `mantis.eval.rounds` is a frozen
+            # producer under R118/A-1 (PREREG_A §8 abort 8) and this repair is not the act
+            # that lifts a freeze.
+            promoted=(result["promoted"] if gate_raw else None),
+            wr_sealbot=result["wr_sealbot"],
             progress=read_progress(inflight.get("spec")),
         )
         emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
@@ -1083,10 +1109,20 @@ class EvalPipeline:
         round_idx = self._round_counter + 1
         round_id = f"r{round_idx:06d}_{step}_terminal"
         self._round_counter = round_idx
-        spec, _scheduled, _gate_scheduled, candidate_path = self._build_round_spec(
+        spec, scheduled, gate_scheduled, candidate_path = self._build_round_spec(
             model, step, best, round_id=round_id, round_idx=round_idx, terminal=True,
         )
         proc = self._spawn_worker(spec)
+        # AUDIT-1 F-28/B05. The terminal round emitted `eval_round_complete` with no
+        # `eval_round_started` beside it, while the `eval_round_wall` manifest row names the
+        # PAIR as its producer — so the one round that runs at the very end of a run, whose
+        # wall time is exactly what the drain budget is judged on, had no start timestamp to
+        # subtract from. The kick path has emitted it since the beginning; this is the same
+        # emit, at the same point in the sequence (after the spawn, before the drain).
+        emit_round_started(
+            self._sink, round_id=round_id, step=step, scheduled=scheduled,
+            gate_scheduled=gate_scheduled, ts=time.time(),
+        )
         inflight = {
             "round_id": round_id, "step": step, "proc": proc, "spec": spec,
             "t0": self._clock(), "round_idx": round_idx,
