@@ -264,7 +264,7 @@ class PlyCapAdjudicationConfig(StrictModel):
     with no margin could not be evaluated, so the terms arrive together or not at all.
 
     WHY THE FACT NEEDS AN AUTHORITY AT ALL. The eval arena caps a game at
-    `mantis.arena.match._DEFAULT_MAX_PLIES` because the board is unbounded, and until now
+    `mantis.arena.match.DEFAULT_MAX_PLIES` because the board is unbounded, and until now
     every capped game scored `"draw"` — the same label a finished, genuinely balanced game
     gets. On the live shakedown burn that collapse consumed the whole outcome channel:
     `draw_rate` measured 1.0 with `avg_game_length` at the 128-move cap, so at early strength

@@ -19,7 +19,7 @@ production code and no mutation can make it so. What the mutations show is sensi
 Pre-registered HEAD verdicts (PREREG §1). The RED rows here fail because the fix's
 production surfaces (`LocalInferenceEngine.infer_batch_ls` / `infer_ls`,
 `MCTSTree.expand_and_backup_ls_graph`, `InferenceBatcher.submit_graphs_and_wait_ls`,
-`DeployHeadPlayer(expand_fn=...)`, `_build_candidate_player(..., spec=...)`) do not exist
+`DeployHeadPlayer(expand_fn=...)`, `build_candidate_player(..., spec=...)`) do not exist
 yet — a frozen oracle must bind to the POST-FIX surface, so "the measured 0-off-window
 child set" is the *reason* these are red, not their HEAD traceback.
 
@@ -222,7 +222,7 @@ def test_eval_child_set_equals_the_fixture(graph_engine) -> None:
 
 # ── ⊕ P-1b ───────────────────────────────────────────────────────────────────────────
 def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
-    """The PRODUCTION entrance reaches the same children: `_build_candidate_player`'s closed
+    """The PRODUCTION entrance reaches the same children: `build_candidate_player`'s closed
     match on `spec.representation` must take the graph arm and hand the deploy head an
     `expand_fn`. This is the graph arm of C-7's closed match. Killing mutation: M2."""
     engine, spec = graph_engine
@@ -230,7 +230,7 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     pos = _positions(fx)[0]
     board = _board(pos)
 
-    player = worker._build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()
     player.select_move(board)
@@ -429,7 +429,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     pos = _positions(_load(_P2_FIXTURE))[3]
     board = _board(pos)
     head_seat = int(board.current_player)
-    player = worker._build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
     player.new_game()
     bot = RandomBot(seed=20260731)
 
@@ -597,7 +597,7 @@ def test_infer_batch_ls_refuses_a_dense_spec() -> None:
 
 # ── ⊕ C-7 ────────────────────────────────────────────────────────────────────────────
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:
-    """`_build_candidate_player` matches CLOSED on `spec.representation`: an unregistered
+    """`build_candidate_player` matches CLOSED on `spec.representation`: an unregistered
     representation raises by name and NEVER falls back to the dense arm. A silent dense
     fallback here is exactly the class R138 ruled on."""
     class _SpecWithRepresentation:
@@ -617,7 +617,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
     )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
-            worker._build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1)
+            worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1)
     finally:
         engine.close()
 

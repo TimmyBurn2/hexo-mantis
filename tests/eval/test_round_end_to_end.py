@@ -65,7 +65,7 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
     # registry.toml `[encodings.v6]`); minimal width/depth (filters/res_blocks) for speed.
     # `weight_seed` is DETERMINISTIC-but-DIFFERENT per round: with n_sims=4 (a genuinely
     # shallow search) most individual games between two weak/untrained players end in the
-    # ply-cap draw (`arena/match.py::_DEFAULT_MAX_PLIES=128` — the board is unbounded, a
+    # ply-cap draw (`arena/match.py::DEFAULT_MAX_PLIES=128` — the board is unbounded, a
     # 6-in-a-row is not guaranteed within any ply budget), so a handful of decisive games
     # per round is a low-probability, high-variance event — reproducible determinism (a
     # fixed seed per round, not "whatever torch's global RNG state happens to be") is what

@@ -202,7 +202,7 @@ NOMINAL_WINDOW_HALF = 9
 #: in PLIES. R247 names the same floor as selection bias (b).
 DECLARED_MIN_PLIES = 20
 #: The ply caps the report is asked to measure truncation against, in PLIES (LAW-03).
-#: 128 is the live arena/eval literal (`src/mantis/arena/match.py:66 _DEFAULT_MAX_PLIES`,
+#: 128 is the live arena/eval literal (`src/mantis/arena/match.py:66 DEFAULT_MAX_PLIES`,
 #: registered as F-816-11); 200 is the candidate R276(g) declined to adopt on a round
 #: number. Both are REPORTING references — this tool recommends neither. Override with
 #: --ply-cap, which replaces the pair rather than adding to it.

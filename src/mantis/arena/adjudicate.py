@@ -77,17 +77,31 @@ class PlyCapVerdict:
         return {"winner": self.winner, "criterion": self.criterion, "margin": self.margin}
 
 
-def _longest_run(board: Any, player: int, *, ceiling: int) -> int:
+def longest_run(board: Any, player: int, *, ceiling: int) -> int:
     """The player's longest line, DERIVED by probing the engine rather than compared against a
     transcribed win length.
 
-    `has_player_long_run(player, k)` is monotone in `k`, and the caller only reaches this
-    function on a board nobody has won — so the probe is guaranteed to turn False strictly
-    below the engine's own win length and the loop needs no `WIN_LENGTH` literal to stop
-    (a second copy of that constant in Python is the drift surface R192(e) names). `ceiling`
-    is a structural bound, not a policy one: a player cannot own a line longer than the number
-    of plies played, so the loop terminates even if the engine predicate were ever to stop
-    being monotone.
+    `has_player_long_run(player, k)` is monotone in `k`, so the loop needs no `WIN_LENGTH`
+    literal to stop (a second copy of that constant in Python is the drift surface R192(e)
+    names): on an unfinished board the probe turns False strictly below the engine's own win
+    length, and on a FINISHED one it turns False just above the winning line, returning that
+    line's length. `ceiling` is a structural bound, not a policy one: a player cannot own a
+    line longer than the number of plies played, so the loop terminates even if the engine
+    predicate were ever to stop being monotone.
+
+    Callers are the ply-cap adjudicator, which only ever sees unfinished boards, and
+    `mantis.diagnostics.acceptance_witness`, which reads finished ones — the second is why
+    this is the ONE run-length derivation in Python and why it is public: a witness that
+    reconstructed stone colour itself would be a second authority over whose line it is, and
+    that is exactly the defect the first witness shipped with.
+
+    Args:
+        board: an engine board.
+        player: the stone colour to measure, in the engine's own `+1`/`-1` vocabulary.
+        ceiling: the structural upper bound on the answer (plies played).
+
+    Returns:
+        The length of `player`'s longest line, `0` if they own no stone.
     """
     length = 0
     while length < ceiling and board.has_player_long_run(player, length + 1):
@@ -137,8 +151,8 @@ class PlyCapAdjudicator:
         opponent_color = -candidate_color
         if self._criterion == CRITERION_LONGEST_RUN:
             return (
-                _longest_run(board, candidate_color, ceiling=plies)
-                - _longest_run(board, opponent_color, ceiling=plies)
+                longest_run(board, candidate_color, ceiling=plies)
+                - longest_run(board, opponent_color, ceiling=plies)
             )
         return (
             int(board.count_winning_moves(candidate_color))
@@ -176,4 +190,5 @@ __all__ = [
     "TERMINAL_PLY_CAP",
     "TERMINAL_REASONS",
     "TERMINAL_WIN",
+    "longest_run",
 ]

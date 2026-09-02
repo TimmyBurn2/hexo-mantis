@@ -52,7 +52,7 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 #: block draws a DIFFERENT slice of the book than the screen block.
 _CONFIRM_SEED_OFFSET = 7919
 
-#: Policy-pool values the eval decode ENTRANCE actually implements. `_build_candidate_player`
+#: Policy-pool values the eval decode ENTRANCE actually implements. `build_candidate_player`
 #: matches CLOSED on `spec.representation` and the two arms drop DIFFERENTLY, which is why
 #: this guard names the grid one:
 #:   - GRID  -> `DeployHeadPlayer(infer_fn=engine.infer)` -> `LocalInferenceEngine.infer_batch`,
@@ -238,7 +238,7 @@ def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
     return _expand
 
 
-def _build_candidate_player(
+def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int
 ) -> DeployHeadPlayer:
     """CLOSED match on the DECLARED representation — never on a model attribute, and
@@ -295,7 +295,7 @@ def _play_floor_probe(
     """
     bot_factory = resolve_bot("random", depth=None, opponent_sims=spec.random_model_sims)
     opponent = bot_factory(seed=spec.seed_base)
-    candidate = _build_candidate_player(
+    candidate = build_candidate_player(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
     )
@@ -347,11 +347,11 @@ def _play_gate_block(
         leaf_build_threads=spec.leaf_build_threads,
     )
     try:
-        candidate = _build_candidate_player(
+        candidate = build_candidate_player(
             candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
             leaf_batch_size=spec.leaf_batch_size,
         )
-        opponent = _build_candidate_player(
+        opponent = build_candidate_player(
             best_engine, spec.gate.deploy_sims, spec=encoding_spec,
             leaf_batch_size=spec.leaf_batch_size,
         )
@@ -412,7 +412,7 @@ def _play_rung_block(
     # for the deploy-matched GATE block, LAW-15). Playing deploy_sims here while stamping a
     # different regime value was an A3 mislabel (the record must describe the regime it
     # actually played).
-    candidate = _build_candidate_player(
+    candidate = build_candidate_player(
         candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
     )
@@ -442,7 +442,7 @@ def _play_random_floor(
     opponent = bot_factory(seed=spec.seed_base)
     # M-3: same fix as the rung block — the random floor plays at the resolved
     # random_model_sims, not gate.deploy_sims.
-    candidate = _build_candidate_player(
+    candidate = build_candidate_player(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
     )

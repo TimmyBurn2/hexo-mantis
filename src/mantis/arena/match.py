@@ -63,7 +63,7 @@ def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
 #: never terminate. Mirrors the production self-play default
 #: (`SelfPlayRunnerConfig.max_moves_per_game=128`, _engine.pyi) — reaching it ends the game
 #: a draw, exactly like a real self-play worker's own cap.
-_DEFAULT_MAX_PLIES = 128
+DEFAULT_MAX_PLIES = 128
 
 
 def _play_one_game(
@@ -73,7 +73,7 @@ def _play_one_game(
     *,
     candidate_color: int,
     board_factory: Callable[[], Any],
-    max_plies: int = _DEFAULT_MAX_PLIES,
+    max_plies: int = DEFAULT_MAX_PLIES,
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None]:
     """Play one game from `opening_moves`; return
@@ -86,7 +86,7 @@ def _play_one_game(
     A game that reaches `max_plies` without a winner ends a draw when `adjudicator is None`
     — the pre-existing behaviour, and the behaviour every shipped config still gets, because
     the disarmed `eval.ply_cap_adjudication: null` posture never constructs an adjudicator.
-    With one armed, that ONE branch consults it instead (see `_DEFAULT_MAX_PLIES` and
+    With one armed, that ONE branch consults it instead (see `DEFAULT_MAX_PLIES` and
     `mantis.arena.adjudicate`). The exhausted-legal-moves exit is deliberately NOT routed
     through adjudication: that is a finished game under the rules, not a budget expiry.
     """
@@ -142,7 +142,7 @@ def play_paired_match(
     regime_key: RegimeKey,
     board_factory: Callable[[], Any],
     record_sink: Any = None,
-    max_plies: int = _DEFAULT_MAX_PLIES,
+    max_plies: int = DEFAULT_MAX_PLIES,
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> list[GameRecord]:
     """Play every opening TWICE (colors swapped); return one `GameRecord` per game.
@@ -179,4 +179,4 @@ def play_paired_match(
     return records
 
 
-__all__ = ["Colors", "GameRecord", "play_paired_match"]
+__all__ = ["DEFAULT_MAX_PLIES", "Colors", "GameRecord", "play_paired_match"]

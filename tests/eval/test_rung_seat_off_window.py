@@ -16,7 +16,7 @@ frozen row green and every sealbot number wrong: the head would answer only insi
 361-cell window against an opponent (SealBot, and RandomBot at the floor) that samples the
 full legal set. This is the seat where the ladder asymmetry would actually be paid for.
 
-MUTATION (M-A15, transient): make `_build_candidate_player` return the grid arm for a graph
+MUTATION (M-A15, transient): make `build_candidate_player` return the grid arm for a graph
 spec. **The kill arrives as an ERROR, not as the named assertion** — R144's known chain
 (`GnnNet` has no `forward`) makes `select_move` raise before the assertion is reached — so
 the cell is labelled `[reached, error-mode]` and NOT "RED via `assert off_window_moves`".
@@ -153,7 +153,7 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     pos = _position(position_index)
     board = _board(pos)
     head_seat = int(board.current_player)
-    player = worker._build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1)
     player.new_game()
     bot = RandomBot(seed=20260802)
 
