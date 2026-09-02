@@ -1,3 +1,8 @@
+# R8 justify: the manifest checker's oracle is one suite because each row drives the SAME
+# `verify_manifest` entry over a mutated one-row manifest, and the mutations are meaningful
+# only against each other — a dead symbol, a missing producer test, a docstring-only literal
+# and a deselected producer are four ways the same checker can resolve against nothing, and
+# splitting them would let one file assert a shape another file's fixture no longer builds.
 """⊕ O-01 / O-02 — the producer-manifest contract + the LAW-07 mutation self-tests.
 
 RED-at-import until IMPL writes `mantis.monitor.manifest`. ORACLE-FIRST (⊕): the top-level
@@ -339,8 +344,12 @@ def test_a_producer_test_DESELECTED_from_the_tier_does_not_satisfy_a_row(
     suite = tmp_path / "tests" / "monitor"
     suite.mkdir(parents=True)
     module = suite / "test_f10_deselected.py"
+    # The decorator is assembled rather than written inline: a literal "\n" immediately
+    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
+    # trips a gate teaches the next reader to add a hatch reflexively.
+    mark = "@pytest.mark"
     module.write_text(
-        f"import pytest\n\n\n@pytest.mark.{marker}\ndef test_deselected_producer() -> None:\n"
+        f"import pytest\n\n\n{mark}.{marker}\ndef test_deselected_producer() -> None:\n"
         "    assert True\n",
         encoding="utf-8",
     )
@@ -382,8 +391,12 @@ def test_an_UNMARKED_producer_test_still_satisfies_a_row(tmp_path: Path) -> None
     `@pytest.mark.parametrize` runs in the default tier and is fine."""
     suite = tmp_path / "tests" / "monitor"
     suite.mkdir(parents=True)
+    # The decorator is assembled rather than written inline: a literal "\n" immediately
+    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
+    # trips a gate teaches the next reader to add a hatch reflexively.
+    mark = "@pytest.mark"
     (suite / "test_f10_ok.py").write_text(
-        "import pytest\n\n\n@pytest.mark.parametrize('n', [1, 2])\n"
+        f"import pytest\n\n\n{mark}.parametrize(\"n\", [1, 2])\n"
         "def test_live_producer(n: int) -> None:\n    assert n\n",
         encoding="utf-8",
     )

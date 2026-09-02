@@ -169,6 +169,35 @@ def _is_break(line: str) -> bool:
     return not COMMENT_LEAD_RE.sub("", line).strip()
 
 
+#: The minimum number of WORDS a justification must carry, after the marker token itself and
+#: the cap spellings are stripped. AUDIT-1 F-25: `check_file` treated ANY `MARKER_RE` match as
+#: a justification, so `# >300` and `# R8 justification:` — both empty of reason — passed, and
+#: R8's "say WHY the file is one unit" was enforced as "the digits 300 appear near the top".
+#: FOUR, and the number is chosen against BOTH ends. It refuses every probe input AUDIT-1 F-25
+#: found accepted — `>300` (0 words), `R8 justification:` (0), `R8 justify: one unit` (2), a
+#: bare `if n >= 300:` in code (1) — and it accepts the TERSEST real header in the tree's own
+#: house styles, e.g. `//! R8: >300 LOC by design -- one indivisible format unit.` A higher
+#: floor would make the gate demand verbosity, which is not the rule R8 states.
+MIN_REASON_WORDS = 4
+
+#: A word, for the count above: letters or digits, so punctuation and bare symbols do not pad
+#: an empty justification up to the floor.
+WORD_RE = re.compile(r"[A-Za-z0-9_]{2,}")
+
+
+def reason_words(block: list[str]) -> list[str]:
+    """The words a justification block carries once its own MARKER is removed.
+
+    The marker token is stripped, not merely the cap digits: `R8 justification:` is four
+    tokens of pure announcement and counting them would let a header satisfy the floor by
+    saying its own name.
+    """
+    text = "\n".join(COMMENT_LEAD_RE.sub("", line) for line in block)
+    text = MARKER_RE.sub(" ", text)
+    text = CAP_TOKEN_RE.sub(" ", text)
+    return WORD_RE.findall(text)
+
+
 def block_at(lines: list[str], start: int) -> list[str]:
     """The justification block: the marker line plus the rest of its paragraph."""
     block = [lines[start]]
@@ -214,7 +243,20 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
     if marker is None:
         return violations, over_cap, False
 
-    found = counts_in(block_at(lines, marker))
+    block = block_at(lines, marker)
+    words = reason_words(block)
+    # SCOPED TO FILES OVER THE CAP. R8's "say WHY" duty exists only for a file that exceeds
+    # the cap; an UNDER-cap file that merely mentions R8 in passing ("R8: keeps every file
+    # under the 300-line soft cap") owes no justification and must not be asked for one. The
+    # no-count rule below stays universal — a stated tally is misinformation wherever it sits.
+    if over_cap and len(words) < MIN_REASON_WORDS:
+        violations.append(
+            f"{rel}:{marker + 1}: the R8 justification states no REASON "
+            f"({len(words)} word(s) after the marker; {MIN_REASON_WORDS} is the floor)\n"
+            "    R8 asks WHY the file is one unit, not that the marker be present.\n"
+            "    A bare `>300` or `R8 justification:` announces the rule and says nothing."
+        )
+    found = counts_in(block)
     if found:
         violations.append(
             f"{rel}:{marker + 1}: R8 justification states a line count: {found}\n"

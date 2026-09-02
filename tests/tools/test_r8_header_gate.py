@@ -332,3 +332,82 @@ def test_the_self_test_covers_both_halves() -> None:
     """A self-test that only ever asserts green is decoration."""
     assert any(must_fire for _n, _h, must_fire in GATE.SELF_TEST)
     assert any(not must_fire for _n, _h, must_fire in GATE.SELF_TEST)
+
+
+# ── AUDIT-1 F-25: the marker was enforced, the REASON was not ─────────────────────────
+#
+# `check_file` treated any `MARKER_RE` match as a justification. The audit probed the decision
+# function directly and found all three of these accepted: `# >300`, `# R8 justification:`,
+# and — because the window is a raw line scan — a bare `if n >= 300:` in code. R8 asks WHY the
+# file is one unit; it was being enforced as "the digits 300 appear near the top".
+
+def _over_cap(header: list[str]) -> list[str]:
+    """A file over the cap carrying `header`, so `check_file` reaches its reason arm.
+
+    The blank line is load-bearing: `block_at` runs to the next paragraph break, so without
+    it the file BODY would be read as part of the justification and every header would clear
+    the word floor on code it does not own.
+    """
+    return [*header, "", *[f"line_{i} = {i}" for i in range(GATE.CAP + 5)]]
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        ["# >300"],
+        ["# R8 justification:"],
+        ["# R8 justify: one unit"],
+        ["#", "# >= 300", "#"],
+        ["if n >= 300:"],
+    ],
+    ids=["bare-cap-token", "bare-announcement", "two-words", "padded-token", "code-line"],
+)
+def test_a_marker_with_no_REASON_is_a_violation(header: list[str]) -> None:
+    """THE PIN. Each of these passed before: the marker matched and nothing looked further."""
+    violations, over_cap, has_marker = GATE.check_file("f.py", _over_cap(header))
+    assert over_cap and has_marker
+    assert violations, f"{header!r} was accepted as a justification"
+    assert "states no REASON" in violations[0], violations
+
+
+def test_a_REAL_justification_is_accepted() -> None:
+    """The control, and it is what keeps the floor honest: the shortest header this gate is
+    meant to accept must still pass."""
+    header = ["# R8 justify: the loader and its four verifiers are one decision procedure "
+              "over one document and cannot be split without one half asserting a shape the "
+              "other never builds."]
+    violations, over_cap, has_marker = GATE.check_file("f.py", _over_cap(header))
+    assert over_cap and has_marker
+    assert violations == [], violations
+
+
+def test_the_marker_TOKEN_itself_does_not_count_toward_the_reason() -> None:
+    """`R8 justification:` is four tokens of pure announcement; counting them would let a
+    header satisfy the floor by saying its own name."""
+    words = GATE.reason_words(["# R8 justify: >= 300"])
+    assert words == [], words
+
+
+def test_an_UNDER_cap_file_that_merely_mentions_R8_owes_no_reason() -> None:
+    """The scoping, pinned. R8's duty exists only for a file over the cap; two files in this
+    tree say "R8: 300-line soft cap not exceeded" as a NOTE, and demanding a justification
+    from them would be the gate inventing a rule."""
+    lines = ["\"\"\"A short module.", "", "R8: 300-line soft cap not exceeded.", "\"\"\""]
+    violations, over_cap, has_marker = GATE.check_file("f.py", lines)
+    assert not over_cap and has_marker
+    assert violations == [], violations
+
+
+def test_the_no_count_rule_still_applies_to_an_under_cap_file() -> None:
+    """…and the OTHER half is deliberately NOT scoped: a stated tally is misinformation a
+    reader trusts wherever it sits."""
+    lines = ["# R8 justify: this file is one unit for reasons stated at length here now.",
+             "# It is 42 lines long."]
+    violations, _over_cap, _marker = GATE.check_file("f.py", lines)
+    assert violations and "states a line count" in violations[0], violations
+
+
+def test_the_committed_tree_passes_the_tightened_rule() -> None:
+    """R98: a rule is adopted only over a clean baseline."""
+    violations, _over, _hdr, _scanned = GATE.scan()
+    assert violations == [], violations[:5]

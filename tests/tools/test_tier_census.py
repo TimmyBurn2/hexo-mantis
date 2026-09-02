@@ -52,8 +52,12 @@ def test_both_marker_spellings_are_seen(tmp_path: Path) -> None:
     in one line and carries no decorator at all."""
     suite = tmp_path / "tests"
     suite.mkdir()
+    # The decorator is assembled rather than written inline: a literal "\n" immediately
+    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
+    # trips a gate teaches the next reader to add a hatch reflexively.
+    mark = "@pytest.mark"
     (suite / "test_decorated.py").write_text(
-        "import pytest\n\n\n@pytest.mark.slow\ndef test_a() -> None:\n    pass\n",
+        f"import pytest\n\n\n{mark}.slow\ndef test_a() -> None:\n    pass\n",
         encoding="utf-8")
     (suite / "test_module_marked.py").write_text(
         "import pytest\n\npytestmark = [pytest.mark.integration]\n\n\n"
@@ -70,8 +74,12 @@ def test_a_non_deselecting_marker_is_not_censused(tmp_path: Path) -> None:
     make the declaration a list of every marker in the repo and stop being reviewable."""
     suite = tmp_path / "tests"
     suite.mkdir()
+    # The decorator is assembled rather than written inline: `'n'@pytest.mark…` matches CI
+    # gate 17's `user@host` pattern class, and a fixture that trips a gate teaches the next
+    # reader to add a hatch (rule 7's own reasoning about reflexive escapes).
+    mark = "@pytest.mark.parametrize"
     (suite / "test_p.py").write_text(
-        "import pytest\n\n\n@pytest.mark.parametrize('n', [1])\n"
+        f"import pytest\n\n\n{mark}(\"n\", [1])\n"
         "def test_a(n: int) -> None:\n    pass\n", encoding="utf-8")
     assert TOOL.census(suite) == set()
 

@@ -62,6 +62,7 @@ a class that fails silently. Pinned by tests/tools/test_encoding_io_gate.py.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -90,7 +91,12 @@ POSITIONAL_MODE: dict[tuple[str, bool], int | None] = {
     ("write_text", True): None,
 }
 
-ESCAPE = "encoding-gate: ok --"
+#: The escape token. COMPILED, not a substring (AUDIT-1 F-25): `ESCAPE in line`
+#: accepted a bare `# encoding-gate: ok --` with nothing after it, while this file's own
+#: docstring says the reason text is MANDATORY. `\S` after the dashes is what makes
+#: that sentence true — the same shape `silent_encoding_gate.ESCAPE` already had.
+ESCAPE_TOKEN = "encoding-gate: ok --"
+ESCAPE = re.compile(re.escape("encoding-gate: ok") + r"\s*--\s*\S")
 
 #: Registered, owned exemptions. NOT an escape hatch: each asserts "this IS a real site, it is
 #: tracked, and it cannot be fixed here". Matched on exact source text, so an entry that stops
@@ -180,11 +186,11 @@ def _module_scope_lines(tree: ast.Module) -> set[int]:
 
 def _justified(lines: list[str], lineno: int) -> bool:
     """Escape on the line itself, or anywhere in the comment block directly above it."""
-    if ESCAPE in lines[lineno - 1]:
+    if ESCAPE.search(lines[lineno - 1]):
         return True
     j = lineno - 2
     while j >= 0 and lines[j].lstrip().startswith("#"):
-        if ESCAPE in lines[j]:
+        if ESCAPE.search(lines[j]):
             return True
         j -= 1
     return False

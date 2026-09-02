@@ -71,7 +71,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-ESCAPE = "rule7-gate: ok --"
+#: The escape token. COMPILED, not a substring (AUDIT-1 F-25): `ESCAPE in line`
+#: accepted a bare `# rule7-gate: ok --` with nothing after it, while this file's own
+#: docstring says the reason text is MANDATORY. `\S` after the dashes is what makes
+#: that sentence true — the same shape `silent_encoding_gate.ESCAPE` already had.
+ESCAPE_TOKEN = "rule7-gate: ok --"
+ESCAPE = re.compile(re.escape("rule7-gate: ok") + r"\s*--\s*\S")
 
 #: FILE-LEVEL hatch, for a file that is definitionally made of patterns: this gate's own
 #: register and its producer test. Declared in the first `FILE_ESCAPE_SCAN_LINES` lines.
@@ -236,11 +241,11 @@ def operator_arm_banner() -> str | None:
 
 def _justified(lines: list[str], lineno: int) -> bool:
     """Escape on the line itself, or anywhere in the comment block directly above it."""
-    if ESCAPE in lines[lineno - 1]:
+    if ESCAPE.search(lines[lineno - 1]):
         return True
     j = lineno - 2
     while j >= 0 and lines[j].lstrip()[:1] in ("#", "/", ";", "-") and lines[j].strip():
-        if ESCAPE in lines[j]:
+        if ESCAPE.search(lines[j]):
             return True
         j -= 1
     return False
@@ -418,7 +423,7 @@ def _local_arm_fires() -> bool:
                 print("gate 17 SELF-TEST FAIL: a local supplement term did not fire through "
                       "scan_text -- the untracked half is NOT wired into the decision")
                 ok = False
-            if scan_text("planted.txt", f"value = {probe}  {ESCAPE} fixture\n"):
+            if scan_text("planted.txt", f"value = {probe}  {ESCAPE_TOKEN} fixture\n"):
                 print("gate 17 SELF-TEST FAIL: escape hatch did not suppress a local term")
                 ok = False
         finally:
@@ -526,7 +531,7 @@ def main() -> int:
             "\nBox specifics live in the migration workspace, never in this repo. If a capture "
             "tool wrote the path, fix the TOOL to normalize at write time (the convention) and "
             "sanitize the artifact.\nIf the site names a pattern without being one, say so in "
-            f"place:\n    <comment> {ESCAPE} <why>\n"
+            f"place:\n    <comment> {ESCAPE_TOKEN} <why>\n"
             "If it is real host content that cannot be removed here, it goes in EXEMPT with "
             "grounds and the blob sha -- never in the escape hatch."
         )

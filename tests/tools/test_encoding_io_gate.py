@@ -157,8 +157,32 @@ def test_every_exemption_carries_grounds() -> None:
 
 
 def test_escape_hatch_requires_a_reason() -> None:
-    """`# encoding-gate: ok` with nothing after it must not silence anything."""
-    assert GATE.ESCAPE.endswith("--"), (
+    """`# encoding-gate: ok` with nothing after it must not silence anything.
+
+    AUDIT-1 F-25: this row asserted the marker's SHAPE (`endswith("--")`) while `_justified`
+    tested `ESCAPE in line` — a substring — so `# encoding-gate: ok --` with NOTHING after the
+    dashes suppressed a violation, against this file's own docstring ("the reason text is
+    mandatory"). The escape is compiled now, the way `silent_encoding_gate.ESCAPE` always was,
+    and the row below drives the DECISION function instead of describing the token.
+    """
+    assert GATE.ESCAPE_TOKEN.endswith("--"), (
         "the escape marker must end with `--` so a bare marker cannot match; "
-        f"got {GATE.ESCAPE!r}"
+        f"got {GATE.ESCAPE_TOKEN!r}"
     )
+
+
+@pytest.mark.parametrize(
+    "comment",
+    ["# encoding-gate: ok --", "# encoding-gate: ok --   ", "# encoding-gate: ok"],
+    ids=["bare-dashes", "dashes-and-space", "no-dashes"],
+)
+def test_a_hatch_with_NO_reason_text_suppresses_nothing(comment: str) -> None:
+    """THE PIN (F-25), driven through `_justified` — the function that decides."""
+    assert not GATE._justified([comment, "open('x')"], 2), comment
+
+
+def test_a_hatch_WITH_a_reason_still_suppresses() -> None:
+    """The control: the hatch must keep working, or the repair replaced a hole with a wall."""
+    assert GATE._justified(["open('x')  # encoding-gate: ok -- a zipfile member, not text"], 1)
+    assert GATE._justified(
+        ["# encoding-gate: ok -- the receiver is a mock, not a path", "open('x')"], 2)

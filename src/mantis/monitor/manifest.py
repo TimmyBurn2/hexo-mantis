@@ -1,3 +1,8 @@
+# R8 justify: one manifest CHECKER — the loader, the four producer-kind verifiers, the
+# producer-test resolver and the deselection refusal are one decision procedure over one
+# document, and every row of that document is checked by all of them in sequence. A verifier
+# living apart from the loader could be handed a row shape the loader never produces, which is
+# the class this whole file exists to make un-shippable.
 """Producer-manifest loader + checker — the seam-7 contract enforcer (WP13-A §c.3).
 
 Every headless gate/monitor input cites a LIVE producer and a NAMED producer test

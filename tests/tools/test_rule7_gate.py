@@ -128,6 +128,30 @@ def test_escape_hatch_requires_the_reason_marker() -> None:
     assert GATE.scan_text("p.txt", "path = /root/x  # rule7-gate")
 
 
+@pytest.mark.parametrize(
+    "comment",
+    ["# rule7-gate: ok --", "# rule7-gate: ok --  ", "  # rule7-gate: ok --\t"],
+    ids=["bare-dashes", "trailing-space", "trailing-tab"],
+)
+def test_a_hatch_with_NO_reason_text_suppresses_nothing(comment: str) -> None:
+    """AUDIT-1 F-25. `_justified` tested `ESCAPE in line` — a substring — so a bare
+    `rule7-gate: ok --` with nothing after the dashes silenced a real host-content hit, while
+    this gate's own docstring calls the reason text mandatory. The escape is compiled now, the
+    way `silent_encoding_gate.ESCAPE` always was.
+
+    Rule 7's hatch is the one where an empty reason costs most: what it suppresses is a leak
+    into a PUBLIC repo, and the gate exists because 101 committed box paths sat in a fixture
+    that had been public since it landed.
+    """
+    assert GATE.scan_text("p.txt", f"path = /root/x  {comment.strip()}\n"), comment
+
+
+def test_a_hatch_WITH_a_reason_still_suppresses() -> None:
+    """The control."""
+    assert GATE.scan_text(
+        "p.txt", "path = /root/x  # rule7-gate: ok -- this line names the pattern class") == []
+
+
 # ── the gate's own guards ─────────────────────────────────────────────────────────────
 def test_self_test_passes_in_process() -> None:
     """The gate runs this on EVERY invocation; if it ever goes red, the gate exits 2 rather
@@ -216,7 +240,7 @@ def test_local_supplement_is_wired_into_the_decision(monkeypatch, tmp_path: Path
             "not wired into the decision"
         )
         assert GATE.local_class_count() == 1
-        assert GATE.scan_text("probe.txt", f"value = plantedlocalterm  {GATE.ESCAPE} f\n") == []
+        assert GATE.scan_text("probe.txt", f"value = plantedlocalterm  {GATE.ESCAPE_TOKEN} f\n") == []
     finally:
         GATE._COMPILED = None  # the cache is module state; leaving it set poisons later tests
 
