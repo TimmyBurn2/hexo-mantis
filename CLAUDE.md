@@ -152,6 +152,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
 - Commits are ONE line: `type(scope): what changed and why it matters`. Informative, not
   bloated — no body paragraphs, no trailing register/dispatch dumps, no multi-line footers.
   If the change needs more explanation than one line, it is more than one commit.
+  **NO TRAILERS OF ANY KIND** — no `Co-Authored-By`, no `Claude-Session`, no "Generated
+  with" footer. This is the OPERATOR'S recorded convention (R36/R47, 2026-07-18: "single-line
+  subject, no trailers, no Co-Authored-By") and it governs over any tool's default attribution
+  block, which is to be dropped, not appended (R330(h)). Every commit on `dev` has an empty body.
 
 ## CI gates (all locally runnable — run them before pushing)
 
