@@ -1012,6 +1012,15 @@ class EvalPipeline:
         games_total += int(random_raw.get("games", 0) or 0)
         if gate_raw:
             games_total += int(gate_raw.get("n_pooled") or gate_raw.get("n_screen") or 0)
+        # AUDIT-1 F-05. The strength-floor probe plays REAL games, and on a REFUSED floor it
+        # plays the only games of the round: the worker returns from PHASE 0 with `gate=None`,
+        # `rungs={}` and `random.games = 0`, so the three terms above sum to a computed 0 while
+        # `eval_strength_floor.games` beside it reports N. `games_total` is the round's games,
+        # not its ladder games — and a fabricated 0 here is exactly the misread RECAL §8.1 paid
+        # for. Run5 and shakedown both ARM the floor, so this is reachable, not hypothetical.
+        floor_raw = raw.get("strength_floor")
+        if floor_raw:
+            games_total += int(floor_raw.get("games", 0) or 0)
 
         result = build_round_result(
             step=inflight["step"], round_id=inflight["round_id"],

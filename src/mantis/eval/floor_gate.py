@@ -23,9 +23,15 @@ from "neither side can finish", and it is measured from the arena's recorded `te
 rather than re-derived from `(winner, plies)`, which cannot tell a win found ON the cap ply
 from the cap itself.
 
-THE VERDICT IS ADVISORY UNTIL ARMED. Every committed config mints `eval.strength_floor: null`,
-so `evaluate_strength_floor` has no caller in a shipped run and the round's phase order is
-untouched. Arming it is a mint event whose three values are operator-owned prereg rows.
+THE VERDICT IS ARMED IN TWO COMMITTED CONFIGS. `configs/run5.yaml` and
+`configs/shakedown_20260807.yaml` mint `strength_floor: {probe_games: 4, min_decisive_rate:
+0.25, min_winrate: 0.0}`; the other five mint `null`. So `evaluate_strength_floor` HAS callers
+in a shipped run — `eval/worker.py::run_round`'s PHASE 0 and `tools/acceptance_witness.py` —
+and on those two configs the round's phase order IS the floor-first one. This paragraph said
+the opposite ("every committed config mints null, so no caller in a shipped run") from the
+module's landing until AUDIT-1 F-05 measured it; the arming happened at the run5 mint and the
+docstring was never revisited. Repaired in place under R311(c). Changing the three values is a
+mint event and they remain operator-owned prereg rows.
 """
 from __future__ import annotations
 

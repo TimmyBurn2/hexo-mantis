@@ -326,3 +326,95 @@ def test_the_three_reasons_are_PAIRWISE_DISTINCT() -> None:
     absent = _skip_event(_round(floor=None))["reason"]
     broken = _skip_event(_round(floor=None, reason=next(iter(EvalBrokenReason))))["reason"]
     assert len({refused, absent, broken}) == 3, (refused, absent, broken)
+
+
+# ── AUDIT-1 F-05: the games the refused round PLAYED ─────────────────────────────────────
+#
+# `_success_result` summed rung games + random games + the gate's pooled/screen count. On a
+# refused floor the worker returns from PHASE 0 with `gate=None`, `rungs={}` and
+# `random.games = 0`, so all three terms are zero and `eval_round_complete.games_total`
+# read 0 for a round that had just played `probe_games` real games — while
+# `eval_strength_floor.games` beside it reported N. The 0 was COMPUTED, not literal, so the
+# AST sentinel that bans a literal `0` at the call site never saw it, and RECAL §8.1 is a
+# sitting that was misread on exactly this field. run5 and shakedown_20260807 both ARM the
+# floor, so the path is live.
+
+def _round_complete_event(sink_events: list[dict[str, Any]]) -> dict[str, Any]:
+    matches = [e for e in sink_events if e.get("event") == "eval_round_complete"]
+    assert len(matches) == 1, matches
+    return matches[0]
+
+
+def _drive_success_result(raw: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The PRODUCTION `_success_result` against the lifted stand-in; returns (result, events)."""
+    from mantis.eval.pipeline import EvalPipeline
+
+    class _Sink:
+        def __init__(self) -> None:
+            self.events: list[dict[str, Any]] = []
+
+        def emit(self, payload: dict) -> None:
+            self.events.append(dict(payload))
+
+    sink = _Sink()
+    fake = _FakePipeline(sink)
+    result = EvalPipeline._success_result(
+        fake, {"round_id": "r000001_5000", "step": 5000, "round_idx": 1}, raw, wall_sec=12.5,
+    )
+    return result, sink.events
+
+
+def test_a_floor_refused_round_reports_the_games_its_probe_PLAYED() -> None:
+    """THE PIN (F-05). Sixteen probe games, every other phase empty: `games_total` is 16.
+    Before the repair it was 0 — a round that played sixteen games reported none."""
+    floor = _verdict_payload(decisive=0, games=16)
+    raw: dict[str, Any] = {
+        "rungs": {}, "gate": None, "random": {"games": 0, "wr": None},
+        "skipped_rungs": [], "strength_floor": floor,
+    }
+    _result, events = _drive_success_result(raw)
+    complete = _round_complete_event(events)
+    assert complete["games_total"] == 16, complete
+    assert complete["games_total"] != 0, (
+        "a refused round that played games reported none — the RECAL §8.1 misread, live"
+    )
+
+
+def test_the_two_events_AGREE_about_the_probe_games() -> None:
+    """The audit's own criterion: `eval_round_complete` and `eval_strength_floor` are emitted
+    for the same round and must not disagree about how many games the probe played."""
+    floor = _verdict_payload(decisive=0, games=16)
+    raw: dict[str, Any] = {
+        "rungs": {}, "gate": None, "random": {"games": 0, "wr": None},
+        "skipped_rungs": [], "strength_floor": floor,
+    }
+    _result, events = _drive_success_result(raw)
+    floor_events = [e for e in events if e.get("event") == "eval_strength_floor"]
+    assert len(floor_events) == 1, events
+    assert _round_complete_event(events)["games_total"] == floor_events[0]["games"] == 16
+
+
+def test_a_PASSING_floor_adds_its_probe_games_to_the_rounds_total() -> None:
+    """The probe is played on the passing path too, and those games are equally real. A sum
+    that counted them only on refusal would make `games_total` mean two different things."""
+    floor = _verdict_payload(decisive=4, games=4)
+    assert floor["passed"] is True
+    raw: dict[str, Any] = {
+        "rungs": {"sealbot_d5": {"games": 8, "wr": 0.5, "wr_ci_lower": 0.2}},
+        "gate": None, "random": {"games": 6, "wr": 0.5},
+        "skipped_rungs": [], "strength_floor": floor,
+    }
+    _result, events = _drive_success_result(raw)
+    assert _round_complete_event(events)["games_total"] == 8 + 6 + 4
+
+
+def test_the_DISARMED_round_total_is_byte_identical_to_the_pre_floor_sum() -> None:
+    """The load-bearing control. Every other committed config mints `strength_floor: null`;
+    with no floor key the sum must be exactly what it always was, or the repair changed the
+    number on runs that have no floor at all."""
+    raw: dict[str, Any] = {
+        "rungs": {"sealbot_d5": {"games": 8, "wr": 0.5, "wr_ci_lower": 0.2}},
+        "gate": None, "random": {"games": 6, "wr": 0.5}, "skipped_rungs": [],
+    }
+    _result, events = _drive_success_result(raw)
+    assert _round_complete_event(events)["games_total"] == 14
