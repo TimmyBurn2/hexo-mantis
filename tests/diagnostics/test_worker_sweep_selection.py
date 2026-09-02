@@ -1,3 +1,8 @@
+# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete). This file is
+# the knee rule's ONE oracle: the band, the smallest-within-band pick, the refusals, the exit
+# codes, the re-derivation from a written report, and (R330(d)) the per-rung noise term with its
+# planted break. A rule that is one function is tested in one place, so a row that moves the
+# pick and a row that refuses to pick are read against the same fixture and the same arithmetic.
 """P7/P8 — the knee rule, its arithmetic, and the exit codes a sitting gates on.
 
 R309(f) fixes the selection rule before any number exists: *the smallest rung within 95 percent

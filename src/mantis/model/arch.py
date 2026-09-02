@@ -1,3 +1,9 @@
+# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete). This module
+# is ONE authority — the declared arch dataclasses, the kind vocabulary that names them, the
+# pairing rule that says which representation admits which, the incumbent-by-history table, the
+# config row that can override it, and the two resolvers that read all of the above. Splitting
+# any of those out would put "which arch is this" in two files, which is the duplicate-authority
+# class this module's own docstrings warn against three times over.
 """Declared model-arch dataclasses + the spec/config → arch adapter.
 
 Arch metadata travels on these frozen dataclasses (repo_design §3): a caller
