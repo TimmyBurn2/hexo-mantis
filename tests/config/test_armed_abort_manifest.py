@@ -53,6 +53,7 @@ LAW-07 requires each row to carry.
 """
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import tokenize
 from pathlib import Path
@@ -733,3 +734,79 @@ def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> N
             f"{name}: the terminal-eval row must be among the audited REQUIRED rows — a row "
             f"nobody audits is a registry entry, not a gate. Audited: {armed}"
         )
+
+
+# ── AUDIT-1 F-13: the REQUIRED set is the disarm switch, and nothing pinned it ─────────
+#
+# `audit_arming` gates on `row.status is Status.REQUIRED`. A DEFERRED row prints loudly and
+# gates NOTHING. So `status` is a one-field disarm switch for any row, and gate 12's rc stays
+# 0 with a stdout paragraph as the only trace.
+#
+# Five of the six REQUIRED rows were pinned by name somewhere in this suite.
+# `fused_graph_caps_calibrated` — the F-816-10 memory-bound MINT gate, the row that stops a
+# `null`-cap config being minted — appeared only in comments and docstrings. Flipping it to
+# DEFERRED left gate 12 at rc 0.
+#
+# WHY AN EXACT SET AND NOT MEMBERSHIP. The deferred assertion above was deliberately loosened
+# from `==` to membership under R192(e), because it had to be re-edited for changes it has no
+# opinion about. This one is the opposite case: the REQUIRED set IS the mint's gate list. A row
+# leaving it is a DISARMAMENT and a row joining it is a mint-visible tightening — both are
+# decisions somebody makes, never drift, so the set is declared and its diff is the review.
+
+#: The rows that GATE a production mint. Editing this literal is the act of arming or
+#: disarming the audit, and it must be reviewed as one.
+_REQUIRED_ROWS_OF_RECORD = frozenset({
+    "actor_lag",
+    "allocator_posture_minted",
+    "disk_space_exhausted",
+    "draw_rate_collapse",
+    "fused_graph_caps_calibrated",
+    "terminal_eval_broken",
+})
+
+
+def test_the_REQUIRED_row_set_is_exactly_the_declared_one() -> None:
+    """THE PIN (F-13). A one-field `status` flip disarms a row with gate 12 still rc 0."""
+    observed = frozenset(row.name for row in _required())
+    assert observed == _REQUIRED_ROWS_OF_RECORD, (
+        f"the mint's gate list changed. Disarmed (was REQUIRED, now is not): "
+        f"{sorted(_REQUIRED_ROWS_OF_RECORD - observed)}; newly gating: "
+        f"{sorted(observed - _REQUIRED_ROWS_OF_RECORD)}. Gate 12 reports rc 0 either way — "
+        "a DEFERRED row prints loudly and gates nothing."
+    )
+
+
+def test_the_memory_bound_mint_gate_is_REQUIRED_and_is_named_here() -> None:
+    """The specific row F-13 measured: it is the one that refuses a `null`-cap config at the
+    mint, and it was the one REQUIRED row no test named."""
+    assert "fused_graph_caps_calibrated" in {row.name for row in _required()}
+
+
+def test_flipping_a_REQUIRED_row_to_DEFERRED_is_caught_by_this_suite() -> None:
+    """The planted break, driven: the exact one-field edit F-13 describes, against the same
+    helper the shipped assertion uses. Without the row above, `_required()` simply returns a
+    five-member list and every other test in this file stays green."""
+    flipped = [
+        dataclasses.replace(row, status=Status.DEFERRED, owner="SOMEBODY",
+                            source_pin=row.source_pin or ("Makefile", "test:"))
+        if row.name == "fused_graph_caps_calibrated" else row
+        for row in MANIFEST
+    ]
+    observed = frozenset(row.name for row in _required(flipped))
+    assert observed != _REQUIRED_ROWS_OF_RECORD
+    assert _REQUIRED_ROWS_OF_RECORD - observed == {"fused_graph_caps_calibrated"}
+
+
+def test_every_REQUIRED_row_reaches_gate_12s_published_block() -> None:
+    """The set is not only declared — it is what the evidence artifact a mint sign-off reads
+    actually publishes, so the declaration and the report cannot disagree."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_pfm_required_probe", REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py")
+    assert spec is not None and spec.loader is not None
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    block = tool._audit_manifest_and_configs(tool._audit_paths(None))
+    assert frozenset(block["required"]) == _REQUIRED_ROWS_OF_RECORD
+    assert {row["name"] for row in block["required_rows"]} == _REQUIRED_ROWS_OF_RECORD
