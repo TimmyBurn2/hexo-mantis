@@ -21,6 +21,14 @@ import numpy
 class WireAlreadyConsumed(Exception):
     """Raised when GraphWire.take() is called a second time (single-read latch)."""
 
+class SelectionDesync(RuntimeError):
+    """Raised when the PUCT descent selects a child whose `action_idx` decodes to a cell the
+    board refuses — the tree and the board have desynchronised (AUDIT-1 F-02).
+
+    This replaces a `pyo3_runtime.PanicException` that `selfplay/worker.py` used to recover
+    from by matching the panic's own message text.
+    """
+
 # --------------------------------------------------------------------------- #
 # Board (unsendable — single-thread Python ownership)
 # --------------------------------------------------------------------------- #
@@ -51,7 +59,10 @@ class Board:
     def set_legal_move_radius(self, radius: int) -> None: ...
     def legal_move_radius(self) -> int: ...
     def zobrist_hash(self) -> int: ...
-    def to_tensor(self) -> numpy.ndarray: ...
+    def to_tensor(self) -> numpy.ndarray:
+        """Raises:
+        ValueError: the board carries no encoding (AUDIT-1 F-38; was a PanicException).
+        """
     def get_cluster_views(self) -> tuple[list[numpy.ndarray], list[tuple[int, int]]]: ...
     def set_cluster_threshold(self, threshold: int) -> None: ...
     def cluster_threshold(self) -> int: ...
@@ -160,7 +171,10 @@ class MCTSTree:
     def quiescence_fire_count(self) -> int: ...
     def last_search_stats(self) -> tuple[float, float]: ...
     def new_game(self, board: Board) -> None: ...
-    def select_leaves(self, n: int) -> list[Board]: ...
+    def select_leaves(self, n: int) -> list[Board]:
+        """Raises:
+        SelectionDesync: the tree and the board disagree about what has been played.
+        """
     def expand_and_backup(
         self, policies: list[list[float]], values: list[float]
     ) -> None: ...
@@ -697,6 +711,13 @@ def apply_symmetries_batch(
     states: numpy.ndarray, sym_indices: list[int]
 ) -> numpy.ndarray: ...
 def mcts_pool_overflow_count() -> int: ...
+def mcts_max_armed_sims() -> int:
+    """The largest sim budget the MCTS node pool can serve (AUDIT-1 F-21).
+
+    `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`, derived in `mantis-search`. The config schema
+    reads it across the bridge rather than re-typing the number, so the bound cannot go stale
+    when either constant moves.
+    """
 def take_mcts_pool_overflow_count() -> int: ...
 def graph_row_outcome(
     rec_player: int,
