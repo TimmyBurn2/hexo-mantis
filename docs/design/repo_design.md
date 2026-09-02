@@ -565,7 +565,10 @@ class.** Recorded here rather than left as silent drift (R9).
   where claimed. Minted output is committed; the template is not a runtime input.
 - One resolver per regime knob (sims, temperature, radius, corpus, amp dtype, …); eval
   reads the same resolver seam self-play does. Unknown knob consumer = ValueError.
-- Identity keys have no terminal defaults: absent encoding/representation is an error.
+- Identity keys have no terminal defaults: absent encoding/representation is an error. `identity.arch_kind`
+  is the ONE optional identity leaf (R330(e), amendment 2026-09-02): the arch-selector row,
+  absent in every committed config until run6's mint writes it (R323(b)); an absent row resolves
+  to the representation's pinned incumbent kind and a present one is refused by name if unknown.
 - Rust crossing: `SelfPlayRunnerConfig` is a versioned builder struct; field set pinned
   by a byte-equivalence test; every field maps to exactly one runner slot.
 - Every config key must have a live consumer (test-enforced); dead knobs are deleted
