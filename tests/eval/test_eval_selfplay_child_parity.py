@@ -470,13 +470,19 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
                     hits.append(f"{path.relative_to(root)}:{lineno}: {line.strip()}")
     assert not hits, "a second child-cap authority appeared in Python:\n" + "\n".join(hits)
 
+    # The subject is "exactly ONE definition, and it is in the search crate" — the FILE and
+    # the COUNT, never the LINE. This assertion pinned `…/mod.rs:47`, and AUDIT-1 F-21 added a
+    # doc comment above the constant, which moved it to 48 and reddened a test that has no
+    # opinion about doc comments. A line number is a transcribed position: it must be
+    # re-edited on every edit above it, will eventually be wrong, and is then read as evidence
+    # (R192(e), derive-or-delete — the same rule gate 15 enforces on R8 headers).
     definitions = [
-        f"{path.relative_to(root)}:{lineno}"
+        str(path.relative_to(root))
         for path in sorted((root / "crates").rglob("*.rs"))
-        for lineno, line in enumerate(path.read_text().splitlines(), 1)
+        for line in path.read_text().splitlines()
         if line.startswith("pub const MAX_CHILDREN_PER_NODE")
     ]
-    assert definitions == ["crates/mantis-search/src/mcts/mod.rs:47"], definitions
+    assert definitions == ["crates/mantis-search/src/mcts/mod.rs"], definitions
 
 
 # ── ⊕ C-1a-d ─────────────────────────────────────────────────────────────────────────

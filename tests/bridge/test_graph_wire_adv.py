@@ -163,3 +163,42 @@ def test_builder_impl_native_handshake():
     wire = _one_graph_wire()
     assert wire.builder_impl == 1
     assert wire.n_graphs == 1
+
+
+# ── AUDIT-1 F-22(d): the shape guard must cover every offset the body reads ───────────
+#
+# `verify_edge_geometry_impl` guarded `node_feat_dim == 0`, then read
+# `node_feat[s * node_feat_dim + 1]` — channel 1, the opponent-stone plane — for every node.
+# A dim of ONE therefore passed the guard and indexed one past the end of the last node's row.
+# This function is the ADV-8 producer and its own docstring promises it "never indexes out of
+# range on a corrupt input", so an out-of-bounds read here is the guard failing at its stated
+# job. `panic = "unwind"` is what kept it from being process-fatal — a property of the worst
+# case, not a design.
+
+@pytest.mark.parametrize("dim", [1, 0], ids=["one-channel", "zero-channel"])
+def test_adv8_a_node_feat_dim_the_body_cannot_index_is_REFUSED(dim: int) -> None:
+    """THE PIN. `dim == 1` used to pass the guard and then read out of range."""
+    n_nodes = 4
+    node_feat = np.zeros(max(n_nodes * dim, 1), dtype=np.float32)
+    _nf, node_coords, edge_index, edge_attr, node_offsets, current_player = _clean_fixture()
+    with pytest.raises(ValueError, match="degenerate dims"):
+        _engine.verify_edge_geometry(
+            node_feat, node_coords, edge_index, edge_attr, node_offsets, current_player,
+            dim, EDGE_FEAT_DIM, WIN_LENGTH,
+        )
+
+
+def test_adv8_the_refusal_says_WHICH_channel_it_needs() -> None:
+    """A reader who hits this needs to know the bound is about channel 1, not a round number."""
+    node_feat = np.zeros(4, dtype=np.float32)
+    _nf, nc, ei, ea, no, cp = _clean_fixture()
+    with pytest.raises(ValueError) as excinfo:
+        _engine.verify_edge_geometry(node_feat, nc, ei, ea, no, cp, 1, EDGE_FEAT_DIM,
+                                     WIN_LENGTH)
+    assert "channel 1" in str(excinfo.value), str(excinfo.value)
+
+
+def test_adv8_the_real_registry_dim_still_passes() -> None:
+    """The control: the shipped `node_feat_dim` is 11 and must be unaffected."""
+    assert NODE_FEAT_DIM >= 2
+    assert _call(_clean_fixture()) is None

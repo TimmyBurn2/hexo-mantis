@@ -237,7 +237,8 @@ fn check_position(src: &str, i: usize, with_priors: bool) {
     // search_drive.rs:421 — the expand eval must reach through the new bridge door.
     let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.25);
     tree.new_game(board.clone());
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1, "{id}: fresh root must yield one pending leaf");
     tree.expand_and_backup_ls_at(&[ls], &[0.0f32], &[g.window_center], spec.trunk_size as i32);
 

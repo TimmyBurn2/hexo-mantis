@@ -62,7 +62,7 @@ fn splice_property_position_indices_before_value_target_valid() {
 
 #[test]
 fn eight_tuple_order_and_carrier_tags_match() {
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_for_test(1.0, 10, true);
     let out = buf.sample_batch_core(2, false).expect("sample");
 
@@ -80,7 +80,7 @@ fn eight_tuple_order_and_carrier_tags_match() {
 
 #[test]
 fn nine_tuple_order_and_carrier_tags_match_with_splice() {
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_for_test(1.0, 10, true);
     let out = buf.sample_batch_with_pos_core(2, false).expect("sample");
 

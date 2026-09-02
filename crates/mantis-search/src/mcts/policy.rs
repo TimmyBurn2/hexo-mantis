@@ -450,7 +450,8 @@ mod tests {
         let n_sims = 10;
         let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
         for _ in 0..n_sims {
-            let leaves = tree.select_leaves(1);
+            let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
             let n = leaves.len();
             let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
             let values = vec![0.0f32; n];

@@ -425,6 +425,16 @@ impl MCTSTree {
         // each leaf board is consumed directly.
         let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
         let n = pending.len().min(policies.len()).min(values.len());
+        // AUDIT-1 F-22. `pending` is already `mem::take`n, so any leaf past `n` is DROPPED —
+        // and `select_one_leaf` incremented its virtual loss on the way down, which nothing
+        // else ever decrements. Those nodes stay permanently penalised for the rest of the
+        // search: their PUCT score is depressed by a loss that will never be backed up.
+        // The clamp itself stays (a short batch must not index out of bounds), but the leaves
+        // it discards get their virtual loss back, so a short return degrades the BATCH
+        // rather than the TREE.
+        for (leaf_idx, _board) in &pending[n..] {
+            self.undo_virtual_loss(*leaf_idx);
+        }
 
         // §P7: TTEntry.policy is `Arc<Vec<f32>>`. We allocate one Arc per
         // first-touch insertion (cheaper than the prior per-hit clone path
@@ -450,6 +460,16 @@ impl MCTSTree {
     pub fn expand_and_backup_ls(&mut self, policies: &[LegalSetPolicy], values: &[f32]) {
         let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
         let n = pending.len().min(policies.len()).min(values.len());
+        // AUDIT-1 F-22. `pending` is already `mem::take`n, so any leaf past `n` is DROPPED —
+        // and `select_one_leaf` incremented its virtual loss on the way down, which nothing
+        // else ever decrements. Those nodes stay permanently penalised for the rest of the
+        // search: their PUCT score is depressed by a loss that will never be backed up.
+        // The clamp itself stays (a short batch must not index out of bounds), but the leaves
+        // it discards get their virtual loss back, so a short return degrades the BATCH
+        // rather than the TREE.
+        for (leaf_idx, _board) in &pending[n..] {
+            self.undo_virtual_loss(*leaf_idx);
+        }
         for i in 0..n {
             let (leaf_idx, board) = &pending[i];
             let ls = &policies[i];

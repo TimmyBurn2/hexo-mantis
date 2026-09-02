@@ -98,7 +98,8 @@ fn bench_expand_leaf(c: &mut Criterion) {
         let armed = || {
             let mut tree = MCTSTree::new(1.5);
             tree.new_game(board.clone());
-            tree.select_leaves(1);
+            tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
             tree
         };
         group.bench_with_input(BenchmarkId::new("dense", n_legal), &n_legal, |b, _| {

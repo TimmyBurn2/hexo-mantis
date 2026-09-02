@@ -377,7 +377,13 @@ fn infer_and_expand(
         return infer_and_expand_graph(tree, batch_size, agg_trunk_sz, infer);
     }
 
-    let leaves = tree.select_leaves(batch_size);
+    // AUDIT-1 F-02: a tree/board desync is a NAMED run-fatal seam failure, not a panic that
+    // `guard_worker` converts into `running = false` with no reason latched. It routes through
+    // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
+    // it and `store_fatal_defect` names it.
+    let leaves = tree
+        .select_leaves(batch_size)
+        .map_err(|desync| InferenceSeamFailure::new("dense", "selection", desync.to_string()))?;
     if leaves.is_empty() {
         return Ok(0);
     }
@@ -533,7 +539,13 @@ fn infer_and_expand_graph(
     agg_trunk_sz: i32,
     infer: InferContext,
 ) -> Result<usize, InferenceSeamFailure> {
-    let leaves = tree.select_leaves(batch_size);
+    // AUDIT-1 F-02: a tree/board desync is a NAMED run-fatal seam failure, not a panic that
+    // `guard_worker` converts into `running = false` with no reason latched. It routes through
+    // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
+    // it and `store_fatal_defect` names it.
+    let leaves = tree
+        .select_leaves(batch_size)
+        .map_err(|desync| InferenceSeamFailure::new("graph", "selection", desync.to_string()))?;
     if leaves.is_empty() {
         return Ok(0);
     }
@@ -721,7 +733,16 @@ fn run_mcts_search(
                     }
 
                     let child_pool_idx = gs.first_child + cand_offset as u32;
-                    tree.set_forced_root_child(Some(child_pool_idx));
+                    // AUDIT-1 F-02: the setter validates against the root's child range now.
+                    // A candidate index the root does not own is a Gumbel bookkeeping defect,
+                    // and it takes the SAME run-fatal exit as an inference failure rather than
+                    // descending into a slot belonging to nothing.
+                    if let Err(err) = tree.set_forced_root_child(Some(child_pool_idx)) {
+                        let _ = tree.set_forced_root_child(None);
+                        return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
+                            "gumbel", "forced_root_child", err.to_string(),
+                        ));
+                    }
 
                     let mut cand_sims = 0;
                     while cand_sims < sims_per && sims_used < move_sims {
@@ -736,7 +757,7 @@ fn run_mcts_search(
                         ) {
                             Ok(n) => n,
                             Err(e) => {
-                                tree.set_forced_root_child(None);
+                                let _ = tree.set_forced_root_child(None);
                                 return McTSSearchResult::InferenceFailed(e);
                             }
                         };
@@ -746,7 +767,7 @@ fn run_mcts_search(
                         cand_sims += n;
                         sims_used += n;
                     }
-                    tree.set_forced_root_child(None);
+                    let _ = tree.set_forced_root_child(None);
                 }
 
                 if gs.candidates.len() <= 1 {
@@ -754,7 +775,7 @@ fn run_mcts_search(
                 }
                 gs.halve_candidates(tree);
             }
-            tree.set_forced_root_child(None);
+            let _ = tree.set_forced_root_child(None);
             gumbel_state = Some(gs);
         }
     } else {

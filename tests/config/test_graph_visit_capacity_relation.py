@@ -35,11 +35,46 @@ def test_the_600_75_prereg_shape_validates_clean(smoke_run_config) -> None:
     assert config.selfplay.playout_cap.n_sims_full == 600
 
 
+#: A leaf-batch wide enough to push the derived capacity past the u16 ceiling on its own.
+#:
+#: AUDIT-1 F-21 CHANGED WHICH AXIS THIS ROW CAN USE, and the interaction is worth stating.
+#: The mutation used to be `n_sims_full: 70_000`. That value is now refused EARLIER, by a
+#: different and TIGHTER ceiling: `MctsConfig`/`PlayoutCapConfig` bound every sims knob at
+#: `MAX_ARMED_SIMS` (1302 = `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS node
+#: pool overflows from `n_simulations` alone above that and `finish_expansion` panics. So on
+#: the SIMS axis the pool bound now subsumes the record-format one — at 1302 sims the derived
+#: capacity is 1309, nowhere near 65535.
+#:
+#: The record-format relation is NOT subsumed: `leaf_batch_size` is the other term the
+#: capacity is derived from and it carries no such bound, so the ceiling stays reachable and
+#: this suite keeps its subject. Two live ceilings on one derived quantity, and the mutation
+#: drives whichever axis the other does not cover.
+_LEAF_BATCH_OVER_THE_CEILING = 70_000
+
+
 def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) -> None:
-    """The dispatch's mutation pin: no capacity can honor a 70_000-sim arm (the
-    per-record visit count is u16), so validation itself refuses — naming the
-    ceiling and saying it is a mint-time error."""
+    """The dispatch's mutation pin: no capacity can honor this regime (the per-record visit
+    count is u16), so validation itself refuses — naming the ceiling and saying it is a
+    mint-time error."""
     with pytest.raises(ValidationError, match="65535"):
+        smoke_run_config(
+            "run5.yaml",
+            selfplay={
+                "playout_cap": {
+                    "full_search_prob": 0.10,
+                    "n_sims_quick": 75,
+                    "n_sims_full": 600,
+                },
+                "leaf_batch_size": _LEAF_BATCH_OVER_THE_CEILING,
+            },
+        )
+
+
+def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> None:
+    """The interaction, pinned rather than left for the next reader to rediscover: the old
+    70_000-sim mutation now reds against the POOL bound, not the record format. Both refusals
+    are correct and a config hitting either is unmintable; what changed is which one names it."""
+    with pytest.raises(ValidationError) as excinfo:
         smoke_run_config(
             "run5.yaml",
             selfplay={
@@ -50,6 +85,7 @@ def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) 
                 }
             },
         )
+    assert "n_sims_full" in str(excinfo.value)
 
 
 def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
@@ -62,8 +98,9 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
                 "playout_cap": {
                     "full_search_prob": 0.10,
                     "n_sims_quick": 75,
-                    "n_sims_full": 70_000,
-                }
+                    "n_sims_full": 600,
+                },
+                "leaf_batch_size": _LEAF_BATCH_OVER_THE_CEILING,
             },
         )
 
@@ -78,8 +115,11 @@ def test_the_relation_is_graph_scoped(smoke_run_config) -> None:
             "playout_cap": {
                 "full_search_prob": 0.10,
                 "n_sims_quick": 75,
-                "n_sims_full": 70_000,
-            }
+                "n_sims_full": 600,
+            },
+            # The same wild LEAF BATCH, on the axis the node-pool bound does not cover
+            # (see `_LEAF_BATCH_OVER_THE_CEILING` above for why the sims axis moved).
+            "leaf_batch_size": _LEAF_BATCH_OVER_THE_CEILING,
         },
     )
     assert config.identity.representation == "grid"

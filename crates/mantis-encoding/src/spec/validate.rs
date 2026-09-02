@@ -1,3 +1,8 @@
+//! R8 justify: ONE validator over one spec, and it is collect-all by contract — every check
+//! appends to a single `errs` list so a reader gets every violation of a registry row at once
+//! rather than one per parse attempt. A check living in another file could not append to that
+//! list without exporting it, and a validator whose arms report separately is the thing this
+//! one was written not to be.
 //! `RegistrySpec::validate` — cross-field invariant checks. Collects ALL
 //! violations into one multi-line message; never short-circuits on the first.
 
@@ -127,6 +132,43 @@ impl RegistrySpec {
         // (universal — every encoding carries the field).
         if self.n_chain_planes == 0 {
             errs.push("n_chain_planes must be >= 1".to_string());
+        }
+
+        // AUDIT-1 F-37. `mantis_selfplay::replay::sym::sym_tables_for` asserts
+        // `n_chain_planes == N_CHAIN_PLANES` and matches `(sym_table_id, n_planes)` against
+        // `("size_19", _) | ("size_25", 8)`, PANICKING on anything else — and it is reached
+        // from `SelfPlayRunner::start()`, including on a GRAPH run where the tables are never
+        // read. So a registry row with a new `sym_table_id` failed at the first runner start,
+        // in a worker thread, rather than at `parse_encoding_toml` or gate 8. Both conditions
+        // are pinned HERE, where the registry `LazyLock` refuses at load.
+        //
+        // The values are duplicated rather than imported because `mantis-encoding` sits BELOW
+        // `mantis-selfplay` in the DAG and may not depend on it; the two are held equal by
+        // `registry_census.rs`, which asserts this validator refuses exactly what
+        // `sym_tables_for` would have panicked on.
+        const SYM_TABLE_IDS: [&str; 2] = ["size_19", "size_25"];
+        const SYM_CHAIN_PLANES: usize = 6;
+        if !SYM_TABLE_IDS.contains(&self.sym_table_id) {
+            errs.push(format!(
+                "sym_table_id {:?} is not one of {SYM_TABLE_IDS:?}: `sym_tables_for` has no \
+                 table for it and would panic at the first runner start",
+                self.sym_table_id
+            ));
+        }
+        if self.sym_table_id == "size_25" && self.n_planes != 8 {
+            errs.push(format!(
+                "sym_table_id \"size_25\" requires n_planes == 8, got {}: `sym_tables_for` \
+                 matches on the PAIR and would panic at the first runner start",
+                self.n_planes
+            ));
+        }
+        if self.n_chain_planes != SYM_CHAIN_PLANES {
+            errs.push(format!(
+                "n_chain_planes must be {SYM_CHAIN_PLANES} (the D6 chain tables' fixed inner \
+                 dimension), got {}: `sym_tables_for` asserts this and would panic at the \
+                 first runner start",
+                self.n_chain_planes
+            ));
         }
 
         // Plane layout sanity: no duplicates, no empty strings.

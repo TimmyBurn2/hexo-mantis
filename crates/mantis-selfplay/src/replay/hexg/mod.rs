@@ -56,6 +56,15 @@ pub const MAX_STONES: usize = 256;
 /// no literal — the old `MAX_VISITS = 128` tunable is deleted).
 pub const HEXG_VISIT_COUNT_CEILING: usize = u16::MAX as usize;
 
+/// Structural ceiling on the record COUNT a buffer may be asked for (AUDIT-1 F-38).
+///
+/// DERIVED, never tuned: the widest per-record allocation this buffer makes is
+/// `capacity * MAX_STONES * 2` (`stones_qr`), and this is the largest capacity for which that
+/// product cannot overflow `usize` — so the arithmetic is safe before any allocator is asked.
+/// It is enormously larger than any real ring (run5's is thousands), which is the point: the
+/// bound exists to stop a wrap, not to express a policy about buffer sizes.
+pub const HEXG_CAPACITY_CEILING: usize = usize::MAX / (MAX_STONES * 2);
+
 /// The ONE effective-standard-budget resolution: `standard_sims` wins when set,
 /// else `n_simulations`. Shared by [`derived_visit_capacity`] and the runner's
 /// own zero-check + budget bake (`SelfPlayRunner::new`) so the guard capacity and
@@ -244,11 +253,39 @@ impl HexgBuffer {
     /// format cannot store (`0` or past [`HEXG_VISIT_COUNT_CEILING`]) is a LOUD
     /// error.
     pub fn new(capacity: usize, encoding: &str, visit_capacity: usize) -> Result<Self, String> {
-        let spec = mantis_encoding::registry::lookup_or_panic(encoding);
+        // AUDIT-1 F-38. `lookup_or_panic` ran BEFORE this function's own `Result` checks, so
+        // an unknown encoding name reached Python as a `PanicException` while every other
+        // refusal here is a named `ValueError` — and `SelfPlayRunner::new` and
+        // `PyRegistrySpec::from_registry` both already return the sorted known list.
+        let spec = mantis_encoding::registry::lookup(encoding).ok_or_else(|| {
+            let mut known: Vec<&str> =
+                mantis_encoding::registry::all_specs().map(|s| s.name).collect();
+            known.sort_unstable();
+            format!("HexgBuffer: unknown encoding {encoding:?}; registered: {known:?}")
+        })?;
         if !spec.is_graph() {
             return Err(format!(
                 "HexgBuffer requires a graph encoding; '{encoding}' is representation=grid \
                  (use ReplayBuffer for dense encodings)"
+            ));
+        }
+        // AUDIT-1 F-38. `capacity` was UNBOUNDED at the FFI. Zero panics on the first push
+        // (an index out of bounds and a `% 0`), and a huge value wraps the slot-geometry
+        // product in release or aborts inside `handle_alloc_error` — the one exit
+        // `panic = "unwind"` cannot convert into a Python exception, so it takes the process
+        // with it. Both are refused here, by name, before anything is allocated.
+        if capacity == 0 {
+            return Err("HexgBuffer: capacity 0 stores nothing and panics on the first push \
+                        (an index out of bounds and a modulo by zero)"
+                .to_string());
+        }
+        if capacity > HEXG_CAPACITY_CEILING {
+            return Err(format!(
+                "HexgBuffer: capacity {capacity} exceeds the ceiling {HEXG_CAPACITY_CEILING}. \
+                 The slot geometry multiplies capacity by MAX_STONES and the per-record \
+                 strides; beyond this the product overflows in a release build (no \
+                 overflow-checks) or aborts in the allocator, which `panic = \"unwind\"` \
+                 cannot convert into a Python exception"
             ));
         }
         if visit_capacity == 0 || visit_capacity > HEXG_VISIT_COUNT_CEILING {

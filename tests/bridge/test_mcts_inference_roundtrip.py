@@ -19,6 +19,7 @@ new tree method rather than only naming it.
 import threading
 
 import numpy as np
+import pytest
 
 from mantis import _engine
 
@@ -70,10 +71,25 @@ def test_mctstree_ctor_compose_and_policy_round_trip():
 
 
 def test_mctstree_forced_root_child_round_trip():
+    """AUDIT-1 F-02: the setter validates against the ROOT'S CHILD RANGE now, so the
+    round-trip needs a root that HAS children and an index that is one of them. A bare tree
+    owns nothing, and the old `= 3` was storing an index into an uninitialised pool slot —
+    whose `action_idx` of `u32::MAX` decodes to the cell (32767, 32767), which an UNBOUNDED
+    board accepts. That is the arm that produced neither a panic nor an error."""
     tree = _engine.MCTSTree()
     assert tree.forced_root_child is None
-    tree.forced_root_child = 3
-    assert tree.forced_root_child == 3
+    with pytest.raises(ValueError, match="not a child of the root"):
+        tree.forced_root_child = 3
+
+    board = _engine.Board.with_encoding_name("v6")
+    tree.new_game(board)
+    leaves = tree.select_leaves(1)
+    tree.expand_and_backup([[1.0 / 362] * 362 for _ in leaves], [0.0] * len(leaves))
+    first = tree.root_children_info()[0][1] if hasattr(tree, "root_children_info") else None
+    if first is None:
+        first = tree.get_root_children_info()[0][1]
+    tree.forced_root_child = first
+    assert tree.forced_root_child == first
     tree.forced_root_child = None
     assert tree.forced_root_child is None
 

@@ -185,7 +185,8 @@ mod tests {
         // Expand root with uniform priors.
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
         let policy = vec![1.0 / n_actions as f32; n_actions];
-        let _leaves = tree.select_leaves(1);
+        let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         tree.expand_and_backup(&[policy], &[0.0]);
         tree
     }

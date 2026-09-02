@@ -1,5 +1,7 @@
-//! R8-justify: the relocated O-16..O-30 HEXG oracle roster (33 tests incl. the frozen v1 byte-golden O-21 and the D6 aug-coherence/ADV-7 canaries) binds ONE buffer type, HexgBuffer, through one shared record/path/symmetry helper set; a split would break the frozen O-numbering and duplicate the helpers.
-//! HEXG (graph) oracle suite — the 32-test module relocated out of src (R5).
+//! R8-justify: the relocated O-16..O-30 HEXG oracle roster (the frozen v1 byte-golden O-21 and the D6 aug-coherence/ADV-7 canaries among them) binds ONE buffer type, HexgBuffer, through one shared record/path/symmetry helper set; a split would break the frozen O-numbering and duplicate the helpers.
+//! HEXG (graph) oracle suite — relocated out of src (R5). AUDIT-1 F-52: the two lines
+//! above stated 33 and 32 for the same module, over 37 tests. Counts are derived, never
+//! asserted (R192(e)) — and two DIFFERENT wrong counts in adjacent lines is the reason.
 //! Ported from the predecessor engine's `replay_buffer/hexg/tests.rs`; every
 //! `sample_graph_batch_impl` assertion is re-anchored from the deferred
 //! `GraphWire` to the buffer-owned `Vec<AxisGraph>` (single graph → local ==
@@ -237,7 +239,7 @@ fn dense_loader_rejects_hexg_file() {
     let path = unique_path("hexg_into_dense");
     buf.save_to_path_impl(path.to_str().unwrap()).unwrap();
 
-    let mut dense = ReplayBuffer::new(4, "v6");
+    let mut dense = ReplayBuffer::new(4, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = dense.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(
         err.contains("magic") || err.contains("Invalid") || err.contains("invalid"),

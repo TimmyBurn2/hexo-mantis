@@ -1,8 +1,83 @@
+//! R8 justify: PUCT descent and the two errors it can produce are one unit. `SelectionDesync`
+//! and `ForcedChildOutOfRange` describe states only this traversal can reach, and their
+//! messages explain what the descent did — a reader who hits either needs the walk and the
+//! refusal side by side, and an error type declared elsewhere drifts from the code that
+//! raises it.
 //! PUCT selection and tree traversal.
 
 use mantis_core::board::{Board, MoveDiff};
 use fxhash::FxHashSet;
 use super::{CachedPolicy, MCTSTree};
+
+/// The selected child's stored `action_idx` decoded to a cell the board cannot play.
+///
+/// AUDIT-1 F-02. This was `.expect("selected move should always be legal")`, and it FIRED in
+/// production: `src/mantis/selfplay/worker.py` carried a `BaseException` handler matching
+/// `"cell already occupied"` — the exact text `Board::apply_move` returns — to restart the
+/// tree at root whenever it happened. `Board::apply_move` errs only on OCCUPANCY, never on
+/// radius, so the panic means a child's `action_idx` decoded to a cell already on the board:
+/// the tree and the board have desynchronised.
+///
+/// It matters that this is an `Err` and not a panic on three counts. On the Rust self-play
+/// arm the unwind is caught by `runner::spawn::guard_worker`, which increments
+/// `worker_panics` and sets `running = false` — a RUN HALT with no reason in the fatal-defect
+/// latch, so R275(b)'s instrument never sees it. On the eval and deploy arms it surfaced as a
+/// `PanicException` and was recovered from only by a string match, and only when the batch
+/// was larger than one. And a panic crossing the FFI is convertible only because the profile
+/// sets `panic = "unwind"` (R2/LAW-13) — a guarantee about the worst case, not a design.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionDesync {
+    /// Pool index of the node whose child was selected.
+    pub node: u32,
+    /// The decoded axial column the board refused.
+    pub q: i32,
+    /// The decoded axial row the board refused.
+    pub r: i32,
+}
+
+impl std::fmt::Display for SelectionDesync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SelectionDesync: the PUCT descent selected a child of node {} whose action_idx \
+             decodes to ({}, {}), which the board refuses. `Board::apply_move` errs only on \
+             occupancy, so the tree and the board have desynchronised — the search cannot be \
+             continued or exported as if it had run.",
+            self.node, self.q, self.r
+        )
+    }
+}
+
+impl std::error::Error for SelectionDesync {}
+
+/// `set_forced_root_child` was given an index that is not one of the ROOT's children.
+///
+/// AUDIT-1 F-02, second trigger. See `MCTSTree::set_forced_root_child` for why an unchecked
+/// store is two distinct defects rather than one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForcedChildOutOfRange {
+    /// The index that was offered.
+    pub child: u32,
+    /// The root's first child slot.
+    pub first_child: u32,
+    /// How many children the root has.
+    pub n_children: u16,
+}
+
+impl std::fmt::Display for ForcedChildOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ForcedChildOutOfRange: {} is not a child of the root, whose {} child slot(s) \
+             start at {}. Forcing a foreign index descends into a node the root does not own \
+             — an uninitialised slot decodes to the cell (32767, 32767), which an unbounded \
+             board accepts, so the search would proceed into a subtree belonging to nothing.",
+            self.child, self.n_children, self.first_child
+        )
+    }
+}
+
+impl std::error::Error for ForcedChildOutOfRange {}
 
 /// §P8: single-pass argmax over `[first..first+n_ch)` by PUCT score, computing
 /// each child's score exactly once. Replaces the prior `.max_by()` closures
@@ -78,8 +153,16 @@ impl MCTSTree {
 
     /// Walk the tree via PUCT until an unexpanded (or terminal) leaf is found.
     /// Applies virtual loss to every node on the path.
-    /// Returns `(leaf_node_index, leaf_depth)`.
-    pub(crate) fn select_one_leaf(&mut self, board: &mut Board, diffs: &mut Vec<MoveDiff>) -> (u32, u32) {
+    /// Returns `(leaf_node_index, leaf_depth)`, or `SelectionDesync` when a selected child's
+    /// `action_idx` decodes to a cell the board refuses (AUDIT-1 F-02).
+    ///
+    /// # Errors
+    /// `SelectionDesync` — the tree and the board disagree about what has been played.
+    pub(crate) fn select_one_leaf(
+        &mut self,
+        board: &mut Board,
+        diffs: &mut Vec<MoveDiff>,
+    ) -> Result<(u32, u32), SelectionDesync> {
         let mut cur: u32 = 0;
         let mut depth = 0;
         loop {
@@ -90,7 +173,7 @@ impl MCTSTree {
                 if depth > self.max_depth_observed {
                     self.max_depth_observed = depth;
                 }
-                return (cur, depth);
+                return Ok((cur, depth));
             }
 
             let parent_n = (node.n_visits + node.virtual_loss_count) as f32;
@@ -142,7 +225,7 @@ impl MCTSTree {
 
             let diff = board
                 .apply_move_tracked(q, r)
-                .expect("selected move should always be legal");
+                .map_err(|_| SelectionDesync { node: cur, q, r })?;
             diffs.push(diff);
 
             cur = best;
@@ -151,7 +234,13 @@ impl MCTSTree {
     }
 
     /// Select up to `n` distinct leaves for evaluation.
-    pub fn select_leaves(&mut self, n: usize) -> Vec<Board> {
+    /// # Errors
+    /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board
+    /// refuses. AUDIT-1 F-02: this was an `expect` that fired in production and halted the run
+    /// through `guard_worker` with no reason latched. Virtual loss applied on the failing
+    /// descent is UNWOUND before returning, so a caller that recovers does not leave the tree
+    /// permanently penalising the path it walked.
+    pub fn select_leaves(&mut self, n: usize) -> Result<Vec<Board>, SelectionDesync> {
         self.pending.clear();
         let mut boards = Vec::with_capacity(n);
         // §P36: O(1) overlap dedup via FxHashSet<u32> on leaf pool indices.
@@ -170,7 +259,20 @@ impl MCTSTree {
         while i < n && attempts < max_attempts {
             attempts += 1;
             diffs.clear();
-            let (leaf_idx, leaf_depth) = self.select_one_leaf(&mut board, &mut diffs);
+            let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
+                Ok(pair) => pair,
+                Err(desync) => {
+                    // Unwind this descent before propagating: the nodes on the path already
+                    // took their virtual loss, and leaving it applied would permanently
+                    // penalise them for a walk that never produced a leaf. The board is
+                    // rewound too, so `self.root_board` invariants hold for any retry.
+                    self.undo_virtual_loss(desync.node);
+                    while let Some(diff) = diffs.pop() {
+                        board.undo_move(diff);
+                    }
+                    return Err(desync);
+                }
+            };
             self.depth_accum += leaf_depth as u64;
             self.sim_count += 1;
 
@@ -230,7 +332,7 @@ impl MCTSTree {
         debug_assert_eq!(board.zobrist_hash, self.root_board.zobrist_hash);
         debug_assert_eq!(board.ply, self.root_board.ply);
 
-        boards
+        Ok(boards)
     }
 
     /// Reverse virtual loss on all nodes from `node_idx` to the root.

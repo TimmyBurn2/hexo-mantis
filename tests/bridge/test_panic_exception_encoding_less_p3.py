@@ -15,25 +15,25 @@ FAILS (no exception raised at all), not a collection error.
 """
 from __future__ import annotations
 
+import pytest
+
 from mantis import _engine
 
 
-def test_encoding_less_board_to_tensor_panics_catchably(panic_exception) -> None:
+def test_encoding_less_board_to_tensor_raises_a_NAMED_error(panic_exception) -> None:
+    """AUDIT-1 F-38: the refusal is unchanged and its FACE moved from `PanicException` to a
+    named `ValueError`. See the twin in `test_panic_exception.py` for the full account."""
     board = _engine.Board()
-    try:
+    with pytest.raises(ValueError) as excinfo:
         board.to_tensor()
-    except panic_exception as exc:
-        assert "encoding-less" in str(exc)
-    else:
-        raise AssertionError("expected a PanicException, none raised")
+    assert "encoding-less" in str(excinfo.value)
+    assert not isinstance(excinfo.value, panic_exception)
 
     # Follow-on liveness check, same test (design's preferred shape, §3.4): the
     # interpreter must still be usable after the catch above (unwind, not abort).
     for _ in range(2):
-        try:
+        with pytest.raises(ValueError):
             _engine.Board().to_tensor()
-        except panic_exception:
-            pass
     b = _engine.Board.with_encoding_name("v6")
     b.apply_move(0, 0)
     assert b.ply == 1

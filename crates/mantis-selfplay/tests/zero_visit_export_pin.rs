@@ -98,7 +98,8 @@ fn uniform_prior(board: &Board) -> LegalSetPolicy {
 fn zero_visit_tree(board: &Board) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1, "construction: the root must be the only pending leaf");
     let centers = vec![board.window_center()];
     tree.expand_and_backup_ls_at(&[uniform_prior(board)], &[0.0f32], &centers, TRUNK);
@@ -147,7 +148,8 @@ fn a_search_that_backed_up_visits_is_exportable() {
     let prior = uniform_prior(&board);
     let mut done = 0;
     while done < 8 {
-        let leaves = tree.select_leaves(4);
+        let leaves = tree.select_leaves(4)
+        .expect("select_leaves: no desync in this fixture");
         if leaves.is_empty() {
             break;
         }

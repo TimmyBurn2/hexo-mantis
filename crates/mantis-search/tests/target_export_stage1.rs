@@ -63,7 +63,8 @@ fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32, sims: usize)
     let mut done = 0;
     while done < sims {
         let take = LEAF_BATCH.min(sims - done);
-        let boards = tree.select_leaves(take);
+        let boards = tree.select_leaves(take)
+        .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }

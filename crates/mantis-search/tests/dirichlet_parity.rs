@@ -26,7 +26,8 @@ fn expanded_root_tree() -> MCTSTree {
     tree.new_game(Board::new());
 
     // One select/expand cycle expands the root (the only leaf on a fresh tree).
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1, "fresh tree must yield exactly one root leaf");
 
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;

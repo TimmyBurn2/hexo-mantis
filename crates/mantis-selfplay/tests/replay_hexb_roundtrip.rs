@@ -42,7 +42,7 @@ fn v7_entry_bytes() -> usize {
 
 #[test]
 fn o1_aux_and_chain_f16_bits_roundtrip() {
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let slot = 0;
     let aux_stride = buf.encoding.aux_stride();
     let chain_stride = buf.encoding.chain_stride();
@@ -67,7 +67,7 @@ fn o1_aux_and_chain_f16_bits_roundtrip() {
     let path = unique_path("o1_roundtrip");
     buf.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut buf2 = ReplayBuffer::new(8, "v6");
+    let mut buf2 = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 1);
 
@@ -88,7 +88,7 @@ fn o1_aux_and_chain_f16_bits_roundtrip() {
 
 #[test]
 fn o1_value_target_valid_v9_roundtrip() {
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_for_test(0.5, 30, true); // normal — supervise
     buf.push_for_test(0.0, 30, true); // ply-capped — masked below
     buf.value_target_valid[1] = 0;
@@ -96,7 +96,7 @@ fn o1_value_target_valid_v9_roundtrip() {
     let path = unique_path("o1_vv_v9");
     buf.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut buf2 = ReplayBuffer::new(8, "v6");
+    let mut buf2 = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf2.value_target_valid[0] = 0; // poison — load must WRITE per-row
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 2);
@@ -107,7 +107,7 @@ fn o1_value_target_valid_v9_roundtrip() {
 
 #[test]
 fn o1_position_index_multirow_roundtrip() {
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     for i in 0..5u16 {
         buf.push_for_test(i as f32, 30, true);
     }
@@ -117,7 +117,7 @@ fn o1_position_index_multirow_roundtrip() {
     let path = unique_path("o1_pos");
     buf.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut buf2 = ReplayBuffer::new(8, "v6");
+    let mut buf2 = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 5);
     for i in 0..5u16 {
@@ -145,7 +145,7 @@ fn o2_v8_file_defaults_value_target_valid_to_supervise() {
             file.write_all(&vec![0u8; entry_v8]).unwrap();
         }
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.value_target_valid[0] = 0; // stale — load must overwrite
     buf.value_target_valid[1] = 0;
     let n = buf.load_from_path(path.to_str().unwrap()).unwrap();
@@ -172,7 +172,7 @@ fn o3_v7_file_defaults_position_index_to_zero() {
         file.write_all(b"v6").unwrap();
         file.write_all(&vec![0u8; entry_v7]).unwrap();
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.position_indices[0] = 99; // stale — v7 load must default to 0
     let n = buf.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 1);
@@ -201,7 +201,7 @@ fn o4_v6_backward_compat() {
             file.write_all(&entry).unwrap();
         }
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let n = buf.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 5);
     assert_eq!(buf.size(), 5);
@@ -221,7 +221,7 @@ fn o5_v5_hard_reject() {
         file.write_all(&0x4845_5842u32.to_le_bytes()).unwrap();
         file.write_all(&5u32.to_le_bytes()).unwrap();
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not supported"), "expected 'not supported', got: {err}");
     let _ = std::fs::remove_file(path);
@@ -232,14 +232,14 @@ fn o5_v5_hard_reject() {
 #[test]
 fn o6_all_grid_encodings_round_trip() {
     for name in ["v6", "v6w25", "v6_live2_ls"] {
-        let mut buf = ReplayBuffer::new(10, name);
+        let mut buf = ReplayBuffer::new(10, name).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
         for i in 0..10 {
             buf.push_for_test(i as f32, 10, i % 3 == 0);
         }
         let path = unique_path(&format!("o6_{name}"));
         buf.save_to_path(path.to_str().unwrap()).unwrap();
 
-        let mut buf2 = ReplayBuffer::new(10, name);
+        let mut buf2 = ReplayBuffer::new(10, name).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
         let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
         assert_eq!(n, 10, "encoding {name}: expected 10 loaded");
         for slot in 0..10 {
@@ -255,14 +255,14 @@ fn o6_all_grid_encodings_round_trip() {
 #[test]
 fn o7_max_name_round_trip() {
     // Longest registered grid encoding name = "v6_live2_ls" (11 bytes).
-    let mut buf = ReplayBuffer::new(10, "v6_live2_ls");
+    let mut buf = ReplayBuffer::new(10, "v6_live2_ls").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     for i in 0..10 {
         buf.push_for_test(i as f32, 10, true);
     }
     let path = unique_path("o7_maxname");
     buf.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut buf2 = ReplayBuffer::new(10, "v6_live2_ls");
+    let mut buf2 = ReplayBuffer::new(10, "v6_live2_ls").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let n = buf2.load_from_path(path.to_str().unwrap()).unwrap();
     assert_eq!(n, 10);
     for slot in 0..10 {
@@ -275,12 +275,12 @@ fn o7_max_name_round_trip() {
 
 #[test]
 fn o8_v6_file_into_v6w25_buffer_rejects() {
-    let mut writer = ReplayBuffer::new(8, "v6");
+    let mut writer = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     writer.push_for_test(1.0, 10, true);
     let path = unique_path("o8_v6_to_v6w25");
     writer.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut reader = ReplayBuffer::new(10, "v6w25");
+    let mut reader = ReplayBuffer::new(10, "v6w25").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = reader.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("encoding mismatch"), "expected 'encoding mismatch': {err}");
     assert!(err.contains("wire_signature"), "expected 'wire_signature' framing: {err}");
@@ -289,7 +289,7 @@ fn o8_v6_file_into_v6w25_buffer_rejects() {
 
 #[test]
 fn o8_v6_file_into_gnn_buffer_rejects() {
-    let mut writer = ReplayBuffer::new(8, "v6");
+    let mut writer = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     writer.push_for_test(1.0, 10, true);
     let path = unique_path("o8_v6_to_gnn");
     writer.save_to_path(path.to_str().unwrap()).unwrap();
@@ -297,7 +297,7 @@ fn o8_v6_file_into_gnn_buffer_rejects() {
     // gnn_axis_v1: n_planes=0 → zero-width dense storage, constructs fine; the v6
     // file passes the file-vs-file n_planes header guard, then the wire_signature
     // guard rejects ((0,..) != (8,..)).
-    let mut reader = ReplayBuffer::new(8, "gnn_axis_v1");
+    let mut reader = ReplayBuffer::new(8, "gnn_axis_v1").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = reader.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("encoding mismatch"), "expected 'encoding mismatch': {err}");
     assert!(err.contains("wire_signature"), "expected 'wire_signature' framing: {err}");
@@ -320,7 +320,7 @@ fn o10_unknown_encoding_rejects() {
         file.write_all(&(name.len() as u32).to_le_bytes()).unwrap();
         file.write_all(name).unwrap();
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("unknown encoding"), "expected 'unknown encoding': {err}");
     let _ = std::fs::remove_file(path);
@@ -341,7 +341,7 @@ fn o11_n_planes_header_guard() {
         file.write_all(&2u32.to_le_bytes()).unwrap();
         file.write_all(b"v6").unwrap();
     }
-    let mut buf = ReplayBuffer::new(10, "v6");
+    let mut buf = ReplayBuffer::new(10, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let err = buf.load_from_path(path.to_str().unwrap()).unwrap_err();
     assert!(err.contains("n_planes"), "expected n_planes framing: {err}");
     assert!(err.contains("corrupted"), "expected 'corrupted' framing: {err}");
@@ -361,7 +361,7 @@ fn o12_hexb_v9_byte_golden_load_and_resave_identity() {
     let golden_bytes = std::fs::read(&golden).expect("frozen hexb golden must exist");
     assert_eq!(golden_bytes.len(), 49218, "golden size drifted");
 
-    let mut buf = ReplayBuffer::new(8, "v6");
+    let mut buf = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let n = buf.load_from_path(golden.to_str().unwrap()).unwrap();
     assert_eq!(n, 4, "golden holds 4 records");
 
@@ -409,7 +409,7 @@ fn o34a_f16_bits_survive_save_load_no_roundtrip() {
     let own = vec![1u8; au];
     let wl = vec![0u8; au];
 
-    let mut buf = ReplayBuffer::new(4, "v6");
+    let mut buf = ReplayBuffer::new(4, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_impl(PushSingleConfig {
         state: &state,
         chain_planes: &chain,
@@ -433,7 +433,7 @@ fn o34a_f16_bits_survive_save_load_no_roundtrip() {
 
     let path = unique_path("o34a_f16");
     buf.save_to_path(path.to_str().unwrap()).unwrap();
-    let mut buf2 = ReplayBuffer::new(4, "v6");
+    let mut buf2 = ReplayBuffer::new(4, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf2.load_from_path(path.to_str().unwrap()).unwrap();
     for (i, &bits) in patterns.iter().enumerate() {
         assert_eq!(buf2.states[i], bits, "post save/load state bit pattern {i}");

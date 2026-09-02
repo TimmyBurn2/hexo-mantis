@@ -73,13 +73,21 @@ impl PyReplayBuffer {
     /// Create a buffer with `capacity` positions. `encoding` is a registry name and is
     /// REQUIRED — the `"v6"` default was a silent-fallback arm (R45, LAW-11): a buffer
     /// built without stating its encoding decoded as v6 and reported success. An unknown
-    /// name panics through `lookup_or_panic` (→ catchable `PanicException`, LOCKED #4).
+    /// name is a `ValueError` naming the registered set.
+    ///
+    /// Raises:
+    ///     ValueError: `encoding` is not registered, or `capacity` is 0 or so large that the
+    ///         per-record stride products overflow. AUDIT-1 F-38 — the first was a
+    ///         `PanicException` through `lookup_or_panic` while `HexgBuffer.__new__` and
+    ///         `SelfPlayRunner.__new__` both already raised `ValueError` with the same sorted
+    ///         list, and the second reached the allocator, whose abort `panic = "unwind"`
+    ///         cannot convert into a Python exception.
     #[new]
     #[pyo3(signature = (capacity, encoding))]
-    pub fn new(capacity: usize, encoding: &str) -> Self {
-        PyReplayBuffer {
-            inner: ReplayBuffer::new(capacity, encoding),
-        }
+    pub fn new(capacity: usize, encoding: &str) -> PyResult<Self> {
+        Ok(PyReplayBuffer {
+            inner: ReplayBuffer::new(capacity, encoding).map_err(PyValueError::new_err)?,
+        })
     }
 
     /// `(size, capacity, weight_histogram)` for dashboard display.
@@ -402,7 +410,7 @@ mod tests {
 
     #[test]
     fn construct_and_scalar_getters() {
-        let b = PyReplayBuffer::new(16, "v6");
+        let b = PyReplayBuffer::new(16, "v6").expect("PyReplayBuffer::new: a registered encoding and a storable capacity");
         assert_eq!(b.size(), 0);
         assert_eq!(b.capacity(), 16);
         assert_eq!(b.encoding().name(), "v6");
@@ -410,7 +418,7 @@ mod tests {
 
     #[test]
     fn next_game_id_advances() {
-        let mut b = PyReplayBuffer::new(8, "v6");
+        let mut b = PyReplayBuffer::new(8, "v6").expect("PyReplayBuffer::new: a registered encoding and a storable capacity");
         assert_eq!(b.next_game_id(), 0);
         assert_eq!(b.next_game_id(), 1);
     }
@@ -421,7 +429,7 @@ mod tests {
     /// post-ASM — the embedded cargo-test interpreter cannot load numpy's C-ext.
     #[test]
     fn push_for_test_grows_size() {
-        let mut b = PyReplayBuffer::new(32, "v6");
+        let mut b = PyReplayBuffer::new(32, "v6").expect("PyReplayBuffer::new: a registered encoding and a storable capacity");
         for _ in 0..8 {
             b.inner.push_for_test(0.5, 10, true);
         }
@@ -434,7 +442,7 @@ mod tests {
     fn empty_sample_errors() {
         Python::initialize();
         Python::attach(|py| {
-            let mut b = PyReplayBuffer::new(8, "v6");
+            let mut b = PyReplayBuffer::new(8, "v6").expect("PyReplayBuffer::new: a registered encoding and a storable capacity");
             assert!(
                 b.sample_batch(py, 4, false).is_err(),
                 "empty buffer sample errors"

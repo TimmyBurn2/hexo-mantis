@@ -25,7 +25,7 @@ fn v6_shape() -> (usize, usize, usize, usize, usize, usize) {
 
 #[test]
 fn o31_weighted_sampling_distribution() {
-    let mut buf = ReplayBuffer::new(300, "v6");
+    let mut buf = ReplayBuffer::new(300, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(42);
     // <10 → 0.15, <25 → 0.50, ≥25 → 1.0
     buf.set_weight_schedule(vec![10, 25], vec![0.15, 0.50], 1.0).unwrap();
@@ -120,7 +120,7 @@ fn o32_aux_augment_equivariance() {
 #[test]
 fn o33_aux_stress_1k_rows() {
     let (state_stride, chain_stride, policy_stride, aux_stride, _nc, _np) = v6_shape();
-    let mut buf = ReplayBuffer::new(2000, "v6");
+    let mut buf = ReplayBuffer::new(2000, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     for _ in 0..1000 {
         buf.push_for_test(0.0, 10, true);
     }
@@ -203,7 +203,7 @@ fn o33_aux_alignment_reproject() {
     let differs = proj_a.iter().zip(&proj_b).any(|(a, b)| *a < aux_stride && *b < aux_stride && a != b);
     assert!(differs, "test setup: centres A and B must yield different projections");
 
-    let mut buf = ReplayBuffer::new(4, "v6");
+    let mut buf = ReplayBuffer::new(4, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let a_start = 0;
     for &flat in &proj_b {
         if flat < aux_stride {
@@ -248,7 +248,7 @@ fn o34b_f16_bits_survive_sample_identity() {
     let own = vec![1u8; aux_stride];
     let wl = vec![0u8; aux_stride];
 
-    let mut buf = ReplayBuffer::new(4, "v6");
+    let mut buf = ReplayBuffer::new(4, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_impl(PushSingleConfig {
         state: &state,
         chain_planes: &chain,

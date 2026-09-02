@@ -241,7 +241,8 @@ fn s2b_zero_visit_prior_fallback_on_a_wide_root_raises_visit_slots_exceeded() {
     }
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1);
     let centers = vec![board.window_center()];
     tree.expand_and_backup_ls_at(&[prior], &[0.0f32], &centers, TRUNK);
@@ -282,7 +283,8 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
     let centers = vec![board.window_center()];
     let mut done = 0;
     while done < 16 {
-        let boards = tree.select_leaves(4);
+        let boards = tree.select_leaves(4)
+        .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }

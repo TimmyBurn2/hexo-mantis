@@ -46,7 +46,7 @@ fn scatter_state_v6_b512(c: &mut Criterion) {
 /// work; augment=true drives the apply_sym scatter under the R245(c) per-record gate.
 fn dense_sample_core_v6_b512_aug(c: &mut Criterion) {
     let capacity = 100_000usize;
-    let mut buf = ReplayBuffer::new(capacity, "v6");
+    let mut buf = ReplayBuffer::new(capacity, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(0x5A_11_9E);
     for _ in 0..capacity {
         buf.push_for_test(0.0, 0, true); // game_id=-1, weight 1.0

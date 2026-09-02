@@ -28,6 +28,14 @@ use mantis_selfplay::records;
 
 use crate::board::PyBoard;
 
+pyo3::create_exception!(
+    mantis_engine,
+    SelectionDesync,
+    pyo3::exceptions::PyRuntimeError,
+    "Raised when the PUCT descent selects a child whose action_idx decodes to a cell the \
+     board refuses -- the tree and the board have desynchronised (AUDIT-1 F-02)."
+);
+
 /// Per-root-child info returned by `get_root_children_info`:
 /// `((q, r), pool_idx, prior, visits, q_value)`. Used by the policy viewer
 /// to drive Gumbel Sequential Halving from Python.
@@ -123,8 +131,16 @@ impl PyMCTSTree {
     /// Returns a list of Board objects (one per unique leaf).
     /// Always call `expand_and_backup` with the same number of results
     /// before the next call to `select_leaves`.
+    ///
+    /// Raises:
+    ///     SelectionDesync: the tree and the board disagree about what has been played.
+    ///         AUDIT-1 F-02 — this was a `PanicException` crossing the FFI, recovered from in
+    ///         `selfplay/worker.py` by matching the panic's own message text, and only when
+    ///         the batch was larger than one.
     pub fn select_leaves(&mut self, py: Python<'_>, n: usize) -> PyResult<Vec<Py<PyBoard>>> {
-        let boards = py.detach(|| self.inner.select_leaves(n));
+        let boards = py
+            .detach(|| self.inner.select_leaves(n))
+            .map_err(|desync| SelectionDesync::new_err(desync.to_string()))?;
         // Keep our own clones for the ls path (the tree's `pending` is pub(crate)).
         self.pending_boards = boards.clone();
         boards
@@ -140,12 +156,31 @@ impl PyMCTSTree {
     ///               Each vector has length `board_size * board_size + 1`.
     ///     values:   list of scalar values in [-1, 1] (one per leaf),
     ///               from the current player's perspective at that leaf.
+    ///
+    /// Raises:
+    ///     ValueError: `policies` or `values` is not exactly as long as the leaf list the
+    ///         preceding `select_leaves` returned. AUDIT-1 F-22 — the inner call took
+    ///         `n = min(pending, policies, values)` and DROPPED the rest, so a short batch
+    ///         from the inference side silently expanded fewer leaves than were selected. The
+    ///         graph sibling `expand_and_backup_ls_graph` already carries C-1..C-4 guards for
+    ///         exactly this; the dense entry — used by `selfplay/worker.py` and
+    ///         `arena/deploy_head.py`, the deploy-strength path — had none.
     pub fn expand_and_backup(
         &mut self,
         py: Python<'_>,
         policies: Vec<Vec<f32>>,
         values: Vec<f32>,
     ) -> PyResult<()> {
+        let pending = self.pending_boards.len();
+        if policies.len() != pending || values.len() != pending {
+            return Err(PyValueError::new_err(format!(
+                "expand_and_backup: the last select_leaves returned {pending} leaf/leaves, \
+                 but got {} policy row(s) and {} value(s). A short batch used to expand the \
+                 leading leaves and silently drop the rest",
+                policies.len(),
+                values.len()
+            )));
+        }
         py.detach(|| self.inner.expand_and_backup(&policies, &values));
         Ok(())
     }
@@ -451,9 +486,17 @@ impl PyMCTSTree {
     }
 
     #[setter]
-    pub fn set_forced_root_child(&mut self, val: Option<u32>) {
-        self.inner.set_forced_root_child(val);
+    ///
+    /// Raises:
+    ///     ValueError: `val` is not one of the ROOT's children. AUDIT-1 F-02 — the store was
+    ///         unchecked, so an index at or beyond `MAX_NODES` index-panicked and any other
+    ///         foreign index descended into a node the root does not own.
+    pub fn set_forced_root_child(&mut self, val: Option<u32>) -> PyResult<()> {
+        self.inner
+            .set_forced_root_child(val)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
         self.forced_root_child = val;
+        Ok(())
     }
 
     /// Returns list of ((q, r), pool_idx, prior, visits, q_value) for each root child.
@@ -506,6 +549,10 @@ impl PyMCTSTree {
 /// Register the `MCTSTree` pyclass into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMCTSTree>()?;
+    // The named face of the desync (AUDIT-1 F-02). Registered so a Python caller can name it
+    // in an `except` clause — the whole point of retiring the `PanicException` that
+    // `selfplay/worker.py` was matching by message text.
+    m.add("SelectionDesync", m.py().get_type::<SelectionDesync>())?;
     Ok(())
 }
 
@@ -515,10 +562,24 @@ mod tests {
 
     #[test]
     fn forced_root_child_mirror_round_trips() {
+        // AUDIT-1 F-02: the setter validates against the ROOT's child range now, so the
+        // round-trip needs a root that HAS children and an index that is one of them.
         let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, true, 0.3);
         assert_eq!(t.forced_root_child(), None);
-        t.set_forced_root_child(Some(7));
-        assert_eq!(t.forced_root_child(), Some(7));
+        assert!(t.set_forced_root_child(Some(7)).is_err(),
+            "an unexpanded root owns no child 7");
+
+        let seed = PyBoard::new();
+        t.new_game(&seed);
+        Python::attach(|py| {
+            let _leaves = t.select_leaves(py, 1).expect("a fresh root selects itself");
+            let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+            t.expand_and_backup(py, vec![vec![1.0 / n_actions as f32; n_actions]], vec![0.0])
+                .expect("one policy for one leaf");
+        });
+        let first = t.inner.pool[0].first_child;
+        t.set_forced_root_child(Some(first)).expect("the root's own first child");
+        assert_eq!(t.forced_root_child(), Some(first));
         // new_game resets the mirror (matches the tree's internal reset).
         let board = PyBoard::new();
         t.new_game(&board);

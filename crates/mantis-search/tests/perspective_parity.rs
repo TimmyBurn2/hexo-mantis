@@ -22,11 +22,13 @@ fn build_tree_visit_one_child(board: Board, child_value: f32) -> (MCTSTree, usiz
     tree.new_game(board);
 
     // Sim 1: expand root (leaf = root itself; value 0.0 so root.w_value starts neutral)
-    let _leaves = tree.select_leaves(1);
+    let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(std::slice::from_ref(&uniform), &[0.0]);
 
     // Sim 2: descend to one child, expand it, backup child_value
-    let _leaves = tree.select_leaves(1);
+    let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(std::slice::from_ref(&uniform), &[child_value]);
 
     // find the visited child via get_top_visits

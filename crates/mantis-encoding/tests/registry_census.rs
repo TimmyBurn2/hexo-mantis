@@ -1,3 +1,8 @@
+//! R8 justify: one census over one registry, and its rows are meaningful only against each
+//! other — the exact-N count, the name set, the deliberately-absent set, the per-field
+//! authorities and the malformed-fragment refusals all read the SAME `valid_grid_body`
+//! fixture, so a split would leave one file asserting a shape another file's fixture no
+//! longer builds.
 //! O-4..O-10, O-13 — registry census (pruned set), per-field pins,
 //! wire_signature families, spec-derived strides, unknown-key / missing-key /
 //! missing-representation parse errors, validator collect-all, n_chain_planes
@@ -285,4 +290,65 @@ fn mechanical_delta_pins() {
     assert_eq!(mantis_core::Ply::new(4).index() % 2, 0, "ply 4 -> ply_val 0");
     assert_eq!(mantis_core::Ply::new(41).index() % 2, 1, "ply 41 -> ply_val 1");
     // chain_stride reads the field (see n_chain_planes_is_the_field_authority).
+}
+
+// ── AUDIT-1 F-37: the two registry values `sym_tables_for` would have panicked on ─────
+//
+// `mantis_selfplay::replay::sym::sym_tables_for` asserts `n_chain_planes == N_CHAIN_PLANES`
+// and matches `(sym_table_id, n_planes)` against `("size_19", _) | ("size_25", 8)`, panicking
+// on anything else — and it is reached from `SelfPlayRunner::start()`, INCLUDING on a graph
+// run where the tables are never read. `spec/validate.rs` checked `n_chain_planes >= 1` and
+// never mentioned `sym_table_id`, so a new registry row failed at the first runner start, in
+// a worker thread, instead of at load. Leg 3's radius-8 work edits this registry.
+
+#[test]
+fn an_unknown_sym_table_id_is_refused_at_LOAD_not_at_the_first_runner_start() {
+    let body = valid_grid_body().replace(
+        "sym_table_id = \"size_19\"", "sym_table_id = \"size_31\"");
+    let err = parse_encoding_toml("v6_symprobe", &body).unwrap_err();
+    assert!(err.contains("sym_table_id"), "the error must name the field: {err}");
+    assert!(err.contains("size_31"), "…and the value it refused: {err}");
+    assert!(err.contains("size_19") && err.contains("size_25"),
+        "…and what IS available, or the reader cannot act on it: {err}");
+}
+
+#[test]
+fn size_25_without_eight_planes_is_refused_because_the_MATCH_is_on_the_pair() {
+    // `("size_25", 8)` is one arm. `("size_25", 4)` falls through to the panic — and the
+    // pairing is exactly the thing a validator checking each field alone cannot see.
+    let body = valid_grid_body()
+        .replace("sym_table_id = \"size_19\"", "sym_table_id = \"size_25\"")
+        .replace("n_planes = 8", "n_planes = 4")
+        .replace(r#"plane_layout = ["a","b","c","d","e","f","g","h"]"#,
+                 r#"plane_layout = ["a","b","c","d"]"#);
+    let err = parse_encoding_toml("v6_pairprobe", &body).unwrap_err();
+    assert!(err.contains("size_25") && err.contains("n_planes"),
+        "the error must name the PAIR, not one half of it: {err}");
+    // The control: `size_25` with EIGHT planes is a real arm and must still load.
+    let ok = valid_grid_body().replace(
+        "sym_table_id = \"size_19\"", "sym_table_id = \"size_25\"");
+    assert!(parse_encoding_toml("v6_pairok", &ok).is_ok(),
+        "the valid (size_25, 8) pair was refused");
+}
+
+#[test]
+fn a_chain_plane_count_the_D6_tables_cannot_hold_is_refused() {
+    let body = valid_grid_body().replace("n_chain_planes = 6", "n_chain_planes = 7");
+    let err = parse_encoding_toml("v6_chainprobe", &body).unwrap_err();
+    assert!(err.contains("n_chain_planes"), "{err}");
+}
+
+#[test]
+fn every_SHIPPED_spec_clears_the_two_relations() {
+    // The control, and the R98 clean-baseline half: the rule is adopted over a registry that
+    // already satisfies it, so nothing here is a green over a tree nobody checked.
+    for name in REGISTERED {
+        let spec = lookup(name).expect("registered");
+        assert!(matches!(spec.sym_table_id, "size_19" | "size_25"),
+            "{name}: sym_table_id {:?}", spec.sym_table_id);
+        if spec.sym_table_id == "size_25" {
+            assert_eq!(spec.n_planes, 8, "{name}: size_25 requires 8 planes");
+        }
+        assert_eq!(spec.n_chain_planes, 6, "{name}: n_chain_planes");
+    }
 }

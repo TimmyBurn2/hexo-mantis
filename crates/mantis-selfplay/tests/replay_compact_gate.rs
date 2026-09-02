@@ -118,7 +118,7 @@ fn spread_row(dropped_cell: usize) -> Row {
 
 #[test]
 fn push_impl_flags_compact_and_spread_rows() {
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&buf);
 
     buf.push_impl(compact_row(interior).push_config(0.0)).unwrap();
@@ -131,7 +131,7 @@ fn push_impl_flags_compact_and_spread_rows() {
 #[test]
 fn push_game_impl_flags_each_row_independently() {
     let (st, ch, po, ax, _) = shape();
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&buf);
 
     // Rows in order: compact, spread, compact.
@@ -174,7 +174,7 @@ fn push_game_impl_flags_each_row_independently() {
 #[test]
 fn push_many_impl_flags_each_row_independently() {
     let (st, ch, po, ax, _) = shape();
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&buf);
 
     let rows = [spread_row(d), compact_row(interior)];
@@ -210,7 +210,7 @@ fn push_many_impl_flags_each_row_independently() {
 
 #[test]
 fn push_for_test_rows_are_compact() {
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.push_for_test(1.0, 10, true);
     assert_eq!(
         buf.compact_at(0),
@@ -224,7 +224,7 @@ fn push_for_test_rows_are_compact() {
 /// dropping element would then silently delete a real P1 ownership label.
 #[test]
 fn ownership_only_spread_row_is_classified_spread() {
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, _) = dropped_and_interior(&buf);
 
     let mut row = Row::neutral();
@@ -239,7 +239,7 @@ fn ownership_only_spread_row_is_classified_spread() {
 
     // Anti-vacuity: the SAME row with ownership neutral (1) is compact, so the
     // classification above is driven by the ownership byte and nothing else.
-    let mut buf2 = ReplayBuffer::new(4, ENC);
+    let mut buf2 = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let clean = Row::neutral();
     buf2.push_impl(clean.push_config(0.0)).unwrap();
     assert_eq!(buf2.compact_at(0), 1);
@@ -248,7 +248,7 @@ fn ownership_only_spread_row_is_classified_spread() {
 /// An ownership byte of 0 on D means "owned by P2" — also content, also spread.
 #[test]
 fn ownership_zero_on_d_is_also_spread() {
-    let mut buf = ReplayBuffer::new(4, ENC);
+    let mut buf = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, _) = dropped_and_interior(&buf);
     let mut row = Row::neutral();
     row.own[d] = 0; // P2
@@ -305,7 +305,7 @@ fn each_channel_alone_on_a_dropped_cell_reads_spread() {
     let last_state_plane = (n_state_planes - 1) * n_cells;
     let last_chain_plane = (n_chain_planes - 1) * n_cells;
 
-    let geometry = ReplayBuffer::new(1, ENC);
+    let geometry = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&geometry);
     drop(geometry);
 
@@ -323,7 +323,7 @@ fn each_channel_alone_on_a_dropped_cell_reads_spread() {
         // SPREAD: the row's ONE non-neutral value sits on a dropped cell.
         let mut spread = Row::neutral();
         write_one(&mut spread, channel, base, d);
-        let mut buf = ReplayBuffer::new(1, ENC);
+        let mut buf = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
         buf.push_impl(spread.push_config(0.0)).unwrap();
         assert_eq!(
             buf.compact_at(0),
@@ -336,7 +336,7 @@ fn each_channel_alone_on_a_dropped_cell_reads_spread() {
         // verdict above is driven by the CELL, not merely by the channel being touched at all.
         let mut compact = Row::neutral();
         write_one(&mut compact, channel, base, interior);
-        let mut buf2 = ReplayBuffer::new(1, ENC);
+        let mut buf2 = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
         buf2.push_impl(compact.push_config(0.0)).unwrap();
         assert_eq!(
             buf2.compact_at(0),
@@ -348,7 +348,7 @@ fn each_channel_alone_on_a_dropped_cell_reads_spread() {
 
 #[test]
 fn ring_wraparound_overwrite_recomputes_the_flag() {
-    let mut buf = ReplayBuffer::new(2, ENC);
+    let mut buf = ReplayBuffer::new(2, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&buf);
 
     buf.push_impl(compact_row(interior).push_config(0.0)).unwrap();
@@ -367,7 +367,7 @@ fn ring_wraparound_overwrite_recomputes_the_flag() {
 
 #[test]
 fn resize_carries_the_flag_through_linearise() {
-    let mut buf = ReplayBuffer::new(3, ENC);
+    let mut buf = ReplayBuffer::new(3, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&buf);
 
     // Ring order after 4 pushes into capacity 3: head = 1, slots = [r3, r1, r2].
@@ -413,14 +413,14 @@ fn hexb_roundtrip_recomputes_flags_for_a_mixed_buffer() {
             .map_or(0, |d| d.as_nanos())
     ));
 
-    let mut writer = ReplayBuffer::new(4, ENC);
+    let mut writer = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     let (d, interior) = dropped_and_interior(&writer);
     writer.push_impl(spread_row(d).push_config(0.0)).unwrap();
     writer.push_impl(compact_row(interior).push_config(1.0)).unwrap();
     writer.push_impl(spread_row(d).push_config(2.0)).unwrap();
     writer.save_to_path(path.to_str().unwrap()).unwrap();
 
-    let mut reader = ReplayBuffer::new(4, ENC);
+    let mut reader = ReplayBuffer::new(4, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     // A fresh buffer's flag column is all-zero, so the compact row's 0 → 1
     // transition below is only reachable if the loader actually recomputes.
     assert!(reader.compact.iter().all(|&c| c == 0));
@@ -523,7 +523,7 @@ fn observed_syms(buf: &mut ReplayBuffer, expected: &[Vec<f32>], draws: usize) ->
 
 #[test]
 fn a_compact_only_buffer_draws_the_full_group() {
-    let mut buf = ReplayBuffer::new(1, ENC);
+    let mut buf = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(0xC011_AC70);
     let dropped: HashSet<usize> =
         buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();
@@ -551,7 +551,7 @@ fn a_compact_only_buffer_draws_the_full_group() {
 
 #[test]
 fn a_spread_only_buffer_draws_exactly_the_window_preserving_subgroup() {
-    let mut buf = ReplayBuffer::new(1, ENC);
+    let mut buf = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(0x5BEA_D100);
     let n_cells = buf.sym_tables.n_cells;
     // Content on EVERY cell, D included → the record is spread.
@@ -580,7 +580,7 @@ fn augment_false_ticks_neither_counter() {
     // this gate): `augment=false` never consults `compact` at all (`sym_idx` is
     // unconditionally 0 in `sample.rs`), so nothing was exercised and nothing may be
     // counted. MUTATION THAT REDS IT: hoist the tick above the `if augment` branch.
-    let mut buf = ReplayBuffer::new(1, ENC);
+    let mut buf = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(0xA5A5_0000);
     let n_cells = buf.sym_tables.n_cells;
     let row = discriminating_row(0..n_cells); // spread — would tick spread_draws if counted
@@ -599,7 +599,7 @@ fn sample_batch_with_pos_core_ticks_the_same_counters() {
     // through (`sample.rs::record_symmetry_draw`), so `sample_batch_with_pos_core` must
     // tick the SAME atomics as `sample_batch_core`, not a second, independent pair.
     // MUTATION THAT REDS IT: give the pos-variant its own uncounted `draw_record_sym` call.
-    let mut buf = ReplayBuffer::new(1, ENC);
+    let mut buf = ReplayBuffer::new(1, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(0x905E_C0DE);
     let n_cells = buf.sym_tables.n_cells;
     let dropped: HashSet<usize> =
@@ -669,7 +669,7 @@ fn mixed_row(cells: &[usize]) -> Row {
 /// record). Even slots are compact, odd slots are spread.
 fn mixed_buffer(seed: u64) -> (ReplayBuffer, Vec<Mass>) {
     let (st, ch, po, ax, _) = shape();
-    let mut buf = ReplayBuffer::new(8, ENC);
+    let mut buf = ReplayBuffer::new(8, ENC).expect("ReplayBuffer::new: a registered encoding and a storable capacity");
     buf.rng = StdRng::seed_from_u64(seed);
     let dropped: Vec<usize> =
         buf.sym_tables.dropped_cells.iter().map(|&c| c as usize).collect();

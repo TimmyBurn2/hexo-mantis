@@ -135,10 +135,47 @@ impl ReplayBuffer {
     /// Create a new buffer with the given `capacity` (number of positions).
     ///
     /// `encoding` — encoding name from the registry.
-    #[must_use]
-    pub fn new(capacity: usize, encoding: &str) -> Self {
-        let spec = mantis_encoding::registry::lookup_or_panic(encoding);
-        Self::build(capacity, spec, StdRng::from_rng(&mut rand::rng()))
+    ///
+    /// # Errors
+    /// A message naming the unknown encoding and the sorted registered set, or a capacity the
+    /// slot geometry cannot hold.
+    ///
+    /// AUDIT-1 F-38. This was infallible and resolved through `lookup_or_panic`, so an
+    /// unknown name crossed the FFI as a `PanicException` while its siblings —
+    /// `SelfPlayRunner::new`, `PyRegistrySpec::from_registry`, and `HexgBuffer::new` — all
+    /// returned a named error carrying the same sorted list. `capacity` was unbounded too:
+    /// zero panics on the first push (an index out of bounds and a `% 0`), and a huge value
+    /// wraps the stride products in a release build (no `overflow-checks`) or aborts inside
+    /// `handle_alloc_error`, which `panic = "unwind"` cannot convert.
+    pub fn new(capacity: usize, encoding: &str) -> Result<Self, String> {
+        let spec = mantis_encoding::registry::lookup(encoding).ok_or_else(|| {
+            let mut known: Vec<&str> =
+                mantis_encoding::registry::all_specs().map(|s| s.name).collect();
+            known.sort_unstable();
+            format!("ReplayBuffer: unknown encoding {encoding:?}; registered: {known:?}")
+        })?;
+        if capacity == 0 {
+            return Err("ReplayBuffer: capacity 0 stores nothing and panics on the first push \
+                        (an index out of bounds and a modulo by zero)"
+                .to_string());
+        }
+        // The widest per-record allocation is `capacity * spec.state_stride()`; bounding the
+        // largest stride bounds every other. Derived from the strides this spec actually
+        // declares, so no literal is invented here.
+        let widest = spec
+            .state_stride()
+            .max(spec.chain_stride())
+            .max(spec.policy_stride())
+            .max(spec.aux_stride())
+            .max(1);
+        if capacity > usize::MAX / widest {
+            return Err(format!(
+                "ReplayBuffer: capacity {capacity} times the widest per-record stride \
+                 {widest} overflows usize. In a release build (no overflow-checks) that \
+                 wraps to a small allocation and corrupts every later index"
+            ));
+        }
+        Ok(Self::build(capacity, spec, StdRng::from_rng(&mut rand::rng())))
     }
 
     /// Shared constructor body — `new` (registry lookup) and the test-only

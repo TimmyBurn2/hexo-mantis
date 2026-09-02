@@ -258,8 +258,45 @@ impl SelfPlayRunner {
                 "SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string(),
             );
         }
+        // AUDIT-1 F-21: the pool bound, checked at BOOT rather than at the first move that
+        // crosses it. Every sims knob the search can be driven at is checked, not only the
+        // standard one, because a `fast_sims` or `n_sims_full` above the bound overflows the
+        // same pool.
+        for (name, sims) in [
+            ("n_simulations", config.n_simulations),
+            ("standard_sims", config.standard_sims),
+            ("fast_sims", config.fast_sims),
+            ("n_sims_quick", config.n_sims_quick),
+            ("n_sims_full", config.n_sims_full),
+        ] {
+            if sims > mantis_search::MAX_ARMED_SIMS {
+                return Err(format!(
+                    "SelfPlayRunner: {name} = {sims} exceeds MAX_ARMED_SIMS \
+                     ({}), derived as MAX_NODES / (4 * MAX_CHILDREN_PER_NODE). \
+                     `select_leaves` expands TT-hit leaves without counting them against the \
+                     batch (bounded by max_attempts = 4n), so each move can add up to \
+                     4 * sims * {} children and `finish_expansion` panics on pool overflow \
+                     at the first move that crosses it",
+                    mantis_search::MAX_ARMED_SIMS,
+                    mantis_search::MAX_CHILDREN_PER_NODE,
+                ));
+            }
+        }
         if config.fast_prob > 0.0 && config.fast_sims == 0 {
             return Err("SelfPlayRunner: fast_sims must be > 0 when fast_prob > 0".to_string());
+        }
+        // AUDIT-1 F-38. `sample_dirichlet` builds `Gamma::new(alpha, 1.0).expect(...)`, and
+        // the guards above it are `debug_assert!` — dead in the shipped `.so`. Only pydantic's
+        // `gt=0` protected a MINTED config; a hand-built runner spec (a test, a future
+        // non-YAML source, an arithmetic slip upstream) reached the expect and panicked mid
+        // self-play. NaN-safe by construction: `!(x > 0.0)` is true for NaN, `x <= 0.0` is not.
+        if config.dirichlet_enabled && !(config.dirichlet_alpha > 0.0) {
+            return Err(format!(
+                "SelfPlayRunner: dirichlet_alpha must be > 0 when dirichlet_enabled, got {} \
+                 — the Gamma distribution behind the root noise cannot be built otherwise, \
+                 and the guard inside `sample_dirichlet` is a debug_assert (absent in release)",
+                config.dirichlet_alpha
+            ));
         }
         if config.full_search_prob > 0.0 && (config.n_sims_quick == 0 || config.n_sims_full == 0) {
             let (n_sims_quick, n_sims_full) = (config.n_sims_quick, config.n_sims_full);

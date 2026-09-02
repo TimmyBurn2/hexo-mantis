@@ -190,7 +190,8 @@ fn s3_bits() -> Vec<u32> {
     tree.new_game(board);
     let n_actions = N_ACTIONS;
     let policy = vec![1.0 / n_actions as f32; n_actions];
-    let _ = tree.select_leaves(1);
+    let _ = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(&[policy], &[0.0]);
 
     // Give a few children deterministic visits/w_values so q_hat != 0 fires.
@@ -231,7 +232,8 @@ fn s4_puct_dirichlet_bits() -> Vec<u32> {
     tree.new_game(board);
     let n_actions = N_ACTIONS;
     let policy = vec![1.0 / n_actions as f32; n_actions];
-    let _ = tree.select_leaves(1);
+    let _ = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(&[policy], &[0.0]);
 
     let n_ch = tree.pool[0].n_children as usize;

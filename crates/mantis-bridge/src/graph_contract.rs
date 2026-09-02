@@ -82,9 +82,16 @@ fn verify_edge_geometry_impl(
     // --- shape guards (defensive; structural layer already enforces these
     // upstream, but this fn must never index out of range on a corrupt
     // input — this is the ADV-8 producer). ---
-    if node_feat_dim == 0 || edge_feat_dim < 5 {
+    // AUDIT-1 F-22(d). The bound was `node_feat_dim == 0`, but this function reads
+    // `node_feat[s * node_feat_dim + 1]` — the opponent-stone channel — so a dim of ONE
+    // passed the guard and then indexed one past the last element of the final node's row.
+    // The docstring promises this function "never indexes out of range on a corrupt input",
+    // and it is the ADV-8 producer, so the guard must cover every offset the body uses.
+    if node_feat_dim < 2 || edge_feat_dim < 5 {
         return Err(format!(
-            "verify_edge_geometry: degenerate dims node_feat_dim={node_feat_dim} edge_feat_dim={edge_feat_dim}"
+            "verify_edge_geometry: degenerate dims node_feat_dim={node_feat_dim} \
+             edge_feat_dim={edge_feat_dim} (node_feat_dim must be >= 2: this check reads \
+             channel 1, the opponent-stone plane, of every node's row)"
         ));
     }
     if !node_feat.len().is_multiple_of(node_feat_dim) {

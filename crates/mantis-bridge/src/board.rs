@@ -1,7 +1,9 @@
 // Exceeds the 300-line soft cap (R8): the full PyBoard surface (~40 methods)
 // plus the inlined threat-viewer scanner (dropped from mantis-core — it is a
 // viewer-only pure function with no core/search/selfplay consumer) port as one
-// line-auditable unit; splitting them would need a 7th module file (out of the
+// line-auditable unit; splitting them would need one more module file than the crate
+// already carries (AUDIT-1 F-52: this said "a 7th" over eleven — a count in a design
+// argument that had gone stale without the argument changing)
 // R1 write scope) for one private helper.
 //! Python-visible Board wrapper over `mantis_core::Board`.
 //!
@@ -270,21 +272,24 @@ impl PyBoard {
     /// over the Vec the encode kernel just allocated. Python callers spell:
     ///   `board.to_tensor().reshape(18, board.size, board.size)`.
     ///
-    /// Panics for an encoding-less board (`Board.new()`) — no v6 default
-    /// (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
-    /// With `panic = "unwind"` that panic crosses the FFI as a catchable
-    /// `PanicException`, matching this function's own multi-window panic
-    /// arm above.
-    pub fn to_tensor<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        let spec = match self.encoding {
-            Some(s) => s,
-            None => panic!(
-                "Board::to_tensor called on an encoding-less Board (Board.new()); \
+    /// Raises:
+    ///     ValueError: the board carries no encoding (`Board.new()`) — no v6 default
+    ///         (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
+    ///
+    /// AUDIT-1 F-38. This was `panic!`, reaching Python as a `PanicException` and convertible
+    /// at all only because the profile sets `panic = "unwind"` (R2/LAW-13) — a guarantee
+    /// about the worst case, not a design. The refusal itself is correct and unchanged; only
+    /// its face is. Four sites in this tree construct encoding-less boards, so the arm is
+    /// reachable even though no live Python caller reaches it today.
+    pub fn to_tensor<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
+        let spec = self.encoding.ok_or_else(|| {
+            PyValueError::new_err(
+                "Board.to_tensor called on an encoding-less Board (Board.new()); \
                  construct via Board.with_encoding_name(...) first — no v6 default \
-                 (R28, LAW-11)"
-            ),
-        };
-        mantis_encoding::to_planes(&self.inner, spec).into_pyarray(py)
+                 (R28, LAW-11)",
+            )
+        })?;
+        Ok(mantis_encoding::to_planes(&self.inner, spec).into_pyarray(py))
     }
 
     /// Returns a tuple of (list of NumPy arrays, list of (q, r) centers) for each cluster.

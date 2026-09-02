@@ -116,7 +116,8 @@ fn test_select_leaves_returns_root_when_empty() {
     let board = Board::new();
     tree.new_game(board.clone());
 
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1);
     assert_eq!(leaves[0].ply, board.ply);
     assert_eq!(leaves[0].moves_remaining, board.moves_remaining);
@@ -128,7 +129,8 @@ fn test_expand_and_backup_creates_children() {
     let board = Board::new();
     tree.new_game(board);
 
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     let n_legal = leaves[0].legal_move_count();
 
     let policy = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
@@ -150,7 +152,8 @@ fn test_full_search_runs_n_simulations() {
     let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
 
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1);
+        let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values: Vec<f32> = (0..n).map(|_| 0.0).collect();
@@ -164,7 +167,8 @@ fn test_full_search_runs_n_simulations() {
 fn test_virtual_loss_applied_during_select() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
-    let _leaves = tree.select_leaves(1);
+    let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(tree.pool[0].virtual_loss_count, 1);
 }
 
@@ -173,7 +177,8 @@ fn test_virtual_loss_reversed_after_backup() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
 
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     let n = leaves.len();
     let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
     let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
@@ -190,7 +195,8 @@ fn test_virtual_loss_causes_path_divergence() {
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 1;
 
-    let batch = tree.select_leaves(2);
+    let batch = tree.select_leaves(2)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(batch.len(), 2);
 
     let dummy = vec![0.5f32; BOARD_SIZE * BOARD_SIZE + 1];
@@ -549,7 +555,8 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
     tree.new_game(board);
 
     // Expand root with uniform priors.
-    let _leaves = tree.select_leaves(1);
+    let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy = vec![1.0 / n_actions as f32; n_actions];
     tree.expand_and_backup(&[policy], &[0.0]);
@@ -562,10 +569,14 @@ fn test_wp6_driver_setters_roundtrip() {
     // selfplay worker-loop driver. In-crate test reads the pub(crate) fields directly.
     let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.0);
 
-    tree.set_forced_root_child(Some(3));
-    assert_eq!(tree.forced_root_child, Some(3),
-        "set_forced_root_child(Some(3)) must set the field");
-    tree.set_forced_root_child(None);
+    // AUDIT-1 F-02: the setter validates against the ROOT's child range, so this round-trip
+    // needs a root that HAS children — a bare tree owns none and index 3 belongs to nothing.
+    let mut tree = setup_expanded_root();
+    let first = tree.pool[0].first_child;
+    tree.set_forced_root_child(Some(first)).expect("the root's own first child is in range");
+    assert_eq!(tree.forced_root_child, Some(first),
+        "set_forced_root_child(Some(first_child)) must set the field");
+    tree.set_forced_root_child(None).expect("clearing is always in range");
     assert_eq!(tree.forced_root_child, None,
         "set_forced_root_child(None) must clear the field");
 
@@ -596,7 +607,8 @@ fn test_forced_root_child_selection() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1);
+        let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -626,7 +638,8 @@ fn test_forced_root_none_uses_puct() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1);
+        let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -656,7 +669,8 @@ fn test_gumbel_disabled_no_behavior_change() {
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
         let uniform = vec![1.0 / n_actions as f32; n_actions];
         for _ in 0..10 {
-            let leaves = tree.select_leaves(1);
+            let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
             let n = leaves.len();
             let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
             let values = vec![0.0f32; n];
@@ -689,7 +703,8 @@ fn test_nonroot_uses_puct_when_root_forced() {
 
     // Run enough sims to expand the forced child and go deeper.
     for _ in 0..30 {
-        let leaves = tree.select_leaves(1);
+        let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -721,7 +736,8 @@ fn test_last_search_stats_bounds_after_sims() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1);
+        let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -900,4 +916,140 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         "pick_topk_children child ORDER must be independent of FxHashSet \
          capacity / iteration order (see backup.rs fn-doc)"
     );
+}
+
+
+// ── AUDIT-1 F-02: the desync is a NAMED error, and the forced child is bounded ────────
+//
+// `select_one_leaf` did `board.apply_move_tracked(q, r).expect("selected move should always
+// be legal")`. `Board::apply_move` errs ONLY on occupancy — never on radius — so the expect
+// fires exactly when a child's stored `action_idx` decodes to a cell already on the board:
+// the tree and the board have desynchronised. It fired in production: `selfplay/worker.py`
+// carried a `BaseException` handler matching the message text `"cell already occupied"` to
+// restart the tree at root, and only when the batch was larger than one.
+
+/// A tree whose root has ONE child, pointing at a cell the root board already holds.
+///
+/// The stone at (0, 0) is played BEFORE `new_game`, so the tree's root board carries it; the
+/// child's `action_idx` is then overwritten to decode back to that same cell. This is exactly
+/// the state the production `expect` fired on — a child whose stored action is no longer
+/// legal on the board the descent walks.
+fn desynchronised_root() -> MCTSTree {
+    let mut tree = MCTSTree::new(1.5);
+    let mut board = Board::new();
+    board.apply_move(0, 0).expect("an empty board accepts (0, 0)");
+    tree.new_game(board);
+    let _leaves = tree.select_leaves(1).expect("the fresh root selects itself");
+    let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+    tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);
+
+    let first = tree.pool[0].first_child as usize;
+    tree.pool[first].action_idx = (32768u32 << 16) | 32768u32; // decodes to (0, 0)
+    tree.pool[0].n_children = 1; // the descent has no other child to take
+    tree
+}
+
+#[test]
+fn a_child_pointing_at_an_occupied_cell_is_an_ERR_not_a_panic() {
+    let mut tree = desynchronised_root();
+    let err = tree.select_leaves(1).expect_err("a desynchronised child must not be a panic");
+    assert_eq!(err.q, 0, "the error names the cell the board refused");
+    assert_eq!(err.r, 0);
+    assert_eq!(err.node, 0, "…and the node whose child was selected");
+    assert!(err.to_string().contains("desynchronised"), "{err}");
+}
+
+#[test]
+fn the_failing_descent_leaves_no_virtual_loss_behind() {
+    // A propagated Err must not permanently penalise the path it walked: the nodes on the
+    // descent already took their virtual loss, and a caller that recovers would search a
+    // tree biased against the branch that failed.
+    let mut tree = desynchronised_root();
+    let before = tree.pool[0].virtual_loss_count;
+    let _ = tree.select_leaves(1);
+    assert_eq!(tree.pool[0].virtual_loss_count, before,
+        "the root kept the virtual loss from a descent that produced no leaf");
+}
+
+#[test]
+fn a_healthy_tree_still_selects_leaves() {
+    // The control. The repair must not turn a working search into a refusal.
+    let mut tree = MCTSTree::new(1.5);
+    tree.new_game(Board::new());
+    let leaves = tree.select_leaves(1).expect("a fresh tree has no desync");
+    assert_eq!(leaves.len(), 1);
+}
+
+#[test]
+fn a_forced_root_child_outside_the_roots_range_is_refused() {
+    // The second trigger. `u32::MAX` index-panicked on the next descent; any other foreign
+    // index descended into a node the root does not own — and an uninitialised slot carries
+    // `action_idx = u32::MAX`, which decodes to (32767, 32767), a cell an UNBOUNDED board
+    // accepts. That arm produced neither a panic nor an error.
+    let mut tree = setup_expanded_root();
+    let err = tree.set_forced_root_child(Some(u32::MAX)).expect_err("u32::MAX is not a child");
+    assert_eq!(err.child, u32::MAX);
+    assert!(err.to_string().contains("not a child of the root"), "{err}");
+
+    let first = tree.pool[0].first_child;
+    let past_end = first + u32::from(tree.pool[0].n_children);
+    assert!(tree.set_forced_root_child(Some(past_end)).is_err(),
+        "one past the last child is still not a child");
+    assert!(tree.set_forced_root_child(Some(first)).is_ok(), "the first child IS in range");
+    assert!(tree.set_forced_root_child(None).is_ok(), "clearing is always allowed");
+}
+
+#[test]
+fn a_root_with_no_children_accepts_no_forced_child_at_all() {
+    let mut tree = MCTSTree::new(1.5);
+    tree.new_game(Board::new());
+    assert_eq!(tree.pool[0].n_children, 0, "an unexpanded root owns nothing");
+    assert!(tree.set_forced_root_child(Some(0)).is_err());
+    assert!(tree.set_forced_root_child(Some(1)).is_err());
+    assert!(tree.set_forced_root_child(None).is_ok());
+}
+
+// ── AUDIT-1 F-22: a short batch degrades the BATCH, not the TREE ──────────────────────
+//
+// `expand_and_backup` takes `n = pending.len().min(policies.len()).min(values.len())` and
+// drops the rest of `pending` — which is already `mem::take`n. `select_one_leaf` incremented
+// the virtual loss of every node on each of those descents, and nothing else ever decrements
+// it, so those nodes stayed permanently penalised for the rest of the search: their PUCT
+// score depressed by a loss that will never be backed up. The inference side returning a
+// short batch is exactly when that happens, and it happens on the deploy-strength path.
+
+#[test]
+fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {
+    // `setup_two_child_tree` is the fixture the virtual-loss divergence row already uses,
+    // and it is the one that reliably yields TWO distinct leaves in one batch.
+    let (mut tree, _child_a, _child_b) = setup_two_child_tree(1.5);
+    tree.pool[0].n_visits = 1;
+    let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+
+    // Select two leaves, then answer for only ONE.
+    let leaves = tree.select_leaves(2).expect("no desync");
+    assert_eq!(leaves.len(), 2, "the fixture needs two distinct leaves");
+    let dropped: Vec<u32> = tree.pending.iter().skip(1).map(|(idx, _)| *idx).collect();
+    assert_eq!(dropped.len(), 1);
+
+    tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);
+
+    for idx in dropped {
+        assert_eq!(tree.pool[idx as usize].virtual_loss_count, 0,
+            "leaf {idx} was dropped from the batch and kept its virtual loss — its PUCT \
+             score stays depressed for the rest of the search");
+    }
+}
+
+#[test]
+fn a_FULL_batch_is_unaffected_by_the_unwind() {
+    // The control: the ordinary path must not lose a leaf or an update.
+    let (mut tree, _a, _b) = setup_two_child_tree(1.5);
+    tree.pool[0].n_visits = 1;
+    let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+    let leaves = tree.select_leaves(2).expect("no desync");
+    let n = leaves.len();
+    let policies: Vec<Vec<f32>> = (0..n).map(|_| vec![1.0 / n_actions as f32; n_actions]).collect();
+    tree.expand_and_backup(&policies, &vec![0.0; n]);
+    assert!(tree.pending.is_empty(), "every pending leaf was consumed");
 }

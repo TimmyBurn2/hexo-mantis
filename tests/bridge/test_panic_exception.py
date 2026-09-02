@@ -2,17 +2,25 @@
 the FFI as a CATCHABLE `pyo3_runtime.PanicException` — `panic = "unwind"`'s whole
 point — NOT a process abort. RED-TEAM: the process must survive.
 """
+import pytest
+
 from mantis import _engine
 
 
-def test_unknown_encoding_lookup_panics_catchably(panic_exception):
-    """`ReplayBuffer("bogus")` -> lookup_or_panic -> catchable PanicException."""
-    try:
+def test_unknown_encoding_lookup_raises_a_NAMED_error(panic_exception):
+    """`ReplayBuffer("bogus")` — the refusal is unchanged, its FACE is not.
+
+    AUDIT-1 F-38. This resolved through `lookup_or_panic` and reached Python as a
+    `PanicException`, while every sibling constructor — `HexgBuffer.__new__`,
+    `SelfPlayRunner.__new__`, `RegistrySpec.from_registry` — already returned a named
+    `ValueError` carrying the sorted registered set. A mistyped encoding name in a config is
+    an ordinary operator error and a panic is not how this repo reports one.
+    """
+    with pytest.raises(ValueError) as excinfo:
         _engine.ReplayBuffer(8, "__no_such_encoding__")
-    except panic_exception as exc:
-        assert "unknown encoding" in str(exc)
-    else:
-        raise AssertionError("expected a PanicException, none raised")
+    assert "unknown encoding" in str(excinfo.value)
+    assert "v6" in str(excinfo.value), "the registered set must be in the message"
+    assert not isinstance(excinfo.value, panic_exception)
 
 
 def test_multi_window_to_tensor_panics_catchably(panic_exception):
@@ -27,25 +35,31 @@ def test_multi_window_to_tensor_panics_catchably(panic_exception):
         raise AssertionError("expected a PanicException, none raised")
 
 
-def test_encoding_less_board_to_tensor_panics_catchably(panic_exception):
-    """Board().to_tensor() (no encoding bound) -> catchable PanicException
-    (R28; DESIGN_P3.md §3.2/§3.4). Mirrors test_multi_window_to_tensor_
-    panics_catchably's exact idiom."""
-    board = _engine.Board()
-    try:
-        board.to_tensor()
-    except panic_exception as exc:
-        assert "encoding-less" in str(exc)
-    else:
-        raise AssertionError("expected a PanicException, none raised")
+def test_encoding_less_board_to_tensor_raises_a_NAMED_error(panic_exception):
+    """`Board().to_tensor()` (no encoding bound) — R28/LAW-11's refusal, which is unchanged.
 
-    # Follow-on liveness check, same test (design's preferred shape, §3.4): the
-    # interpreter must still be usable after the catch above (unwind, not abort).
+    AUDIT-1 F-38 CHANGED ITS FACE, not its verdict. It was `panic!`, reaching Python as a
+    `PanicException` and convertible only because the profile sets `panic = "unwind"`
+    (R2/LAW-13) — a guarantee about the WORST case, not a design. CLAUDE.md's Rust rule is
+    that fail-loud means a NAMED error that propagates, never a panic reached for in the first
+    place. The row keeps `panic_exception` as a parameter so it also asserts the NEGATIVE: this
+    site no longer produces one.
+    """
+    board = _engine.Board()
+    with pytest.raises(ValueError) as excinfo:
+        board.to_tensor()
+    assert "encoding-less" in str(excinfo.value)
+    assert not isinstance(excinfo.value, panic_exception), (
+        "the refusal is a named ValueError now, not a panic crossing the FFI"
+    )
+
+    # Follow-on liveness check, same test (design's preferred shape, §3.4): the interpreter
+    # must still be usable after the refusal above — and a NAMED error makes that trivially
+    # true, which is the improvement. It is kept because the row's subject is the SITE, and a
+    # site that refused once must go on refusing.
     for _ in range(2):
-        try:
+        with pytest.raises(ValueError):
             _engine.Board().to_tensor()
-        except panic_exception:
-            pass
     b = _engine.Board.with_encoding_name("v6")
     b.apply_move(0, 0)
     assert b.ply == 1
@@ -60,9 +74,15 @@ def test_process_survives_a_caught_panic(panic_exception):
     # while saying nothing about unwinding (R192(e), derive-or-delete).
     before = len(_engine.all_specs())
     assert before > 0, "the registry was already empty; this row cannot show survival"
+    # AUDIT-1 F-38 moved this row's DRIVER. `ReplayBuffer` with an unknown encoding is a named
+    # `ValueError` now, so the repeated-panic loop is driven by the site that STILL panics:
+    # the multi-window dense kernel's `unimplemented!`. The claim is unchanged and is the one
+    # `panic = "unwind"` exists for — an ABORT would take the process with it, and no
+    # assertion after it would run.
+    multi_window = _engine.Board.with_encoding_name("v6w25")
     for _ in range(3):
         try:
-            _engine.ReplayBuffer(8, "__still_bogus__")
+            multi_window.to_tensor()
         except panic_exception:
             pass
     # The engine is still fully functional after repeated caught panics.

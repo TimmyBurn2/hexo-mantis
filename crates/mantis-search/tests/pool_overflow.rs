@@ -33,7 +33,8 @@ fn run_uniform_search(tree: &mut MCTSTree, n_sims: usize, leaf_batch: usize) {
     let mut completed = 0;
     while completed < n_sims {
         let take = leaf_batch.min(n_sims - completed);
-        let boards = tree.select_leaves(take);
+        let boards = tree.select_leaves(take)
+        .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }
@@ -108,7 +109,8 @@ fn normal_sized_pool_does_not_overflow_on_empty_root() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0_f32 / n_actions as f32; n_actions];
 
-    let _leaves = tree.select_leaves(1);
+    let _leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(&[uniform], &[0.0]);
 
     let root = &tree.pool[0];

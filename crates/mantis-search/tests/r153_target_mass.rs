@@ -69,7 +69,8 @@ fn run_uniform_search(tree: &mut MCTSTree, n_actions: usize) {
     let mut done = 0;
     while done < N_SIMS {
         let take = LEAF_BATCH.min(N_SIMS - done);
-        let boards = tree.select_leaves(take);
+        let boards = tree.select_leaves(take)
+        .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }

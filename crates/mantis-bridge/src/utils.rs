@@ -158,8 +158,20 @@ pub(crate) fn graph_row_outcome(
     ))
 }
 
+/// The largest sim budget the MCTS node pool can serve (AUDIT-1 F-21).
+///
+/// Exported so the config schema can bound `n_simulations` and its siblings against the
+/// ENGINE'S own derivation rather than a re-typed number. `MAX_ARMED_SIMS` is
+/// `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`, and both constants live in `mantis-search`; a
+/// literal on the Python side would be a second authority for a bound only the pool knows.
+#[pyfunction]
+pub fn mcts_max_armed_sims() -> usize {
+    mantis_search::MAX_ARMED_SIMS
+}
+
 /// Register the utility free fns into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(mcts_max_armed_sims, m)?)?;
     m.add_function(wrap_pyfunction!(apply_symmetries_batch, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;

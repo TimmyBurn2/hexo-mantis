@@ -12,6 +12,14 @@ use std::sync::atomic::Ordering;
 
 use super::{ReplayBuffer, HEXB_MAGIC, HEXB_VERSION};
 
+/// Structural ceiling on the record count a HEXB header may claim (AUDIT-1 F-23).
+///
+/// DERIVED, not tuned: `u32::MAX` records at any plausible per-entry size stays far inside
+/// `usize`, and no real buffer is within many orders of magnitude of it. The bound exists to
+/// stop the multiplication below from WRAPPING in a release build (`[profile.release]` sets no
+/// `overflow-checks`), not to express a policy about how big a saved buffer may be.
+const MAX_SAVED_RECORDS: usize = u32::MAX as usize;
+
 impl ReplayBuffer {
     /// Load buffer contents from a binary file written by `save_to_path`.
     ///
@@ -22,6 +30,7 @@ impl ReplayBuffer {
     #[allow(clippy::too_many_lines)]
     pub fn load_from_path(&mut self, path: &str) -> Result<usize, String> {
         use std::io::{BufReader, Read};
+
 
         let file = match std::fs::File::open(path) {
             Ok(f) => f,
@@ -138,6 +147,25 @@ impl ReplayBuffer {
             ));
         }
 
+        // AUDIT-1 F-23. `saved_size` is a `u64` read straight from the file header, and
+        // `[profile.release]` sets no `overflow-checks` — so the shipped `.so` WRAPS exactly
+        // where `cargo test` panics. `to_skip * entry_bytes` on a corrupt header wraps to a
+        // small number, the loader skips the wrong distance, and then reads records at the
+        // wrong offsets into `self.states[slot..]`. This loader is SINGLE-PASS (the HEXG one
+        // is the two-pass atomic one), so a later `Err` leaves the live buffer already
+        // partially overwritten — LAW-14 says the run dies, but anything that catches the
+        // error is reading misaligned rows.
+        //
+        // Both bounds are checked BEFORE the first byte is consumed. The file's own length is
+        // the tightest honest bound on how many records it can contain.
+        if saved_size > MAX_SAVED_RECORDS {
+            return Err(format!(
+                "HEXB v{version}: header claims {saved_size} records, above the structural \
+                 ceiling {MAX_SAVED_RECORDS}. The skip arithmetic below multiplies this by \
+                 the per-entry byte size, which wraps in a release build (no overflow-checks)"
+            ));
+        }
+
         // How many to actually load — cap at our capacity
         let to_load = saved_size.min(self.capacity);
         // How many to skip if saved_size > capacity (skip oldest)
@@ -164,7 +192,25 @@ impl ReplayBuffer {
 
         // Skip oldest entries
         if to_skip > 0 {
-            let skip_bytes = to_skip * entry_bytes;
+            // F-23: `checked_mul`, and the product bounded by the file's ACTUAL length. A
+            // header that claims more bytes than the file holds is corrupt by construction,
+            // and saying so here costs one `metadata` call against a whole-file misread.
+            let skip_bytes = to_skip.checked_mul(entry_bytes).ok_or_else(|| {
+                format!(
+                    "HEXB v{version}: skip arithmetic overflows — {to_skip} records times \
+                     {entry_bytes} bytes per entry does not fit in usize"
+                )
+            })?;
+            let file_len = std::fs::metadata(path)
+                .map(|m| m.len() as usize)
+                .unwrap_or(usize::MAX);
+            if skip_bytes > file_len {
+                return Err(format!(
+                    "HEXB v{version}: the header asks to skip {skip_bytes} bytes but the \
+                     file is only {file_len} bytes — the header is corrupt, and skipping \
+                     past the end would leave the read cursor at an arbitrary offset"
+                ));
+            }
             let mut remaining = skip_bytes;
             let mut skip_buf = vec![0u8; 8192.min(skip_bytes)];
             while remaining > 0 {
@@ -320,7 +366,7 @@ mod tests {
         // The alias is not registered — the guard keys on the FILE's name, not this.
         assert!(mantis_encoding::registry::lookup("v6_alias").is_none());
 
-        let mut writer = ReplayBuffer::new(8, "v6"); // file DECLARES the registered "v6"
+        let mut writer = ReplayBuffer::new(8, "v6").expect("ReplayBuffer::new: a registered encoding and a storable capacity"); // file DECLARES the registered "v6"
         writer.push_for_test(1.0, 10, true);
         let path = unique_test_path("v6_alias");
         writer.save_to_path(path.to_str().unwrap()).unwrap();

@@ -409,7 +409,9 @@ pub fn aggregate_policy_ls(
 /// builder crate so the sentinel can never drift from what `build_axis_graph`
 /// emits (contract §2.1/§2.2 amendment).
 /// Returns `Err(reason)` (never panics/aborts) on a ragged length desync or an
-/// out-of-range slot — the workspace release profile is `panic="abort"`, so the
+/// out-of-range slot — the workspace release profile is `panic="unwind"` (R2/LAW-13: a panic
+/// must cross the FFI as a PanicException, never a process abort, because an abort loses the
+/// run), so the
 /// WP-3 review N4 note asks the seam consumer to die loud through
 /// `submit_graph_inference_failure` (§7) rather than abort the process. Both
 /// error legs are unreachable in practice (the caller pre-checks the segment

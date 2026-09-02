@@ -119,7 +119,8 @@ fn drive_negative_prior_chain(use_at: bool) {
 
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
-    let leaves = tree.select_leaves(1);
+    let leaves = tree.select_leaves(1)
+        .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1);
     if use_at {
         let centers = vec![board.window_center()];

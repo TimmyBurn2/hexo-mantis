@@ -11,13 +11,25 @@ old key.
 """
 from pydantic import Field, model_validator
 
+from mantis._engine import mcts_max_armed_sims
 from mantis.config.schema._base import StrictModel
+
+#: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (AUDIT-1 F-21).
+#:
+#: `finish_expansion` panics on pool overflow, and `select_leaves` expands TT-hit leaves
+#: without counting them against the batch, so one move can add up to
+#: `4 * sims * MAX_CHILDREN_PER_NODE` children. `n_simulations` was `Field(ge=1)` with NO
+#: ceiling, so a config could arm a budget that halts the run at the first move crossing it.
+#: Derived from `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)` in `mantis-search` and read across
+#: the bridge rather than re-typed — a literal here would be a second authority for a bound
+#: only the pool knows, and it would go stale the day either constant moves.
+MAX_ARMED_SIMS: int = mcts_max_armed_sims()
 
 
 class MctsConfig(StrictModel):
     """Flat-regime MCTS knobs (`# mcts ns` in `hparams.py`)."""
 
-    n_simulations: int = Field(ge=1)
+    n_simulations: int = Field(ge=1, le=MAX_ARMED_SIMS)
     c_puct: float = Field(gt=0)
     fpu_reduction: float
     quiescence_enabled: bool
@@ -32,12 +44,12 @@ class MctsConfig(StrictModel):
 class PlayoutCapConfig(StrictModel):
     """Playout-cap-randomization (PCR) knobs (`# playout_cap ns` in `hparams.py`)."""
 
-    fast_sims: int = Field(ge=1)
+    fast_sims: int = Field(ge=1, le=MAX_ARMED_SIMS)
     fast_prob: float = Field(ge=0, le=1)
-    standard_sims: int = Field(ge=0)
+    standard_sims: int = Field(ge=0, le=MAX_ARMED_SIMS)
     full_search_prob: float = Field(ge=0, le=1)
-    n_sims_quick: int = Field(ge=0)
-    n_sims_full: int = Field(ge=0)
+    n_sims_quick: int = Field(ge=0, le=MAX_ARMED_SIMS)
+    n_sims_full: int = Field(ge=0, le=MAX_ARMED_SIMS)
     zoi_enabled: bool
     zoi_lookback: int = Field(ge=0)
     zoi_margin: int = Field(ge=0)

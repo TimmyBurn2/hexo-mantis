@@ -50,7 +50,12 @@ def _to_registry_spec(spec: RegistrySpec | Any) -> RegistrySpec:
 
 
 class SelfPlayWorker:
-    """MCTS + inference wrapper used by the model-backed bot.
+    """MCTS + inference wrapper: the SELF-PLAY search loop, and the bot path that shares it.
+
+    AUDIT-1 F-52: this read "used by the model-backed bot", which describes one of its two
+    consumers and not the load-bearing one — the self-play generation path is what this
+    class exists for, and reading it as bot-only invites treating the search loop as
+    non-production.
 
     Args:
         model:  trained (or random) net.
@@ -176,18 +181,21 @@ class SelfPlayWorker:
         sims_done = 0
         while sims_done < n_sims:
             current_batch = min(effective_batch, n_sims - sims_done)
-            try:
-                leaves = self.tree.select_leaves(current_batch)
-            except BaseException as exc:
-                # Native MCTS can occasionally panic during batched leaf reconstruction.
-                # Recover by restarting at root in batch_size=1 mode.
-                if current_batch > 1 and "cell already occupied" in str(exc):
-                    self.tree.new_game(board)
-                    dirichlet_applied = False
-                    effective_batch = 1
-                    leaves = self.tree.select_leaves(1)
-                else:
-                    raise
+            # AUDIT-1 F-02. This was a `BaseException` handler that matched the OCCUPANCY
+            # message `Board::apply_move` returns, read out of the `str()` of a
+            # `PanicException`, and restarted the tree at root in batch-1 mode.
+            # Three things were wrong with it and all three are closed engine-side:
+            #   * it recovered only when `current_batch > 1`, so the same desync at batch 1
+            #     propagated as an unnamed panic;
+            #   * on the RUST self-play arm nothing reaches this code at all — the unwind is
+            #     caught by `runner::spawn::guard_worker`, which halts the run with no reason
+            #     latched — so the recovery covered one arm of two;
+            #   * matching a panic's message text is a contract nothing enforces.
+            # `select_leaves` now returns a named `SelectionDesync` and the runner routes it
+            # through the same run-fatal seam channel every other leaf-inference failure takes.
+            # A desync means the tree and the board disagree about what has been played, and
+            # continuing from a silently reset tree exports a search that did not happen.
+            leaves = self.tree.select_leaves(current_batch)
 
             if not leaves:
                 break

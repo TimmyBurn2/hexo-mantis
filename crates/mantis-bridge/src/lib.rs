@@ -34,7 +34,7 @@ fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     board::register(m)?; // Board
     encoding::register(m)?; // RegistrySpec + all_specs/registry_sha/registry_sha_hex
     graph_contract::register(m)?; // verify_edge_geometry
-    mcts::register(m)?; // MCTSTree
+    mcts::register(m)?; // MCTSTree + SelectionDesync
     tactics::register(m)?; // TacticalSolver
     utils::register(m)?; // apply_symmetries_batch + (take_)mcts_pool_overflow_count
     inference::register(m)?; // InferenceBatcher + GraphWire + WireAlreadyConsumed

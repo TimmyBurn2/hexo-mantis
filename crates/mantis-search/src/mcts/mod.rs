@@ -1,3 +1,7 @@
+//! R8 justify: the tree's type, its pool constants and the derived bounds taken over them are
+//! one unit — `MAX_ARMED_SIMS` is a function of `MAX_NODES` and `MAX_CHILDREN_PER_NODE`, and a
+//! bound living apart from the constants it is derived from is the duplicate-authority class
+//! this repo keeps closing.
 //! Single-threaded PUCT MCTS tree with a flat pre-allocated node pool.
 //!
 //! Design notes:
@@ -25,6 +29,7 @@ mod completed_q;
 
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use backup::{pool_overflow_count, take_pool_overflow_count};
+pub use selection::{ForcedChildOutOfRange, SelectionDesync};
 
 /// Maximum children created per leaf expansion.
 ///
@@ -45,6 +50,21 @@ pub use backup::{pool_overflow_count, take_pool_overflow_count};
 /// stable identity across re-roots since the chosen top-K set is determined
 /// by local policy + flat_idx, both invariant under root rotation.
 pub const MAX_CHILDREN_PER_NODE: usize = 192;
+
+/// The largest armed sim budget the node pool can serve, DERIVED from the pool's own two
+/// constants (AUDIT-1 F-21).
+///
+/// `finish_expansion` panics when `next_free + n_ch > pool.len()`, and `select_leaves`
+/// expands TT-hit leaves WITHOUT counting them against `n` — bounded only by
+/// `max_attempts = 4n`. So the worst case for one move is `4 × sims` expansions, each adding
+/// up to `MAX_CHILDREN_PER_NODE` children, and the pool overflows from `n_simulations` alone
+/// at roughly 1302. The schema declares `n_simulations: Field(ge=1)` with NO ceiling, and
+/// `SelfPlayRunner::new` checked only `effective_standard == 0`, so a config could arm a
+/// budget that halts the run at the first move that crosses the bound.
+///
+/// The panic STAYS as the last line — a pool that has actually overflowed has corrupted its
+/// own indices and must not continue. This constant is what stops a config reaching it.
+pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
 
 use mantis_core::board::{Board, BOARD_SIZE};
 use fxhash::FxHashMap;
@@ -160,8 +180,31 @@ impl MCTSTree {
     /// Set the Gumbel Sequential-Halving forced root child (or clear it). The selfplay
     /// worker-loop driver steers Gumbel by forcing sims into a candidate then clearing;
     /// exposed for cross-crate driving (mantis-selfplay). Pure state set — no search logic.
-    pub fn set_forced_root_child(&mut self, child: Option<u32>) {
+    ///
+    /// # Errors
+    /// `ForcedChildOutOfRange` — `child` is not a pool index inside the ROOT's child range.
+    ///
+    /// AUDIT-1 F-02, second trigger. This used to be an unchecked store, and the value is read
+    /// straight into `self.pool[best as usize]` on the next descent: an index at or beyond
+    /// `MAX_NODES` index-panics, and any OTHER in-range index descends into a node the root
+    /// does not own — including an uninitialised slot, whose `action_idx` of `u32::MAX`
+    /// decodes to the axial cell `(32767, 32767)`, which an unbounded board ACCEPTS. That arm
+    /// produced no panic and no error: it silently searched a subtree belonging to nothing.
+    pub fn set_forced_root_child(&mut self, child: Option<u32>) -> Result<(), ForcedChildOutOfRange> {
+        if let Some(idx) = child {
+            let root = &self.pool[0];
+            let first = root.first_child;
+            let end = first.saturating_add(u32::from(root.n_children));
+            if root.n_children == 0 || idx < first || idx >= end {
+                return Err(ForcedChildOutOfRange {
+                    child: idx,
+                    first_child: first,
+                    n_children: root.n_children,
+                });
+            }
+        }
         self.forced_root_child = child;
+        Ok(())
     }
 
     /// Configure quiescence once per worker from run config (mirrors the old worker's
@@ -247,7 +290,11 @@ impl MCTSTree {
         let mut policies: Vec<Vec<f32>> = Vec::with_capacity(1);
         let mut values: Vec<f32> = Vec::with_capacity(1);
         for _ in 0..n {
-            let boards = self.select_leaves(1);
+            // A desync ENDS the bench loop rather than being retried: the bench measures a
+            // healthy search, and a tree that has desynchronised from its board is not one
+            // (AUDIT-1 F-02). `run_simulations_cpu_only` has no production caller, so this
+            // is the one place the error is legitimately dropped instead of propagated.
+            let Ok(boards) = self.select_leaves(1) else { return };
             if boards.is_empty() {
                 continue;
             }
