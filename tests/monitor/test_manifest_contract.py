@@ -238,3 +238,159 @@ def test_the_k_cluster_histogram_instrument_has_a_manifest_row() -> None:
         f"the row must cite the function that BUILDS the field, not a symbol that merely "
         f"resolves; got {producer['symbol']!r}"
     )
+
+
+# ── AUDIT-1 F-10 (+ its sibling GATE-C03): the two ways a row resolved against nothing ──
+#
+# `_verify_event_literal` was `re.search` over RAW MODULE SOURCE, so ANY occurrence of the
+# quoted literal satisfied the row — including one inside a docstring. `eval/pipeline.py`'s
+# module docstring contains `heartbeat("eval_round")` as PROSE while the live producer is
+# `EvalPipeline._poll_loop`'s `self._beat("eval_round")`: delete the call and the row still
+# resolved. That is precisely the class the manifest exists to make un-shippable — a producer
+# vanishing with the gate green.
+#
+# `_verify_producer_test` found a `test_*` FunctionDef and stopped there, so a cited test
+# carrying `@pytest.mark.slow` / `skip` / `skipif` / `integration` — or a module-level
+# `pytestmark` with one — satisfied the row while running in no default-tier invocation.
+
+def _module_row(tmp_path: Path, module: str, literal: str) -> Path:
+    return _write_manifest(tmp_path / "m.yaml", [
+        "  - id: literal_row\n"
+        f"    producer: {{kind: event_literal, module: {module}, literal: {literal}}}\n"
+        f"    producer_test: {_LIVE_TEST_NODE}\n",
+    ])
+
+
+def _fake_module(tmp_path: Path, name: str, body: str) -> None:
+    """Write an importable module into a directory on `sys.path` for the duration of a test."""
+    (tmp_path / f"{name}.py").write_text(body, encoding="utf-8")
+
+
+def test_a_literal_that_appears_ONLY_in_a_docstring_does_not_satisfy_a_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """THE PIN (F-10). Documented is not live."""
+    import sys
+
+    _fake_module(tmp_path, "_f10_docstring_only", '''"""A module whose only mention of
+    heartbeat("ghost_beat") is this sentence."""
+
+
+def beat() -> None:
+    return None
+''')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("_f10_docstring_only", None)
+    with pytest.raises(ManifestError) as ei:
+        verify_manifest(_module_row(tmp_path, "_f10_docstring_only", "ghost_beat"), _REPO_ROOT)
+    assert "literal_row" in str(ei.value)
+    assert "docstring" in str(ei.value), (
+        "the refusal must say WHY: a reader who hit this needs to know the literal IS in the "
+        "file"
+    )
+
+
+def test_a_literal_in_LIVE_code_still_satisfies_a_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The control, and it is the load-bearing one: the tightened check must not reject the
+    real producers. Same module, same literal, moved from prose into a call."""
+    import sys
+
+    _fake_module(tmp_path, "_f10_live_literal", '''"""A module with a live beat."""
+
+
+def beat(sink) -> None:
+    sink.emit("ghost_beat")
+''')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("_f10_live_literal", None)
+    verify_manifest(_module_row(tmp_path, "_f10_live_literal", "ghost_beat"), _REPO_ROOT)
+
+
+def test_a_function_docstring_does_not_satisfy_a_row_either(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Docstrings are excluded STRUCTURALLY — module, class and function alike — rather than
+    by "is it near the top of the file"."""
+    import sys
+
+    _fake_module(tmp_path, "_f10_func_docstring", '''"""Module."""
+
+
+class Thing:
+    """Class."""
+
+    def beat(self) -> None:
+        """Emits nested_ghost when it fires."""
+        return None
+''')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("_f10_func_docstring", None)
+    with pytest.raises(ManifestError):
+        verify_manifest(_module_row(tmp_path, "_f10_func_docstring", "nested_ghost"), _REPO_ROOT)
+
+
+@pytest.mark.parametrize("marker", ["slow", "skip", "integration"])
+def test_a_producer_test_DESELECTED_from_the_tier_does_not_satisfy_a_row(
+    tmp_path: Path, marker: str
+) -> None:
+    """GATE-C03. A producer test that does not run is the same evidence as no producer test."""
+    suite = tmp_path / "tests" / "monitor"
+    suite.mkdir(parents=True)
+    module = suite / "test_f10_deselected.py"
+    module.write_text(
+        f"import pytest\n\n\n@pytest.mark.{marker}\ndef test_deselected_producer() -> None:\n"
+        "    assert True\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path / "m.yaml", [
+        "  - id: deselected_row\n"
+        "    producer: {kind: symbol, module: mantis.train.checkpoints, "
+        "symbol: persist_errors_total}\n"
+        "    producer_test: tests/monitor/test_f10_deselected.py::test_deselected_producer\n",
+    ])
+    with pytest.raises(ManifestError) as ei:
+        verify_manifest(manifest, tmp_path)
+    assert "deselected_row" in str(ei.value)
+    assert marker in str(ei.value), str(ei.value)
+
+
+def test_a_module_level_pytestmark_is_caught_too(tmp_path: Path) -> None:
+    """The decorator is the obvious form; `pytestmark = [pytest.mark.slow]` deselects the
+    WHOLE module and is the one a reader scanning the function would miss."""
+    suite = tmp_path / "tests" / "monitor"
+    suite.mkdir(parents=True)
+    (suite / "test_f10_modmark.py").write_text(
+        "import pytest\n\npytestmark = [pytest.mark.slow]\n\n\n"
+        "def test_module_marked_producer() -> None:\n    assert True\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path / "m.yaml", [
+        "  - id: modmark_row\n"
+        "    producer: {kind: symbol, module: mantis.train.checkpoints, "
+        "symbol: persist_errors_total}\n"
+        "    producer_test: tests/monitor/test_f10_modmark.py::test_module_marked_producer\n",
+    ])
+    with pytest.raises(ManifestError) as ei:
+        verify_manifest(manifest, tmp_path)
+    assert "slow" in str(ei.value)
+
+
+def test_an_UNMARKED_producer_test_still_satisfies_a_row(tmp_path: Path) -> None:
+    """The control for the sibling: only DESELECTING markers are refused. A test carrying, say,
+    `@pytest.mark.parametrize` runs in the default tier and is fine."""
+    suite = tmp_path / "tests" / "monitor"
+    suite.mkdir(parents=True)
+    (suite / "test_f10_ok.py").write_text(
+        "import pytest\n\n\n@pytest.mark.parametrize('n', [1, 2])\n"
+        "def test_live_producer(n: int) -> None:\n    assert n\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path / "m.yaml", [
+        "  - id: ok_row\n"
+        "    producer: {kind: symbol, module: mantis.train.checkpoints, "
+        "symbol: persist_errors_total}\n"
+        "    producer_test: tests/monitor/test_f10_ok.py::test_live_producer\n",
+    ])
+    verify_manifest(manifest, tmp_path)

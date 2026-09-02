@@ -144,18 +144,51 @@ def _verify_seam(row_id: str, row: Mapping[str, Any], producer: Mapping[str, Any
         )
 
 
+def _string_constants(tree: ast.AST) -> set[str]:
+    """Every string constant in ``tree`` that is NOT a docstring.
+
+    AUDIT-1 F-10. The check used to be `re.search` over raw module SOURCE, so
+    `eval/pipeline.py`'s module docstring — which contains `heartbeat("eval_round")` as
+    PROSE — satisfied the `eval_round` row on its own. Delete the live `self._beat(
+    "eval_round")` call and the row still resolved: the manifest's whole purpose is that a
+    producer cannot vanish silently, and a docstring is exactly a producer that does not run.
+
+    Docstrings are excluded structurally (the first statement of a module, class or function
+    body), not by heuristic, so a real literal that happens to sit near one still counts.
+    """
+    docstrings: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+            continue
+        body = getattr(node, "body", None)
+        if body and isinstance(body[0], ast.Expr) \
+                and isinstance(body[0].value, ast.Constant) \
+                and isinstance(body[0].value.value, str):
+            docstrings.add(id(body[0].value))
+    return {
+        node.value for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        and id(node) not in docstrings
+    }
+
+
 def _verify_event_literal(row_id: str, producer: Mapping[str, Any]) -> None:
     module = producer.get("module")
     literal = producer.get("literal")
     if not module or not literal:
         raise ManifestError(row_id, "an event_literal producer needs 'module' and 'literal'")
     source = _module_source(row_id, str(module))
-    pattern = re.compile(r"""["']""" + re.escape(str(literal)) + r"""["']""")
-    if not pattern.search(source):
+    try:
+        tree = ast.parse(source, filename=str(module))
+    except SyntaxError as exc:
+        raise ManifestError(row_id, f"module {module} is unparseable: {exc!r}") from exc
+    if str(literal) not in _string_constants(tree):
         raise ManifestError(
             row_id,
-            f"the QUOTED literal {literal!r} does not appear in {module} "
-            "(an identifier substring never satisfies an event_literal row)",
+            f"the literal {literal!r} does not appear as a CODE string constant in {module} "
+            "(an identifier substring never satisfies an event_literal row, and neither does "
+            "an occurrence inside a docstring — a documented producer is not a live one)",
         )
 
 
@@ -187,8 +220,46 @@ def _verify_producer_test(row_id: str, row: Mapping[str, Any], root: Path) -> No
     for candidate in ast.walk(tree):
         if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef)) \
                 and candidate.name == test_name:
+            _refuse_deselected(row_id, rel, candidate, tree)
             return
     raise ManifestError(row_id, f"producer_test {test_name!r} not found in {rel}")
+
+
+#: Markers that REMOVE a test from the default tier. A producer test carrying one of these is
+#: a producer test that does not run when the manifest is checked, which is the same standing
+#: as no producer test at all (AUDIT-1 F-10's sibling, GATE-C03).
+_DESELECTING_MARKERS = frozenset({"skip", "skipif", "slow", "integration"})
+
+
+def _marker_names(decorators: list[ast.expr]) -> set[str]:
+    """The `pytest.mark.<name>` names on a decorator list, called or bare."""
+    names: set[str] = set()
+    for node in decorators:
+        target = node.func if isinstance(node, ast.Call) else node
+        if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Attribute) \
+                and target.value.attr == "mark":
+            names.add(target.attr)
+    return names
+
+
+def _refuse_deselected(row_id: str, rel: str, func: ast.FunctionDef | ast.AsyncFunctionDef,
+                       tree: ast.AST) -> None:
+    """A producer test the default tier does not collect proves nothing when it is not run."""
+    found = _marker_names(func.decorator_list) & _DESELECTING_MARKERS
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets
+        ):
+            values = node.value.elts if isinstance(node.value, (ast.List, ast.Tuple)) \
+                else [node.value]
+            found |= _marker_names(list(values)) & _DESELECTING_MARKERS
+    if found:
+        raise ManifestError(
+            row_id,
+            f"producer_test {rel}::{func.name} carries {sorted(found)} — a marker that "
+            "DESELECTS it from the default tier. A producer test that does not run is the "
+            "same evidence as no producer test at all (LAW-07)",
+        )
 
 
 # ── resolution helpers ───────────────────────────────────────────────────────────────
