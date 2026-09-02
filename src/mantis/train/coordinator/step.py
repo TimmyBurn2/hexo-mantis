@@ -867,10 +867,13 @@ class StepCoordinator:
         elapsed = self._clock.now() - self._run_started
         return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else None
 
-    def _steps_per_hour(self) -> float:
+    def _steps_per_hour(self) -> float | None:
         """R29 gap metric (b), the twin of `_games_per_hour` over the SAME clock: train
         steps per hour from the coordinator's own step counter. Published beside (a) in
-        `iteration_complete` — the cutover floor's live emitter (WPBOX CB-3)."""
+        `iteration_complete` — the cutover floor's live emitter (WPBOX CB-3).
+
+        `None` before the clock has advanced, for `_games_per_hour`'s reason (F-28/C07).
+        """
         elapsed = self._clock.now() - self._run_started
         return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else None
 

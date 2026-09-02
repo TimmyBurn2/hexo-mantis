@@ -705,7 +705,7 @@ def _finalise_verdict(report: dict) -> dict:
     """
     if report.get("verdict") != "pass":
         return report
-    mode = report.get("mode")
+    mode = str(report.get("mode"))
     required = MODE_REQUIRED_ASSERTIONS.get(mode)
     if required is None:
         raise PreflightInternalError(
