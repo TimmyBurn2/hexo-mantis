@@ -56,7 +56,10 @@ _BUILDER_IMPL_NATIVE = 1
 
 
 # ---------------------------------------------------------------------------
-# The 18 named errors (contract §2.5). All subclass ValueError so existing
+# The named contract errors (§2.5). All subclass ValueError so existing
+# AUDIT-1 F-52: this said "the 18 named errors" over 20 subclasses. The count is
+# DERIVED by a reader who needs it (R192(e)); a transcribed tally must be re-edited on
+# every addition, will eventually be wrong, and is then read as evidence.
 # loud-fail call sites (die-loud → submit_inference_failure) catch uniformly.
 # ---------------------------------------------------------------------------
 class GraphContractError(ValueError):

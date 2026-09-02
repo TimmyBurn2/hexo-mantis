@@ -347,8 +347,11 @@ def declared_allocator_posture(full_config: Any) -> str | None:
     caller that is only THREADING the value across a seam does not have to pronounce on
     whether the process at the other end can run.
 
-    It exists for exactly one caller: `compose_run` threading the posture onto every
-    `RoundSpec`. The eval child is the process that knows its own device and its own
+    It exists for `compose_run`, threading the posture onto every `RoundSpec`.
+    (AUDIT-1 F-52: this read "exactly ONE caller"; `diagnostics/worker_sweep.py` imports it
+    too, to publish the DECLARED posture beside the LIVE one in its provenance block. The
+    design claim is unchanged — this function threads and does not judge — but "exactly one"
+    is a census, and it was wrong.) The eval child is the process that knows its own device and its own
     environment, and `assert_posture_token` there RAISES on a `None` token whenever
     `worker_device` is cuda — so the placeholder is refused, at the seam that can name what is
     wrong, rather than being silently accepted anywhere.

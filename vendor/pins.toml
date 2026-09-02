@@ -11,7 +11,10 @@
 
 [pins.sealbot]
 # R139/R145: a pin is a COMMIT SHA, never a branch name. `branch` and `as_of` below are
-# DATA — tools/vendor_fetch.sh reads only `url`, `sha` and `patch` (:17, :24), so the
+# DATA — tools/vendor_fetch.sh reads only `url`, `sha` and `patch`, so the
+# (AUDIT-1 F-52: this cited `(:17, :24)`; both had moved. A line number in a comment is a
+# transcribed position — the FACT is which KEYS the fetcher reads, and
+# tests/tools/test_vendor_pins_sealbot.py is what holds it.)
 # checkout is sha-driven and a branch name can never become the thing that is fetched.
 # That rider is satisfied structurally rather than by convention, and
 # tests/tools/test_vendor_pins_sealbot.py is what makes it falsifiable.

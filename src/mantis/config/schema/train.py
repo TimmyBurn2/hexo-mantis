@@ -1,5 +1,7 @@
 # >300 justify (R8). WPMINT Phase K-B
-# authors the 19 step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned, and roughly four
+# authors the step-coordinator knobs `CARD-COORD-KNOBS` (R78/R80) owned (AUDIT-1 F-52: the
+# count was stated as 19 here and as 18 in `coordinator.py` — two transcribed tallies of one
+# set, which is how a reader learns the set has no authority), and roughly four
 # fifths of the added length is the per-field GROUNDS the house style requires: what the bound
 # is a bound ON (the mechanism's own range, never policy), which defect it makes
 # inexpressible, and the ONE resolver that reads it. `DrawRateAbortConfig`'s docstring set that

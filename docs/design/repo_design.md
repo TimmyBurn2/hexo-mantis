@@ -140,7 +140,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 
 ## 3. Representation extensibility (the registry-kind axis)
 
-- `crates/mantis-encoding/registry.toml` is the single source of truth for encoding and
+- `crates/mantis-encoding/src/registry.toml` is the single source of truth for encoding and
   shape. Every entry carries `representation` (required, no default): `"grid" | "graph"`
   today; the set is extensible. Unknown TOML keys are a parse ERROR; missing required
   keys are a parse error; the validator collects ALL errors before reporting.
@@ -150,7 +150,9 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   parser). Model/buffer/batcher construction dispatches through ONE authority per layer
   (`model.build.build_net(arch)`, buffer facade, batcher ctor). Reading arch attributes off
   live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
-  (`model.arch.CnnArch` / `model.arch.GnnArch`), which `build_net` consumes; a live-module
+  (`model.arch.CnnArch` / `model.arch.GnnArch` / `model.arch.GnnArchV2`), which
+  `build_net` consumes — and its dispatch ORDER is load-bearing, `GnnArchV2` first,
+  because `GnnArchV2` is a subclass of `GnnArch`; a live-module
   representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
   (a census test proves it stays absent). The discriminator, stated so the prose stops being
   broader than the gate: what is banned is *deriving* arch metadata from a live module's
@@ -170,12 +172,12 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 |---|---|---|---|
 | 1 | registry | v1 | TOML schema + validator invariants + audit CLI exit codes (0/1/2) |
 | 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
-| 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; 18 assertions, 15+ named errors; single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
+| 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
-| 5 | run config schema | v8 | pydantic models, extra=forbid; schema_version key in every file |
+| 5 | run config schema | v13 | pydantic models, extra=forbid; schema_version key in every file. The version here is the CONTRACT DOC's own table, whose last row is the authority — it read v8 while `docs/contracts/run_config_schema.md` had reached v13, and gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
 | 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
-| 8 | community bot API | bot-api v1 | vendored OpenAPI 3.1 spec + BKE-notation round-trip suite |
+| 8 | community bot API | bot-api v1 (SKELETON) | PLANNED: a vendored OpenAPI 3.1 spec + a BKE-notation round-trip suite. NEITHER EXISTS: the contract file carries two `TODO`s and there are zero `openapi`/`bke` tokens under `src/`, `tests/` or `vendor/`. Recorded as planned rather than deleted — it is a real intention — but it is not a shipped seam (AUDIT-1 F-52) |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 
@@ -563,7 +565,11 @@ class.** Recorded here rather than left as silent drift (R9).
   complete config from a named template + an explicit delta mapping, stamping the delta
   into the file header; a one-key-diff assert tool verifies two configs differ exactly
   where claimed. Minted output is committed; the template is not a runtime input.
-- One resolver per regime knob (sims, temperature, radius, corpus, amp dtype, …); eval
+- One resolver per regime knob (sims, temperature, corpus, amp dtype, …); eval
+  <!-- AUDIT-1 F-52: `radius` was in this list and there is NO radius resolver. The schema
+       declares `legal_move_radius` DELIBERATELY ABSENT (`config/schema/selfplay.py`): radius
+       is a registry IDENTITY key, which is the whole premise of the run6 re-mint, so a
+       config-level resolver for it would be a consumer-less knob (R1/LAW-08). -->
   reads the same resolver seam self-play does. Unknown knob consumer = ValueError.
 - Identity keys have no terminal defaults: absent encoding/representation is an error. `identity.arch_kind`
   is the ONE optional identity leaf (R330(e), amendment 2026-09-02): the arch-selector row,
@@ -626,14 +632,25 @@ class.** Recorded here rather than left as silent drift (R9).
   counted and reported.
 - Fixture regimes derive from production configs (`production_config()` fixture +
   explicit per-test deltas); one regime-parity test per LAW knob (graph amp dtype, sims,
-  encoding, radius schedule) asserts suite default == production default.
+  encoding) asserts suite default == production default.
+  <!-- AUDIT-1 F-52: `radius schedule` was named here too. `RadiusStage` /
+       `resolve_radius_from_schedule` are formally retired and the schema field is gone,
+       so there is no radius arm for a regime-parity test to assert. -->
 - Census pins (grep-gate tests) guard classes the type system can't reach; each names
   its bug class and its triage protocol.
 - Rust: inline unit tests near code; invariant pins and cross-language goldens under
   `crates/*/tests/`; proptest for board invariants; goldens are f32-bit-exact where the
   contract is numeric identity.
 
-## 9. CI gates (PR → dev, and dev → main; main is merge-gated only)
+## 9. CI gates (PR → dev; `dev` is the only long-lived branch)
+
+<!-- AUDIT-1 F-52: this heading read "PR → dev, and dev → main; main is merge-gated only".
+     There is no `main` branch — `tools/ci_gates/test_count_gate.sh` sets `MAIN_BRANCH="dev"`
+     and `dev` is what every gate compares against. The enumeration below listed gates 1-14;
+     15, 16 and 17 exist (R8 headers, encoding-less text I/O, rule-7 host content) and are
+     described in CLAUDE.md, which is the roster of record. Item 8's audit sub-check is
+     described here as live; it is an `echo ... DEFERRED` and only the sha HANDSHAKE
+     sub-check is armed. -->
 
 1. Fresh-clone `uv sync` (builds the extension) — clone-and-run is the product.
 2. `cargo test --workspace` and `cargo clippy` (pedantic=warn baseline).
@@ -711,7 +728,12 @@ class.** Recorded here rather than left as silent drift (R9).
   consumed by both the bench script and the perf doc; per-host baselines are generated
   locally (`make bench.baseline`). No host's numbers are baked into code, defaults, or
   prose gates.
-- `n_workers` defaults derive from `os.cpu_count()` via a documented formula; configs
+- `n_workers` is a REQUIRED minted key with NO default anywhere (R1: a default lives only
+  in the schema field, and this field has none). <!-- AUDIT-1 F-52: this row read
+  "defaults derive from `os.cpu_count()` via a documented formula"; no such formula
+  exists and no code-side default does either. `diagnostics/worker_sweep.py` is how the
+  value is CHOSEN — measured on the box, picked by the knee rule, minted by the
+  operator. -->; configs
   override only for stated experimental reasons.
 
 ## 11. Run-safety core (headless monitor + lifecycle)

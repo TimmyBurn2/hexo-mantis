@@ -4,7 +4,9 @@ on:
     # ci-repair/** exists because a runner-class failure cannot be validated locally
     # (six shaping probes green while the runner reds — the differential is the runner):
     # a repair branch must run REAL CI before dev moves. Removed when unused.
-    branches: [dev, main, 'ci-repair/**']
+    # AUDIT-1 F-52: `main` does not exist. `dev` is the only long-lived branch and
+    # `tools/ci_gates/test_count_gate.sh` sets `MAIN_BRANCH="dev"` accordingly.
+    branches: [dev, 'ci-repair/**']
   pull_request:
 
 jobs:

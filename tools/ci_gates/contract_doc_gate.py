@@ -94,6 +94,10 @@ _NON_CONFIG_ROOTS: frozenset[str] = frozenset({
 _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 #: The doc's own statement of the leaf count, e.g. "**175 leaf key-paths**".
 _COUNT_RE = re.compile(r"\*\*(\d+) leaf key-paths\*\*")
+#: The doc's header version line, e.g. "- version: v9".
+_HEADER_VERSION_RE = re.compile(r"^- version:\s*v(\d+)\s*$", re.M)
+#: A version-table row, e.g. "| v13 | one new OPTIONAL leaf … |".
+_TABLE_VERSION_RE = re.compile(r"^\|\s*v(\d+)\s*\|", re.M)
 #: The heading below which every citation is checked in REVERSE (see the module docstring).
 ABSENT_HEADING = "## Deliberately absent"
 #: The heading whose table's first two cells are LIVE-claim bare citations (the DSV2-2 arm).
@@ -273,6 +277,28 @@ def check(doc_path: Path) -> list[str]:
             f'{doc_path}: the "{_CROSS_FIELD_HEADING}" table has no claim-column citations. '
             f"The bare-symbol arm is part of this gate's reach (DSV2-2); a moved or emptied "
             f"table would silently retire it"
+        )
+
+    # AUDIT-1 F-52 item 3. The header said v9 while the table's own last row was v12 — three
+    # versions of drift in the file this gate exists to keep honest, and nothing checked the
+    # line because nothing DERIVED it. The table is the authority: a row is added when a
+    # version lands, so its maximum IS the contract's version.
+    header = _HEADER_VERSION_RE.search(text)
+    rows = [int(m.group(1)) for m in _TABLE_VERSION_RE.finditer(text)]
+    if not rows:
+        failures.append(
+            f"{doc_path}: no version-table rows parsed. This gate's version check would pass "
+            "vacuously over a reshaped table, which is the phantom-gate class."
+        )
+    elif header is None:
+        failures.append(
+            f"{doc_path}: no `- version: vN` header line, so the stated version cannot be "
+            f"checked against the table (whose last row is v{max(rows)})"
+        )
+    elif int(header.group(1)) != max(rows):
+        failures.append(
+            f"{doc_path}: header says v{header.group(1)} but the version table's last row is "
+            f"v{max(rows)}. The table is the authority — a row lands when a version does."
         )
 
     stated = _COUNT_RE.search(text)

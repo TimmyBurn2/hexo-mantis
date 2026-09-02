@@ -24,7 +24,11 @@ def best_device() -> torch.device:
 def cuda_counters_available(device: str) -> bool:
     """True iff `device` names a CUDA device whose allocator counters can be read.
 
-    HERE, and not in `mantis.eval.child_memory` where its one caller lives, and the reason is
+    HERE, and not in `mantis.eval.child_memory` — the caller this placement was decided for.
+    (AUDIT-1 F-52: the line read "where its ONE caller lives"; `diagnostics/worker_sweep.py`
+    reaches it at four sites too. The placement argument below is unaffected — it is about
+    which module may own `torch.cuda`, not about how many callers there are — but a count
+    stated in passing is still read as a census.) The reason is
     an isolation law rather than tidiness: `tests/eval/test_pipeline_isolation.py::
     test_parent_side_eval_modules_have_no_inference_surface` bans every `.cuda` attribute in
     `src/mantis/eval/*.py` except the child entry point, because an in-process CUDA eval path

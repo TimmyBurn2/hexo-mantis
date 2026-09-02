@@ -2,7 +2,10 @@
 
 - version: v1
 - owner: mantis.arena
-- status: SKELETON — contract text lands with the subsystem port
+- status: LIVE. <!-- AUDIT-1 F-52: this read "SKELETON — contract text lands with the
+  subsystem port" over a filled contract, beside a shipped eval subsystem. The label is
+  decision-adjacent: a reader deciding whether the deploy-matched bar is specified would
+  have concluded it is not. -->
 
 ## Summary
 deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games

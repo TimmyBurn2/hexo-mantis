@@ -1,8 +1,8 @@
 # Contract: run config schema
 
-- version: v9
+- version: v13
 - owner: mantis.config.schema
-- status: LIVE since scaffold (WP0). Eight growth steps since (v1 -> v9). Each through v6 is
+- status: LIVE since scaffold (WP0). Twelve growth steps since (v1 -> v13). Each through v6 is
   recorded as a named amendment in docs/design/repo_design.md §4; v7, v8 and v9 are NOT, and
   that is stated rather than implied — v7 landed without one, v8 (R242/ADJ-D12) inherited that
   gap rather than back-filling somebody else's amendment, and v9 records the same gap for

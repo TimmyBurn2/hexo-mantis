@@ -22,8 +22,11 @@ re-densified); the arrays are yielded **exactly once** by `take()` (a second rea
 the named `WireAlreadyConsumed`); and every graph must carry the native
 `builder_impl` handshake before it reaches the wire.
 
-The 18 structural assertions the fused wire guarantees and the ≥15 named errors the
-build/queue/wire path can raise are enumerated below.
+The structural assertions the fused wire guarantees and the named errors the build/queue/wire
+path can raise are enumerated below. <!-- AUDIT-1 F-52: this read "The 18 structural
+assertions … and the ≥15 named errors" while `graph_collate.py` carries 20 error subclasses.
+The enumeration below IS the count; a number in the sentence above it is a second authority
+that goes stale (R192(e), derive-or-delete). -->
 
 ## Payload shape (block-diagonal; all fields little-endian on the wire)
 
@@ -50,7 +53,7 @@ build/queue/wire path can raise are enumerated below.
 | `window_center` | `Vec<i32>` | `B × 2` (flat `[q,r]`) | per-graph window centre, in order |
 | `current_player` | `Vec<i8>` | `B` | per-graph side to move (∈ {−1, +1}), in order |
 
-### The 18 structural assertions
+### The structural assertions
 
 Offsets/indexing (1–7): (1) `node_offsets`/`edge_offsets`/`legal_offsets` are running
 prefix sums with `[0] == 0` and length `B + 1`; (2) `edge_index.len() == 2·E` laid out

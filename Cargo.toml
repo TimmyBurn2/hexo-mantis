@@ -20,12 +20,16 @@ license = "MIT"
 # must carry `rust-version.workspace = true` or this line is inert for that crate.
 #
 # 1.87 is MEASURED, not chosen, and two independent floors agree on it:
-#   (1) first-party source calls `usize::is_multiple_of`, stable since 1.87.0 —
-#       mantis-bridge/src/board.rs:343, graph_contract.rs:90,104,
-#       mantis-selfplay/benches/graph_build_bench.rs:100;
+#   (1) first-party source calls `usize::is_multiple_of`, stable since 1.87.0, in
+#       mantis-bridge/src/{board.rs, graph_contract.rs} and
+#       mantis-selfplay/benches/{graph_build_bench.rs, queue_fuse_bench.rs};
 #   (2) the highest `rust-version` declared by any locked dependency is wasip2 1.87.0.
-# Lowering this reds `clippy::incompatible_msrv` (in clippy::all, hence CI gate 2b) at
-# those four sites. Raise it only alongside a re-measurement of both floors.
+# Lowering this reds `clippy::incompatible_msrv` (in clippy::all, hence CI gate 2b) at every
+# such site. Raise it only alongside a re-measurement of both floors.
+#
+# AUDIT-1 F-52: the list above carried LINE NUMBERS (board.rs:343, graph_contract.rs:90,104)
+# and a count ("those four sites"). Every line had shifted and the count was one short — five
+# call sites in four files. Files, not lines; the census is `git grep is_multiple_of`.
 rust-version = "1.87"
 
 [workspace.dependencies]
