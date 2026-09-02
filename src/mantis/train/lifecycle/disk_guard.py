@@ -73,6 +73,10 @@ class DiskGuard:
         # `stop()` has joined that thread, so no cross-thread write to the run's stop state
         # exists anywhere on this path.
         self._critical_fired = False
+        # F-11's two counters. Written only on this guard's own thread (or the caller's, for
+        # a direct `check_once`), read by the coordinator's `monitor_gates` emit.
+        self._errors_total = 0
+        self._checks_total = 0
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._loop, daemon=True, name="disk-guard")
@@ -101,6 +105,7 @@ class DiskGuard:
         """Check disk free, emit ``disk_free``, handle thresholds. Returns free_gb (decimal
         GB, matching old ``/1e9``)."""
         usage = shutil.disk_usage(self._path)
+        self._checks_total += 1
         free_gb = usage.free / _GB
         self._sink.emit({"event": "disk_free", "disk_free_gb": round(free_gb, 2)})
 
@@ -146,4 +151,39 @@ class DiskGuard:
             try:
                 self.check_once()
             except Exception as exc:  # noqa: BLE001 — a monitor thread must not crash the run
+                # AUDIT-1 F-11. This was a bare `_LOG.warning`, and three facts made it a
+                # SILENT total failure: the run installs no logging handler at all
+                # (F-08), the guard is not a heartbeat source, and gate 12's REQUIRED
+                # `disk_space_exhausted` row audits ARMED off a CONFIG NUMBER — so a
+                # `check_once` raising every tick emitted no `disk_free`, incremented no
+                # counter, never set `_critical_fired`, and every instrument still reported
+                # the guard armed. The rc-47 abort R132 closed can be dead for a whole run
+                # while the volume fills and the supervisor relaunches into it.
+                # The counter and the event are the two channels a monitor can actually
+                # read; the WARNING stays for a terminal an operator is watching live.
+                self._errors_total += 1
                 _LOG.warning("disk_guard_error: %s", exc)
+                self._sink.emit({
+                    "event": "disk_guard_error",
+                    "error_class": type(exc).__name__,
+                    "detail": str(exc)[:300],
+                    "errors_total": self._errors_total,
+                    "checks_total": self._checks_total,
+                    "watch_path": str(self._path),
+                })
+
+    @property
+    def errors_total(self) -> int:
+        """How many ticks of this guard's loop raised (AUDIT-1 F-11).
+
+        A guard whose `check_once` raises on every tick is indistinguishable from a healthy
+        one on every OTHER observable — it emits no `disk_free`, so absence-of-alert reads as
+        "plenty of space". This is the counter that separates them.
+        """
+        return self._errors_total
+
+    @property
+    def checks_total(self) -> int:
+        """How many ticks completed. `checks_total == 0` with a started guard is the shape a
+        reader must be able to see: nothing was measured, so nothing is known."""
+        return self._checks_total
