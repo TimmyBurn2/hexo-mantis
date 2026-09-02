@@ -289,8 +289,16 @@ impl SelfPlayRunner {
         // the guards above it are `debug_assert!` — dead in the shipped `.so`. Only pydantic's
         // `gt=0` protected a MINTED config; a hand-built runner spec (a test, a future
         // non-YAML source, an arithmetic slip upstream) reached the expect and panicked mid
-        // self-play. NaN-safe by construction: `!(x > 0.0)` is true for NaN, `x <= 0.0` is not.
-        if config.dirichlet_enabled && !(config.dirichlet_alpha > 0.0) {
+        // self-play.
+        //
+        // NaN-SAFE AND CLIPPY-CLEAN. The obvious `x <= 0.0` is WRONG — it is FALSE for NaN, so
+        // a NaN alpha would pass the guard and blow up inside `Gamma::new` anyway. The obvious
+        // fix, `!(x > 0.0)`, is correct but trips `clippy::neg_cmp_op_on_partial_ord` (in
+        // `clippy::all`, hence gate 2b). `partial_cmp` says the same thing explicitly: NaN
+        // compares as `None`, which is not `Some(Greater)`, so it is refused.
+        if config.dirichlet_enabled
+            && config.dirichlet_alpha.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater)
+        {
             return Err(format!(
                 "SelfPlayRunner: dirichlet_alpha must be > 0 when dirichlet_enabled, got {} \
                  — the Gamma distribution behind the root noise cannot be built otherwise, \

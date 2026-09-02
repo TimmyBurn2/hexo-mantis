@@ -134,10 +134,17 @@ fn boot_admits_the_run5_shape() {
 fn boot_refuses_a_regime_over_the_format_ceiling() {
     // Defense-in-depth: the schema twin refuses this at mint; a direct construction
     // must still die loud at boot, with the derivation's own message.
+    //
+    // AUDIT-1 F-21 CHANGED WHICH AXIS THIS ROW CAN USE — the same interaction its Python twin
+    // (`tests/config/test_graph_visit_capacity_relation.py`) records. The mutation used to be
+    // `n_sims_full: 70_000`, which is now refused EARLIER by a TIGHTER ceiling:
+    // `MAX_ARMED_SIMS` (1302 = `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS
+    // node pool overflows from the sim count alone above that. On the SIMS axis the pool
+    // bound subsumes the record-format one — at 1302 sims the derived capacity is 1309,
+    // nowhere near 65535. `leaf_batch_size` is the OTHER term the capacity is derived from
+    // and carries no such bound, so this row's subject survives on that axis.
     let cfg = SelfPlayRunnerConfig {
-        full_search_prob: 0.10,
-        n_sims_quick: 75,
-        n_sims_full: 70_000,
+        leaf_batch_size: 70_000,
         ..graph_cfg()
     };
     let err = SelfPlayRunner::new(cfg)
@@ -147,6 +154,25 @@ fn boot_refuses_a_regime_over_the_format_ceiling() {
         err.contains(&HEXG_VISIT_COUNT_CEILING.to_string()),
         "the boot refusal must carry the derivation's ceiling message: {err}"
     );
+}
+
+#[test]
+fn boot_refuses_a_sim_budget_the_node_pool_cannot_serve() {
+    // The interaction pinned rather than left for the next reader to rediscover: the old
+    // 70_000-sim mutation now reds against the POOL bound, not the record format. Both
+    // refusals are correct and a config hitting either cannot boot; what changed is which one
+    // names it, and a reader of the row above needs to be able to find that out here.
+    let cfg = SelfPlayRunnerConfig {
+        full_search_prob: 0.10,
+        n_sims_quick: 75,
+        n_sims_full: 70_000,
+        ..graph_cfg()
+    };
+    let err = SelfPlayRunner::new(cfg)
+        .err()
+        .expect("a sim budget past the pool bound must not boot");
+    assert!(err.contains("MAX_ARMED_SIMS"), "{err}");
+    assert!(err.contains("n_sims_full"), "the refusal must name the knob: {err}");
 }
 
 // ── completed-Q (old guard 2, generalized against the DERIVED capacity) ─────────────
