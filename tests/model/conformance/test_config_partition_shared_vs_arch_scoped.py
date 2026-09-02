@@ -169,6 +169,9 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
     "identity.encoding": "the SELECTOR itself — it names which arch a run is, so it is the one "
                          "key that must be readable on every arch",
     "identity.representation": "the selector's other half, for the same reason",
+    "identity.arch_kind": "the selector ROW itself (R330(e)): it names which arch KIND a run "
+                          "builds, so like `identity.encoding` it must be readable on every "
+                          "arch; absent until the run6 mint writes it (R323(b))",
     "train.augment": "symmetry augmentation is a data-pipeline posture; both representations "
                      "have an augmentation path and run5 mints it false on the graph one",
     "selfplay.solver_node_budget": "SEARCH nodes, not graph nodes — the tactical solver's "

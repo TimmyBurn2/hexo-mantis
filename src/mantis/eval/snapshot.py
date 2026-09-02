@@ -21,9 +21,12 @@ from typing import Any
 
 import torch
 
-from mantis.model import CnnArch, GnnArch, build_net
+from mantis.model import ARCH_KINDS, build_net
 
-_ARCH_TYPES: dict[str, type] = {"CnnArch": CnnArch, "GnnArch": GnnArch}
+#: THE ONE arch-kind vocabulary, imported (R330(e)). This module carried its own two-row copy,
+#: which is why `GnnNetV2` could be trained and checkpointed but never snapshotted for the eval
+#: child (AUDIT-1 F-16): a private table is a second authority that silently lags the first.
+_ARCH_TYPES: dict[str, type] = ARCH_KINDS
 
 
 def _arch_to_plain_dict(arch: Any) -> dict[str, Any]:

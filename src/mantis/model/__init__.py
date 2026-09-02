@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from mantis.model.amp import amp_dtype_for
 from mantis.model.arch import (
+    ARCH_KIND_ROW,
     ARCH_KINDS,
     ARCH_KINDS_BY_REPRESENTATION,
     INCUMBENT_ARCH_KIND,
@@ -20,6 +21,7 @@ from mantis.model.arch import (
     RepresentationMismatch,
     UnknownArchKind,
     arch_from_spec_and_config,
+    declared_arch_kind,
     select_arch,
 )
 from mantis.model.build import build_net
@@ -40,6 +42,7 @@ from mantis.model.gnn_v2 import GnnNetV2
 from mantis.model.identity import net_param_hash
 
 __all__ = [
+    "ARCH_KIND_ROW",
     "ARCH_KINDS",
     "ARCH_KINDS_BY_REPRESENTATION",
     "INCUMBENT_ARCH_KIND",
@@ -57,6 +60,7 @@ __all__ = [
     "UnknownArchKind",
     "amp_dtype_for",
     "arch_from_spec_and_config",
+    "declared_arch_kind",
     "binned_value_loss",
     "build_net",
     "compile_model",

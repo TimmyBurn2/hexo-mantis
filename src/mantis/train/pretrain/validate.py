@@ -1,8 +1,10 @@
 """Pretrain checkpoint validation (WP10 §a.7 PORT of `bootstrap/pretrain_validate.py`).
 
 `validate` — verify a pretrain checkpoint round-trips and runs a forward pass at the right policy
-width. Rehomed onto `build_net(arch_from_spec_and_config(...))` (WP9 construction authority) — no
-kwargs ctor, no shape-inference.
+width. Rehomed onto `build_net(select_arch(...))` with the kind read off the ARTIFACT'S STAMP
+(`stamped_arch_kind`, R330(e); the pretrain envelope is a legacy shape whose stamp names no arch,
+so it resolves to the incumbent-era kind) — no kwargs ctor, no shape-inference, and no config
+default: this site holds no run config, and does not consult the table one would come with.
 
 Two ratified reductions from the old validator (both killed/deferred, not reachable numeric paths):
   * the v8 / pma_global / gpool_bias_active skip branches are GONE — those encodings/pools are
@@ -20,7 +22,8 @@ import torch
 
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.encoding.resolvers import resolve_from_config as _resolve_from_config
-from mantis.model import arch_from_spec_and_config, build_net
+from mantis.model import build_net, select_arch
+from mantis.train.checkpoints import stamped_arch_kind
 
 _LOG = logging.getLogger(__name__)
 
@@ -50,7 +53,8 @@ def validate(ckpt_path: Path, device: torch.device) -> None:
     encoding = _config_encoding(cfg)
     spec = _lookup_encoding(encoding)
 
-    arch = arch_from_spec_and_config(spec, cfg if isinstance(cfg, dict) else {})
+    kind = stamped_arch_kind(ckpt.get("metadata"), representation=str(spec.representation))
+    arch = select_arch(spec, cfg if isinstance(cfg, dict) else {}, arch_kind=kind)
     model = build_net(arch)
     model.load_state_dict(ckpt["model_state"])
     model.eval().to(device)

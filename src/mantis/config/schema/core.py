@@ -104,17 +104,30 @@ ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
 
 
 class IdentityConfig(StrictModel):
-    """Identity keys have no terminal defaults (repo_design §5): absent = error.
+    """Identity keys have no terminal defaults (repo_design §5): absent = error — for
+    ``encoding`` and ``representation``. ``arch_kind`` is the ONE optional identity leaf, below.
 
     ``representation`` is cross-checked against the encoding's registry representation at
     validation time (F1 runtime guard): a graph encoding declared ``representation: grid`` (or
     vice versa) is REJECTED at load, so the LAW-06 amp pin (resolve_amp_dtype reads this field)
     cannot be bypassed by a LAW-11-inconsistent config. Frozen sourced representation from the
     encoding spec, making disagreement structurally impossible; this guard restores that invariant.
+
+    ``arch_kind`` is THE ARCH-SELECTOR ROW (R330(e), candidate D of R322(d)): which member of
+    ``mantis.model.ARCH_KINDS`` a run builds. R323(b) rules that it enters production configs
+    ONLY as a minted row at run6's mint, so it is schema-OPTIONAL and every committed config
+    omits it; ``mantis.model.arch.arch_from_spec_and_config`` reads it, hands a present value to
+    ``select_arch`` (an unknown kind, or one the representation does not admit, is refused there
+    by name at construction — this schema cannot import the vocabulary without a config↔model
+    cycle, gate 9), and resolves an ABSENT row to the representation's incumbent, a history fact
+    pinned against every minted file. The ``None`` is therefore not a fallback carrying a guess:
+    it states "this config predates the row", and the arch such configs have always built is
+    pinned by test. Artifacts never read this row — a checkpoint's arch is its stamp's.
     """
 
     encoding: str = Field(min_length=1)
     representation: Literal["grid", "graph"]
+    arch_kind: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def _representation_matches_registry(self) -> "IdentityConfig":

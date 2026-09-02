@@ -33,6 +33,7 @@ from mantis.config.schema import (
     StrictModel,
     TrainConfig,
 )
+from mantis.model import ARCH_KIND_ROW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -423,6 +424,13 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # that quietly became required is a red too.
     exempt = {f"{key.section}.{key.field}" for key in ARCH_SCOPED_KEYS}
     assert exempt, "no key is arch-scoped, so this exemption is unused and should go"
+    # THE SECOND EXEMPT CLASS, one row, grounded (R330(e) / R323(b)): the arch-selector row
+    # `identity.arch_kind` enters production configs ONLY as a minted row at run6's mint, so the
+    # schema must accept its absence today; an absent row resolves in `arch_from_spec_and_config`
+    # to the representation's INCUMBENT kind — a history fact pinned against every minted file by
+    # tests/model/conformance/test_arch_selector_makes_v2_selectable.py, not a value a reader
+    # guessed. Enumerated here by name so a THIRD optional leaf anywhere is still a red.
+    exempt |= {ARCH_KIND_ROW}
     seen: set[str] = set()
     for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():

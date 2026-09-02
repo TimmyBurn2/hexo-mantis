@@ -58,6 +58,9 @@ CONSUMER_REGISTRY = {
     ),
     "identity.encoding": "reconcile_encoding + encoding regime-parity (O11) + emit",
     "identity.representation": "resolve_amp_dtype + IdentityConfig runtime consistency guard (F1) + O11 + emit",
+    "identity.arch_kind": "arch_from_spec_and_config via declared_arch_kind -> select_arch (the "
+                          "arch-selector ROW, R330(e); OPTIONAL, absent until run6's mint writes it "
+                          "per R323(b); absence resolves to the pinned incumbent)",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.sealbot_model_sims": "resolve_eval_model_sims (sealbot rungs) + sims regime-parity (O9) + emit",
     "eval.kraken_model_sims": "resolve_eval_model_sims (kraken rungs)",
@@ -506,8 +509,11 @@ def test_registry_matches_the_live_leaf_count():
     # placeholder, schema-valid and runtime-REFUSED — because R308(g)(i) reserves the VALUE
     # for the re-calibration sitting under R282(b) and a token minted by a dispatcher would be
     # a regime nobody measured. 184 + 1 = 185.
-    assert len(CONSUMER_REGISTRY) == 185
-    assert len(_leaf_paths(RunConfig)) == 185
+    # R330(e): + 1 = 186 — `identity.arch_kind`, the arch-selector row, the first OPTIONAL leaf
+    # this walker has counted. One leaf, one YAML line when minted; absent from every committed
+    # config until run6's mint (R323(b)), read by ONE function (`arch_from_spec_and_config`).
+    assert len(CONSUMER_REGISTRY) == 186
+    assert len(_leaf_paths(RunConfig)) == 186
 
 
 def test_no_forward_reference_strings_in_registry():

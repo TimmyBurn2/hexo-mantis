@@ -35,8 +35,9 @@ from mantis.model import (
     GnnArch,
     ModelArch,
     RepresentationMismatch,
-    arch_from_spec_and_config,
     build_net,
+    declared_arch_kind,
+    select_arch,
 )
 from mantis.train.emit import emit_via
 
@@ -208,6 +209,39 @@ def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
             f"serialized arch does not fit {cls.__name__}: {exc}. A stamp is rehydrated as what "
             "it says it is or not at all — never coerced into the nearest member of the union."
         ) from exc
+
+
+def stamped_arch_kind(metadata: Mapping[str, Any] | None, *, representation: str) -> str:
+    """THE ONE answer to "which arch kind does this ARTIFACT carry" (R330(e)).
+
+    A v2 stamp names it: `metadata.arch.arch_kind`. A stamp written before the discriminator
+    existed — a v1 envelope, a bare anchor, or a v2 stamp from before B1 — IS the incumbent-era
+    stamp, and resolves through `_LEGACY_BY_REPRESENTATION` for the representation of the
+    encoding it names: a fact about history, not a default, because at the time those stamps were
+    written that kind was the only member of the union on its representation. Never reads a
+    config; a config-less call site that needs an artifact's arch comes here and nowhere else.
+
+    Raises:
+        RepresentationMismatch: the stamp names an `arch_kind` this build does not know, or the
+            representation is neither 'grid' nor 'graph'.
+    """
+    arch = metadata.get("arch") if isinstance(metadata, Mapping) else None
+    kind = arch.get(_ARCH_KIND_KEY) if isinstance(arch, Mapping) else None
+    if kind is not None:
+        if str(kind) not in _ARCH_KINDS:
+            raise RepresentationMismatch(
+                f"stamp names {_ARCH_KIND_KEY}={kind!r}, which this build does not know — known "
+                f"kinds are {sorted(_ARCH_KINDS)}. A checkpoint from a newer arch is REFUSED "
+                "rather than rebuilt as the nearest thing that fits."
+            )
+        return str(kind)
+    cls = _LEGACY_BY_REPRESENTATION.get(str(representation))
+    if cls is None:
+        raise RepresentationMismatch(
+            f"representation={representation!r} — expected 'grid' or 'graph'; a stamp with no "
+            f"{_ARCH_KIND_KEY} resolves only through the legacy-by-representation rule."
+        )
+    return cls.__name__
 
 
 def _stamp_name(value: Any) -> Any:
@@ -619,8 +653,10 @@ def load_legacy_weights(
 ) -> Checkpoint:
     """Distinct read surface for pre-v2 artifacts (bare state_dict / light envelope / full-v1).
     `torch.load(weights_only=True)`. Resolve arch from the declared/stamped `encoding_name` →
-    registry spec → `arch_from_spec_and_config` (NEVER shape-sniffs — an unregistered encoding
-    raises loudly). Apply the SAME O3b killed-prefix REJECT. Returns a Checkpoint with NO
+    registry spec → the STAMP's arch kind (`stamped_arch_kind`, R330(e): a pre-discriminator
+    stamp is the incumbent-era stamp) → `select_arch` (NEVER shape-sniffs — an unregistered
+    encoding raises loudly; an embedded config whose `identity.arch_kind` row disagrees with the
+    stamp raises `CheckpointStampError`). Apply the SAME O3b killed-prefix REJECT. Returns a Checkpoint with NO
     synthetic run_id/content-hash/created_utc (a legacy anchor is never re-stamped on read;
     LAW-12); a full-v1 envelope reads via the old→v2 field map (training_date→created_utc,
     model_architecture/variant→arch, train_config_path DROPPED)."""
@@ -658,7 +694,19 @@ def load_legacy_weights(
     embedded_config = raw_config if isinstance(raw_config, dict) else {}
     if embedded_config:
         RunConfig.model_validate(embedded_config)  # config snapshot re-validated
-    arch = arch_from_spec_and_config(spec, embedded_config)
+    # R330(e): the ARTIFACT'S stamp is the arch authority. A legacy envelope has no arch in its
+    # stamp, so it resolves to the incumbent-era kind; an embedded config that carries the
+    # selector row and DISAGREES is a contradiction between two records of one artifact and is
+    # refused, never resolved in either's favour.
+    kind = stamped_arch_kind(meta, representation=str(spec.representation))
+    declared_kind = declared_arch_kind(embedded_config)
+    if declared_kind is not None and str(declared_kind) != kind:
+        raise CheckpointStampError(
+            f"{path.name}: the embedded config declares identity.arch_kind={declared_kind!r} but "
+            f"the artifact's stamp resolves to {kind!r}; a legacy artifact's arch is its stamp's, "
+            "and a config that says otherwise describes a different artifact."
+        )
+    arch = select_arch(spec, embedded_config, arch_kind=kind)
 
     # old v1 metadata → v2 field map (read-only; NEVER writes back / mints v2 provenance).
     metadata = CheckpointMetadata(
@@ -726,7 +774,24 @@ def strip_and_restamp(
             "(the ONE sanctioned encoding-change path)."
         )
 
-    arch = arch_from_spec_and_config(new_spec, {})
+    # R330(e): the SOURCE artifact's stamp is the arch across the strip — kind AND widths. A
+    # V2-stamped source used to be rebuilt as the incumbent at default widths and re-stamped as
+    # such — a provenance defect of exactly the class LAW-12 exists for, closed by carrying the
+    # stamped arch verbatim when the stamp has one, and resolving only a pre-discriminator stamp
+    # (which has no arch to carry) to its incumbent-era kind.
+    raw_meta = raw.get("metadata") if isinstance(raw, dict) else None
+    stamped_arch = raw_meta.get("arch") if isinstance(raw_meta, dict) else None
+    if isinstance(stamped_arch, Mapping):
+        arch = _arch_from_dict(stamped_arch)
+        if str(getattr(arch, "representation", None)) != str(new_spec.representation):
+            raise CheckpointStampError(
+                f"{src_path.name}: the stamped arch is {type(arch).__name__} "
+                f"({arch.representation}) but {new_encoding} is {new_spec.representation}; the "
+                "strip carries an arch, never re-derives one for a different representation."
+            )
+    else:
+        kind = stamped_arch_kind(None, representation=str(old_spec.representation))
+        arch = select_arch(new_spec, {}, arch_kind=kind)
     synth_config = {
         "schema_version": 1,
         "run_id": run_id,

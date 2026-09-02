@@ -24,15 +24,16 @@ WHAT LANDED, AND IT IS THE MECHANISM IN FULL:
   * `INCUMBENT_ARCH_KIND` — a statement about HISTORY, not a default, and pinned below against
     the real minted configs: what this tree has always built, per representation.
 
-WHAT DID NOT LAND, AND WHY IT IS REPORTED RATHER THAN FORCED. **There is no config key that
-names an arch kind.** Under R1 a `RunConfig` key is explicit and complete with no code-side
-default, so a selector key would be REQUIRED in every shipped config — including `run5.yaml`
-and `shakedown_20260807.yaml`, the two `PRODUCTION_CONFIGS`, which would each gain a minted
-row. R322(d) makes a repair that would touch a minted row a HALT rather than a judgment call,
-and the same clause's dispatch note says: if the selector's design wants a schema change that
-leaks into minted files, stop and report the shape. So the mechanism is here and its config
-surface is the operator's. The three shapes the decision is between are written up in the
-leg's exit; none of them is snuck in here as a default.
+THE CONFIG ROW LANDED AT R330(e), AND IT IS EMPTY IN EVERY SHIPPED CONFIG. B2 reported that a
+selector key would be REQUIRED under R1 and would put a minted row into the two production
+configs, which R322(d) makes a HALT; R323(b) then ruled the key "enters production configs only
+as a minted row at run6's mint". R330(e) lands the plumbing under that ruling: `identity.arch_kind`
+is an OPTIONAL schema leaf (the one optional identity leaf, enumerated as such in
+`tests/config/test_schema.py`), `arch_from_spec_and_config` honours a present row and resolves an
+absent one to the incumbent, and the rows below pin BOTH halves — no shipped config carries the
+row yet, and a config that does carry it builds what it names. Config-less call sites (a
+checkpoint's legacy read, `strip_and_restamp`, the pretrain validator) never reach this table:
+their authority is the artifact's stamp, `mantis.train.checkpoints.stamped_arch_kind`.
 
 WHAT "THROWAWAY DIAGNOSTIC CONFIG" MEANS BELOW, stated precisely so the round trip is not read
 as more than it is: the test MINTS a real config file, loads it through the ONE loader, builds
@@ -53,6 +54,7 @@ import yaml
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
 from mantis.model import (
+    ARCH_KIND_ROW,
     ARCH_KINDS,
     ARCH_KINDS_BY_REPRESENTATION,
     INCUMBENT_ARCH_KIND,
@@ -83,20 +85,24 @@ class SelectorWentVacuous(ConformanceRefusal):
     """The selector's subject is missing, so a green result would mean nothing."""
 
 
-def _graph_config_source() -> tuple[dict, str]:
-    """A shipped GRAPH config's raw YAML, as the diagnostic config's base.
+def _config_source(representation: str) -> tuple[dict, str]:
+    """A shipped config's raw YAML for `representation`, as a diagnostic config's base.
 
     Copied from a real minted file rather than authored here: a hand-built config would drift
     from the schema the moment a key is added, and the point of the round trip is that the
     diagnostic config is a config the REAL loader accepts.
     """
     for path in sorted(CONFIGS.glob("*.yaml")):
-        if load_config(path).identity.representation == "graph":
+        if load_config(path).identity.representation == representation:
             return yaml.safe_load(path.read_text(encoding="utf-8")), path.name
     raise SelectorWentVacuous(
-        "no shipped config selects graph, so the diagnostic config has no base and the round "
-        "trip below would prove nothing"
+        f"no shipped config selects {representation}, so the diagnostic config has no base and "
+        "the round trip below would prove nothing"
     )
+
+
+def _graph_config_source() -> tuple[dict, str]:
+    return _config_source("graph")
 
 
 @pytest.fixture
@@ -352,16 +358,13 @@ def test_the_selected_V2_arch_is_the_SIBLING_dataclass_and_not_V1(diagnostic_con
     assert not isinstance(arch, GnnArch)
 
 
-# ── the boundary, asserted so it cannot be quietly crossed ───────────────────────────────
-def test_NO_config_key_names_an_arch_kind_yet(derived):
-    """The reported HALT, made structural (R322(d)).
-
-    Candidate D lands the mechanism and NOT a config key: a `RunConfig` selector would be
-    required under R1 and would put a minted row into the two production configs, which R322(d)
-    makes a HALT. This row is what notices if one arrives without a ruling — and it is written
-    as a PIN on the current state, not as a prohibition: whoever lands the key deletes this row
-    in the same commit, which is the ratchet discipline T9 states in its own section.
-    """
+# ── the row (R330(e)): it exists, it is empty everywhere shipped, and it is honoured ──────
+def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_no_shipped_config_carries_it(
+    derived,
+):
+    """R323(b): the row enters production configs ONLY as a minted row at run6's mint. Pinned in
+    both directions — the key is live in the schema (R330(e)), and every committed config omits
+    it — so a row minted early or a second arch-naming key both red this test."""
     from mantis.config.schema import RunConfig
 
     from test_config_partition_shared_vs_arch_scoped import live_leaf_paths
@@ -372,8 +375,51 @@ def test_NO_config_key_names_an_arch_kind_yet(derived):
     naming = re.compile(r"(^|_)arch(_|$)")
     named = sorted(leaf for leaf in leaves if naming.search(leaf.split(".")[-1]))
     derived("t10.arch_naming_leaves", named)
-    assert not named, (
-        f"a config key now names an arch: {named}. If that is the selector key, the halt R322(d) "
-        "recorded has been resolved — delete this row in the same commit as the ruling that "
-        "resolved it, and add the key to T9's partition with its grounds."
+    assert named == [ARCH_KIND_ROW], named
+    carrying = sorted(
+        path.name for path in CONFIGS.glob("*.yaml")
+        if yaml.safe_load(path.read_text(encoding="utf-8")).get("identity", {}).get("arch_kind")
+        is not None
     )
+    derived("t10.configs_carrying_the_row", carrying)
+    assert not carrying, (
+        f"{carrying} carry identity.arch_kind before the run6 mint; R323(b) reserves the row to "
+        "that mint act"
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(ARCH_KINDS_BY_REPRESENTATION["graph"]))
+def test_a_minted_arch_kind_row_is_honoured_by_the_production_entry_point(tmp_path, kind):
+    """The row's reader is `arch_from_spec_and_config` — the function every config-holding
+    production site calls — so a config that carries `identity.arch_kind` builds what it names,
+    incumbent or not, and the mint later writes only the row."""
+    raw, _base = _graph_config_source()
+    raw["run_id"] = "r330e-row-honoured"
+    raw["identity"]["arch_kind"] = kind
+    path = tmp_path / "with_row.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_config(path)
+    assert config.identity.arch_kind == kind
+    arch = arch_from_spec_and_config(lookup(config.identity.encoding), config.model_dump())
+    assert type(arch) is ARCH_KINDS[kind], type(arch).__name__
+
+
+def test_a_row_naming_a_kind_the_representation_does_not_admit_is_refused_at_construction(
+    tmp_path,
+):
+    """The schema cannot import the vocabulary (a config↔model cycle, gate 9), so the refusal
+    lives in `select_arch` and fires at the first net built — before anything trains or serves.
+    A GRID config naming a graph kind is refused by name, never resolved to the nearest fit."""
+    raw, _base = _config_source("grid")
+    raw["run_id"] = "r330e-row-refused"
+    raw["identity"]["arch_kind"] = "GnnArchV2"
+    path = tmp_path / "bad_row.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_config(path)  # schema-valid: the refusal is downstream, and this pins where
+    with pytest.raises(UnknownArchKind, match="not admitted by representation='grid'"):
+        arch_from_spec_and_config(lookup(config.identity.encoding), config.model_dump())
+    raw["identity"]["arch_kind"] = "NoSuchArch"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_config(path)
+    with pytest.raises(UnknownArchKind, match="not a known model kind"):
+        arch_from_spec_and_config(lookup(config.identity.encoding), config.model_dump())

@@ -144,13 +144,34 @@ ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
 #: kind EXPLICITLY and has no default at all — is the surface a caller uses to build anything
 #: else.
 #:
-#: **WHAT IS DELIBERATELY MISSING, and it is reported rather than papered over (R322(d) §2):
-#: there is no CONFIG KEY that names a kind.** A `RunConfig` selector would be a required key
-#: under R1 (explicit + complete, no code-side defaults), so every shipped config — including
-#: the two PRODUCTION ones — would gain a minted row, and R322(d) makes a repair that touches a
-#: minted row a HALT rather than a judgment call. The mechanism lands; its config surface is
-#: the operator's, and the shape is written up in the leg's exit.
+#: **THE CONFIG ROW EXISTS AND IS EMPTY IN EVERY SHIPPED CONFIG (R330(e) / R323(b)).** The
+#: selector row is `identity.arch_kind` (`ARCH_KIND_ROW`), an OPTIONAL schema leaf, and the run6
+#: mint is what first writes a value into it — a mint act, not an engine one, which is why the
+#: plumbing lands here first and the row later. Until a config carries the row,
+#: `arch_from_spec_and_config` resolves through THIS table; once it does, the row is the
+#: authority and this table is not consulted. Absence is therefore not a fallback with a guess in
+#: it: it is the statement "this config predates the row", and what such a config has always
+#: built is the incumbent, pinned against the real minted files by
+#: `tests/model/conformance/test_arch_selector_makes_v2_selectable.py`.
 INCUMBENT_ARCH_KIND: dict[str, str] = {"grid": "CnnArch", "graph": "GnnArch"}
+
+#: THE ONE CONFIG ROW that names an arch kind — dotted, as `RunConfig` spells it. Read by
+#: `declared_arch_kind` and nowhere else, so the row has exactly one reader to change.
+ARCH_KIND_ROW = "identity.arch_kind"
+
+
+def declared_arch_kind(config: Mapping[str, Any]) -> str | None:
+    """The `identity.arch_kind` row of a plain config mapping, or `None` when the config does not
+    carry it (every config minted before the run6 mint, R323(b)).
+
+    Mapping-typed for the same reason the rest of this module is: no `mantis.config` import.
+    A row that is present but not a string is returned as-is and refused downstream by
+    `select_arch`, which names the kind it was given — this reader never coerces.
+    """
+    identity = config.get("identity")
+    if not isinstance(identity, Mapping):
+        return None
+    return identity.get("arch_kind")
 
 # Grid hparam config keys → CnnArch field names (config override wins; absent →
 # the dataclass field default, which is the sole default authority — R1).
@@ -173,14 +194,19 @@ _GRAPH_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
 
 
 def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch:
-    """Resolved encoding spec + plain config mapping → the representation's INCUMBENT arch.
+    """Resolved encoding spec + plain config mapping → the arch the CONFIG selects.
 
-    Behaviour is byte-for-byte what it was before the selector existed: this is
-    `select_arch(..., arch_kind=INCUMBENT_ARCH_KIND[representation])` with the incumbent
-    looked up rather than branched on. Callers that want a NON-incumbent kind call
-    `select_arch` and name it; there is no way to reach one from here, which is deliberate —
-    every production call site routes through this function, so the incumbent is what
-    production builds until a config can say otherwise.
+    THE PRODUCTION ENTRY POINT for a caller that holds a run's config (R330(e)). The config's
+    `identity.arch_kind` row, when it carries one, is the authority and is handed to
+    `select_arch` verbatim — an unknown or non-admitted kind is refused there by name. A config
+    that does not carry the row predates the run6 mint (R323(b)) and resolves to the
+    representation's INCUMBENT kind, which is a history fact pinned against every minted file,
+    not a guess: `select_arch(..., arch_kind=INCUMBENT_ARCH_KIND[representation])`, byte-for-byte
+    what this function built before the row existed.
+
+    A caller that holds an ARTIFACT and no config does not come here: the artifact's stamp is
+    its authority (`mantis.train.checkpoints.stamped_arch_kind`), and reading this table for it
+    would be a second answer to "which arch is this".
 
     Mapping-typed (NOT config-schema-typed) so the model layer is self-contained
     and testable without the config package.
@@ -188,6 +214,8 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
     Raises:
         RepresentationMismatch: `spec.representation` is absent or unknown (LAW-11: no
             dense-by-default), or the encoding is incompatible with the requested config.
+        UnknownArchKind: the config's `identity.arch_kind` row names a kind this build does not
+            have, or one its representation does not admit.
     """
     rep = getattr(spec, "representation", None)
     if rep is None:
@@ -195,6 +223,9 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
             f"spec {getattr(spec, 'name', spec)!r} has no representation attribute "
             "— cannot infer a model arch (no dense-by-default, LAW-11)."
         )
+    declared = declared_arch_kind(config)
+    if declared is not None:
+        return select_arch(spec, config, arch_kind=declared)
     incumbent = INCUMBENT_ARCH_KIND.get(str(rep))
     if incumbent is None:
         raise RepresentationMismatch(
