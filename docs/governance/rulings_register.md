@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ cb67843, regenerated 2026-09-01.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ c2a625a, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -4548,6 +4548,16 @@ citing an un-carried ruling number HALTs at Task 0 by rule, not by judgment.
 >   forbids scaling. R283(c) supplies the authored band. R282(c) is
 >   otherwise in force.]
 
+**ANNOTATION 12 — R282(b) RESERVES NO PUSH. Ordered by R330(f), appended 2026-09-02 by the R330
+landing.** Clause (b)'s preserved operator-only list reads, verbatim, *"box grants, run5 mint
+authorization, judgment-valued prereg rows"*; pushes appear nowhere in it, and the reading that they
+were reserved lived in the ACTIVE index (§2's R170 line and §6's R303(d) row — *"merges/pushes"*),
+not in this text. **Pushes are governed by R311(b):** the full local gate set green at leg exit and
+before any push, remote CI suspended by operator decision. R170's MERGE half is untouched by this
+annotation. The IDENTITY-CLOSEOUT session (2026-09-02) held two gate-green commits unpushed on the
+conservative reading and recorded the disagreement (`RECAL_SITTING6_RECORD_2026-09-02.md` §10.5);
+that was the index overclaiming, not the clause. `dev` pushes under R330(f).
+
 # R283 — architect adjudication response, 2026-08-18 (box-sitting HALT ratified; R282 carried; bench pre-registration AUTHORED and binding; calibration falsifier substitution) [INLINE]
 
 **Provenance: [INLINE], verbatim.** Text supplied in the architect's message accompanying the
@@ -7917,3 +7927,75 @@ the landing so that it is a derivation on the record and not a silent choice ins
 > table is the architect's next text after a passing witness.
 > ROUTE: land this, census, ACTIVE next version; Legs 0–4 in order; one
 > plain exit screen.
+
+# R329 — architect ruling, ARCH-ERA session, 2026-09-02 (RUN6-IDENTITY-1 Legs 1–4 RATIFIED with the witness PASS and the is_full_search defect credited to the held-out monitor's first print; the leg-order deviation ACCEPTED as measurement and CORRECTED as provenance, with two witness caveats ordered REPAIRED first — a determinism-seam-seeded control and a longest-run read from the engine, never from ply parity; SITTING-6 ordered to CLOSE OUT at r8 with the cap re-derived at r8 need, mint or card-level fact; F-816-33 ordered FIXED so gate 3c refuses a count from an interrupted collection; the AUDIT sweep, the run dashboard and the measured perf tranche sequenced BEFORE the prereg table, run6 still held) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), forwarded by the operator into this IDENTITY-CLOSEOUT execution session's prompt rather than as a file — so the landing session CREATED the ruling's one canonical home, `PACKET_R329_IDENTITY_CLOSEOUT.md` §1, and no competing text existed under `plan/` before it: `grep -rn 'R329' plan/` returned **rc 1 and 0 hits**, read under `set -o pipefail` with the count taken from a FILE rather than from a pipeline's exit code (R327's landing disclosed that exact trap on the other side). **The forwarded text carried the placeholder `R{next}`**, substituted to `R329` after verifying the head is R328 — census `R23–R328, 299 sections / 299 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.34 == §8 last entry v3.34`; `--self-test` all four controls fire. The text was transcribed a SECOND time, independently, with `R{next}` intact: **IDENTICAL at 26 lines**, and the two substituted forms are identical to each other. The residual-placeholder grep over the substituted block returns rc 1. Extraction by `awk` over the canonical home, never retyped; the `awk`-extracted block against the substituted one — **EMPTY diff**. The register's pre-append prefix is byte-identical after the append, so no neighbouring section moved.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the leg record — and one of them is measured WRONG in the artifact the clause praises, which is the finding that made clause (b) necessary.** **Clause (a)'s witness figures are real and verified at the artifact:** `/workspace/sitting6/witness.json`'s `bc` arm reads `decisive 20 / 20`, `decisive_rate 1.0`, `terminals {"win": 20}`, against an armed floor of `min_decisive_rate 0.25` — **cleared 4×, exactly as the clause states.** **Clause (a)'s encode count reproduces from the ring provenance sidecars rather than from prose:** `v2_train.hexg` carries `games 8252` and `v2_heldout.hexg` carries `games 446`, summing to **8 698**, which is R328(c)'s expected figure; the truncation the clause requires beside it is `games_truncated 83 + 5 = 88` and `rows_refused_over_max_stones 7518 + 348 = 7 866` against `plies_offered 547 251`, with `max_stones_ceiling 256` READ FROM THE ENGINE and `split_seed 328` / `split_heldout_frac 0.05` on both sides. **`certify_compact` is `tests/model/conformance/test_construction_path_determinism_centroid_branch.py:191`** and the `max_stones()` amendment is `src/mantis/config/schema/core.py:697-699`, whose own comment states the ceiling is read from the engine and never typed. **AND THE SAME `witness.json` CARRIES THE PROOF OF ITS OWN DEFECT:** the `bc` arm reports twenty WINS — each of which requires a six-in-a-row — beside `longest_run_max 3`. That is arithmetically impossible and it is clause (b)'s second caveat visible in the artifact, not inferred from the code. The `fresh` arm's `longest_run_max 6` beside `11` wins is the same defect landing differently. **Clause (b)'s first caveat is equally visible:** the `fresh` arm cleared the armed floor on its own (`decisive_rate 0.55`, `winrate 0.775`), so the quantity the BC arm was being compared against was an uncontrolled draw that itself beat the random bot. **Clause (c)'s R326(b) pattern** is `plan/rulings_register.md`'s R326 blockquote — *"measured need plus a stated allowance: peak 7.443 GiB … plus 12.9% → PROPOSED 8.40 GiB"* — and the exact ratio it carried is re-derived here as `8.40 / 7.443366 = 1.128522`, not read off the "12.9%". **Clause (c)'s arch-selector row** is R323(b), *"the arch-selector key enters production configs only as a minted row at run6's mint"*, whose mechanism is `src/mantis/model/arch.py`'s `ARCH_KINDS` / `ARCH_KINDS_BY_REPRESENTATION` / `INCUMBENT_ARCH_KIND` / `select_arch(..., arch_kind=)`, and whose absent half — *"there is no CONFIG KEY that names a kind"* — that file states in its own words. **Clause (d)'s subject** is F-816-33 at `plan/ADJUDICATION_QUEUE.md`, filed 2026-09-01 by the RUN6-IDENTITY-1 session; its "N collected, M errors" shape was RE-MEASURED on this tree before the fix rather than carried from the filing, and the string this box actually prints is `4414 tests collected, 1 error in 2.06s` at exit status 2.
+
+> R329 — (a) RUN6-IDENTITY-1 Legs 1–4 are RATIFIED: the two-row identity
+> mechanism; the suite green at r8 with certify_compact re-grounded on
+> measurement; the MAX_STONES amendment executed with max_stones() derived
+> from the allocation; the full-corpus encode with truncation counted beside
+> the game count; the stopping mechanism with its measured noise floor; and
+> the WITNESS PASSED — post-BC 20/20 decisive vs random, floor cleared 4×.
+> The is_full_search defect (policy loss silently masked on every corpus
+> row) is recorded as caught by the held-out monitor on first print — the
+> mechanism the architect owed paid for itself immediately.
+> (b) The leg-order deviation (BC before the mint) is ACCEPTED as measurement
+> and CORRECTED as provenance: the checkpoint of record is re-produced on the
+> minted world. Two witness caveats are REPAIRED before it: the control net
+> seeds through the determinism seam (a fixed baseline, not a draw), and
+> longest-run reads stone colour from the engine, never ply parity.
+> (c) SITTING-6 CLOSES OUT at r8: Phase W with per-rung noise; full terms;
+> the cap re-derived at r8 need by the R326(b) pattern; fit under M and the
+> ceiling convention; the nine-act mint of the run6 lineage — including the
+> r8 cap pair and the arch-selector row (candidate D rides this mint, as
+> ruled); the burst paid. Mint or card-level fact.
+> (d) F-816-33 is FIXED: gate 3c fails on any collection error — no stderr
+> swallowing, no tolerated "N collected, M errors"; a planted vanished-file
+> break proves it bites. Its compensating control retires.
+> (e) NEXT after this: the codebase AUDIT sweep (structural census → ranked
+> findings → targeted repairs with tests), the file-based run dashboard, and
+> the measured perf tranche — all before the prereg table. Run6 remains held.
+> ROUTE: land at exit with census and ACTIVE next; one plain exit screen.
+
+
+# R330 — architect ruling, ARCH-ERA session, 2026-09-02 (IDENTITY-CLOSEOUT RATIFIED with the card-level fact re-read as a fact about the PERMISSION, not the card, the refusal to pick an allowance after reading the gate COMMENDED and two omissions placed on the ARCHITECT'S ledger; THE ALLOWANCE RULE pre-registered — max(2 × measured cross-sitting trainer-peak variance, 3%), 3% PROPOSED, conditional on the boundary re-derived AFTER eval_child is measured at r8, never below 2%, the VALUE arming only at the operator's next mint forwarding; eval_child ORDERED MEASURED at r8 by the R319(c) probe; PER-RUNG NOISE given its mechanism; ARCH-SELECTOR PLUMBING ordered engine-side with config-less sites resolving from the artifact's stamp; PUSHES SETTLED by annotation — governed by R311(b), not reserved; the bare-pytest recurrence killed at cause; the commit convention set to the OPERATOR'S recorded correction) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), forwarded by the operator into this FINISH-1 execution session's prompt rather than as a file — so the landing session CREATED the ruling's one canonical home, `PACKET_R330_FINISH_1.md` §1, and no competing text existed under `plan/` before it: `grep -rn 'R330' plan/` returned **rc 1 and 0 hits**, read under `set -o pipefail` with the count taken from a FILE. **The forwarded text carried the placeholder `R{next}`**, substituted to `R330` after verifying the head is R329 — census `R23–R329, 300 sections / 300 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp` reported `STAMP OK: stamp v3.35 == §8 last entry v3.35`; `--self-test` all four controls fire. The text was transcribed a SECOND time, independently, with `R{next}` intact: **IDENTICAL at 31 lines**, and the two substituted forms are identical to each other; exactly ONE placeholder was substituted and the residual-placeholder grep over the substituted block returns rc 1. Extraction by `awk` over the canonical home, never retyped. The register's pre-append prefix is byte-identical after the append, so no neighbouring section moved.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the exit screen.** **Clause (a)'s `+0.424`** is `plan/SITTING6_EVIDENCE/s6_partition_arithmetic.json` → `partitions.zero_allowance_at_r8_need.headroom = 0.423972`, and **`4.89%`** is the same file's `cap_ceiling.largest_allowance_over_r8_need = 0.048924`, i.e. `8.487197 / 8.091338 − 1`; both computed by the sitting's own script from measured terms and re-read here rather than carried from prose. **Clause (a)'s witness figures** are `plan/SITTING6_EVIDENCE/witness_repaired.json`: `bc` → `decisive_rate 1.0`, `games 20`, `terminals {"win": 20}`, `longest_run_max 6`; `control` → `decisive_rate 0.0`, `terminals {"ply_cap": 20}`, `longest_run_max 2`. Twenty wins beside a longest run of exactly six is arithmetically consistent, which the pre-repair artifact was not. **Gate 3c's fix** is `hexo-mantis` commit `a8fd1c9`, the head of local `dev` at landing. **Clause (a)'s two architect omissions are read at their sources:** R326(a)'s correction is `rulings_register.md:7664` — *"future ladders use per-rung noise"* — and the tool it did not order is `src/mantis/diagnostics/worker_sweep.py::select_knee`, whose signature takes ONE `noise_floor_rel_std: float` for the whole ladder (verify-at-HEAD; ~:1259); R326(b)'s allowance is `:7673-7674` — *"peak 7.443 GiB, reproduced to kilobytes across two sittings, plus 12.9%"* — an r6 figure. **Clause (b)'s "four byte-identical sittings"** is the r6 CONTROL arm of the OF2-10 paired trainer-peak instrument: `peak_delta = 7 992 252 928 B` at `RECAL_SITTING3_RECORD_2026-08-28.md:355`, `RECAL_SITTING4_RECORD_2026-08-31.md:276`, `RECAL_SITTING5_RECORD_2026-08-31.md:276` and `RECAL_SITTING6_RECORD_2026-09-02.md:133` — four sittings, one byte string. **Stated so the rule is applied to what was measured:** the cross-sitting variance is measured at r6 (n = 4); the r8 need `8 688 008 192 B` has ONE sitting behind it (n = 1), and the rule's `max(…, 3%)` floor is what carries the proposal in that case. **Clause (c)'s probe** is R319(c), `rulings_register.md:7325`, and the carried term it re-measures is `eval_child = 2.554688` (the sitting-6 arithmetic's `EVAL_CHILD`), last MEASURED at r6 on 2026-08-31 (`RECAL_SITTING4_RECORD_2026-08-31.md` §4.9) and inherited by sittings 5 and 6. **Clause (e)'s "73 refs" is RE-DERIVED at `a8fd1c9`, not carried:** `grep -rn 'arch_from_spec_and_config' src tools tests --include=*.py | wc -l` = **73** (72 code lines + 1 comment line), **27 in `src/`**, **16 test files**, **10 real call sites**, of which THREE hold no full validated config — `src/mantis/train/checkpoints.py` at the legacy read (~:661, a v1 envelope's EMBEDDED config) and at `strip_and_restamp` (~:729, passes `{}`), and `src/mantis/train/pretrain/validate.py` (~:53, passes `{}` when the config is not a dict) — every figure the sitting-6 record §10 stated, reproduced. **The v2 stamp already carries the authority clause (e) names:** `checkpoints._arch_to_dict` writes `arch_kind` beside the dataclass fields and `_arch_from_dict` dispatches on it. **Clause (f)'s premise is read VERBATIM:** R282(b) at `:4520-4523` preserves operator-only *"box grants, run5 mint authorization, judgment-valued prereg rows"* and names pushes NOWHERE; the reservation the IDENTITY-CLOSEOUT session honoured lives in the ACTIVE index (`RULINGS_ACTIVE.md` §2's R170 line and §6's R303(d) row, *"merges/pushes"*), which is exactly the overclaiming-index-line class R271(d) warns of; R311(b) at `:6959` is the cadence the annotation points to. **Clause (g)'s three occurrences** are `RECAL_SITTING4_RECORD_2026-08-31.md` Δ10.13, `RECAL_SITTING5_EXIT.md:229` and `RECAL_SITTING6_RECORD_2026-09-02.md` §11.1 (22 minutes against 2 min 52 s), and the cause is structural: `Makefile:14` carries `-m "not integration and not slow"` while `pyproject.toml`'s `addopts` (`:53`) is `-ra --strict-markers` with no marker expression, so a bare `pytest` runs the superset (`ADJUDICATION_QUEUE.md` N1 measured it at ~37 min against ~110-310 s). **Clause (h)'s "recorded correction"** is the operator's own commit rule as the register carries it — R36 at `:133-137`, *"single-line subject, no trailers, no Co-Authored-By"*, generalised to the standing pattern by R47 at `:282-283` — against `CLAUDE.md:148-150`, which says ONE line and names no trailer class; the harness this session runs under injects a `Co-Authored-By` + `Claude-Session` footer by default, which is the collision the clause settles. **All 449 commits on `hexo-mantis` `dev` carry an EMPTY body** (`git log --format='%b' | grep -c .` = 0), so "existing commits stand" describes a tree already in compliance.
+
+> R330 — (a) IDENTITY-CLOSEOUT is RATIFIED: the card-level fact is about the
+> PERMISSION, not the card — at zero allowance the r8 partition holds +0.424
+> GiB, the widest measured; every allowance ≤ 4.89% closes it. The seeded
+> witness (control 0/20, longest run 2; BC 20/20, six-in-a-row in all 20) is
+> ratified; gate 3c's fix is ratified. Refusing to pick an allowance after
+> reading the gate is COMMENDED. Two omissions are the ARCHITECT'S: R326(a)
+> corrected an assumption without ordering its mechanism, and the 12.9%
+> allowance was an r6 artifact re-applied without r8 grounds.
+> (b) THE ALLOWANCE RULE, pre-registered: allowance = max(2 × measured
+> cross-sitting trainer-peak variance, 3%). Four byte-identical sittings put
+> the variance at ~0, so 3% is PROPOSED. It must clear the affordable
+> boundary re-derived AFTER eval_child is measured at r8; if it cannot, that
+> is the fact, and the r8 memory design (eval k, eval concurrency posture)
+> re-adjudicates — no allowance below 2% is ever proposed. The value arms at
+> the next mint forwarding, the operator's.
+> (c) eval_child is MEASURED at r8 by the R319(c) two-point probe; the
+> boundary re-derives from it.
+> (d) PER-RUNG NOISE gets its mechanism: each rung's rel-SE from its own
+> measured rounds; the within-set expansion uses the max rel-SE over the
+> candidate set; planted break. Phase W runs at the next sitting, not here.
+> (e) ARCH-SELECTOR PLUMBING lands engine-side before the mint: config-less
+> call sites resolve the arch from the artifact's stamp — one authority; the
+> mint later writes only the row. Blast radius (73 refs) is walked, not
+> assumed.
+> (f) PUSHES SETTLED: R282(b) is annotated — pushes are governed by R311(b)
+> (full local green), not reserved. dev pushes now.
+> (g) The bare-pytest recurrence (third occurrence) is killed at cause: the
+> bare invocation resolves to the default tier or refuses loudly.
+> (h) Commit convention: the OPERATOR'S recorded correction governs;
+> CLAUDE.md is updated to match it; existing commits stand.
+> ROUTE: land, census, ACTIVE next; execute; one exit screen.

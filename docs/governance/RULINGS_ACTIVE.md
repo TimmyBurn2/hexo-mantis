@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ cb67843, regenerated 2026-09-01.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c2a625a, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.34, 2026-09-01. Created under R271 (register hygiene: archive/index split);
+# v3.36, 2026-09-02. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -865,6 +865,60 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # burst paid. Then BC-EXEC under the §0.3 envelope with the ACCEPTANCE WITNESS pre-registered as
 # filed at v3.33. **A failed witness RE-ADJUDICATES the recipe and returns to the architect.**
 # **RUN6 DOES NOT START**; the prereg table is the architect's next text after a PASSING witness.
+# **v3.35 = R329 folded in — the curation where THE PERMISSION, NOT THE CARD, REFUSES.**
+# **THE WITNESS THAT PASSED WAS MEASURING THE WRONG BOARD, and its own artifact says so.**
+# R329(a) ratifies a witness reading of `20 / 20` decisive; the same `witness.json` reports
+# `longest_run_max 3` beside those twenty WINS, and a win in this game requires a six-in-a-row.
+# **The seat was reconstructed from PLY PARITY** (`1 if (i // 2) % 2 == 0 else -1`) against an
+# engine that gives player 1 the first stone and then alternates in PAIRS (LAW-03). R329(b)'s
+# second repair is therefore not a refinement: the number it fixes was impossible on its face.
+# **Its first repair is the same class one path over** — the control arm called `build_net` with
+# whatever RNG state the process held, and that uncontrolled draw CLEARED THE ARMED FLOOR ON ITS
+# OWN (`decisive_rate 0.55`, `winrate 0.775`). A baseline that resamples itself is not a baseline.
+# Both are REPAIRED at mechanism and PINNED — `src/mantis/diagnostics/acceptance_witness.py`, with
+# the mutation arm beside each repair (`tests/diagnostics/test_acceptance_witness.py`).
+# **SITTING-6 RAN TO A CARD-LEVEL FACT, and the fact is about the ALLOWANCE.** The r8 trainer need
+# MEASURES **8.091338 GiB** — paired against the r6 control, which reproduces
+# `7 992 252 928 B` byte-identically for a FOURTH sitting, through the shipped oracle's own code.
+# R326(b)'s pattern (need + 12.9 %) gives a cap of **9.13 GiB**, and conjunct 2 then reads
+# **headroom +0.229883 against M 0.350000 — REFUSE by 0.120117**. **The card is not too small for
+# radius 8:** at ZERO allowance the same partition closes at **+0.423972**, the widest headroom any
+# sitting has measured, and the largest cap it affords is **8.487197 GiB** — an allowance of
+# **4.89 %** against the pattern's 12.9 %. Every allowance ≤ 4.89 % closes it. **Choosing one now,
+# having read the measurement it gates, is the movement R327(c) refused for `--margin`**, so the
+# number is REPORTED and RESERVED, and no mint, no burst and no BC-of-record follow.
+# **WHY THE NEED MOVED AT ALL is the half worth carrying forward:** the minted micro-batch caps are
+# ABSOLUTE `(E, N)` and the cost model is geometry-free (`b` moved 0.0008 %, `c` 0.011 % across the
+# radius change), so the need "should" have been unchanged — **and the NODE member binds**, so
+# radius 8 delivers 1.818× the edges for 1.649× the nodes and the same node budget arrives carrying
+# **10.2 % more edges**. The prediction was tested rather than believed.
+# **F-816-33 IS CLOSED.** Gate 3c captured its count from `pytest --collect-only -q 2>/dev/null`
+# and read the number out of the very line saying the collection was interrupted. Measured on this
+# tree with a planted vanished-file import: BEFORE the fix `collected=4414 … GATE_RC=0`, a PASS over
+# a dead collection, in the gate whose whole purpose is to notice that tests went missing; AFTER,
+# `GATE_RC=1` with the failing module named. **The compensating control retires.**
+# **PHASE W WAS NOT RUN, and the reason is a finding rather than a budget:** R326(a)'s correction —
+# per-rung noise — **is not implementable by the shipped tool**. `--noise-floor N` drives ONE rung
+# and `read_noise_floor_report` returns ONE scalar `rel_std`, which the knee rule then applies to
+# every rung as a single 3-sigma widening. A ladder run today would have re-run the exact carried
+# assumption R326(a) measured FALSE.
+# **RUN6 REMAINS HELD.**
+# **v3.36 = R330 folded in — the curation where THE ALLOWANCE GETS A RULE BEFORE IT GETS A VALUE.**
+# **R330(a) ratifies IDENTITY-CLOSEOUT and re-reads its fact:** the card is not too small for radius
+# 8; at ZERO allowance the r8 partition holds `+0.423972` and every allowance ≤ 4.89 % closes it, so
+# the halt was about the PERMISSION. **R330(b) pre-registers the rule** — `allowance = max(2 × measured
+# cross-sitting trainer-peak variance, 3 %)` — with 3 % PROPOSED on an r6 control byte-identical across
+# four sittings, conditional on clearing the boundary RE-DERIVED after `eval_child` is measured at r8
+# (R330(c)), never below 2 %, the VALUE arming only at the operator's next mint forwarding. **Two
+# omissions go on the ARCHITECT'S ledger:** R326(a) corrected an assumption without ordering its
+# mechanism, and R326(b)'s 12.9 % was an r6 artifact re-applied without r8 grounds. **Four pieces of
+# owed mechanism land engine-side this session:** per-rung noise in `worker_sweep` (R330(d)), the
+# arch-selector plumbing with config-less sites reading the artifact's stamp (R330(e)), the bare-pytest
+# recurrence killed at cause (R330(g)), and the commit convention set to the operator's recorded
+# correction (R330(h)). **R330(f) SETTLES PUSHES by ANNOTATION 12 under R282's foot:** the clause
+# reserves no push; pushes are governed by R311(b); the reservation this index carried from v2.6 was
+# an overclaiming index line, corrected in this curation at every site it appeared.
+# **RUN6 REMAINS HELD. No mint, no arm, no training.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -915,9 +969,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R308 — **279 sections, 279 distinct numbers, no duplicates** — and **every number
+  R23–R330 — **301 sections, 301 distinct numbers, no duplicates** (re-derived at v3.36; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c)) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 309)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 331)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -1010,8 +1064,9 @@ re-confirmed this session — check before relying.
   bar (R267, text OWED).
 - R155/R157/R158 — target-integrity no-drop; production-path + production-parameters
   clearance only (with R160).
-- One composition authority · LAW-16 lifecycle · CI gate family · R170 merges/pushes
-  operator-only · rule-7 host hygiene (R31/R112/R142 pattern: host access is a
+- One composition authority · LAW-16 lifecycle · CI gate family · R170 merges operator-only
+  (PUSHES are NOT a lock — R330(f)/ANNOTATION 12: governed by R311(b), full local green; this line
+  read "merges/pushes" through v3.35 and overclaimed) · rule-7 host hygiene (R31/R112/R142 pattern: host access is a
   per-dispatch grant) · falsified ledgers verbatim.
 - R26/R238 — radius = 6, never 8. Re-derive any radius number from `registry.toml` at
   point of use.
@@ -1706,7 +1761,9 @@ Verbatim text in the register; one-liners here are index only.
   recommended form); **any deviation HALTs with the numbers.** Scope note, stated as a pointer
   and NOT as a claim on R119: R119's enumerated armed values (0.25 / 25000 / 50) are not the
   values this carve-out covers — read both texts at point of use before treating any value as
-  delegated.
+  delegated. **R330(f), 2026-09-02: this clause names NO push reservation — pushes are governed by
+  R311(b) (full local green), ANNOTATION 12 under R282's foot. The IDENTITY-CLOSEOUT session's
+  conservative reading was taken off this INDEX (§2, §6), not off the clause.**
 - **R282(c) — BOX SITTING packet authorized; box grant activated by operator forwarding,
   PER-EVENT, expires on completion.** Artifacts land in `mantis-migration` ONLY; the burst
   reads `actor_sync` as the production-visible games signal (F-43); STEP 3 mints run5 AND
@@ -2296,6 +2353,95 @@ Verbatim text in the register; one-liners here are index only.
   PASSING witness.
   **Legs are SEVERABLE IN ORDER at gate-green boundaries; NIGHTRUN autonomy rules apply verbatim;
   HALTS ARE SUCCESSES.**
+  **AMENDED by R329 (2026-09-02). (a)–(e) RAN AND ARE RATIFIED by R329(a); the row EXPIRES.
+  (f) RAN ITS SITTING-6 HALF TO A CARD-LEVEL FACT and is SUPERSEDED by R329(c)'s execution
+  record.** R326(b)'s pattern re-applied at the r8 need gives a cap of **9.13 GiB** and conjunct 2
+  refuses it — headroom `+0.229883` against `M 0.350000`. **The nine-act mint, the r8 cap pair, the
+  arch-selector row and the burst are therefore UNPERFORMED, and BC-EXEC under the §0.3 envelope
+  does not follow**; the envelope itself is untouched and stands for the next attempt. **Two of
+  (f)'s components are separately reported as NOT DOABLE AS WRITTEN:** Phase W's per-rung noise has
+  no mechanism in `mantis.diagnostics.worker_sweep` (one scalar `rel_std` for the whole ladder), and
+  the arch-selector row's blast radius is measured at 73 references with three call sites holding no
+  full config. **The ACCEPTANCE WITNESS pre-registration survives unchanged** — R329(b) repairs the
+  INSTRUMENT, not the criterion.
+
+- **R329 — the witness is repaired at mechanism, gate 3c is closed, and sitting 6 returns a
+  card-level fact about the ALLOWANCE. LIVE, expires at the AUDIT sweep's exit screen.**
+  **(a) RATIFIES RUN6-IDENTITY-1 Legs 1–4** — the two-row identity mechanism, the suite green at
+  r8, the `MAX_STONES` amendment with `max_stones()` derived from the allocation, the full-corpus
+  encode (`8 698` games, truncation counted beside it), the stopping mechanism with its measured
+  noise floor, and the witness PASS. **The `is_full_search` defect is credited to the held-out
+  monitor's FIRST print** — a `0.000000` policy loss on step 500 — and the same clause records
+  that the noise guard could not have caught it: **a degenerate estimator has zero noise.**
+  **(b) THE LEG-ORDER DEVIATION IS ACCEPTED AS MEASUREMENT AND CORRECTED AS PROVENANCE**, and TWO
+  WITNESS CAVEATS ARE REPAIRED FIRST: the control net seeds through `mantis.util.determinism`
+  (a fixed baseline, not a draw — F-RESIT-10's defect one path over), and longest-run reads stone
+  colour FROM THE ENGINE, never from ply parity. **EXECUTED** at
+  `src/mantis/diagnostics/acceptance_witness.py`, with the mutation arm beside each repair; the
+  witness is promoted out of the box script it shipped as, because a repair that cannot carry a
+  test is not a repair. **The checkpoint of record is NOT re-produced — there is no minted world
+  to produce it on (see (c)) — so this clause's provenance half stands OWED.**
+  **THE REPAIRED WITNESS WAS RE-RUN on the same checkpoint and the same twenty openings, and it
+  ENLARGED the result rather than shrinking it:** BC **20/20 decisive**, winrate **1.0**, mean game
+  **14.8 plies**, and a winner's run of **exactly 6 in every one of the twenty games** against a
+  loser's 1–2. **The SEEDED control is 0/20** — every game to the 128-ply cap, `longest_run_max`
+  **2**, and it FAILS the armed floor. The pre-repair control's `11/20` was ONE LUCKY
+  INITIALISATION, so the old witness showed 20-vs-11 where the truth is **20-vs-0**. This is
+  R324(d)'s own ground reproduced (*"candidate-vs-random decisiveness measured 0/20 with the
+  fresh-init control identical"*). Evidence: `plan/SITTING6_EVIDENCE/witness_repaired.json`.
+  **(c) SITTING-6 RAN AND RETURNED THE CARD-LEVEL FACT.** r8 trainer need **8.091338 GiB**
+  (paired, r6 control byte-identical for a fourth sitting); R326(b) pattern → cap **9.13 GiB**;
+  conjunct 2 **REFUSE**, headroom `+0.229883` vs `M 0.350000`. Conjuncts 1 and 3 PASS
+  (falsifier PASS-WITH-DISCLOSURE, fitted pair `605 860 / 24 993` refusing no graph seen).
+  **The largest cap the partition affords is `8.487197` — a 4.89 % allowance — and the allowance
+  is the operator's to set, not a sitting's to discover.** Mint, burst, r8 cap pair and
+  arch-selector row all UNPERFORMED. Record `plan/RECAL_SITTING6_RECORD_2026-09-02.md`.
+  **(d) F-816-33 IS FIXED and its compensating control RETIRES.** `tools/ci_gates/test_count_gate.sh`
+  captures both streams and the collection's exit status and refuses a count taken from an
+  interrupted one; `collection_verdict` is isolated the way `verdict` already was, so the gate's own
+  self-test drives it (4 clean arms + 7 firing arms). The planted vanished-file break bites:
+  `GATE_RC=0` before, `GATE_RC=1` after, on this tree, with the failing module named in the refusal.
+  **(e) THE ORDER AFTER THIS: the codebase AUDIT sweep (structural census → ranked findings →
+  targeted repairs with tests), the file-based run dashboard, then the measured perf tranche — ALL
+  BEFORE the prereg table. RUN6 REMAINS HELD.**
+  **AMENDED by R330(a) (2026-09-02). RATIFIED — the card-level fact is RE-READ as a fact about the
+  PERMISSION, not the card (zero allowance closes at `+0.423972`; every allowance ≤ 4.89 % closes);
+  the seeded witness and the gate-3c fix RATIFIED; the refusal to choose an allowance COMMENDED.
+  (b)'s provenance half — the checkpoint of record on the minted world — stays OWED to the mint;
+  (e)'s order stands.**
+
+- **R330 — the allowance gets a RULE before it gets a value, `eval_child` is re-measured at r8, and
+  four pieces of owed mechanism land. LIVE: (b)/(c) expire at the next mint forwarding; (d)–(h)
+  expire on their landings, recorded in the FINISH-1 record.**
+  **(a) RATIFIES IDENTITY-CLOSEOUT** — the fact is about the PERMISSION: at zero allowance the r8
+  partition closes at `+0.423972` and every allowance ≤ 4.89 % closes it; the seeded witness
+  (control 0/20, longest run 2; BC 20/20, run exactly 6 in all twenty) and the gate-3c fix are
+  ratified; refusing to pick an allowance after reading the gate is COMMENDED. **Two ARCHITECT
+  omissions on the ledger:** R326(a) ordered no mechanism for per-rung noise; R326(b)'s 12.9 % was
+  r6-grounded.
+  **(b) THE ALLOWANCE RULE, pre-registered: `allowance = max(2 × measured cross-sitting trainer-peak
+  variance, 3 %)`. 3 % PROPOSED** — the r6 control is byte-identical (`7 992 252 928 B`) across four
+  sittings, so the measured variance is ~0 and the 3 % floor carries; the r8 need itself has ONE
+  sitting behind it. **Conditional on clearing the boundary RE-DERIVED after (c)**; if it cannot,
+  that is the fact and the r8 memory design (eval k, eval concurrency posture) re-adjudicates;
+  **no allowance below 2 % is ever proposed. The VALUE arms only at the operator's next mint
+  forwarding — OPERATOR-OWED.**
+  **(c) `eval_child` is MEASURED at r8** by the R319(c) two-point probe (4/8 games, tolerance
+  pre-stated from point one, ≥3 rounds) and the boundary re-derives from it. POINTER: the numbers
+  live in the FINISH-1 record, never here.
+  **(d) PER-RUNG NOISE gets its mechanism** in `mantis.diagnostics.worker_sweep`: each rung's
+  rel-SE from its own measured rounds; the `within` expansion uses the MAX rel-SE over the
+  candidate set; planted break. Phase W runs at the next sitting, not this session.
+  **(e) ARCH-SELECTOR PLUMBING lands engine-side before the mint:** the config-less call sites
+  (`train/checkpoints.py` legacy read and `strip_and_restamp`, `train/pretrain/validate.py`)
+  resolve the arch from the ARTIFACT'S STAMP — one authority; the mint later writes only the row;
+  the 73-reference blast radius is walked, not assumed.
+  **(f) PUSHES SETTLED — ANNOTATION 12 under R282's foot:** pushes are governed by R311(b) (full
+  local green), not reserved. `dev` pushes.
+  **(g) The bare-pytest recurrence (third occurrence) is killed at cause:** a bare `pytest` resolves
+  to the default tier or refuses loudly.
+  **(h) Commit convention:** the OPERATOR'S recorded correction (R36/R47 — one-line subject, no
+  trailers, no Co-Authored-By) governs; CLAUDE.md is updated to say so; existing commits stand.
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -2307,7 +2453,8 @@ Verbatim text in the register; one-liners here are index only.
   reports route to it directly. **The predecessor session lineage is CLOSED**, R303 its final act.
   **The bound, stated because a constitutive clause cannot be premise-checked against a prior
   fact:** the operator's residue is enumerated and unchanged in substance (§7's residue stamp),
-  R282(b) still reserves armed values, box grants, merges/pushes, the mint word and the owed texts,
+  R282(b) still reserves armed values, box grants, merges (NOT pushes — R330(f)/ANNOTATION 12; this row
+  read "merges/pushes" from v2.6 through v3.35 and overclaimed), the mint word and the owed texts,
   and the prompt this authority runs on is on disk and readable. **The duty this creates:** an
   architect verifies its own premises exactly as it did when executing someone else's, because
   R303(d) removes the second reader who used to run that check — the mechanism, not the goodwill,
@@ -4983,3 +5130,112 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it changes no registry key (Leg 1 does), encodes nothing
   (Leg 2 does), mints nothing (Leg 3 does), trains nothing (Leg 4 does), and starts no run6.
   **RUN6 REMAINS HELD.**
+
+- 2026-09-02 — **v3.35** curated by the IDENTITY-CLOSEOUT execution session, landing **R329**,
+  authored in the ARCH-ERA architect session under R303(d) and forwarded by the operator into this
+  session's prompt rather than as a file. **The landing session CREATED the ruling's ONE canonical
+  home** (R285's ONE-TEXT rule), `plan/PACKET_R329_IDENTITY_CLOSEOUT.md` §1, and the register entry
+  was built from it by `awk`, never retyped. **Census re-run independently BEFORE and AFTER:**
+  `R23–R328, 299 sections / 299 distinct / 0 duplicates, excluded set 53` before, `R23–R329,
+  300 / 300 / 0, excluded set 53` after, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`
+  unchanged both times; `--stamp` read `STAMP OK: stamp v3.34 == §8 last entry v3.34` before the
+  edits and **FAILED loudly mid-curation** (`header says v3.35, §8's last entry says v3.34`) with
+  this entry unwritten — R284(f)'s instrument doing its job on THIS curation for the second landing
+  running; `--self-test` all four controls fire. **`grep -rn 'R329' plan/` returned rc 1 and ZERO
+  hits** before the landing, read under `set -o pipefail` with the count taken from a FILE.
+  **Double transcription IDENTICAL at 26 lines** with `R{next}` intact, and the two substituted
+  forms identical to each other; exactly ONE placeholder was substituted and the residual grep
+  returns rc 1; the canonical home's `awk`-extracted block against the register entry's — **EMPTY**;
+  and the register's pre-append prefix is byte-identical after the append at 7 915 lines, so no
+  neighbouring section moved.
+  **SPOT-CHECKS, FIVE index lines against the verbatim register (R271(d)/R272(b)), chosen because
+  this landing leans on all five:** **R326(b)** (`rulings_register.md:7673-7674` — *"RE-DERIVED as
+  measured need plus a stated allowance: peak 7.443 GiB, reproduced to kilobytes across two
+  sittings, plus 12.9% → PROPOSED 8.40 GiB"*; the index's paraphrase is accurate and the sitting
+  re-derives the ratio `8.40 / 7.443366 = 1.128522` rather than reading the rounded percent);
+  **R327(c)** (`:7793-7794` — *"Moving to the measured affordability edge (0.8568) after observing
+  it would be criterion movement"*, which is verbatim the precedent on which this sitting refuses to
+  choose an allowance after measuring one); **R326(a)** (`:7664` — *"future ladders use per-rung
+  noise"*, accurate, and the finding recorded against it here is that the shipped tool cannot do it);
+  **R323(b)** (`:7563` — *"the arch-selector key enters production configs only as a minted row at
+  run6's mint"*, accurate; the row is unperformed because there is no mint); and **R328(f)**
+  (`:7906` — *"(per-rung noise per R326(a)'s correction), terms, fit under M and the …"*, which is
+  the clause this sitting executes to its halt). **No index line was widened by this curation, and
+  none was found overclaiming.**
+  **REGISTER EDIT: NONE beyond the R329 append.** No annotation was ordered and none is invented.
+  **Index edits, FIVE — four planned and a fifth added after the witness re-ran, stated rather
+  than left as a stale four:** the v3.35 header block; the stamp (which rides it, R284(f)); an
+  **amendment appended to §5's R328 row** — (a)–(e) RATIFIED and the row EXPIRES, (f)'s sitting-6
+  half SUPERSEDED by R329(c)'s execution record, with the two components reported NOT DOABLE AS
+  WRITTEN named on the row; a **new §5 LIVE row for R329**; and the **post-repair witness measurement appended to that row**
+  once it existed (`20/20` against a seeded control's `0/20`), because a session seeding from this
+  index would otherwise carry only the pre-repair comparison. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** **A number that passed a bar is not evidence until the instrument
+  that produced it has been read.** R329(a) ratifies a witness PASS; R329(b), in the same ruling,
+  orders the witness repaired — and the artifact ratified in (a) is where the defect is visible,
+  twenty wins beside a longest run of three. The two clauses are not in tension: the PASS was real
+  in its decisive half and unreadable in its contested-play half, and the ruling says which is
+  which instead of averaging them.
+  **The second half is the mirror of R327's.** R327(c) refused to move `--margin` after seeing the
+  number it gates. This sitting inherits that discipline on a term that WOULD have closed the
+  partition: the r8 need is 8.091338 GiB, an allowance of 4.89 % closes it, R326(b)'s stated 12.9 %
+  refuses it, **and the sitting does not choose.** A permission is honest only if the number it is
+  set from was fixed before the measurement it gates.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, runs no burst, trains nothing, produces no
+  checkpoint of record, and lands no arch-selector row. **RUN6 REMAINS HELD.**
+
+- 2026-09-02 — **v3.36** curated by the FINISH-1 execution session, landing **R330**, authored in
+  the ARCH-ERA architect session under R303(d) and forwarded by the operator into this session's
+  prompt rather than as a file. **The landing session CREATED the ruling's ONE canonical home**
+  (R285's ONE-TEXT rule), `plan/PACKET_R330_FINISH_1.md` §1, and the register entry was built from
+  it by `awk`, never retyped. **Census re-run independently BEFORE and AFTER:** `R23–R329, 300
+  sections / 300 distinct / 0 duplicates, excluded set 53` before, `R23–R330, 301 / 301 / 0,
+  excluded set 53` after the append AND unchanged after ANNOTATION 12's mid-file insert (an
+  annotation header does not match the section pattern, by design), missing-in-range
+  `{24, 29, 32, 33, 227, 228, 267}` unchanged throughout; `--stamp` read `STAMP OK: stamp v3.35 ==
+  §8 last entry v3.35` before the edits and **FAILED loudly mid-curation** (`header says v3.36, §8's
+  last entry says v3.35`) with this entry unwritten — R284(f)'s instrument firing on its third
+  consecutive landing; `--self-test` all four controls fire. **`grep -rn 'R330' plan/` returned rc 1
+  and ZERO hits** before the landing, under `set -o pipefail` with the count taken from a FILE.
+  **Double transcription IDENTICAL at 31 lines** with `R{next}` intact, the two substituted forms
+  identical, exactly ONE placeholder substituted and the residual grep rc 1; the canonical home's
+  `awk`-extracted block against the register entry's — **EMPTY**; the register's pre-append prefix
+  byte-identical after the append at 7 949 lines.
+  **SPOT-CHECKS, SIX index lines against the verbatim register (R271(d)/R272(b)), and ONE OF THEM
+  FOUND OVERCLAIMING — which is the finding R330(f) exists for:** **R326(a)** (`:7664`, *"future
+  ladders use per-rung noise"* — accurate; the mechanism it did not order is what R330(d) lands);
+  **R326(b)** (`:7673-7674`, *"peak 7.443 GiB … plus 12.9%"* — accurate, and the figure is r6's);
+  **R323(b)** (`:7563`, *"enters production configs only as a minted row at run6's mint"* — accurate;
+  R330(e) lands the plumbing under it and leaves the row to the mint); **R319(c)** (`:7325`, the
+  two-point probe with its pre-stated tolerance — accurate, and it is the instrument R330(c) runs);
+  **R311(b)** (`:6959`, *"the full local gate set … before any push"* — accurate); and **R282(b)**
+  (`:4520-4523`) — the verbatim operator-only list is *"box grants, run5 mint authorization,
+  judgment-valued prereg rows"* and names NO push, while this index said *"merges/pushes"* at §2's
+  R170 line and §6's R303(d) row from v2.6 through v3.35. **THE INDEX OVERCLAIMED**, and the
+  IDENTITY-CLOSEOUT session took its conservative no-push reading off this index rather than off
+  the clause (`RECAL_SITTING6_RECORD_2026-09-02.md` §10.5). Corrected at both sites and on the
+  R282(b) row itself in this curation, each correction naming the versions it stood through.
+  **REGISTER EDITS, TWO:** the R330 append, and **ANNOTATION 12 under R282's foot** (ordered by
+  R330(f)), stating that R282(b) reserves no push and that pushes are governed by R311(b).
+  **Index edits, NINE, enumerated:** the v3.36 header block; the stamp (rides it, R284(f)); the §1
+  census sentence repaired from R308/279 to the live R330/301 with `range(23, 331)` (R311(c) —
+  it had been stale for eleven curations while every one of them ran the script); the §2 lock line
+  (R170 merges stay a lock, pushes leave it); the R282(b) row (R330(f) note); the §6 R303(d) row
+  (the same correction, versions named); an **amendment appended to §5's R329 row** — RATIFIED by
+  R330(a) with the fact re-read as about the permission, (b)'s provenance half still OWED, (e)
+  standing; a **new §5 LIVE row for R330**; and this entry. Nothing was deleted.
+  **`plan/ARCHITECT_SESSION_PROMPT.md`'s operator-only paragraph repaired in place the same way**
+  (a non-canonical working doc, R311(c)): *"merges/pushes outside a mission-scoped grant"* → merges,
+  with pushes pointed at R311(b).
+  **WHAT THIS RULING SETTLES.** **A permission is set by a RULE fixed before the number it gates is
+  read.** Sitting 6 measured that the r8 partition affords up to 4.89 % and refused to choose;
+  R330(b) writes the rule down first — `max(2 × measured variance, 3 %)`, floor 2 % — and proposes
+  3 % from it, then orders the one voided term re-measured BEFORE the boundary the proposal must
+  clear is re-derived. The value is still the operator's.
+  **The second half is the register correcting its own index.** Two sessions read "pushes are
+  reserved" off this file; the clause never said it. R330(f) fixes the clause's reading by
+  annotation and this curation fixes every index line that carried the overclaim.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing, trains nothing, sets no
+  allowance VALUE, and starts no run. The `eval_child` measurement, the boundary re-derivation
+  and the four engine landings are EXECUTION under R330, recorded in the FINISH-1 record and
+  appended to the R330 row at exit. **RUN6 REMAINS HELD.**
