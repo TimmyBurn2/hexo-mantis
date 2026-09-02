@@ -365,6 +365,26 @@ def emit_axis_distribution(
     return axis_q
 
 
+def measured(loss_info: Mapping[str, Any], key: str) -> float | None:
+    """An absent loss key is NOT MEASURED (`None`), never a fabricated number.
+
+    `docs/contracts/event_manifest.md`'s unproduced-field convention. AUDIT-1 F-01 is what
+    it costs when the convention is not applied here: `policy_entropy` defaulted to `0.0`,
+    no trainer tail produces the key, and `check_entropy_collapse` therefore fired
+    `entropy_collapse` at every `log_interval` of every run — while masking a real collapse
+    behind identical text. Every WARN rule already has an absent arm; a fabricated default
+    is what made those arms unreachable.
+    """
+    value = loss_info.get(key)
+    return None if value is None else float(value)
+
+
+def measured_int(loss_info: Mapping[str, Any], key: str) -> int | None:
+    """`measured` for the integer counters — absence is `None`, not a count of zero."""
+    value = loss_info.get(key)
+    return None if value is None else int(value)
+
+
 def emit_training_step_event(
     train_step: int,
     loss_info: dict[str, float],
@@ -388,10 +408,10 @@ def emit_training_step_event(
     keyed in exactly like `solver_deltas` and unrelated to it (a SEPARATE debt, its own
     parameter rather than an overload of a legacy, byte-frozen-elsewhere one).
     """
-    policy_entropy = float(loss_info.get("policy_entropy", 0.0))
-    value_accuracy = float(loss_info.get("value_accuracy", 0.0))
-    grad_norm = float(loss_info.get("grad_norm", float("nan")))
-    lr = float(loss_info.get("lr", 0.0))
+    policy_entropy = measured(loss_info, "policy_entropy")
+    value_accuracy = measured(loss_info, "value_accuracy")
+    grad_norm = measured(loss_info, "grad_norm")
+    lr = measured(loss_info, "lr")
 
     probe_metrics: dict[str, Any] = {}
     if early_game_probe is not None and trainer_model is not None:
@@ -413,18 +433,22 @@ def emit_training_step_event(
         "loss_total": float(loss_info["loss"]),
         "loss_policy": float(loss_info["policy_loss"]),
         "loss_value": float(loss_info["value_loss"]),
-        "loss_aux": float(loss_info.get("opp_reply_loss", 0.0)),
-        "loss_ownership": float(loss_info.get("ownership_loss", 0.0)),
-        "loss_threat": float(loss_info.get("threat_loss", 0.0)),
-        "loss_chain": float(loss_info.get("chain_loss", 0.0)),
-        "avg_sigma": float(loss_info.get("avg_sigma", 0.0)),
+        # Every row below is `None` when its producer did not supply it. The three
+        # `policy_entropy_*` rows travelled as JSON `NaN` — which is not valid JSON at all —
+        # and the rest as `0.0`/`0`, indistinguishable from a measured zero (AUDIT-1 F-01,
+        # F-28 rows INST-C01/C02/C03).
+        "loss_aux": measured(loss_info, "opp_reply_loss"),
+        "loss_ownership": measured(loss_info, "ownership_loss"),
+        "loss_threat": measured(loss_info, "threat_loss"),
+        "loss_chain": measured(loss_info, "chain_loss"),
+        "avg_sigma": measured(loss_info, "avg_sigma"),
         "policy_entropy": policy_entropy,
-        "policy_entropy_pretrain": float(loss_info.get("policy_entropy_pretrain", float("nan"))),
-        "policy_entropy_selfplay": float(loss_info.get("policy_entropy_selfplay", float("nan"))),
-        "policy_entropy_recent": float(loss_info.get("policy_entropy_recent", float("nan"))),
-        "policy_target_entropy": float(loss_info.get("policy_target_entropy", 0.0)),
-        "n_rows_policy_loss": int(loss_info.get("n_rows_policy_loss", 0)),
-        "n_rows_total": int(loss_info.get("n_rows_total", 0)),
+        "policy_entropy_pretrain": measured(loss_info, "policy_entropy_pretrain"),
+        "policy_entropy_selfplay": measured(loss_info, "policy_entropy_selfplay"),
+        "policy_entropy_recent": measured(loss_info, "policy_entropy_recent"),
+        "policy_target_entropy": measured(loss_info, "policy_target_entropy"),
+        "n_rows_policy_loss": measured_int(loss_info, "n_rows_policy_loss"),
+        "n_rows_total": measured_int(loss_info, "n_rows_total"),
         "value_accuracy": value_accuracy,
         "lr": lr,
         "grad_norm": grad_norm,

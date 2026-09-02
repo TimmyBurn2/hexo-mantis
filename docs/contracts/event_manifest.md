@@ -323,10 +323,27 @@ is silently disabled.
   is no baseline and no forgiveness window, so an error raised before the watchdog was armed
   still aborts at the first poll.
 - **An unproduced field carries `None`, never a fabricated value.** A constant `0` in the
-  ONE channel reads as a real measurement and is the F-10 class in miniature. Currently
-  unproduced: `training_step.quiescence_fires_per_step` (the solver-delta half is
-  DEFER/ARCH; the key is retained for schema stability and travels as `None` = NOT
-  MEASURED). A consumer must treat `None` as "no producer", never as zero.
+  ONE channel reads as a real measurement and is the F-10 class in miniature. A consumer
+  must treat `None` as "no producer", never as zero. Symmetrically, a field that IS produced
+  carries its value even when that value is `0.0` — a measured zero and an absent
+  measurement are different facts and the payload distinguishes them.
+  **The `training_step` roster, all of it built by `mantis.train.events.measured` /
+  `measured_int`:** `quiescence_fires_per_step` (the solver-delta half is DEFER/ARCH; the
+  key is retained for schema stability), `policy_entropy`, `policy_entropy_pretrain`,
+  `policy_entropy_selfplay`, `policy_entropy_recent`, `policy_target_entropy`, `loss_aux`,
+  `loss_ownership`, `loss_threat`, `loss_chain`, `avg_sigma`, `value_accuracy`,
+  `n_rows_policy_loss`, `n_rows_total`. Of these the two trainer tails currently produce
+  `value_accuracy` (dense only) and `loss_chain` (dense, when `aux_chain_weight > 0`); the
+  rest have no producer in a shipped run and are `None` on every step.
+  **AUDIT-1 F-01 is the cost of not applying this rule here.** `policy_entropy` defaulted to
+  `0.0`, every minted config sets `alert_entropy_min: 1.0`, and `check_entropy_collapse`
+  therefore emitted `training_alert entropy_collapse "policy entropy 0.00 — possible mode
+  collapse"` at every `log_interval` of every run — while a REAL collapse would have been
+  the identical event. The three `policy_entropy_*` rows additionally defaulted to
+  `float("nan")`, which `json.dumps` writes as the bare token `NaN`: not valid JSON.
+  Producer test: `tests/train/test_training_step_absence.py`, driven by the two REAL tails
+  rather than by an injected `loss_info` — the fake shape carrying `"policy_entropy": 2.0`
+  is what let the defect ship past a LAW-07 row.
 - **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
   encoding does not have is ABSENT from that encoding's stream — never zero, never
   `null`-as-value.** Every `iteration_complete` block subtracted on these grounds (the
