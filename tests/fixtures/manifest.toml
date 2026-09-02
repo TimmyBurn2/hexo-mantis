@@ -292,7 +292,7 @@ added_by = "WP-SP"
 
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-sha256 = "6c14cbf41716a797778cf7fb85ae9064f41971a676726c0ed51d7dfdcd47ddd9"
+sha256 = "7882e1e6227917841723990b3682122c62fca37e09d3d3416f7fd1d764a3867b"
 added_by = "WP-SP"
 
 [[required]]

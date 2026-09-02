@@ -23,7 +23,7 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
         m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_.]*):", text, flags=re.MULTILINE)
     }
     assert targets == {
-        "build", "build.native", "test", "test.integration", "lint",
+        "build", "build.native", "test", "test.integration", "lint", "lint.rust", "gates",
         "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "clean",
     }
 
@@ -127,11 +127,32 @@ def test_every_ci_gate_script_is_invoked_by_ci_yaml():
     scripts = _gate_scripts()
     assert scripts, "no gate scripts found — the census itself is broken"
 
+    # AUDIT-1 F-09 WIDENED WHAT "INVOKED" MEANS, and the widening is forced by the finding.
+    # `ci.yml` was the only place a gate could be invoked from, which is exactly the state
+    # F-09 measured as the defect: remote CI is SUSPENDED (R311(b)) and local green is the
+    # gate, so a script reachable only from a workflow file is a script nothing runs. Three
+    # invocation sites now count, and all three are executed things rather than mentions:
+    #   * a `run:` body in `ci.yml`;
+    #   * a recipe line in the `Makefile` (`make gates` runs the local gate set);
+    #   * another gate SCRIPT (gate 3c shells out to `tier_census.py`, and a gate invoked by
+    #     a gate is invoked).
+    # The original subject is untouched: a script no executed line names is still an orphan.
     commands = _ci_run_commands()
-    orphans = [s for s in scripts if not any(s in cmd for cmd in commands)]
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    gate_bodies = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((REPO_ROOT / "tools" / "ci_gates").iterdir())
+        if path.is_file() and path.suffix in {".sh", ".py"}
+    )
+    orphans = [
+        s for s in scripts
+        if not any(s in cmd for cmd in commands)
+        and Path(s).name not in makefile
+        and Path(s).name not in gate_bodies
+    ]
     assert not orphans, (
-        f"gate scripts present but executed by no ci.yml `run:` step: {orphans}. "
-        "A gate nothing runs is not a gate."
+        f"gate scripts present but executed by no ci.yml `run:` step, no Makefile recipe and "
+        f"no sibling gate: {orphans}. A gate nothing runs is not a gate."
     )
 
 
