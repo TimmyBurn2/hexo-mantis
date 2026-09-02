@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ ace9a2d, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 6d31643, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -2547,6 +2547,28 @@ Verbatim text in the register; one-liners here are index only.
   still audits ARMED off a config number, so a guard failing every tick still audits armed.
   The observability half is closed (a named event and two counters); changing the arming is a
   mint-affecting decision about `armed_aborts.MANIFEST`, not a repair.
+  **THE FULL LOCAL GATE SET IS GREEN: 19/19, rc 0, 66 min** (`make gates`, base `origin/dev`;
+  gate 1 opt-in and DECLARED not-run in the runner's own summary, per CLAUDE.md's recorded
+  accepted cost). Gate 3b — the integration tier, unmeasured since R310(g) in this session —
+  is 48 passed / 2 loud CUDA-only skips.
+  **THE FIRST THREE FULL RUNS WERE RED, on this session's OWN Leg 3 work, and it is on the record
+  rather than repaired quietly** — the class R331 was dispatched to close, produced by the
+  session closing it. Gate 2a: the RUST TWIN of an interaction already fixed on the Python side
+  (F-21's `MAX_ARMED_SIMS` bound refuses a 70 000-sim mutation before the HEXG record ceiling
+  can), missed because every cargo run after F-21 landed was `-p`-scoped. Gate 2b:
+  `clippy::neg_cmp_op_on_partial_ord` on F-38's NaN-safe dirichlet guard — **caught by
+  `make lint.rust`, the target F-09 added THIS LEG because nothing local ran clippy.** Both
+  fixed at `2675f17`; the interaction is now pinned by its own row. **Gate 14: the `_engine.pyi`
+  stub was missing this session's WHOLE engine surface** — `mcts_max_armed_sims`,
+  `SelectionDesync`, and the two signatures that now raise instead of panicking — because
+  `make lint.rust` was run after F-21 and `lint_gate.sh` was not; `cargo` does not type-check
+  Python. Fixed at `f33f987`, both stub copies.
+  **The transferable defect is the REPORTING, not the cadence.** Targeted tests while iterating
+  is R311(b)'s own rule; what went wrong is that each time I verified the half I had just
+  touched and reported before the other half ran. **The irony is exact: F-09's whole point is
+  that the gate set should be ONE COMMAND rather than a set assembled from memory, and this
+  session kept assembling it from memory.** Every one of the three was caught by a gate and
+  none by the session; two of them by gates this leg added or restored.
   **RUN6 REMAINS HELD.** Nothing in REPAIR-1 mints, arms, trains or starts a run.
 
 ## 6. Dispatch & autopilot governance — LAW
