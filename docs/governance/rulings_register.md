@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 49026e1, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ ace9a2d, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 

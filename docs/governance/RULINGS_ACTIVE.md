@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 49026e1, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ ace9a2d, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -2522,6 +2522,32 @@ Verbatim text in the register; one-liners here are index only.
   REPAIR-3 (P7, P9), the file-based run dashboard, the tranche-2 prereg (P11, the ARCHITECT'S),
   then the **run6 mint**. **P10 is not a packet** — it is the architect's design input for lane C,
   dispatched per sub-item under the seam spec.
+  **EXECUTED 2026-09-03 (REPAIR-1 session; exit `plan/REPAIR1_EXIT.md`), appended here so a
+  session seeding from the index carries the outcome and not only the order.** **P1–P4 all
+  landed gate-green**, 24 commits on `dev`, collected-test floor 4442 → 4629. **(c)'s four legs
+  in order:** P1 closed every class-7 row including all nineteen F-28 sub-rows — the false
+  `entropy_collapse` that fired at every `log_interval` of every run is dead, and the drain
+  golden's two FROZEN fabrications (an undecodable winner captured as a measured DRAW, six
+  investigation metrics captured as zeros) are corrected in the fixture with their reasons.
+  P2's F-09 landed FIRST and changes what every later packet's "local green" means: `make
+  gates` runs all 17 with CI's own arguments and `make lint.rust` restores
+  `clippy --all-targets`, which is the ONLY thing in the repo that compiles seven of the eight
+  bench targets — witnessed with a planted `clippy::len_zero` that `cargo test`, `make bench`
+  and plain clippy all passed. P3 retired the MCTS desync panic the worker had been recovering
+  from BY MATCHING ITS MESSAGE TEXT. P4 repaired repo_design, the README, the contract headers
+  and eleven stale counts, and extended gate 13 to catch the header-vs-table drift — which it
+  did on its first run (v9 stated, v13 actual).
+  **TWO ROWS BANKED, both with reasons on the record.** (i) **F-14's producer half hit a
+  FROZEN-FILE HALT**: `mantis/eval/rounds.py` is frozen under R118/A-1 (PREREG_A §8 abort 8)
+  and its working-tree guard FIRED on contact. The edit was reverted unpushed and the rung
+  identity is published by the PIPELINE instead, agreement-checked against the frozen producer
+  (R104). **THE FREEZE IS FOR THE ARCHITECT**: A-1's claim was about WP12-R Phase A, long
+  merged, and a permanent working-tree guard on a live producer may now cost more than it
+  protects. (ii) **F-11's ARMING mechanism**: gate 12's REQUIRED `disk_space_exhausted` row
+  still audits ARMED off a config number, so a guard failing every tick still audits armed.
+  The observability half is closed (a named event and two counters); changing the arming is a
+  mint-affecting decision about `armed_aborts.MANIFEST`, not a repair.
+  **RUN6 REMAINS HELD.** Nothing in REPAIR-1 mints, arms, trains or starts a run.
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -5357,3 +5383,6 @@ Verbatim text in the register; one-liners here are index only.
   through a runner that actually runs the gates.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing, trains nothing, sets no
   allowance VALUE, and starts no run. **RUN6 REMAINS HELD.**
+  **EXECUTION APPENDED AT EXIT (2026-09-03), stated here rather than left as a silent sixth
+  index edit:** the §5 R331 row gained an EXECUTED block recording P1–P4's landing, the two
+  banked rows and the frozen-file halt. No other line moved and nothing was deleted.
