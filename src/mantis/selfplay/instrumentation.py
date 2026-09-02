@@ -300,14 +300,17 @@ class PoolInstrumentation:
         mv_distinct: int,
         stride5_run: int,
         cluster_threshold: int = _CLUSTER_THRESHOLD,
-    ) -> tuple[int, int, float, int, int, float, int]:
+    ) -> tuple[int | None, int | None, float | None, int,
+               int | None, float | None, int | None]:
         """Update all telemetry state for one completed game.
 
         Returns ``(colony_ext_count, colony_ext_total, colony_ext_frac,
         stride5_p90, longest_line, longest_line_fraction, n_components)``.
-        Colony + B3a structural stats are 0/0/0.0 (longest_line 0, fraction 0.0,
-        n_components 0) when ``log_investigation_metrics`` is False or
-        ``move_history`` is empty.  ``stride5_p90`` is the rolling P90 including
+        Colony + B3a structural stats are all ``None`` when
+        ``log_investigation_metrics`` is False or ``move_history`` is empty —
+        AUDIT-1 F-28/C04: they were six zeros, and "no colony extension was
+        measured" and "the winner extended no stones" are different facts that
+        both landed as ``0`` in the ONE channel.  ``stride5_p90`` is the rolling P90 including
         this game.  ``cluster_threshold`` (the connectivity edge bound for
         n_components) defaults to the PINNED ``_CLUSTER_THRESHOLD`` (engine
         DEFAULT_CLUSTER_THRESHOLD=5); callers may override for tests.
@@ -343,8 +346,10 @@ class PoolInstrumentation:
                 move_history, cluster_threshold, winner_code,
             )
         else:
-            ext_count, ext_total, ext_frac = 0, 0, 0.0
-            longest_line, longest_line_frac, n_components = 0, 0.0, 0
+            # NOT MEASURED, not measured-as-zero (AUDIT-1 F-28/C04). The lever is off, or
+            # the game recorded no moves; either way nothing computed these.
+            ext_count = ext_total = ext_frac = None
+            longest_line = longest_line_frac = n_components = None
 
         return (
             ext_count, ext_total, ext_frac, stride5_p90,

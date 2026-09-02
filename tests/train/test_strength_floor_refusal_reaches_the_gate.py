@@ -207,6 +207,11 @@ class _FakePipeline:
         bt_prior_games = 1.0
 
     class _State:
+        def status(self, rung: str) -> str:
+            """AUDIT-1 F-28/B02: `_success_result` now stamps each rung's REAL ladder status
+            (the child has none), so the stand-in has to answer for the rungs it is given."""
+            return "active"
+
         def record_round(self, *a, **k) -> None: ...
 
         def save(self, *a, **k) -> None: ...

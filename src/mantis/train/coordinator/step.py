@@ -1071,11 +1071,18 @@ class StepCoordinator:
             "data_loss_counters": dict(_data_loss.REPLAY_COUNTERS.snapshot()),
         })
 
-    def _watchdog_counters(self) -> dict[str, int]:
+    def _watchdog_counters(self) -> dict[str, int] | None:
+        """The watchdog's best-effort counters, or `None` when NO WATCHDOG IS WIRED.
+
+        AUDIT-1 F-28/C05: this returned `{}` for both "the watchdog is armed and nothing has
+        failed" and "there is no watchdog to ask", so the healthiest run and the one with no
+        fire path at all published the same block. An empty mapping from a LIVE watchdog is a
+        real, good measurement; absence is not.
+        """
         counters = getattr(self.heartbeat_watchdog, "counters", None)
         snapshot = getattr(counters, "snapshot", None)
         if not callable(snapshot):
-            return {}
+            return None
         # `WatchdogCounters.snapshot()` contract: a str→int mapping (duck-typed here —
         # the watchdog is an injected Any collaborator).
         return dict(cast("Mapping[str, int]", snapshot()))

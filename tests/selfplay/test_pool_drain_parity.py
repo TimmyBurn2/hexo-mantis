@@ -332,10 +332,27 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
 def test_game_complete_payload_golden(run_drain, drain_goldens):
     """C-03 — PASS iff the six emitted `game_complete` payloads equal the capture on ALL 21
     keys except the uuid `game_id` (format-checked only): the LAW-04 dedupe
-    `game_id_byte_hash`, the winner map {0:−1, 1:0, 2:1} with unknown code → −1, the
+    `game_id_byte_hash`, the winner map {0:−1, 1:0, 2:1} with unknown code → **null**, the
     terminal-reason names with unknown code → "unknown", the stride5 / colony / longest-line /
     n_components metrics, and the seeded / solver_fires counters. FAIL = the event contract
-    WP13-A will build against drifted — including a dropped, added, or reordered key."""
+    WP13-A will build against drifted — including a dropped, added, or reordered key.
+
+    **THE CAPTURE WAS UPDATED, DELIBERATELY, BY AUDIT-1 F-28/C04 — two cells, and each is a
+    fabrication this fixture had frozen:**
+
+    * **Game 5** carries `winner_code = 3`, which no map entry covers. It was captured as
+      `winner: -1` — a measured DRAW — while `pool_drain`'s own log line beside it printed
+      `winner=unknown` off `_WINNER_NAMES[...] if winner_code < 3 else "unknown"`. Two
+      readings of one game, and the ONE channel carried the wrong one. It is `null`.
+    * **Game 3** has an EMPTY move history, so nothing computed its colony-extension trio or
+      its longest-line/n_components pair; all five were captured as `0`/`0.0`. They are
+      `null`. A zero longest line is a legitimate measurement for other games in this very
+      capture (game 1 reports `longest_line_fraction: 0.5`), which is why the absent case
+      cannot share its value.
+
+    Everything else in the capture is byte-identical, including the stride5 pair — a
+    stride-5 run of zero over no stones IS a measurement, and G-14 pins it as one.
+    """
     pool, _ = run_drain()
     golden = _variant(drain_goldens, "dense_5s_crossed")
     expected_events = [e for e in golden["events"] if e["event"] == "game_complete"]

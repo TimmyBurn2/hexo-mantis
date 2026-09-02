@@ -154,7 +154,13 @@ def run_stats_loop(pool: Any) -> None:
             )
 
             # winner_code → spec convention: 0=P0, 1=P1, -1=draw.
-            winner_int = {0: -1, 1: 0, 2: 1}.get(winner_code, -1)
+            # AUDIT-1 F-28/C04: an UNRECOGNISED code used to fall to `-1`, i.e. to be
+            # reported as a measured DRAW. It is `None` — no outcome was decoded — and it is
+            # logged, the way `terminal_reason` already maps an unknown code to a named
+            # "unknown" rather than to one of its real values.
+            winner_int = {0: -1, 1: 0, 2: 1}.get(winner_code)
+            if winner_int is None:
+                _LOG.error("game_complete_winner_undecodable: winner_code=%s", winner_code)
 
             moves_list = [f"({q},{r})" for q, r in move_history] if move_history else []
 

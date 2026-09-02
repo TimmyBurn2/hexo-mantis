@@ -367,6 +367,20 @@ is silently disabled.
   manifest row names `eval_round_started` + `eval_round_complete` as one producer; the terminal
   round emitted only the second, so the one round whose wall time the drain budget is judged on
   had no start timestamp to subtract from.
+- **`game_complete`'s six investigation metrics and its winner (AUDIT-1 F-28/C04).** The
+  colony-extension trio and the longest-line/n_components pair are `None` when
+  `log_investigation_metrics` is off or the game recorded no moves — they were `0`/`0.0`, and
+  a zero longest line is a real measurement for other games in the same run. `winner` is
+  `None` for a `winner_code` no map entry covers; it used to fall to `-1`, reporting an
+  undecodable outcome as a measured DRAW, while the log line emitted from the same block
+  already printed `winner=unknown`. `stride5_run_p90` and `row_max_density` are NOT in this
+  set: a stride-5 run of zero over no stones is a measurement, and G-14 pins it as one.
+- **`monitor_gates.watchdog_best_effort` is `None` when no watchdog is wired (AUDIT-1
+  F-28/C05).** It returned `{}` for both "armed and nothing has failed" and "there is no fire
+  path to ask", so the healthiest run and the one with no watchdog published the same block.
+  Its sibling `data_loss_counters` is deliberately UNCHANGED: `REPLAY_COUNTERS` is a
+  module-level registry that always exists and is always counting, so `{}` from it is a true
+  "nothing was lost" rather than an absence.
 - **A rung result's `status` is the parent's, and it is the status the rung was PLAYED under
   (AUDIT-1 F-28/B02).** The worker child has no `LadderState` and used to stamp
   `"status": "active"` on every rung, so a SATURATED rung's off-cadence calibration games were

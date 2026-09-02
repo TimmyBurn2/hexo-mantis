@@ -256,14 +256,24 @@ def test_g12_structural_metrics_via_on_game_complete() -> None:
 
 # ── G-13 — structural metrics OFF when log_investigation_metrics disabled ─────────────
 def test_g13_structural_metrics_off_when_log_disabled() -> None:
-    """G-13 — PASS iff `log_investigation_metrics=False` zeroes the structural fields
-    (gate respected). FAIL = the investigation flag no longer gates the expensive emit."""
+    """G-13 — PASS iff `log_investigation_metrics=False` reports the structural fields as
+    NOT MEASURED (gate respected). FAIL = the investigation flag no longer gates the
+    expensive emit.
+
+    AUDIT-1 F-28/C04 changed the unmeasured value from `(0, 0.0, 0)` to `(None, None,
+    None)`: a zero longest line and a zero component count are legitimate MEASUREMENTS for
+    some games, so the gated-off case and the measured-zero case used to be one observable
+    in the `game_complete` payload. The gate itself is unchanged and this row still pins it.
+    """
     instr = _make_instr(log_metrics=False)
     lk = _lock()
     out = _game_complete(instr, lk, winner_code=1, move_history=_SIX_IN_A_ROW_P1,
                          cluster_threshold=5)
-    (_ext_c, _ext_t, _ext_f, _p90, longest_line, ll_frac, n_comp) = out
-    assert (longest_line, ll_frac, n_comp) == (0, 0.0, 0)
+    (ext_c, ext_t, ext_f, _p90, longest_line, ll_frac, n_comp) = out
+    assert (longest_line, ll_frac, n_comp) == (None, None, None)
+    assert (ext_c, ext_t, ext_f) == (None, None, None), (
+        "the colony-extension trio is gated by the same flag and must report the same way"
+    )
 
 
 # ── G-14 — stride5 metrics: empty history ────────────────────────────────────────────
