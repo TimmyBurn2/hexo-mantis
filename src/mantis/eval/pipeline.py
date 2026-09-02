@@ -1054,6 +1054,23 @@ class EvalPipeline:
             # leaving one of them reporting a stale verdict.
             strength_floor=raw.get("strength_floor"),
         )
+        # AUDIT-1 F-14. `wr_sealbot` is a bare float: `_first_sealbot_wr` returns the WR of
+        # the FIRST sealbot rung in ladder order with games > 0 and DROPS the name. Once
+        # `sealbot_d5` saturates, `LadderState.allocate_games` gives it 0 games off-cadence
+        # (run5: `calibration_every_k_rounds: 4`, `calibration_games: 8`), so the reported
+        # number alternates between d5 and d6 — and an 8-game reading sits in the same ring
+        # as 32-game ones. The coordinator's trajectory rules then test `wr < peak * ratio`
+        # over a series that is not one series.
+        #
+        # The identity is published HERE rather than in `mantis.eval.rounds`, which is a
+        # FROZEN producer under R118/A-1 (PREREG_A §8 abort 8). To avoid a second authority
+        # for the SELECTION, the frozen producer's own `_first_sealbot_wr` is what picks and
+        # this block only re-walks the ladder to NAME what it picked — then refuses if the two
+        # disagree (R104, agreement-or-raise).
+        result["wr_sealbot_rung"], result["wr_sealbot_games"] = self._name_the_sealbot_rung(
+            rungs_raw, result["wr_sealbot"], round_id=inflight["round_id"],
+        )
+
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             games_total=games_total,
@@ -1077,6 +1094,38 @@ class EvalPipeline:
             )
         self._emit_posture_events(inflight, raw)
         return result
+
+    def _name_the_sealbot_rung(
+        self, rungs_raw: Mapping[str, Any], reported_wr: float | None, *, round_id: str,
+    ) -> tuple[str | None, int | None]:
+        """`(rung_name, games)` behind this round's `wr_sealbot`, or `(None, None)`.
+
+        AUDIT-1 F-14. The selection rule lives in `mantis.eval.rounds._first_sealbot_wr` and
+        stays there; this walks the SAME ladder in the SAME order and refuses if the WR it
+        lands on is not the one the producer reported — a disagreement means the two rules
+        have drifted, and a trajectory ring labelled by the wrong rung is worse than one with
+        no label at all.
+
+        Raises:
+            ResultContractError: the named rung's WR is not the reported `wr_sealbot`.
+        """
+        if reported_wr is None:
+            return None, None
+        for rung in self._eval_cfg.ladder.rungs:
+            if getattr(rung, "bot", None) != "sealbot":
+                continue
+            info = rungs_raw.get(rung.name)
+            if info is None or int(info.get("games", 0)) <= 0:
+                continue
+            if info.get("wr") != reported_wr:
+                raise ResultContractError(
+                    f"round {round_id}: the ladder walk names {rung.name!r} as the first "
+                    f"sealbot rung with games this round (wr {info.get('wr')!r}), but "
+                    f"`wr_sealbot` reports {reported_wr!r}. The selection rule in "
+                    "`mantis.eval.rounds._first_sealbot_wr` and this walk have drifted."
+                )
+            return rung.name, int(info.get("games", 0))
+        return None, None
 
     def _emit_posture_events(self, inflight: dict[str, Any], raw: Mapping[str, Any]) -> None:
         """The two armed-posture channels, driven by the worker payload's OWN key set.

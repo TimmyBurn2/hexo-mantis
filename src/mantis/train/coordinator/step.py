@@ -282,6 +282,9 @@ class StepCoordinator:
 
         # WP13-A gate state — every ring is caller-owned (the rules are stateless).
         self._wr_history: list[tuple[int, float]] = []
+        # Which sealbot rung the entries in `_wr_history` came from (AUDIT-1 F-14). `None`
+        # before the first round, and whenever the round reported no sealbot rung at all.
+        self._wr_history_rung: str | None = None
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
         self._last_iter_games = 0
@@ -1055,6 +1058,8 @@ class StepCoordinator:
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
             "sealbot_wr_result_producer_pending": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             "wr_history_len": len(self._wr_history),
+            # F-14: the ring's length means nothing without the rung it is a series OVER.
+            "wr_history_rung": self._wr_history_rung,
             # The watchdog's best-effort counters get a LIVE in-run consumer here (LAW-08 /
             # LAW-18): a degraded fire-path effect (a failed mirror, a timed-out snapshot)
             # is readable in the ONE channel while the run is alive, not only in the
@@ -1186,6 +1191,35 @@ class StepCoordinator:
                 "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })
             return
+        # AUDIT-1 F-14. The ring used to be one series by assumption. `wr_sealbot` is the WR
+        # of the FIRST sealbot rung with games this round, name dropped: once `sealbot_d5`
+        # SATURATES it gets 0 games off-cadence (run5 mints `calibration_every_k_rounds: 4`),
+        # so consecutive rounds report d6 then d5 then d6 — and an 8-game calibration reading
+        # sits beside 32-game ones while `sealbot_wr_trajectory_alert` tests
+        # `wr < peak * ratio` across the lot. A drop from one opponent's WR to a HARDER
+        # opponent's is not a collapse, and that is the false positive the `wr_hard_abort`
+        # capability would have fired on.
+        #
+        # The ring is per-rung: when the reporting rung changes, the series STARTS OVER and
+        # says so. Clearing is the conservative direction — a trigger that needs N
+        # observations simply waits N more rounds — and the alternative (carrying the rung in
+        # the tuple) would reshape a ring two rules in `monitor/rules.py` read.
+        rung = payload.get("wr_sealbot_rung")
+        if rung != self._wr_history_rung:
+            if self._wr_history:
+                emit_via(self._sink, {
+                    "event": "sealbot_wr_series_restarted",
+                    "step": step,
+                    "from_rung": self._wr_history_rung,
+                    "to_rung": rung,
+                    "discarded": len(self._wr_history),
+                    "reason": "the trajectory rules compare a rung against ITSELF; a series "
+                              "spanning two opponents is not one series",
+                })
+                _LOG.info("sealbot_wr_series_restarted step=%s from=%s to=%s discarded=%s",
+                          step, self._wr_history_rung, rung, len(self._wr_history))
+            self._wr_history.clear()
+            self._wr_history_rung = rung
         self._wr_history.append((step, float(wr)))
         # R265 / ADJ-D38: the ring's capacity is DERIVED from everything that reads it — the
         # two minted consec keys (`sealbot_wr_trajectory_alert` refuses each trigger on

@@ -234,6 +234,14 @@ class _FakePipeline:
     def _current_p_hat(self) -> dict:
         return self._last_p_hat
 
+    def _name_the_sealbot_rung(self, rungs_raw, reported_wr, *, round_id):
+        """The PRODUCTION method, bound through the class — not a stub (AUDIT-1 F-14). It
+        walks `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
+        from mantis.eval.pipeline import EvalPipeline
+
+        return EvalPipeline._name_the_sealbot_rung(
+            self, rungs_raw, reported_wr, round_id=round_id)
+
     def _emit_posture_events(self, inflight, raw) -> None:
         """The PRODUCTION method, bound through the class — not a stub. Its own witness is
         `tests/eval/test_eval_posture_inert.py`; what matters here is that the event channel
