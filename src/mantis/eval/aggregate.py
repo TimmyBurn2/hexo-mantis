@@ -303,6 +303,19 @@ def aggregate_gate(
 
     distinct_per_pair = _distinct_per_pair(pooled) if pooled else 0
     low_power = distinct_per_pair < int(gate_cfg.min_distinct_per_pair)
+    # AUDIT-1 F-27. `min_distinct_per_pair` is `Field(ge=1)`, so the low-power guard can be
+    # SATISFIED by ONE distinct game — and a bootstrap over a single sample is not an
+    # interval, it is that sample resampled: every draw is the same value, the "CI" collapses
+    # to the point estimate, and a single distinct WIN re-centres to +0.5 > 0 and promotes.
+    # `run5` mints 10, but `smoke_preflight_armed.yaml` deliberately mints 1 to boot fast, so
+    # the floor cannot simply be raised in the schema without refusing a config that exists to
+    # be cheap. The refusal belongs to the STATISTIC instead: below two distinct games there
+    # is no interval to report, so none is reported, and `gate_promotion_decision`'s
+    # `ci_lo_boot is not None` arm then cannot clear. A smoke config still boots; it just
+    # cannot promote off one game, which is the correct outcome and not a policy choice.
+    _MIN_DISTINCT_FOR_AN_INTERVAL = 2
+    if distinct_per_pair < _MIN_DISTINCT_FOR_AN_INTERVAL:
+        elo_ci_lower_boot = None
 
     promoted = (
         wr_confirm is not None
