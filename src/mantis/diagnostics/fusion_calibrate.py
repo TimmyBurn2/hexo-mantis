@@ -425,7 +425,12 @@ def _fit(measured: list[dict[str, Any]]) -> dict[str, Any]:
 def _recommend(
     fit: dict[str, Any], budget_bytes: int, margin: float, points: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Solve `a + b*E + c*N <= budget * margin` with `E/N` pinned to the measured ratio."""
+    """Solve `a + b*E + c*N <= budget * margin` with `E/N` pinned to the measured ratio.
+
+    Publishes BOTH margins: `margin` is the requested ceiling the solve ran against, and
+    `margin_achieved` is `predicted_peak_bytes / budget_bytes` — the fraction the emitted pair
+    is actually predicted to occupy (AUDIT-1 F-07).
+    """
     ratio = fit["operating_edges_per_node"]
     usable = budget_bytes * margin - fit["a_bytes"]
     per_node = fit["b_bytes_per_edge"] * ratio + fit["c_bytes_per_node"]
@@ -453,6 +458,8 @@ def _recommend(
             "`ge=1` anyway; it is refused HERE so the message names the budget that produced "
             "it. Raise --budget-bytes, or re-fit: no pair and no mint line are emitted."
         )
+    predicted = (fit["a_bytes"] + fit["b_bytes_per_edge"] * edges
+                 + fit["c_bytes_per_node"] * nodes)
     largest_nodes = max(p["largest_graph_nodes"] for p in points)
     largest_edges = max(p["largest_graph_edges"] for p in points)
     return {
@@ -460,8 +467,14 @@ def _recommend(
         "max_fused_nodes": nodes,
         "budget_bytes": budget_bytes,
         "margin": margin,
-        "predicted_peak_bytes": fit["a_bytes"] + fit["b_bytes_per_edge"] * edges
-        + fit["c_bytes_per_node"] * nodes,
+        "predicted_peak_bytes": predicted,
+        # AUDIT-1 F-07. The ACHIEVED margin is the prediction over the budget — what the pair
+        # this tool emits is actually predicted to occupy. It is strictly below `margin`,
+        # because `nodes` is a FLOOR division: the cap that fits is the largest integer pair
+        # under the requested fraction, so the fraction it lands on is the measurement and
+        # `margin` is only the ceiling it was solved against. Publishing `--margin` under this
+        # name reported an input as a result.
+        "margin_achieved": predicted / budget_bytes,
         "pinned_edges_per_node": ratio,
         # The floor BELOW which the cap starts refusing single graphs: a graph bigger than
         # the cap has no split that rescues it, so a pair under this is a run that dies on
@@ -681,6 +694,7 @@ def run(argv: list[str] | None = None) -> int:
                 "edges": max(p.max_graph_edges for p in points),
             },
             "fragmentation_ratio": None,
+            "margin_requested": None,
             "margin_achieved": None,
             "recommended": None,
             "mint_line": None,
@@ -778,7 +792,13 @@ def run(argv: list[str] | None = None) -> int:
             "edges": max(m["largest_graph_edges"] for m in measured),
         },
         "fragmentation_ratio": float(np.median(ratios)),
-        "margin_achieved": float(args.margin) if recommending else None,
+        # AUDIT-1 F-07: the INPUT under its own name, and the MEASUREMENT under its own name.
+        # This field was `margin_achieved: float(args.margin)` — the `--margin` argument
+        # echoed back as though the tool had measured it — and the sitting-4 and sitting-5
+        # records both carry `| margin_achieved | 0.85 |` read off exactly that.
+        "margin_requested": float(args.margin) if recommending else None,
+        "margin_achieved": (recommendation["margin_achieved"]
+                            if recommendation is not None else None),
         "recommended": recommendation,
         "mint_line": mint_line,
         "provenance": _provenance(config_path, spec, arch),

@@ -228,9 +228,11 @@ def test_the_margin_pin_is_0_85_READ_OFF_THE_PARSER_not_the_help(tmp_path) -> No
 
     The value is taken from the argparse action argparse itself uses, never from the help text
     or from the `(0.85 when unset.)` note in it — a string an edit can move without moving the
-    default is the proxy-not-mechanism trap. `margin_achieved` in the report would be the other
+    default is the proxy-not-mechanism trap. `margin_requested` in the report is the other
     mechanism reading, but it is `None` unless the tool RECOMMENDS, which needs the GPU this
-    suite deliberately does not have.
+    suite deliberately does not have. (That field was called `margin_achieved` until AUDIT-1
+    F-07: it carried the `--margin` INPUT under a measurement's name, and the real achieved
+    ratio now travels beside it — see `test_fusion_margin_is_measured.py`.)
     """
     from mantis.diagnostics.fusion_calibrate import build_parser
 
