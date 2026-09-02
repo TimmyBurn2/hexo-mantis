@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c2a625a, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c45936f, regenerated 2026-09-02.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -2442,6 +2442,22 @@ Verbatim text in the register; one-liners here are index only.
   to the default tier or refuses loudly.
   **(h) Commit convention:** the OPERATOR'S recorded correction (R36/R47 — one-line subject, no
   trailers, no Co-Authored-By) governs; CLAUDE.md is updated to say so; existing commits stand.
+  **EXECUTED 2026-09-02 (FINISH-1 session; record `plan/FINISH1_RECORD_2026-09-02.md`, evidence
+  `plan/FINISH1_EVIDENCE/`), appended to this row so a session seeding from the index carries the
+  measurement and not only the order.** **(c) `eval_child` at r8 = 1 902 MiB = 1.857422 GiB**
+  (card-level per-process, the larger instrument; allocator peak 1.2420), the R319(c) probe agreeing
+  to **0.00 %** across 4 and 8 games against a 2.0 % tolerance committed before point B; PLATEAU at
+  every band to 0.5 %; the term FELL 0.697 GiB from the carried r6 figure, on a stated denominator
+  (the replayed fused caps). **The boundary re-derived with it: the partition affords a cap of
+  9.046908 GiB, an 11.81 % allowance; (b)'s PROPOSED 3 % CLEARS M by +0.133202**; the 12.9 %
+  pattern still refuses by 0.0155. **The VALUE stays OPERATOR-OWED.** **(d) landed** — per-rung
+  rel-SE, max over the passing set, the scalar mode DELETED, planted break bites (PICK 4 → 2).
+  **(e) landed** — `identity.arch_kind` optional leaf (contract v13, 186 leaves), `stamped_arch_kind`
+  as the artifact-side authority at the three config-less sites, a latent V2→V1 restamp defect and
+  AUDIT-1's F-16 closed en route; no minted config gained the row. **(g) landed** — bare `pytest` is
+  the default tier, gate 3c counts the tree with `-m ''`, the header prints `TIER:`. **(h) landed** —
+  CLAUDE.md names the no-trailer rule. **(f) executed** — ANNOTATION 12, index corrected, push per
+  the exit screen. **Phase W did not run** (per (d)).
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -5238,4 +5254,5 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing, trains nothing, sets no
   allowance VALUE, and starts no run. The `eval_child` measurement, the boundary re-derivation
   and the four engine landings are EXECUTION under R330, recorded in the FINISH-1 record and
-  appended to the R330 row at exit. **RUN6 REMAINS HELD.**
+  appended to the R330 row at exit. The R330 row's EXECUTED block was appended at exit, stated here rather
+  than left as a silent tenth edit. **RUN6 REMAINS HELD.**
