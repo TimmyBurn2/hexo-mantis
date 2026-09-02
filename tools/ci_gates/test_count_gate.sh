@@ -276,7 +276,11 @@ main() {
     # BOTH streams into the log, and the status kept. The predecessor sent stderr to
     # /dev/null and lost the status to a pipeline; that is the whole of F-816-33.
     # shellcheck disable=SC2086  # PYTEST_CMD is a command line, deliberately word-split.
-    $PYTEST_CMD --collect-only -q >"$log" 2>&1 || pytest_rc=$?
+    # `-m ''` CLEARS the default-tier marker expression pyproject's addopts now carries (R330(g)):
+    # this gate counts the WHOLE tree, and deselection is not collection. Without it the count
+    # would still parse right by regex accident (`N/M tests collected` matches on M) and be one
+    # summary-format change away from reading the filtered N.
+    $PYTEST_CMD --collect-only -q -m '' >"$log" 2>&1 || pytest_rc=$?
     summary=$(grep -Ei '[0-9]+ (tests? collected|errors?)|no tests ran' "$log" | tail -1)
     if ! collection_verdict "$pytest_rc" "$summary"; then
       sed -e 's/^/  | /' "$log" | tail -"$LOG_TAIL" >&2

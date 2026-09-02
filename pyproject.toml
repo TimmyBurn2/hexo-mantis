@@ -50,7 +50,12 @@ packages = ["src/mantis"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# The DEFAULT TIER rides addopts so a bare `pytest` resolves to it (R330(g)): the marker
+# expression lived only in `make test`, and three sittings ran the 35-minute superset by
+# typing `pytest -q`. A later `-m` OVERRIDES this one (argparse store, last wins), so
+# `make test.integration`'s `-m integration` is untouched and `-m ''` counts the whole tree,
+# which is what gate 3c passes. Pinned by tests/test_bare_pytest_tier.py against real pytest.
+addopts = "-ra --strict-markers -m 'not integration and not slow'"
 markers = [
     "integration: CI integration tier (runs in CI via `make test.integration`)",
     "slow: on-demand only; excluded from `make test` and CI default tier",

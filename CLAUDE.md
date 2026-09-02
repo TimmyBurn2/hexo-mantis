@@ -120,6 +120,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   native flags; artifacts host-specific, never distributed).
 - `make test` — pytest default tier + `cargo test --workspace --locked`.
 - `make test.integration` — the CI integration tier (`-m integration`).
+- A bare `pytest` IS the default tier: pyproject's `addopts` carries
+  `-m 'not integration and not slow'`, a later `-m` overrides it, and `-m ''` runs or counts
+  the whole tree (gate 3c does). The header prints `TIER:` on every run — read it, never
+  assume the tier from the command typed (R330(g); the superset is ~35 min, the tier ~3).
 - Cadence (R311(b)): targeted tests, smallest relevant first, while iterating; the FULL local
   gate set at leg exit and before any push, never per edit. **Remote CI is SUSPENDED by
   operator decision** until the operator re-enables it — no push or merge waits on it, and

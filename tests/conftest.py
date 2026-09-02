@@ -18,7 +18,15 @@ _SEEDED_LIBS = ["random"] + (["numpy"] if _HAVE_NUMPY else []) + (["torch"] if _
 
 
 def pytest_report_header(config):
-    return f"PYTEST_SEED={PYTEST_SEED} (autouse reseed per test: {', '.join(_SEEDED_LIBS)})"
+    # The TIER is DERIVED from the live marker expression and printed on every run (R330(g)):
+    # three sittings mistook the superset for the default tier, and N1 asked that the tier a
+    # run actually executed be read off its own output, never assumed from the command typed.
+    markexpr = config.getoption("markexpr") or ""
+    tier = f"-m {markexpr!r}" if markexpr else "NONE (whole tree, every marker)"
+    return [
+        f"PYTEST_SEED={PYTEST_SEED} (autouse reseed per test: {', '.join(_SEEDED_LIBS)})",
+        f"TIER: {tier}",
+    ]
 
 
 @pytest.fixture(autouse=True)
