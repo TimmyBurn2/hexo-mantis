@@ -69,6 +69,9 @@ set -euo pipefail
 FLOOR_FILE="tools/ci_gates/test_count_floor.txt"
 MAIN_BRANCH="dev"
 PYTEST_CMD="uv run pytest"
+# The interpreter the tier census runs under. `uv run` so it sees the project env, the
+# same way the collection above does; overridable for the harness.
+PYTHON_BIN=${PYTHON_BIN:-"uv run python"}
 #: Lines of the collection log echoed on a refusal. Enough to carry pytest's
 #: `short test summary info` block, which is where the failing module is named.
 LOG_TAIL=40
@@ -95,6 +98,17 @@ verdict() {
       "$FLOOR_FILE" "$tree_floor" "$ref_floor" "$ref"
     printf '  The floor may only ratchet UP. A lowered floor makes a red gate green while\n'
     printf '  deleting the evidence that anything was lost; that is the defect this arm closes.\n'
+    rc=1
+  fi
+  # AUDIT-1 F-12. The two arms above compare the count against the REF's floor and the two
+  # floors against each other; nothing compared the TREE's own floor against what this tree
+  # actually collects. A floor ratcheted past the collection is a claim about tests that do
+  # not exist, and it stays green for as long as the ref floor trails it.
+  if [ "$tree_floor" -gt "$count" ]; then
+    printf 'gate 3c FAIL (over-ratchet): %s is %s in this tree but only %s test(s) collected.\n' \
+      "$FLOOR_FILE" "$tree_floor" "$count"
+    printf '  A floor above the collection is a floor over tests that are not there. Ratchet\n'
+    printf '  it to what this tree collects, or find the suite that went missing.\n'
     rc=1
   fi
   return "$rc"
@@ -162,6 +176,10 @@ self_test() {
   # Against the working-tree floor that reads as green; against a real ref it is two faults.
   _expect_fail  "6 lost tests + lowered floor" 80 90 80 "FAIL (count)"
   _expect_fail  "7 lost tests + lowered floor" 80 90 80 "FAIL (monotonicity)"
+  # AUDIT-1 F-12: the tree's own floor ratcheted PAST what the tree collects. Both other
+  # arms stay quiet — the count clears the REF floor and the tree floor only went up.
+  _expect_fail  "7b floor above the collection" 95 90 100 "FAIL (over-ratchet)"
+  _expect_clean "7c floor equal to the collection" 95 90 95
 
   # Arms 8-11 drive `collection_verdict`. Arm 9 is F-816-33 VERBATIM: the summary line this
   # tree actually printed under a planted import break, beside the status pytest actually
@@ -226,7 +244,16 @@ main() {
 
   self_test || exit 1
   if [ "$self_test_only" -eq 1 ]; then
-    echo "gate 3c self-test: 4 clean arms + 7 firing arms, all correct"
+    # DERIVED, never transcribed (R192(e)): the tally used to read "4 clean arms + 7 firing
+    # arms" as a literal, which is a count that goes wrong the first time an arm is added and
+    # is then read as evidence. The arms count themselves.
+    local clean fired
+    # `|| true`: `grep -c` exits 1 on a zero count and `set -e` would kill the run — which
+    # would report the SELF-TEST as failing because it found no arms, the very confusion a
+    # derived tally exists to avoid. A zero prints as a zero and is visibly wrong.
+    clean=$(grep -cE '^ *_(expect|collection)_clean +"' "$0" || true)
+    fired=$(grep -cE '^ *_(expect|collection)_fail +"' "$0" || true)
+    echo "gate 3c self-test: $clean clean arms + $fired firing arms, all correct"
     return 0
   fi
 
@@ -295,7 +322,19 @@ collection itself is probably broken, which is a worse failure than this gate"
   fi
 
   echo "collected=$collected floor=$ref_floor ref=$ref tree_floor=$tree_floor"
-  verdict "$collected" "$ref_floor" "$tree_floor" "$ref"
+  local count_rc=0 census_rc=0
+  verdict "$collected" "$ref_floor" "$tree_floor" "$ref" || count_rc=$?
+  # AUDIT-1 F-12's other half, and it rides HERE because it is the same gate's subject: this
+  # gate's whole claim is that no test was LOST, and a deselecting marker loses a test from
+  # every tier the repo runs while leaving it COLLECTED and therefore counted. Both arms run
+  # even when the first reds — a run that stops at the count reports one fact when two were
+  # asked about.
+  # shellcheck disable=SC2086  # PYTHON_BIN is a command line, deliberately word-split.
+  $PYTHON_BIN "$(dirname "$0")/tier_census.py" || census_rc=$?
+  if [ "$count_rc" -ne 0 ] || [ "$census_rc" -ne 0 ]; then
+    return 1
+  fi
+  return 0
 }
 
 main "$@"

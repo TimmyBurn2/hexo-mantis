@@ -1,0 +1,72 @@
+# THE DESELECTION DECLARATION — every test the default tier does NOT run.
+#
+# AUDIT-1 F-12. Gate 3c counts COLLECTED tests (`-m ''`, the whole tree). `make test` runs
+# `-m "not integration and not slow"` and `make test.integration` runs `-m integration`, so a
+# `slow`, `skip`, or host-true `skipif` marker removes a test from EVERY tier while the
+# collected-test floor holds. `tests/model/conformance/` already refused exactly this for its
+# own suite (`require_declared_tier_placement`); this file is that guard's tree-wide twin.
+#
+# ONE LINE PER (path, test, marker), sorted. `<module>` is a module-level `pytestmark`, which
+# takes a whole file out in one line and is the form a reader scanning a function would miss.
+# Adding a deselecting marker WITHOUT adding its line here reds gate 3c; REMOVING a marker
+# without removing its line reds it too, because a stale declaration is a licence nobody is
+# using and the next real one hides behind it.
+#
+# `integration` rows are NOT a hole: they run in `make test.integration`. They are declared
+# because the census cannot tell which tier a marker moves a test INTO without being told, and
+# because a test silently gaining `integration` leaves the default tier just as completely.
+tests/bots/test_sealbot_vendored.py	<module>	integration
+tests/config/test_train_device_authority.py	test_a_cuda_minted_config_never_silently_boots_on_the_cpu	integration
+tests/config/test_train_device_authority.py	test_the_configs_device_reaches_the_real_trainer_and_the_real_pool	integration
+tests/diagnostics/test_cuda_build_guard.py	test_r328e_01_a_cpu_only_build_refuses_by_name_and_names_the_recurring_cause	skipif
+tests/diagnostics/test_cuda_build_guard.py	test_r328e_02_the_cli_exits_2_and_prints_no_pass_line	skipif
+tests/diagnostics/test_cuda_build_guard.py	test_r328e_03_json_refusal_carries_the_verdict_and_the_build	skipif
+tests/encoding/test_audit_cli.py	test_section_checkpoints_declared_equals_inferred	skipif
+tests/eval/test_round_end_to_end.py	<module>	integration
+tests/model/conformance/test_arch_states_its_memory_envelope.py	test_report_the_per_arch_memory_envelope	slow
+tests/model/conformance/test_arch_states_its_perf_floor.py	test_report_the_per_arch_floor_and_serving_overhead	slow
+tests/model/conformance/test_construction_path_determinism_centroid_branch.py	test_report_construction_path_disagreement_over_the_spread_partition	slow
+tests/model/conformance/test_leaf_forward_throughput_harness.py	test_leaf_forward_throughput_ladder	slow
+tests/model/conformance/test_legal_move_coverage_boundary.py	test_report_the_uncovered_legal_move_distribution_per_grid_encoding	slow
+tests/model/conformance/test_window_frame_midpoint_translation_boundary.py	test_report_the_graph_node_feature_translation_residual	slow
+tests/model/test_bf16_parity_nulldist.py	test_mutation_green_cuda_exact_null_under_TEST_SCOPE_determinism	skipif
+tests/model/test_bf16_parity_nulldist.py	test_mutation_red_cuda_injected_change_under_TEST_SCOPE_determinism	skipif
+tests/monitor/test_supervisor_config_witness.py	test_a_command_line_override_is_published_and_is_the_effective_bound	integration
+tests/monitor/test_supervisor_config_witness.py	test_boot_identity_publishes_the_config_sha_and_the_effective_bounds	integration
+tests/monitor/test_supervisor_config_witness.py	test_minted_kill_grace_reaches_the_running_supervisors_stop_ladder	integration
+tests/monitor/test_supervisor_config_witness.py	test_running_main_with_a_real_config_does_not_import_torch	integration
+tests/monitor/test_supervisor_config_witness.py	test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on	integration
+tests/selfplay/test_gnn_seam_smoke.py	<module>	integration
+tests/selfplay/test_inference_server.py	test_pinned_staging_absent_on_cpu	skipif
+tests/selfplay/test_pool_lifecycle.py	test_encoding_aware_pool_wires_trunk_derived_dims	integration
+tests/selfplay/test_pool_lifecycle.py	test_graph_pool_smoke_drains_without_producer_death	integration
+tests/selfplay/test_pool_lifecycle.py	test_pool_encoding_wired_no_warn	integration
+tests/selfplay/test_pool_lifecycle.py	test_worker_pool_produces_positions_threaded_smoke	integration
+tests/test_bare_pytest_tier.py	test_integration_witness_is_outside_the_default_tier	integration
+tests/test_bare_pytest_tier.py	test_slow_witness_is_outside_the_default_tier	slow
+tests/test_launch_smoke.py	test_launch_smoke_subprocess	integration
+tests/test_run_launcher.py	test_a_periodic_cadence_burst_streams_periodic_checkpoint_save	integration
+tests/test_run_launcher.py	test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean	integration
+tests/tools/test_preflight_armed_smoke.py	<module>	integration
+tests/tools/test_preflight_child_convergence.py	<module>	integration
+tests/tools/test_preflight_mint_process.py	test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc	integration
+tests/tools/test_preflight_mint_process.py	test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot	integration
+tests/tools/test_preflight_mint_process.py	test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer	integration
+tests/tools/test_preflight_mint_process.py	test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer	skipif
+tests/tools/test_preflight_mint_process.py	test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config	integration
+tests/tools/test_preflight_mint_process.py	test_the_real_boot_terminates_where_the_docstring_says	integration
+tests/tools/test_preflight_mint_process.py	test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove	integration
+tests/tools/test_preflight_pfc_cards.py	test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot	integration
+tests/tools/test_preflight_pfc_cards.py	test_a_foreign_run_ids_litter_does_not_trip_the_refusal	integration
+tests/tools/test_preflight_pfc_cards.py	test_child_streams_spool_in_full_beside_the_report	integration
+tests/train/test_clean_stop_save.py	test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint	integration
+tests/train/test_graph_microbatch_bound.py	test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget	integration
+tests/train/test_graph_microbatch_bound.py	test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget	skipif
+tests/train/test_graph_microbatch_bound.py	test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak	integration
+tests/train/test_graph_microbatch_bound.py	test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak	skipif
+tests/train/test_launch_path_smoke.py	<module>	integration
+tests/train/test_parent_death_event.py	test_a_real_boot_writes_the_arming_event_into_the_runs_own_jsonl	integration
+tests/train/test_parent_death_signal.py	test_a_SIGKILLED_parent_takes_its_armed_child_with_it	skipif
+tests/train/test_parent_death_signal.py	test_a_child_that_HANDLES_sigterm_is_still_taken_down	skipif
+tests/train/test_parent_death_signal.py	test_an_UNARMED_child_survives_the_same_kill	skipif
+tests/util/test_device.py	<module>	skipif
