@@ -109,7 +109,17 @@ def run_stats_loop(pool: Any) -> None:
         elapsed = now - pool._last_drain_time
         pool._last_drain_time = now
         pos_generated = int(getattr(pool._runner, "positions_generated", 0))
-        pos_delta = max(0, pos_generated - pool._last_pos_generated)
+        # AUDIT-1 F-28/C07. `positions_generated` is monotone in the runner, so a NEGATIVE
+        # delta means the counter was reset (a replaced runner) and not that no work happened.
+        # `max(0, ...)` published the two as one observable and left the rate reading as a
+        # measured stall. The clamp stays — the rate must not go negative — but the event says
+        # it fired, so the two are distinguishable in the stream.
+        raw_delta = pos_generated - pool._last_pos_generated
+        pos_delta = max(0, raw_delta)
+        if raw_delta < 0 and pool._sink is not None:
+            pool._sink.emit({"event": "positions_counter_reset", "delta": int(raw_delta),
+                             "last_seen": int(pool._last_pos_generated),
+                             "now": int(pos_generated)})
         pool._last_pos_generated = pos_generated
         if pos_delta > 0:
             sims = pos_delta * pool._effective_sims_per_move

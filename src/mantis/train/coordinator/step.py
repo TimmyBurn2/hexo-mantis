@@ -344,7 +344,6 @@ class StepCoordinator:
             games_played=self._games_played,
             consec_high_gn=self._consec_high_gn,
             last_loss_info=self._last_loss_info,
-            games_per_hour=0.0,
             **kw,
         )
 
@@ -859,16 +858,21 @@ class StepCoordinator:
             self._last_target_counters[_POSITIONS_COUNTER] = positions
         return report, rstats
 
-    def _games_per_hour(self) -> float:
+    def _games_per_hour(self) -> float | None:
+        """Games per hour over the run clock, or `None` before the clock has advanced.
+
+        AUDIT-1 F-28/C07: a rate over zero elapsed time is an ABSENT measurement, not a rate
+        of zero. The `0.0` was published on `iteration_complete` as a measured stall.
+        """
         elapsed = self._clock.now() - self._run_started
-        return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else 0.0
+        return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _steps_per_hour(self) -> float:
         """R29 gap metric (b), the twin of `_games_per_hour` over the SAME clock: train
         steps per hour from the coordinator's own step counter. Published beside (a) in
         `iteration_complete` — the cutover floor's live emitter (WPBOX CB-3)."""
         elapsed = self._clock.now() - self._run_started
-        return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else 0.0
+        return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.

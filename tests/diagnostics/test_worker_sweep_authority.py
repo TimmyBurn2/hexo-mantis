@@ -600,6 +600,44 @@ def test_a_malformed_report_refuses_at_rc_2_and_never_presents_as_rc_1(tmp_path:
     assert ws.main(["--select-only", str(path)]) == ws.RC_REFUSED
 
 
+def test_a_NEGATIVE_counter_delta_refuses_instead_of_clamping_to_zero(
+    plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AUDIT-1 F-28/A02. The rung's `games` and `moves` were `max(0, after - before)`.
+
+    The runner's counters are MONOTONE, so a negative delta cannot mean "no work happened" —
+    it means they were reset or the runner was replaced, and the rung's rate is then taken
+    across two different programs. Clamping published a rung that ran and did nothing, and
+    the knee rule compares rates ACROSS rungs, so one such rung moves the pick. It is the
+    same shape as the dead-feeder case the guard above it already refuses by name.
+    """
+    class _Healthy:
+        _producer_exc = None
+        model = type("_NoParams", (), {"state_dict": lambda self: {}})()
+
+        def start(self) -> None: ...
+        def check_producer_health(self) -> None: ...
+        def stop(self) -> None: ...
+
+    counters = iter([
+        type("S", (), {"games_completed": 100, "positions_generated": 5000})(),
+        type("S", (), {"games_completed": 3, "positions_generated": 40})(),  # RESET
+    ])
+    monkeypatch.setattr(ws, "build_sweep_pool", lambda *a, **k: _Healthy())
+    monkeypatch.setattr(ws, "cuda_counters_available", lambda _d: False)
+    monkeypatch.setattr(ws, "runner_stats", lambda _p: next(counters))
+    result = ws.drive_rung(object(), plan, n_workers=4, device=torch.device("cpu"),
+                           label="t", out=io.StringIO(), sleep=lambda _s: None)
+    assert result.verdict == ws.REFUSED, (
+        f"a counter reset was recorded as a measured rung: {result!r}"
+    )
+    assert result.rounds == (), "no reading may be recorded for a rung measured across a reset"
+    assert "NEGATIVE counter delta" in (result.refusal or ""), result.refusal
+    assert "-97" in (result.refusal or "") and "-4960" in (result.refusal or ""), (
+        "the refusal must name the deltas it saw, not merely that one was negative"
+    )
+
+
 def test_select_only_REFUSES_a_report_whose_net_hash_gate_DIVERGED(tmp_path: Path) -> None:
     """AUDIT-1 F-04's reader half, which survives R330(d).
 

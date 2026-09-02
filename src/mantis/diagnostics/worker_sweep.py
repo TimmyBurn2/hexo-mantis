@@ -1070,10 +1070,26 @@ def drive_rung(
                 elapsed = time.monotonic() - start
                 end_mark = probe.mark(f"round_end:{index}")
                 sampled_peak, samples = sampler.window() if sampler is not None else (None, 0)
+                # AUDIT-1 F-28/A02. These were `max(0, after - before)`. The Rust counters
+                # are monotone, so a NEGATIVE delta is not a small number to round up — it
+                # means the counters were reset or the runner was replaced mid-rung, and the
+                # rung's rate is then measured over two different programs. Clamping it to 0
+                # published a rung that ran and did nothing, which the knee rule reads as a
+                # real rate. It is refused BY NAME instead.
+                games_delta = after.games_completed - before.games_completed
+                moves_delta = after.positions_generated - before.positions_generated
+                if games_delta < 0 or moves_delta < 0:
+                    raise SweepRefusal(
+                        f"round {index} measured a NEGATIVE counter delta (games "
+                        f"{games_delta}, moves {moves_delta}): the runner's counters are "
+                        "monotone, so this means they were reset or the runner was replaced "
+                        "mid-rung. The rung's rate would be taken across two programs; no "
+                        "reading is recorded."
+                    )
                 reading = RoundReading(
                     index=index, warmup=warmup, wall_sec=elapsed,
-                    games=max(0, after.games_completed - before.games_completed),
-                    moves=max(0, after.positions_generated - before.positions_generated),
+                    games=games_delta,
+                    moves=moves_delta,
                     available=bool(end_mark.get("max_memory_allocated_bytes") is not None),
                     sampled_peak_bytes=sampled_peak,
                     allocator_peak_bytes=end_mark.get("max_memory_allocated_bytes"),

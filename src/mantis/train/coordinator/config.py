@@ -414,4 +414,9 @@ class StepOutcome:
     consec_high_gn: int
     instrumentation_emitted: list[str]
     pool_overflow_delta: int
-    games_per_hour: float
+    # AUDIT-1 F-28/C06: `games_per_hour` was a field here too, built as a hard `0.0` by
+    # `_build_outcome` with NO reader anywhere in src/, tests/ or tools/ — a second, always-
+    # zero authority for a fact `iteration_complete` already publishes from
+    # `StepCoordinator._games_per_hour`. Deleted rather than wired: LAW-08 wants a live
+    # consumer, and duplicating a measured field with an unmeasured twin is worse than not
+    # having it.

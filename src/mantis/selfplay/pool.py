@@ -149,14 +149,20 @@ class WorkerPool:
         self.x_wins = 0
         self.o_wins = 0
         self.draws = 0
-        self._sims_per_sec: float = 0.0
+        # None = NOT MEASURED. A drain has to observe a positive `positions_generated`
+        # delta over a positive interval before there is a rate at all; a starting 0.0 was
+        # published on `iteration_complete` as "the search is doing nothing" for every
+        # iteration before the first drain (AUDIT-1 F-28/C07).
+        self._sims_per_sec: float | None = None
         self._last_drain_time: float = time.monotonic()
         # Last-seen runner `positions_generated`; the per-drain delta is what the
         # sims/sec bill multiplies by the effective per-move sim count.
         self._last_pos_generated: int = 0
         self._total_sims: int = 0
         self._game_lengths: deque[int] = deque(maxlen=200)
-        self._avg_game_length: float = 0.0
+        # None = NOT MEASURED, for the same reason as `_sims_per_sec`: no game has finished
+        # yet, so there is no mean length. A 0.0 reads as "games are ending instantly".
+        self._avg_game_length: float | None = None
 
         # Injected collaborators (all optional, all defaulting to inert).
         self._sink: EventSink | None = sink
@@ -236,7 +242,10 @@ class WorkerPool:
             return (self.draws / total) if total > 0 else 0.0
 
     @property
-    def sims_per_sec(self) -> float:
+    def sims_per_sec(self) -> float | None:
+        """Simulations per second over the last drain interval, or `None` before the first
+        interval that measured one (`docs/contracts/event_manifest.md`'s unproduced-field
+        convention)."""
         return self._sims_per_sec
 
     @property
@@ -252,7 +261,8 @@ class WorkerPool:
         return bool(sp.get("gumbel_mcts", False))
 
     @property
-    def avg_game_length(self) -> float:
+    def avg_game_length(self) -> float | None:
+        """Mean completed-game length, or `None` before any game has completed."""
         return self._avg_game_length
 
     @property

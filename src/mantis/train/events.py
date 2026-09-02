@@ -499,23 +499,27 @@ def emit_iteration_complete_event(
     SEMANTIC CHANGE (more correct, not a no-op): the two blocks are now guaranteed-consistent
     on one snapshot.
     """
+    # AUDIT-1 F-28/C07. Each of the three is `None` when its inputs were not measured, on
+    # the same doctrine `steps_per_hour` below already states. A rate over zero elapsed time,
+    # a mean over zero completed games, and a product of either, are all absences — and each
+    # of them used to be published as a hard `0.0`, which reads as a measured stall.
     gph = games_per_hour_fn()
-    avg_gl = pool.avg_game_length if hasattr(pool, "avg_game_length") else 0.0
-    pph = gph * avg_gl if avg_gl > 0 else 0.0
+    avg_gl = getattr(pool, "avg_game_length", None)
+    pph = (gph * avg_gl) if (gph is not None and avg_gl is not None and avg_gl > 0) else None
     _puct_regime = not pool.gumbel_mcts
     iteration_complete_event: dict[str, Any] = {
         "event": "iteration_complete",
         "step": train_step,
         "games_total": games_played,
         "games_this_iter": games_played - last_iter_games,
-        "games_per_hour": round(gph, 1),
+        "games_per_hour": round(gph, 1) if gph is not None else None,
         # R29 gap metric (b): the coordinator's own step rate over the same clock as (a).
         # None = NOT MEASURED (no producer injected), never a fabricated 0 — the same
         # doctrine as `quiescence_fires_per_step`.
         "steps_per_hour": (round(float(steps_per_hour_fn()), 1)
                            if steps_per_hour_fn is not None else None),
-        "positions_per_hour": round(pph, 1),
-        "avg_game_length": round(avg_gl, 1),
+        "positions_per_hour": round(pph, 1) if pph is not None else None,
+        "avg_game_length": round(avg_gl, 1) if avg_gl is not None else None,
         "win_rate_p0": round(float(pool.x_winrate), 4),
         "win_rate_p1": round(float(pool.o_winrate), 4),
         # F-816-2: read the SHARE off the pool, not `pool.draws / games_played`. The old
@@ -524,7 +528,9 @@ def emit_iteration_complete_event(
         # shakedown burn — a fraction above 1. Same straddle class as R218 rider 1, one
         # payload over. The three outcome shares now share a denominator and sum to 1.
         "draw_rate": round(float(pool.draw_rate), 4),
-        "sims_per_sec": pool.sims_per_sec or 0.0,
+        # `or 0.0` turned the not-yet-measured `None` into a measured zero, which is the
+        # whole finding in one operator.
+        "sims_per_sec": pool.sims_per_sec,
         "buffer_size": buffer.size,
         "buffer_capacity": buffer.capacity,
         "corpus_selfplay_frac": round(1.0 - w_pre, 4),

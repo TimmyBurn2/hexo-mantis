@@ -344,6 +344,17 @@ is silently disabled.
   Producer test: `tests/train/test_training_step_absence.py`, driven by the two REAL tails
   rather than by an injected `loss_info` — the fake shape carrying `"policy_entropy": 2.0`
   is what let the defect ship past a LAW-07 row.
+  **The `iteration_complete` rate roster (AUDIT-1 F-28/C07), same rule:** `games_per_hour`
+  and `steps_per_hour` are `None` before the run clock has advanced (a rate over zero elapsed
+  is an absence, not a rate of zero); `avg_game_length` is `None` before any game has
+  completed; `sims_per_sec` is `None` until a drain interval has billed a positive
+  `positions_generated` delta; `positions_per_hour` is `None` whenever either factor is. All
+  five read a hard `0.0` before this, which in the ONE channel is what a STALLED run looks
+  like. `sims_per_sec` in particular reached the payload through `pool.sims_per_sec or 0.0`,
+  which collapsed a genuine measured zero and a not-yet-measured reading into one value.
+  A negative `positions_generated` delta — the counters are monotone, so it means a reset —
+  still clamps the rate at zero but now emits `positions_counter_reset` beside it, so the two
+  are distinguishable in the stream.
 - **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
   encoding does not have is ABSENT from that encoding's stream — never zero, never
   `null`-as-value.** Every `iteration_complete` block subtracted on these grounds (the
