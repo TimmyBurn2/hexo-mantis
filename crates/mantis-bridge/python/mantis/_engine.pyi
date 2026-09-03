@@ -746,3 +746,20 @@ def derived_hexg_visit_capacity(
     leaf_batch_size: int,
     completed_q_values: bool,
 ) -> int: ...
+
+
+# ── wire-format geometry constants (AUDIT-1 F-42) ──────────────────────────────────────
+# The v6 source-plane indices, the hex axis table and the win length, exported so Python
+# READS them instead of typing a second copy beside the Rust owner. Owners:
+# `mantis_encoding::encode::{MY_STONE_PLANE, OPP_STONE_PLANE, MOVES_REMAINING_PLANE,
+# PLY_PARITY_PLANE}` and `mantis_core::board::{HEX_AXES, WIN_LENGTH,
+# DEFAULT_CLUSTER_THRESHOLD}`. Before these existed Python pinned Python and Rust pinned a
+# literal, with nothing pinning across the FFI; the cross-check is
+# `tests/encoding/test_geometry_crosses_the_ffi.py`.
+MY_STONE_PLANE: int
+OPP_STONE_PLANE: int
+MOVES_REMAINING_PLANE: int
+PLY_PARITY_PLANE: int
+HEX_AXES: tuple[tuple[int, int], tuple[int, int], tuple[int, int]]
+WIN_LENGTH: int
+DEFAULT_CLUSTER_THRESHOLD: int

@@ -17,7 +17,8 @@ import threading
 from collections import deque
 from typing import Any
 
-from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES, WIN_LENGTH as _ENGINE_WIN_LENGTH
+from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
+from mantis._engine import WIN_LENGTH as _ENGINE_WIN_LENGTH
 from mantis.util.constants import DRAW_RATE_WINDOW as _DRAW_RATE_WINDOW
 from mantis.util.coordinates import axial_distance
 

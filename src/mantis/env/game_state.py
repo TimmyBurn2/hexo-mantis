@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from mantis._engine import Board, HEX_AXES as _ENGINE_HEX_AXES, WIN_LENGTH as _ENGINE_WIN_LENGTH
+from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
+from mantis._engine import WIN_LENGTH as _ENGINE_WIN_LENGTH
+from mantis._engine import Board
 from mantis.encoding import lookup as _lookup_encoding
 
 # Named source-plane offsets (no bare 0/16/17 in the corpus tensor build).

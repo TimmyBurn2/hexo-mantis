@@ -20,11 +20,10 @@ import sys
 from pathlib import Path
 
 import yaml
-
-from mantis.util.yaml_io import parse_config_yaml
 from pydantic import ValidationError
 
 from mantis.config.schema import RunConfig
+from mantis.util.yaml_io import parse_config_yaml
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "config_templates"
 

@@ -28,8 +28,8 @@ from mantis.data.loss_counters import REPLAY_COUNTERS
 from mantis.data.replay_v6w25 import replay_game_to_triples_v6w25
 from mantis.encoding import EncodingSpec
 from mantis.env.game_state import (
-    N_CHAIN_PLANES,
     BOARD_SIZE,
+    N_CHAIN_PLANES,
     GameState,
     _compute_chain_planes,  # pyright: ignore[reportPrivateUsage]  # ported chain-plane kernel
 )
