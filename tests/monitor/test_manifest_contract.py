@@ -27,9 +27,11 @@ from pathlib import Path
 import pytest
 
 from mantis.monitor.manifest import ManifestError, load_manifest, verify_manifest
+from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SHIPPED_MANIFEST = _REPO_ROOT / "src" / "mantis" / "monitor" / "producer_manifest.yaml"
+#: The SHIPPED manifest, from its own module — one authority, not a path copy (AUDIT-1 F-47).
+_SHIPPED_MANIFEST = DEFAULT_MANIFEST_PATH
 
 
 def test_shipped_manifest_every_row_resolves() -> None:

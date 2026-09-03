@@ -54,9 +54,14 @@ import mantis.run as mantis_run
 from mantis.config.emit import resolve_config
 from mantis.monitor.manifest import verify_manifest
 from mantis.train.lifecycle.disk_guard import DiskGuard
+from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 
 _REPO = Path(__file__).resolve().parents[1]
-_MANIFEST = _REPO / "src" / "mantis" / "monitor" / "producer_manifest.yaml"
+#: The SHIPPED manifest, from its own module (AUDIT-1 F-47). `DEFAULT_MANIFEST_PATH` named
+#: itself "the ONE seam-7 instance" and had zero references while THREE test files rebuilt
+#: the path by hand — so the finding was right that it was unreferenced and wrong that the
+#: repair was deletion: deleting it would have left the three hand copies and no authority.
+_MANIFEST = DEFAULT_MANIFEST_PATH
 
 #: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1 (the
 #: reachability validator spans cadence < actor_lag_threshold < max_train_steps).

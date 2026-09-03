@@ -219,9 +219,6 @@ class GnnNet(nn.Module):
         value, bin_logits = self.value_head(pooled)
         return policy_logits, value.squeeze(0), bin_logits
 
-    def num_params(self) -> int:
-        return sum(p.numel() for p in self.parameters())
-
 
 class BcTransferReport(TypedDict):
     """The docstring-stated return shape of `load_representation_policy_from_bc`."""

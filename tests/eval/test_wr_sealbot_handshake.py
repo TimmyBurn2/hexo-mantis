@@ -28,9 +28,12 @@ from types import SimpleNamespace
 import pytest
 
 from mantis.eval.rounds import build_round_result  # noqa: F401 — RED-at-import anchor
+from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 
 _REPO = Path(__file__).resolve().parents[2]
-_MANIFEST = _REPO / "src" / "mantis" / "monitor" / "producer_manifest.yaml"
+#: The SHIPPED manifest, from its own module — one authority, not a fourth path copy
+#: (AUDIT-1 F-47).
+_MANIFEST = DEFAULT_MANIFEST_PATH
 
 
 def _rung_cfg(name: str, bot: str) -> SimpleNamespace:

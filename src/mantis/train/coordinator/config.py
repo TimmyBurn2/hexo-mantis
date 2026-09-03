@@ -13,7 +13,7 @@
 
 The 13-class god-module `training/step_coordinator.py` splits by responsibility (collaborator
 protocol): this file is the DAG-clean seam layer — the injected-collaborator Protocols (no torch
-import), `StepCoordinatorConfig`, `StepOutcome`, and the `RealClock`/`RealTracemalloc` defaults.
+import), `StepCoordinatorConfig`, `StepOutcome`, and the `RealClock` default.
 `step.py` holds `StepCoordinator.step()`; `drain.py` holds the terminal-eval flush + close_out.
 
 KILL severances (must not re-enter): the `bot_refresh` subprocess family (`bot_corpus_refresh_*`
@@ -24,7 +24,6 @@ config fields) is a DEFINITE KILL (0 config consumers, §e/§f) — those fields
 from __future__ import annotations
 
 import time
-import tracemalloc
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -186,23 +185,9 @@ class EvalPipelineLike(Protocol):
 
 
 @runtime_checkable
-class GpuMonitorLike(Protocol):
-    gpu_util_pct: float
-
-
-@runtime_checkable
 class ClockLike(Protocol):
     def now(self) -> float: ...
     def sleep(self, seconds: float) -> None: ...
-
-
-@runtime_checkable
-class TracemallocLike(Protocol):
-    def start(self, max_frames: int = 25) -> None: ...
-    def stop(self) -> None: ...
-    def get_traced_memory(self) -> tuple[int, int]: ...
-    def take_snapshot(self) -> Any: ...
-    def reset_peak(self) -> None: ...
 
 
 # ── Default implementations ─────────────────────────────────────────────────────────────
@@ -212,23 +197,6 @@ class RealClock:
 
     def sleep(self, seconds: float) -> None:
         time.sleep(seconds)
-
-
-class RealTracemalloc:
-    def start(self, max_frames: int = 25) -> None:
-        tracemalloc.start(max_frames)
-
-    def stop(self) -> None:
-        tracemalloc.stop()
-
-    def get_traced_memory(self) -> tuple[int, int]:
-        return tracemalloc.get_traced_memory()
-
-    def take_snapshot(self) -> Any:
-        return tracemalloc.take_snapshot()
-
-    def reset_peak(self) -> None:
-        tracemalloc.reset_peak()
 
 
 # ── close-out drain caps: DELETED, not moved (WPMINT Phase K-A, R93) ────────────────────

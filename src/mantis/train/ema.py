@@ -71,11 +71,6 @@ class EmaModel:
         — callers that mutate must clone first)."""
         return dict(self._shadow)
 
-    def load_into(self, model: torch.nn.Module) -> None:
-        """Load the EMA shadow state into `model` in place."""
-        base = _base_of(model)
-        base.load_state_dict(self._shadow)
-
     @property
     def module(self) -> _EmaModuleView:
         """A module-like proxy over the shadow (for `state_dict`/`parameters` call
