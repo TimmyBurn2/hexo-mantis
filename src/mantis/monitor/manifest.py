@@ -38,6 +38,8 @@ from typing import Any, cast
 
 import yaml
 
+from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
+
 #: The manifest that ships beside this module — the ONE seam-7 instance.
 DEFAULT_MANIFEST_PATH = Path(__file__).with_name("producer_manifest.yaml")
 
@@ -54,11 +56,19 @@ class ManifestError(RuntimeError):
 
 
 def load_manifest(path: Path | str) -> dict[str, Any]:
-    """Parse the manifest yaml (no resolution). Raises `ManifestError` on a shape error."""
+    """Parse the manifest yaml (no resolution).
+
+    Raises:
+        ManifestError: the file is unreadable, not valid UTF-8, not well-formed YAML, carries
+            a duplicate key, is not a mapping, or lacks a required top-level key.
+    """
     target = Path(path)
     try:
-        raw: Any = yaml.safe_load(target.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+        # AUDIT-1 F-45. THE config parser. `yaml.safe_load` is last-wins on a duplicate key,
+        # and this file is a GATE INPUT (LAW-07): a duplicated row id would silently drop the
+        # first row's producer and cadence while the manifest still parsed clean.
+        raw: Any = parse_config_yaml(target)
+    except (OSError, UnicodeDecodeError, DuplicateKeyError, yaml.YAMLError) as exc:
         raise ManifestError("<file>", f"unreadable manifest {target}: {exc!r}") from exc
     if not isinstance(raw, dict):
         raise ManifestError("<file>", f"manifest {target} must be a mapping")

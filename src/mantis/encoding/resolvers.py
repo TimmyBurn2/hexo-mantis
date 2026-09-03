@@ -18,6 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from mantis._engine import MOVES_REMAINING_PLANE as _ENGINE_MOVES_REMAINING_PLANE
+from mantis._engine import MY_STONE_PLANE as _ENGINE_MY_STONE_PLANE
+from mantis._engine import OPP_STONE_PLANE as _ENGINE_OPP_STONE_PLANE
+from mantis._engine import PLY_PARITY_PLANE as _ENGINE_PLY_PARITY_PLANE
 from mantis._engine import RegistrySpec as EncodingSpec
 from mantis.encoding._probes import FIRST_CONV_KEYS as _FIRST_CONV_KEYS
 from mantis.encoding._probes import GNN_GRAPH_MARKER_KEY as _GNN_GRAPH_MARKER_KEY
@@ -292,10 +296,15 @@ _ANCHOR_PATHS: dict[str, str] = {
 #   16,17   → turn-phase scalars (moves_remaining / ply_parity)
 # ---------------------------------------------------------------------------
 
-_CUR_STONE_SRC_PLANE = 0
-_OPP_STONE_SRC_PLANE = 8
-_MOVES_REMAINING_SRC_PLANE = 16
-_PLY_PARITY_SRC_PLANE = 17
+# AUDIT-1 F-42. READ from the engine, not typed beside it: these four are
+# `mantis_encoding::encode::{MY_STONE_PLANE, OPP_STONE_PLANE, MOVES_REMAINING_PLANE,
+# PLY_PARITY_PLANE}`, which the Rust encode kernels index the wire format by. Python used to
+# pin Python and Rust to pin a literal, with nothing pinning across the FFI, while the SAME
+# indices appear again in `v6_live2_ls.kept_plane_indices = [0, 8, 16, 17]`.
+_CUR_STONE_SRC_PLANE: int = _ENGINE_MY_STONE_PLANE
+_OPP_STONE_SRC_PLANE: int = _ENGINE_OPP_STONE_PLANE
+_MOVES_REMAINING_SRC_PLANE: int = _ENGINE_MOVES_REMAINING_PLANE
+_PLY_PARITY_SRC_PLANE: int = _ENGINE_PLY_PARITY_PLANE
 _HISTORY_SRC_PLANES = frozenset({1, 2, 3, 9, 10, 11})
 _TURN_PHASE_SRC_PLANES = frozenset({_MOVES_REMAINING_SRC_PLANE, _PLY_PARITY_SRC_PLANE})
 

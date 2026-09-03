@@ -8,7 +8,9 @@
 use mantis_core::board::HEX_AXES;
 
 /// Saturation cap for chain length — the 6-in-a-row win target.
-const CHAIN_CAP: i32 = 6;
+// AUDIT-1 F-42. The cap IS the win length, and `mantis_core::board::WIN_LENGTH` owns it;
+// a second 6 here goes stale the day the rule changes.
+const CHAIN_CAP: i32 = mantis_core::board::WIN_LENGTH as i32;
 /// Normalisation denominator; derived from `CHAIN_CAP` (one const, not two) so
 /// the cap and its normalizer cannot drift apart.
 const CHAIN_NORM: f32 = CHAIN_CAP as f32;

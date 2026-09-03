@@ -229,7 +229,7 @@ def _apply_capture_fill(pool: WorkerPool) -> None:
     for i, reason in enumerate(TERMINAL_SCRIPT):
         pool._instrumentation.on_game_complete(
             lock, 0 if reason >= 2 else 1, [(0, 0), (1, 0)], i % 2,
-            reason, 0, 0, 1, 0, 5,
+            reason, 0, 0, 1, 0,
         )
 
 

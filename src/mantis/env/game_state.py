@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from mantis._engine import Board
+from mantis._engine import Board, HEX_AXES as _ENGINE_HEX_AXES, WIN_LENGTH as _ENGINE_WIN_LENGTH
 from mantis.encoding import lookup as _lookup_encoding
 
 # Named source-plane offsets (no bare 0/16/17 in the corpus tensor build).
@@ -32,10 +32,18 @@ from mantis.util.constants import HISTORY_LEN
 
 BOARD_SIZE: int = _lookup_encoding("v6").board_size
 
-# Chain-length plane encoding (Q13). Mirror of the mantis-core HEX_AXES order.
-# Plane layout within the 6-plane block: [a0_cur, a0_opp, a1_cur, a1_opp, a2_cur, a2_opp].
-_HEX_AXES: tuple[tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
-_CHAIN_CAP: int = 6  # win target; also the saturation cap per the literature review
+# Chain-length plane encoding (Q13). READ from the engine, not mirrored beside it
+# (AUDIT-1 F-42) — the plane layout within the 6-plane block is
+# [a0_cur, a0_opp, a1_cur, a1_opp, a2_cur, a2_opp], so the axis INDEX is the meaning and a
+# reordering on either side relabels planes with nothing failing.
+_HEX_AXES: tuple[tuple[int, int], ...] = tuple(
+    (int(dq), int(dr)) for dq, dr in _ENGINE_HEX_AXES
+)
+_CHAIN_CAP: int = _ENGINE_WIN_LENGTH  # the win target IS the saturation cap
+#: Q13 chain-plane count = one plane per (axis, player). DERIVED, not typed (AUDIT-1
+#: F-42): the same 6 was a literal at four Python array-allocation sites while
+#: `mantis_selfplay::replay::sym::N_CHAIN_PLANES` and every registry row own the number.
+N_CHAIN_PLANES: int = len(_HEX_AXES) * 2
 
 
 def _run_batched(
@@ -89,7 +97,7 @@ def _compute_chain_planes(
     (25×25) callers share the same kernel.
     """
     H, W = cur_stones.shape
-    planes = np.zeros((6, H, W), dtype=np.int8)
+    planes = np.zeros((N_CHAIN_PLANES, H, W), dtype=np.int8)
     stones = np.empty((2, H, W), dtype=bool)
     stones[0] = cur_stones > 0
     stones[1] = opp_stones > 0

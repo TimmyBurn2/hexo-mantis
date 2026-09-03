@@ -8,7 +8,7 @@
 //! apply when placing (or removing) a stone of `player_index` (0=P1, 1=P2)
 //! at flat index `cell_index`.
 
-use super::TOTAL_CELLS; // 361
+use super::{BOARD_SIZE, HALF, TOTAL_CELLS};
 
 /// Deterministic splitmix64 PRNG. Produces a pseudo-random u64 from a seed.
 const fn splitmix64(mut x: u64) -> u64 {
@@ -75,10 +75,12 @@ impl ZobristTable {
     /// the same key regardless of board history or window position.
     #[inline]
     pub fn get_for_pos(q: i32, r: i32, player: usize) -> u128 {
-        const HALF: i32 = 9;
-        const BOARD_SIZE: i32 = 19;
+        // AUDIT-1 F-42. These were LOCAL `const HALF: i32 = 9` / `const BOARD_SIZE: i32 = 19`
+        // shadowing the crate constants — while the key table below is sized by the real
+        // `TOTAL_CELLS`. Move the board and the index arithmetic desynchronises from the
+        // table it indexes, silently, with no compile error anywhere.
         if (-HALF..=HALF).contains(&q) && (-HALF..=HALF).contains(&r) {
-            let cell = ((q + HALF) as usize) * (BOARD_SIZE as usize) + ((r + HALF) as usize);
+            let cell = ((q + HALF) as usize) * BOARD_SIZE + ((r + HALF) as usize);
             Self::get(cell, player)
         } else {
             // Mixing primes for arbitrary coordinates
@@ -182,6 +184,26 @@ mod prop_tests {
             let key = ZobristTable::get(cell, player);
             prop_assert_ne!(key, 0u128, "Zobrist key must be non-zero");
             prop_assert_eq!(key ^ key, 0u128, "key XOR itself must be zero (self-inverse)");
+        }
+
+        /// AUDIT-1 F-42. `get_for_pos`'s in-table branch indexes a table sized by
+        /// `TOTAL_CELLS`, and it used to compute that index from LOCAL `HALF = 9` /
+        /// `BOARD_SIZE = 19` constants shadowing the crate's. This drives the index the way
+        /// `get_for_pos` must, from the crate constants, over the WHOLE table: if the two
+        /// ever disagree again — a shadow re-introduced, or the board resized on one side —
+        /// some cell maps to the wrong key or out of range, and this reds.
+        #[test]
+        fn every_in_table_cell_agrees_with_the_crate_geometry(
+            q in -HALF..=HALF, r in -HALF..=HALF, player in 0usize..2usize,
+        ) {
+            let cell = ((q + HALF) as usize) * BOARD_SIZE + ((r + HALF) as usize);
+            prop_assert!(cell < TOTAL_CELLS, "derived cell {} outside the table", cell);
+            prop_assert_eq!(
+                ZobristTable::get_for_pos(q, r, player),
+                ZobristTable::get(cell, player),
+                "({}, {}) must index the table by the CRATE geometry, not a local literal",
+                q, r
+            );
         }
 
         /// Distinct (cell, player) pairs must yield distinct keys (collision resistance).

@@ -494,9 +494,10 @@ impl PyBoard {
 mod threats {
     use std::collections::HashMap;
 
-    use mantis_core::board::HEX_AXES;
-
-    const WIN_LEN: usize = 6;
+    // AUDIT-1 F-42. The threat scan's window length IS the game's win length, and the axis
+    // set IS the board's; a literal 6 or a re-typed axis table here drifts from the rule
+    // `Board::player_wins` enforces.
+    use mantis_core::board::{HEX_AXES, WIN_LENGTH as WIN_LEN};
 
     /// Endpoint-bounded line for `scan_line` (axes (1,0) and (0,1)).
     #[derive(Clone, Copy, Debug)]

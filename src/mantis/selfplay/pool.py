@@ -27,7 +27,7 @@ from typing import Any
 
 import torch
 
-from mantis._engine import SelfPlayRunner
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
     SelfPlayHParams,
@@ -185,6 +185,13 @@ class WorkerPool:
         self._instrumentation_enabled = hp.instrumentation_enabled
         self._instrumentation = PoolInstrumentation(
             log_investigation_metrics=hp.log_investigation_metrics,
+            # AUDIT-1 F-42. The n_components bound is per-ENCODING (8 on v6w25, 5 on
+            # v6_live2_ls, the engine default where the spec sets none) and was a module
+            # literal 5. It is resolved from the same spec the drain dispatches on.
+            cluster_threshold=(
+                spec.cluster_threshold if spec.cluster_threshold is not None
+                else DEFAULT_CLUSTER_THRESHOLD
+            ),
         )
 
     # ── read surface ────────────────────────────────────────────────────────────

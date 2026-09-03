@@ -17,6 +17,7 @@ from mantis.data.loss_counters import REPLAY_COUNTERS
 from mantis.encoding import EncodingSpec
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.env.game_state import (
+    N_CHAIN_PLANES,
     GameState,
     _compute_chain_planes,  # pyright: ignore[reportPrivateUsage]  # ported chain-plane kernel
 )
@@ -65,7 +66,7 @@ def replay_game_to_triples_v6w25(
         dtype=np.float16,
     )
     chain_planes = np.zeros(
-        (max_len, 6, BOARD_SIZE_V6W25, BOARD_SIZE_V6W25), dtype=np.float16
+        (max_len, N_CHAIN_PLANES, BOARD_SIZE_V6W25, BOARD_SIZE_V6W25), dtype=np.float16
     )
     policies = np.zeros((max_len, N_ACTIONS_V6W25), dtype=np.float32)
     outcomes = np.zeros(max_len, dtype=np.float32)

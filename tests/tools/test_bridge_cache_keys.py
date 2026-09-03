@@ -84,8 +84,9 @@ def _required_build_inputs() -> set[Path]:
     """Every file whose content can change the emitted extension.
 
     Deliberately `src/**/*` and not `src/**/*.rs`: `crates/mantis-encoding/src` holds
-    `registry.toml` and `manifests.toml`, both `include_str!`-ed into the binary. Anything else
-    a future author drops into a `src/` tree is a build input by the same argument.
+    `registry.toml`, which is `include_str!`-ed into the binary. Anything else a future author
+    drops into a `src/` tree is a build input by the same argument — which is why the glob
+    stays wide even though AUDIT-1 F-36 took the second such file (`manifests.toml`) out.
     """
     required: set[Path] = {
         (REPO_ROOT / "Cargo.toml").resolve(),
@@ -124,7 +125,6 @@ def test_every_workspace_build_input_is_a_cache_key() -> None:
     "rel",
     [
         "crates/mantis-encoding/src/registry.toml",
-        "crates/mantis-encoding/src/manifests.toml",
     ],
 )
 def test_embedded_registry_data_files_are_cache_keys(rel: str) -> None:

@@ -38,6 +38,7 @@ from __future__ import annotations
 import inspect
 import threading
 
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.monitor.rules import check_draw_rate_collapse
 from mantis.selfplay.instrumentation import (  # RED anchor (R92) — `pooled_draw_counts` is new
     _DRAW_RATE_WINDOW,
@@ -59,7 +60,7 @@ CONSEC = 3
 
 
 def _instr() -> tuple[PoolInstrumentation, threading.Lock]:
-    return PoolInstrumentation(log_investigation_metrics=False), threading.Lock()
+    return PoolInstrumentation(log_investigation_metrics=False, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), threading.Lock()
 
 
 def _play(instr, lock, *, worker_id: int, games: int, draws: int) -> None:
@@ -72,7 +73,7 @@ def _play(instr, lock, *, worker_id: int, games: int, draws: int) -> None:
     for index in range(games):
         drawn = index < draws
         instr.on_game_complete(lock, 0 if drawn else 1, [], worker_id,
-                               2 if drawn else 0, 0, 0, 1, 0, 5)
+                               2 if drawn else 0, 0, 0, 1, 0)
 
 
 def _fires(rate: float | None, *, at_step: int = RUN5_MIN_STEP) -> bool:

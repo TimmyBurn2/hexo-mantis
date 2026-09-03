@@ -14,6 +14,7 @@ use super::{PolicyPool, RegistrySpec, Representation, ValuePool};
 // schema constants (mantis-encoding → mantis-graph rlib dep) so
 // `node_feat_dim`/`edge_feat_dim`/`win_axes`/`builder_impl_required` can never
 // drift from what `build_axis_graph` emits.
+use mantis_core::board::WIN_LENGTH;
 use mantis_graph::{BUILDER_IMPL_NATIVE, EDGE_FEAT_DIM, NODE_FEAT_DIM, WIN_AXES};
 
 /// Graph-only field must be present and equal the builder-schema constant.
@@ -272,16 +273,32 @@ impl RegistrySpec {
                 require_graph_eq(&mut errs, "node_feat_dim", self.node_feat_dim, NODE_FEAT_DIM);
                 require_graph_eq(&mut errs, "edge_feat_dim", self.edge_feat_dim, EDGE_FEAT_DIM);
                 require_graph_eq(&mut errs, "win_axes", self.win_axes, WIN_AXES.len());
-                // win_length / graph_radius: present + positive.
-                match self.win_length {
-                    Some(w) if w >= 1 => {}
-                    Some(w) => errs.push(format!("win_length={w} must be >= 1")),
-                    None => errs.push("representation=graph requires win_length".to_string()),
-                }
+                // AUDIT-1 F-42. `win_length` is the GAME'S rule, not a free registry number:
+                // `mantis_core::board::WIN_LENGTH` owns it and five copies read it. The check
+                // was "present + positive", which accepts a 7 that no engine path honours.
+                require_graph_eq(&mut errs, "win_length", self.win_length, WIN_LENGTH);
                 match self.graph_radius {
                     Some(r) if r >= 1 => {}
                     Some(r) => errs.push(format!("graph_radius={r} must be >= 1")),
                     None => errs.push("representation=graph requires graph_radius".to_string()),
+                }
+                // AUDIT-1 F-18. THE RELATION, not two independent positivity checks. The MCTS
+                // legal set is built at `legal_move_radius` (`runner::game`) and the graph's
+                // legal nodes at `graph_radius` (`runner::search_drive`, `replay::hexg`). If
+                // they disagree the ragged policy covers a different cell set than the tree
+                // expands - the `EmptyLegalSet` / dropped-mass family. Until this line the
+                // only thing holding them equal was a COMMENT in registry.toml
+                // ("legal_move_radius = 8   # matches graph_radius"), and Leg 3 edits exactly
+                // these two keys.
+                if let Some(r) = self.graph_radius {
+                    if r != self.legal_move_radius {
+                        errs.push(format!(
+                            "representation=graph requires graph_radius == legal_move_radius; \
+                             got graph_radius={} vs legal_move_radius={} (the MCTS legal set \
+                             and the graph's legal nodes would cover different cells)",
+                            r, self.legal_move_radius
+                        ));
+                    }
                 }
                 // contract + builder handshake the resolver asserts.
                 if self.contract_version != Some(1) {

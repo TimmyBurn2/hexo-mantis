@@ -17,6 +17,7 @@ import threading
 from collections import deque
 from typing import Any
 
+from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES, WIN_LENGTH as _ENGINE_WIN_LENGTH
 from mantis.util.constants import DRAW_RATE_WINDOW as _DRAW_RATE_WINDOW
 from mantis.util.coordinates import axial_distance
 
@@ -32,19 +33,11 @@ _COLONY_EXT_HEX_DIST = 6
 # distance-1 adjacency) miss it by construction.
 _STRIDE5_STEP = 5
 
-# B3a structural-metric geometry — PINNED to the engine win-line / cluster
-# conventions so the interim Python emit is numerically comparable to a future
-# Rust emit.
-#   mantis-core `board/state/core.rs` — three positive hex axes (walked both
-#   ways via +dir and -dir => 6 directions).
-_HEX_AXES = [(1, 0), (0, 1), (1, -1)]
-# mantis-core `board/moves.rs::WIN_LENGTH` — 6-in-a-row wins; longest_line capped here.
-_WIN_LENGTH = 6
-# mantis-core `board/moves.rs::DEFAULT_CLUSTER_THRESHOLD`. n_components edge iff
-# hex_distance <= this. A PINNED engine constant (like _COLONY_EXT_HEX_DIST /
-# _STRIDE5_STEP above), NOT an operator tunable: it MUST equal the engine
-# get_clusters bound or the metric is incomparable.
-_CLUSTER_THRESHOLD = 5
+# B3a structural-metric geometry — READ from the engine, not transcribed beside it
+# (AUDIT-1 F-42). These were three literals whose comments named the Rust owner; a comment
+# is not a pin, and the metric is only comparable to a Rust emit if it is the same number.
+_HEX_AXES = [tuple(axis) for axis in _ENGINE_HEX_AXES]
+_WIN_LENGTH = _ENGINE_WIN_LENGTH
 
 
 def _compute_stride5_metrics(
@@ -275,8 +268,17 @@ class PoolInstrumentation:
     unchanged from the original inline code.
     """
 
-    def __init__(self, log_investigation_metrics: bool) -> None:
+    def __init__(self, log_investigation_metrics: bool, cluster_threshold: int) -> None:
+        """
+        Args:
+            log_investigation_metrics: whether the B3a structural metrics are computed.
+            cluster_threshold: the connectivity edge bound for `n_components`, resolved from
+                the run's encoding (`spec.cluster_threshold`, or the engine's
+                `DEFAULT_CLUSTER_THRESHOLD` where the spec sets none). AUDIT-1 F-42 — this
+                was a literal 5 in this module while `v6w25` runs at 8.
+        """
         self._log_investigation_metrics = log_investigation_metrics
+        self._cluster_threshold = int(cluster_threshold)
         # Rolling window of last ≤100 completed game move histories.
         self._recent_move_histories: deque[list[tuple[int, int]]] = deque(maxlen=100)
         # Per-worker rolling last-`_DRAW_RATE_WINDOW`-game outcomes (1=draw, 0=decisive).
@@ -299,7 +301,6 @@ class PoolInstrumentation:
         mv_max: int,
         mv_distinct: int,
         stride5_run: int,
-        cluster_threshold: int = _CLUSTER_THRESHOLD,
     ) -> tuple[int | None, int | None, float | None, int,
                int | None, float | None, int | None]:
         """Update all telemetry state for one completed game.
@@ -311,9 +312,13 @@ class PoolInstrumentation:
         AUDIT-1 F-28/C04: they were six zeros, and "no colony extension was
         measured" and "the winner extended no stones" are different facts that
         both landed as ``0`` in the ONE channel.  ``stride5_p90`` is the rolling P90 including
-        this game.  ``cluster_threshold`` (the connectivity edge bound for
-        n_components) defaults to the PINNED ``_CLUSTER_THRESHOLD`` (engine
-        DEFAULT_CLUSTER_THRESHOLD=5); callers may override for tests.
+        this game.
+
+        The connectivity edge bound for ``n_components`` is this instance's
+        ``cluster_threshold``, resolved from the RESOLVED ENCODING at construction (AUDIT-1
+        F-42). It was a per-call default of 5 — the engine's fallback — which made every
+        n_components reading on a ``v6w25`` corpus (threshold 8) incomparable with the engine
+        it claims to mirror, with no call site passing anything else.
         """
         if move_history:
             with lock:
@@ -340,10 +345,10 @@ class PoolInstrumentation:
             ext_frac = float(ext_count / ext_total) if ext_total > 0 else 0.0
             # B3a structural emit — PER-PLAYER (winner) longest_line + n_components.
             longest_line, longest_line_frac = _compute_longest_line(
-                move_history, cluster_threshold, winner_code,
+                move_history, self._cluster_threshold, winner_code,
             )
             n_components = _compute_n_components(
-                move_history, cluster_threshold, winner_code,
+                move_history, self._cluster_threshold, winner_code,
             )
         else:
             # NOT MEASURED, not measured-as-zero (AUDIT-1 F-28/C04). The lever is off, or

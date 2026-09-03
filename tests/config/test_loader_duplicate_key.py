@@ -1,4 +1,7 @@
-"""O13 — duplicate-key rejection (loader._UniqueKeyLoader).
+"""O13 — duplicate-key rejection (util.yaml_io.UniqueKeyLoader).
+
+AUDIT-1 F-45 moved the loader to `mantis.util.yaml_io` (a DAG leaf) so the encoding audit
+can read through THE parser instead of a strictly more permissive `yaml.safe_load`.
 
 Frozen utils/config.py merely LOGGED a warning on overlap (last-wins). The new loader
 HARD-ERRORS on any duplicate key, at any nesting depth. Safe construction preserved
@@ -10,7 +13,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mantis.config.loader import DuplicateKeyError, _UniqueKeyLoader, load_config
+from mantis.config.loader import DuplicateKeyError, load_config
+from mantis.util.yaml_io import UniqueKeyLoader as _UniqueKeyLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

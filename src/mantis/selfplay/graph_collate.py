@@ -41,11 +41,15 @@ from typing import Any
 
 import numpy as np
 
-# The 3 win axes in axial coords (mirrors `mantis_graph::WIN_AXES`). Public constant (part
-# of `__all__`) for external callers; the check-14 edge-geometry recompute itself now runs in
-# Rust (`mantis._engine.verify_edge_geometry`) against its own copy of `mantis_graph::WIN_AXES`
-# — this Python tuple is no longer read internally.
-WIN_AXES: tuple[tuple[int, int], ...] = ((1, 0), (0, 1), (1, -1))
+from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
+
+# The 3 win axes in axial coords — READ from the engine (AUDIT-1 F-42), not mirrored beside
+# it. Public constant (part of `__all__`) for external callers; the check-14 edge-geometry
+# recompute runs in Rust (`mantis._engine.verify_edge_geometry`) against the same table, and
+# a mirrored copy here could disagree with the one the recompute uses.
+WIN_AXES: tuple[tuple[int, int], ...] = tuple(
+    (int(dq), int(dr)) for dq, dr in _ENGINE_HEX_AXES
+)
 
 # Contract-fixed schema widths (single-sourced against the mantis-graph constants;
 # callers pass spec.node_feat_dim / spec.edge_feat_dim from the registry).

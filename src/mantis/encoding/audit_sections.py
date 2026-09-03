@@ -35,6 +35,7 @@ from mantis.encoding.audit import (
 )
 from mantis.encoding.compat import infer_encoding_from_state_dict
 from mantis.encoding.registry import _load as _load_registry
+from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
 # Deliberately-unstamped dead checkpoint directories. These prefixes are
 # skipped in §2 checkpoint audit (info, not error).
@@ -384,8 +385,15 @@ def _section_variants(report: AuditReport, variants_dir: Path) -> None:
             else p
         )
         try:
-            cfg = yaml.safe_load(p.read_text()) or {}
-        except (OSError, yaml.YAMLError) as e:
+            # AUDIT-1 F-45. THE loader's parser, not a second `yaml.safe_load`. This section
+            # exists to report on "whatever `load_config` accepts"; a bare safe_load is
+            # LAST-WINS on a duplicate key, so it reported clean on files the loader refuses.
+            cfg = parse_config_yaml(p) or {}
+        except DuplicateKeyError as e:
+            sect.rows.append([rel, "-", "DUPLICATE-KEY"])
+            report.add_finding("error", "§4", f"{rel}: {e}")
+            continue
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
             sect.rows.append([rel, "-", f"YAML-ERR ({type(e).__name__})"])
             report.add_finding("error", "§4", f"{rel}: yaml parse failed: {e}")
             continue

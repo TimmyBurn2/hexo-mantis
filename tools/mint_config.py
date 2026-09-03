@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 import yaml
+
+from mantis.util.yaml_io import parse_config_yaml
 from pydantic import ValidationError
 
 from mantis.config.schema import RunConfig
@@ -155,7 +157,10 @@ def main(argv: list[str] | None = None) -> int:
     if not template_path.is_file():
         print(f"unknown template: {args.template} (no {template_path})", file=sys.stderr)
         return 2
-    data = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+    # AUDIT-1 F-45. THE config parser, not a third `yaml.safe_load`: a template with a
+    # duplicate key would mint a config whose loaded value silently differs from the one
+    # the template appears to state, and the minted file is the artifact of record.
+    data = parse_config_yaml(template_path)
 
     delta_lines: list[str] = []
     for raw in args.deltas:

@@ -27,6 +27,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
 
@@ -227,7 +228,7 @@ def _build_pool(golden, collect_rows, graph_rows, *, is_graph, clock,
     pool._sims_per_sec = 0.0
     pool._game_lengths = deque(maxlen=200)
     pool._avg_game_length = 0.0
-    pool._instrumentation = PoolInstrumentation(log_investigation_metrics=True)
+    pool._instrumentation = PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD)
     pool._recorder = RecordingRecorder()
     pool._sink = sink if sink is not None else RecordingSink()
     pool._heartbeat = heartbeat

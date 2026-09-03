@@ -60,13 +60,12 @@ pub const N_CHAIN_PLANES: usize = 6;
 /// Offset used when building the chain_src_lookup (chains are their own buffer).
 pub const CHAIN_PLANE_OFFSET: usize = 0;
 
-/// Canonical hex-basis directions mirroring the board `HEX_AXES`. Used to derive
-/// the axis-plane permutation under each symmetry.
-pub(crate) const HEX_BASIS: [(i32, i32); 3] = [
-    (1, 0),  // axis 0 — E/W
-    (0, 1),  // axis 1 — NE/SW
-    (1, -1), // axis 2 — SE/NW
-];
+/// Canonical hex-basis directions — `mantis_core::board::HEX_AXES` ITSELF, not a mirror of
+/// it (AUDIT-1 F-42). The axis INDEX is load-bearing: chain planes are laid out in this
+/// order, the `axis_perm` derived here permutes those planes, and a swap of two entries
+/// would silently permute every augmented Q13 target rather than fail. This crate already
+/// depends on `mantis-core`, so the copy bought nothing.
+pub(crate) use mantis_core::board::HEX_AXES as HEX_BASIS;
 
 /// Apply the canonical `(q, r) → (−r, q + r)` 60° rotation, `n_rot` times.
 #[inline]
@@ -388,7 +387,12 @@ pub fn sym_tables_for(spec: &'static RegistrySpec) -> &'static SymTables {
     // "size_25" n_planes=8 (v6w25): board 25×25, 8-plane wire format.
     static SIZE25_8: LazyLock<SymTables> = LazyLock::new(|| SymTables::with_shape(25, 8));
 
-    match (spec.sym_table_id, spec.n_planes) {
+    // AUDIT-1 F-42. The 19 and the 25 above are `spec.board_size` typed a second time, keyed
+    // by a STRING. The singletons stay — these tables are built once and read on every
+    // augmentation, so per-spec construction would be a real cost — but the string no longer
+    // gets to disagree with the number: a registry row that moves `board_size` while keeping
+    // its `sym_table_id` is refused here rather than scattering through the wrong-sized table.
+    let table = match (spec.sym_table_id, spec.n_planes) {
         ("size_19", _) => &SIZE19_8,
         ("size_25", 8) => &SIZE25_8,
         (id, np) => panic!(
@@ -396,7 +400,14 @@ pub fn sym_tables_for(spec: &'static RegistrySpec) -> &'static SymTables {
              Add a LazyLock<SymTables> entry in replay::sym::sym_tables_for().",
             spec.name, id, np
         ),
-    }
+    };
+    assert_eq!(
+        table.board_size, spec.board_size,
+        "sym_tables_for: encoding {:?} declares board_size={} but sym_table_id={:?} selects a \
+         {}×{} table — the id and the number have drifted",
+        spec.name, spec.board_size, spec.sym_table_id, table.board_size, table.board_size
+    );
+    table
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────

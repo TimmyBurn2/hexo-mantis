@@ -39,12 +39,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures"
 MANIFEST_PATH = FIXTURES_ROOT / "manifest.toml"
 
-#: Byte-significant beyond the fixture manifest: both are `include_str!`-ed into the engine
-#: (`crates/mantis-encoding/src/registry/mod.rs:25`, `manifests.rs:13`), and registry.toml's
-#: sha256 is exported across the FFI as `_engine.registry_sha()` and handshaken by CI gate 8.
+#: Byte-significant beyond the fixture manifest: `include_str!`-ed into the engine
+#: (`crates/mantis-encoding/src/registry/mod.rs:25`), and its sha256 is exported across the
+#: FFI as `_engine.registry_sha()` and handshaken by CI gate 8.
+#:
+#: AUDIT-1 F-36 removed the second entry, `manifests.toml`: it and its parser were a SECOND
+#: authority over the corpus/anchor/held-out pins that `mantis.encoding.resolvers` actually
+#: enforces, reached by nothing but their own test, and drifted from the live dicts. There is
+#: one embedded data file now.
 EMBEDDED_BYTE_SIGNIFICANT = (
     "crates/mantis-encoding/src/registry.toml",
-    "crates/mantis-encoding/src/manifests.toml",
 )
 
 

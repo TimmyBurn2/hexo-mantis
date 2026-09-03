@@ -59,33 +59,18 @@ import hashlib
 import json
 from pathlib import Path
 
-import yaml
-
 from mantis.config.schema import RunConfig
+from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
+
+__all__ = [
+    "DuplicateKeyError",
+    "config_identity_sha256",
+    "discover_configs",
+    "load_config",
+    "parse_config_yaml",
+]
 
 
-class DuplicateKeyError(ValueError):
-    """A YAML mapping declared the same key twice (silent last-wins is banned)."""
-
-
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that HARD-ERRORS on a duplicate key at any nesting depth.
-
-    The frozen utils/config.py merely LOGGED a warning and kept the last value; a duplicate
-    key is a copy-paste hazard, so it becomes a load-time error. Safe construction is preserved
-    (SafeLoader subclass — no arbitrary object construction).
-    """
-
-    def construct_mapping(self, node, deep=False):
-        seen: set = set()
-        for key_node, _ in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise DuplicateKeyError(
-                    f"duplicate key {key!r} at {key_node.start_mark}"
-                )
-            seen.add(key)
-        return super().construct_mapping(node, deep=deep)
 
 
 def discover_configs(configs_dir: str | Path) -> list[Path]:
@@ -124,8 +109,16 @@ def load_config(path: str | Path) -> RunConfig:
     narrowing that briefly stood here). What keeps that safe is not a suffix test but the
     invariant `discover_configs` holds — whatever this function accepts under the audit root,
     the audit sees.
+
+    Raises:
+        DuplicateKeyError: a mapping declared the same key twice, at any depth.
+        TypeError: the config root is not a mapping.
+        yaml.YAMLError: the file is not well-formed YAML.
+        OSError: the path cannot be read.
+        UnicodeDecodeError: the file is not valid UTF-8.
+        pydantic.ValidationError: the config fails the schema.
     """
-    raw = yaml.load(Path(path).read_text(), Loader=_UniqueKeyLoader)
+    raw = parse_config_yaml(path)
     if not isinstance(raw, dict):
         raise TypeError(f"{path}: config root must be a mapping")
     return RunConfig.model_validate(raw)

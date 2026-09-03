@@ -205,6 +205,41 @@ notes = "test"
     .to_string()
 }
 
+fn valid_graph_body() -> String {
+    // gnn_axis_v1's shipped body, kept in the SAME column layout as registry.toml so a probe
+    // can `.replace()` a field by its exact source line (AUDIT-1 F-18).
+    r#"
+representation          = "graph"
+board_size              = 19
+trunk_size              = 19
+cluster_window_size     = "none"
+cluster_threshold       = "none"
+legal_move_radius       = 6
+n_planes                = 0
+plane_layout            = []
+policy_logit_count      = 362
+has_pass_slot           = true
+is_multi_window         = false
+value_pool              = "none"
+policy_pool             = "none"
+sym_table_id            = "size_19"
+kept_plane_indices      = []
+n_source_planes         = 0
+k_max                   = 1
+node_feat_dim           = 11
+edge_feat_dim           = 5
+win_length              = 6
+graph_radius            = 6
+win_axes                = 3
+contract_version        = 1
+builder_impl_required   = 1
+n_chain_planes          = 6
+schema_version          = 4
+notes                   = "test"
+"#
+    .to_string()
+}
+
 // ── O-6: unknown-key reject (collect-all with a co-present missing key) ───────
 #[test]
 fn unknown_key_rejected_collect_all() {
@@ -336,6 +371,32 @@ fn a_chain_plane_count_the_D6_tables_cannot_hold_is_refused() {
     let body = valid_grid_body().replace("n_chain_planes = 6", "n_chain_planes = 7");
     let err = parse_encoding_toml("v6_chainprobe", &body).unwrap_err();
     assert!(err.contains("n_chain_planes"), "{err}");
+}
+
+#[test]
+fn the_two_radii_typed_APART_are_refused_at_parse() {
+    // AUDIT-1 F-18, the planted break. Before this relation existed, the only thing holding
+    // `legal_move_radius` equal to `graph_radius` was a COMMENT in registry.toml. The MCTS
+    // legal set is built at the first and the graph's legal nodes at the second: type them
+    // apart and the ragged policy covers a different cell set than the tree expands.
+    for (lm, gr) in [(6usize, 8usize), (8, 6)] {
+        let body = valid_graph_body()
+            .replace("legal_move_radius       = 6", &format!("legal_move_radius       = {lm}"))
+            .replace("graph_radius            = 6", &format!("graph_radius            = {gr}"));
+        let err = parse_encoding_toml("gnn_radprobe", &body)
+            .expect_err("two radii typed apart must be REFUSED, not loaded");
+        assert!(err.contains("graph_radius") && err.contains("legal_move_radius"),
+            "the error must name BOTH keys, or the reader cannot act on it: {err}");
+        assert!(err.contains(&lm.to_string()) && err.contains(&gr.to_string()),
+            "…and both values: {err}");
+    }
+    // The CONTROL: equal radii at a value neither shipped row uses must still load, so the
+    // relation is what reds and not the number.
+    let ok = valid_graph_body()
+        .replace("legal_move_radius       = 6", "legal_move_radius       = 7")
+        .replace("graph_radius            = 6", "graph_radius            = 7");
+    assert!(parse_encoding_toml("gnn_radok", &ok).is_ok(),
+        "equal radii must load: {:?}", parse_encoding_toml("gnn_radok", &ok).err());
 }
 
 #[test]

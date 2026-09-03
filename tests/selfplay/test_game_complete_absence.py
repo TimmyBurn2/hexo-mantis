@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay.instrumentation import PoolInstrumentation
 
 _MOVES = [(0, 0), (1, 0), (2, 1), (3, 1)]
@@ -33,7 +34,7 @@ _MOVES = [(0, 0), (1, 0), (2, 1), (3, 1)]
 
 def _run(instr: PoolInstrumentation, *, moves: list[tuple[int, int]]) -> tuple:
     return instr.on_game_complete(
-        threading.Lock(), 1, moves, 0, 0, 0, 0, 1, 0, 5,
+        threading.Lock(), 1, moves, 0, 0, 0, 0, 1, 0,
     )
 
 
@@ -42,7 +43,7 @@ def _run(instr: PoolInstrumentation, *, moves: list[tuple[int, int]]) -> tuple:
 def test_the_investigation_metrics_are_absent_when_the_lever_is_OFF() -> None:
     """THE PIN. Six zeros before the repair."""
     ext_c, ext_t, ext_f, _p90, ll, ll_frac, n_comp = _run(
-        PoolInstrumentation(log_investigation_metrics=False), moves=_MOVES
+        PoolInstrumentation(log_investigation_metrics=False, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=_MOVES
     )
     assert (ext_c, ext_t, ext_f) == (None, None, None)
     assert (ll, ll_frac, n_comp) == (None, None, None)
@@ -51,7 +52,7 @@ def test_the_investigation_metrics_are_absent_when_the_lever_is_OFF() -> None:
 def test_the_investigation_metrics_are_absent_when_the_game_recorded_no_moves() -> None:
     """The other gate on the same block — and the one the drain golden had frozen."""
     ext_c, ext_t, ext_f, _p90, ll, ll_frac, n_comp = _run(
-        PoolInstrumentation(log_investigation_metrics=True), moves=[]
+        PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=[]
     )
     assert (ext_c, ext_t, ext_f) == (None, None, None)
     assert (ll, ll_frac, n_comp) == (None, None, None)
@@ -63,7 +64,7 @@ def test_a_MEASURED_zero_still_reads_as_zero() -> None:
     another."""
     adjacent = [(0, 0), (1, 0)]
     ext_c, ext_t, ext_f, _p90, _ll, _ll_frac, n_comp = _run(
-        PoolInstrumentation(log_investigation_metrics=True), moves=adjacent
+        PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=adjacent
     )
     assert ext_c == 0 and ext_c is not None
     assert ext_t == 2, "the denominator is measured, so the fraction is meaningful"

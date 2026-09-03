@@ -272,13 +272,27 @@ pub(crate) fn registry_sha_hex() -> &'static str {
     mantis_encoding::registry_sha_hex()
 }
 
-/// Register the `RegistrySpec` pyclass + the 3 NEW-BUILD module fns into
-/// `_engine`. Called by Slice ASM's `#[pymodule]` assembly.
+/// Register the `RegistrySpec` pyclass + the NEW-BUILD module fns and the wire-format
+/// constants into `_engine`. Called by Slice ASM's `#[pymodule]` assembly.
+///
+/// AUDIT-1 F-42, the module constants. The v6 source-plane indices, the hex axis table and
+/// the win length were each typed on BOTH sides of the FFI with nothing pinning across it:
+/// `encoding/resolvers.py` carried `_CUR_STONE_SRC_PLANE = 0 … _PLY_PARITY_SRC_PLANE = 17`
+/// beside `mantis_encoding::encode::{MY_STONE_PLANE … PLY_PARITY_PLANE}`, and the three axes
+/// were typed in three Python modules beside `mantis_core::board::HEX_AXES`. Python pinned
+/// Python and Rust pinned a literal. These exports are what a cross-FFI pin can read.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRegistrySpec>()?;
     m.add_function(wrap_pyfunction!(all_specs, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha_hex, m)?)?;
+    m.add("MY_STONE_PLANE", mantis_encoding::MY_STONE_PLANE)?;
+    m.add("OPP_STONE_PLANE", mantis_encoding::OPP_STONE_PLANE)?;
+    m.add("MOVES_REMAINING_PLANE", mantis_encoding::MOVES_REMAINING_PLANE)?;
+    m.add("PLY_PARITY_PLANE", mantis_encoding::PLY_PARITY_PLANE)?;
+    m.add("HEX_AXES", mantis_core::board::HEX_AXES)?;
+    m.add("WIN_LENGTH", mantis_core::board::WIN_LENGTH)?;
+    m.add("DEFAULT_CLUSTER_THRESHOLD", mantis_core::board::DEFAULT_CLUSTER_THRESHOLD)?;
     Ok(())
 }
 

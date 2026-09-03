@@ -27,7 +27,7 @@ from mantis.data.augment import draw_record_syms, get_policy_scatters, spread_ma
 from mantis.data.replay import replay_game_to_triples
 from mantis.encoding import lookup as _lookup_encoding
 from mantis.encoding import opp_stone_slot
-from mantis.env.game_state import _compute_chain_planes
+from mantis.env.game_state import N_CHAIN_PLANES, _compute_chain_planes
 
 # 19×19 is the Rust `apply_symmetries_batch` fast-path board size (the binding hardcodes it); a
 # larger K-cluster trunk (e.g. v6w25 at 25×25) falls to the pure-numpy scatter below.
@@ -137,7 +137,7 @@ def make_augmented_collate(augment: bool, encoding: str):
                 policies = policy_aug
 
         # Chain planes — recomputed post-augment from stone planes 0 (cur) / opp-slot (opp).
-        chain_np = np.zeros((n, 6, board_size, board_size), dtype=np.float16)
+        chain_np = np.zeros((n, N_CHAIN_PLANES, board_size, board_size), dtype=np.float16)
         for i in range(n):
             chain_np[i] = _compute_chain_planes(
                 states[i, 0].astype(np.float32),

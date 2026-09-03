@@ -31,6 +31,7 @@ import builtins
 import importlib.util
 import threading
 
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay.instrumentation import (
     PoolInstrumentation,
     _compute_colony_extension,
@@ -45,16 +46,14 @@ def _lock() -> threading.Lock:
 
 
 def _make_instr(log_metrics: bool = True) -> PoolInstrumentation:
-    return PoolInstrumentation(log_investigation_metrics=log_metrics)
+    return PoolInstrumentation(log_investigation_metrics=log_metrics, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD)
 
 
 def _game_complete(instr, lock, *, winner_code=1, move_history=None, worker_id=0,
-                   terminal_reason=0, mv_min=0, mv_max=0, mv_distinct=1, stride5_run=0,
-                   cluster_threshold=5):
+                   terminal_reason=0, mv_min=0, mv_max=0, mv_distinct=1, stride5_run=0):
     return instr.on_game_complete(
         lock, winner_code, move_history or [], worker_id,
         terminal_reason, mv_min, mv_max, mv_distinct, stride5_run,
-        cluster_threshold,
     )
 
 
@@ -246,8 +245,7 @@ def test_g12_structural_metrics_via_on_game_complete() -> None:
     six P1 stones one connected line). FAIL = the on_game_complete wiring drops a field."""
     instr = _make_instr(log_metrics=True)
     lk = _lock()
-    out = _game_complete(instr, lk, winner_code=1, move_history=_SIX_IN_A_ROW_P1,
-                         cluster_threshold=5)
+    out = _game_complete(instr, lk, winner_code=1, move_history=_SIX_IN_A_ROW_P1)
     (_ext_c, _ext_t, _ext_f, _p90, longest_line, ll_frac, n_comp) = out
     assert longest_line == 6
     assert abs(ll_frac - 1.0) < 1e-9
@@ -267,8 +265,7 @@ def test_g13_structural_metrics_off_when_log_disabled() -> None:
     """
     instr = _make_instr(log_metrics=False)
     lk = _lock()
-    out = _game_complete(instr, lk, winner_code=1, move_history=_SIX_IN_A_ROW_P1,
-                         cluster_threshold=5)
+    out = _game_complete(instr, lk, winner_code=1, move_history=_SIX_IN_A_ROW_P1)
     (ext_c, ext_t, ext_f, _p90, longest_line, ll_frac, n_comp) = out
     assert (longest_line, ll_frac, n_comp) == (None, None, None)
     assert (ext_c, ext_t, ext_f) == (None, None, None), (

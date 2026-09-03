@@ -48,6 +48,7 @@ from typing import Any
 
 import pytest
 
+from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
 
@@ -151,7 +152,7 @@ def _make_scripted_pool(games, sink):
     pool.x_wins = 0
     pool.o_wins = 0
     pool.draws = 0
-    pool._instrumentation = PoolInstrumentation(log_investigation_metrics=False)
+    pool._instrumentation = PoolInstrumentation(log_investigation_metrics=False, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD)
     pool._recorder = type("NullRec", (), {
         "set_step": lambda self, step: None,
         "maybe_record": lambda self, **kw: None,
