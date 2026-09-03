@@ -30,6 +30,7 @@ from typing import Any
 
 import pytest
 
+from mantis.config.resolve.bootstrap import BootstrapNotFoundError
 import mantis.run as mantis_run
 from mantis.train.buffer_persist import canonical_buffer_path, try_save_buffer
 from mantis.train.lifecycle.watchdog import (
@@ -105,8 +106,14 @@ def test_launch_run_forwards_the_resume_target_without_branching() -> None:
     assert "checkpoint_path" in kwargs, "launch_run does not forward checkpoint_path"
 
 
-def test_cli_resume_flag_reaches_launch_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`--resume-from` is the operator's route in. Without it the wiring below is dead."""
+def test_cli_resume_flag_reaches_launch_run(monkeypatch: pytest.MonkeyPatch,
+                                            tmp_path: Path) -> None:
+    """`--resume-from` is the operator's route in. Without it the wiring below is dead.
+
+    THE PATH MUST NOW EXIST (AUDIT-1 F-47): `main` validates it through `resolve_bootstrap`
+    BEFORE launching, so a made-up `ckpt.pt` is refused at launch — which is the whole point of
+    wiring that guard, and is asserted directly by the test below.
+    """
     seen: dict[str, Any] = {}
 
     def _fake_launch(**kwargs: Any) -> Any:
@@ -116,11 +123,34 @@ def test_cli_resume_flag_reaches_launch_run(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(mantis_run, "launch_run", _fake_launch)
     monkeypatch.setattr(mantis_run, "load_config", lambda _p: object())
 
-    rc = mantis_run.main(["--config", "c.yaml", "--out-dir", "o", "--resume-from", "ckpt.pt"])
+    ckpt = tmp_path / "ckpt.pt"
+    ckpt.write_bytes(b"not a real checkpoint, but a real file")
+    rc = mantis_run.main(["--config", "c.yaml", "--out-dir", "o", "--resume-from", str(ckpt)])
     assert rc == 0
-    assert seen.get("checkpoint_path") == "ckpt.pt", (
+    assert seen.get("checkpoint_path") == str(ckpt), (
         f"--resume-from did not reach launch_run; got {seen.get('checkpoint_path')!r}"
     )
+
+
+def test_cli_resume_flag_with_a_STALE_path_refuses_before_it_launches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard AUDIT-1 F-47 wired, driven end-to-end from the CLI.
+
+    Before the wiring a mistyped `--resume-from` reached `launch_run` untouched and surfaced as
+    a torch error deep inside `init_trainer`'s resume branch — after the composition root had
+    built a run, spawned workers and opened a sink. `launch_run` is monkeypatched to EXPLODE, so
+    a green here proves the refusal happened before the launch rather than merely somewhere.
+    """
+    def _must_not_launch(**_kwargs: Any) -> Any:
+        raise AssertionError("launch_run was reached with a nonexistent --resume-from path")
+
+    monkeypatch.setattr(mantis_run, "launch_run", _must_not_launch)
+    monkeypatch.setattr(mantis_run, "load_config", lambda _p: object())
+
+    with pytest.raises(BootstrapNotFoundError, match="does not exist"):
+        mantis_run.main(["--config", "c.yaml", "--out-dir", "o",
+                         "--resume-from", "/nonexistent/ckpt.pt"])
 
 
 def test_cli_without_the_flag_launches_fresh(monkeypatch: pytest.MonkeyPatch) -> None:

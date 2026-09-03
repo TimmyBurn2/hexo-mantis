@@ -23,7 +23,10 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
         m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_.]*):", text, flags=re.MULTILINE)
     }
     assert targets == {
-        "build", "build.native", "test", "test.integration", "lint", "lint.rust", "gates",
+        "build", "build.native", "test", "test.integration", "lint", "lint.rust",
+        # `gates` is the everyday set; `gates.exit` adds the slow tier, which BOTH pytest
+        # tiers deselect (R333(b)); `dashboard` renders a run record (R333(d)).
+        "gates", "gates.exit", "dashboard",
         "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "clean",
     }
 
