@@ -360,9 +360,10 @@ is silently disabled.
   anchor to play against, or the round broke before the gate block. `False` means the gate ran
   and REFUSED. Those are different facts and all three used to read `false`, so a reader
   counting "rounds that failed the gate" counted every round without one. Derived in
-  `EvalPipeline._success_result` from the worker payload's own `gate` key rather than in
-  `mantis.eval.rounds`, which is a FROZEN producer under R118/A-1 (`PREREG_A` §8 abort 8,
-  guarded by `tests/eval/test_wr_sealbot_config_only.py::test_the_wr_sealbot_producer_file_is_unmodified`).
+  `EvalPipeline._success_result` from the worker payload's own `gate` key, which is where that
+  payload lives. (It was originally placed there because `mantis.eval.rounds` was a FROZEN
+  producer under R118/A-1; **that freeze is LIFTED by R332(b)** and its working-tree guard is
+  retired, so the placement is now a choice.)
 - **The `eval_round_wall` pair is emitted by the TERMINAL round too (AUDIT-1 F-28/B05).** The
   manifest row names `eval_round_started` + `eval_round_complete` as one producer; the terminal
   round emitted only the second, so the one round whose wall time the drain budget is judged on

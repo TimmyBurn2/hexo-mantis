@@ -12,12 +12,13 @@ A drop from one opponent's win rate to a HARDER opponent's is not a collapse. Th
 false positive `sealbot_wr_warn` carried and the one the `wr_hard_abort_enabled` capability
 would have STOPPED THE RUN on.
 
-TWO HALVES, AND WHERE THEY LIVE. `mantis.eval.rounds` is a FROZEN producer under R118/A-1
-(PREREG_A §8 abort 8), so the identity is published by the PIPELINE — which re-walks the same
-ladder to NAME what the frozen rule picked and raises if the two disagree (R104,
-agreement-or-raise) — and consumed by the coordinator, which restarts the series when the
-reporting rung changes. Clearing is the conservative direction: a trigger needing N
-observations simply waits N more rounds.
+TWO HALVES, AND WHERE THEY LIVE. R332(b) LIFTED the R118/A-1 freeze on `mantis.eval.rounds`,
+so the PRODUCER publishes the identity out of the one walk that selects it — `_first_sealbot_wr`
+returns `(wr, rung, games)` and `build_round_result` carries all three. The PIPELINE keeps an
+independent walk of the same ladder as the AGREEMENT CHECK (R104, agreement-or-raise): it
+derives the triple again and refuses the round on any disagreement. The COORDINATOR consumes
+the identity and restarts the series when the reporting rung changes. Clearing is the
+conservative direction: a trigger needing N observations simply waits N more rounds.
 """
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ import pytest
 from mantis.eval.errors import ResultContractError
 from mantis.train.coordinator.step import GATE_NAMES
 from mantis.eval.pipeline import EvalPipeline
+from mantis.eval.rounds import build_round_result
 
 
 class _Ladder:
@@ -46,49 +48,73 @@ class _Pipe:
     def __init__(self) -> None:
         self._eval_cfg = SimpleNamespace(ladder=_Ladder())
 
-    def name(self, rungs_raw: dict[str, Any], wr: float | None) -> tuple[Any, Any]:
-        return EvalPipeline._name_the_sealbot_rung(self, rungs_raw, wr, round_id="r1")
+    def check(self, rungs_raw: dict[str, Any], result: dict[str, Any]) -> None:
+        EvalPipeline._check_the_sealbot_rung_identity(self, rungs_raw, result, round_id="r1")
 
 
-# ── the pipeline half: naming what the frozen producer picked ─────────────────────────
+def _published(rungs_raw: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """The three keys the PRODUCER publishes, read off a real `build_round_result` call."""
+    result = build_round_result(
+        step=1, round_id="r1", rungs_config=_Ladder.rungs, rung_results=rungs_raw,
+        gate_result=None, skipped_rungs=[], bt={"ratings": {}, "p_hat": {}},
+        schedule_next={}, eval_round_wall_sec=1.0, reason=None, detail=None, random_wr=None,
+    )
+    return result["wr_sealbot"], result["wr_sealbot_rung"], result["wr_sealbot_games"]
+
+
+# ── the producer half: the identity travels with the value (R332(b)) ──────────────────
 
 def test_the_named_rung_is_the_FIRST_sealbot_rung_with_games() -> None:
-    pipe = _Pipe()
     rungs = {"strixbot_1": {"games": 10, "wr": 0.9},
              "sealbot_d5": {"games": 32, "wr": 0.6},
              "sealbot_d6": {"games": 32, "wr": 0.4}}
-    assert pipe.name(rungs, 0.6) == ("sealbot_d5", 32)
+    assert _published(rungs) == (0.6, "sealbot_d5", 32)
 
 
 def test_a_SATURATED_first_rung_hands_the_reading_to_the_next_one() -> None:
     """THE MECHANISM. d5 got 0 games this round, so `wr_sealbot` is d6's — a different
-    opponent, reported under the same field name."""
-    pipe = _Pipe()
+    opponent, reported under the same field name. The name is what makes that visible."""
     rungs = {"sealbot_d5": {"games": 0, "wr": None},
              "sealbot_d6": {"games": 8, "wr": 0.4}}
-    assert pipe.name(rungs, 0.4) == ("sealbot_d6", 8)
+    assert _published(rungs) == (0.4, "sealbot_d6", 8)
 
 
 def test_a_round_with_no_sealbot_games_names_nothing() -> None:
-    assert _Pipe().name({"sealbot_d5": {"games": 0, "wr": None}}, None) == (None, None)
-
-
-def test_a_DISAGREEMENT_with_the_frozen_producer_RAISES() -> None:
-    """R104. The selection rule stays in the frozen `mantis.eval.rounds`; this walk only
-    names what it picked. If they ever disagree, a ring labelled by the wrong rung is worse
-    than one with no label, so the round is refused rather than mislabelled."""
-    pipe = _Pipe()
-    rungs = {"sealbot_d5": {"games": 32, "wr": 0.6}}
-    with pytest.raises(ResultContractError, match="drifted"):
-        pipe.name(rungs, 0.4)
+    assert _published({"sealbot_d5": {"games": 0, "wr": None}}) == (None, None, None)
 
 
 def test_a_non_sealbot_rung_is_never_named() -> None:
     """The control: `strixbot_1` is first in ladder order and has games."""
-    pipe = _Pipe()
     rungs = {"strixbot_1": {"games": 40, "wr": 0.7},
              "sealbot_d6": {"games": 8, "wr": 0.4}}
-    assert pipe.name(rungs, 0.4) == ("sealbot_d6", 8)
+    assert _published(rungs) == (0.4, "sealbot_d6", 8)
+
+
+# ── the pipeline half: an independent walk, agreement-or-raise ────────────────────────
+
+def test_the_agreement_check_PASSES_on_what_the_producer_published() -> None:
+    """The control for the check itself: it must not red on a correct round, or it teaches
+    its reader to wave rounds through."""
+    rungs = {"sealbot_d5": {"games": 32, "wr": 0.6},
+             "sealbot_d6": {"games": 32, "wr": 0.4}}
+    wr, rung, games = _published(rungs)
+    _Pipe().check(rungs, {"wr_sealbot": wr, "wr_sealbot_rung": rung,
+                          "wr_sealbot_games": games})
+
+
+@pytest.mark.parametrize("published", [
+    {"wr_sealbot": 0.4, "wr_sealbot_rung": "sealbot_d5", "wr_sealbot_games": 32},
+    {"wr_sealbot": 0.6, "wr_sealbot_rung": "sealbot_d6", "wr_sealbot_games": 32},
+    {"wr_sealbot": 0.6, "wr_sealbot_rung": "sealbot_d5", "wr_sealbot_games": 8},
+])
+def test_a_DISAGREEMENT_on_ANY_of_the_three_RAISES(published: dict[str, Any]) -> None:
+    """R104. Two derivations of one identity: the producer's walk and this one. A drift in
+    the WR, the NAME or the GAME COUNT refuses the round — a ring labelled by the wrong rung
+    is worse than one with no label, because the coordinator RESTARTS the series on a name
+    change and would silently discard real observations."""
+    rungs = {"sealbot_d5": {"games": 32, "wr": 0.6}}
+    with pytest.raises(ResultContractError, match="drifted"):
+        _Pipe().check(rungs, published)
 
 
 # ── the coordinator half: the ring restarts when the rung changes ─────────────────────

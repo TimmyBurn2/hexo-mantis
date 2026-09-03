@@ -127,13 +127,13 @@ class _FakePipeline:
     def _current_p_hat(self) -> dict:
         return self._last_p_hat
 
-    def _name_the_sealbot_rung(self, rungs_raw, reported_wr, *, round_id):
+    def _check_the_sealbot_rung_identity(self, rungs_raw, result, *, round_id):
         """The PRODUCTION method, bound through the class — not a stub (AUDIT-1 F-14). It
         walks `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
         from mantis.eval.pipeline import EvalPipeline
 
-        return EvalPipeline._name_the_sealbot_rung(
-            self, rungs_raw, reported_wr, round_id=round_id)
+        return EvalPipeline._check_the_sealbot_rung_identity(
+            self, rungs_raw, result, round_id=round_id)
 
     def _emit_posture_events(self, inflight: Any, raw: Any) -> None: ...
 

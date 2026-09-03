@@ -226,19 +226,28 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
 # ── the round-result builder (§c.2) ─────────────────────────────────────────────────────
 def _first_sealbot_wr(
     rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
-) -> float | None:
-    """`wr_sealbot` = the FIRST sealbot-kind rung (ladder order) with >=1 game this round;
-    None if no sealbot rung ever recorded a game (skip-counted at the coordinator, G-2)."""
+) -> tuple[float | None, str | None, int | None]:
+    """`(wr, rung_name, games)` for the FIRST sealbot-kind rung (ladder order) with >=1 game
+    this round; `(None, None, None)` if no sealbot rung recorded a game (skip-counted at the
+    coordinator, G-2).
+
+    AUDIT-1 F-14, producer half, completed under R332(b) — the R118/A-1 freeze on this file
+    is LIFTED. The WR alone is not a series: once `sealbot_d5` saturates it draws 0 games
+    off-cadence and the reported number silently becomes `sealbot_d6`'s, so a trajectory rule
+    testing `wr < peak * ratio` compares two opponents. The identity travels with the value
+    out of the SAME walk that selects it, so the two cannot drift.
+    """
     for rung in rungs_config:
         if getattr(rung, "bot", None) != "sealbot":
             continue
         info = rung_results.get(rung.name)
         if info is None:
             continue
-        if int(info.get("games", 0)) <= 0:
+        games = int(info.get("games", 0))
+        if games <= 0:
             continue
-        return info.get("wr")
-    return None
+        return info.get("wr"), rung.name, games
+    return None, None, None
 
 
 def _gate_result_to_mapping(gate_result: Any) -> dict[str, Any] | None:
@@ -296,12 +305,15 @@ def build_round_result(
     (`tests/eval/test_round_result_reason_shape.py::test_no_module_under_src_branches_on_the_eval_broken_detail`).
     """
     promoted = (reason is None) and _gate_result_promoted(gate_result)
+    _sealbot_reading = _first_sealbot_wr(rungs_config, rung_results)
     result: dict[str, Any] = {
         "step": step,
         "round_id": round_id,
         "promoted": promoted,
         "promoted_step": step if promoted else None,
-        "wr_sealbot": _first_sealbot_wr(rungs_config, rung_results),
+        "wr_sealbot": _sealbot_reading[0],
+        "wr_sealbot_rung": _sealbot_reading[1],
+        "wr_sealbot_games": _sealbot_reading[2],
         "wr_random": random_wr,
         "eval_round_wall_sec": eval_round_wall_sec,
         "eval_broken_reason": reason,
