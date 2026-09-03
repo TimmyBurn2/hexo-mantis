@@ -158,6 +158,22 @@ impl ProofTt {
 
     /// Bump the generation (deploy-time reuse across `prove` calls): entries from
     /// the prior generation become preferentially replaceable.
+    ///
+    /// AUDIT-1 F-48 counted this as dead — zero callers — and it is, but it is NOT deletable
+    /// on its own and the reason is worth stating. `TacticalSolver::prove`/`prove_in_place`
+    /// take `&self` and construct a FRESH `ProofTt` per call, so no table survives to be aged.
+    /// The bump, the `generation` comparison inside `store_loss_proof`'s replacement rule, and
+    /// the `stale_generation_entry_is_replaceable` test are ONE coherent mechanism with ONE
+    /// switch: the solver owning its table. Deleting the API half would leave a replacement
+    /// policy whose only exercise is gone and a test with no way to drive it.
+    ///
+    /// THAT SWITCH IS A PERF DECISION, and it is banked as one. The same per-call construction
+    /// is `vec![[Slot::EMPTY; 2]; 1 << 16]` at `size_of::<Slot>() == 64` — an 8 MiB
+    /// alloc-and-fill ahead of a node budget in the tens of thousands — so owning the table
+    /// removes the alloc AND activates the aging in one change. LAW-09 wants that
+    /// pre-registered with an expected gain bracket and one IQR-gated bench, not folded into a
+    /// dead-code commit. It is LATENT meanwhile: `selfplay.solver_node_budget` arms the solver
+    /// and all seven configs mint it off.
     #[inline]
     pub fn new_generation(&mut self) {
         self.generation = self.generation.wrapping_add(1);
