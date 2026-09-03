@@ -11,7 +11,11 @@ Three ratified WP10 amendments over a pure relocation:
   * **Representation off the DECLARED arch (§c.6, WP9 O3 census).** The DELETED arch-off-a-live-
     module representation sniff is REPLACED by the declared `representation` carried on the WP9
     arch dataclass (`AnchorState.representation`, `trainer.arch.representation`,
-    `Checkpoint.metadata.arch.representation`) — nobody reads arch off a live `nn.Module`.
+    `Checkpoint.metadata.arch.representation`) — nobody DERIVES arch from a live `nn.Module`'s
+    structure. Reading the declared dataclass `build_net` ATTACHED to the module (`model.arch`)
+    is the other thing: it is the arch-travels-with-the-model convention `build_net` documents
+    and `eval.snapshot.write_model_snapshot` already relies on, and `save_best_model_atomic`
+    uses it to stamp a promoted anchor (AUDIT-1 F-17).
   * **weights-only everywhere (LAW-12).** `checkpoint_state_sha256` loads weights-only — the old
     pickle-exec load mode is gone; the round-trip verify was already weights-only.
   * **DAG-clean (repo_design §2).** `resolve_anchor` takes the `eval_pipeline` INJECTED (no
@@ -34,7 +38,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import pickle
 import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -110,17 +116,36 @@ def save_best_model_atomic(
     run_id: str | None = None,
     encoding: str | None = None,
 ) -> None:
-    """Save ``state_dict()`` to ``path`` atomically with one-revision backup.
+    """Save ``model``'s weights to ``path`` atomically with one-revision backup.
 
     Sequence: (1) write ``path.tmp``, (2) round-trip verify the tmp file loads (catches partial
     writes), (3) rotate any existing ``path`` → ``path.bak``, (4) rename ``path.tmp`` → ``path``.
     A kill between (3) and (4) leaves ``.bak`` as the recovery copy (``load_best_model_resilient``
     falls through to it).
 
-    With ``step`` supplied (the promotion path) the payload is wrapped with provenance
-    (``step``/``run_id``/``promoted``/``encoding``/``metadata.encoding_name``) and a
-    ``.provenance.json`` sidecar is written, so a promoted anchor is greppable. With ``step=None``
-    the legacy bare-``state_dict`` payload is written (back-compat with provenance-less callers).
+    AUDIT-1 F-17 — THE PAYLOAD CARRIES ITS ARCH. This wrote one of two KIND-LESS shapes: a bare
+    ``state_dict`` (``step=None``) or a light envelope with ``step``/``run_id``/``encoding`` and
+    no ``arch`` at all. Nothing on either shape says WHICH arch built it, so the read side
+    rebuilt the INCUMBENT kind for the representation — and for a `GnnArchV2` lineage that is a
+    shape mismatch on ``value_head.*`` (V2's ``pooled_width = 2*head_in``), which unwinds through
+    ``_try_load_anchor``'s trailing except into ``_quarantine_corrupt``. The promoted incumbent
+    of a V2 run was lost on every relaunch, with a WARNING and no error. The payload now carries
+    ``metadata.arch`` (the DECLARED dataclass, ``arch_kind`` included) so the reader rebuilds
+    what was written, read off the model's own declared handle; a promotion whose model carries
+    no handle REFUSES, because a promotion that cannot name its arch is the defect.
+
+    Args:
+        model: the net whose weights are the anchor. A ``torch.compile``/DDP wrapper is unwrapped.
+        path: the ``best_model.pt`` slot.
+        step: the promotion step, or ``None`` for a launch-time initialisation.
+        run_id: the run that promoted it (provenance).
+        encoding: the encoding name the anchor plays under (LAW-11 — carried, never inferred).
+
+    Raises:
+        AttributeError: ``step`` is supplied but ``model`` carries no declared ``.arch``. A
+            stamped promotion that cannot name its arch is the kind-less artifact this row
+            retires, and the arch-travels-with-the-model convention is how it is named — the
+            SAME read `eval.snapshot.write_model_snapshot` makes, and the same refusal.
     """
     path = Path(path)
     base = getattr(model, "_orig_mod", model)
@@ -131,13 +156,30 @@ def save_best_model_atomic(
     if step is None:
         payload = sd
     else:
+        arch = getattr(base, "arch", None)
+        if arch is None:
+            raise AttributeError(
+                "save_best_model_atomic: the model carries no declared '.arch' attribute, so a "
+                "promoted anchor cannot name the arch that built it (AUDIT-1 F-17). Without it "
+                "the read side rebuilds the representation's INCUMBENT kind, which for any "
+                "non-incumbent lineage fails the shape load and quarantines a good anchor on "
+                "every relaunch. `build_net` sets this handle; the same read and the same "
+                "refusal are in `eval.snapshot.write_model_snapshot`."
+            )
+        from mantis.train.checkpoints import _arch_to_dict
+
         payload = {
             "model_state": sd,
             "step": int(step),
             "run_id": run_id,
             "promoted": True,
             "encoding": encoding,
-            "metadata": {"encoding_name": encoding} if encoding is not None else {},
+            "metadata": {
+                "encoding_name": encoding,
+                # The DECLARED dataclass, `arch_kind` included — read back by
+                # `checkpoints.stamped_arch_kind`, the ONE authority for an artifact's kind.
+                "arch": _arch_to_dict(arch),
+            } if encoding is not None else {"arch": _arch_to_dict(arch)},
         }
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, tmp)
@@ -240,6 +282,16 @@ def verify_launch_anchor_pin(
 
 
 # ══ Quarantine + the (B) corruption-guarded from-disk load ═════════════════════════════
+#: The corrupt-or-unreadable-ARTIFACT family, and nothing wider (AUDIT-1 F-17). `torch.load`
+#: raises these on a truncated zip, a non-archive file or an unpicklable payload; the caller
+#: responds by quarantining and trying the next candidate, which is only ever the right answer
+#: for a file that is actually broken. `RuntimeError` is deliberately NOT here: `load_state_dict`
+#: raises it for a SHAPE MISMATCH, which means the artifact is fine and the arch is wrong.
+_CORRUPT_ARTIFACT_ERRORS: tuple[type[BaseException], ...] = (
+    OSError, EOFError, zipfile.BadZipFile, pickle.UnpicklingError, ValueError, KeyError,
+)
+
+
 def _quarantine_corrupt(path: Path) -> Path:
     """Move a corrupt anchor aside with a unique suffix so the next write does not overwrite it.
     Returns the destination path for logging."""
@@ -350,7 +402,14 @@ def _try_load_anchor(
         # A required-core-tensor miss / arch mismatch is a LOUD configuration error, not
         # recoverable corruption — surface it rather than silently quarantining a valid anchor.
         raise
-    except Exception as exc:  # noqa: BLE001 — corrupt zip / unreadable file: fall through to next candidate
+    except _CORRUPT_ARTIFACT_ERRORS as exc:
+        # AUDIT-1 F-17. This was a bare `except Exception`, and it is what turned F-17 from a
+        # loud failure into a silent one: a `RuntimeError` from `load_state_dict` — a shape
+        # mismatch, i.e. "this anchor is a different arch than I rebuilt" — landed here beside
+        # genuine disk corruption, and the caller responded by QUARANTINING a perfectly good
+        # file. The named set below is the corrupt/unreadable-artifact family only; anything
+        # else propagates, because a wrong-arch or wrong-config anchor is a configuration
+        # error an operator has to see, not a file to move aside.
         _LOG.warning(
             "anchor_load_failed path=%s error=%s error_type=%s",
             str(candidate), exc, type(exc).__name__,

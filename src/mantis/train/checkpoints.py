@@ -706,7 +706,17 @@ def load_legacy_weights(
             f"the artifact's stamp resolves to {kind!r}; a legacy artifact's arch is its stamp's, "
             "and a config that says otherwise describes a different artifact."
         )
-    arch = select_arch(spec, embedded_config, arch_kind=kind)
+    # AUDIT-1 F-17. A stamp that carries the WHOLE declared dataclass is rehydrated verbatim;
+    # only a stamp without one falls to `select_arch`, which re-derives the widths from the
+    # embedded config. The distinction is load-bearing for the ANCHOR, whose embedded config is
+    # empty: re-deriving there yields the dataclass field DEFAULTS, so an anchor written by a
+    # run with non-default widths would rebuild at the wrong shape and fail the load — the same
+    # quarantine-on-relaunch this row exists to close, one layer down.
+    stamped_arch = meta.get("arch")
+    if isinstance(stamped_arch, Mapping) and _ARCH_KIND_KEY in stamped_arch:
+        arch = _arch_from_dict(stamped_arch)
+    else:
+        arch = select_arch(spec, embedded_config, arch_kind=kind)
 
     # old v1 metadata → v2 field map (read-only; NEVER writes back / mints v2 provenance).
     metadata = CheckpointMetadata(
