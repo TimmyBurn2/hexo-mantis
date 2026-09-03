@@ -2,8 +2,9 @@
 # `iteration_complete`). WP12R Step 3 narration (R210) SPLIT the builder into
 # `emit_training_step_event` + `emit_iteration_complete_event` so the two halves can live on
 # different cadences (training_step stays `log_interval`-gated; iteration_complete emits per
-# coordinator step), keeping the OLD combined `emit_training_events` as a thin wrapper for the
-# `tests/train/test_target_counter_events.py:486` signature pin. The 4 WARN rules run on the
+# coordinator step). The OLD combined `emit_training_events` was kept as a thin wrapper for
+# ONE test's signature pin and is DELETED (AUDIT-1 F-47) — the pin moved to the live builder.
+# The 4 WARN rules run on the
 # `training_step` payload that was actually emitted, so a rule can never fire on a shape the
 # event stream does not carry (LAW-07 — the alert and its producer are the same object).
 # Phase O adds the `target_integrity` block; WP12R R218 rider 1 adds the `Q-O-TWO-POOL-READS`
@@ -572,62 +573,15 @@ def emit_iteration_complete_event(
     emit_via(sink, iteration_complete_event)
 
 
-def emit_training_events(
-    train_step: int,
-    loss_info: dict[str, float],
-    w_pre: float,
-    games_played: int,
-    last_iter_games: int,
-    pool: PoolTelemetryLike,
-    buffer: Any,
-    gpu_monitor: Any,
-    config: dict[str, Any],
-    mcts_config: dict[str, Any],
-    capacity: int,
-    games_per_hour_fn: Any,
-    qfire_delta: int | None,
-    sink: EventSink,
-    early_game_probe: Any | None = None,
-    trainer_model: Any | None = None,
-    solver_deltas: dict[str, Any] | None = None,
-    steps_per_hour_fn: Any | None = None,
-    *,
-    target_integrity: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Emit `training_step` + `iteration_complete` events through the injected sink and
-    RETURN the `training_step` payload.
+# ══ THE PRE-SPLIT WRAPPER IS DELETED (AUDIT-1 F-47) ═════════════════════════════════════
+# `emit_training_events` stood here — the combined `training_step` + `iteration_complete`
+# emitter that R210 split in two, because the halves run on DIFFERENT cadences
+# (`training_step` stays `log_interval`-gated; `iteration_complete` emits per coordinator
+# step). It was RETAINED as a thin wrapper with a stated reason: to keep one test's
+# `inspect.signature(emit_training_events)` assertion green. Its own docstring said so.
+#
+# That is a signature pin on a shape production does not produce, and it kept a second entry
+# to the event stream alive to satisfy it. The pin moved to `emit_iteration_complete_event`,
+# where `target_integrity` actually lives, and the wrapper went. The two builders above are
+# the emitters; `coordinator/step.py` has called them directly since the split.
 
-    RETAINED as a thin wrapper (WP12R Step 3 narration, R210): the production coordinator
-    now calls `emit_training_step_event` + `emit_iteration_complete_event` directly (the
-    two halves live on different cadences after R210 — `training_step` stays
-    `log_interval`-gated, `iteration_complete` emits per coordinator step). This wrapper
-    keeps the OLD combined signature so `tests/train/test_target_counter_events.py:486`'s
-    `inspect.signature(emit_training_events).parameters` assertion stays green. It has no
-    production caller after the split; retiring it is a wider change out of scope here.
-
-    `target_integrity` (WP12-R Phase O, R164) is REQUIRED, keyword-only and carries NO
-    default, and that is the whole difference from `solver_deltas` two lines above — a
-    defaulted parameter with zero callers passing it, whose payload keys therefore silently
-    never appear and whose absence no test can see. A parameter default is a MIGRATED
-    authority, not an absent one (`run.py:366-372`, MF-2 Attack B): with no default, a
-    caller that forgets it is a `TypeError` at the first `log_interval` boundary, loudly.
-    (`solver_deltas` itself is left byte-untouched here — its fix needs a semantics decision
-    about denominators and about the documented-unproduced `quiescence_fires_per_step`, and
-    taking that inside this commit would be the scope widening R119 forbids.)
-
-    The return is what the 4 WARN rules read (`monitor.rules.emit_training_step_alerts`):
-    the rules run on the payload that was actually emitted, so a rule can never fire on a
-    shape the event stream does not carry (LAW-07 — the alert and its producer are the
-    same object)."""
-    training_step_event = emit_training_step_event(
-        train_step, loss_info, qfire_delta, sink,
-        early_game_probe=early_game_probe, trainer_model=trainer_model,
-        solver_deltas=solver_deltas,
-    )
-    rstats = pool.runner_stats()
-    emit_iteration_complete_event(
-        train_step, w_pre, games_played, last_iter_games, pool, buffer,
-        config, mcts_config, capacity, games_per_hour_fn, steps_per_hour_fn,
-        target_integrity, rstats, sink,
-    )
-    return training_step_event

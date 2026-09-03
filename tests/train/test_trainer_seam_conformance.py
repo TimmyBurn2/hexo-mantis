@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import textwrap
 
 import mantis.train.buffer_persist as persist_mod
 import mantis.train.coordinator.dispatch as dispatch_mod
@@ -106,8 +107,14 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
     (persist_mod, ("buffer",), (ReplayBufferLike,), ("save_to_path",)),
     (persist_mod, ("recent_buffer",), (RecentBufferLike,), ("save_to_path", "size")),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),
+    # `runner_stats` LEFT this sentinel with the deleted `emit_training_events` wrapper, and
+    # that is the state R218 rider 1 ORDERED: the Q-O-TWO-POOL-READS collapse passes `rstats`
+    # INTO `emit_iteration_complete_event` so the builder does NOT make its own
+    # `pool.runner_stats()` call — one atomic snapshot, the straddle eliminated. The wrapper
+    # was the last site in this module still calling it. The inverse assertion (the builder
+    # must NOT call it) is the test immediately below the matrix.
     (events_mod, ("pool",), (PoolTelemetryLike,),
-     ("recent_move_histories", "runner_stats", "x_winrate", "batch_fill_pct")),
+     ("recent_move_histories", "x_winrate", "batch_fill_pct")),
     (events_mod, ("buffer",), (ReplayBufferLike,), ("size", "capacity")),
 )
 
@@ -199,3 +206,36 @@ def test_the_gate_never_imports_a_collaborator_implementation() -> None:
             assert mod not in forbidden_modules, "the gate must stay implementation-blind"
             assert not (set(names) & forbidden_modules), "the gate must stay implementation-blind"
             assert "Trainer" not in names, "the gate must stay implementation-blind"
+
+
+def test_the_iteration_complete_builder_makes_NO_pool_runner_stats_call() -> None:
+    """R218 rider 1's inverse assertion, landed where the sentinel that implied it used to be.
+
+    The Q-O-TWO-POOL-READS collapse is a SEMANTIC change, not a tidy-up: `rstats` is passed IN
+    so the `target_integrity` snapshot and the `mcts_mean_depth`/cluster block are ONE atomic
+    read instead of two microseconds apart that could straddle a game boundary. A second
+    `pool.runner_stats()` call inside the builder re-opens the straddle silently.
+
+    AUDIT-1 F-47 is why this is written down NOW: `events.py`'s last `pool.runner_stats()` call
+    lived in the retired `emit_training_events` wrapper, so deleting the wrapper moved the
+    sentinel above — and a sentinel that merely stops matching is not the same thing as a rule
+    saying the call must not come back.
+    """
+    # Over the AST's CALL nodes, not the raw source: the builder's own docstring necessarily
+    # names `pool.runner_stats()` to say it does not call it, and a text census cannot tell a
+    # defect from a note about a defect. This session hit that trap three times; REPAIR-2 §6
+    # recorded it as the transferable half, and it transfers.
+    body = ast.parse(textwrap.dedent(
+        inspect.getsource(events_mod.emit_iteration_complete_event)))
+    calls = [n for n in ast.walk(body)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "runner_stats"]
+    assert calls == [], (
+        "`emit_iteration_complete_event` calls `pool.runner_stats()` again. R218 rider 1: the "
+        "snapshot is PASSED IN (`rstats`) precisely so the two reads cannot straddle a game "
+        "boundary; a second read inside the builder re-introduces the straddle with every test "
+        "still green"
+    )
+    assert "rstats" in inspect.signature(events_mod.emit_iteration_complete_event).parameters, (
+        "the builder no longer takes `rstats`, so the collapse it is asserted against is gone"
+    )

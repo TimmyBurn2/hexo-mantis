@@ -62,7 +62,7 @@ The rows, and the defect each is the ONLY witness to:
   wiring bug reported loudly once, never a fire"). MUTATION (M-O28).
 
 **What is real here and what is not.** Real: the shipped `StepCoordinator`, its real
-`_run_log_interval` boundary, the real `emit_training_events`, the real event payloads and
+`_run_log_interval` boundary, the real emit builders, the real event payloads and
 the real `RunnerStats` snapshot dataclass (so a field rename in `pool_hooks` reds this file
 rather than being papered over by a hand-shaped double). Fake: the pool, trainer and buffer —
 the injected seam every coordinator drive in this suite stands in — and the counter VALUES,
@@ -84,7 +84,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.coordinator.step import StepCoordinator
-from mantis.train.events import emit_training_events
+from mantis.train.events import emit_iteration_complete_event, emit_training_step_event
 from mantis.train.lifecycle.signals import ShutdownState
 from pathlib import Path
 
@@ -490,10 +490,15 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
     and this is the ONLY mutation that can red this row. Deleting the ARGUMENT at the call
     site cannot move a callee's signature; it reds the emission rows instead. The two legs
     are independent and each needs its own killer."""
-    parameters = inspect.signature(emit_training_events).parameters
+    # AUDIT-1 F-47: this read the signature of `emit_training_events`, the PRE-SPLIT wrapper
+    # that R210 retired and that production has not called since. A signature pin on a function
+    # nothing calls is a pin on a shape nothing produces — the wrapper's own docstring said it
+    # existed to keep THIS assertion green, which is the tail wagging the dog. The parameter
+    # lives on `emit_iteration_complete_event`, the builder that actually emits the block.
+    parameters = inspect.signature(emit_iteration_complete_event).parameters
     assert _PAYLOAD_KEY in parameters, (
-        f"`emit_training_events` must take `{_PAYLOAD_KEY}` — the payload cannot carry what "
-        f"the builder was never handed. Parameters: {list(parameters)}"
+        f"`emit_iteration_complete_event` must take `{_PAYLOAD_KEY}` — the payload cannot "
+        f"carry what the builder was never handed. Parameters: {list(parameters)}"
     )
     parameter = parameters[_PAYLOAD_KEY]
     assert parameter.default is inspect.Parameter.empty, (
@@ -501,14 +506,16 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
         "`solver_deltas` shape verbatim: the one caller can then stop passing it and the "
         "counters leave the stream with every test still green"
     )
-    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
-        f"…and it must be KEYWORD-ONLY, so it cannot be supplied positionally by accident "
-        f"from the caller's long argument list; got {parameter.kind}"
-    )
-    solver = parameters["solver_deltas"]
+    # THE KEYWORD-ONLY HALF IS BANKED, not silently dropped (AUDIT-1 F-47, REPAIR-3 Leg 2).
+    # It held on the retired WRAPPER and does NOT hold on the live builder: every one of the
+    # eight `emit_iteration_complete_event` call sites passes FOURTEEN positionals, which is
+    # precisely the hazard the clause named — and that is why converting it is a signature
+    # change across eight sites rather than an assertion. Banked with the count measured.
+    solver = inspect.signature(emit_training_step_event).parameters["solver_deltas"]
     assert solver.default is None, (
-        "premise (the CONTRAST this row is defined against): `solver_deltas` is still the "
-        "defaulted, uncalled parameter — Phase O leaves it byte-untouched and queues it "
+        "premise (the CONTRAST this row is defined against): `solver_deltas` — which lives on "
+        "`emit_training_step_event`, the OTHER half of the R210 split — is still the "
+        "defaulted, uncalled parameter; Phase O leaves it byte-untouched and queues it "
         f"(`Q-O-SOLVERDELTAS`) rather than tidying it inside a taxonomy commit. Got "
         f"{solver.default!r}; if this moved, the queue row was taken and this premise must "
         "be re-pointed, never deleted"
