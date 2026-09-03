@@ -19,14 +19,16 @@ authority — `RunConfig` for keys, the module tree for symbols — never by con
 transcribed copy of either. Nothing here is a list of key names that a future phase would have
 to remember to update.
 
-THE ONE COPY THIS FILE DOES CARRY, AND WHY IT CANNOT ROT SILENTLY. `_leaf_paths` is a third
-transcription of the walker that `tests/config/test_every_key_has_consumer.py` and its `_p2`
-twin already hold twice. That is deliberate and it is self-defending: those two files assert
-`len(_leaf_paths(RunConfig)) == 175` against the same schema, and this gate asserts the doc's
-stated count against ITS walker. A walker here that diverged from theirs would produce a
-different number, disagree with the doc, and red this gate. The alternative — importing the
-walker from a test module — is barred outright (no package named `tests`, no sys.path
-mutation, R5/LAW-17).
+THE WALKER IS IMPORTED, NOT TRANSCRIBED (AUDIT-1 F-44). This file used to carry its own copy
+and argued the copy was self-defending, because two test files asserted the same count against
+the same schema and a divergent walker here would disagree with the doc. That argument was
+false in both directions and the measurement is the reason it is gone: the count in the
+argument had itself gone stale, and the copies did NOT agree — `test_eval_config_remint.py`'s
+pre-DR-6 copy walked to 182 and the conformance partition's `live_leaf_paths` to 199 against
+this gate's 191, none of them able to see the others. The walker now lives at
+`mantis.config.schema.leaf_paths`, in `src/` where a gate may legitimately import it; importing
+it from a TEST module remains barred outright (R5/LAW-17), which is what made the copy look
+necessary in the first place.
 
 THE "DELIBERATELY ABSENT" SECTION IS CHECKED IN REVERSE, not exempted. That section exists to
 name keys and modules the schema does NOT have — a retired radius field, a dead gate knob, six
@@ -36,8 +38,8 @@ resolve. A retired key that quietly comes back reds this gate, which is the dire
 matters: `selfplay.legal_move_radius_schedule` returning is exactly the consumer-less-knob
 regression the section was written to prevent.
 
-WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not require the doc to enumerate all 175
-leaves, and it does not check prose for truth. It is a citation check: every config key and
+WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not require the doc to enumerate every
+leaf, and it does not check prose for truth. It is a citation check: every config key and
 every `mantis.*` symbol the doc NAMES must exist (or, under the absent heading, must not). A
 claim the doc simply omits is invisible to it. That bound is stated rather than hidden, because
 a gate whose real reach is narrower than its name is the class this repo keeps closing.
@@ -60,12 +62,9 @@ import argparse
 import importlib
 import re
 import sys
-import typing
 from pathlib import Path
 
-from pydantic import BaseModel
-
-from mantis.config.schema import RunConfig
+from mantis.config.schema import RunConfig, leaf_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DOC = REPO_ROOT / "docs" / "contracts" / "run_config_schema.md"
@@ -92,7 +91,8 @@ _NON_CONFIG_ROOTS: frozenset[str] = frozenset({
 })
 #: A backticked or bare dotted symbol rooted at the package.
 _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
-#: The doc's own statement of the leaf count, e.g. "**175 leaf key-paths**".
+#: The doc's own statement of the leaf count, e.g. "**191 leaf key-paths**". The NUMBER is
+#: derived from the live schema on both sides of the comparison; only the doc's copy is text.
 _COUNT_RE = re.compile(r"\*\*(\d+) leaf key-paths\*\*")
 #: The doc's header version line, e.g. "- version: v9".
 _HEADER_VERSION_RE = re.compile(r"^- version:\s*v(\d+)\s*$", re.M)
@@ -130,33 +130,6 @@ def _schema_defined_names() -> set[str]:
     return names
 
 
-def _nested_block(ann: object) -> type[BaseModel] | None:
-    """The single `BaseModel` a field annotation resolves to, or None.
-
-    Mirrors the consumer-registry walker: an OPTIONAL block (`Block | None`) is descended
-    into, and a `list[SubModel]` field stays ONE leaf.
-    """
-    if typing.get_origin(ann) is list:
-        return None
-    candidates = [
-        arg for arg in (typing.get_args(ann) or (ann,))
-        if isinstance(arg, type) and issubclass(arg, BaseModel)
-    ]
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _leaf_paths(model: type[BaseModel], prefix: str = "") -> list[str]:
-    out: list[str] = []
-    for name, field in model.model_fields.items():
-        path = f"{prefix}{name}"
-        nested = _nested_block(field.annotation)
-        if nested is not None:
-            out.extend(_leaf_paths(nested, path + "."))
-        else:
-            out.append(path)
-    return out
-
-
 def _symbol_exists(dotted: str) -> bool:
     """True iff `dotted` names an importable module, or an attribute reachable from one.
 
@@ -188,7 +161,7 @@ def check(doc_path: Path) -> list[str]:
     text = doc_path.read_text(encoding="utf-8")
     failures: list[str] = []
 
-    leaves = _leaf_paths(RunConfig)
+    leaves = leaf_paths(RunConfig)
     sections = set(RunConfig.model_fields)
     # A doc may legitimately name an interior BLOCK (`train.draw_rate_abort`,
     # `monitor.drain`) as well as a leaf, so a cited key passes if it is a leaf or a

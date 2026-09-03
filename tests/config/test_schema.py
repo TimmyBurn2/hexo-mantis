@@ -13,8 +13,6 @@ against the same imports. Splitting them lets a builder drift out from under the
 tests, or a census exemption appear with its counter-example in another file.
 """
 from pathlib import Path
-from types import UnionType
-from typing import Any, Union, get_args, get_origin
 
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -32,6 +30,7 @@ from mantis.config.schema import (
     SelfplayConfig,
     StrictModel,
     TrainConfig,
+    nested_block,
 )
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
@@ -290,45 +289,20 @@ def test_o16_schema_round_trip():
 # of what someone remembered; R1's "NO code-side defaults" is a claim about the schema itself.
 
 
-def _nested_block(ann: Any) -> type[BaseModel] | None:
-    """The single config BLOCK an annotation names, seen THROUGH `Optional` / `Block | None`.
-
-    Traversal semantics are the ones `tools/ci_gates/contract_doc_gate.py::_leaf_paths` and
-    its two `tests/config/test_every_key_has_consumer*.py` twins already hold, so the four
-    walkers agree about what a nested block is: an OPTIONAL block is descended into (WPMINT
-    DR-6 / R93 — `Block | None` is the house arming idiom and treating it as one opaque leaf
-    hid an entirely unconsumed key), and a union naming more than one BaseModel is NOT, since
-    it has no single block to hand out. R5/LAW-17 bar importing any of the three, which is why
-    this is a fourth copy; it is self-defending in the same way theirs are — a walker that
-    diverged would discover a different model set and red the reachability test below, which
-    derives its expected set from the package rather than from this walk.
-    """
-    if isinstance(ann, type) and issubclass(ann, BaseModel):
-        return ann
-    if get_origin(ann) in (Union, UnionType):
-        blocks = [a for a in get_args(ann) if isinstance(a, type) and issubclass(a, BaseModel)]
-        if len(blocks) == 1:
-            return blocks[0]
-    return None
-
-
-def _element_block(ann: Any) -> type[BaseModel] | None:
-    """The BLOCK inside a `list[SubModel]`, which `_leaf_paths` deliberately does NOT descend.
-
-    This is the one place the census parts company with the leaf-path walk, and the divergence
-    is required rather than incidental. NIT-3 keeps `list[SubModel]` as ONE leaf because a list
-    element has no single key-path to name — that is a statement about KEY PATHS. It says
-    nothing about the element MODEL, which is still a schema block whose fields must be
-    required and whose unknown keys must be refused. `eval.ladder.rungs` (`LadderRung`) and
-    `train.replay_capacity_schedule` (`ReplayCapacityStage`) are reachable ONLY through this
-    arm — measured: without it the census misses both, and both are real config blocks that
-    ship in every minted config.
-    """
-    if get_origin(ann) is list:
-        blocks = [a for a in get_args(ann) if isinstance(a, type) and issubclass(a, BaseModel)]
-        if len(blocks) == 1:
-            return blocks[0]
-    return None
+#: THE PREDICATE IS THE AUTHORITY'S (AUDIT-1 F-44). This file used to carry a fourth copy of
+#: `_nested_block` plus an `_element_block` twin, and argued the copy was self-defending because
+#: a divergent walker would discover a different model set. `mantis.config.schema.nested_block`
+#: is now the one predicate, in `src/` where a test may import it — R5/LAW-17 bars importing
+#: from a test module, which is what made the copy look necessary.
+#:
+#: WHERE THE CENSUS PARTS COMPANY WITH THE LEAF-PATH WALK, and why the divergence is required:
+#: NIT-3 keeps `list[SubModel]` as ONE leaf because a list element has no single key-path — a
+#: statement about KEY PATHS. It says nothing about the element MODEL, which is still a schema
+#: block whose fields must be required and whose unknown keys must be refused. `eval.ladder.rungs`
+#: (`LadderRung`) and `train.replay_capacity_schedule` (`ReplayCapacityStage`) are reachable ONLY
+#: through the container arm — measured: without it the census misses both, and both ship in every
+#: minted config. So the census asks the SAME predicate its second question
+#: (`descend_containers=True`) instead of holding a second implementation of it.
 
 
 def _schema_census(root: type[BaseModel]) -> dict[type[BaseModel], str]:
@@ -338,9 +312,9 @@ def _schema_census(root: type[BaseModel]) -> dict[type[BaseModel], str]:
     def walk(model: type[BaseModel], prefix: str) -> None:
         for name, field in model.model_fields.items():
             path = f"{prefix}{name}"
-            block = _nested_block(field.annotation)
+            block = nested_block(field.annotation)
             if block is None:
-                block = _element_block(field.annotation)
+                block = nested_block(field.annotation, descend_containers=True)
                 path = f"{path}[]"
             if block is not None and block not in found:
                 found[block] = path

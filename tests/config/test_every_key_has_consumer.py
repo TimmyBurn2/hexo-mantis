@@ -1,33 +1,29 @@
-""">300 justify (R8): it is mostly DATA — the
-184-entry `CONSUMER_REGISTRY` is the LAW-08 authority itself, one entry per schema leaf, and
-splitting it would create a second registry copy to keep in sync (there is already exactly one
-deliberate duplicate, `test_every_key_has_consumer_p2.py`). The five tests below are short by
-comparison. WPMAIN moved the registry 170 -> 175 (R120 `eval_enabled`, R122's
-`monitor.disk_guard.*` family, R126 `train.device`); WP12-R R178(a) moved it 175 -> 174, the
-first DOWNWARD move (`train.buffer_save_interval` deleted as a dead knob under R116/LAW-08).
-The registry figure is re-derived at HEAD from the live `len(CONSUMER_REGISTRY)`, never
-transcribed (SF-7, REVIEW-impl F-4).
+""">300 justify (R8): it is mostly DATA — `CONSUMER_REGISTRY` is the LAW-08 authority itself,
+one entry per schema leaf, and splitting it would create a second registry copy to keep in sync
+(there is already exactly one deliberate duplicate, `test_every_key_has_consumer_p2.py`). The
+tests below are short by comparison. The registry's SIZE is never stated here: it is read at
+HEAD from `len(CONSUMER_REGISTRY)` and pinned only by the bijection, because a transcribed tally
+is re-edited on every edit, is eventually wrong, and is then read as evidence (R8/R192(e),
+derive-or-delete — this header stated 184 while the registry held 191).
 
 O15 — every-key-has-consumer bijection (LAW-08).
 
 SCHEMA KEYS ONLY (not registered encodings — that is gate-8's disjoint concern). Enumerate
-leaf key-paths of RunConfig.model_fields and assert the set equals an explicit CONSUMER_REGISTRY.
+leaf key-paths of RunConfig and assert the set equals an explicit CONSUMER_REGISTRY.
 `selfplay.legal_move_radius_schedule`/`RadiusStage` are GONE (WPSC Phase 2 SC-A2 forced-fallout,
 DESIGN_P2.md §5) — the NIT-3 "enumeration stops at a list[SubModel] field" note that used to
 apply to `RadiusStage.step`/`.radius` no longer has a subject; `selfplay.mcts.*`/`selfplay.
 playout_cap.*` are ordinary nested `StrictModel` leaves, fully enumerated like every other
 section.
 
-WPMINT DR-6 (R93): the walker now descends through OPTIONAL nested blocks too. The old stop
-condition was blind to `Block | None` — the R79 arming idiom — and the reason recorded here
-for that blindness was itself wrong; see `_nested_block` below.
+THE WALKER IS IMPORTED, NOT COPIED (AUDIT-1 F-44). `mantis.config.schema.leaf_paths` is the one
+derivation; this file held one of five hand-mirrored copies that walked to three different
+answers. WPMINT DR-6 (R93)'s rule — descend through OPTIONAL nested blocks, the R79 arming idiom
+— lives there now, and the test below drives it on a fixture built here.
 """
-from types import UnionType
-from typing import Any, Union, get_args, get_origin
-
 from pydantic import BaseModel
 
-from mantis.config.schema import RunConfig
+from mantis.config.schema import RunConfig, leaf_paths
 
 # Each value names a REAL WP8/WP11-A reader; every "emit" reader genuinely appears in the
 # O6 payload. WP11-A extends this registry with every eval.gate/eval.ladder leaf (design
@@ -147,7 +143,7 @@ CONSUMER_REGISTRY = {
     "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
-    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf, because `_leaf_paths` used to
+    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf, because `leaf_paths` used to
     # recurse only into `isinstance(ann, type) and issubclass(ann, BaseModel)`. WPMINT DR-6
     # (R93) closes that: the cause was OPTIONALITY, not nesting — `DrawRateAbortConfig |
     # None` is a `UnionType`, while a NON-optional nested block (`monitor.drain.*`) was
@@ -389,146 +385,13 @@ CONSUMER_REGISTRY = {
 }
 
 
-def _nested_block(ann: Any) -> type[BaseModel] | None:
-    """The nested config BLOCK an annotation names, seen THROUGH `Optional` / `Block | None`.
-
-    WPMINT DR-6 (R93). The predecessor tested `isinstance(ann, type) and issubclass(ann,
-    BaseModel)` and stopped there, so an OPTIONAL block was one opaque leaf. The stated
-    reason ("the BLOCK is one leaf") was wrong: non-optional nested blocks — `monitor.drain`
-    — were descended into all along, and the real cause was that `DrawRateAbortConfig |
-    None` is a `types.UnionType`, not a `type`. Since `Block | None` is the house arming
-    idiom (R79), that blindness was generic to every future arming block, and it was
-    measured: a fourth, entirely unconsumed key inside `DrawRateAbortConfig` passed the full
-    tier and gates 7 and 12 green.
-
-    NIT-3 is UNCHANGED and is a different rule: `list[SubModel]` (`eval.ladder.rungs`) has a
-    `list` origin, not a union one, so it stays ONE leaf. Only an `Optional`/union whose
-    non-`None` arms name exactly ONE BaseModel is descended — a genuine sum of two different
-    blocks has no single key-path to hand out and is left as a leaf rather than guessed at.
-    """
-    if isinstance(ann, type) and issubclass(ann, BaseModel):
-        return ann
-    if get_origin(ann) in (Union, UnionType):
-        blocks = [arm for arm in get_args(ann)
-                  if isinstance(arm, type) and issubclass(arm, BaseModel)]
-        if len(blocks) == 1:
-            return blocks[0]
-    return None
-
-
-def _leaf_paths(model: type[BaseModel], prefix: str = "") -> list[str]:
-    """Leaf key-paths of a StrictModel; recurse into nested models (including OPTIONAL ones,
-    DR-6) but STOP at any field that does not name exactly one nested block (NIT-3 —
-    list[SubModel] is one leaf)."""
-    out: list[str] = []
-    for name, field in model.model_fields.items():
-        path = f"{prefix}.{name}" if prefix else name
-        nested = _nested_block(field.annotation)
-        if nested is not None:
-            out.extend(_leaf_paths(nested, path))
-        else:
-            out.append(path)
-    return out
-
-
 def test_schema_leaves_equal_consumer_registry_bijection():
-    leaves = set(_leaf_paths(RunConfig))
+    leaves = set(leaf_paths(RunConfig))
     registered = set(CONSUMER_REGISTRY)
     assert leaves == registered, (
         f"schema-only (unregistered): {leaves - registered}; "
         f"registry-only (no schema field): {registered - leaves}"
     )
-
-
-def test_registry_matches_the_live_leaf_count():
-    # WP11-A extends the O15 registry 8 -> 36 leaves (design §c.1: eval.gate.* + eval.
-    # ladder.* + 6 new eval.* scalars). WPSC Phase 2 SC-A1 extends it further 36 -> 61
-    # (design §2: 25 new `train.*` leaves, R-TRAINCONFIG-SCHEMA closure). SC-A2 removes 1
-    # (`selfplay.legal_move_radius_schedule`, forced fallout of DESIGN_P2.md §5) and adds 52
-    # (25 `selfplay.*` + 8 `selfplay.mcts.*` + 11 `selfplay.playout_cap.*` + 8 `inference.*`,
-    # R-SELFPLAYCONFIG-SCHEMA closure): 61 - 1 + 52 = 112. SC-A3 adds 31 (27 `monitor.*` + 4
-    # `monitor.drain.*`, R-MONITORCONFIG-SCHEMA closure): 112 + 31 = 143. The historical
-    # test name is retired here (it said `eight` while asserting 146); the bijection test
-    # above is the live invariant this file exists to hold, not this count.
-    # WP-UNFREEZE adds 3 (K1 train.actor_sync_cadence_
-    # steps + K2/K3 monitor.actor_lag_*): 143 + 3 = 146. WPAX S-4 adds 1
-    # (train.max_train_steps, the run-length authority): 146 + 1 = 147.
-    # WPAX Phase D adds 1 (train.draw_rate_abort, registered as ONE opaque block leaf):
-    # 147 + 1 = 148. WPMINT DR-6 (R93) then makes `_leaf_paths` descend through OPTIONAL
-    # blocks, which retires that one block leaf and surfaces its three inner keys:
-    # 148 - 1 + 3 = 150. Measured, not derived: `train.draw_rate_abort` is the ONLY
-    # `Block | None` field anywhere in `RunConfig`, so those three are the whole blast
-    # radius; `eval.ladder.rungs` is a `list[LadderRung]` and stays one leaf under NIT-3.
-    # WPMINT Phase DS (R92) SWAPS one of those three (`min_samples` -> `N_pool_min`) and the
-    # count is unchanged at 150 — recorded because a swap that silently dropped or doubled a
-    # key would move this number, and the bijection above would then be the only witness.
-    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80) adds 20: the 19 flat `train.*`
-    # step-coordinator knobs plus `train.draw_rate_abort.consec`, the fourth abort term R80
-    # left with this card. 150 + 20 = 170. SIX further coordinator fields were DELETED rather
-    # than authored (adjudication call K-a) precisely so this count would not rise by 26 with
-    # six of them naming nothing — a registry entry for a dead field is the LAW-08 violation
-    # this test exists to catch, written down by hand. `train.replay_capacity_schedule` is a
-    # `list[ReplayCapacityStage]` and stays ONE leaf under NIT-3, exactly like
-    # `eval.ladder.rungs`, so its two inner names are covered by the schedule's own entry.
-    # WPMAIN (CARD-RUN-MAIN) adds 5 and the count becomes 175: `eval_enabled` (R120, the
-    # code-side `compose_run` default promoted to a typed top-level key), the three
-    # `monitor.disk_guard.*` leaves (R122's granted FAMILY — one block, one resolver, three
-    # typed leaves, replacing four dead `dict.get` literals in a function with zero callers)
-    # and `train.device` (R126, the CLI-only run input on both callers promoted to a typed
-    # `train.*` key). 170 + 1 + 3 + 1 = 175. The nested `monitor.disk_guard` block itself is
-    # DESCENDED by `_leaf_paths`, so it contributes three leaves and not four.
-    # WP12-R R178(a) SUBTRACTS 1 — the first DOWNWARD move this count has ever made:
-    # `train.buffer_save_interval` is deleted under R116/LAW-08 because F-CS-2 measured its
-    # only consumer chain (`_try_save_buffer`) production-dead on every leg, and a minted key
-    # with no reachable effect is the dead-knob class R1 exists to kill. 175 - 1 = 174.
-    # WP12-R F2 (CARD-RUN5-GPU-OOM, R179) ADDS 2: `train.microbatch_caps.{max_edges,
-    # max_nodes}` — ONE block, ONE fact ("how big may one micro-batch be"), sized TOGETHER
-    # from one measured cost model. Their consumer is GRAPH-ROUTE-SCOPED and the registry
-    # rows say so: the provider is threaded to `_graph_step` alone and `_grid_step` is not
-    # given it, so a grid run structurally cannot reach them. 174 + 2 = 176.
-    # R242 (ADJ-D12) ADDS 1: `monitor.gate_interval`, the ARMING cadence split off the
-    # NARRATION cadence `train.log_interval`. It is a monitor leaf and a SCHEMA-ONLY one
-    # (a third enumerated drop in `resolve_monitor_config`, beside `drain` and
-    # `disk_guard`), so the runtime `MonitorConfig` field count does not move with it.
-    # 176 + 1 = 177.
-    # The eval-posture bundle (F-R-P2B-5) ADDS 5: `eval.ply_cap_adjudication.{criterion,
-    # min_margin}` and `eval.strength_floor.{probe_games, min_decisive_rate, min_winrate}` —
-    # TWO `Block | None` blocks, both minted `null` in every committed config. The walker
-    # DESCENDS optional blocks (WPMINT DR-6/R93), so all five inner leaves surface here while
-    # each YAML file carries exactly one line per block; the count below is the SCHEMA's, not
-    # the YAML's, and the two differ by design. This also RETIRES the line above that called
-    # `train.draw_rate_abort` the only `Block | None` field in `RunConfig` — it was true when
-    # written and is not any more; the sentence is corrected here rather than left to be read
-    # as evidence (R192(e)). 177 + 5 = 182.
-    # F-816-10 (R276(f)) ADDS 2: `inference.fused_graph_caps.{max_fused_edges,
-    # max_fused_nodes}` — ONE block, ONE fact ("how big may one fused inference forward
-    # be"), sized TOGETHER from one measured fit against one budget, and the training cap's
-    # partner over the same card. Members are NOT spelled `max_edges`/`max_nodes`: the
-    # train-side OF2-9 census freezes those names and distinct names keep the two budgets
-    # unconfusable. Shipped `null` in both production configs — the R119 placeholder, which
-    # is schema-valid and runtime-REFUSED, never an off state. 182 + 2 = 184.
-    # RECAL-PREP (R308(g)(i)) ADDS 1 and the count becomes 185: `allocator_posture`, a
-    # TOP-LEVEL leaf naming the CUDA caching allocator's REGIME. TOP-LEVEL for `eval_enabled`'s
-    # own recorded grounds — a root-composition fact spanning more than one section's surface,
-    # with three consumers in two processes (trainer, self-play/inference, and the eval child,
-    # which is a SECOND allocator on the same card). It is a `Literal | None` SCALAR, not a
-    # block, so the walker contributes exactly one leaf and each YAML file carries exactly one
-    # line; there is no descend-into-optional-block arithmetic here of the kind the
-    # eval-posture bundle above needed. Shipped `null` in EVERY committed config — R119's
-    # placeholder, schema-valid and runtime-REFUSED — because R308(g)(i) reserves the VALUE
-    # for the re-calibration sitting under R282(b) and a token minted by a dispatcher would be
-    # a regime nobody measured. 184 + 1 = 185.
-    # R330(e): + 1 = 186 — `identity.arch_kind`, the arch-selector row, the first OPTIONAL leaf
-    # this walker has counted. One leaf, one YAML line when minted; absent from every committed
-    # config until run6's mint (R323(b)), read by ONE function (`arch_from_spec_and_config`).
-    # R332(d): + 2 = 188 — `identity.warm_start`'s two members. ONE optional BLOCK, two leaves
-    # under the walker: both are REQUIRED inside the block, which is what makes a checkpoint
-    # path with no expected net hash unconstructible (AUDIT-1 F-19).
-    # R332(d): + 3 = 191 — `train.ema`'s three members. REQUIRED, not optional: the lever was
-    # unreachable from any config (AUDIT-1 F-06), so every config now STATES its posture and
-    # `enabled: false` is a minted value rather than a code-side silence.
-    assert len(CONSUMER_REGISTRY) == 191
-    assert len(_leaf_paths(RunConfig)) == 191
 
 
 def test_no_forward_reference_strings_in_registry():
@@ -571,17 +434,17 @@ def test_the_walker_descends_into_an_OPTIONAL_block_not_only_a_required_one():
         block_list: list[_Inner]
         scalar: int
 
-    assert _leaf_paths(_Outer) == [
+    assert leaf_paths(_Outer) == (
         "required_block.a", "required_block.b",
         "optional_block.a", "optional_block.b",
         "block_list", "scalar",
-    ], (
+    ), (
         "an OPTIONAL nested block must be descended into exactly like a required one — "
         "optionality, not nesting, was the cause of the LAW-08 hole (DR-6) — while a "
-        f"list[SubModel] stays one leaf (NIT-3); got {_leaf_paths(_Outer)}"
+        f"list[SubModel] stays one leaf (NIT-3); got {leaf_paths(_Outer)}"
     )
 
-    leaves = set(_leaf_paths(RunConfig))
+    leaves = set(leaf_paths(RunConfig))
     assert {"train.draw_rate_abort.threshold", "train.draw_rate_abort.min_step",
             "train.draw_rate_abort.N_pool_min"} <= leaves, (
         "the real arming block's three inner keys must each carry their own LAW-08 "
@@ -599,6 +462,6 @@ def test_bijection_bites_on_a_real_schema_mutation():
     class _MutatedRunConfig(RunConfig):
         phantom_leaf: int  # new schema field, no CONSUMER_REGISTRY entry
 
-    leaves = set(_leaf_paths(_MutatedRunConfig))
+    leaves = set(leaf_paths(_MutatedRunConfig))
     assert "phantom_leaf" in leaves
     assert leaves != set(CONSUMER_REGISTRY), "bijection must break when a new leaf is unregistered"

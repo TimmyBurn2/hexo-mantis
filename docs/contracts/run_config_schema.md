@@ -60,9 +60,10 @@ Eleven top-level fields; **191 leaf key-paths** under the walker that descends n
 **The per-section rows above are HAND-VERIFIED, and gate 13 does not check them.** The gate
 derives the document's TOTAL from `RunConfig` and compares it; no code path parses this table,
 so a section row can drift undetected while the total stays green. F-816-10 re-derived all ten
-rows against the gate's own `_leaf_paths` walker and found `train` stating **53** against a
+rows against the gate's walker and found `train` stating **53** against a
 live **52** — stale since v6 removed the `train` section's dead replay-buffer-save leaf and
-decremented the total but not the row. Corrected here. Whoever edits a section row next re-derives all ten the same way,
+decremented the total but not the row. Corrected here. Whoever edits a section row next re-derives all ten the same way — through
+`mantis.config.schema.leaf_paths`, which is THE walker since AUDIT-1 F-44 (the gate's private copy is gone) —
 or writes the check (ORACLE-WRITE noted it is oracle-able: derive per-section counts from
 `RunConfig`, compare to this table) and retires the gap.
 

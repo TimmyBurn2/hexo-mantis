@@ -65,6 +65,7 @@ from mantis.config.resolve.arch_scope import (
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.schema.core import ARCH_SCOPED_KEYS, RunConfig
+from mantis.config.schema.leaves import leaf_paths
 
 from _corpus import ConformanceRefusal
 
@@ -187,26 +188,21 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
 DECLARED_RED_ROWS: frozenset[tuple[str, str]] = frozenset()
 
 
-def live_leaf_paths(model: type[BaseModel] = RunConfig, prefix: str = "") -> tuple[str, ...]:
-    """Every leaf key of the shipped schema, walked off `RunConfig` itself.
+def live_leaf_paths(model: type[BaseModel] = RunConfig) -> tuple[str, ...]:
+    """Every field NAME the live schema reaches, as dotted paths, for the vocabulary probe.
 
-    The same walk `tools/ci_gates/contract_doc_gate.py` performs, and for the same stated
-    reason: a transcribed key list is written in the commit that adds a key and therefore can
-    never be the thing that notices one. An arch-scoped block is `Block | None`, so the walk
-    descends through the union arm rather than stopping at the `None` — otherwise the repair
-    would hide the very leaves this section is about.
+    THE ONE WALKER, in `descend_containers` mode (AUDIT-1 F-44). This was the FIFTH hand copy
+    of the schema walk and the audit's census could not see it, because that census was scoped
+    to the name `_leaf_paths` and this one is called `live_leaf_paths`. It walked to 199 where
+    gate 13 and the consumer bijection walked to 191, and nothing compared the two.
+
+    THE DIFFERENCE IS DELIBERATE AND IS NOW AN ARGUMENT, not an implementation. The other
+    consumers want key-paths a config file can WRITE, so `eval.ladder.rungs` is one leaf. This
+    probe wants every field name a future key could hide an architecture in — including inside
+    a ladder rung — so it descends the container. A rung field named `graph_depth` must fire the
+    vocabulary probe, and under the writable-path walk it would not exist to fire it.
     """
-    out: list[str] = []
-    for name, field in model.model_fields.items():
-        path = f"{prefix}{name}"
-        annotation = field.annotation
-        arms = getattr(annotation, "__args__", (annotation,))
-        nested = next((a for a in arms if isinstance(a, type) and issubclass(a, BaseModel)), None)
-        if nested is not None:
-            out.extend(live_leaf_paths(nested, path + "."))
-        else:
-            out.append(path)
-    return tuple(out)
+    return leaf_paths(model, descend_containers=True)
 
 
 def config_for(representation: str) -> Path:

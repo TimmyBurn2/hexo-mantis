@@ -111,8 +111,15 @@ def test_a_retired_resolver_symbol_reds_the_gate(tmp_path, doc_text):
 #: import in the suite. Recorded here rather than only in a log: a helper whose import cannot
 #: resolve is indistinguishable from one that was never called.
 def _live_count_claim(gate_module) -> str:
+    """The count read through the SAME symbol the gate uses, so this can never drift from it.
+
+    AUDIT-1 F-44: the gate's private `_leaf_paths` is gone and `mantis.config.schema.leaf_paths`
+    is the one walker. It is read off `gate_module` rather than imported here, so a gate that
+    swapped in a different walker would still be measured by ITS walker, which is the property
+    the fixture-loaded module exists to give.
+    """
     from mantis.config.schema import RunConfig
-    return f"**{len(gate_module._leaf_paths(RunConfig))} leaf key-paths**"
+    return f"**{len(gate_module.leaf_paths(RunConfig))} leaf key-paths**"
 
 
 def test_a_stale_leaf_count_reds_the_gate(tmp_path, doc_text, gate_module):

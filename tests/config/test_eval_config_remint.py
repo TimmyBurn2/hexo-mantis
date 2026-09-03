@@ -20,10 +20,10 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from mantis.config.loader import discover_configs, load_config
-from mantis.config.schema import RunConfig
+from mantis.config.schema import RunConfig, leaf_paths
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS_DIR = _REPO / "configs"
@@ -187,25 +187,8 @@ def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> No
         )
 
 
-def _leaf_paths(model: type[BaseModel], prefix: str = "") -> list[str]:
-    """Leaf key-paths of a StrictModel; recurse into nested models but stop at any field
-    whose annotation is not itself a BaseModel subclass (mirrors
-    tests/config/test_every_key_has_consumer.py's `_leaf_paths` — reimplemented locally
-    rather than imported across test modules, per house convention)."""
-    out: list[str] = []
-    for name, field in model.model_fields.items():
-        path = f"{prefix}.{name}" if prefix else name
-        ann = field.annotation
-        if isinstance(ann, type) and issubclass(ann, BaseModel):
-            out.extend(_leaf_paths(ann, path))
-        else:
-            out.append(path)
-    return out
-
-
-# The NEW leaf keys this WP's schema extension must introduce (forward-looking pin: asserts
-# the FUTURE schema's leaf-set, not today's — RED today because none of these leaves exist
-# yet on RunConfig, so `_leaf_paths(RunConfig)` today is just the 8 WP8 leaves).
+# The NEW leaf keys this WP's schema extension must introduce (forward-looking pin: asserted
+# against the FUTURE schema's leaf-set, which has since landed).
 _NEW_LEAF_CONSUMERS = {
     "eval.kraken_model_sims": "resolve_eval_model_sims (kraken rungs)",
     "eval.strix_model_sims": "resolve_eval_model_sims (strix rungs)",
@@ -241,9 +224,11 @@ _NEW_LEAF_CONSUMERS = {
 def test_new_keys_all_have_consumers_in_o15_registry() -> None:
     """Forward-looking pin: once the schema extension lands, every new EvalConfig/
     GateConfig/LadderConfig leaf must be present — no more, no fewer than the registry this
-    test defines. RED today: `_leaf_paths(RunConfig)` today has none of these leaves (the
-    schema hasn't been extended), so the intersection assertion below is false."""
-    leaves = set(_leaf_paths(RunConfig))
+    test defines. Historically RED: when this oracle was written none of these leaves existed.
+    The walker is `mantis.config.schema.leaf_paths` — this file used to carry a pre-DR-6 copy
+    that stopped at `Block | None` and therefore walked to 182 where the gate walked to 191
+    (AUDIT-1 F-44), while its own docstring claimed to mirror the others."""
+    leaves = set(leaf_paths(RunConfig))
     missing = set(_NEW_LEAF_CONSUMERS) - leaves
     assert missing == set(), (
         f"new schema leaves not yet present (expected once EvalConfig/GateConfig/"

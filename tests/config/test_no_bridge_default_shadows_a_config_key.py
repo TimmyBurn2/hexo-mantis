@@ -23,7 +23,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from mantis.config.schema import RunConfig
+from mantis.config.schema import RunConfig, leaf_paths
 
 _REPO = Path(__file__).resolve().parents[2]
 _STUBS = (
@@ -90,20 +90,17 @@ REGISTERED_DEBT: frozenset[str] = frozenset({
 
 
 def _config_leaf_names() -> set[str]:
-    """Every LEAF NAME in `RunConfig`, unqualified — the vocabulary a bridge default could
-    shadow. Derived from the live schema, never transcribed."""
-    names: set[str] = set()
+    """Every field NAME in `RunConfig`, unqualified — the vocabulary a bridge default could
+    shadow. Derived from the live schema through the ONE walker (AUDIT-1 F-44).
 
-    def walk(model: type) -> None:
-        for name, field in model.model_fields.items():
-            names.add(name)
-            ann = field.annotation
-            for candidate in (ann, *getattr(ann, "__args__", ())):
-                if hasattr(candidate, "model_fields"):
-                    walk(candidate)
-
-    walk(RunConfig)
-    return names
+    `descend_containers` is the mode that reaches a name inside a `list[SubModel]`: a bridge
+    default shadowing `LadderRung.depth` shadows a config key just as surely as one shadowing
+    `train.lr`, and the unqualified vocabulary is every SEGMENT of every reachable path — the
+    block names included, since a block name is a key a config writes too.
+    """
+    return {segment
+            for path in leaf_paths(RunConfig, descend_containers=True)
+            for segment in path.split(".")}
 
 
 def test_the_vocabulary_is_not_empty() -> None:

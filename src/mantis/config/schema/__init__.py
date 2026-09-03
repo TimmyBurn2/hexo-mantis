@@ -21,6 +21,7 @@ from mantis.config.schema.core import (
     StrictModel,
     WarmStartConfig,
 )
+from mantis.config.schema.leaves import leaf_paths, nested_block
 from mantis.config.schema.monitor import (
     DiskGuardConfig,
     DrainCapsConfig,
@@ -57,5 +58,7 @@ __all__ = [
     "EmaConfig",
     "TrainConfig",
     "WarmStartConfig",
+    "leaf_paths",
+    "nested_block",
     "_EVAL_TIMEOUT_CEILING_SEC",
 ]
