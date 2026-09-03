@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 3130557, regenerated 2026-09-03.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5697fb1, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.39, 2026-09-03. Created under R271 (register hygiene: archive/index split);
+# v3.40, 2026-09-04. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -993,6 +993,53 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # the fifth is `live_leaf_paths` in `tests/model/conformance/test_config_partition_shared_vs_arch_scoped.py`,
 # whose own docstring says it performs "the same walk `contract_doc_gate.py` performs".
 # **RUN6 REMAINS HELD. No mint, no arm, no training.**
+# **v3.40 = R334 folded in — the curation that RATIFIES REPAIR-3, ARMS the two screened
+# mechanisms by ruling, and PRE-REGISTERS the perf tranche the run6 mint will be minted on.**
+# **R334(a) RATIFIES REPAIR-3** (P7's ONE leaf-path walker where seven hand copies stood — a
+# STRUCTURAL AST census over the whole tree finds three self-recursive `model_fields` functions and
+# only one is a leaf-path walker, the other two being a MODEL census that asks the authority's own
+# predicate and a planted break inside the pinning test; P9's two reverted deletions on ruling
+# grounds, R289(q) and R178(c); the slow tier at packet exit; DASH-1 at `PANELS` 9 / `BANKED_PANELS`
+# 2 = **seven live**, read from the source rather than the exit screen) **AND EXECUTES THE HELD
+# PUSH** — the one term of (a) that was NOT already true, since REPAIR-3 held it deliberately for
+# gate 3c's ref-floor mechanics and handed it to the operator. Pre-flight verifies `dev` ==
+# `origin/dev` before any measurement is taken.
+# **R334(b) ARMS F-11 AS SHAPE A** — the arming predicate gains a PRODUCER-LIVENESS operand, gate 12
+# untouched (probe absent → the row audits exactly as today) — **PLUS** `poll_once` reading the
+# guard's own counters as a LAST-EMIT AGE, which is the screen's own cheaper follow-on for the
+# mid-run gap shape A cannot reach. **SHAPE B IS REJECTED IN ITS FORM, on a mechanism and not a
+# preference:** the stall watchdog's code is **42, the TRANSIENT class the supervisor RELAUNCHES
+# on**, so a disk guard raising every tick would stall-abort and be relaunched into the same broken
+# state — a crash loop into a filling volume, on the leg whose whole purpose is stopping a run
+# before the volume fills. **LANDS BEFORE THE MINT.**
+# **R334(c) RULES F-32 SHAPE A AT THE RUN6 MINT, and CORRECTS the screen it adopts.** The screen
+# proposed `identity.expected_anchor_sha256` as a `str | None` TWIN of `identity.warm_start`; the
+# ruling refuses the twin — **the pin DERIVES from `identity.warm_start` when present, one source,
+# no hand-synced second authority for one fact** — and a standalone key exists only for the
+# non-warm-start case, decided by derivation at mint prep. **SHAPE C IS REJECTED**: the refusal is
+# WANTED, and its ground is run3's frozen-incumbent post-mortem (`inputs/run3_findings_v2.md` A1;
+# the actor never synced at all, **0 %, not run3's ~39 %**, and nothing was ever deploy-blessed).
+# **SHAPE B IS REJECTED**: an invocation is not an identity. **Until minted, the guard's
+# unreachability is DISCLOSED BY A TEST, not hidden** — an unreachable guard reads as coverage.
+# **R334(d) RULES F-18 OPTION (i)**: the cross-crate pin against `mantis-core`'s independent
+# implementation IS the r8 authority, and the manifest's Python-oracle expectation **retires with a
+# grave line** — verified negative rather than assumed, `grep -rln 'wpa_positions|graph_parity'` over
+# `*.py` returns ZERO files, so the audit's "regenerated through the Python oracle" has no subject in
+# this tree. (iii) rides lane C's golden recapture; (ii) is rejected.
+# **R334(e) PRE-REGISTERS PERF-TRANCHE-2**: six items, bars from `PERF_RESEARCH`'s CONSERVATIVE
+# bounds written into the record BEFORE each A/B, rig-based with the REGIME NAMED per figure,
+# net-hash green after every landed change, memory deltas recorded for the mint that follows, and
+# the frontier ledger RE-BASELINED at exit at the r8 identity. **THE KERNEL SPIKE AND GUMBEL ARE
+# OUT** — one deferred, the other the operator's prereg row. **Three of the six are RE-ATTEMPTS**,
+# not new proposals: NIGHTRUN-1 left `collate_h2d` NOT REACHED, the fuse's source-side reads
+# CONDITION-NOT-MET (step 1 profiled the EVAL path, where the fuse does not appear), and eval
+# concurrency DEFERRED with its reason measured.
+# **R334(f) PRE-REGISTERS THE RUN6 SUCCESS WITNESS IN SHAPE** — (i) the promotion gate completes
+# rounds from round one; (ii) a checkpoint beats `sealbot_d5` (a real rung, `configs/run5.yaml:48`)
+# at fixed nodes with a CI EXCLUDING 0.5 within N games; (iii) Elo against the pinned external rungs
+# slopes upward over the run's first third. **N and the slope bar are OPERATOR PREREG ROWS** — the
+# shape carries no judgment, those two terms do.
+# **RUN6 REMAINS HELD. The mint follows the tranche's numbers, not this curation.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1043,9 +1090,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R333 — **304 sections, 304 distinct numbers, no duplicates** (re-derived at v3.39; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R334 — **305 sections, 305 distinct numbers, no duplicates** (re-derived at v3.40; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 334)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 335)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -1054,7 +1101,7 @@ re-confirmed this session — check before relying.
   carries no text of its own. Drop that requirement and the count reads 312, not 259 — measured
   this curation POST-append, stated so the next reader does not have to rediscover it; re-measured
   at v3.0 the excluded set is **53**, unchanged for the third consecutive curation, and the
-  drop-the-requirement count reads 319 against 266; re-measured at v3.5 the excluded set is **53 still — fourth consecutive curation unchanged** — and the drop-the-requirement count reads **324 against 271**; re-measured at v3.6 the excluded set is **53, FIFTH consecutive curation unchanged**, and the drop-the-requirement count reads **325 against 272**; re-measured at v3.7 **BY SCRIPT** the excluded set is **53, SIXTH consecutive curation unchanged**, and the drop-the-requirement count reads **326 against 273**; re-measured at v3.8 the excluded set is **53, SEVENTH consecutive curation unchanged**, and the drop-the-requirement count reads **327 against 274**; re-measured at v3.9 the excluded set is **53, EIGHTH consecutive curation unchanged**, and the drop-the-requirement count reads **328 against 275**; re-measured at v3.10 **unchanged at 328 against 275** — ANNOTATION 5 carries no R-number, so like every annotation before it, it disturbs neither count; **re-measured at v3.12 BY SCRIPT the excluded set is 53** and the drop-the-requirement count reads **330 against 277**; **re-measured at v3.13 the excluded set is 53 STILL** and the count reads **331 against 278** — the +1 on both sides is R307's header alone, and **`ANNOTATION 6`, landed in the same act, moved NEITHER count**, which is the measured form of the claim every prior annotation asserted. **v3.12 discloses a SKIP rather than absorbing it: the v3.11 curation did not re-measure this parenthetical at all**, so it stopped at v3.10's figures while the register ran to R305 — the same one-curation lag §1's own range sentence records against itself below. The streak is therefore stated as **eight measured links plus one unmeasured**, not as an unbroken nine: an excluded-set streak is evidence only about the curations that actually ran the measurement). **R289 was appended 2026-08-20 by the R289 EXECUTION session; R290 appended 2026-08-20 by the
+  drop-the-requirement count reads 319 against 266; re-measured at v3.5 the excluded set is **53 still — fourth consecutive curation unchanged** — and the drop-the-requirement count reads **324 against 271**; re-measured at v3.6 the excluded set is **53, FIFTH consecutive curation unchanged**, and the drop-the-requirement count reads **325 against 272**; re-measured at v3.7 **BY SCRIPT** the excluded set is **53, SIXTH consecutive curation unchanged**, and the drop-the-requirement count reads **326 against 273**; re-measured at v3.8 the excluded set is **53, SEVENTH consecutive curation unchanged**, and the drop-the-requirement count reads **327 against 274**; re-measured at v3.9 the excluded set is **53, EIGHTH consecutive curation unchanged**, and the drop-the-requirement count reads **328 against 275**; re-measured at v3.10 **unchanged at 328 against 275** — ANNOTATION 5 carries no R-number, so like every annotation before it, it disturbs neither count; **re-measured at v3.12 BY SCRIPT the excluded set is 53** and the drop-the-requirement count reads **330 against 277**; **re-measured at v3.13 the excluded set is 53 STILL** and the count reads **331 against 278**; **re-measured at v3.40 the excluded set is 53** and the count reads **358 against 305** — and the honest reading of that streak is stated rather than the flattering one: this parenthetical was last measured at **v3.13**, so the twenty-six curations from v3.14 to v3.39 did not re-measure it at all, exactly the lag v3.12 disclosed against itself one curation wide. The streak is **nine measured links with a twenty-six-curation gap**, not thirty-five; the census SENTENCE above was re-derived at every one of those curations by script, which is why no count was ever wrong while this note went stale — the +1 on both sides is R307's header alone, and **`ANNOTATION 6`, landed in the same act, moved NEITHER count**, which is the measured form of the claim every prior annotation asserted. **v3.12 discloses a SKIP rather than absorbing it: the v3.11 curation did not re-measure this parenthetical at all**, so it stopped at v3.10's figures while the register ran to R305 — the same one-curation lag §1's own range sentence records against itself below. The streak is therefore stated as **eight measured links plus one unmeasured**, not as an unbroken nine: an excluded-set streak is evidence only about the curations that actually ran the measurement). **R289 was appended 2026-08-20 by the R289 EXECUTION session; R290 appended 2026-08-20 by the
   R290 follow-up session, together with a `## REGISTER-FOOT ANNOTATIONS` block ordered by R290(f) —
   whose header carries no R-number at all, so it disturbs neither count; R291 appended 2026-08-20 by
   the R291 landing session, **R292 / R293 / R294 appended 2026-08-20 by their respective landing
@@ -2703,6 +2750,74 @@ Verbatim text in the register; one-liners here are index only.
   record.
   **(e) THE ORDER AFTER THIS:** the tranche-2 prereg and the lane-C codec design (the architect's),
   the perf tranche, then the **run6 mint**. **RUN6 REMAINS HELD.**
+  **AMENDED by R334 (2026-09-04). (a) STANDS. (b) IS STANDING LAW and does NOT expire — it is
+  a process law, not a packet row, and R334's own legs run under it. (c) IS DISCHARGED: the
+  architect has ruled on both screens (R334(b) F-11 shape A + the `poll_once` age; R334(c) F-32
+  shape A at the mint, with the screen's twin CORRECTED to a derivation) and on F-18 besides
+  (R334(d), option (i)). (d) IS DISCHARGED on REPAIR-3's exit, RATIFIED by R334(a). (e) ADVANCES:
+  the tranche-2 prereg is R334(e) and the perf tranche is now the LIVE packet; the lane-C codec
+  design remains the architect's and is NOT dispatched by R334.**
+
+- **R334 — THE MEASURED LEVERS, AND THE RE-BASELINE THE MINT WILL BE MINTED ON. LIVE: (b) lands
+  BEFORE the mint; (c) lands AT the mint; (d) is a disposition, executed with its grave line;
+  (e) is the running packet; (f) is a pre-registration awaiting two operator values.**
+  **(a) RATIFIES REPAIR-3** and **EXECUTES THE HELD PUSH**. The four ratification terms were
+  re-derived at landing, not accepted: the ONE leaf-path walker is
+  `src/mantis/config/schema/leaves.py::leaf_paths` and a STRUCTURAL AST census over the whole tree
+  finds no second one (the two other self-recursive `model_fields` functions are a MODEL census
+  asking the authority's own `nested_block` predicate, and a planted break inside the pinning test
+  that MUST disagree); the two reverted deletions are `BatchBuffers` (R289(q)) and
+  `buffer_persist.py` (R178(c)); DASH-1 reads `PANELS` **9** and `BANKED_PANELS` **2** from source,
+  i.e. **seven live**. **The push was the one term of (a) not already true** — REPAIR-3 held it
+  deliberately because gate 3c's ref floor must sit behind `dev` while a leg declares a
+  down-ratchet — so **this ruling IS that forwarding**, and pre-flight verifies `dev` ==
+  `origin/dev` before any measurement.
+  **(b) F-11 ARMS AS SHAPE A, PLUS THE `poll_once` AGE.** The arming predicate gains a
+  PRODUCER-LIVENESS operand; **gate 12 is untouched** (probe absent → the row audits exactly as
+  today), so the pure-config audit stays pure and no config is edited. Beside it, `poll_once` reads
+  the guard's own `checks_total`/`errors_total` as a LAST-EMIT AGE — the screen's own cheaper
+  follow-on for the mid-run death shape A cannot reach. **SHAPE B IS REJECTED IN ITS FORM**, on a
+  mechanism: the stall watchdog's code is **42, the TRANSIENT class the supervisor RELAUNCHES on**,
+  so a guard raising every tick would stall-abort and be relaunched into the same broken state — a
+  crash loop into a filling volume, on the leg whose purpose is stopping a run before the volume
+  fills. **LANDS BEFORE THE MINT** — it is a mint precondition, not a repair.
+  **(c) F-32 ARMS AS SHAPE A AT THE RUN6 MINT, and the screen it adopts is CORRECTED in the
+  adopting.** The screen proposed a `str | None` TWIN of `identity.warm_start`; **the ruling refuses
+  the twin — the pin DERIVES from `identity.warm_start` when present, ONE source, no hand-synced
+  second authority for one fact.** A standalone key exists only for the non-warm-start case, and
+  which it is is DECIDED BY DERIVATION at mint prep. **SHAPE C (delete the chain) IS REJECTED — the
+  refusal is WANTED**, on run3's frozen-incumbent post-mortem (`inputs/run3_findings_v2.md` A1: the
+  actor never synced at all, **0 %, not run3's ~39 %**; nothing was ever deploy-blessed).
+  **SHAPE B IS REJECTED: an invocation is not an identity.** **Until minted, the guard's
+  UNREACHABILITY IS DISCLOSED BY A TEST, not hidden** — an unreachable guard reads as coverage.
+  **(d) F-18 RESOLVES AS OPTION (i).** The cross-crate pin against `mantis-core`'s INDEPENDENT
+  implementation is the r8 authority; the manifest's Python-oracle expectation **retires with a
+  grave line**, its negative verified rather than assumed (zero `*.py` files mention
+  `wpa_positions`/`graph_parity`, so the audit's "regenerated through the Python oracle" has no
+  subject in this tree). Option (iii) rides lane C's golden recapture; **(ii) — commissioning a
+  Python geometry oracle as a real second implementation — is REJECTED.**
+  **(e) PERF-TRANCHE-2 IS PRE-REGISTERED, six items in order, severable.** Bars come from
+  `PERF_RESEARCH`'s CONSERVATIVE bounds and are **written into the record BEFORE each A/B**;
+  rig-based, **regime named per figure**; net-hash green after every landed change; **memory deltas
+  recorded, because the mint that follows has an eval memory term**; the frontier ledger
+  **re-baselined at exit at the r8 identity**. **THE KERNEL SPIKE AND GUMBEL ARE OUT** — one
+  deferred, the other the operator's prereg row. The items: **F-11** (above, first, engine-side);
+  **T2-1** `collate_h2d`'s non-copy share; **T2-2** INCR-GRAPH in the Rust builder, parity oracle
+  byte-exact as the GATE; **T2-3** eval-battery concurrency; **T2-4** the fuse's source-side reads,
+  **profile first, land only if attribution confirms**; **T2-5** the 7.2 % discrepancy, find or
+  bound; **T2-6** the trainer step re-profiled post-B1, MEASUREMENT ONLY. **Three of these are
+  RE-ATTEMPTS of items NIGHTRUN-1 left undone** (T2-1 NOT REACHED, T2-4 CONDITION-NOT-MET, T2-3
+  DEFERRED), and **T2-5 inherits a CLOSED bound, not an open question**: NIGHTRUN-1 §4 already
+  bounded the gap inside this box's measured run-to-run spread (CV 5.61 %, min-to-max 15.55 %,
+  n = 6) and recorded the original pair as unresolvable by construction — so T2-5 can only widen or
+  RE-SCOPE it, and re-scoping is what it needs, since that spread was measured on the EVAL path and
+  the 7.2 % was observed on the SELF-PLAY contended card.
+  **(f) THE RUN6 SUCCESS WITNESS IS PRE-REGISTERED IN SHAPE:** (i) the promotion gate COMPLETES
+  ROUNDS FROM ROUND ONE; (ii) a checkpoint beats **`sealbot_d5`** at FIXED NODES with a **CI
+  EXCLUDING 0.5** within N games; (iii) **Elo against the pinned external rungs SLOPES UPWARD** over
+  the run's first third. **N and the slope bar are OPERATOR PREREG ROWS** — the shape carries no
+  judgment; those two terms do, and a run6 launch without them is a run with no failing condition.
+  **RUN6 REMAINS HELD. The mint follows the tranche's numbers, not this row.**
 
 
 ## 6. Dispatch & autopilot governance — LAW
@@ -5646,3 +5761,74 @@ Verbatim text in the register; one-liners here are index only.
   visible on every gate screen instead of remembered.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing (F-11 and F-32 are screened,
   not armed), trains nothing, sets no allowance VALUE and starts no run. **RUN6 REMAINS HELD.**
+
+- 2026-09-04 — **v3.40** curated by the PERF-TRANCHE-2 execution session, landing **R334**, authored
+  in the ARCH-ERA architect session and forwarded by the operator INLINE (no file), so the landing
+  session created the canonical home `plan/PACKET_R334_PERF_TRANCHE_2.md` §1.
+  **PRECONDITIONS, run before any edit:** census `R23–R333 — 304 sections / 304 distinct / 0
+  duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp`
+  `STAMP OK: stamp v3.39 == §8 last entry v3.39`; `--self-test` all four controls fire.
+  **`grep -rn 'R334' plan/` returned rc 1 and ZERO hits** before the landing. The forwarded text
+  carried `R{next}` in **TWO** places (the dispatch's §1 heading and the quote-block lead) — both
+  substituted, no other placeholder touched, the residual grep over §1 rc 1 and exactly ONE `R334`
+  token in §1. Extraction into the register by script over the canonical home's §1 quote block, and
+  the appended copy was DIFFED against the packet afterwards — **32 lines, byte-identical**.
+  Post-append census `R23–R334 — 305 / 305 / 0, excluded 53`.
+  **REFERENTS RE-DERIVED AT POINT OF USE:** (a)'s "one walker" measured by a STRUCTURAL AST census
+  over the whole tree (three self-recursive `model_fields` functions; only `leaves.py::leaf_paths` is
+  a leaf-path walker, the other two being a MODEL census that asks the authority's own predicate and
+  a planted break that must disagree); DASH-1's "seven live" read from source as `PANELS` 9 minus
+  `BANKED_PANELS` 2, never from the exit screen; (b)'s premise re-verified at HEAD (the
+  `disk_space_exhausted` row is still `CONFIG_THRESHOLD_GT_ZERO` over a config number with
+  `cadence_paths=()`); (c)'s shape-C ground verified to EXIST (`inputs/run3_findings_v2.md` A1, the
+  0 %-not-39 % actor freeze ledgered at `port_ledger.md:42`); (d)'s negative verified by search
+  (zero `*.py` files mention `wpa_positions`/`graph_parity`, so the audit's "Python oracle" has no
+  subject); (f)'s `sealbot_d5` read at `configs/run5.yaml:48`.
+  **ONE TERM OF THE RULING WAS NOT TRUE AT LANDING, AND IT IS RECORDED AS AN ORDER RATHER THAN A
+  FACT.** (a) says *"Merge and push executed"*; at landing `dev` was `639c75f`, 14 commits past
+  `eaeb1d2`, and `origin/dev` was still `ba883c9`. REPAIR-3 held that push deliberately for gate
+  3c's ref-floor mechanics and handed it to the operator, so the clause is this session's
+  PRE-FLIGHT ACT, not a description of a completed one. Reading it the other way would have made a
+  ruling assert a state nobody had produced.
+  **A MIS-CITATION IN THE TRANCHE'S OWN READING LIST IS CORRECTED OF RECORD, AND REPAIRED IN PLACE
+  (R311(c)).** `plan/research/PERF_RESEARCH.md` §0 and `PERF_TRANCHE1_RESULTS.md` §0 both attribute
+  *"a ratio transfers, a level does not"* to **R287(a)**. R287(a) says no such thing: read verbatim
+  it is *"the figure-provenance convention … every measured figure carried across documents names
+  its producing run"* — the provenance half. The transfer rule is **R289(o)**: *"bench floors are
+  host-attested instruments; cross-host comparisons are inadmissible for verdicts (mechanism
+  evidence only)"*, generalised to memory caps as a CLASS by R302. The claim was always right; its
+  authority was wrong, and it is the authority this tranche's every A/B leans on.
+  **SPOT-CHECKS (R271(d)/R272(b), ≥5), each read against the VERBATIM register text, all PASS:**
+  **R289(o)** `rulings_register.md:5007` — the host-attestation rule above, and the real authority
+  for R334(e)'s *"regime named per figure"*; **R287(a)** `:4841` — quoted verbatim to establish what
+  it does NOT say, which is how the mis-citation was found; **R104** `:1314` *"Disagreeing
+  dual-shape configs are corrupt, not precedence questions"* — the class ground on which R334(c)
+  refuses the screen's hand-synced twin and takes a derivation instead; **R323(b)** `:7573` *"the
+  arch-selector key enters production configs only as a minted row at run6's mint"* — why an
+  identity row is mint-class and F-32 could not have been armed in a repair leg; **LAW-09**
+  (`docs/registers/laws.md:48-54`) *"One change = one commit = one IQR-gated bench; parity oracles
+  re-run after every hot-path change; measure the end-to-end metric, not only the microbench …
+  Profile first"* — the standing law R334(e)'s bar-before-A/B discipline is an instance of, and the
+  reason T2-4 is conditional on its own profile; **R303(d)** (ACTIVE §6) *"R282(b) still reserves
+  armed values, box grants, merges (NOT pushes — R330(f)/ANNOTATION 12)"* — the authority under
+  which this session pushes `dev` and merges nothing.
+  **INDEX EDITS, SIX, enumerated:** the v3.40 header block; the stamp (rides this §8 edit,
+  R284(f)); §1's census sentence re-derived to R334/305 with `range(23, 335)`; **§1's excluded-set
+  parenthetical RE-MEASURED (53; 358 against 305) with its own lag disclosed** — it was last
+  measured at **v3.13**, so twenty-six curations passed without touching it, and the streak is
+  stated as nine measured links with a twenty-six-curation gap rather than as thirty-five (the
+  census SENTENCE was re-derived by script at every one of those curations, which is why no COUNT
+  was ever wrong while this NOTE went stale); an **amendment appended to §5's R333 row** ((b) is
+  standing law and does not expire, (c) and (d) DISCHARGED, (e) ADVANCES); and a **new §5 LIVE row
+  for R334**. Nothing was deleted. **REGISTER EDITS, ONE:** the R334 append.
+  **WHAT THIS RULING SETTLES.** **Two guards that read as coverage stop reading as coverage.** The
+  disk-space abort has audited ARMED off a config number while the guard behind it could be dead
+  (R334(b)), and the launch anchor pin has been a correctly-written refusal nothing can reach
+  (R334(c)). Both are now ruled, with the second's arming shape CORRECTED in the adopting — one
+  source, derived, never a hand-synced twin — and its unreachability disclosed by a test until the
+  mint. Beside them R334(e) puts the perf tranche's bars on the record BEFORE its measurements, and
+  R334(f) puts the run6 witness's SHAPE on the record before the run, leaving exactly two
+  judgment-valued terms to the operator.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms no VALUE, trains nothing, and starts no
+  run. F-11's mechanism lands as code before the mint; F-32's lands AT the mint. **RUN6 REMAINS
+  HELD.**
