@@ -299,6 +299,9 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
         fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
         inference_batching=resolve_inference_batching(dump) if graph else None,
         max_in_flight=cfg.selfplay.leaf_batch_size,
+        # AUDIT-1 F-31: the declared autocast dtype, from the config this witness already
+        # holds. `amp_dtype_for` resolves it (LAW-06); this site names no dtype.
+        amp_dtype=cfg.train.amp_dtype,
     )
 
 

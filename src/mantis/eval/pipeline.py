@@ -423,6 +423,7 @@ class EvalPipeline:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         leaf_batch_size: int,
+        amp_dtype: str,
         leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
@@ -468,6 +469,11 @@ class EvalPipeline:
         #: `selfplay.leaf_batch_size`, and a default here would be a search regime nobody
         #: minted standing in for the one the net was trained under.
         self._leaf_batch_size = int(leaf_batch_size)
+        #: The run's declared `train.amp_dtype`, resolved ONCE in the parent and carried to
+        #: every round's `RoundSpec`. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1
+        #: F-31): the child's dense forward autocast with no dtype at all, and a default here
+        #: would put a dtype nobody declared back on the deploy-matched bar.
+        self._amp_dtype = str(amp_dtype)
         #: The graph collector's batching geometry (PERF-TRANCHE-1 G-2, ledger F-2), resolved
         #: ONCE in the parent and carried to every round's `RoundSpec`. NOT defaulted, for
         #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
@@ -717,6 +723,10 @@ class EvalPipeline:
             # R318(b), same seam and same reason: the deploy head must search at the width the
             # net's targets were generated at, and the child cannot read the config to find it.
             leaf_batch_size=self._leaf_batch_size,
+            # AUDIT-1 F-31, same seam and same reason: the child's DENSE autocast had no
+            # `dtype=` at all, so it ran at torch's device default while the run declared
+            # otherwise — on the path LAW-15 reads the promotion bar off.
+            amp_dtype=self._amp_dtype,
             # G-2, same seam and same reason: the child's graph server wrote its pop width
             # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
             # deadline one of them set (ledger F-2).
@@ -1231,6 +1241,7 @@ def build_eval_pipeline(
     fused_graph_caps: FusedGraphCapsSpec | None,
     inference_batching: InferenceBatchingSpec | None,
     leaf_batch_size: int,
+    amp_dtype: str,
     run_id: str,
     spool_dir: str | Path,
     ladder_state_path: str | Path,
@@ -1248,7 +1259,8 @@ def build_eval_pipeline(
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
-        leaf_batch_size=leaf_batch_size, leaf_build_threads=leaf_build_threads,
+        leaf_batch_size=leaf_batch_size, amp_dtype=amp_dtype,
+        leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,
         spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,

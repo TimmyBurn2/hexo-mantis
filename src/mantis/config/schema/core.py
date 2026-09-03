@@ -103,6 +103,27 @@ ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
 )
 
 
+class WarmStartConfig(StrictModel):
+    """The BC warm-start SOURCE: which checkpoint a fresh run's representation+policy weights
+    come from, and which net that checkpoint is (R332(d), AUDIT-1 F-19).
+
+    A BLOCK rather than two sibling leaves, and that is the whole design. Both members are
+    REQUIRED *inside* it, so `checkpoint` without `net_hash` is UNCONSTRUCTIBLE — and a path
+    with no hash is precisely the shape that lets a run warm-start from whatever file happens
+    to be sitting there. `null` on the parent is the EXPLICIT no-warm-start posture, the same
+    "block or null" the `train.draw_rate_abort` row uses for the same reason.
+
+    `net_hash` is `mantis.model.identity.net_param_hash` over the net REBUILT FROM the
+    checkpoint's own stamp — not a file digest. A file digest changes with re-saves,
+    compression and metadata; the parameter hash is the thing a prereg means when it names an
+    artifact, and it is the same currency `worker_sweep`, `acceptance_witness` and T10 already
+    report, so a prereg row and a sweep row can be compared without a conversion.
+    """
+
+    checkpoint: str = Field(min_length=1)
+    net_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class IdentityConfig(StrictModel):
     """Identity keys have no terminal defaults (repo_design §5): absent = error — for
     ``encoding`` and ``representation``. ``arch_kind`` is the ONE optional identity leaf, below.
@@ -123,11 +144,20 @@ class IdentityConfig(StrictModel):
     pinned against every minted file. The ``None`` is therefore not a fallback carrying a guess:
     it states "this config predates the row", and the arch such configs have always built is
     pinned by test. Artifacts never read this row — a checkpoint's arch is its stamp's.
+
+    ``warm_start`` is THE BC WARM-START ROW (R332(d), AUDIT-1 F-19) and it is optional for
+    ``arch_kind``'s reason, not a new one: it enters production configs only as a minted row at
+    run6's mint, so every committed config omits it today. It is an IDENTITY key because it
+    decides what net a run starts from — the same class of fact as which arch it builds. Its
+    consumer is ``mantis.train.warmstart.resolve_bc_warm_start`` -> ``apply_bc_warm_start``,
+    called from ``mantis.train.orchestrator.init_trainer``'s fresh-run branch; an absent row
+    means NO transfer, which is what every run before the row did.
     """
 
     encoding: str = Field(min_length=1)
     representation: Literal["grid", "graph"]
     arch_kind: str | None = Field(default=None, min_length=1)
+    warm_start: WarmStartConfig | None = Field(default=None)
 
     @model_validator(mode="after")
     def _representation_matches_registry(self) -> "IdentityConfig":

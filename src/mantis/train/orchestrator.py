@@ -134,6 +134,21 @@ def init_trainer(
     spec = resolve_from_config(cfg)
     arch = arch_from_spec_and_config(spec, cfg)
     model = build_net(arch)
+
+    # AUDIT-1 F-19 / R332(d) — THE BC WARM-START ENTRY, and this call is the whole point of the
+    # row. `train/warmstart.py` was imported by NOTHING in `src/`: the module that moves a BC
+    # checkpoint's representation+policy weights into a fresh run's net had no production
+    # caller, no config key, and two `.get(key, default)` reads against keys the schema does not
+    # have. So BC-EXEC could produce a checkpoint and nothing could consume it.
+    #
+    # It sits HERE, on the FRESH branch only, because that is what a warm start is: a resume
+    # (`checkpoint_path is not None`, returned above) already restored trained weights and
+    # seeding over them would destroy them. An absent `identity.warm_start` row returns False
+    # and this is a no-op, which is what every run before the row did.
+    from mantis.train.warmstart import maybe_warmstart_gnn_from_bc
+
+    maybe_warmstart_gnn_from_bc(model, cfg, spec=spec)
+
     # Pass the DECLARED arch (the SOLE arch source at save) + the injected sink through so a
     # fresh-run Trainer stamps envelope-v2 checkpoints from `metadata.arch` and routes events.
     return Trainer(model, dict(config), arch=arch, checkpoint_dir=checkpoint_dir,

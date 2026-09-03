@@ -72,6 +72,7 @@ import numpy as np
 from mantis.config.resolve.allocator_posture import (
     read_live_allocator_conf as _live_alloc_conf,
 )
+from mantis.model.amp import amp_dtype_for
 
 _TOOL = "mantis.diagnostics.fusion_calibrate"
 _KEY = "inference.fused_graph_caps"
@@ -297,11 +298,17 @@ def _sweep(encoding: str, max_moves: int, counts: tuple[int, ...],
 def _measure_point(
     net: Any, spec: Any, device: Any, encoding: str, max_moves: int,
     point: SweepPoint, stones: int, spread: int, repeats: int, corpus: Any = None,
+    *, amp_dtype: str,
 ) -> dict[str, Any]:
     """Run the PRODUCTION forward `repeats` times at this point; report the MEDIAN peak delta.
 
     Median and not a single shot: one allocation retry or one cache state makes a single
     reading unrepeatable, and a cap fitted to a single shot is fitted to noise.
+
+    Args:
+        amp_dtype: the run's declared `train.amp_dtype`, threaded from the config and resolved
+            through `amp_dtype_for` — the ONE dtype authority (LAW-06). Keyword-only and with
+            no default: a default here would be the second authority AUDIT-1 F-31 is about.
     """
     import torch
 
@@ -334,8 +341,15 @@ def _measure_point(
             canary_period=64,
         )
         stone_mask = stone_mask_from_batch(batch)
+        # AUDIT-1 F-31. `amp_dtype_for` is the ONE dtype authority (LAW-06) and this was a
+        # literal `torch.bfloat16` beside it. The literal happens to be right for the graph
+        # path — LAW-06 pins graph to bf16 — which is exactly why it was invisible: a copy
+        # that agrees today is still a second authority, and this one calibrates the caps a
+        # production forward then runs under.
         with torch.inference_mode(), torch.autocast(
-            device_type="cuda", dtype=torch.bfloat16, enabled=True,
+            device_type="cuda",
+            dtype=amp_dtype_for(str(spec.representation), amp_dtype),
+            enabled=True,
         ):
             policy_logits, value, _bins = net.forward_batch(
                 batch.x, batch.edge_index, batch.edge_attr, batch.legal_node_gather,
@@ -754,6 +768,11 @@ def run(argv: list[str] | None = None) -> int:
             measured.append(_measure_point(
                 net, spec, device, config.identity.encoding, max_moves, point,
                 *by_label[point.label], args.repeats, corpus,
+                # AUDIT-1 F-31: THREADED from the config, never named here. The graph branch
+                # of `amp_dtype_for` ignores it (LAW-06 pins graph to bf16), but threading it
+                # is what keeps this call site from being a second dtype authority the day a
+                # grid calibration exists.
+                amp_dtype=config.train.amp_dtype,
             ))
         except torch.cuda.OutOfMemoryError as exc:
             # RECORDED, NEVER RETRIED, and never estimated. A sweep whose largest point does

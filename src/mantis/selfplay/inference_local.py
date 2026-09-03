@@ -45,6 +45,7 @@ from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import EncodingSpec
 from mantis.env.game_state import GameState
+from mantis.model.amp import amp_dtype_for
 from mantis.selfplay.hparams import is_graph_representation
 
 
@@ -107,6 +108,7 @@ class LocalInferenceEngine:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         max_in_flight: int,
+        amp_dtype: str,
         leaf_build_threads: int = 1,
     ) -> None:
         self.model = model
@@ -119,6 +121,12 @@ class LocalInferenceEngine:
         # value-identical on every reachable input — and a genuine model/spec
         # disagreement now fails loudly instead of silently decoding down the other arm.
         self._is_graph = is_graph_representation(self.encoding_spec)
+        # AUDIT-1 F-31. The DENSE decodes below autocast, and carried no `dtype=` at all — so
+        # they ran at torch's device default while `train.amp_dtype` said something else, on
+        # the path LAW-15 reads the promotion bar off. Resolved ONCE here through the one
+        # authority (`amp_dtype_for`, LAW-06) and applied at both call sites. REQUIRED and
+        # keyword-only, with no default: a default is the second authority this row removes.
+        self._amp_dtype = amp_dtype_for(str(self.encoding_spec.representation), amp_dtype)
         # NIGHTRUN-1 E1. `1` is the SERIAL path and the exact-parity control — the same
         # identity default `HexgBuffer.sample_graph_batch`'s `n_threads` carries, and for the
         # same reason: this layer must not invent a host reservation. The EVAL round derives
@@ -165,7 +173,12 @@ class LocalInferenceEngine:
                 # WPSC Phase 3 SC-B3: InferenceServer hard-reads config["train"]
                 # ["amp_dtype"] unconditionally (R30b, no fallback) — inert here (this
                 # branch is always graph, LAW-06 bf16-pinned regardless of the value).
-                }, "train": {"amp_dtype": "bf16"}},
+                # THREADED, for the same reason the two knobs above are: the server hard-reads
+                # this key (R30b, no fallback), and a literal here is a second dtype authority
+                # on the one construction path with no config to be the first (AUDIT-1 F-31).
+                # Inert in EFFECT on this branch — it is always graph, LAW-06 bf16-pinned —
+                # and threading it is what keeps it inert by CONSTRUCTION rather than by luck.
+                }, "train": {"amp_dtype": amp_dtype}},
                 batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
                 # F-816-10 D-1: THREADED, never hardcoded. This dict literal has no
                 # `fused_graph_caps` key and must not grow one — a cap written here would be a
@@ -247,6 +260,12 @@ class LocalInferenceEngine:
         self.model.eval()
         with autocast(
             device_type=self.device.type,
+            # AUDIT-1 F-31. This carried NO `dtype=`, so the DENSE eval/arena forward ran at
+            # torch's device default regardless of the run's declared `train.amp_dtype` — on
+            # the one path LAW-15 reads a deploy-matched promotion bar off. `amp_dtype_for` is
+            # the ONE authority (LAW-06); the value is threaded from the round spec, never
+            # named here.
+            dtype=self._amp_dtype,
             enabled=(self.device.type in ("cuda", "mps")),
         ):
             log_policy, value, _v_logit = self.model(batch_tensor.float())
@@ -475,6 +494,12 @@ class LocalInferenceEngine:
         self.model.eval()
         with autocast(
             device_type=self.device.type,
+            # AUDIT-1 F-31. This carried NO `dtype=`, so the DENSE eval/arena forward ran at
+            # torch's device default regardless of the run's declared `train.amp_dtype` — on
+            # the one path LAW-15 reads a deploy-matched promotion bar off. `amp_dtype_for` is
+            # the ONE authority (LAW-06); the value is threaded from the round spec, never
+            # named here.
+            dtype=self._amp_dtype,
             enabled=(self.device.type in ("cuda", "mps")),
         ):
             log_policy, value, _v_logit = self.model(batch_tensor.float())

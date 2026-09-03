@@ -142,7 +142,7 @@ def _engine(sign: float) -> LocalInferenceEngine:
     net.eval()
     return LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=lookup(_ENC),
                                 fused_graph_caps=_CAPS,
-                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8)
+                                inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, amp_dtype="bf16")
 
 
 @pytest.fixture

@@ -34,6 +34,7 @@ from mantis.config.schema import (
     TrainConfig,
 )
 from mantis.model import ARCH_KIND_ROW
+from mantis.train.warmstart import WARM_START_ROW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -430,7 +431,14 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # to the representation's INCUMBENT kind — a history fact pinned against every minted file by
     # tests/model/conformance/test_arch_selector_makes_v2_selectable.py, not a value a reader
     # guessed. Enumerated here by name so a THIRD optional leaf anywhere is still a red.
-    exempt |= {ARCH_KIND_ROW}
+    #
+    # THE THIRD EXEMPT ROW, grounded (R332(d) / AUDIT-1 F-19): `identity.warm_start`, the BC
+    # warm-start block, optional for the SAME reason and not a new one — it enters production
+    # configs only as a minted row at run6's mint. It is a BLOCK, so the exemption is on the
+    # PARENT only: `checkpoint` and `net_hash` are REQUIRED inside it and are covered by the
+    # required-field assertion below, which is exactly what makes a path with no expected hash
+    # unconstructible. A FOURTH optional leaf anywhere is still a red.
+    exempt |= {ARCH_KIND_ROW, WARM_START_ROW}
     seen: set[str] = set()
     for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():

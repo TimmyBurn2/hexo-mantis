@@ -61,6 +61,12 @@ CONSUMER_REGISTRY = {
     "identity.arch_kind": "arch_from_spec_and_config via declared_arch_kind -> select_arch (the "
                           "arch-selector ROW, R330(e); OPTIONAL, absent until run6's mint writes it "
                           "per R323(b); absence resolves to the pinned incumbent)",
+    "identity.warm_start.checkpoint": "resolve_bc_warm_start -> apply_bc_warm_start, called from "
+                                      "init_trainer's FRESH branch (the BC warm-start ROW, R332(d) / "
+                                      "AUDIT-1 F-19; OPTIONAL, absent until run6's mint writes it)",
+    "identity.warm_start.net_hash": "resolve_bc_warm_start -> apply_bc_warm_start identity check: "
+                                    "net_param_hash of the net rebuilt from the checkpoint's OWN "
+                                    "stamp must equal this, else WarmStartIdentityError (R332(d))",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.sealbot_model_sims": "resolve_eval_model_sims (sealbot rungs) + sims regime-parity (O9) + emit",
     "eval.kraken_model_sims": "resolve_eval_model_sims (kraken rungs)",
@@ -512,8 +518,11 @@ def test_registry_matches_the_live_leaf_count():
     # R330(e): + 1 = 186 — `identity.arch_kind`, the arch-selector row, the first OPTIONAL leaf
     # this walker has counted. One leaf, one YAML line when minted; absent from every committed
     # config until run6's mint (R323(b)), read by ONE function (`arch_from_spec_and_config`).
-    assert len(CONSUMER_REGISTRY) == 186
-    assert len(_leaf_paths(RunConfig)) == 186
+    # R332(d): + 2 = 188 — `identity.warm_start`'s two members. ONE optional BLOCK, two leaves
+    # under the walker: both are REQUIRED inside the block, which is what makes a checkpoint
+    # path with no expected net hash unconstructible (AUDIT-1 F-19).
+    assert len(CONSUMER_REGISTRY) == 188
+    assert len(_leaf_paths(RunConfig)) == 188
 
 
 def test_no_forward_reference_strings_in_registry():

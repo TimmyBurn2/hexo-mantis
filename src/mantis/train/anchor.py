@@ -35,7 +35,6 @@ MUST land, and unexpected keys MUST be empty. A checkpoint missing a REQUIRED co
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import pickle
@@ -48,6 +47,7 @@ from typing import Any
 import torch
 
 from mantis.model import RepresentationMismatch, build_net
+from mantis.model.identity import state_dict_param_hash
 
 _LOG = logging.getLogger(__name__)
 
@@ -206,32 +206,15 @@ def _write_provenance_sidecar(
 
 
 # ══ Tensor-identity hash + launch pin ══════════════════════════════════════════════════
-def state_dict_sha256(state_dict: dict[str, Any]) -> str:
-    """Deterministic sha256 over a model ``state_dict`` (canonical sorted keys + raw tensor
-    bytes) — stable across processes and save formats for identical weights. Canonicalises
-    `_orig_mod.`/`module.` compile/DDP wrapper prefixes so a wrapped and an unwrapped copy of the
-    same weights hash equal."""
-    def _canon(key: str) -> str:
-        changed = True
-        while changed:
-            changed = False
-            for prefix in ("_orig_mod.", "module."):
-                if key.startswith(prefix):
-                    key = key[len(prefix):]
-                    changed = True
-        return key
-
-    h = hashlib.sha256()
-    for canon_key, raw_key in sorted((_canon(k), k) for k in state_dict.keys()):
-        h.update(canon_key.encode("utf-8"))
-        value = state_dict[raw_key]
-        if isinstance(value, torch.Tensor):
-            h.update(value.detach().cpu().contiguous().numpy().tobytes())
-        else:
-            h.update(repr(value).encode("utf-8"))
-    return h.hexdigest()
-
-
+# AUDIT-1 F-32. `state_dict_sha256` USED TO LIVE HERE — canonicalised keys plus raw bytes, no
+# shape and no dtype — and it was a SECOND parameter identity beside
+# `mantis.model.identity.net_param_hash` (sorted `name + shape + dtype + bytes`, R317's
+# observable, consumed by `worker_sweep`, `acceptance_witness` and the T10 conformance rows).
+# The two disagree BY CONSTRUCTION, so a run's `expected_anchor_sha256` and any recorded
+# `net_param_hash` were never comparable — the pin could not be cross-checked against a single
+# observable this repo actually reports. It is deleted; `state_dict_param_hash` is the one
+# denomination, and it keeps the wrapper-prefix canonicalisation that half of the old function
+# had right.
 def _extract_stored_state(raw: Any) -> dict[str, Any]:
     """The MODEL weights stored in a loaded anchor payload — a bare `state_dict` or a
     `{model_state: …}` provenance wrapper."""
@@ -241,13 +224,35 @@ def _extract_stored_state(raw: Any) -> dict[str, Any]:
 
 
 def checkpoint_state_sha256(path: Path) -> str:
-    """sha256 of the MODEL weights STORED in an anchor file — the dtype/device-independent
-    identity the launch pin compares against. Hashes the STORED state (matching the on-disk pin),
-    NOT a live model whose runtime dtype diverges from disk. Weights-only (LAW-12)."""
+    """The parameter identity of the weights STORED in an anchor file.
+
+    ONE denomination with everything else that answers "same net?" — `net_param_hash` over a
+    module, `state_dict_param_hash` over bytes (AUDIT-1 F-32). Hashes the STORED state and not
+    a live model, so a runtime dtype that diverges from disk does not move the answer.
+    Weights-only (LAW-12).
+    """
     raw = torch.load(path, map_location="cpu", weights_only=True)
-    return state_dict_sha256(_extract_stored_state(raw))
+    return state_dict_param_hash(_extract_stored_state(raw))
 
 
+#: AUDIT-1 F-32, the ARMING half — BANKED at REPAIR-2, and the reason is on the record rather
+#: than in a commit message. The hash duplication is REPAIRED (one denomination,
+#: `state_dict_param_hash`), so the pin below and every `net_param_hash` a sweep or witness
+#: reports are finally the same currency. What is NOT repaired is that nothing ever passes a
+#: value: `run.py` never sets it, there is no schema key and no CLI flag, so
+#: `verify_launch_anchor_pin` is a refusal nobody can reach.
+#:
+#: The audit offers three routes and each needs an authority this session does not have:
+#:   * a SCHEMA KEY — R323(b) puts identity rows into production configs only at the run6
+#:     mint, so minting one here is a mint-class act;
+#:   * a CLI FLAG — the value has to cross `mantis.run.compose_run`, whose parameter tuple is
+#:     PINNED by `tests/test_run_strict_composition.py` with "adding one is a design decision,
+#:     not an edit" (WPAX MF-1). The flag would not violate that rule's SUBSTANCE — an
+#:     invocation fact is not a config fact — but flipping the pinned tuple is exactly the
+#:     decision the pin reserves;
+#:   * DELETING the chain — removing a guard somebody deliberately built, on the judgement of
+#:     the session that found it disarmed.
+#: It is the same shape as F-11's arming bank and belongs on the same screen.
 def verify_launch_anchor_pin(
     *,
     expected_anchor_sha256: str | None,
@@ -614,6 +619,5 @@ __all__ = [
     "load_best_model_resilient",
     "resolve_anchor",
     "save_best_model_atomic",
-    "state_dict_sha256",
     "verify_launch_anchor_pin",
 ]

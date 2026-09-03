@@ -12,7 +12,6 @@ dispatch signal.
 """
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -527,6 +526,15 @@ def _graph_specs() -> list[EncodingSpec]:
     return [s for s in all_specs() if getattr(s, "representation", "grid") == "graph"]
 
 
+#: REPORT-ONLY, and the restriction is the whole of AUDIT-1 F-20's second half. The function
+#: below dispatches on an ARCH-STRUCTURAL key and then on conv/policy-fc widths, so a V3 graph
+#: arch that renames its trunk entry reads as GRID. `checkpoints.load_legacy_weights` — the
+#: loader for exactly these artifacts — REFUSES to shape-sniff and says so in its docstring;
+#: two postures on one question is the duplicate-authority class, and the loader's is the one
+#: that governs. NOTHING ON A DISPATCH PATH MAY CALL THIS: the encoding a run uses comes from a
+#: stamp or from an explicit declaration. `mantis.encoding.audit_sections` calls it to REPORT a
+#: declared-vs-inferred reconciliation for an operator, which selects no behaviour, and
+#: `tests/encoding/test_no_shape_sniff_dispatch.py` is what keeps that the only caller.
 def detect_encoding_from_state_dict(
     state: Mapping[str, Any],
     ckpt_label: str,
@@ -621,14 +629,36 @@ def detect_encoding_from_state_dict(
 
 
 def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
-    """Return an `EncodingSpec` for a saved checkpoint.
+    """Return an `EncodingSpec` for a saved checkpoint — from its STAMP, never its shape.
 
-    Reads `ckpt['metadata']['encoding_name']` if present. Otherwise falls back
-    to the unified state-dict detector and emits a `DeprecationWarning`.
+    AUDIT-1 F-20, and it repairs two separate things.
+
+    **The pickle-exec hole.** This read `torch.load(path, weights_only=False)`, which executes
+    arbitrary pickle on load. `docs/contracts/checkpoint_envelope.md` asserts *"every read
+    surface is `torch.load(weights_only=True)`; there is no pickle-exec fallback"* — an
+    assertion that was FALSE at HEAD, on a surface reachable from the pretrain CLI's
+    `--resume` (without `--encoding`) and from the audit CLI.
+
+    **The shape sniffer.** When the stamp was absent it fell through to
+    `detect_encoding_from_state_dict`, which dispatches on an ARCH-STRUCTURAL key
+    (`representation.input_proj.weight`) and then on conv/policy-fc shapes across the
+    registered grid set. A V3 graph arch that renames `input_proj` is silently classified as
+    GRID. Meanwhile `checkpoints.load_legacy_weights` — the loader for exactly these
+    artifacts — REFUSES to shape-sniff and says so. Two postures on one question; the loader's
+    is the one kept.
+
+    An artifact with no `encoding_name` in its stamp now RAISES by name. That is a harder
+    failure than the old `DeprecationWarning`, and deliberately: the warning's advice ("stamp
+    metadata explicitly") is the only correct action, and emitting it while proceeding on a
+    guess is what let unstamped artifacts stay unstamped.
+
+    Raises:
+        EncodingRegistryError: the payload is not a mapping, carries no
+            `metadata['encoding_name']`, or that field is not a string.
     """
     import torch
 
-    d = torch.load(path, map_location="cpu", weights_only=False)
+    d = torch.load(path, map_location="cpu", weights_only=True)
     meta = d.get("metadata") if isinstance(d, dict) else None
     if isinstance(meta, dict) and "encoding_name" in meta:
         name = meta["encoding_name"]
@@ -639,25 +669,13 @@ def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
             )
         return lookup(name)
 
-    if isinstance(d, dict) and "model_state" in d:
-        sd = d["model_state"]
-    else:
-        sd = d
-    if not isinstance(sd, Mapping):
-        raise EncodingRegistryError(
-            f"checkpoint {path}: cannot extract state-dict for shape inference"
-        )
-    # Lazy import — compat delegates back into this module's unified detector.
-    from mantis.encoding import compat
-
-    name = compat.infer_encoding_from_state_dict(sd, str(path))
-    warnings.warn(
-        f"checkpoint {path} has no metadata['encoding_name']; "
-        f"inferred {name!r} from state-dict shape. Stamp metadata explicitly.",
-        DeprecationWarning,
-        stacklevel=2,
+    raise EncodingRegistryError(
+        f"checkpoint {path}: no metadata['encoding_name'] to resolve an encoding from. This "
+        "used to fall through to a state-dict SHAPE inference, which dispatches on an "
+        "arch-structural key and on conv widths — so a renamed graph trunk read as grid "
+        "(AUDIT-1 F-20). An artifact's encoding is its STAMP's. Pass the encoding explicitly, "
+        "or re-stamp the artifact."
     )
-    return lookup(name)
 
 
 def validate_against_state_dict(

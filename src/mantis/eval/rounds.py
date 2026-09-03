@@ -169,6 +169,14 @@ class RoundSpec:
     #: silently restore the k=1 train/deploy mismatch this field exists to close. A plain int,
     #: so it round-trips through `asdict`/`from_dict` with no rehydration entry.
     leaf_batch_size: int
+    #: The run's declared `train.amp_dtype`, carried across the process seam for
+    #: `fused_graph_caps`' reason (AUDIT-1 F-31). The eval child's `LocalInferenceEngine` has no
+    #: `RunConfig` to resolve against, and its DENSE decodes carried no `dtype=` on their
+    #: autocast at all — so the deploy-matched forward ran at torch's device default while the
+    #: run declared something else, on the one path LAW-15 reads a promotion bar off. Resolved
+    #: through `amp_dtype_for` (the ONE authority, LAW-06) inside the engine; threaded, never
+    #: named at the construction site.
+    amp_dtype: str
     #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
     #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
     #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph

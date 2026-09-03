@@ -1,5 +1,12 @@
 """test_anchor — the anchor consumer-of-record (WP10 §a.5/§c.6; LAW-08 CI consumer).
 
+R8 justification: this file is ONE unit because the anchor's save, load, quarantine and
+identity invariants are one artifact lifecycle and only mean anything together. Every row here
+either writes a `best_model.pt` and reads it back, or asserts what happens when that round trip
+is broken — a save test in one file and its load test in another would let a change pass both
+while breaking the pair, which is exactly the shape AUDIT-1 F-17 was: the write dropped the
+arch and the read invented one, and each half looked fine alone.
+
 Exercises `save_best_model_atomic` round-trip verify + `.bak` rotation, `_quarantine_corrupt`,
 the `load_best_model_resilient` fallback chain, and representation-off-the-declared-arch (a census
 that `model_representation` is NOT imported/used — WP9 O3). PLUS the (B) corruption guard: a
@@ -23,7 +30,6 @@ from mantis.train.anchor import (
     _quarantine_corrupt,
     load_best_model_resilient,
     save_best_model_atomic,
-    state_dict_sha256,
 )
 
 _ANCHOR_SRC = Path(anchor_mod.__file__).read_text(encoding="utf-8")
@@ -222,11 +228,22 @@ def test_quarantine_corrupt_renames(tmp_path: Path) -> None:
     assert dest.exists() and ".corrupt-" in dest.name
 
 
-def test_state_dict_sha256_is_wrapper_invariant() -> None:
+def test_the_anchor_hash_is_wrapper_invariant_and_is_THE_net_param_hash() -> None:
+    """AUDIT-1 F-32. The anchor's identity used to be `state_dict_sha256` — its OWN hash, with
+    no shape and no dtype — so a run's `expected_anchor_sha256` could never be compared with
+    the `net_param_hash` a sweep or an acceptance witness reports. One denomination now, and
+    both halves are asserted: the wrapper invariance the old function had right, and the
+    agreement with the module-level hash it could not have."""
+    from mantis.model.identity import net_param_hash, state_dict_param_hash
+
     net = _full_net()
     sd = net.state_dict()
     wrapped = {f"_orig_mod.{k}": v for k, v in sd.items()}
-    assert state_dict_sha256(sd) == state_dict_sha256(wrapped)
+    assert state_dict_param_hash(sd) == state_dict_param_hash(wrapped)
+    assert state_dict_param_hash(sd) == net_param_hash(net), (
+        "the state-dict entry point and the module entry point must be ONE hash — that they "
+        "were not is exactly what made the launch pin uncomparable to every recorded observable"
+    )
 
 
 # ══ resilient load fallback chain ══════════════════════════════════════════════════════

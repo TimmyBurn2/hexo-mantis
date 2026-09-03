@@ -126,10 +126,10 @@ SHADOWED_TRAIN_KEYS: tuple[str, ...] = (
 )
 
 
-def training_terms(train_cfg: TrainConfig) -> dict[str, float | int]:
+def training_terms(train_cfg: TrainConfig) -> dict[str, float | int | bool | str]:
     """The training terms a bootstrap pretrain runs on, read from the minted config.
 
-    THE ONE READ PATH, and that is the whole of F-816-25's fix. Each of these six was a
+    THE ONE READ PATH, and that is the whole of F-816-25's fix. Each of the first six was a
     code-side literal on the argparse surface — three of them DIVERGENT from `configs/run5.yaml`
     — so a bootstrap pretrain ran on the parser's numbers while the minted ones sat inert. Two
     authorities over one number is R79; here there is one, and it is the config.
@@ -150,6 +150,13 @@ def training_terms(train_cfg: TrainConfig) -> dict[str, float | int]:
         "aux_opp_reply_weight": float(train_cfg.aux_opp_reply_weight),
         "aux_chain_weight": float(train_cfg.aux_chain_weight),
         "pretrain_eta_min": float(train_cfg.eta_min),
+        # AUDIT-1 F-30, and it is the SAME defect this function was written to fix, on two
+        # more keys. `BootstrapTrainer` read `config.get("fp16", True)` — a code-side default
+        # on a key the schema REQUIRES — and autocast at a LITERAL `torch.float16`, so BC
+        # pretrain ran at hard-fp16 on grid and fp32 on graph (no autocast at all) while the
+        # trainer it warm-starts runs `amp_dtype_for`. Both now come off the minted config.
+        "fp16": bool(train_cfg.fp16),
+        "amp_dtype": str(train_cfg.amp_dtype),
     }
 
 

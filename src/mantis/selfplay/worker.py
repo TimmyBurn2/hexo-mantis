@@ -126,6 +126,10 @@ class SelfPlayWorker:
             # which has no fused graph forward to bound. Written out so a reader sees the
             # decision instead of a silence (F-816-10 D-1).
             fused_graph_caps=None,
+            # AUDIT-1 F-31: the run's declared autocast dtype, read by key off the SAME config
+            # this worker was built from. The dense decode below it autocast with no `dtype=`,
+            # so it ran at torch's device default whatever the run declared.
+            amp_dtype=str(config["train"]["amp_dtype"]),
             # EXPLICIT `None` / `0` on the same grounds as the line above: the graph
             # representation is refused by name at this constructor, so this engine opens no
             # graph collector and there is no batching geometry or supply for it to carry.

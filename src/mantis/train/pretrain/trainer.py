@@ -26,6 +26,7 @@ import torch.optim as optim
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 
+from mantis.model.amp import amp_dtype_for
 from mantis.train.emit import emit_via
 from mantis.train.losses import (
     compute_aux_loss,
@@ -66,8 +67,19 @@ class BootstrapTrainer:
         self._sink = sink
         self.step = 0
 
-        fp16 = bool(config.get("fp16", True)) and device.type == "cuda"
+        # AUDIT-1 F-30. `config.get("fp16", True)` was a code-side default on a key the schema
+        # HAS (`train.fp16`), so a config that declared False still got True if the key was
+        # read from the wrong level. Read BY KEY, absent is an error (R1).
+        fp16 = bool(config["fp16"]) and device.type == "cuda"
         self.fp16 = fp16
+        # AUDIT-1 F-30. The autocast below ran at a LITERAL `torch.float16` while
+        # `amp_dtype_for` is the ONE dtype authority (LAW-06) and `train.amp_dtype` is a
+        # REQUIRED key — so BC pretrain trained at hard-fp16 on grid and at fp32 on graph (no
+        # autocast at all), and then warm-started a trainer that runs `amp_dtype_for`. The
+        # representation comes from the DECLARED arch, never sniffed off the module.
+        self.amp_dtype = amp_dtype_for(
+            str(arch.representation), str(config["amp_dtype"]),
+        )
 
         self.optimizer = optim.AdamW(
             self.model.parameters(),
@@ -123,7 +135,7 @@ class BootstrapTrainer:
             use_chain = chain_weight > 0.0
             with autocast(
                 device_type=self.device.type,
-                dtype=torch.float16,
+                dtype=self.amp_dtype,
                 enabled=self.fp16,
             ):
                 fwd = self.model(states, aux=True, chain=use_chain)

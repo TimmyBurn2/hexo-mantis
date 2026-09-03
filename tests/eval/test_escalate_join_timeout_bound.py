@@ -119,7 +119,8 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: "EvalConfig | None" = None, **
             final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
         ),
-        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir,
+        encoding="v6_live2_ls",
+        amp_dtype="bf16", run_id="oracle_test_run", spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json", promotion=_promotion_hooks(tmp_path),
         # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in
         # the parent and carries it to every `RoundSpec`, because the eval child is a

@@ -214,23 +214,37 @@ def test_the_literal_covers_every_key_run5_declares() -> None:
         )
 
 
-def test_amp_dtype_disagrees_and_is_erased_only_by_the_law06_pin() -> None:
-    """THE SHARP HALF, asserted as what it is rather than papered over.
+def test_the_amp_dtype_LITERAL_IS_GONE_and_the_declared_value_is_threaded() -> None:
+    """THE SHARP HALF — and the shape of this row CHANGED at AUDIT-1 F-31, which is worth
+    saying rather than quietly rewriting.
 
-    The literal hands `train.amp_dtype = "bf16"`; run5 DECLARES `fp16`. They differ. The
-    difference is inert only because `amp_dtype_for` pins the graph path to bfloat16
-    regardless (LAW-06). This test asserts BOTH facts, so that if LAW-06's pin is ever
-    relaxed the disagreement becomes visible instead of silently taking effect.
+    IT USED TO ASSERT A DISAGREEMENT. `inference_local.py`'s inline server dict wrote
+    `train.amp_dtype = "bf16"` as a LITERAL while run5 DECLARES `fp16`; the two differed, and
+    the difference was inert only because `amp_dtype_for` pins the graph path to bfloat16
+    regardless (LAW-06). This test asserted both facts so that a relaxed pin would make the
+    divergence visible — a good instrument for a defect that was being lived with.
+
+    F-31 REMOVED THE DEFECT, so the instrument changes with it: the literal is THREADED now
+    (`"amp_dtype": amp_dtype`, from the caller's declared value), and there is no disagreement
+    left to watch. What is pinned instead is that the literal does not come BACK, and that
+    LAW-06's pin — which is why the old divergence was survivable — still holds.
     """
-    from mantis.model.amp import amp_dtype_for
     import torch
 
-    literal = _inline_inference_literal()["train"]["amp_dtype"]
-    declared = _run5()["train"]["amp_dtype"]
-    assert literal == "bf16" and declared == "fp16", (
-        f"the known disagreement changed shape: literal={literal!r} declared={declared!r}"
+    from mantis.model.amp import amp_dtype_for
+
+    literals, threaded = _split_literal_and_threaded("train")
+    assert "amp_dtype" not in literals, (
+        "`train.amp_dtype` is a LITERAL in inference_local.py's inline server dict again. "
+        "That is a second dtype authority on the one construction path with no config to be "
+        "the first, and it is what AUDIT-1 F-31 removed."
     )
-    assert amp_dtype_for("graph", declared) is torch.bfloat16, (
-        "LAW-06's graph pin is what makes the amp_dtype disagreement inert; it no longer "
-        "holds, so the eval path's bf16 literal now genuinely diverges from run5's fp16"
+    assert "amp_dtype" in threaded, (
+        "`train.amp_dtype` is neither a literal nor threaded in the inline dict — the key "
+        "vanished. The server hard-reads it (R30b, no fallback), so a missing key is a boot "
+        "failure on the graph eval path, not a simplification."
+    )
+    assert amp_dtype_for("graph", _run5()["train"]["amp_dtype"]) is torch.bfloat16, (
+        "LAW-06's graph pin is what made the OLD literal-vs-declared divergence inert. The "
+        "divergence is gone, but the pin is still what the graph path's dtype rests on."
     )

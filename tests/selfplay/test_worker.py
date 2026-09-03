@@ -44,8 +44,16 @@ def _tiny_net() -> torch.nn.Module:
     return net
 
 
+#: The `train` section this worker's config must carry. AUDIT-1 F-31 made the engine's
+#: autocast dtype a REQUIRED read (`config["train"]["amp_dtype"]`) rather than a `dtype=`-less
+#: autocast running at torch's device default, so a config with no `train` section is now a
+#: loud `KeyError` — which is the R1 posture, and the reason it is written here rather than
+#: softened back to a `.get`.
+_TRAIN: dict = {"train": {"amp_dtype": "bf16"}}
+
+
 def _worker(**mcts: object) -> SelfPlayWorker:
-    cfg: dict = {"encoding": {"version": "v6"}, "mcts": dict(mcts)}
+    cfg: dict = {"encoding": {"version": "v6"}, "mcts": dict(mcts), **_TRAIN}
     return SelfPlayWorker(_tiny_net(), cfg, _CPU, encoding_spec=_SPEC)
 
 
@@ -82,7 +90,7 @@ def test_defaults_when_the_mcts_namespace_is_empty() -> None:
 def test_n_simulations_falls_back_to_the_top_level_key() -> None:
     """`n_simulations` is read from the `mcts` namespace with a TOP-LEVEL fallback —
     a two-step chain, not a single lookup."""
-    cfg = {"encoding": {"version": "v6"}, "mcts": {}, "n_simulations": 13}
+    cfg = {"encoding": {"version": "v6"}, "mcts": {}, "n_simulations": 13, **_TRAIN}
     w = SelfPlayWorker(_tiny_net(), cfg, _CPU, encoding_spec=_SPEC)
     assert w.n_sims == 13
 
@@ -99,7 +107,7 @@ def test_spec_like_object_is_adapted_by_name() -> None:
 
     w = SelfPlayWorker(
         _tiny_net(),
-        {"encoding": {"version": "v6"}, "mcts": {}},
+        {"encoding": {"version": "v6"}, "mcts": {}, **_TRAIN},
         _CPU,
         encoding_spec=_SpecLike(),
     )
@@ -110,7 +118,7 @@ def test_spec_like_object_is_adapted_by_name() -> None:
 def test_unadaptable_spec_raises() -> None:
     with pytest.raises(TypeError, match="cannot adapt"):
         SelfPlayWorker(
-            _tiny_net(), {"encoding": {"version": "v6"}, "mcts": {}}, _CPU,
+            _tiny_net(), {"encoding": {"version": "v6"}, "mcts": {}, **_TRAIN}, _CPU,
             encoding_spec=42,
         )
 

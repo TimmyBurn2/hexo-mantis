@@ -940,6 +940,10 @@ def compose_run(
                         if _posture_governs_device(config.eval.worker_device)
                         else None
                     ),
+                    # AUDIT-1 F-31: the run's declared autocast dtype, resolved ONCE here
+                    # and carried to every round — the eval child has no RunConfig, and
+                    # its dense forward had no dtype at all.
+                    amp_dtype=config.train.amp_dtype,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(
@@ -1138,6 +1142,7 @@ def launch_run(
     That is exactly why it may ride this pass-through without violating O-A2 — the census
     forbids a third STATEMENT here, and adding a `if resume:` branch is precisely the
     mutation it names. There is none; the parameter rides the existing builder call.
+
     """
     collaborators = build_run_collaborators(
         config=config, out_dir=out_dir, checkpoint_path=checkpoint_path)

@@ -39,7 +39,7 @@ from mantis.model.gnn import (
     load_representation_policy_from_bc,
 )
 from mantis.model.gnn_v2 import GnnNetV2
-from mantis.model.identity import net_param_hash
+from mantis.model.identity import net_param_hash, state_dict_param_hash
 
 __all__ = [
     "ARCH_KIND_ROW",
@@ -67,6 +67,7 @@ __all__ = [
     "decode_binned_value",
     "load_representation_policy_from_bc",
     "net_param_hash",
+    "state_dict_param_hash",
     "scalar_to_two_hot",
     "select_arch",
 ]

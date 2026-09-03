@@ -162,10 +162,20 @@ def build_arch() -> GnnArch:
 
 
 def build_net() -> GnnNet:
-    """The net PREREG_DFIX §1 fixes, at its pinned seed. `eval()`: no dropout/BN state."""
+    """The net PREREG_DFIX §1 fixes, at its pinned seed. `eval()`: no dropout/BN state.
+
+    AUDIT-1 F-31: built through `mantis.model.build_net`, not `GnnNet(...)` directly. This was
+    the ONLY direct net constructor outside `mantis.model` in the tree, so the parity net
+    carried no `.arch` handle — it was not the object production builds, while being the object
+    a LAW-06 parity claim rests on. Seed and construction order are unchanged, so the pinned
+    net is byte-identical; what changes is that it now comes off the one builder.
+    """
+    from mantis.model import build_net as _build_net
+
     torch.set_num_threads(1)
     torch.manual_seed(_SEED)
-    net = GnnNet(build_arch())
+    net = _build_net(build_arch())
+    assert isinstance(net, GnnNet)
     net.eval()
     return net
 

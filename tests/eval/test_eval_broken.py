@@ -115,6 +115,7 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: EvalConfig | None = None, **ov
             terminal_eval_hard_cap_sec=2.0,
         ),
         encoding="v6_live2_ls",
+        amp_dtype="bf16",
         run_id="oracle_test_run",
         spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json",

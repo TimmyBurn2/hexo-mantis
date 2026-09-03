@@ -24,14 +24,21 @@ Three seams:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
 
 from mantis.model import load_representation_policy_from_bc
+from mantis.model.gnn import BcTransferReport
 
 _LOG = logging.getLogger(__name__)
+
+
+class WarmStartIdentityError(RuntimeError):
+    """The declared warm-start checkpoint is not the net the config says it is (R332(d))."""
 
 # ── Arm-selection by value_head_type (RELATIVE to the launch-supplied head_dir) ────────
 # Pre-registered selection (INV-D1 / R5): scalar arm <- arm_A_seed0, dist arm <- arm_B_seed0.
@@ -270,67 +277,170 @@ def assert_dist65_bins_seeded(
     )
 
 
-# ══ GNN BC-prefit transfer (fresh graph launch) ════════════════════════════════════════
-def maybe_warmstart_gnn_from_bc(
-    model: Any,
-    combined_config: dict[str, Any],
-    *,
-    spec: Any,
-) -> bool:
-    """Seed a FRESH ``GnnNet``'s representation+policy_head from a BC-prefit checkpoint declared
-    at ``gnn_warm_start.checkpoint``. Returns True iff the transfer fired. Value head is NEVER
-    touched (``load_representation_policy_from_bc`` transfers ONLY representation.*/policy_head.*).
-    Default-OFF: a byte-identical no-op when ``gnn_warm_start`` is disabled/absent.
+# ══ GNN BC-prefit transfer — THE PRODUCTION ENTRY (R332(d), AUDIT-1 F-19) ══════════════
+#: THE ONE CONFIG ROW naming a BC warm-start source — dotted, as `RunConfig` spells it. Read by
+#: `resolve_bc_warm_start` and nowhere else, so the row has exactly one reader to change (the
+#: `ARCH_KIND_ROW` pattern, for the same reason).
+WARM_START_ROW = "identity.warm_start"
+
+
+@dataclass(frozen=True)
+class BcWarmStart:
+    """A resolved BC warm-start source: the checkpoint, and the net it must turn out to be.
+
+    FROZEN for the reason every resolved run-scoped constant in this tree is frozen — a value a
+    consumer could rebind is a second authority with extra steps. Both members travel together
+    because a path without its expected hash is the shape this row exists to make
+    unconstructible.
+    """
+
+    checkpoint: Path
+    net_hash: str
+
+
+def resolve_bc_warm_start(combined_config: Mapping[str, Any]) -> BcWarmStart | None:
+    """The declared BC warm-start source, or `None` when the config carries no row.
+
+    `None` is NOT a default carrying a guess: it states "this config declares no warm start",
+    which is what every run before the row did and what every committed config still says. A
+    row that is PRESENT is fully specified by the schema (`WarmStartConfig` requires both
+    members), so there is no `.get(key, fallback)` anywhere on this path.
+
+    Mapping-typed rather than `RunConfig`-typed so `mantis.train` keeps no import edge it does
+    not already have; the schema is what guarantees the shape.
 
     Raises:
-        ValueError:        enabled but ``spec.representation`` != "graph", or checkpoint unset.
-        FileNotFoundError: the declared checkpoint does not exist.
-        RuntimeError:      a key mismatch / failed landed-verify (F1 guard).
+        ValueError: the row is present but is not a mapping, or is missing a member — a config
+            that reaches here in that state did not come through the one loader.
     """
-    ws_cfg = combined_config.get("gnn_warm_start") or {}
-    if not isinstance(ws_cfg, dict) or not ws_cfg.get("enabled", False):
-        return False
+    identity = combined_config.get("identity")
+    if not isinstance(identity, Mapping):
+        return None
+    row = identity.get("warm_start")
+    if row is None:
+        return None
+    if not isinstance(row, Mapping):
+        raise ValueError(
+            f"{WARM_START_ROW} is {type(row).__name__}, expected a mapping with `checkpoint` "
+            "and `net_hash` (or `null` for no warm start)."
+        )
+    missing = [m for m in ("checkpoint", "net_hash") if not row.get(m)]
+    if missing:
+        raise ValueError(
+            f"{WARM_START_ROW} is missing {missing}. Both members are REQUIRED by the schema, "
+            "so a config reaching here without them did not come through `load_config` — and a "
+            "checkpoint path with no expected net hash is exactly the unverified warm start "
+            "this row exists to prevent."
+        )
+    return BcWarmStart(Path(str(row["checkpoint"])), str(row["net_hash"]))
 
-    representation = getattr(spec, "representation", "grid")
+
+def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTransferReport:
+    """Seed a fresh graph net's representation+policy_head from the DECLARED BC checkpoint.
+
+    THE SEQUENCE, and every step is a refusal point:
+
+    1. the artifact is read through THE checkpoint loader, so its arch comes from its own STAMP
+       (`checkpoints.stamped_arch_kind`, the one selector authority for an artifact) and never
+       from a shape sniff or this run's config;
+    2. the net that checkpoint IS gets rebuilt and hashed, and the hash must equal the
+       `net_hash` the identity declared — otherwise the file at that path is not the artifact
+       the prereg named, and the run refuses rather than training from whatever is there;
+    3. only then does the transfer run, and it is the existing strict primitive: every
+       `representation.*` / `policy_head.*` key must match on both sides, with a landed-verify
+       pass. The value head is NEVER touched.
+
+    Returns the transfer report (`loaded_keys`, `verified_tensors`).
+
+    Raises:
+        ValueError:        the resolved encoding is not a graph representation.
+        FileNotFoundError: the declared checkpoint does not exist.
+        WarmStartIdentityError: the checkpoint's net hash is not the declared one.
+        RuntimeError:      a key mismatch or failed landed-verify in the transfer (F1 guard).
+    """
+    representation = getattr(spec, "representation", None)
     if representation != "graph":
         raise ValueError(
-            "gnn_warm_start.enabled is true but the resolved encoding "
-            f"{getattr(spec, 'name', '?')!r} has representation={representation!r} "
-            "(expected 'graph') — the BC-prefit warm-start seam is graph-only. Use warm_start.* "
-            "for the CNN value-head-only E1 warm-start instead."
+            f"{WARM_START_ROW} is declared but the resolved encoding "
+            f"{getattr(spec, 'name', '?')!r} has representation={representation!r} (expected "
+            "'graph') — the BC-prefit transfer is graph-only. Use `warm_start.*` for the CNN "
+            "value-head-only E1 warm-start instead."
+        )
+    if not declared.checkpoint.exists():
+        raise FileNotFoundError(
+            f"{WARM_START_ROW}.checkpoint not found: {declared.checkpoint}."
         )
 
-    ckpt_path_raw = ws_cfg.get("checkpoint")
-    if not ckpt_path_raw:
-        raise ValueError(
-            "gnn_warm_start.enabled is true but gnn_warm_start.checkpoint is unset — cannot "
-            "resolve the BC-prefit source checkpoint."
-        )
-    ckpt_path = Path(ckpt_path_raw)
-    if not ckpt_path.exists():
-        raise FileNotFoundError(f"gnn_warm_start.checkpoint not found: {ckpt_path}.")
-
-    raw = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-    bc_state_dict = _extract_state(raw)
-
-    if _DIST65_BINS_KEY in bc_state_dict:
-        _LOG.warning(
-            "gnn_warmstart_source_has_value_head checkpoint=%s "
-            "(looks like a FULL GnnNet checkpoint, not a BC-prefit-only source; the value head "
-            "stays fresh either way. If a full resume was intended, use --checkpoint).",
-            str(ckpt_path),
-        )
-
-    result = load_representation_policy_from_bc(model, bc_state_dict)
-    _LOG.info(
-        "gnn_warmstart_loaded checkpoint=%s loaded_keys=%d verified_tensors=%s",
-        str(ckpt_path), len(result["loaded_keys"]), result["verified_tensors"],
+    from mantis.model import build_net
+    from mantis.model.identity import net_param_hash
+    from mantis.train.checkpoints import (
+        CHECKPOINT_SCHEMA_VERSION,
+        load_checkpoint,
+        load_legacy_weights,
     )
+
+    raw = torch.load(declared.checkpoint, map_location="cpu", weights_only=True)
+    is_v2 = isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION
+    ck = (
+        load_checkpoint(declared.checkpoint)
+        if is_v2
+        else load_legacy_weights(declared.checkpoint, declared_encoding=getattr(spec, "name", None))
+    )
+    if ck.metadata.arch is None:
+        raise WarmStartIdentityError(
+            f"{declared.checkpoint}: the artifact's stamp resolves no arch, so the net it "
+            "carries cannot be rebuilt and its identity cannot be checked."
+        )
+    source_net = build_net(ck.metadata.arch)
+    source_net.load_state_dict(ck.model_state)
+    actual = net_param_hash(source_net)
+    if actual != declared.net_hash:
+        raise WarmStartIdentityError(
+            f"{WARM_START_ROW}: the checkpoint at {declared.checkpoint} has net_param_hash "
+            f"{actual}, but the config declares {declared.net_hash}. The artifact at that path "
+            "is NOT the one this run was pre-registered against — refusing to warm-start from "
+            "it. Re-point the path, or re-mint the hash against the checkpoint of record."
+        )
+
+    if _DIST65_BINS_KEY in ck.model_state:
+        _LOG.warning(
+            "bc_warmstart_source_has_value_head checkpoint=%s "
+            "(looks like a FULL net checkpoint, not a BC-prefit-only source; the value head "
+            "stays fresh either way. If a full resume was intended, use --resume-from).",
+            str(declared.checkpoint),
+        )
+
+    result = load_representation_policy_from_bc(model, dict(ck.model_state))
+    _LOG.info(
+        "bc_warmstart_loaded checkpoint=%s net_param_hash=%s loaded_keys=%d verified_tensors=%s",
+        str(declared.checkpoint), actual, len(result["loaded_keys"]), result["verified_tensors"],
+    )
+    return result
+
+
+def maybe_warmstart_gnn_from_bc(model: Any, combined_config: Mapping[str, Any], *, spec: Any) -> bool:
+    """The launch hook: resolve `identity.warm_start` and apply it. True iff a transfer fired.
+
+    Raises:
+        ValueError:        the row is malformed, or the encoding is not a graph representation.
+        FileNotFoundError: the declared checkpoint does not exist.
+        WarmStartIdentityError: the checkpoint is not the declared net.
+        RuntimeError:      a key mismatch / failed landed-verify (F1 guard).
+    """
+    declared = resolve_bc_warm_start(combined_config)
+    if declared is None:
+        return False
+    apply_bc_warm_start(model, declared, spec=spec)
     return True
 
 
 __all__ = [
     "HEAD_FILE_BY_TYPE",
+    "WARM_START_ROW",
+    "BcWarmStart",
+    "WarmStartIdentityError",
+    "apply_bc_warm_start",
+    "resolve_bc_warm_start",
     "assert_dist65_bins_seeded",
     "default_head_for_arm",
     "load_value_head",

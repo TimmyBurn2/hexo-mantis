@@ -148,7 +148,13 @@ def _section_checkpoints(
         inferred = "-"
         status = "?"
         try:
-            obj = torch.load(p, map_location="cpu", weights_only=False)
+            # AUDIT-1 F-20. `weights_only=False` EXECUTES arbitrary pickle on load, and
+            # `docs/contracts/checkpoint_envelope.md` asserts every read surface is
+            # weights-only with no pickle-exec fallback — an assertion that was false at HEAD,
+            # here and in `resolvers.resolve_from_checkpoint`. A legacy artifact that will not
+            # load weights-only now reports LOAD-ERR, which is a finding an operator can act
+            # on rather than a payload this tool executed to describe.
+            obj = torch.load(p, map_location="cpu", weights_only=True)
         except (OSError, RuntimeError, ValueError, EOFError) as e:
             sect.rows.append([rel, "-", "-", f"LOAD-ERR ({type(e).__name__})"])
             report.add_finding("error", "§2", f"failed to load {rel}: {e}")

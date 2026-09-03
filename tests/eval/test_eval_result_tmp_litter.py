@@ -92,6 +92,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             eval_final_drain_hard_cap_sec=5.0, terminal_eval_hard_cap_sec=5.0,
         ),
         encoding="v6_live2_ls",
+        amp_dtype="bf16",
         run_id=_RUN_ID,
         spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json",

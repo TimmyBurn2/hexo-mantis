@@ -19,6 +19,7 @@ from mantis.config.schema.core import (
     RunConfig,
     StrengthFloorConfig,
     StrictModel,
+    WarmStartConfig,
 )
 from mantis.config.schema.monitor import (
     DiskGuardConfig,
@@ -54,5 +55,6 @@ __all__ = [
     "StrengthFloorConfig",
     "StrictModel",
     "TrainConfig",
+    "WarmStartConfig",
     "_EVAL_TIMEOUT_CEILING_SEC",
 ]
