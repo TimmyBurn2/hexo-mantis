@@ -125,9 +125,14 @@ CONSUMER_REGISTRY = {
         "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
         " on both callers)",
+    # AUDIT-1 F-47: this citation named `cuda_warmup`, a symbol with ZERO references anywhere
+    # (deleted with the rest of `subsystems.py`'s model-build half). A registry string naming a
+    # DEAD site satisfies the bijection just as well as one naming a live reader, so the entry
+    # was evidence of nothing. `InferenceServer.__init__` is the read site that exists:
+    # `self._amp_dtype = amp_dtype_for(_representation, config["train"]["amp_dtype"])`.
     "train.amp_dtype": (
         "resolve_amp_dtype (R30b single authority) -> amp_dtype_for -> "
-        "Trainer/InferenceServer/cuda_warmup autocast dtype"
+        "Trainer.__init__ / InferenceServer.__init__ autocast dtype"
     ),
     "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
     "train.total_steps": "TrainHParams.from_config -> Trainer._build_scheduler T_max fallback",

@@ -1,7 +1,8 @@
 """AUDIT-1 F-31 — every `autocast` in `src/` names its dtype, and it comes from the authority.
 
 THE DEFECT. `mantis.model.amp.amp_dtype_for` is the ONE dtype authority (LAW-06), honoured by
-`Trainer.__init__`, `InferenceServer.__init__` and `subsystems.cuda_warmup`. Four sites did
+`Trainer.__init__` and `InferenceServer.__init__` (AUDIT-1 F-47 deleted the third,
+`subsystems.cuda_warmup`, which had no caller at all). Four sites did
 not honour it, and one of them mattered on a decision path:
 
   * `selfplay/inference_local.py::infer_batch` / `infer_batch_per_cluster` called

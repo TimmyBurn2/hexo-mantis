@@ -4,12 +4,8 @@ The old `training/lifecycle.py` was a NAME-COLLISION trap: it is subsystem-BOOT 
 monitor/probe/dashboard construction), NOT the run-safety `lifecycle` repo_design §11 defines.
 It lands HERE as `subsystems.py`, freeing the `lifecycle` name for the §11 subsystem.
 
-Two ratified changes from the port:
-  * `InfModelArch` carries the DECLARED `representation` (off the WP9 arch dataclass), and
-    `build_inference_model` / `build_eval_model` construct via `build_net(arch)` — NOT a
-    `model_representation(module)` sniff (WP9-deleted, §c.4/§c.6). No shape-inference.
-  * The DISPLAY-boot half (WebDashboard, `register_renderer`/`register_jsonl_sink`, TB
-    `MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH.
+The DISPLAY-boot half (WebDashboard, `register_renderer`/`register_jsonl_sink`, TB
+`MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH.
 
 WPMAIN (R116/R121(b)) DELETED `build_subsystems` and `LoopSubsystems`. Both had ZERO callers
 and zero test references, and the disk guard they returned had therefore never been
@@ -28,16 +24,11 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-import torch
-
 import mantis.train.checkpoints as _checkpoints
-from mantis.model import ModelArch, amp_dtype_for, build_net
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
 from mantis.monitor.sink import JsonlEventSink
@@ -46,96 +37,21 @@ from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
 _LOG = logging.getLogger(__name__)
 
-
-@dataclass(frozen=True)
-class InfModelArch:
-    """The declared inference/eval arch — the SOLE construction source at sync/eval (§c.6).
-
-    `arch` is the WP9 `CnnArch|GnnArch` dataclass; `representation` is the DECLARED
-    discriminant read off it (never sniffed off a live module). `amp_dtype` is the DECLARED
-    `train.amp_dtype` string (R30b) — carried, no default (R1), so `cuda_warmup` matches the
-    production loop's autocast dtype instead of guessing. `spec` carries the resolved
-    registry spec for a graph warmup. `build_eval_model` reconstructs the IDENTICAL net from
-    just this object."""
-
-    arch: ModelArch
-    representation: str
-    amp_dtype: str
-    spec: Any = None
-
-
-def build_inference_model(trainer: Any, device: torch.device) -> tuple[torch.nn.Module, InfModelArch]:
-    """Build the inference-model instance the self-play server owns, from the trainer's DECLARED
-    arch (`trainer.arch`, a WP9 dataclass) via `build_net`. Loads `trainer.inference_state_dict()`
-    (EMA weights when EMA is on; identical to the raw model at step 0). No shape-inference."""
-    arch = trainer.arch
-    inf_model = build_net(arch).to(device)
-    inf_model.load_state_dict(trainer.inference_state_dict())
-    inf_model.eval()
-    # AUDIT-1 F-35: attribute access, no default. A `"grid"` default here re-introduces the
-    # dense-by-default LAW-11 forbids, one layer below the schema that forbids it — and a THIRD
-    # representation would silently be grid at this site.
-    representation = arch.representation
-    amp_dtype = trainer.config["train"]["amp_dtype"]
-    spec = None
-    try:
-        from mantis.encoding import resolve_from_config
-        spec = resolve_from_config(dict(trainer.config))
-    except Exception:  # noqa: BLE001 — spec is only consulted for a CUDA graph warmup
-        spec = None
-    return inf_model, InfModelArch(
-        arch=arch, representation=representation, amp_dtype=amp_dtype, spec=spec
-    )
-
-
-def build_eval_model(arch: InfModelArch, device: torch.device) -> torch.nn.Module:
-    """Reconstruct the IDENTICAL net (grid or graph) from just `arch` via `build_net` (§c.6)."""
-    eval_model = build_net(arch.arch).to(device)
-    eval_model.eval()
-    return eval_model
-
-
-def cuda_warmup(inf_model: torch.nn.Module, device: torch.device, arch: InfModelArch) -> None:
-    """Warm CUDA kernels with a dummy forward so the first worker inference returns immediately.
-
-    CUDA-only (no-op on CPU). Representation-aware: the grid path feeds a dummy (1, C, B, B)
-    tensor; the graph path runs `forward_batch` on a minimal synthetic 1-graph batch under bf16
-    autocast (LAW-06 pin). Warmup dtype matches the production loop so the RIGHT kernels compile.
-    """
-    if device.type != "cuda":
-        return
-    representation = arch.representation
-    _t = time.time()
-    with torch.no_grad(), torch.autocast(device_type="cuda",
-                                         dtype=amp_dtype_for(representation, arch.amp_dtype)):
-        if representation == "graph":
-            x, ei, ea, legal_index, stone_mask, node_offsets = _synthetic_graph_warmup(arch, device)
-            # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
-            # `forward_batch` is GnnNet's real method.
-            inf_model.forward_batch(x, ei, ea, legal_index, stone_mask, node_offsets=node_offsets)  # pyright: ignore[reportCallIssue]
-        else:
-            base = getattr(inf_model, "_orig_mod", inf_model)
-            ch = int(getattr(base, "in_channels", 8))
-            board = int(getattr(base, "board_size", 19))
-            inf_model(torch.zeros(1, ch, board, board, device=device))
-    torch.cuda.synchronize()
-    _LOG.info("cuda_warmup_done elapsed_sec=%.1f", time.time() - _t)
-
-
-def _synthetic_graph_warmup(arch: InfModelArch, device: torch.device):
-    """A minimal 2-node / 2-edge synthetic graph batch for the graph CUDA warmup. Self-contained
-    (no self-play collate dependency — that lives in WP6's selfplay surface)."""
-    in_dim = int(getattr(arch.arch, "in_dim", 11))
-    edge_dim = int(getattr(arch.arch, "edge_dim", 5))
-    x = torch.zeros(2, in_dim, device=device)
-    edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long, device=device)
-    edge_attr = torch.zeros(2, edge_dim, device=device)
-    # The gather form of "node 1 is the only legal node" — `forward_batch` takes the
-    # contract's `legal_node_gather` rows, not a dense mask (R284 P-MASK).
-    legal_index = torch.tensor([1], dtype=torch.long, device=device)
-    stone_mask = torch.tensor([True, False], dtype=torch.bool, device=device)
-    node_offsets = torch.tensor([0, 2], dtype=torch.long, device=device)
-    return x, edge_index, edge_attr, legal_index, stone_mask, node_offsets
+# ══ THE MODEL-BUILD HALF IS DELETED (AUDIT-1 F-47) ══════════════════════════════════════
+# `InfModelArch`, `build_inference_model`, `build_eval_model`, `cuda_warmup` and
+# `_synthetic_graph_warmup` stood here with ZERO references anywhere in `src/`, `tests/` or
+# `tools/`. The header above already recorded that WPMAIN deleted `build_subsystems` — the one
+# caller this half ever had — and left the builders behind; this is the rest of that deletion.
+#
+# TWO THINGS WENT WITH THEM, and both are the reason the row mattered more than its size:
+#   * `cuda_warmup` read `getattr(arch.arch, "in_dim", 11)` and `("edge_dim", 5)` — literal
+#     defaults on IDENTITY quantities, read off the LIVE module, which is the sniff
+#     `repo_design` §3 bans and AUDIT-1 F-46 counts.
+#   * The consumer-registry citation for `train.amp_dtype` NAMED `cuda_warmup` as a read site.
+#     A string naming a dead symbol satisfied the LAW-08 bijection, so the key's entry was
+#     evidence of nothing. It now names `InferenceServer._warmup_compile_path`, which reads it.
+#
+# This module's surviving subject is `build_run_safety`, as the header says.
 
 
 # ── WP13-A run-safety composition root ───────────────────────────────────────────────

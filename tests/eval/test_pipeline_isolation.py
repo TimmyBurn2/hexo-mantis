@@ -19,8 +19,8 @@ do (torch import, model load, ...).
 IMPL API pin introduced by this oracle (design leaves this as a convention, not
 pseudocode): the model object passed to `run_evaluation` carries its declared `arch`
 dataclass as a plain `.arch` attribute — mirrors the established `trainer.arch` /
-`InfModelArch` convention already in this tree (`mantis.train.subsystems.
-build_inference_model`; `HexTacToeNet`/`GnnNet` themselves do NOT store `.arch`, so
+`InfModelArch` convention that was in this tree until AUDIT-1 F-47 deleted it with
+`mantis.train.subsystems.build_inference_model` (both had zero callers; `HexTacToeNet`/`GnnNet` themselves do NOT store `.arch`, so
 something upstream of the model must carry it, and `.arch` on the model instance is this
 suite's concrete choice for that seam). If IMPL threads arch through differently (e.g. an
 explicit `write_model_snapshot(model, path, arch=...)` kwarg), that is a narrow interface

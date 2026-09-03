@@ -70,10 +70,14 @@ def test_the_scan_finds_the_call_sites_it_claims_to_guard() -> None:
     not a pin — a new production consumer of the graph forward must not have to edit this
     number, only to obey the rule."""
     sites = _call_sites()
-    assert len(sites) >= 4, f"the scan found only {len(sites)} call site(s): {sites}"
+    # AUDIT-1 F-47 removed the fourth known site: `subsystems.cuda_warmup` called the graph
+    # forward from a function with zero callers of its own. The FLOOR moves with it — a floor
+    # above what the tree can reach is a claim about code that is not there, which is the
+    # over-ratchet shape gate 3c's third arm exists to refuse.
+    assert len(sites) >= 3, f"the scan found only {len(sites)} call site(s): {sites}"
     files = {s[0] for s in sites}
     for expected in ("selfplay/inference_server.py", "train/trainer/core.py",
-                     "train/subsystems.py", "diagnostics/fusion_calibrate.py"):
+                     "diagnostics/fusion_calibrate.py"):
         assert expected in files, f"{expected} is a known call site the scan did not reach"
 
 
