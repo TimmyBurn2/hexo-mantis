@@ -23,12 +23,48 @@ if TYPE_CHECKING:
     from mantis.encoding.audit import AuditReport, Severity
 
 
-_HARDCODE_HITS_DUMP = Path("/tmp/encoding_audit_hardcode_hits.txt")
+#: AUDIT-1 F-43. The dump path is a PARAMETER now. It was a fixed `/tmp/...` name — a
+#: world-shared filename written under `except OSError: pass`, so two users on one host raced
+#: for it and a failure to write was silent. `None` means "do not dump"; the CLI supplies one.
+_DEFAULT_HITS_DUMP: Path | None = None
 
 
-# Word-boundary number matcher; integer-only. Captures `19`, `25`, `361`, `5`, `8`.
-_NUM_PATTERN = re.compile(r"\b(19|25|361|5|8)\b")
-_HARDCODE_TARGETS: tuple[str, ...] = ("19", "25", "361", "5", "8")
+def _registry_targets() -> tuple[str, ...]:
+    """The values this scanner looks for, DERIVED from the live registry (AUDIT-1 F-43).
+
+    THE DEFECT. This was a frozen dense-era literal list — `19`, `25`, `361`, `5`, `8` — so the
+    graph-era values were never scanned at all: `6` (graph_radius, win_length, n_chain_planes),
+    `11` (node_feat_dim), `362`/`626` (policy_logit_count), `16`/`17`/`18` (plane indices and
+    n_source_planes), `3` (win_axes). The one copy-detector in the repo could not see the
+    numbers the graph seam is built from, while `8` had quietly acquired a second meaning
+    (`graph_radius`) that the list still read as a plane count.
+
+    Every registry value >= 3 is a target, plus the `mantis_graph` schema constants the
+    registry validates against. `< 3` is excluded because `0`/`1`/`2` are arithmetic, not
+    geometry, and scanning them would drown the signal — which is a judgement stated here
+    rather than a silence.
+    """
+    values: set[int] = set()
+    try:
+        from mantis.encoding import all_specs
+    except ImportError:  # the scanner runs without the extension in some contexts
+        return ("19", "25", "361", "5", "8", "6", "11", "362", "626", "16", "17", "18", "3")
+    for spec in all_specs():
+        for field in (
+            "board_size", "trunk_size", "n_planes", "policy_logit_count", "n_source_planes",
+            "legal_move_radius", "cluster_window_size", "cluster_threshold", "k_max",
+            "n_chain_planes", "node_feat_dim", "edge_feat_dim", "win_length", "graph_radius",
+            "win_axes",
+        ):
+            v = getattr(spec, field, None)
+            if isinstance(v, int) and not isinstance(v, bool) and v >= 3:
+                values.add(v)
+    return tuple(str(v) for v in sorted(values, reverse=True))
+
+
+_HARDCODE_TARGETS: tuple[str, ...] = _registry_targets()
+# Word-boundary number matcher; integer-only, over the DERIVED target set.
+_NUM_PATTERN = re.compile(r"\b(" + "|".join(_HARDCODE_TARGETS) + r")\b")
 _SKIP_DIRS: frozenset[str] = frozenset(
     {"__pycache__", "target", ".venv", "node_modules", "data", "checkpoints", ".git",
      "vendor", "build", "tests", "benches"}
@@ -339,6 +375,42 @@ def _apply_line_transforms(line: str, suffix: str) -> str:
     return line
 
 
+def _is_the_owning_file(path: Path, line: str) -> bool:
+    """True when `line` defines a canonical name IN the file that owns it (AUDIT-1 F-43).
+
+    THE DEFECT this closes: `_CANONICAL_DEFINE_RE` exempted ANY line defining a name in the
+    canonical set, anywhere. So a COPY that reused the canonical spelling was exempt BY NAME —
+    the exact inverse of a copy detector, and the shape F-42 found six times over.
+
+    The owner is derived from the name, not listed per file: a canonical constant is owned by
+    the module or crate whose own name the definition sits under. Anything else redefining it
+    is a copy and is scanned.
+    """
+    stem = path.stem
+    m = _CANONICAL_DEFINE_RE.match(line)
+    if m is None:
+        return False
+    name = m.group(1)
+    owners = _CANONICAL_OWNERS.get(name)
+    if owners is None:
+        # A name with no declared owner keeps the old exemption — narrowing is done by adding
+        # an owner row, never by guessing one here.
+        return True
+    return stem in owners
+
+
+#: Which file owns each canonical constant. A definition anywhere else is a COPY and is
+#: scanned (AUDIT-1 F-43). Keyed by stem so a crate move does not silently widen the exemption.
+_CANONICAL_OWNERS: dict[str, tuple[str, ...]] = {
+    "NODE_FEAT_DIM": ("lib",), "EDGE_FEAT_DIM": ("lib",), "WIN_AXES": ("lib",),
+    "WIN_LENGTH": ("moves",), "BOARD_SIZE": ("core",), "TOTAL_CELLS": ("core",),
+    "HISTORY_LEN": ("constants",),
+    "DEFAULT_LEGAL_MOVE_RADIUS": ("moves",), "DEFAULT_CLUSTER_THRESHOLD": ("moves",),
+    "N_CHAIN_PLANES": ("sym", "game_state"),
+    "OPP_STONE_PLANE": ("mod",), "MOVES_REMAINING_PLANE": ("mod",), "PLY_PARITY_PLANE": ("mod",),
+}
+
+
 def _scan_file(path: Path) -> list[tuple[int, str, list[str]]]:
     """Return [(lineno, line, hits)] for unjustified hits in `path`."""
     suffix = path.suffix
@@ -364,7 +436,8 @@ def _scan_file(path: Path) -> list[tuple[int, str, list[str]]]:
         if (any(tok in line for tok in _TUNABLE_TOKENS)
                 and not any(g in line for g in _TUNABLE_SKIP_GUARD_TOKENS)):
             continue
-        if suffix in (".py", ".rs") and _CANONICAL_DEFINE_RE.match(line):
+        if suffix in (".py", ".rs") and _CANONICAL_DEFINE_RE.match(line) \
+                and _is_the_owning_file(path, line):
             continue
         if _line_has_coord_pattern(line):
             continue
@@ -375,7 +448,8 @@ def _scan_file(path: Path) -> list[tuple[int, str, list[str]]]:
     return out
 
 
-def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool = False) -> None:
+def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool = False,
+                      hits_dump: Path | None = _DEFAULT_HITS_DUMP) -> None:
     from mantis.encoding.audit import AuditSection
 
     sect = AuditSection(
@@ -423,16 +497,16 @@ def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool
                 report._raw_hardcode_hits.append(
                     {"file": rel, "line": lineno, "content": line, "hits": hits}
                 )
-    else:
-        try:
-            with _HARDCODE_HITS_DUMP.open("w", encoding="utf-8") as fh:
-                for p in sorted(file_hits):
-                    fh.write(f"# {p}\n")
-                    for lineno, line, hits in file_hits[p]:
-                        fh.write(f"  L{lineno}  hits={hits}  | {line}\n")
-                    fh.write("\n")
-        except OSError:
-            pass
+    elif hits_dump is not None:
+        # AUDIT-1 F-43. NO `except OSError: pass` — a dump the operator asked for and did not
+        # get is a fact, not a silence, and this used to swallow it on a fixed world-shared
+        # `/tmp` name that two users on one host raced for.
+        with Path(hits_dump).open("w", encoding="utf-8") as fh:
+            for p in sorted(file_hits):
+                fh.write(f"# {p}\n")
+                for lineno, line, hits in file_hits[p]:
+                    fh.write(f"  L{lineno}  hits={hits}  | {line}\n")
+                fh.write("\n")
 
     for p in sorted(file_hits):
         hits = file_hits[p]
@@ -453,8 +527,8 @@ def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool
         report.add_finding(
             severity, "§5",
             f"{total_hits} unjustified literal hit(s) across {len(file_hits)} file(s); "
-            f"full dump → {_HARDCODE_HITS_DUMP}",
+            f"full dump → {hits_dump}" if hits_dump else "no dump requested",
         )
         sect.notes.append(f"strict={report.strict} → severity={severity}")
-        sect.notes.append(f"full dump: {_HARDCODE_HITS_DUMP}")
+        sect.notes.append(f"full dump: {hits_dump}" if hits_dump else "full dump: not requested")
     report.sections["§5"] = sect

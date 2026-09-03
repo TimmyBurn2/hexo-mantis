@@ -32,6 +32,14 @@ _ALLOWED_MONITOR_MANTIS_IMPORTS = ("mantis.util", "mantis.encoding", "mantis.mon
 _EXPECTED_TRAIN_MONITOR_SITES = {
     "train/coordinator/step.py",
     "train/subsystems.py",
+    # AUDIT-1 F-08 (R332(d)), disclosed in the commit that creates the edge, the way every
+    # other row here was. `train/pretrain/cli.py` top-level imports
+    # `monitor.logging_setup.configure_logging` because the pretrain CLI is a PROCESS ENTRY and
+    # a process entry with no root handler drops every `logger.info` it emits — which is the
+    # state the whole tree was in. It replaced `logging.basicConfig`, i.e. it removes a SECOND
+    # sink bootstrap rather than adding a first: the edge is new, the dependency is not, and
+    # the direction is the declared one (train -> monitor, never the reverse).
+    "train/pretrain/cli.py",
     "train/lifecycle/heartbeat_watchdog.py",
     # Item 4 amendment. The stall watchdog's fire path routes its two saves through
     # `monitor.best_effort` — the SAME sanctioned optional-effect seam, for the same LAW-14

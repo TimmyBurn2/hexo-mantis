@@ -92,6 +92,9 @@ VALID_TRAIN_PAYLOAD: dict = {
     "aux_chain_weight": 0.0,
     "ply_index_weight": 0.0,
     "threat_pos_weight": 1.0,
+    # AUDIT-1 F-06 / R332(d): `train.ema` is a REQUIRED block. `enabled: false` is what every
+    # committed config mints — the posture stated, not inherited from a code-side default.
+    "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
 }
 
 FIELD_NAMES = sorted(VALID_TRAIN_PAYLOAD)

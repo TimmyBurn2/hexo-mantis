@@ -702,6 +702,11 @@ def worker_main(spec_path: str | Path, result_path: str | Path) -> None:
 
 
 def _main(argv: list[str] | None = None) -> int:
+    # AUDIT-1 F-08: the eval CHILD is its own process and installed no handler either, so every
+    # INFO it emitted — including its allocator-posture assertion — went nowhere.
+    from mantis.monitor.logging_setup import configure_logging
+
+    configure_logging()
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) != 2:
         print("usage: python -m mantis.eval.worker <spec.json> <result.json>", file=sys.stderr)

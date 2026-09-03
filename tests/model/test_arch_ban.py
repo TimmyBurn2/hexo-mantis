@@ -46,6 +46,13 @@ def _py_files(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob("*.py"))
 
 
+def _code_only(line: str) -> str:
+    """`line` with any trailing `#` comment removed — naive but sufficient here, because a `#`
+    inside a string literal on a line that ALSO carries a dense default is not a shape this
+    tree produces, and over-stripping can only lose a hit in a string, never invent one."""
+    return line.split("#", 1)[0]
+
+
 def find_arch_sniffs(root: Path) -> list[str]:
     """Return a list of `file:line: reason` violations for arch-off-module sniffs."""
     violations: list[str] = []
@@ -101,10 +108,14 @@ def test_no_representation_default_anywhere_under_src() -> None:
     call site is how a census stops meaning anything. So the ROOT widens for the pattern F-35
     is actually about, and the arch-off-a-module patterns keep their tighter root above.
     """
+    # CODE, not comments. A comment that RECORDS a removed default contains the removed
+    # default — this exact row tripped on `anchor.py`'s own note about the `getattr(...,
+    # "grid")` it deleted. Strip the comment tail before matching, so the census sees what
+    # runs and not what is written about what used to run.
     offenders = [
         f"{path}:{i}" for path in _py_files(_SRC)
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
-        if _RE_DENSE_DEFAULT.search(line)
+        if _RE_DENSE_DEFAULT.search(_code_only(line))
     ]
     assert not offenders, (
         f"a `representation` read defaulting to a dense/grid literal: {offenders}. LAW-11: an "

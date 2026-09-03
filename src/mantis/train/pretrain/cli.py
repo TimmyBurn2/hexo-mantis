@@ -44,6 +44,7 @@ from mantis.encoding import resolve_from_checkpoint as _resolve_encoding_from_ck
 from mantis.encoding.registry import EncodingRegistryError as _EncodingRegistryError
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import HexTacToeNet, arch_from_spec_and_config, build_net, compile_model
+from mantis.monitor.logging_setup import configure_logging
 from mantis.train.emit import NullEventSink
 from mantis.train.pretrain.dataset import (
     AugmentedBootstrapDataset,
@@ -194,7 +195,11 @@ def _resolve_encoding_name(args: argparse.Namespace) -> str:
 
 
 def pretrain(argv: list[str] | None = None) -> None:
-    logging.basicConfig(level=logging.INFO)
+    # AUDIT-1 F-08: THE one mantis handler, not `basicConfig` — two bootstraps for one sink is
+    # the duplicate-authority shape, and the other one was dead. `configure_logging` is
+    # idempotent (it removes a previously installed mantis handler first), so a repeated entry
+    # cannot double every line.
+    configure_logging()
     args = _build_arg_parser().parse_args(argv)
 
     # The class error is the authority (R45); the CLI boundary is the only place it is

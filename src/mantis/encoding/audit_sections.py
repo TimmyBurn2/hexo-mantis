@@ -365,8 +365,16 @@ def _section_variants(report: AuditReport, variants_dir: Path) -> None:
         headers=("path", "resolved", "status"),
     )
     if not variants_dir.is_dir():
-        sect.notes.append(f"variants dir {variants_dir} not found — skipped")
-        report.add_finding("warn", "§4", f"variants dir {variants_dir} missing")
+        # AUDIT-1 F-43. `configs/variants/` DOES NOT EXIST — R1 retired hand-varied configs in
+        # favour of minted ones, so this section warned about a missing directory on every run
+        # of the audit. A warning that always fires is the corrosion R186 names: it teaches its
+        # readers to wave warnings through, and the next REAL one arrives in a record where
+        # that is already the habit. Absence is the EXPECTED state and is reported as info.
+        sect.notes.append(
+            f"no variants dir at {variants_dir} — EXPECTED: configs are minted, never "
+            "hand-varied (R1), so this section has nothing to resolve"
+        )
+        report.add_finding("info", "§4", "no variants dir (expected — configs are minted)")
         report.sections["§4"] = sect
         return
 

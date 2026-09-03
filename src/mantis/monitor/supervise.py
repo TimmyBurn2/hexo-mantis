@@ -51,6 +51,7 @@ from mantis.monitor.heartbeat import (
     WATCHDOG_STALL_EXIT_CODE,
     read_heartbeat_file,
 )
+from mantis.monitor.logging_setup import configure_logging
 
 # Relaunch budget exhausted: a loud, distinct nonzero code (never confused with the child's).
 RELAUNCH_BUDGET_EXIT_CODE: int = 44
@@ -670,6 +671,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         so the supervisor still dies loud with its own traceback;
       * everything else -> `Supervisor.run`'s existing exit-code contract, untouched.
     """
+    # AUDIT-1 F-08: the ONE mantis stderr handler, at this process entry too. A supervisor
+    # whose own INFO lines are dropped cannot report why it relaunched.
+    configure_logging()
     # LAZY BY NECESSITY, NOT BY TASTE — and gate 9's own rule is "top-level imports only; lazy
     # imports need a stated reason", so here is the reason. A top-level `mantis.config` import
     # in this module closes a condensed-subpackage cycle, because `config/resolve/monitor.py`

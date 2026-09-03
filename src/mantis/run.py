@@ -112,6 +112,7 @@ from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
+from mantis.monitor.logging_setup import configure_logging
 from mantis.selfplay.pool import WorkerPool
 from mantis.train.actor_sync import ActorSync
 from mantis.train.anchor import canonical_anchor_path
@@ -1239,6 +1240,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--resume-from", default=None,
         help="checkpoint to resume the trainer from; omit for a fresh run")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
+
+    # AUDIT-1 F-08. THE ONE mantis stderr handler, installed at the process entry. Until this
+    # call `monitor/logging_setup.configure_logging` had ZERO callers: `run`, `supervise`, the
+    # eval child and every diagnostic installed no root handler, so Python's lastResort dropped
+    # every `logger.info` and printed WARNING+ unformatted. Everything INFO a run emits was
+    # unobservable on stderr — including the registry-sha handshake's SKIP reason, whose own
+    # docstring says it is "NEVER a silent pass", and REPAIR-1's new `disk_guard_error`
+    # warning. Installed BEFORE the launch so the boot path's own diagnostics are covered.
+    configure_logging()
 
     handles = launch_run(config=load_config(args.config), out_dir=args.out_dir,
                          checkpoint_path=args.resume_from)

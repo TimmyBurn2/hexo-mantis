@@ -119,6 +119,15 @@ _ADDED_LEAVES = {
     "monitor.disk_guard.warn_gb",
     "monitor.disk_guard.fail_gb",
     "train.device",
+    # AUDIT-1 F-06 / R332(d): `train.ema` is a REQUIRED schema block, so every config
+    # necessarily gains all three leaves and the re-mint stays purely ADDITIVE. The VALUE is
+    # `enabled: false` everywhere — the posture every run already had and was not stating,
+    # which is the whole point of the row: before it, `resolve_ema_config` read four names off
+    # a schema that had none of them, so the lever was off on every run and no config could
+    # turn it on. Arming it is a prereg lever, not a config edit.
+    "train.ema.enabled",
+    "train.ema.decay",
+    "train.ema.update_every",
     # WP12-R dispatch 6 phase F2 (CARD-RUN5-GPU-OOM, R179): `train.microbatch_caps` is a
     # REQUIRED schema block, so every config necessarily gains both leaves — the re-mint is
     # still purely ADDITIVE and the textual half stays insert-only. run5 additionally gains
