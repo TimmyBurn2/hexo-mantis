@@ -1,8 +1,16 @@
 """Training bootstrap/resume checkpoint resolver (PORT of frozen resolve/bootstrap.py).
 
-One resolver for the ``--checkpoint`` / ``BOOTSTRAP`` training bootstrap: validate the resolved
-path exists at LAUNCH (before torch.load) so a stale path fails loudly + early. CLI arg, not a
-config-file key → no schema field. ``exists`` is injectable (no torch import).
+One resolver for `mantis.run`'s ``--resume-from``: validate the resolved path exists at LAUNCH
+(before torch.load) so a stale path fails loudly + early. A CLI arg, not a config-file key → no
+schema field; `exists` is injectable so this module needs no torch import.
+
+WIRED, LATE (AUDIT-1 F-47). This resolver had ZERO callers: `run.main` passed `--resume-from`
+straight through to `launch_run`, so a mistyped path surfaced as whatever `torch.load` says
+about a missing file, deep inside `init_trainer`'s resume branch, after the composition root
+had already built a run. The guard existed and the flag existed and nothing joined them. Its
+error text also named a `BOOTSTRAP=<path>` make target and a `--checkpoint` flag that do not
+exist — a message pointing at knobs the operator cannot use, corrected here to the one that
+does. It is called now, at `run.main`, before `launch_run`.
 """
 from __future__ import annotations
 
@@ -43,7 +51,7 @@ def resolve_bootstrap(
     if not exists(cli_checkpoint):
         raise BootstrapNotFoundError(
             f"bootstrap/resume checkpoint {cli_checkpoint!r} does not exist. "
-            "Set BOOTSTRAP=<path> (make targets) or --checkpoint <path> to an existing file "
+            "Pass `--resume-from <path>` to an existing file, or omit it for a fresh run "
             "(validated at launch, not a late torch.load failure)."
         )
     return ResolvedBootstrap(path=cli_checkpoint, source="cli")

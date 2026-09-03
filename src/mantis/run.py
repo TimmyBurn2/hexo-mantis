@@ -97,6 +97,7 @@ from mantis.config.resolve.allocator_posture import (
 from mantis.config.resolve.allocator_posture import (
     governs_device as _posture_governs_device,
 )
+from mantis.config.resolve.bootstrap import resolve_bootstrap
 from mantis.config.resolve.composition import require_run_config, revalidate_run_config
 from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
 from mantis.config.resolve.disk_guard import resolve_disk_guard
@@ -1250,8 +1251,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # warning. Installed BEFORE the launch so the boot path's own diagnostics are covered.
     configure_logging()
 
+    # AUDIT-1 F-47. `resolve_bootstrap` exists to fail a stale `--resume-from` AT LAUNCH,
+    # before `torch.load`, and had zero callers — so a mistyped path surfaced as a torch error
+    # deep inside `init_trainer`'s resume branch, after the composition root had built a run.
+    # A guard and the flag it guards, in the same process, joined by nothing.
+    bootstrap = resolve_bootstrap(args.resume_from)
     handles = launch_run(config=load_config(args.config), out_dir=args.out_dir,
-                         checkpoint_path=args.resume_from)
+                         checkpoint_path=bootstrap.path)
     rule = handles.shutdown.abort_rule
     if rule is None:
         return 0
