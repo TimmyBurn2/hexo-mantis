@@ -1,4 +1,4 @@
-.PHONY: build build.native test test.integration lint lint.rust gates gates.exit bench bench.baseline check.wasm vendor vendor.sealbot clean
+.PHONY: build build.native test test.integration lint lint.rust gates gates.exit dashboard bench bench.baseline check.wasm vendor vendor.sealbot clean
 
 UV ?= uv
 
@@ -37,6 +37,14 @@ gates:
 # executed by no other gate, so this is the only invocation that covers the tree.
 gates.exit:
 	bash tools/ci_gates/run_all.sh --with-slow
+
+# THE RUN DASHBOARD (R333(d)). ONE command, an existing run record in, one self-contained
+# HTML file out. No server, no producer, no live connection to a run. A panel with no producer
+# at HEAD is drawn as a stated gap, never as a zero.
+#   make dashboard EVENTS=<run>/events.jsonl OUT=/tmp/run.html [LADDER=<run>/eval_ladder_state.json]
+dashboard:
+	uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
+	  $(if $(LADDER),--ladder-state "$(LADDER)",)
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1

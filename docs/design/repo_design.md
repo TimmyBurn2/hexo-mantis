@@ -63,7 +63,9 @@ hexo-mantis/
 
 Display surfaces (web dashboard, game viewer, TUI monitors) are deliberately absent.
 The event-manifest + schema'd JSONL channels (§4.7) are the stable contract any future
-display builds against. `src/mantis/deploy/` is reserved, empty until post-cutover.
+display builds against — and `tools/run_dashboard.py` is the ONE thing admitted to build
+against them (the amendment at the foot of this file). `src/mantis/deploy/` is reserved,
+empty until post-cutover.
 
 ## 2. Dependency DAG (one-way; enforced by crate/package deps, checked in CI)
 
@@ -936,3 +938,39 @@ class.** Recorded here rather than left as silent drift (R9).
   bootstrap percentile.
 - Promotion-gate eval runs subprocess-isolated (own CUDA context; sidecar-JSON result
   contract, never stderr).
+
+---
+
+### AMENDMENT — an OFFLINE, FILE-BASED run report is admitted; every display surface stays absent
+
+**R333(d), REPAIR-3 Leg 4.** §1 says display surfaces are deliberately absent and names the
+§4.7 JSONL channels as the contract any future display builds against. A run dashboard is
+ordered. Under R9 that is a deviation from this file and it lands as an amendment, in the same
+commit as the tool, rather than as drift.
+
+1. **What is admitted, narrowly.** `tools/run_dashboard.py` — one command, an EXISTING run
+   record in, one self-contained HTML file out. It adds no producer, opens no socket, runs no
+   server, and has no connection to a live run. It reads the §4.7 JSONL stream and, when given
+   one, the run's `eval_ladder_state.json`. It is dev-only tooling under `tools/`, which is
+   where §1's tree already puts `mint_config` and `hardcode_scan`.
+2. **What stays absent, unchanged.** The web dashboard, the game viewer and the TUI monitor.
+   The distinction is not size, it is COUPLING: an absent surface is one that would have to
+   watch a run, and everything on that list would. A report generated after the fact from an
+   artifact is the same shape as the preflight report (contract #9) and the sweep report —
+   neither of which was ever read as a display surface.
+3. **The rule the tool carries, which is why it is admissible at all.** A panel whose producer
+   does not exist at HEAD is declared BANKED and drawn as a stated gap naming the producer that
+   would fill it; a panel whose producer exists but whose series is empty in a given record is
+   drawn as an ABSENCE naming the event. Neither is ever a zero, an empty axis, or a flat line.
+   The tool refuses an event-less record rather than rendering a clean-looking empty page, and
+   its `--self-test` drives both refusals plus the two shapes that would smuggle a number in
+   (a chart drawn from no series; a bare zero with no absence label). "Absent is not zero"
+   (class 7, the P1 packet's whole subject) applied to pixels.
+4. **Measured at landing, and stated so the gap is on the record rather than in the code:**
+   of the nine panels R333(d) names, **SEVEN are LIVE and TWO are BANKED** — *average
+   sims/move* (`SelfPlayHParams.effective_sims_per_move` is derived in-process to BILL
+   `sims_per_sec` and is emitted by nothing; the quotient of two differently-windowed rates is
+   not the quantity) and *held-out loss* (`HeldOutMonitor.counters()` is LAW-18-shaped but sits
+   on the BC pretrain path and reports through a logger line, never through the sink).
+5. **§4.7 is unchanged.** The contract this reads through is the one that was already there;
+   nothing about the event manifest moves, and no row is added to it.

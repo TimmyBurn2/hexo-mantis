@@ -217,7 +217,11 @@ lives only in workflow YAML.
 ## Deliberately absent
 
 - Display surfaces (web dashboard, viewer, TUI): the event-manifest JSONL contract
-  (docs/contracts/event_manifest.md) is what any future display builds against.
+  (docs/contracts/event_manifest.md) is what any future display builds against. The ONE
+  exception, admitted by R333(d) and amended into repo_design: `tools/run_dashboard.py`
+  (`make dashboard EVENTS=… OUT=…`) — an OFFLINE report, an existing run record in, one
+  self-contained HTML file out, no server and no new producer. A panel with no producer at
+  HEAD is drawn as a stated gap, never as a zero.
 - src/mantis/deploy/ is reserved-empty until post-cutover.
 - Vendoring only via vendor/pins.toml + `make vendor` — no submodules, no loose weights.
 - No requirements.txt (uv.lock is the lock), no setup script (`uv sync` is bootstrap).
