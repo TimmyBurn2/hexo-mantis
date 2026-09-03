@@ -125,7 +125,11 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   the whole tree (gate 3c does). The header prints `TIER:` on every run — read it, never
   assume the tier from the command typed (R330(g); the superset is ~35 min, the tier ~3).
 - Cadence (R311(b)): targeted tests, smallest relevant first, while iterating; the FULL local
-  gate set at leg exit and before any push, never per edit. **Remote CI is SUSPENDED by
+  gate set at leg exit and before any push, never per edit. **At a PACKET exit that means
+  `make gates.exit` (`run_all.sh --with-slow`), not `make gates`** — a `slow`-marked test is
+  deselected from BOTH pytest tiers, so nothing else in the repo executes it (R333(b); the
+  runner prints which of the two opt-ins ran on every invocation, so a log says whether the
+  tier was covered). **Remote CI is SUSPENDED by
   operator decision** until the operator re-enables it — no push or merge waits on it, and
   local green is the gate. Doc/governance-only commits need no gates at all. The accepted cost
   is on the record: gate 1's fresh-clone `uv sync` is the one check no local run reproduces.

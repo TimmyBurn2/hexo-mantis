@@ -146,3 +146,65 @@ def test_the_only_filter_can_select_a_single_gate() -> None:
     assert "gate 16" in proc.stdout
     assert "gate 2a" not in proc.stdout, "the filter did not filter"
     assert "green: 1" in proc.stdout
+
+
+# ── the slow tier: the last place a tier-scoped defect can hide (R333(b)) ──────────────────
+def test_the_slow_tier_is_reachable_from_the_runner_and_declares_itself() -> None:
+    """R333(b)'s instrument. A `slow`-marked test is deselected from BOTH tiers, so before the
+    flag those tests were executed by NO gate — and REPAIR-2 shipped a red into its own exit
+    run for exactly the tier-scoped reason. The omission must be PRINTED, like gate 1's, or the
+    summary is a claim about a set that is short by a whole tier."""
+    body = RUNNER.read_text(encoding="utf-8")
+    assert "--with-slow" in body
+    assert "SLOW TIER NOT RUN" in body, (
+        "the summary must state the omission unconditionally; a runner that quietly skips a "
+        "TIER is a stronger version of the gate-1 defect this file already guards"
+    )
+    assert "slow tier RAN" in body, (
+        "…and it must say so when it DID run, so a log distinguishes a covered exit from an "
+        "uncovered one without anyone remembering which flags were typed"
+    )
+    assert 'pytest -m slow' in body, "the flag must actually run the slow marker expression"
+
+
+def test_the_slow_tier_is_NOT_run_by_default() -> None:
+    """The other half: opt-in means opt-in. A tier that costs seconds today could cost minutes
+    tomorrow, and gate 1's precedent is that the expensive one is chosen, never inherited."""
+    body = RUNNER.read_text(encoding="utf-8")
+    guard = "[ $WITH_SLOW -eq 1 ] &&"
+    assert guard in body, f"the slow row must sit behind {guard!r}"
+    assert body.index("WITH_SLOW=0") < body.index(guard), "the default must be OFF"
+
+
+def test_the_runner_help_names_the_slow_flag() -> None:
+    proc = subprocess.run(["bash", str(RUNNER), "--help"], capture_output=True, text=True,
+                          cwd=REPO_ROOT)
+    assert proc.returncode == 0, proc.stderr
+    assert "--with-slow" in proc.stdout
+
+
+def test_the_slow_tier_actually_selects_the_slow_tests() -> None:
+    """Not a claim about the flag — a run of it. The tier is small and fast, so this drives the
+    real runner rather than asserting on its source."""
+    proc = subprocess.run(
+        ["bash", str(RUNNER), "--with-slow", "--only", "slow tier"],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-2000:]
+    assert "slow tier RAN" in proc.stdout
+    assert "deselected" in proc.stdout, (
+        "the run must show a deselection count — if it deselected nothing it was not running "
+        "the slow marker expression"
+    )
+
+
+def test_the_summary_states_the_slow_tier_either_way() -> None:
+    """The property that makes the flag honest: a reader of ANY run's summary can tell whether
+    the tier was covered, without knowing what was typed."""
+    for args, expected in (([], "SLOW TIER NOT RUN"), (["--with-slow"], "slow tier RAN")):
+        proc = subprocess.run(
+            ["bash", str(RUNNER), *args, "--only", "gate 4"],
+            capture_output=True, text=True, cwd=REPO_ROOT,
+        )
+        assert proc.returncode == 0, proc.stdout[-2000:]
+        assert expected in proc.stdout, f"{args or 'default'}: summary did not say {expected!r}"

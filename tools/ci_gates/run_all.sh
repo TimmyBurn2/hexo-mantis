@@ -32,20 +32,35 @@
 # GATE 1 IS DELIBERATELY NOT HERE by default. Its fresh-clone `uv sync` is the one check no
 # local run reproduces cheaply (CLAUDE.md records the accepted cost), and it takes minutes.
 # `--with-fresh-sync` opts into it.
+#
+# THE SLOW TIER IS THE OTHER OPT-IN, and R333(b) is why it exists here at all. A `slow`-marked
+# test is deselected from BOTH tiers — `pytest -m "not integration and not slow"` and
+# `pytest -m integration` — so before this flag those tests were executed by NO gate. REPAIR-2
+# shipped a red into its own exit run because a repair made a signature stricter and the one
+# call site that broke was integration-marked: 4 669 green tests could not see it. That is the
+# general shape, and the slow tier is the LAST place it can still hide. The rule R333(b) sets
+# is that a stricter signature is swept over the whole tree BY STRUCTURE; the instrument is
+# that the tier which no tier runs becomes runnable by one flag, and its omission is printed
+# on every run exactly as gate 1's is.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 2
 
 UV=${UV:-uv}
 WITH_FRESH_SYNC=0
+WITH_SLOW=0
 BASE_REF=${GATE_BASE_REF:-origin/dev}
 ONLY=""
 
 usage() {
     cat <<'USAGE'
-usage: tools/ci_gates/run_all.sh [--with-fresh-sync] [--base REF] [--only SUBSTRING]
+usage: tools/ci_gates/run_all.sh [--with-fresh-sync] [--with-slow] [--base REF]
+                                 [--only SUBSTRING]
 
   --with-fresh-sync  also run gate 1 (fresh-clone uv sync; minutes, not seconds)
+  --with-slow        also run the `slow` tier, which BOTH pytest tiers deselect and which
+                     therefore no gate otherwise executes (R333(b)). Run it at every
+                     packet exit.
   --base REF         the diff base gates 6 and 17 measure against (default origin/dev,
                      or $GATE_BASE_REF)
   --only SUBSTRING   run only the gates whose label contains SUBSTRING
@@ -55,6 +70,7 @@ USAGE
 while [ $# -gt 0 ]; do
     case "$1" in
         --with-fresh-sync) WITH_FRESH_SYNC=1; shift ;;
+        --with-slow) WITH_SLOW=1; shift ;;
         --base) BASE_REF=$2; shift 2 ;;
         --only) ONLY=$2; shift 2 ;;
         -h|--help) usage; exit 0 ;;
@@ -107,6 +123,11 @@ run_gate "gate 3a: pytest default tier" \
     $UV run pytest -m "not integration and not slow"
 run_gate "gate 3b: pytest integration tier" \
     $UV run pytest -m integration
+# Not numbered: it is not one of CLAUDE.md's seventeen gates. It is the tier those gates do
+# not reach, and it says so in the summary whether or not it ran.
+[ $WITH_SLOW -eq 1 ] && \
+    run_gate "slow tier (opt-in, --with-slow): the tests BOTH tiers deselect" \
+        $UV run pytest -m slow
 run_gate "gate 3c: collected-test count non-decreasing" \
     bash tools/ci_gates/test_count_gate.sh
 run_gate "gate 7: every configs/ file schema-validates" \
@@ -142,6 +163,12 @@ printf '   base ref for the diff-scoped gates: %s\n' "$BASE_REF"
 if [ $WITH_FRESH_SYNC -eq 0 ]; then
     printf '   gate 1 NOT RUN (pass --with-fresh-sync). Its fresh-clone uv sync is the one\n'
     printf '   check no local run reproduces; CLAUDE.md records that as an accepted cost.\n'
+fi
+if [ $WITH_SLOW -eq 0 ]; then
+    printf '   SLOW TIER NOT RUN (pass --with-slow). Both pytest tiers DESELECT it, so these\n'
+    printf '   tests were executed by nothing in this run. R333(b): run it at every packet exit.\n'
+else
+    printf '   slow tier RAN (--with-slow) — the tier both pytest tiers deselect.\n'
 fi
 printf '   green: %s\n' "${#PASSED[@]}"
 if [ ${#FAILED[@]} -eq 0 ]; then

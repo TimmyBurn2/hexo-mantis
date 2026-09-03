@@ -1,4 +1,4 @@
-.PHONY: build build.native test test.integration lint lint.rust gates bench bench.baseline check.wasm vendor vendor.sealbot clean
+.PHONY: build build.native test test.integration lint lint.rust gates gates.exit bench bench.baseline check.wasm vendor vendor.sealbot clean
 
 UV ?= uv
 
@@ -28,9 +28,15 @@ lint.rust:
 	cargo clippy --workspace --all-targets --locked -- -D clippy::all
 
 # THE LOCAL GATE SET (AUDIT-1 F-09). R311(b) made local green the gate; this is what
-# "local green" means. Gate 1 is opt-in (`--with-fresh-sync`) — see the script's header.
+# "local green" means. Two opt-ins, both self-declaring in the summary: `--with-fresh-sync`
+# (gate 1) and `--with-slow` (the tier BOTH pytest tiers deselect — R333(b)).
 gates:
 	bash tools/ci_gates/run_all.sh
+
+# The packet-exit form: the whole set PLUS the slow tier. R333(b) — a `slow`-marked test is
+# executed by no other gate, so this is the only invocation that covers the tree.
+gates.exit:
+	bash tools/ci_gates/run_all.sh --with-slow
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1
