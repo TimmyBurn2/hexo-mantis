@@ -127,7 +127,7 @@ def _build_pipeline(tmp_path: Path):
     spool_dir = tmp_path / "spool"
     spool_dir.mkdir(exist_ok=True)
     return build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16",
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128,
         eval_cfg=_eval_cfg(),
         coordinator_cfg_caps=DrainCaps(
             final_eval_drain_timeout_sec=600.0,
