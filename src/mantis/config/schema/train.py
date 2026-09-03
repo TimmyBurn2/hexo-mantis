@@ -258,6 +258,27 @@ class MicrobatchCapsConfig(StrictModel):
     max_nodes: int = Field(ge=1)
 
 
+class EmaConfig(StrictModel):
+    """The EMA lever's arming keys (R332(d), AUDIT-1 F-06).
+
+    THE DEFECT THIS CLOSES. `train/ema.py::resolve_ema_config` read `config.get("ema")`,
+    `("ema_enabled", False)`, `("ema_decay", 0.999)` and `("ema_update_every", 10)` off a
+    `RunConfig` that has `extra="forbid"` and no `ema` leaf — so the module's own docstring
+    called EMA an "anti-colony lever (kept)" while it was OFF on every run and NO CONFIG COULD
+    TURN IT ON. That is R1's silently-disabled class verbatim, and it was invisible because a
+    disabled lever and an absent one produce the same run.
+
+    REQUIRED members, and every committed config mints `enabled: false` — so the posture is
+    STATED rather than inherited from a code-side default. Turning it on is a prereg lever:
+    the values below are the ones the dead reader used, carried so that arming the lever
+    changes only `enabled`, not the regime underneath it.
+    """
+
+    enabled: bool
+    decay: float = Field(ge=0.0, lt=1.0)
+    update_every: int = Field(ge=1)
+
+
 class TrainConfig(StrictModel):
     """Training hyperparameters (R-TRAINCONFIG-SCHEMA). Every field REQUIRED — no terminal
     default anywhere in this class; the minted value in each `configs/*.yaml` is the sole
@@ -315,6 +336,11 @@ class TrainConfig(StrictModel):
     # (R49 enforced at the type level). Resolved ONLY by
     # `mantis.config.resolve.actor_sync.resolve_actor_sync_cadence`.
     actor_sync_cadence_steps: int = Field(ge=1)
+    # AUDIT-1 F-06 / R332(d). The EMA lever's arming block, REQUIRED so every config states its
+    # posture explicitly. Until this key existed `resolve_ema_config` read four `.get(...)`
+    # names off a schema that has none of them under `extra="forbid"`, so the lever was OFF on
+    # every run and unreachable from any config — R1's silently-disabled class.
+    ema: EmaConfig
     # WPAX S-4 (F-C re-anchor): the RUN-LENGTH authority, in coordinator training steps.
     # Consumed by mantis.config.resolve.run_length.resolve_max_train_steps ->
     # StepCoordinatorConfig.stop_step, the real stop condition (coordinator/step.py O2).

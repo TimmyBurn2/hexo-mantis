@@ -177,6 +177,13 @@ class RoundSpec:
     #: through `amp_dtype_for` (the ONE authority, LAW-06) inside the engine; threaded, never
     #: named at the construction site.
     amp_dtype: str
+    #: The run's `selfplay.max_game_moves`, carried across the process seam for `amp_dtype`'s
+    #: reason (AUDIT-1 F-15). `arena/match.py::DEFAULT_MAX_PLIES = 128` defaulted every eval
+    #: game, and its own comment said it "mirrors the production self-play default" — a copy of
+    #: a bridge signature default, itself a copy of the minted key. So the moment
+    #: `max_game_moves` is re-minted, eval keeps capping at 128 silently and the draw channel
+    #: changes meaning with no config diff, on the bar LAW-15 reads deploy-matched.
+    max_plies: int
     #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
     #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
     #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph

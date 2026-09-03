@@ -314,7 +314,7 @@ def _play_floor_probe(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("floor_probe"), adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("floor_probe"), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return list(records[:probe_games])
 
@@ -375,7 +375,7 @@ def _play_gate_block(
         )
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
-            board_factory=board_factory, record_sink=progress.sink("gate_screen"), adjudicator=adjudicator,
+            board_factory=board_factory, record_sink=progress.sink("gate_screen"), adjudicator=adjudicator, max_plies=spec.max_plies,
         )
         screen_agg = [_agg_record(r) for r in screen_records]
 
@@ -389,7 +389,7 @@ def _play_gate_block(
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
-                board_factory=board_factory, record_sink=progress.sink("gate_confirm"), adjudicator=adjudicator,
+                board_factory=board_factory, record_sink=progress.sink("gate_confirm"), adjudicator=adjudicator, max_plies=spec.max_plies,
             )
             confirm_agg = [_agg_record(r) for r in confirm_records]
         return {"screen": screen_agg, "confirm": confirm_agg}
@@ -434,7 +434,7 @@ def _play_rung_block(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("rung"), adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("rung"), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 
@@ -469,7 +469,7 @@ def _play_random_floor(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("random_floor"), adjudicator=adjudicator,
+        board_factory=board_factory, record_sink=progress.sink("random_floor"), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return [_agg_record(r) for r in records[: spec.random_floor_games]]
 

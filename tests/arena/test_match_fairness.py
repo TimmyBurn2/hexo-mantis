@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mantis._engine import Board
-from mantis.arena.match import play_paired_match
+from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -91,7 +91,7 @@ def test_paired_openings_swap_colors_exactly():
     records = play_paired_match(
         candidate, opponent, _openings(),
         regime_key=_regime_key(deploy_matched=True),
-        board_factory=_board_factory, record_sink=None,
+        board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     assert len(records) == len(_openings()) * 2, "each opening must be played exactly twice"
     by_opening: dict[str, list] = {}
@@ -111,7 +111,7 @@ def test_records_stamp_regime_key_opening_and_trajectory_hash():
     regime_key = _regime_key(deploy_matched=True)
     records = play_paired_match(
         candidate, opponent, _openings(),
-        regime_key=regime_key, board_factory=_board_factory, record_sink=None,
+        regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     assert len(records) > 0
     for rec in records:
@@ -130,12 +130,12 @@ def test_trajectory_hash_is_move_order_sensitive_and_deterministic():
     regime_key = _regime_key(deploy_matched=True)
     records_a = play_paired_match(
         candidate, opponent, [_Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
-        regime_key=regime_key, board_factory=_board_factory, record_sink=None,
+        regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     records_b = play_paired_match(
         _FixedMoveBot([(5, 5), (6, 6)]), _FixedMoveBot([(7, 7), (8, 8)]),
         [_Opening(opening_id="op0", moves=[(0, 0), (1, 1), (0, 1), (1, 0)])],
-        regime_key=regime_key, board_factory=_board_factory, record_sink=None,
+        regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     assert [r.trajectory_hash for r in records_a] == [r.trajectory_hash for r in records_b], (
         "identical scripted play from an identical opening must reproduce identical hashes"
@@ -143,7 +143,7 @@ def test_trajectory_hash_is_move_order_sensitive_and_deterministic():
     records_diff_opening = play_paired_match(
         _FixedMoveBot([(5, 5), (6, 6)]), _FixedMoveBot([(7, 7), (8, 8)]),
         [_Opening(opening_id="op1", moves=[(2, 2), (3, 3), (2, 3), (3, 2)])],
-        regime_key=regime_key, board_factory=_board_factory, record_sink=None,
+        regime_key=regime_key, board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     hashes_a = {r.trajectory_hash for r in records_a}
     hashes_diff = {r.trajectory_hash for r in records_diff_opening}
@@ -159,11 +159,11 @@ def test_deploy_matched_flag_travels_from_rung_to_record():
     unmatched_key = _regime_key(deploy_matched=False)
     matched_records = play_paired_match(
         candidate, opponent, _openings(), regime_key=matched_key,
-        board_factory=_board_factory, record_sink=None,
+        board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     unmatched_records = play_paired_match(
         _FixedMoveBot([(5, 5)]), _FixedMoveBot([(7, 7)]), _openings(), regime_key=unmatched_key,
-        board_factory=_board_factory, record_sink=None,
+        board_factory=_board_factory, max_plies=DEFAULT_MAX_PLIES, record_sink=None,
     )
     assert all(r.regime_key.deploy_matched is True for r in matched_records)
     assert all(r.regime_key.deploy_matched is False for r in unmatched_records)

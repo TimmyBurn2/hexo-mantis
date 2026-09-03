@@ -40,7 +40,7 @@ through the same decode entrance an eval round does.
 **WHAT THIS MODULE DOES NOT OWN.** No threshold: the floor's three terms arrive resolved from
 `eval.strength_floor`, and a config that leaves it `null` gets `floor_verdict: null` and a
 readout with no verdict rather than a witness that quietly passes itself (LAW-07/LAW-08). No
-ply cap of its own: it plays at the arena's `DEFAULT_MAX_PLIES`, the cap the eval worker plays
+ply cap of its own: it plays at the run's own `selfplay.max_game_moves`, the cap the eval worker plays
 at, passed explicitly at the call site so a reader sees which cap the numbers are under.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ import torch
 from mantis._engine import Board
 from mantis.arena.adjudicate import longest_run
 from mantis.arena.books import paired_openings
-from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
+from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
 from mantis.bots.resolve import resolve_bot
 from mantis.config.loader import load_config
@@ -325,7 +325,9 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
         "seed": cfg.seed,
         "random_model_sims": sims,
         "leaf_batch_size": leaf_batch_size,
-        "max_plies": DEFAULT_MAX_PLIES,
+        # AUDIT-1 F-15: the RUN's cap, from the config this witness already holds — the
+        # arena's module constant is no longer a default anyone can inherit.
+        "max_plies": int(cfg.selfplay.max_game_moves),
         "games_per_arm": games,
         "armed_floor": None if floor is None else {
             "probe_games": floor.probe_games,
@@ -346,7 +348,7 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                 seed=cfg.eval.gate.seed_base),
                 regime_key=witness_regime(encoding_name=spec.name, model_sims=sims,
                                           opening_book=cfg.eval.gate.opening_book),
-                encoding_name=spec.name, max_plies=DEFAULT_MAX_PLIES, games=games,
+                encoding_name=spec.name, max_plies=int(cfg.selfplay.max_game_moves), games=games,
             )
             measured = measure_arm(records, encoding_name=spec.name, floor=floor)
             measured["net_param_hash"] = net_param_hash(engine.model)

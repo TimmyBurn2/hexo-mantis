@@ -140,6 +140,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
                                 " Trainer._maybe_periodic_checkpoint (THE one reader; both the dense"
                                 " and the graph step tail call it — R173/CARD-CS2)",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
+    "train.ema.enabled": "resolve_ema_config -> Trainer.__init__ (the EMA lever's ARMING key, R332(d) / AUDIT-1 F-06; every committed config mints false explicitly)",
+    "train.ema.decay": "resolve_ema_config -> build_ema_model(decay=...) -> EmaModel mixing rate",
+    "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
     # WPAX Phase D (R65/R80) registered the BLOCK as one leaf; WPMINT DR-6 (R93) makes the
@@ -470,8 +473,11 @@ def test_registry_matches_the_live_leaf_count():
     # R332(d): + 2 = 188 — `identity.warm_start`'s two members. ONE optional BLOCK, two leaves
     # under the walker: both are REQUIRED inside the block, which is what makes a checkpoint
     # path with no expected net hash unconstructible (AUDIT-1 F-19).
-    assert len(CONSUMER_REGISTRY) == 188
-    assert len(_leaf_paths(RunConfig)) == 188
+    # R332(d): + 3 = 191 — `train.ema`'s three members. REQUIRED, not optional: the lever was
+    # unreachable from any config (AUDIT-1 F-06), so every config now STATES its posture and
+    # `enabled: false` is a minted value rather than a code-side silence.
+    assert len(CONSUMER_REGISTRY) == 191
+    assert len(_leaf_paths(RunConfig)) == 191
 
 
 def test_bijection_bites_on_a_real_schema_mutation():

@@ -60,9 +60,22 @@ def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
 #: Hard ply cap — the board is UNBOUNDED (CLAUDE.md), so a game between two
 #: non-adversarial/degenerate bots (a fixed-move-then-first-legal-move stub, an untrained
 #: net) is not guaranteed to ever complete a 6-in-a-row: without a cap the loop below would
-#: never terminate. Mirrors the production self-play default
-#: (`SelfPlayRunnerConfig.max_moves_per_game=128`, _engine.pyi) — reaching it ends the game
-#: a draw, exactly like a real self-play worker's own cap.
+#: never terminate. Reaching it ends the game a draw, exactly like a real self-play worker's
+#: own cap.
+#:
+#: AUDIT-1 F-15 — THIS IS NO LONGER A DEFAULT, and the difference is the whole row. Its own
+#: comment used to say it "mirrors the production self-play default
+#: (`SelfPlayRunnerConfig.max_moves_per_game=128`)" — a copy of a bridge signature default,
+#: which is itself a copy of the minted `selfplay.max_game_moves`. Three copies of one number,
+#: and the eval worker passed none of them: `eval/worker.py`, `eval/pipeline.py` and `run.py`
+#: never set `max_plies`, so every eval game capped HERE. The moment `max_game_moves` is
+#: re-minted, eval would keep capping at 128 with no config diff — and the ply cap is half of
+#: the ply-cap x adjudication matrix that is an operator-owed prereg row, read off the bar
+#: LAW-15 calls deploy-matched.
+#:
+#: It survives as the TEST fixture's cap and nothing else: `play_paired_match` and
+#: `_play_one_game` now take `max_plies` with NO default, so production threads the run's own
+#: value and a caller that forgets it gets a `TypeError` rather than a silent 128.
 DEFAULT_MAX_PLIES = 128
 
 
@@ -73,7 +86,7 @@ def _play_one_game(
     *,
     candidate_color: int,
     board_factory: Callable[[], Any],
-    max_plies: int = DEFAULT_MAX_PLIES,
+    max_plies: int,
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None]:
     """Play one game from `opening_moves`; return
@@ -142,7 +155,7 @@ def play_paired_match(
     regime_key: RegimeKey,
     board_factory: Callable[[], Any],
     record_sink: Any = None,
-    max_plies: int = DEFAULT_MAX_PLIES,
+    max_plies: int,
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> list[GameRecord]:
     """Play every opening TWICE (colors swapped); return one `GameRecord` per game.

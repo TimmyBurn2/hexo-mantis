@@ -245,9 +245,10 @@ class Trainer:
         self.scheduler = self._build_scheduler()
 
         from mantis.train.ema import build_ema_model, resolve_ema_config
-        _ema_enabled, _ema_decay, self.ema_update_every = resolve_ema_config(
-            config if isinstance(config, dict) else {}
-        )
+        # AUDIT-1 F-06: the block is REQUIRED, so it is read from the config as given. The
+        # `{}` fallback that stood here made an absent block indistinguishable from a declared
+        # OFF — which is exactly how the lever stayed silently disabled.
+        _ema_enabled, _ema_decay, self.ema_update_every = resolve_ema_config(config)
         self.ema_model = (
             build_ema_model(getattr(self.model, "_orig_mod", self.model), decay=_ema_decay)
             if _ema_enabled else None

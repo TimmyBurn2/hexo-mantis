@@ -424,6 +424,7 @@ class EvalPipeline:
         inference_batching: InferenceBatchingSpec | None,
         leaf_batch_size: int,
         amp_dtype: str,
+        max_plies: int,
         leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
@@ -474,6 +475,11 @@ class EvalPipeline:
         #: F-31): the child's dense forward autocast with no dtype at all, and a default here
         #: would put a dtype nobody declared back on the deploy-matched bar.
         self._amp_dtype = str(amp_dtype)
+        #: The run's `selfplay.max_game_moves`, resolved ONCE in the parent and carried to every
+        #: round. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1 F-15): a default here is
+        #: the `DEFAULT_MAX_PLIES = 128` module constant put back, and the ply cap is half of
+        #: the ply-cap x adjudication matrix that is an operator-owed prereg row.
+        self._max_plies = int(max_plies)
         #: The graph collector's batching geometry (PERF-TRANCHE-1 G-2, ledger F-2), resolved
         #: ONCE in the parent and carried to every round's `RoundSpec`. NOT defaulted, for
         #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
@@ -727,6 +733,9 @@ class EvalPipeline:
             # `dtype=` at all, so it ran at torch's device default while the run declared
             # otherwise — on the path LAW-15 reads the promotion bar off.
             amp_dtype=self._amp_dtype,
+            # AUDIT-1 F-15, same seam and same reason: the eval arena capped at a module
+            # constant while the run declared `selfplay.max_game_moves`.
+            max_plies=self._max_plies,
             # G-2, same seam and same reason: the child's graph server wrote its pop width
             # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
             # deadline one of them set (ledger F-2).
@@ -1242,6 +1251,7 @@ def build_eval_pipeline(
     inference_batching: InferenceBatchingSpec | None,
     leaf_batch_size: int,
     amp_dtype: str,
+    max_plies: int,
     run_id: str,
     spool_dir: str | Path,
     ladder_state_path: str | Path,
@@ -1259,7 +1269,7 @@ def build_eval_pipeline(
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
-        leaf_batch_size=leaf_batch_size, amp_dtype=amp_dtype,
+        leaf_batch_size=leaf_batch_size, amp_dtype=amp_dtype, max_plies=max_plies,
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,

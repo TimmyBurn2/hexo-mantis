@@ -97,6 +97,10 @@ train:
   min_lr: null
   checkpoint_interval: 0
   actor_sync_cadence_steps: 2
+  ema:
+    enabled: false
+    decay: 0.999
+    update_every: 10
   max_train_steps: 200
   draw_rate_abort:
     threshold: 0.5

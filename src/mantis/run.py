@@ -944,6 +944,9 @@ def compose_run(
                     # and carried to every round — the eval child has no RunConfig, and
                     # its dense forward had no dtype at all.
                     amp_dtype=config.train.amp_dtype,
+                    # AUDIT-1 F-15: the eval arena's ply cap is the RUN's, not a module
+                    # constant. `DEFAULT_MAX_PLIES = 128` was a copy of a copy of this key.
+                    max_plies=config.selfplay.max_game_moves,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(

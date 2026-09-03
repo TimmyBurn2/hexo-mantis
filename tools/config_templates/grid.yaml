@@ -124,6 +124,10 @@ train:
   min_lr: null
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
+  ema:
+    enabled: false
+    decay: 0.999
+    update_every: 10
   max_train_steps: 1000000
   # WPAX Phase D (R65/R80/R79+R83), statistic replaced by R92 (WPMINT Phase DS): the
   # draw-rate collapse hard abort's terms. `null` is the EXPLICIT off posture and is what

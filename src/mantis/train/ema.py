@@ -13,13 +13,20 @@ all parameters + buffers (`use_buffers=True` semantics), updated in place.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import torch
 
 DEFAULT_DECAY = 0.999
 DEFAULT_UPDATE_EVERY = 10
+
+#: The members `train.ema` must carry. Read by key; absent is an error (R1).
+_EMA_MEMBERS: tuple[str, ...] = ("enabled", "decay", "update_every")
+
+
+class MissingEmaConfigError(ValueError):
+    """`train.ema` is absent or incomplete (AUDIT-1 F-06 / R332(d))."""
 
 
 def _base_of(model: torch.nn.Module) -> torch.nn.Module:
@@ -96,14 +103,43 @@ def build_ema_model(model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> Ema
     return EmaModel(model, decay=decay)
 
 
-def resolve_ema_config(config: dict[str, Any]) -> tuple[bool, float, int]:
-    """Read EMA settings — nested ``{"ema": {...}}`` or flat ``ema_*`` keys. Default
-    OFF preserves the pre-EMA path."""
-    ema_block = config.get("ema")
-    nested = ema_block if isinstance(ema_block, dict) else {}
-    enabled = bool(nested.get("enabled", config.get("ema_enabled", False)))
-    decay = float(nested.get("decay", config.get("ema_decay", DEFAULT_DECAY)))
-    update_every = int(nested.get("update_every", config.get("ema_update_every", DEFAULT_UPDATE_EVERY)))
+def resolve_ema_config(config: Mapping[str, Any]) -> tuple[bool, float, int]:
+    """Read the EMA lever's arming block from `train.ema`. Returns
+    `(enabled, decay, update_every)`.
+
+    AUDIT-1 F-06 / R332(d). THIS FUNCTION USED TO READ FOUR KEYS THAT DO NOT EXIST:
+    `config.get("ema")`, `("ema_enabled", False)`, `("ema_decay", 0.999)` and
+    `("ema_update_every", 10)`, against a `RunConfig` that is `extra="forbid"` and had no `ema`
+    leaf anywhere. So the lever this module's docstring calls an "anti-colony lever (kept)" was
+    OFF on every run, no config could turn it on, and nothing said so — a disabled lever and an
+    absent one produce identical runs. `train.ema` is now a REQUIRED schema block and this
+    reads it BY KEY: absent is an error, never a default (R1/LAW-08).
+
+    Raises:
+        MissingEmaConfigError: the config carries no `train.ema` block, or it is not a mapping,
+            or a member is absent. A config that reaches here in that state did not come
+            through `load_config`, and there is no code-side default to stand in for it.
+    """
+    train = config.get("train") if isinstance(config, Mapping) else None
+    block = train.get("ema") if isinstance(train, Mapping) else None
+    if block is None:
+        raise MissingEmaConfigError(
+            "train.ema is absent. It is a REQUIRED schema block (R332(d)); absence used to "
+            "resolve to a code-side `False`, which is how the EMA lever stayed off on every "
+            "run while reading as 'kept'. State the posture in the config."
+        )
+    if not isinstance(block, Mapping):
+        raise MissingEmaConfigError(
+            f"train.ema is {type(block).__name__}, expected a mapping with "
+            f"{sorted(_EMA_MEMBERS)}."
+        )
+    missing = [m for m in _EMA_MEMBERS if m not in block]
+    if missing:
+        raise MissingEmaConfigError(
+            f"train.ema is missing {missing}. Every member is REQUIRED by the schema, so a "
+            "config reaching here without them did not come through the one loader."
+        )
+    update_every = int(block["update_every"])
     if update_every < 1:
         raise ValueError(f"ema.update_every must be >= 1; got {update_every}")
-    return enabled, decay, update_every
+    return bool(block["enabled"]), float(block["decay"]), update_every

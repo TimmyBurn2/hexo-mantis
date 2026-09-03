@@ -110,7 +110,7 @@ def _round_spec(
         )
     ]
     return RoundSpec(
-        leaf_batch_size=1, amp_dtype="bf16", leaf_build_threads=1,
+        leaf_batch_size=1, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
         round_id=f"oracle_{enc_name}", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=enc_name, worker_device="cpu",
         gate=gate, rung_jobs=rung_jobs, random_floor_games=floor_games,
