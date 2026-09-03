@@ -1,3 +1,8 @@
+# >300 justify (R8): the three defects below are ONE theme — a run that died could not be
+# recovered — and each arm's mutation self-test only means anything beside the arm it controls.
+# Split them and the resume leg's "the flag reaches the launcher" would sit in a different file
+# from "a stale flag refuses before the launcher", which are the two halves of one guard: a
+# reader who finds only the first cannot tell a wired guard from an unwired one.
 """Item 4 pins — the survivability triangle: resume in, model out, no invented paths.
 
 Three defects, one theme: a run that died could not be recovered.
