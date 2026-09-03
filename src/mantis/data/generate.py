@@ -47,6 +47,8 @@ class BotLike(Protocol):
 def _play_one_game(
     bot: BotLike,
     game_idx: int,
+    *,
+    encoding_name: str,
     rng_seed: int = 0,
     n_random_opening: int = 1,
     use_human_seeding: bool = False,
@@ -67,7 +69,11 @@ def _play_one_game(
     Returns None if the game ends without a winner (capped).
     """
     bot.reset()
-    board = Board()
+    # AUDIT-1 F-34: identity-BOUND. `Board()` takes the engine defaults (legal-move radius 5,
+    # cluster threshold 5) whatever encoding the games are being generated FOR, so a generated
+    # corpus was radius-5 constrained regardless of the identity it feeds. REQUIRED and
+    # keyword-only: a default would be the same silence one argument out.
+    board = Board.with_encoding_name(encoding_name)
     state = GameState.from_board(board)
     moves: list[tuple[int, int]] = []
 
@@ -162,6 +168,8 @@ def generate_bot_games(
     bot: BotLike,
     n_games: int,
     output_dir: Path,
+    *,
+    encoding_name: str,
     rng_seed: int = 42,
     n_random_opening: int = 1,
     use_human_seeding: bool = False,
@@ -186,7 +194,7 @@ def generate_bot_games(
 
     for i in range(n_games):
         result = _play_one_game(
-            bot, i, rng_seed=rng_seed,
+            bot, i, encoding_name=encoding_name, rng_seed=rng_seed,
             n_random_opening=n_random_opening,
             use_human_seeding=use_human_seeding,
             human_corpus_dir=human_corpus_dir,

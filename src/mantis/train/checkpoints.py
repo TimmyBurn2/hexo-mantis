@@ -853,6 +853,12 @@ def strip_and_restamp(
         "train": {
             "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
             "amp_dtype": "fp16",
+            # R332(d) / AUDIT-1 F-06: `train.ema` is a REQUIRED block. `enabled: false` is the
+            # same zero-behaviour placeholder posture as `seed: 0` and `eval_enabled: true`
+            # above — a stripped artifact boots no run, so no EMA shadow is ever built from
+            # this. Stated rather than omitted, because omission is what the block exists to
+            # make impossible.
+            "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
             # WPMAIN / R126 + R127: `train.device` is a REQUIRED closed-vocabulary key.
             # Literal for the same measured reason as `eval_enabled` above (no schema
             # default exists to derive from); `"cpu"` is a schema-valid member and nothing

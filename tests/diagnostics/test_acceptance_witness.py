@@ -104,7 +104,7 @@ def _readout(seed: int) -> dict:
             *paired_openings("book_v1_s20260625_p4", n_pairs=1, seed=7),
         ]
         records = play_arm(
-            build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1),
+            build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0),
             resolve_bot("random", depth=None, opponent_sims=2)(seed=7),
             openings,
             regime_key=witness_regime(encoding_name=_ENCODING, model_sims=2,

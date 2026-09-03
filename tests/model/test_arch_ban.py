@@ -78,6 +78,41 @@ def test_no_arch_sniffs_in_model_layer() -> None:
     assert find_arch_sniffs(_MODEL) == []
 
 
+def test_no_representation_default_anywhere_under_src() -> None:
+    """AUDIT-1 F-35 — the DENSE-BY-DEFAULT arm, censused over the WHOLE package.
+
+    `getattr(x, "representation", "grid")` sat at SIX sites outside the model layer: both
+    encoding spec filters, `train/subsystems.py`, `train/anchor.py` TWICE (one of them reading
+    a legacy checkpoint's metadata, so live for any artifact lacking the field) and
+    `train/trainer/core.py`. LAW-11 holds at the schema and at `is_graph_representation`, and
+    each of those re-introduced the default one layer down — a THIRD representation would have
+    been silently grid at every one of them.
+
+    WHY THIS ROW AND NOT `find_arch_sniffs(_SRC)`. The audit's repair line says "widen the
+    census root to `src/mantis/`", and I ran that: it returns TEN findings, and every one is
+    correct code. Nine are `.board_size` read off a registry SPEC whose receiver is not in
+    `_ALLOWED_RECEIVERS` (`_V6`, `_V6W25_SPEC`, `resolved`, `encoding_spec`, `s`) or a
+    `.filters` read off an argparse namespace; the tenth is
+    `pretrain/cli.py`'s `isinstance(model, HexTacToeNet)`, which REFUSES a non-dense net at a
+    dense-only CLI rather than branching to a dense default. This module's own docstring makes
+    that distinction for the sibling pattern — *"inside an affirmative guard it is correct
+    dispatch, and a gate that fires on correct code trains reviewers to ignore it"*. Widening
+    wholesale would need five receiver names allowlisted, and an allowlist that grows per
+    call site is how a census stops meaning anything. So the ROOT widens for the pattern F-35
+    is actually about, and the arch-off-a-module patterns keep their tighter root above.
+    """
+    offenders = [
+        f"{path}:{i}" for path in _py_files(_SRC)
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if _RE_DENSE_DEFAULT.search(line)
+    ]
+    assert not offenders, (
+        f"a `representation` read defaulting to a dense/grid literal: {offenders}. LAW-11: an "
+        "absent representation is an ERROR, never a default — the schema says so and these "
+        "sites must not say otherwise one layer down."
+    )
+
+
 def test_model_representation_symbol_is_deleted_repo_wide() -> None:
     assert not _has_model_representation_def(_SRC), "model_representation def must stay deleted"
 

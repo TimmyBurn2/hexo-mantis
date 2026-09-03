@@ -247,7 +247,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
     spool_dir = tmp_path / "spool"
     spool_dir.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
-        leaf_batch_size=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0,
         max_plies=128, amp_dtype="bf16",
         eval_cfg=_eval_cfg(),
         coordinator_cfg_caps=DrainCaps(

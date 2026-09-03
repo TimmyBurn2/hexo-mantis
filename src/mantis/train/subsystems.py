@@ -72,7 +72,10 @@ def build_inference_model(trainer: Any, device: torch.device) -> tuple[torch.nn.
     inf_model = build_net(arch).to(device)
     inf_model.load_state_dict(trainer.inference_state_dict())
     inf_model.eval()
-    representation = getattr(arch, "representation", "grid")
+    # AUDIT-1 F-35: attribute access, no default. A `"grid"` default here re-introduces the
+    # dense-by-default LAW-11 forbids, one layer below the schema that forbids it — and a THIRD
+    # representation would silently be grid at this site.
+    representation = arch.representation
     amp_dtype = trainer.config["train"]["amp_dtype"]
     spec = None
     try:

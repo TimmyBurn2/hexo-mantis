@@ -81,8 +81,8 @@ class DeployHeadPlayer:
         expand_fn: ExpandFn | None = None,
         n_sims: int,
         leaf_batch_size: int,
-        c_visit: float = 50.0,
-        c_scale: float = 1.0,
+        c_visit: float,
+        c_scale: float,
     ) -> None:
         if (infer_fn is None) == (expand_fn is None):
             supplied = "both" if infer_fn is not None else "neither"
@@ -91,6 +91,14 @@ class DeployHeadPlayer:
                 f"(graph); {supplied} was supplied. There is no default arm — picking one "
                 f"here would decide the decode contract silently."
             )
+        # AUDIT-1 F-39. `c_visit`/`c_scale` lost their `= 50.0` / `= 1.0` defaults for
+        # `leaf_batch_size`'s reason, one row over: they are REQUIRED schema keys
+        # (`selfplay.c_visit`, `selfplay.c_scale`) that the eval head was never given, so the
+        # deploy-matched bar searched at this signature's numbers instead of the run's. A
+        # default that happens to equal today's minted value is still a second authority — and
+        # the moment the key is re-minted, LAW-15's "deploy-matched" claim stops being true
+        # with no config diff to show for it.
+        #
         # R318(b): REQUIRED and never defaulted. A default would be a search-regime constant
         # nobody minted, and the value it would take (1) is the defect itself.
         if int(leaf_batch_size) < 1:

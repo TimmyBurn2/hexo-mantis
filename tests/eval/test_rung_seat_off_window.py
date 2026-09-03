@@ -153,7 +153,7 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     pos = _position(position_index)
     board = _board(pos)
     head_seat = int(board.current_player)
-    player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, rung_sims, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0)
     player.new_game()
     bot = RandomBot(seed=20260802)
 

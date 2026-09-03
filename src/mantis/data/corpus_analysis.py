@@ -167,6 +167,11 @@ def load_all_games(
 def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description="Corpus distribution analysis")
+    # AUDIT-1 F-34: the corpus's own geometry. REQUIRED and undefaulted — this tool had no
+    # encoding at all, so every Board it built took the engine defaults and its diversity and
+    # cluster numbers described a board the corpus was not generated on.
+    parser.add_argument("--encoding", type=str, required=True,
+                        help="the registered encoding the corpus was generated under")
     parser.add_argument("--human-dir", type=str, required=True,
                         help="Directory of scraped human game JSON files")
     parser.add_argument("--bot-games-dir", type=str, default=None,
@@ -211,7 +216,8 @@ def main() -> None:
         console.rule("[bold]Corpus Distribution Analysis")
 
     # Always run combined analysis
-    combined_results = run_analysis(records, "all", cluster_sample=500)
+    combined_results = run_analysis(
+        records, "all", cluster_sample=500, encoding_name=args.encoding)
     _print_summary_table(combined_results, "Combined")
 
     # Print win rate by Elo band for combined
@@ -249,7 +255,8 @@ def main() -> None:
         for src, src_records in strata.items():
             if console is not None:
                 console.rule(f"[bold cyan]{SOURCE_LABELS.get(src, src)}")
-            result = run_analysis(src_records, src, cluster_sample=500)
+            result = run_analysis(
+                src_records, src, cluster_sample=500, encoding_name=args.encoding)
             strata_results[src] = result
             _print_summary_table(result, src)
 

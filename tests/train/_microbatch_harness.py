@@ -227,20 +227,22 @@ def ema_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
                       update_every: int = 1, **hp_over: Any) -> Trainer:
     """A tiny graph `Trainer` with EMA ACTUALLY ENABLED.
 
-    `tiny_graph_trainer` above builds from `configs/dev_example.yaml`, which declares no `ema`
-    block, so `resolve_ema_config` returns `enabled=False` and `ema_model is None` — measured.
+    `tiny_graph_trainer` above builds from `configs/dev_example.yaml`, which since R332(d)
+    MINTS `train.ema.enabled: false` explicitly — so `resolve_ema_config` returns
+    `enabled=False` and `ema_model is None` because the config SAYS SO, not because the key was
+    missing. Before AUDIT-1 F-06 there was no key at all, and the two states were
+    indistinguishable.
     That means the EMA branch of the graph step's tail never executes in a default-fixture row,
     and an EMA update moved into the accumulation loop would be invisible to it. This builder
     exists so OF2-4 can assert the EMA count the row's registered PASS column names.
 
-    `ema` is a runtime key read by `mantis.train.ema.resolve_ema_config` off the trainer's
-    config dict, not a `RunConfig` field — so a trainer built this way must not write a
-    checkpoint (the writer schema-validates its config). Every leg using it sets
-    `checkpoint_interval=0`."""
+    `train.ema` IS a `RunConfig` field since R332(d)/AUDIT-1 F-06, so overriding it here keeps
+    the config schema-valid — but every leg using this helper still sets
+    `checkpoint_interval=0`, because that was never the only reason not to write."""
     torch.manual_seed(seed)
     arch = tiny_graph_arch()
     config = graph_config()
-    config["ema"] = {"enabled": True, "decay": 0.9, "update_every": update_every}
+    config["train"]["ema"] = {"enabled": True, "decay": 0.9, "update_every": update_every}
     hp_over.setdefault("checkpoint_interval", 0)
     return Trainer(build_net(arch), config, arch=arch,
                    checkpoint_dir=Path(tmp_path) / "ckpt_ema", device=torch.device("cpu"),

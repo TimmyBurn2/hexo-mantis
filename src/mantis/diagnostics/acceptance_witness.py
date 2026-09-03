@@ -341,7 +341,11 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
         try:
             records = play_arm(
                 build_candidate_player(engine, sims, spec=spec,
-                                       leaf_batch_size=leaf_batch_size),
+                                       leaf_batch_size=leaf_batch_size,
+                                       # AUDIT-1 F-39: the deploy head's sigma terms are the
+                                       # config's, not the player's signature defaults.
+                                       c_visit=cfg.selfplay.c_visit,
+                                       c_scale=cfg.selfplay.c_scale),
                 resolve_bot("random", depth=None, opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),

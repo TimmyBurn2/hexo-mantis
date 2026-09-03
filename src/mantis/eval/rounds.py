@@ -184,6 +184,14 @@ class RoundSpec:
     #: `max_game_moves` is re-minted, eval keeps capping at 128 silently and the draw channel
     #: changes meaning with no config diff, on the bar LAW-15 reads deploy-matched.
     max_plies: int
+    #: The deploy head's completed-Q sigma terms, `selfplay.{c_visit, c_scale}` — REQUIRED
+    #: schema keys that the eval head never received (AUDIT-1 F-39). `DeployHeadPlayer`
+    #: defaulted them to `50.0` / `1.0` on its own signature and `eval/worker.py` constructed it
+    #: with only `n_sims` and `leaf_batch_size`, so the deploy-matched bar searched at a regime
+    #: nobody minted — and the moment `c_visit` is re-minted, LAW-15's "deploy-matched" claim
+    #: quietly stops being true. Threaded here for `leaf_batch_size`' reason exactly.
+    c_visit: float
+    c_scale: float
     #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
     #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
     #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph

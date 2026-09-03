@@ -113,7 +113,7 @@ def _synthetic_records() -> list[GameRecord]:
 
 def test_run_analysis_key_sets() -> None:
     recs = _synthetic_records()
-    res = cm.run_analysis(recs, "test", cluster_sample=20)
+    res = cm.run_analysis(recs, "test", cluster_sample=20, encoding_name="v6")
     assert set(res) == {
         "game_count", "total_positions", "game_lengths", "win_rates",
         "move_entropy", "opening_diversity", "cluster_counts", "ply_coverage",

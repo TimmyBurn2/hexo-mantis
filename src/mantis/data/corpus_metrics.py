@@ -311,8 +311,15 @@ def analyse_move_entropy(records: list[GameRecord], label: str = "all") -> dict:
 # Analysis (d): Opening diversity
 # ---------------------------------------------------------------------------
 
-def analyse_opening_diversity(records: list[GameRecord], label: str = "all") -> dict:
-    """Count unique Zobrist hashes at move 3, 5, 10, 20 and compute dupe rate."""
+def analyse_opening_diversity(
+    records: list[GameRecord], label: str = "all", *, encoding_name: str,
+) -> dict:
+    """Count unique Zobrist hashes at move 3, 5, 10, 20 and compute dupe rate.
+
+    `encoding_name` is REQUIRED (AUDIT-1 F-34): the board these hashes are computed on used to
+    be an identity-blind `Board()` at the engine's default radius, so the diversity of a
+    corpus generated at any other geometry was measured under the wrong legal set.
+    """
     checkpoints = [3, 5, 10, 20]
     unique_hashes: dict[int, set] = {cp: set() for cp in checkpoints}
 
@@ -324,7 +331,7 @@ def analyse_opening_diversity(records: list[GameRecord], label: str = "all") -> 
     with _progress_ctx() as progress:
         task = progress.add_task(f"Opening diversity ({label})", total=len(records))
         for r in records:
-            board = Board()
+            board = Board.with_encoding_name(encoding_name)
             if r.moves:
                 first_moves.append(r.moves[0])
             seq_10 = tuple(r.moves[:10])
@@ -390,7 +397,7 @@ def analyse_opening_diversity(records: list[GameRecord], label: str = "all") -> 
 
 def analyse_cluster_counts(records: list[GameRecord],
                            sample_size: int = CLUSTER_SAMPLE_SIZE,
-                           label: str = "all") -> dict:
+                           label: str = "all", *, encoding_name: str) -> dict:
     """Sample positions and measure cluster count (K) via GameState.to_tensor()."""
     all_positions: list[tuple[int, int]] = []
     for gi, r in enumerate(records):
@@ -413,7 +420,10 @@ def analyse_cluster_counts(records: list[GameRecord],
         task = progress.add_task(f"Cluster counts ({label})", total=actual_sample)
         for gi, plies in by_game.items():
             r = records[gi]
-            board = Board()
+            # AUDIT-1 F-34: identity-BOUND. `Board()` clusters at the engine's DEFAULT
+            # threshold 5, so cluster counts on a `v6w25` corpus — whose registry threshold is
+            # 8 — were computed under a rule that corpus never played by.
+            board = Board.with_encoding_name(encoding_name)
             state = GameState.from_board(board)
             max_ply = max(plies)
             ply_set = set(plies)
@@ -799,8 +809,13 @@ def analyse_elo_stratified(records: list[GameRecord]) -> dict:
 # ---------------------------------------------------------------------------
 
 def run_analysis(records: list[GameRecord], label: str = "all",
-                 cluster_sample: int = CLUSTER_SAMPLE_SIZE) -> dict:
-    """Run all five analyses on a set of records."""
+                 cluster_sample: int = CLUSTER_SAMPLE_SIZE, *, encoding_name: str) -> dict:
+    """Run all five analyses on a set of records.
+
+    `encoding_name` is REQUIRED and threaded to the two analyses that build a `Board`
+    (AUDIT-1 F-34) — a corpus is measured under the geometry it was generated at, or the
+    numbers describe a board nobody played on.
+    """
     length_stats = analyse_game_lengths(records, label)
     log.info("game_lengths_done", label=label, **length_stats)
 
@@ -813,11 +828,12 @@ def run_analysis(records: list[GameRecord], label: str = "all",
     log.info("move_entropy_done", label=label,
              mean=entropy_stats["mean_entropy_nats"])
 
-    diversity_stats = analyse_opening_diversity(records, label)
+    diversity_stats = analyse_opening_diversity(records, label, encoding_name=encoding_name)
     log.info("opening_diversity_done", label=label, **{
         k: v for k, v in diversity_stats.items() if not k.startswith("first_move")})
 
-    cluster_stats = analyse_cluster_counts(records, cluster_sample, label)
+    cluster_stats = analyse_cluster_counts(
+        records, cluster_sample, label, encoding_name=encoding_name)
     log.info("cluster_counts_done", label=label,
              median=cluster_stats["median_cluster_count"])
 

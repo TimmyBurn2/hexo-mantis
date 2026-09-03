@@ -119,6 +119,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
         encoding="v6_live2_ls",
         amp_dtype="bf16",
         max_plies=128,
+        c_visit=50.0, c_scale=1.0,
         run_id="oracle_test_run",
         spool_dir=spool_dir,
         ladder_state_path=tmp_path / "ladder_state.json",

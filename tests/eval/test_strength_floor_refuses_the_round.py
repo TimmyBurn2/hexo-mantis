@@ -85,7 +85,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
         bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
     )
     return RoundSpec(
-        leaf_batch_size=1, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
         round_id="floor_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=0,

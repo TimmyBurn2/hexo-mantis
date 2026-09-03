@@ -228,12 +228,12 @@ def test_corpus_metrics_illegal_move_truncations_are_counted() -> None:
     assert _delta(
         lc.PIPELINE_COUNTERS,
         "data.corpus_metrics.opening_diversity_illegal_move_truncated_replay",
-        lambda: analyse_opening_diversity(records),
+        lambda: analyse_opening_diversity(records, encoding_name="v6"),
     ) == 1
     assert _delta(
         lc.PIPELINE_COUNTERS,
         "data.corpus_metrics.cluster_counts_illegal_move_truncated_replay",
-        lambda: analyse_cluster_counts(records, sample_size=4),
+        lambda: analyse_cluster_counts(records, sample_size=4, encoding_name="v6"),
     ) == 1
 
 
@@ -250,7 +250,7 @@ def test_generate_seeding_fallback_and_bot_move_error_are_counted(tmp_path: Path
     seed_label = "data.generate.human_seeding_failed_fallback_random"
     bot_label = "data.generate.bot_move_error_truncated_game"
     before = (lc.PIPELINE_COUNTERS.get(seed_label), lc.PIPELINE_COUNTERS.get(bot_label))
-    result = _play_one_game(_BotThatExplodes(), 0, use_human_seeding=True,
+    result = _play_one_game(_BotThatExplodes(), 0, encoding_name="v6", use_human_seeding=True,
                             human_corpus_dir=str(tmp_path))
     after = (lc.PIPELINE_COUNTERS.get(seed_label), lc.PIPELINE_COUNTERS.get(bot_label))
     assert (after[0] - before[0], after[1] - before[1]) == (1, 1)
@@ -275,7 +275,7 @@ def test_the_wrapper_covers_everything_the_old_try_covered(tmp_path: Path) -> No
     assert n == 1, "a non-comparable moveCount must be a COUNTED skip, not a raise"
 
     m = _delta(lc.PIPELINE_COUNTERS, "data.generate.bot_move_error_truncated_game",
-               lambda: _play_one_game(_BotWithBadMoveShape(), 0))
+               lambda: _play_one_game(_BotWithBadMoveShape(), 0, encoding_name="v6"))
     assert m == 1, "a bot returning a non-pair must be a COUNTED skip, not a raise"
 
 

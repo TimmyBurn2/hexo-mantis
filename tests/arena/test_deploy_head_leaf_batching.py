@@ -67,7 +67,7 @@ def _play_one_move(*, n_sims: int, leaf_batch_size: int) -> list[int]:
     """One `select_move` on the GRAPH arm; returns the per-call batch widths."""
     calls: list[int] = []
     player = DeployHeadPlayer(
-        expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size,
+        expand_fn=_counting_expand_fn(calls), n_sims=n_sims, leaf_batch_size=leaf_batch_size, c_visit=50.0, c_scale=1.0,
     )
     player.new_game()
     player.select_move(Board.with_encoding_name(_ENCODING))
@@ -139,7 +139,7 @@ def test_the_grid_arm_batches_too_and_is_not_left_behind() -> None:
     the tree is driven through. A fix applied to only one arm would pass every graph-arm row."""
     calls: list[int] = []
     player = DeployHeadPlayer(
-        infer_fn=_counting_infer_fn(calls), n_sims=12, leaf_batch_size=4,
+        infer_fn=_counting_infer_fn(calls), n_sims=12, leaf_batch_size=4, c_visit=50.0, c_scale=1.0,
     )
     player.new_game()
     player.select_move(Board.with_encoding_name(_ENCODING))
@@ -156,14 +156,14 @@ def test_a_batch_width_below_one_is_REFUSED_not_clamped(bad: int) -> None:
     """R1 applied to a search regime: a silent clamp to 1 would restore the exact defect this
     ruling exists to close, and it would do it invisibly."""
     with pytest.raises(ValueError, match="leaf_batch_size"):
-        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4, leaf_batch_size=bad)
+        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4, leaf_batch_size=bad, c_visit=50.0, c_scale=1.0)
 
 
 def test_leaf_batch_size_has_NO_DEFAULT_and_must_be_stated() -> None:
     """A default here would be a search-regime constant nobody minted. The constructor must
     refuse to guess — omitting it is a TypeError, not a quiet k=1."""
     with pytest.raises(TypeError, match="leaf_batch_size"):
-        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4)  # type: ignore[call-arg]
+        DeployHeadPlayer(infer_fn=_counting_infer_fn([]), n_sims=4, c_visit=50.0, c_scale=1.0)  # type: ignore[call-arg]
 
 
 def test_deploy_and_selfplay_read_THE_SAME_CONFIG_KEY() -> None:

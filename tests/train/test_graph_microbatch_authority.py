@@ -534,7 +534,9 @@ def _dense_step_digests(tmp_path) -> tuple[dict[str, str], str]:
     net = build_net(arch)
     trainer = Trainer(net,
                       {"identity": {"encoding": GRID_ENCODING, "representation": "grid"},
-                       "train": {"amp_dtype": "fp16"}},
+                       "train": {"amp_dtype": "fp16",
+                                 "ema": {"enabled": False, "decay": 0.999,
+                                         "update_every": 10}}},
                       arch=arch, checkpoint_dir=tmp_path / "ckpt",
                       device=torch.device("cpu"), train_hparams=H.graph_hparams())
     states, chain, policies, outcomes, own, wl, ifs, pos, vv = _fixed_dense_batch()

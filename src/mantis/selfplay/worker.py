@@ -108,12 +108,22 @@ class SelfPlayWorker:
         # Within-game temperature is resolved per-move by `get_temperature` from
         # `self.config`; there is no cached threshold field.
         self.dirichlet_alpha = float(mcts_cfg.get("dirichlet_alpha", 0.3))
-        # ⚠ FIELD NAME != CONFIG KEY. The exploration-noise weight is read from
-        # `mcts.epsilon`, NOT from `mcts.dirichlet_eps`/`mcts.dirichlet_epsilon`. Reading
-        # the field's own spelling returns None on every config and silently substitutes
-        # the 0.25 default for the operator's value — the same silently-disabled-knob
-        # class that bites the temperature threshold. Traced to the frozen read site.
-        self.dirichlet_eps = float(mcts_cfg.get("epsilon", 0.25))
+        # AUDIT-1 F-39. THE SCHEMA KEY IS `mcts.dirichlet_epsilon`, and this read
+        # `mcts_cfg.get("epsilon", 0.25)` — a key NO config carries, so every construction got
+        # the 0.25 default and the operator's minted value was silently discarded. The old
+        # comment here asserted the opposite ("the weight is read from `mcts.epsilon`, NOT
+        # from `dirichlet_epsilon`"), and `tests/selfplay/test_worker.py` asserted it too:
+        # a test CERTIFYING the defect R1 exists to kill. `schema/selfplay.py` says it plainly
+        # — "the schema field IS the config key ... retires hparams.py's
+        # `mcts.epsilon`-vs-`dirichlet_epsilon` key/field-spelling mismatch by construction".
+        # Read by key; absent is an error, never a default.
+        if "dirichlet_epsilon" not in mcts_cfg:
+            raise KeyError(
+                "mcts.dirichlet_epsilon is absent. It is a REQUIRED schema key; this read used "
+                "to look for `mcts.epsilon` — a key no config has — and substitute 0.25 for "
+                "the operator's minted value (AUDIT-1 F-39)."
+            )
+        self.dirichlet_eps = float(mcts_cfg["dirichlet_epsilon"])
 
         # Pass the resolved spec into the engine so the Python-side path sizes its
         # global-policy vector from `spec.policy_logit_count`.

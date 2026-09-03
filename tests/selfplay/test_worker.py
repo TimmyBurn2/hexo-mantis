@@ -12,6 +12,12 @@ on record in this WP; the worker carries a third instance of the SAME class:
 Reading the field's own spelling returns `None` on every config and substitutes the 0.25
 default for the operator's exploration noise — silently. `test_dirichlet_epsilon_reads_
 the_real_config_key` is the bite.
+
+R8 justification: this file is ONE unit because it is `SelfPlayWorker`'s whole consumer
+surface — the config-wiring rows, the MCTS policy rows and the action-sampling rows all drive
+the SAME constructor, and the constructor is where the defects live. AUDIT-1 F-39 is the case
+in point: the knob-wiring row and the behaviour rows had to move together, because the wiring
+row was ASSERTING the defect the behaviour rows ran on.
 """
 from __future__ import annotations
 
@@ -52,8 +58,15 @@ def _tiny_net() -> torch.nn.Module:
 _TRAIN: dict = {"train": {"amp_dtype": "bf16"}}
 
 
+#: The one REQUIRED mcts key every construction must carry (AUDIT-1 F-39): `dirichlet_epsilon`
+#: is a schema key with no code-side default, so a worker built without it RAISES. The harness
+#: supplies run5's minted value unless a row overrides it.
+_MCTS_REQUIRED: dict = {"dirichlet_epsilon": 0.25}
+
+
 def _worker(**mcts: object) -> SelfPlayWorker:
-    cfg: dict = {"encoding": {"version": "v6"}, "mcts": dict(mcts), **_TRAIN}
+    cfg: dict = {"encoding": {"version": "v6"},
+                 "mcts": {**_MCTS_REQUIRED, **mcts}, **_TRAIN}
     return SelfPlayWorker(_tiny_net(), cfg, _CPU, encoding_spec=_SPEC)
 
 
@@ -68,15 +81,27 @@ def test_mcts_knobs_are_read_from_the_mcts_namespace() -> None:
 def test_dirichlet_epsilon_reads_the_real_config_key() -> None:
     """⚠ field name != config key. `mcts.epsilon` is the operator's knob and it must WIN;
     the field spelling must NOT be what is read, or the default silently substitutes."""
-    w = _worker(epsilon=0.42)
+    w = _worker(dirichlet_epsilon=0.42)
     assert w.dirichlet_eps == pytest.approx(0.42), (
-        "mcts.epsilon did not reach dirichlet_eps — the port read the field's own "
-        "spelling and the 0.25 default fired instead of the operator's value"
+        "mcts.dirichlet_epsilon did not reach dirichlet_eps — the SCHEMA key is what the "
+        "worker must read (AUDIT-1 F-39)"
     )
 
-    # The field-name spelling is NOT a config key: setting it must change nothing.
-    w_wrong = _worker(dirichlet_eps=0.42, dirichlet_epsilon=0.42)
-    assert w_wrong.dirichlet_eps == pytest.approx(0.25)
+    # INVERTED AT AUDIT-1 F-39, and the inversion is the point. This block used to assert
+    # that setting `dirichlet_epsilon` changed NOTHING and the reader took `mcts.epsilon` —
+    # a key no config carries — so `_worker(dirichlet_epsilon=0.42).dirichlet_eps` was
+    # asserted to be 0.25. That is a test certifying the defect R1 exists to kill: the
+    # operator's minted value discarded for a code-side default, with a green test over it.
+    # `schema/selfplay.py` states the rule the other way — "the schema field IS the config
+    # key" — and now so does the worker.
+    w_legacy = _worker(epsilon=0.42)  # the OLD spelling is not a key
+    assert w_legacy.dirichlet_eps == pytest.approx(0.25), (
+        "the retired `mcts.epsilon` spelling reached the field again"
+    )
+
+    with pytest.raises(KeyError, match="dirichlet_epsilon"):
+        SelfPlayWorker(_tiny_net(), {"encoding": {"version": "v6"}, "mcts": {}, **_TRAIN},
+                       _CPU, encoding_spec=_SPEC)
 
 
 def test_defaults_when_the_mcts_namespace_is_empty() -> None:
@@ -90,7 +115,8 @@ def test_defaults_when_the_mcts_namespace_is_empty() -> None:
 def test_n_simulations_falls_back_to_the_top_level_key() -> None:
     """`n_simulations` is read from the `mcts` namespace with a TOP-LEVEL fallback —
     a two-step chain, not a single lookup."""
-    cfg = {"encoding": {"version": "v6"}, "mcts": {}, "n_simulations": 13, **_TRAIN}
+    cfg = {"encoding": {"version": "v6"}, "mcts": dict(_MCTS_REQUIRED),
+           "n_simulations": 13, **_TRAIN}
     w = SelfPlayWorker(_tiny_net(), cfg, _CPU, encoding_spec=_SPEC)
     assert w.n_sims == 13
 
@@ -107,7 +133,7 @@ def test_spec_like_object_is_adapted_by_name() -> None:
 
     w = SelfPlayWorker(
         _tiny_net(),
-        {"encoding": {"version": "v6"}, "mcts": {}, **_TRAIN},
+        {"encoding": {"version": "v6"}, "mcts": dict(_MCTS_REQUIRED), **_TRAIN},
         _CPU,
         encoding_spec=_SpecLike(),
     )
@@ -118,7 +144,8 @@ def test_spec_like_object_is_adapted_by_name() -> None:
 def test_unadaptable_spec_raises() -> None:
     with pytest.raises(TypeError, match="cannot adapt"):
         SelfPlayWorker(
-            _tiny_net(), {"encoding": {"version": "v6"}, "mcts": {}, **_TRAIN}, _CPU,
+            _tiny_net(), {"encoding": {"version": "v6"}, "mcts": dict(_MCTS_REQUIRED),
+                          **_TRAIN}, _CPU,
             encoding_spec=42,
         )
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from mantis.train.pretrain.dataset import (
     AugmentedBootstrapDataset,
-    _game_winner_from_replay,
     make_augmented_collate,
 )
 from mantis.train.pretrain.freeze import _apply_finetune_freeze
@@ -22,7 +21,6 @@ __all__ = [
     "AugmentedBootstrapDataset",
     "BootstrapTrainer",
     "_apply_finetune_freeze",
-    "_game_winner_from_replay",
     "make_augmented_collate",
     "pretrain",
     "validate",

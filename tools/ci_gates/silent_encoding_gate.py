@@ -123,6 +123,16 @@ PATTERNS: tuple[tuple[str, str], ...] = (
     (rf"\bmap_or(?:_else)?\(\s*{_CALL}{_Q}",
      "Rust map_or()/map_or_else() with an encoding default"),
     (rf"=>\s*{_CALL}{_Q}", "Rust match arm defaulting to an encoding"),
+    # AUDIT-1 F-35. The REPRESENTATION default is the same defect one level up from an
+    # encoding-name default: `getattr(x, "representation", "grid")` re-introduces the
+    # dense-by-default LAW-11 forbids, at a site the schema's own refusal cannot reach. It
+    # sat at SIX places in `src/` — both spec filters, `train/subsystems.py`, `train/anchor.py`
+    # twice and `train/trainer/core.py` — while every layer above them said absent-is-an-error.
+    # A third representation would have been silently grid at all six.
+    (r"getattr\(\s*[^)]*?,\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense)[\"']",
+     "getattr() defaulting a representation"),
+    (r"\.(?:get|setdefault|pop)\(\s*[\"']representation[\"']\s*,\s*[\"'](?:grid|graph|dense)[\"']",
+     "dict read defaulting a representation"),
 )
 
 # ── known, owned, still-open arms ────────────────────────────────────────────────────

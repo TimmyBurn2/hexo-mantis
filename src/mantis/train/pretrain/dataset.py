@@ -11,7 +11,7 @@ the ratified WP10 amendment: **the v8 dispatch key + the v8 augment branch are S
     ``mantis._engine.apply_symmetries_batch`` binding (19×19 fast path) or a pure-numpy scatter
     (25×25 K-cluster, e.g. v6w25). Chain planes are recomputed post-augment from the augmented
     stone planes.
-  - ``_game_winner_from_replay`` — replay a move list on a ``Board`` and return the winner.
+  - (``_game_winner_from_replay`` was DELETED at AUDIT-1 F-34 — see the note below.)
 
 Imports the WP9-relocated ``mantis.data`` seams (train → data is DAG-legal): the numpy replayer
 ``mantis.data.replay.replay_game_to_triples`` + ``mantis.data.augment.get_policy_scatters`` /
@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from mantis._engine import Board, apply_symmetries_batch
+from mantis._engine import apply_symmetries_batch
 from mantis.data.augment import draw_record_syms, get_policy_scatters, spread_mask
 from mantis.data.replay import replay_game_to_triples
 from mantis.encoding import lookup as _lookup_encoding
@@ -37,8 +37,14 @@ __all__ = [
     "AugmentedBootstrapDataset",
     "make_augmented_collate",
     "replay_game_to_triples",
-    "_game_winner_from_replay",
 ]
+
+# AUDIT-1 F-34. `_game_winner_from_replay` IS DELETED. It built an identity-blind `Board()` —
+# engine defaults, radius 5 — and then wrapped every `apply_move` in `except Exception: break`,
+# so a game whose moves are illegal at radius 5 truncated silently and the function returned a
+# winner read off the TRUNCATED position. At radius 6 that refusal is 34.76 % of the bootstrap
+# corpus (R327), which is exactly the measurement this would have hidden. It was exported and
+# had no caller anywhere in `src/` or `tests/`, so nothing is re-pointed.
 
 
 class AugmentedBootstrapDataset(torch.utils.data.Dataset):
@@ -154,13 +160,3 @@ def make_augmented_collate(augment: bool, encoding: str):
     return _collate
 
 
-def _game_winner_from_replay(moves: list[tuple[int, int]]) -> int | None:
-    """Replay a move sequence and return the winner (+1 or -1), or None."""
-    board = Board()
-    for q, r in moves:
-        try:
-            board.apply_move(q, r)
-        except Exception:  # noqa: BLE001 — a broken game truncates at the first illegal move
-            break
-    w = board.winner()
-    return int(w) if w is not None else None

@@ -19,7 +19,7 @@ production code and no mutation can make it so. What the mutations show is sensi
 Pre-registered HEAD verdicts (PREREG §1). The RED rows here fail because the fix's
 production surfaces (`LocalInferenceEngine.infer_batch_ls` / `infer_ls`,
 `MCTSTree.expand_and_backup_ls_graph`, `InferenceBatcher.submit_graphs_and_wait_ls`,
-`DeployHeadPlayer(expand_fn=...)`, `build_candidate_player(..., spec=...)`) do not exist
+`DeployHeadPlayer(expand_fn=..., c_visit=50.0, c_scale=1.0)`, `build_candidate_player(..., spec=..., c_visit=50.0, c_scale=1.0)`) do not exist
 yet — a frozen oracle must bind to the POST-FIX surface, so "the measured 0-off-window
 child set" is the *reason* these are red, not their HEAD traceback.
 
@@ -231,7 +231,7 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     pos = _positions(fx)[0]
     board = _board(pos)
 
-    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0)
     assert isinstance(player, DeployHeadPlayer)
     player.new_game()
     player.select_move(board)
@@ -430,7 +430,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     pos = _positions(_load(_P2_FIXTURE))[3]
     board = _board(pos)
     head_seat = int(board.current_player)
-    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1)
+    player = worker.build_candidate_player(engine, 1, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0)
     player.new_game()
     bot = RandomBot(seed=20260731)
 
@@ -581,7 +581,7 @@ def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
 
     kwargs = {} if case == "neither" else {"infer_fn": _infer, "expand_fn": _expand_fn}
     with pytest.raises(ValueError):
-        DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1)
+        DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1, c_visit=50.0, c_scale=1.0)
 
 
 # ── ⊕ C-6 ────────────────────────────────────────────────────────────────────────────
@@ -624,7 +624,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
     )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
-            worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1)
+            worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0)
     finally:
         engine.close()
 

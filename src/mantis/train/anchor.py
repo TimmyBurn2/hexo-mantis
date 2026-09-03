@@ -387,7 +387,11 @@ def _try_load_anchor(
 
     try:
         model, ck = _build_anchor_model(candidate, declared_encoding=declared_encoding, device=device)
-        representation = getattr(ck.metadata.arch, "representation", "grid")
+        # AUDIT-1 F-35: attribute access, no default. `_build_anchor_model` RAISES when the
+        # stamp resolves no arch, so `ck.metadata.arch` is not None here — and a `"grid"`
+        # default would have made a legacy artifact with an unresolvable arch read as grid at
+        # the one site that decides the anchor's lineage.
+        representation = ck.metadata.arch.representation
         step = ck.metadata.step if ck.metadata.step else None
         return (model, candidate, step, representation)
     except DeclaredEncodingMismatchError:
@@ -524,7 +528,6 @@ def resolve_anchor(
     resolved_device: torch.device = (
         device if device is not None else getattr(trainer, "device", torch.device("cpu"))
     )
-    inf_representation = getattr(getattr(trainer, "arch", None), "representation", "grid")
     if declared_encoding is None:
         declared_encoding = _resolve_declared_encoding(config)
     # NO CWD FALLBACK (item 5(a)). This used to default to `Path("checkpoints/best_model.pt")`
@@ -544,6 +547,12 @@ def resolve_anchor(
             "`mantis.train.anchor.canonical_anchor_path(checkpoint_dir)`."
         )
     bmp = Path(best_model_path)
+    # AUDIT-1 F-35: the trainer's DECLARED arch, not a defaulted read. A trainer with no
+    # `.arch` is a composition defect and must surface as one — the `getattr(..., "grid")` that
+    # stood here made the cross-representation lineage check below quietly compare grid to
+    # grid. Read HERE and not at the top of the function: the missing-`best_model_path`
+    # refusal is the louder, earlier failure and stays the first thing a caller sees.
+    inf_representation = trainer.arch.representation
 
     if eval_pipeline is None:
         return AnchorState(None, None, bmp, inf_representation)

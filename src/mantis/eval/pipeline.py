@@ -425,6 +425,8 @@ class EvalPipeline:
         leaf_batch_size: int,
         amp_dtype: str,
         max_plies: int,
+        c_visit: float,
+        c_scale: float,
         leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
@@ -480,6 +482,12 @@ class EvalPipeline:
         #: the `DEFAULT_MAX_PLIES = 128` module constant put back, and the ply cap is half of
         #: the ply-cap x adjudication matrix that is an operator-owed prereg row.
         self._max_plies = int(max_plies)
+        #: `selfplay.{c_visit, c_scale}` — the deploy head's sigma terms, resolved ONCE in the
+        #: parent. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1 F-39): a default here
+        #: is `DeployHeadPlayer`'s own `50.0`/`1.0` put back one layer out, on the search
+        #: regime LAW-15's deploy-matched bar is defined by.
+        self._c_visit = float(c_visit)
+        self._c_scale = float(c_scale)
         #: The graph collector's batching geometry (PERF-TRANCHE-1 G-2, ledger F-2), resolved
         #: ONCE in the parent and carried to every round's `RoundSpec`. NOT defaulted, for
         #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
@@ -736,6 +744,9 @@ class EvalPipeline:
             # AUDIT-1 F-15, same seam and same reason: the eval arena capped at a module
             # constant while the run declared `selfplay.max_game_moves`.
             max_plies=self._max_plies,
+            # AUDIT-1 F-39, same seam and same reason: two REQUIRED schema keys the deploy
+            # head was never given, so it searched at its own signature defaults.
+            c_visit=self._c_visit, c_scale=self._c_scale,
             # G-2, same seam and same reason: the child's graph server wrote its pop width
             # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
             # deadline one of them set (ledger F-2).
@@ -1252,6 +1263,8 @@ def build_eval_pipeline(
     leaf_batch_size: int,
     amp_dtype: str,
     max_plies: int,
+    c_visit: float,
+    c_scale: float,
     run_id: str,
     spool_dir: str | Path,
     ladder_state_path: str | Path,
@@ -1270,6 +1283,7 @@ def build_eval_pipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
         leaf_batch_size=leaf_batch_size, amp_dtype=amp_dtype, max_plies=max_plies,
+        c_visit=c_visit, c_scale=c_scale,
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,

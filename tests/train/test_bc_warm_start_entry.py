@@ -181,7 +181,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
     forward the PRODUCTION eval path can drive, on CPU, producing legal moves to a terminal.
 
     Driven through the real seam and not a stand-in: `LocalInferenceEngine` (graph arm) ->
-    `DeployHeadPlayer(expand_fn=...)` -> `mantis.arena.match._play_one_game`, which is what the
+    `DeployHeadPlayer(expand_fn=..., c_visit=50.0, c_scale=1.0)` -> `mantis.arena.match._play_one_game`, which is what the
     eval worker builds for a graph candidate. A warm start that "succeeds" and hands back a net
     the inference server cannot run would red here rather than in a run.
 
@@ -213,7 +213,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
             # `n_sims` deliberately small: this is a liveness smoke on the default tier, not a
             # search-quality measurement. `leaf_batch_size` is threaded, never defaulted (R318(b)).
             return DeployHeadPlayer(
-                expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2,
+                expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2, c_visit=50.0, c_scale=1.0,
             )
 
         winner, plies, moves, terminal, _adj = _play_one_game(

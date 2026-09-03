@@ -517,13 +517,13 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
 
 def _grid_specs() -> list[EncodingSpec]:
     """Registered GRID-representation specs (graph encodings excluded)."""
-    return [s for s in all_specs() if getattr(s, "representation", "grid") != "graph"]
+    return [s for s in all_specs() if s.representation != "graph"]
 
 
 def _graph_specs() -> list[EncodingSpec]:
     """Registered GRAPH-representation specs. Derived, so pruning back to one re-arms
     the marker branch without an edit."""
-    return [s for s in all_specs() if getattr(s, "representation", "grid") == "graph"]
+    return [s for s in all_specs() if s.representation == "graph"]
 
 
 #: REPORT-ONLY, and the restriction is the whole of AUDIT-1 F-20's second half. The function

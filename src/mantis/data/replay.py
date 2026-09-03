@@ -86,7 +86,10 @@ def replay_game_to_triples_v6(
     outcomes     = np.zeros(max_len,                               dtype=np.float32)
     t = 0
 
-    board = Board()
+    # AUDIT-1 F-34: identity-BOUND. `Board()` takes the engine defaults (radius 5,
+    # cluster threshold 5) whatever the encoding says, so a replay ran under a geometry
+    # the corpus was never generated at. This replayer IS the v6 one; it says so.
+    board = Board.with_encoding_name("v6")
     state = GameState.from_board(board)
 
     for q, r in moves:
@@ -173,7 +176,10 @@ def replay_game_to_triples_ls(
     outcome_rows: list[float] = []
     ply_rows: list[int] = []
 
-    board = Board()
+    # AUDIT-1 F-34: identity-BOUND. `Board()` takes the engine defaults (radius 5,
+    # cluster threshold 5) whatever the encoding says, so a replay ran under a geometry
+    # the corpus was never generated at. This replayer IS the v6_live2_ls one; it says so.
+    board = Board.with_encoding_name("v6_live2_ls")
     state = GameState.from_board(board)
 
     for ply, (q, r) in enumerate(moves):

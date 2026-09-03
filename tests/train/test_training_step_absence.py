@@ -77,7 +77,7 @@ def _real_dense_loss_info(full_train_hparams: Any) -> dict[str, float]:
         "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
         "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
         "selfplay": {"legal_move_radius_schedule": None},
-        "train": {"amp_dtype": "fp16"},
+        "train": {"amp_dtype": "fp16", "ema": {"enabled": False, "decay": 0.999, "update_every": 10}},
     }
     hp = full_train_hparams(fp16=False, lr_schedule="none", checkpoint_interval=0)
     torch.manual_seed(11)

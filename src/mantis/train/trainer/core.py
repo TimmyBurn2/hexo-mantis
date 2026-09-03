@@ -222,7 +222,8 @@ class Trainer:
         # autocast dtype off the DECLARED arch representation (§c.4; no module sniff).
         # R30b: hard key access, no fallback — config["train"] is already required by
         # TrainHParams.from_config's own no-fallback read (Phase 2 precedent).
-        representation = getattr(self.arch, "representation", "grid")
+        # AUDIT-1 F-35: attribute access, no default (LAW-11 — no dense-by-default).
+        representation = self.arch.representation
         self.amp_dtype = amp_dtype_for(representation, config["train"]["amp_dtype"])
 
         # fp16 is CUDA-only (matches old: disabled on CPU); bf16 needs no scaler.
