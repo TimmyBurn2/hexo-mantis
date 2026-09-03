@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 6d31643, regenerated 2026-09-02.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 3130557, regenerated 2026-09-03.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.37, 2026-09-03. Created under R271 (register hygiene: archive/index split);
+# v3.39, 2026-09-03. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -941,6 +941,57 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # REPAIR-2 (P5; P8 with F-16 first and F-19 built; P6), REPAIR-3 (P7, P9), the run dashboard, the
 # tranche-2 prereg, then the run6 mint; P10 is the architect's lane-C design input.
 # **RUN6 REMAINS HELD.**
+# **v3.38 = R332 folded in — the curation where A FREEZE IS LIFTED BY THE ONLY THING THAT CAN LIFT
+# ONE.** **R332(a) RATIFIES REPAIR-1**: P1-P4 with their pinning tests in the same commits (derived,
+# not accepted - every repair commit over `ba883c9..HEAD` carries test files), the local runner making
+# the gate set ONE command (20 `run_gate` invocations, **19 by default** and gate 1 behind
+# `--with-fresh-sync` with its omission printed unconditionally), the three self-introduced reds
+# ledgered with their ONE cause, and the F-14 / F-11 banks ACCEPTED.
+# **R332(b) LIFTS the R118/A-1 FREEZE on `mantis/eval/rounds.py`** - its subject (WP12-R Phase A) is
+# long merged and its certification discharged - and adopts the standing RULE: **a freeze outlives its
+# subject only by ruling.** The freeze was never a sha256 manifest row (`grep` over
+# `wp/*/ORACLE_FREEZE*.sha256` for the producer returns rc 1): it was PREREG_A §8 abort 8 plus one
+# in-repo working-tree guard. **R332(c) declares F-11's ARMING mechanism MINT-CLASS** - screened in one
+# pre-flight screen with two shapes costed, ruled by the architect at exit, **armed nowhere here**.
+# **R332(d) DISPATCHES REPAIR-2** as three legs: P5 "one radius, one axis", then P8 with **F-16 FIRST**
+# and the **F-19 warm-start entry BUILT** (identity names a checkpoint by path and net hash, resolved
+# through the artifact stamp by the ONE selector authority; the 20/20 step-0 reproduction runs at the
+# MINT SITTING on the checkpoint of record, **not here**), then P6 with the EMA key landing as a
+# **schema twin, default off, its value a prereg lever**. **R332(e) SETS THE ORDER AFTER**: REPAIR-3
+# (P7, P9), the dashboard, the tranche-2 prereg, then the run6 mint.
+# **THE CLAUSE (d) CITATION IS CORRECTED OF RECORD:** the EMA key is **F-06**, not F-08; F-08 is the
+# missing logging handler. F-08 is repaired beside it because the id was named and because it is the
+# only R1 finding the audit's §5 order assigns to no packet.
+# **RUN6 REMAINS HELD. No mint, no arm, no training.**
+# **v3.39 = R333 folded in — the curation that writes down A TIER LAW.** **R333(a) RATIFIES
+# REPAIR-2**: P5/P8/P6 executed over 10 commits (`4f5a114..eaeb1d2`, floor 4629 -> **4730**, gate set
+# ALL GREEN 19/19 on that tree), the F-19 warm-start entry BUILT with its hash-equality pin and
+# reachable from `train/orchestrator.py`, F-16 closed by replacing the two-member hand copy with
+# `ARCH_KINDS` itself, the two audit repair lines that were WRONG AT CONTACT (F-30's graph half,
+# F-35's census root) corrected of record rather than followed, and the four banked/registered rows
+# accepted on their recorded grounds.
+# **R333(b) IS THE LAW, and it is new: A TIER-SCOPED VERIFICATION LOOP CANNOT SEE A TIER-SCOPED CALL
+# SITE.** A repair that makes a signature STRICTER sweeps its call sites over the WHOLE TREE **by
+# structure** before it is called done - not over whichever tier the session happens to be iterating
+# against. The instrument that follows: **the slow tier joins the one command as a self-declaring
+# opt-in flag**, its cost printed on every run exactly as gate 1's omission is, and it runs at every
+# packet exit. REPAIR-3 lands the runner change.
+# **R333(c) RULES F-11's AND F-32's ARMING ON READING** - the pre-flight screen rides to REPAIR-3's
+# exit VERBATIM, the arm lands at the mint forwarding whichever shape is ruled, and **F-18's bank
+# ground is restated in one line at pre-flight** so the architect can rule with it if it needs a
+# ruling. **Nothing arms in REPAIR-3.**
+# **R333(d) DISPATCHES REPAIR-3** as four severable legs: **P7** "tests that derive" (F-41, F-49,
+# F-44's leaf-count reconciliation), **P9** "dead code, one commit per group" (F-47, F-48, F-33 and
+# **F-19's dead-code half, now measurable because its decision half resolved** - the entry exists),
+# the **slow-tier runner change**, then **DASH-1**: a static run dashboard regenerated from the run
+# record by one command, no server and NO NEW PRODUCERS, where **a panel with no producer at HEAD is
+# a banked finding, not an invented number - "absent is not zero" applied to pixels**.
+# **R333(e) SETS THE ORDER AFTER**: the tranche-2 prereg and the lane-C codec design (the
+# architect's), the perf tranche, then the run6 mint.
+# **A CENSUS IN THE RULING'S SOURCE IS CORRECTED OF RECORD:** AUDIT-1 F-44 counts **four**
+# schema-leaf walkers; there are **FIVE**. The audit's census was scoped to the NAME `_leaf_paths`;
+# the fifth is `live_leaf_paths` in `tests/model/conformance/test_config_partition_shared_vs_arch_scoped.py`,
+# whose own docstring says it performs "the same walk `contract_doc_gate.py` performs".
 # **RUN6 REMAINS HELD. No mint, no arm, no training.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
@@ -992,9 +1043,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R331 — **302 sections, 302 distinct numbers, no duplicates** (re-derived at v3.37; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R333 — **304 sections, 304 distinct numbers, no duplicates** (re-derived at v3.39; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 332)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 334)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -2524,13 +2575,16 @@ Verbatim text in the register; one-liners here are index only.
   dispatched per sub-item under the seam spec.
   **EXECUTED 2026-09-03 (REPAIR-1 session; exit `plan/REPAIR1_EXIT.md`), appended here so a
   session seeding from the index carries the outcome and not only the order.** **P1–P4 all
-  landed gate-green**, 24 commits on `dev`, collected-test floor 4442 → 4629. **(c)'s four legs
+  landed gate-green**, **28** commits on `dev` (the row read 24, written mid-flight; re-derived at the
+  R332 landing over `ba883c9..HEAD` and repaired in place under R311(c)), collected-test floor 4442 → 4629. **(c)'s four legs
   in order:** P1 closed every class-7 row including all nineteen F-28 sub-rows — the false
   `entropy_collapse` that fired at every `log_interval` of every run is dead, and the drain
   golden's two FROZEN fabrications (an undecodable winner captured as a measured DRAW, six
   investigation metrics captured as zeros) are corrected in the fixture with their reasons.
   P2's F-09 landed FIRST and changes what every later packet's "local green" means: `make
-  gates` runs all 17 with CI's own arguments and `make lint.rust` restores
+  gates` runs every gate CLAUDE.md lists with CI's own arguments — **20 `run_gate` invocations, 19 of them
+  by default** (the row read "all 17", which is CLAUDE.md's gate NUMBERING, not the runner's row count; gate 2
+  splits 2a/2b and gate 3 splits 3a/3b/3c, and gate 1 is opt-in) — and `make lint.rust` restores
   `clippy --all-targets`, which is the ONLY thing in the repo that compiles seven of the eight
   bench targets — witnessed with a planted `clippy::len_zero` that `cargo test`, `make bench`
   and plain clippy all passed. P3 retired the MCTS desync panic the worker had been recovering
@@ -2570,6 +2624,86 @@ Verbatim text in the register; one-liners here are index only.
   session kept assembling it from memory.** Every one of the three was caught by a gate and
   none by the session; two of them by gates this leg added or restored.
   **RUN6 REMAINS HELD.** Nothing in REPAIR-1 mints, arms, trains or starts a run.
+  **AMENDED by R332(a) (2026-09-03). RATIFIED in full** — P1–P4 with pinning tests in the same
+  commits, the local runner, the three self-caught reds with their one cause, and BOTH banked rows
+  ACCEPTED. (c) is therefore EXPIRED; (b)'s amendments and (d)'s order remain LIVE, and (d)'s first
+  item is now in flight as REPAIR-2. **The F-14 bank is DISCHARGED by R332(b), not merely accepted**:
+  the freeze that produced it is lifted, so the producer half completes under normal discipline.
+
+- **R332 — A FREEZE IS LIFTED, AND ONLY A RULING CAN DO IT. LIVE: (b)'s RULE is standing; (c)
+  expires when the architect rules on the F-11 screen; (d) expires on REPAIR-2's exit; (e) is the
+  running order.**
+  **(a) RATIFIES REPAIR-1** — see the R331 row's amendment above; nothing is re-stated here.
+  **(b) LIFTS the R118/A-1 FREEZE on `mantis/eval/rounds.py`.** Its subject is R118's own text —
+  *"A-1 (wr_sealbot None until WP12-R): ratified; value populates in WP12-R Phase A"* — and Phase A
+  is long merged (Phase T closed at R162). **THE STANDING RULE: a freeze outlives its subject only
+  by ruling.** What the freeze actually WAS, measured at the landing: not a sha256 manifest row
+  (`grep -rn 'eval/rounds.py' wp/*/ORACLE_FREEZE*.sha256` → **rc 1, zero rows**), but PREREG_A §8
+  abort 8 plus ONE in-repo working-tree guard,
+  `tests/eval/test_wr_sealbot_config_only.py::test_the_wr_sealbot_producer_file_is_unmodified`,
+  which shells `git diff --stat` over the producer and fires on ANY uncommitted edit. **The one
+  freeze row that traces to the file is the GUARD'S OWN FILE** (`ORACLE_FREEZE_A.sha256:141`), and
+  it closes with the guard under this clause's authority. The pipeline-published identity with its
+  agreement check (R104) is the pinning test; F-14's producer half completes under normal discipline.
+  **(c) F-11's ARMING mechanism is MINT-CLASS** — presented in ONE pre-flight screen with two shapes
+  costed and their blast radius, the session's recommendation stated, **the architect ruling at
+  exit. NOTHING ARMS HERE**, and gate 12's REQUIRED `disk_space_exhausted` row keeps auditing armed
+  off `monitor.disk_guard.fail_gb > 0` until it does.
+  **(d) REPAIR-2 EXECUTES P5 → P8 → P6, in that order and not in parallel** (P8's F-17 and F-19
+  share the anchor/warm-start path). P8 takes **F-16 FIRST**. **F-19's warm-start entry is BUILT**:
+  the identity names a checkpoint by path AND net hash, the ONE selector authority resolves it
+  through the artifact stamp, the pinning test is that the loaded net's hash equals the checkpoint's,
+  and a CPU smoke plays one legal game from it. **The 20/20 step-0 reproduction is NOT this
+  session's** — it runs at the mint sitting on the checkpoint of record. P6 lands the EMA key as a
+  **schema twin, default off, its value a prereg lever**.
+  **THE CLAUSE (d) CITATION IS CORRECTED OF RECORD:** the clause says "F-08's EMA key"; there is no
+  EMA key in F-08. **F-06** is *"EMA is a lever with no arming key"* and is already in P6's roster;
+  F-08 is *"`python -m mantis.run` installs no logging handler"*. The clause is executed as F-06.
+  F-08 is repaired beside it — the id was named, it is the **only R1 finding the audit's §5 order
+  assigns to NO packet**, and it is what makes REPAIR-1's new `disk_guard_error` warning invisible.
+  **(e) THE ORDER AFTER THIS:** REPAIR-3 (P7, P9), the file-based run dashboard, the tranche-2
+  prereg, then the **run6 mint**. **RUN6 REMAINS HELD.**
+
+  **AMENDED by R333(a) (2026-09-03). RATIFIED in full** — P5/P8/P6 executed over 10 commits
+  (`4f5a114..eaeb1d2`, floor 4629 → 4730, gate set ALL GREEN 19/19), the warm-start entry BUILT
+  with its hash-equality pin, F-16 closed, the two wrong audit repair lines corrected of record,
+  and the four banked/registered rows ACCEPTED on their recorded grounds. **(c) does NOT expire
+  here**: R333(c) carries the F-11 screen forward VERBATIM to REPAIR-3's exit and adds F-32's
+  arming beside it, so the mint-class question stays open and unarmed. (b)'s standing RULE and
+  (e)'s order remain LIVE; (d) is DISCHARGED.
+
+- **R333 — THE TIER LAW, AND A DASHBOARD THAT MAY NOT INVENT A NUMBER. LIVE: (b) is standing LAW;
+  (c) expires when the architect rules on the two arming screens; (d) expires on REPAIR-3's exit;
+  (e) is the running order.**
+  **(a) RATIFIES REPAIR-2** — see the R332 row's amendment above; nothing is re-stated here.
+  **(b) THE LAW: a tier-scoped verification loop cannot see a tier-scoped call site.** A repair
+  that makes a signature STRICTER sweeps its call sites over the WHOLE TREE **by structure** before
+  it is called done. The instrument: **the slow tier joins the one command as a self-declaring
+  opt-in**, cost printed on every run as gate 1's omission is, run at every packet exit. Measured
+  at the landing so the flag has a subject: the slow tier is **7 tests in 7 files**
+  (`pytest -m slow --collect-only -q` → `7/4730 tests collected (4723 deselected)`) — six
+  `tests/model/conformance/` reports plus `tests/test_bare_pytest_tier.py::test_slow_witness_is_outside_the_default_tier`.
+  **The file list comes from the collector, never from a grep**: two further files match a
+  `mark.slow` grep and carry no slow test, because they name the marker as the SUBJECT of a census.
+  **(c) F-11's AND F-32's ARMING ARE RULED ON READING.** The F-11 pre-flight screen rides to
+  REPAIR-3's exit **verbatim**; F-32's arming is the same question (an authority this session does
+  not have — a schema key is mint-class under R323(b), and `compose_run`'s parameter tuple is
+  pinned) and is screened beside it. Whichever shape is ruled, **the arm lands at the mint
+  forwarding, not in a repair leg**. F-18's bank ground is restated in one line at pre-flight.
+  **(d) REPAIR-3 EXECUTES FOUR SEVERABLE LEGS, in order:** P7 "tests that derive" (F-41, F-49,
+  F-44); P9 "dead code, one commit per group" (F-47, F-48, F-33, **F-19's dead-code half — now
+  measurable, because its decision half resolved and the entry exists**), each group lowering the
+  gate-3 floor in its OWN commit with the reachability census as the proof, **a name-collision
+  doubt keeping the code and saying so**; the slow-tier runner change; then **DASH-1**, a static
+  page regenerated from the run record by ONE command — no server, no new producers — whose panels
+  are throughput and average sims/move, memory shares vs minted caps, training and held-out losses,
+  gate outcomes and floor refusals, strength vs external rungs with CIs, the determinism hash and
+  health. **A panel with no producer at HEAD is a BANKED FINDING, not an invented number:
+  "absent is not zero" applies to pixels.** Proven on an existing run record, screenshot in the
+  record.
+  **(e) THE ORDER AFTER THIS:** the tranche-2 prereg and the lane-C codec design (the architect's),
+  the perf tranche, then the **run6 mint**. **RUN6 REMAINS HELD.**
+
 
 ## 6. Dispatch & autopilot governance — LAW
 
@@ -5408,3 +5542,107 @@ Verbatim text in the register; one-liners here are index only.
   **EXECUTION APPENDED AT EXIT (2026-09-03), stated here rather than left as a silent sixth
   index edit:** the §5 R331 row gained an EXECUTED block recording P1–P4's landing, the two
   banked rows and the frozen-file halt. No other line moved and nothing was deleted.
+- 2026-09-03 — **v3.38** curated by the REPAIR-2 execution session, landing **R332**, authored in
+  the ARCH-ERA architect session and forwarded by the operator INLINE (no file), so the landing
+  session created the canonical home `plan/PACKET_R332_REPAIR_2.md` §1.
+  **PRECONDITIONS, run before any edit:** census `R23–R331 — 302 sections / 302 distinct / 0
+  duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp`
+  `STAMP OK: stamp v3.37 == §8 last entry v3.37`; `--self-test` all four controls fire.
+  **`grep -rn 'R332' plan/` returned rc 1 and ZERO hits** before the landing. The forwarded text
+  carried `R{next}` in **TWO** places (the dispatch's §1 heading and the quote-block lead) — both
+  substituted, no other placeholder touched, the residual grep over §1 rc 1 and exactly ONE `R332`
+  token in §1. Extraction into the register by heredoc over the canonical home's §1, never retyped
+  a second time. Post-append census `R23–R332 — 303 / 303 / 0, excluded 53`.
+  **REFERENTS RE-DERIVED AT POINT OF USE:** (a)'s "pinning tests in the same commits" derived over
+  `ba883c9..HEAD` (every repair commit carries test files; the five that do not are mirrors, the
+  doc-only leg, the floor ratchet and the `.pyi` fix); the tip is **28** commits, not the exit
+  screen's 27, because `4f5a114` followed the screen's own writing; **"nineteen gates" measured and
+  a first reading of my own corrected** — `grep -c 'run_gate ' run_all.sh` = 20 and ALL TWENTY are
+  invocations (the definition is `run_gate() {`, no space), of which gate 1 sits behind
+  `[ $WITH_FRESH_SYNC -eq 1 ] &&`, leaving 19 by default; the floor file reads 4629;
+  (b)'s freeze measured to be **not a manifest row at all** (`grep -rn 'eval/rounds.py'
+  wp/*/ORACLE_FREEZE*.sha256` → rc 1) but PREREG_A §8 abort 8 plus one working-tree guard, with the
+  ONE tracing freeze row being the guard's own file at `ORACLE_FREEZE_A.sha256:141`; (c)'s premise
+  re-verified in the tree — the `DISK_SPACE_ABORT_RULE` row is `CONFIG_THRESHOLD_GT_ZERO` over
+  `monitor.disk_guard.fail_gb` with `cadence_paths=()`.
+  **A MIS-CITATION IN THE RULING IS CORRECTED OF RECORD, not repaired silently:** clause (d)'s
+  "F-08's EMA key" names the wrong finding — the EMA key is **F-06**, F-08 is the missing logging
+  handler. Recorded in the register's provenance, in the v3.38 header block and in the §5 row.
+  **SPOT-CHECKS (R271(d)/R272(b), ≥5), each read against the VERBATIM register text, all PASS:**
+  **R104** `:` "agreement-or-raise … disagreeing dual-shape configs are corrupt" — the pinning
+  test's authority in (b); **R118** `:1525` "A-1 (wr_sealbot None until WP12-R): ratified; value
+  populates in WP12-R Phase A" — (b)'s discharged subject, quoted not paraphrased; **R162** `:2372`
+  "Phase T CLOSED, ratified in full" — the merge that discharged it; **R311(b)** "remote CI
+  SUSPENDED by operator decision — local green is the gate" — what the gate-set line means;
+  **R330(e)** "arch-selector plumbing ordered engine-side with config-less sites resolving from the
+  artifact's stamp" — the ONE selector authority (d) hands the warm-start entry to.
+  **INDEX LINES REPAIRED IN PLACE under R311(c)** (a non-canonical index disagreeing with verified
+  repo state): the R331 §5 row said **24 commits** where the tree has 28, and **"runs all 17"**
+  where the runner has 20 invocations / 19 default — CLAUDE.md's gate NUMBERING is 17, which is not
+  the runner's row count. Both repaired with the derivation stated; nothing deleted.
+  **REGISTER EDITS, ONE:** the R332 append. **Index edits, FIVE, enumerated:** the v3.38 header
+  block; the stamp (rides this §8 edit, R284(f)); §1's census sentence re-derived to R332/303 with
+  `range(23, 333)`; an **amendment appended to §5's R331 row** — RATIFIED in full, (c) EXPIRED, both
+  banks accepted and the F-14 bank DISCHARGED rather than merely accepted; and a **new §5 LIVE row
+  for R332**. Nothing was deleted.
+  **WHAT THIS RULING SETTLES.** **A freeze is a claim with an owner, and it expires the way any
+  other claim does — by ruling, never by anyone deciding it has gotten inconvenient.** REPAIR-1 hit
+  the guard, STOPPED, banked the row and handed the freeze up; R332(b) is the only instrument that
+  could lift it, and it does — with the standing rule written down so the next stale guard is a
+  question for the architect and not a judgement call at the keyboard. The measurement underneath it
+  is the useful part: the freeze everyone had been citing as a manifest row was never in a manifest.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing, trains nothing, sets no
+  allowance VALUE, arms no abort, and starts no run. **RUN6 REMAINS HELD.**
+
+- 2026-09-03 — **v3.39** curated by the REPAIR-3 execution session, landing **R333**, authored in
+  the ARCH-ERA architect session and forwarded by the operator INLINE (no file), so the landing
+  session created the canonical home `plan/PACKET_R333_REPAIR_3.md` §1.
+  **PRECONDITIONS, run before any edit:** census `R23–R332 — 303 sections / 303 distinct / 0
+  duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `--stamp`
+  `STAMP OK: stamp v3.38 == §8 last entry v3.38`; `--self-test` all four controls fire.
+  **`grep -rn 'R333' plan/` returned rc 1 and ZERO hits** before the landing. The forwarded text
+  carried `R{next}` in **TWO** places (the dispatch's §1 heading and the quote-block lead) — both
+  substituted, no other placeholder touched, the residual grep over §1 rc 1 and exactly ONE `R333`
+  token in §1. Extraction into the register by script over the canonical home's §1 quote block,
+  never retyped a second time. Post-append census `R23–R333 — 304 / 304 / 0, excluded 53`.
+  **REFERENTS RE-DERIVED AT POINT OF USE:** (a)'s "P5, P8, P6 executed" measured — 10 commits
+  `4f5a114..eaeb1d2`, floor file 4730 (from 4629), `REPAIR2_EXIT.md` §5 ALL GREEN 19/19 on that
+  tree; the warm-start entry is a real optional BLOCK at `src/mantis/config/schema/core.py:160`
+  reached from production at `src/mantis/train/orchestrator.py:148-150`; F-16's close is
+  `src/mantis/eval/snapshot.py:29` (`_ARCH_TYPES: dict[str, type] = ARCH_KINDS` — the hand copy
+  replaced by the authority); **"the four banks" is four ROWS of TWO kinds** — three BANKED and one
+  **REGISTERED** (F-39's 34 bridge-signature defaults ship an enumerated `REGISTERED_DEBT` at
+  `tests/config/test_no_bridge_default_shadows_a_config_key.py:54` that reds two ways), and reading
+  the registered row as a bank would lose its ratchet. (b)'s slow tier measured from the COLLECTOR:
+  **7 tests / 4723 deselected in 7 files**; two more files match a `mark.slow` grep and carry no
+  slow test, which is the text-not-structure trap REPAIR-2 §6 item 2 recorded.
+  **A CENSUS IN THE RULING'S SOURCE IS CORRECTED OF RECORD:** AUDIT-1 F-44 counts **four**
+  schema-leaf walkers; there are **FIVE** — the audit's census was scoped to the NAME `_leaf_paths`
+  and the fifth is `live_leaf_paths`
+  (`tests/model/conformance/test_config_partition_shared_vs_arch_scoped.py:190`), imported by
+  `test_arch_selector_makes_v2_selectable.py:370`, whose docstring says it performs *"the same walk
+  `tools/ci_gates/contract_doc_gate.py` performs"*.
+  **SPOT-CHECKS (R271(d)/R272(b), ≥5), each read against the VERBATIM register text, all PASS:**
+  **R311(b)** `:4552` *"before any push, remote CI suspended by operator decision"* — what the
+  gate-set line means and why local green is the bar; **ANNOTATION 12** `:4547` *"R282(b) RESERVES
+  NO PUSH … Pushes are governed by R311(b)"* — the push posture this session inherits, quoted not
+  assumed; **R323(b)** `:7573` *"the arch-selector key enters production configs only as a minted
+  row at run6's mint"* — the authority F-32's arming would need, which is why (c) screens it rather
+  than arming it; **R329(e)** `:7955-7957` *"the codebase AUDIT sweep …, the file-based run
+  dashboard, and the measured perf tranche — all before the prereg table"* — DASH-1's lineage, and
+  the reason it is a leg here rather than a later item; **R289** `:4925` *"premise-verification
+  institutionalized"* — the duty under which every referent above was re-derived instead of carried.
+  **INDEX EDITS, FIVE, enumerated:** the v3.39 header block; the stamp (rides this §8 edit,
+  R284(f)); §1's census sentence re-derived to R333/304 with `range(23, 334)`; an **amendment
+  appended to §5's R332 row** — RATIFIED in full, (d) DISCHARGED, and **(c) explicitly NOT expired**
+  because R333(c) carries the F-11 screen forward verbatim and adds F-32 beside it; and a **new §5
+  LIVE row for R333**. Nothing was deleted. **REGISTER EDITS, ONE:** the R333 append.
+  **WHAT THIS RULING SETTLES.** **A verification loop is only as wide as the tier it runs.**
+  REPAIR-2 made a signature stricter, swept its call sites against the tier it was iterating
+  against, and shipped a red into the exit run — 4669 green tests could not see the broken call
+  because the call site was integration-marked. R333(b) writes the general form down as LAW and
+  gives it an instrument rather than a resolution: the sweep is by STRUCTURE over the WHOLE TREE,
+  and the slow tier joins the one command as a self-declaring opt-in so the last un-run tier is
+  visible on every gate screen instead of remembered.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms nothing (F-11 and F-32 are screened,
+  not armed), trains nothing, sets no allowance VALUE and starts no run. **RUN6 REMAINS HELD.**
