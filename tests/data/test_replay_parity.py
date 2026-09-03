@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from _frozen_games import FROZEN_GAMES
 
+from mantis.encoding.registry import lookup
 from mantis.data.replay import ReplayTriples, replay_game_to_triples
 from mantis.encoding import lookup
 
@@ -71,10 +72,21 @@ def test_replay_byte_parity_v6_live2_ls() -> None:
 
 
 def test_per_encoding_plane_counts_and_dtypes() -> None:
-    # v6 states are the FULL 18-plane tensor (unsliced); v6w25=8; v6_live2_ls=4.
-    assert _replay("v6").states.shape[1] == 18
-    assert _replay("v6w25").states.shape[1] == 8
-    assert _replay("v6_live2_ls").states.shape[1] == 4
+    """v6 replays the FULL source tensor UNSLICED; the other two replay their kept planes.
+
+    AUDIT-1 F-49: this read `== 18`, `== 8`, `== 4` — three registry numbers restated. The
+    DISTINCTION is the content and it survives: v6's width is `n_source_planes` (no slice),
+    the others' is `n_planes` (sliced to their kept set). Both come off the row.
+    """
+    assert _replay("v6").states.shape[1] == lookup("v6").n_source_planes, (
+        "v6 is the unsliced arm — its replay width is the SOURCE plane count"
+    )
+    for name in ("v6w25", "v6_live2_ls"):
+        assert _replay(name).states.shape[1] == lookup(name).n_planes, name
+    assert lookup("v6").n_source_planes != lookup("v6w25").n_planes, (
+        "sliced and unsliced widths have converged, so the first assertion no longer "
+        "distinguishes the two arms"
+    )
     v6 = _replay("v6")
     ls = _replay("v6_live2_ls")
     assert v6.chain_planes is not None

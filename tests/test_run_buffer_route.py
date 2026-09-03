@@ -40,6 +40,31 @@ from mantis.train.coordinator.dispatch import RepresentationRouteError
 _CAPACITY = 64
 
 
+def _derived(config) -> int:
+    """The capacity the ONE formula derives for this config, through the bridge export.
+
+    `mantis._engine.derived_hexg_visit_capacity` delegates VERBATIM to
+    `mantis_selfplay::replay::hexg::derived_visit_capacity` — the same function the schema
+    validator and the runner's boot guard call. Asking it here is the difference between
+    "the composition called the derivation" and "the composition produced the number I typed".
+    """
+    from mantis._engine import derived_hexg_visit_capacity
+
+    sp = config.selfplay
+    pc = sp.playout_cap
+    return derived_hexg_visit_capacity(
+        n_simulations=sp.mcts.n_simulations,
+        standard_sims=pc.standard_sims,
+        fast_prob=pc.fast_prob,
+        fast_sims=pc.fast_sims,
+        full_search_prob=pc.full_search_prob,
+        n_sims_quick=pc.n_sims_quick,
+        n_sims_full=pc.n_sims_full,
+        leaf_batch_size=sp.leaf_batch_size,
+        completed_q_values=sp.completed_q_values,
+    )
+
+
 def test_a_graph_config_selects_the_graph_buffer(smoke_run_config) -> None:
     """O-F1, arm 1. `identity.representation == "graph"` -> the REAL `HexgBuffer`, carrying
     the config's declared encoding.
@@ -146,13 +171,18 @@ def test_the_route_error_carries_no_tool_exit_code(smoke_run_config) -> None:
 def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     smoke_run_config,
 ) -> None:
-    """R255: 'derived at composition time from the configured sims regime'. The
-    composed buffer's slot geometry must be the derivation's output — under the
-    600/75 PCR shape that is max(50, 75, 600) + 8 − 1 = 607, and under the minted
-    run5 shape 50 + 8 − 1 = 57. A literal anywhere on this path reds one of the two.
+    """R255: 'derived at composition time from the configured sims regime'. The composed
+    buffer's slot geometry must be the DERIVATION's output, on both shapes.
 
-    MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity (the old
-    128, or a new constant) instead of calling the derivation."""
+    AUDIT-1 F-49: the two expectations were `== 607` and `== 57`, the formula's answers typed
+    by hand under a docstring that spells the arithmetic out. `target_boot_guards.rs` pins the
+    FORMULA; this file's job is that the composition CALLS it, so it compares against the one
+    bridge-exported derivation rather than against a re-computed number. A hand-typed 57 also
+    silently encodes run5's minted sims regime, which is the class-6 shape: re-mint and this
+    test reds with "57 != N" and nothing says where 57 came from.
+
+    MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity (the old 128, or a new
+    constant) instead of calling the derivation."""
     pcr = smoke_run_config(
         "run5.yaml",
         selfplay={
@@ -163,7 +193,11 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
             }
         },
     )
-    assert _select_buffer(pcr, _CAPACITY).visit_capacity == 607
+    assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
 
     minted = smoke_run_config("run5.yaml")
-    assert _select_buffer(minted, _CAPACITY).visit_capacity == 57
+    assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
+    assert _derived(pcr) != _derived(minted), (
+        "the two sims regimes now derive the same capacity, so this test can no longer tell a "
+        "derivation from a constant — the whole point of driving both shapes"
+    )

@@ -37,7 +37,7 @@ pub use state::{
 // Re-export the win-rule length so downstream users (the search crate's
 // backup path) reference `WIN_LENGTH - 1` instead of a bare `5`.
 pub use moves::WIN_LENGTH;
-pub use moves::{DEFAULT_CLUSTER_THRESHOLD, DEFAULT_LEGAL_MOVE_RADIUS};
+pub use moves::{hex_ball_cells, DEFAULT_CLUSTER_THRESHOLD, DEFAULT_LEGAL_MOVE_RADIUS};
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -107,8 +107,9 @@ mod tests {
         // Empty board: 5×5 init region = 25 cells (search-optimised first move).
         assert_eq!(b.legal_move_count(), 25);
         b.apply_move(0, 0).unwrap();
-        // Hex ball radius 5 around (0,0) = 91 cells, minus 1 occupied = 90.
-        assert_eq!(b.legal_move_count(), 90);
+        // The default-radius hex ball around (0,0), minus the one occupied cell.
+        // AUDIT-1 F-49: this read `90` with the formula only in the comment.
+        assert_eq!(b.legal_move_count(), hex_ball_cells(DEFAULT_LEGAL_MOVE_RADIUS) - 1);
     }
 
     #[test]
@@ -232,13 +233,17 @@ mod tests {
     #[test]
     fn legal_grows_with_bounding_box() {
         let mut b = Board::new();
-        // Hex ball radius 5 around (0,0) = 91 cells, minus 1 occupied = 90.
+        // The default-radius hex ball around (0,0), minus the one occupied cell.
         b.apply_move(0, 0).unwrap();
-        assert_eq!(b.legal_move_count(), 90);
-        // hex_distance((0,0),(5,0)) = 5.  Union of two radius-5 balls: 91+91-36=146
-        // cells; minus 2 occupied = 144.
-        b.apply_move(5, 0).unwrap();
-        assert_eq!(b.legal_move_count(), 144);
+        let r = DEFAULT_LEGAL_MOVE_RADIUS;
+        assert_eq!(b.legal_move_count(), hex_ball_cells(r) - 1);
+        // A second stone at hex-distance exactly r: the union of two balls, minus their
+        // overlap, minus the two occupied cells. The overlap of two radius-r balls whose
+        // centres are r apart is the r-lens; at r = 5 the whole expression is 91+91-36-2 = 144.
+        // Kept as a LITERAL for the second stone deliberately: the lens count is not a
+        // one-line formula, and deriving it here would re-implement the very set under test.
+        b.apply_move(r, 0).unwrap();
+        assert_eq!(b.legal_move_count(), 144, "r = {r}: two balls minus the r-lens minus 2");
     }
 
     #[test]

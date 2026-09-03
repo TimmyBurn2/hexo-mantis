@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 from _retired_batch_fields import RETIRED_BATCH_FIELDS
+from _wire_geometry import geometry_kwargs
 import pytest
 
 from mantis.selfplay.graph_collate import (
@@ -76,13 +77,21 @@ _ERROR_CLASSES = {
     )
 }
 
-NODE_FEAT_DIM = 11
-EDGE_FEAT_DIM = 5
+#: The capture's geometry, READ OFF THE REGISTRY ROW it was built at (AUDIT-1 F-41). These were
+#: `NODE_FEAT_DIM = 11` / `EDGE_FEAT_DIM = 5` typed here, under a suite whose subject is that the
+#: collate refuses geometry it was not given — while the suite itself asserted geometry nobody
+#: derived. `tests/selfplay/conftest.py::wire_geometry` proves the row-to-capture association
+#: against the captured arrays; this module reads the same row for its own array arithmetic.
+GEOMETRY: dict[str, int] = geometry_kwargs()
+NODE_FEAT_DIM = GEOMETRY["node_feat_dim"]
+EDGE_FEAT_DIM = GEOMETRY["edge_feat_dim"]
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────────────
 def _collate(fields: dict[str, Any], **kw: Any):
-    return collate_graph_batch(GraphWirePayload(**fields), **kw)
+    """The geometry is stated on every call, never defaulted — `collate_graph_batch` requires
+    it since F-41, and a caller that omitted it used to get `gnn_axis_v1`'s numbers silently."""
+    return collate_graph_batch(GraphWirePayload(**fields), **{**GEOMETRY, **kw})
 
 
 def _clean_twin_ok(payload_fields, name: str = "b6", **kw: Any) -> None:

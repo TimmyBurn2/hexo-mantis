@@ -12,7 +12,7 @@
 //! rejected at compile time, pinned by the `compile_fail,E0502` doctest on
 //! `legal_moves_set`).
 
-use mantis_core::board::Board;
+use mantis_core::board::{hex_ball_cells, Board, DEFAULT_LEGAL_MOVE_RADIUS};
 
 fn splitmix(s: &mut u64) -> u64 {
     *s = s.wrapping_add(0x9e3779b97f4a7c15);
@@ -105,7 +105,16 @@ fn miri_nested_shared_borrows() {
         assert!(g2.contains(mv));
     }
     drop(g1);
-    assert_eq!(g2.len(), 90);
+    assert_eq!(g2.len(), one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS));
+}
+
+/// The legal-move count around ONE stone at the given radius: the hex ball minus the stone.
+///
+/// AUDIT-1 F-49: this file asserted `90` five times under comments spelling out `91 - 1`, so the
+/// formula lived only in prose and every assertion would red with a false message if the engine
+/// default moved. `mantis_core::board::hex_ball_cells` is the one home for the arithmetic.
+fn one_stone_legal_count(radius: i32) -> usize {
+    hex_ball_cells(radius) - 1
 }
 
 /// Clone's shared cap read must coexist with a live `&FxHashSet` returned by
@@ -117,15 +126,16 @@ fn miri_nested_shared_borrows() {
 fn miri_clone_while_set_borrowed() {
     let mut b = Board::new();
     b.apply_move(0, 0).unwrap();
+    let expect = one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS);
     let set = b.legal_moves_set(); // shared borrow, held across clone()
-    assert_eq!(set.len(), 90, "radius 5 ball around (0,0) minus the stone");
+    assert_eq!(set.len(), expect, "the default-radius ball around (0,0) minus the stone");
     let clone = b.clone(); // shared cap read while `set` is live
     // The held reference stays valid and readable after the clone.
-    assert_eq!(set.len(), 90);
+    assert_eq!(set.len(), expect);
     assert!(set.contains(&(1, 0)));
     // The clone's first legal_moves_set() rebuilds correctly (same position).
     let cloned_set = clone.legal_moves_set();
-    assert_eq!(cloned_set.len(), 90);
+    assert_eq!(cloned_set.len(), expect);
     let mut a: Vec<(i32, i32)> = set.iter().copied().collect();
     let mut c: Vec<(i32, i32)> = cloned_set.iter().copied().collect();
     a.sort_unstable();
@@ -139,11 +149,13 @@ fn miri_clone_while_set_borrowed() {
 fn miri_radius_change_rebuild() {
     let mut b = Board::new();
     b.apply_move(0, 0).unwrap();
-    assert_eq!(b.legal_move_count(), 90, "radius 5 default: 91 - 1");
-    b.set_legal_move_radius(4);
-    assert_eq!(b.legal_move_count(), 60, "radius 4: 61 - 1");
-    b.set_legal_move_radius(6);
-    assert_eq!(b.legal_move_count(), 126, "radius 6: 127 - 1");
-    b.set_legal_move_radius(5);
-    assert_eq!(b.legal_move_count(), 90, "back to radius 5");
+    assert_eq!(
+        b.legal_move_count(),
+        one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS),
+        "the engine default radius, ball minus the one stone"
+    );
+    for r in [4, 6, DEFAULT_LEGAL_MOVE_RADIUS] {
+        b.set_legal_move_radius(r);
+        assert_eq!(b.legal_move_count(), one_stone_legal_count(r), "radius {r}");
+    }
 }

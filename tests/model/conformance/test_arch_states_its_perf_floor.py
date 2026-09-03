@@ -308,16 +308,27 @@ def registered_probes() -> dict[str, FloorProbe]:
     }
 
 
-def _spec_for(arch_kind: str):
-    """A registered encoding whose representation the arch kind serves. Read off the roster."""
+def specs_for(arch_kind: str) -> tuple[Any, ...]:
+    """EVERY registered encoding whose representation the arch kind serves, NAME-SORTED.
+
+    AUDIT-1 F-41. This returned the FIRST match in `all_specs()` order, so the table measured
+    `gnn_axis_v1` and never `gnn_axis_r8` — run6's own identity — and a roster REORDER would
+    have silently changed the subject of a measurement nothing else in the tree reproduces.
+    Name-sorted so the order is a property of the registry's contents, not its declaration order.
+
+    Raises:
+        ArchDeclaresNoFloor: no registered encoding carries this arch's representation, so its
+            floor cannot be measured on any subject the tree actually ships.
+    """
     graph = arch_kind.startswith("GnnArch")
-    for spec in roster():
-        if bool(spec.is_graph) is graph:
-            return spec
-    raise ArchDeclaresNoFloor(
-        f"{arch_kind}: no registered encoding carries the representation this arch serves, so "
-        "its floor cannot be measured on any subject the tree actually ships."
-    )
+    matches = tuple(sorted((s for s in roster() if bool(s.is_graph) is graph),
+                           key=lambda s: s.name))
+    if not matches:
+        raise ArchDeclaresNoFloor(
+            f"{arch_kind}: no registered encoding carries the representation this arch serves, "
+            "so its floor cannot be measured on any subject the tree actually ships."
+        )
+    return matches
 
 
 # --------------------------------------------------------------------------------------- #
@@ -443,7 +454,7 @@ def test_a_SERVED_arm_BENEATH_the_floor_is_refused():
 def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(derived):
     """The derivation control, the half a manifest cannot give. A probe whose constructed input
     does not move when the arch's declared width moves is a fixed fixture wearing an arch."""
-    spec = _spec_for("GnnArch")
+    spec = specs_for("GnnArch")[0]
     narrow = build_net(
         GnnArch(in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim, hidden=8, num_layers=1,
                 policy_hidden=8, value_hidden=8)
@@ -472,35 +483,39 @@ def test_report_the_per_arch_floor_and_serving_overhead(derived):
     nothing is written to a tracked path.
 
     COVERAGE, STATED, because a table is read as its own scope: CPU only, at the smallest net
-    each arch admits, on ONE registered encoding per representation. The magnitudes are
+    each arch admits, on EVERY registered encoding the arch serves (AUDIT-1 F-41 — it was one,
+    picked by roster order, and it was never r8). The magnitudes are
     therefore mechanism evidence about the SEAM's shape and are not comparable to
     `PERF_BASELINE_LEDGER`'s production-shape readings — which were taken on the box, at
     production width, in bf16.
     """
     rows: list[dict] = []
     for kind, probe in sorted(registered_probes().items()):
-        spec = _spec_for(kind)
-        floor_build, floor_forward = probe.floor_arm(spec)
-        served_build, served_forward = probe.served_arm(spec)
-        floor = measure_forward(
-            floor_build, floor_forward, repeats=5, warmup=2, device_type="cpu"
-        )
-        served = measure_forward(
-            served_build, served_forward, repeats=5, warmup=2, device_type="cpu"
-        )
-        rows.append(
-            {
-                "arch_kind": kind,
-                "encoding": spec.name,
-                "floor_median_ns": floor.median_ns,
-                "served_median_ns": served.median_ns,
-                "serving_overhead": serving_overhead(floor, served),
-                "repeats": floor.repeats,
-                "device": "cpu",
-            }
-        )
+        for spec in specs_for(kind):
+            floor_build, floor_forward = probe.floor_arm(spec)
+            served_build, served_forward = probe.served_arm(spec)
+            floor = measure_forward(
+                floor_build, floor_forward, repeats=5, warmup=2, device_type="cpu"
+            )
+            served = measure_forward(
+                served_build, served_forward, repeats=5, warmup=2, device_type="cpu"
+            )
+            rows.append(
+                {
+                    "arch_kind": kind,
+                    "encoding": spec.name,
+                    "floor_median_ns": floor.median_ns,
+                    "served_median_ns": served.median_ns,
+                    "serving_overhead": serving_overhead(floor, served),
+                    "repeats": floor.repeats,
+                    "device": "cpu",
+                }
+            )
     derived("t7.measurement.rows", rows)
-    assert {row["arch_kind"] for row in rows} == frozenset(registered_probes()), (
-        "the measured table does not cover every registered arch kind, so an arch could state a "
-        "floor in the manifest and never be measured against it"
+    assert {(row["arch_kind"], row["encoding"]) for row in rows} == {
+        (kind, spec.name) for kind in registered_probes() for spec in specs_for(kind)
+    }, (
+        "the measured table does not cover every registered arch kind on every encoding it "
+        "serves, so an arch could state a floor in the manifest and never be measured against "
+        "it — or be measured on only one of the encodings it ships for (AUDIT-1 F-41)"
     )

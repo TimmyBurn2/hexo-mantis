@@ -86,6 +86,7 @@ that the paragraph was ever a scope statement rather than a hedge.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -561,44 +562,62 @@ def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[t
     return sorted(found)
 
 
-#: THE PIN. A source-level literal of `(file, line, expression)` triples, compared for
-#: set-equality in BOTH directions. It is never a regenerated golden and never a bare count:
-#: a pin the tier rewrites when it differs certifies its own breakage, and a count pins none of
-#: the four ambiguous units this census could be measured in. The `frame` note beside each row
-#: is prose for the reader; the assertion compares the triples only.
+#: THE PIN. A source-level literal of `(file, expression, count)` rows, compared for MULTISET
+#: equality in BOTH directions. It is never a regenerated golden and never a bare count: a pin
+#: the tier rewrites when it differs certifies its own breakage, and a bare cardinality pins none
+#: of the four ambiguous units this census could be measured in. The `frame` note beside each row
+#: is prose for the reader; the assertion compares the rows only.
+#:
+#: THE LINE NUMBER IS NOT PART OF THE IDENTITY (AUDIT-1 F-49, caught by this suite going RED in
+#: REPAIR-3's own gate run). It was, and a NINE-LINE DOC COMMENT added above `window_center` in
+#: `mantis-graph/src/lib.rs` moved 252 to 261 and reddened a census about midpoint arithmetic
+#: with a message reading "a fifth origin?" — which was false, and is the exact misinformation
+#: R8/R192(e) forbids: a positional tally is re-edited on every edit above it, is eventually
+#: wrong, and is then read as evidence. The line is PROVENANCE and still travels in the failure
+#: message and in the derived outputs; what the assertion compares is which file constructs which
+#: midpoint expression, and how many times.
 #:
 #: THE EXPRESSION COLUMN IS NORMALISED TOKEN TEXT, which is what the matcher can render for an
 #: operand shape it does not parse. The rows were re-pinned once, when the operand grammar was
-#: removed; the `(file, line)` multiset of the census was IDENTICAL across that change except
-#: for `core.rs:48` below, which the old matcher could not see at all — that is the check that
-#: distinguishes a renderer change from a tree change, and it was made before re-pinning.
-_THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, int, str], ...] = (
-    # dense, cluster frame — small-cluster centroid branch
-    ("mantis-core/src/board/state/cluster.rs", 71, "( min_q + max_q ) / 2"),
-    ("mantis-core/src/board/state/cluster.rs", 71, "( min_r + max_r ) / 2"),
-    # dense, cluster frame — massive-cluster no-anchor fallback
-    ("mantis-core/src/board/state/cluster.rs", 92, "( min_q + max_q ) / 2"),
-    ("mantis-core/src/board/state/cluster.rs", 92, "( min_r + max_r ) / 2"),
+#: removed; the census was IDENTICAL across that change except for `core.rs`'s `hex_distance`
+#: below, which the old matcher could not see at all — that is the check that distinguishes a
+#: renderer change from a tree change, and it was made before re-pinning.
+_THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, str, int], ...] = (
+    # dense, cluster frame — the small-cluster centroid branch AND the massive-cluster
+    # no-anchor fallback, one q-midpoint and one r-midpoint each: TWO of each in this file.
+    ("mantis-core/src/board/state/cluster.rs", "( min_q + max_q ) / 2", 2),
+    ("mantis-core/src/board/state/cluster.rs", "( min_r + max_r ) / 2", 2),
     # NOT A WINDOW ORIGIN — `hex_distance`'s axial halving. It is in the pin because the census
     # counts midpoint CONSTRUCTIONS and cannot tell an origin from an unrelated halving; that
     # judgement is this prose column, which the assertion does not read. It was invisible to
     # the operand grammar the matcher used to carry, so it arrived with the wider matcher.
     (
         "mantis-core/src/board/state/core.rs",
-        48,
         "( ( q1 - q2 ).abs() + ( q1 + r1 - q2 - r2 ).abs() + ( r1 - r2 ).abs() ) / 2",
+        1,
     ),
     # dense, BOARD frame — Board::window_center()
-    ("mantis-core/src/board/state/core.rs", 381, "( self.min_q + self.max_q ) / 2"),
-    ("mantis-core/src/board/state/core.rs", 382, "( self.min_r + self.max_r ) / 2"),
+    ("mantis-core/src/board/state/core.rs", "( self.min_q + self.max_q ) / 2", 1),
+    ("mantis-core/src/board/state/core.rs", "( self.min_r + self.max_r ) / 2", 1),
     # graph arm — mantis-graph's own fn window_center
-    ("mantis-graph/src/lib.rs", 252, "( min_q + max_q ) / 2"),
-    ("mantis-graph/src/lib.rs", 252, "( min_r + max_r ) / 2"),
+    ("mantis-graph/src/lib.rs", "( min_q + max_q ) / 2", 1),
+    ("mantis-graph/src/lib.rs", "( min_r + max_r ) / 2", 1),
 )
 
 
 def require_census(observed: list[tuple[str, int, str]], pinned: tuple) -> int:
-    """Set-equality in BOTH directions, plus the empty refusal. Returns the cardinality."""
+    """Multiset-equality on (file, expression) in BOTH directions, plus the empty refusal.
+
+    The LINE is deliberately not part of the identity — see the pin's own header. It travels in
+    the failure message so a reader can still find the site.
+
+    Returns:
+        The number of observed constructions.
+
+    Raises:
+        SecondWindowOriginAuthority: the census is empty, or the (file, expression) multiset
+            differs from the pin in either direction.
+    """
     if not observed:
         raise SecondWindowOriginAuthority(
             "the midpoint census returned EMPTY. Under a naive reading that says 'no second "
@@ -606,11 +625,15 @@ def require_census(observed: list[tuple[str, int, str]], pinned: tuple) -> int:
             "dangerous green in this tier. An empty census means the instrument stopped "
             "seeing, not that the tree stopped constructing."
         )
-    got, want = set(observed), set(pinned)
+    got = Counter((f, expr) for f, _line, expr in observed)
+    want = Counter({(f, expr): n for f, expr, n in pinned})
     if got != want:
+        where = {(f, expr): sorted(ln for g, ln, e in observed if (g, e) == (f, expr))
+                 for (f, expr) in got}
         raise SecondWindowOriginAuthority(
-            f"midpoint constructions changed. NEW (a fifth origin?): {sorted(got - want)}; "
-            f"GONE (a pinned site deleted?): {sorted(want - got)}"
+            f"midpoint constructions changed. NEW (a fifth origin?): {sorted((got - want).items())}; "
+            f"GONE (a pinned site deleted?): {sorted((want - got).items())}. "
+            f"Observed lines per row (provenance, NOT part of the pin): {where}"
         )
     return len(observed)
 

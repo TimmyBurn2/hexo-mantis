@@ -49,7 +49,7 @@ fn board_at(radius: i32, stones: &[(i32, i32, i8)]) -> Board {
 fn graph_legal_coords(radius: i32, stones: &[(i32, i32, i8)]) -> Vec<(i32, i32)> {
     let g = build_axis_graph(
         &StoneList { stones: stones.to_vec() },
-        &BuildParams { radius: radius as u16, ..BuildParams::default() },
+        &BuildParams { radius: radius as u16, ..BuildParams::V1_GEOMETRY },
     );
     let mut out: Vec<(i32, i32)> = g
         .legal_node_gather
@@ -86,7 +86,7 @@ fn graph_window_center_equals_board_window_center() {
         for stones in layouts() {
             let g = build_axis_graph(
                 &StoneList { stones: stones.clone() },
-                &BuildParams { radius: radius as u16, ..BuildParams::default() },
+                &BuildParams { radius: radius as u16, ..BuildParams::V1_GEOMETRY },
             );
             assert_eq!(
                 g.window_center,

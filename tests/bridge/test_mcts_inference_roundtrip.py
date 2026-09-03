@@ -156,10 +156,37 @@ def test_mctstree_expand_and_backup_ls_graph_round_trip():
 
 
 # ---------------------------- InferenceBatcher --------------------------------
-def test_inference_batcher_has_all_22_methods():
-    missing = [m for m in INFERENCE_METHODS if not hasattr(_engine.InferenceBatcher, m)]
-    assert not missing, f"InferenceBatcher missing methods (WP8-compat break): {missing}"
-    assert len(INFERENCE_METHODS) == 21  # + __init__ = the 22-method surface
+#: Public methods on the live class that the WP8 compat list deliberately does NOT carry, each
+#: with its ground. The set below is asserted for EQUALITY against `dir()` minus this, so a row
+#: here that stops being true reds just as loudly as a method that appears unannounced.
+NOT_IN_THE_COMPAT_SURFACE: dict[str, str] = {
+    "graph_max_in_flight": "a CONSTRUCTION parameter read back, not a WP8 call-surface method; "
+                           "it post-dates the compat list and belongs to the fused-graph caps",
+    "lock_recoveries": "an instrument counter (poisoned-mutex recoveries), added by the "
+                       "lock-recovery repair; nothing in the WP8 surface calls it",
+}
+
+
+def test_the_declared_inference_surface_equals_the_live_class():
+    """Set equality, both directions — AUDIT-1 F-49.
+
+    This asserted `len(INFERENCE_METHODS) == 21` against a list literal in this same module: a
+    method ADDED to the bridge was invisible to it, which is the direction that matters for a
+    compat surface. The count form could only ever notice someone editing the literal. The set
+    form reds on a new `#[pymethods]` fn, which is the pin the audit named.
+    """
+    live = {name for name in dir(_engine.InferenceBatcher) if not name.startswith("_")}
+    declared = set(INFERENCE_METHODS)
+    assert declared - live == set(), (
+        f"the compat list names methods the class does not carry: {sorted(declared - live)}"
+    )
+    assert live - declared == set(NOT_IN_THE_COMPAT_SURFACE), (
+        "the live class and the declared compat surface disagree. A NEW public method must "
+        "either join INFERENCE_METHODS or be declared in NOT_IN_THE_COMPAT_SURFACE with its "
+        f"ground; a declared exclusion that is gone must be removed. Live-only: "
+        f"{sorted(live - declared)}; declared exclusions: {sorted(NOT_IN_THE_COMPAT_SURFACE)}"
+    )
+    assert len(declared) > 10, "vacuity floor: an emptied compat list would pass the diffs above"
 
 
 def test_inference_batcher_getters_spec_derived():

@@ -30,11 +30,18 @@ import numpy as np
 import pytest
 
 from mantis import _engine
+from mantis.encoding.registry import lookup
 
 # --- verify_edge_geometry clean fixture (ports graph_contract.rs clean_fixture) --
-NODE_FEAT_DIM = 11
-EDGE_FEAT_DIM = 5
-WIN_LENGTH = 6
+#: AUDIT-1 F-41: these were `11`, `5` and `6` typed here — the geometry of the row the fixture
+#: is built for, restated by hand in a suite whose subject is that the bridge REFUSES wrong
+#: geometry. `node_feat_dim`/`edge_feat_dim` come off the registry row; `win_length` comes off
+#: the ENGINE, which is where it is owned (`mantis_core::board::WIN_LENGTH`, exported through
+#: the bridge by REPAIR-2's F-42) — the registry's `win_length` is checked against it at parse.
+_SPEC = lookup("gnn_axis_v1")
+NODE_FEAT_DIM = _SPEC.node_feat_dim
+EDGE_FEAT_DIM = _SPEC.edge_feat_dim
+WIN_LENGTH = _engine.WIN_LENGTH
 
 
 def _clean_fixture():

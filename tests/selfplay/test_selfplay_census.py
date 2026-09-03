@@ -178,7 +178,13 @@ def test_j01_census_covers_every_frozen_row() -> None:
             assert _find_function(trees[module], qual) is not None, (
                 f"{label}: {module}:{qual} not found"
             )
-    assert len(_Q6_TABLE) == 10, "the frozen §Q6 table has exactly 10 rows"
+    assert len(_Q6_TABLE) >= 10, (
+        "the frozen §Q6 table has lost rows. AUDIT-1 F-49: this read `== 10` against a\n"
+        "literal in this same module, which could only notice someone editing that\n"
+        "literal. What it is FOR is that a deleted hot-path function makes its\n"
+        "parametrized row vanish rather than fail, so a FLOOR is the shape that catches\n"
+        f"the case; rows may be added. Now: {len(_Q6_TABLE)}"
+    )
 
 
 # ── J-01 mutation self-test (LAW-07): the census must BITE, two-armed ─────────────────

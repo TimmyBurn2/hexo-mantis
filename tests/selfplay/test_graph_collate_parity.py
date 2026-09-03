@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 from _retired_batch_fields import RETIRED_BATCH_FIELDS
+from _wire_geometry import geometry_kwargs
 import pytest
 import torch
 
@@ -46,8 +47,13 @@ def single_threaded_torch():
         torch.set_num_threads(previous)
 
 
+#: The capture's geometry, READ OFF THE REGISTRY ROW it was built at (AUDIT-1 F-41), never typed.
+GEOMETRY: dict[str, int] = geometry_kwargs()
+
+
 def _collate(fields: dict[str, Any], **kw: Any):
-    return collate_graph_batch(GraphWirePayload(**fields), **kw)
+    """The geometry is stated on every call — `collate_graph_batch` requires it since F-41."""
+    return collate_graph_batch(GraphWirePayload(**fields), **{**GEOMETRY, **kw})
 
 
 #: The ONE authority lives in `_retired_batch_fields`; a second copy here is the class this

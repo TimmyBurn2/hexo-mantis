@@ -32,7 +32,7 @@ from mantis.train.losses import ragged_policy_ce
 from mantis.train.trainer.core import Trainer
 
 
-def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields) -> None:
+def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geometry) -> None:
     """A4 re-expressed against the GATHER (R297(c)), and it asserts MORE than it used to.
 
     The old form was `legal_mask.sum() == legal_offsets[-1]`. That was two assertions wearing one
@@ -44,7 +44,8 @@ def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields) -> None:
     lost. Both halves are therefore asserted explicitly below, which is a strictly stronger test
     than the one it replaces and names the property instead of implying it through a scatter.
     """
-    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1)
+    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
+                                **wire_geometry)
     gather = batch.legal_node_gather
     assert int(gather.numel()) == int(batch.legal_offsets[-1].item()), (
         "the gather and the CSR disagree on the size of the legal set"
@@ -55,10 +56,11 @@ def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields) -> None:
     )
 
 
-def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields) -> None:
+def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields, wire_geometry) -> None:
     """The per-graph half, re-expressed. Each graph's slice of the gather must fall inside that
     graph's node range and must be exactly as long as the CSR says."""
-    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1)
+    batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
+                                **wire_geometry)
     for i in range(int(batch.n_graphs)):
         lo, hi = int(batch.node_offsets[i]), int(batch.node_offsets[i + 1])
         c0, c1 = int(batch.legal_offsets[i]), int(batch.legal_offsets[i + 1])

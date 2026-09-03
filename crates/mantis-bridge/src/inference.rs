@@ -1198,9 +1198,15 @@ mod tests {
         .expect("graph batcher constructs");
         assert!(b.is_graph);
         assert_eq!(b.representation, "graph");
-        assert_eq!(b.graph_win_length, 6);
-        assert_eq!(b.graph_radius, 6);
-        assert_eq!(b.graph_trunk_size, 19);
+        // AUDIT-1 F-41. These read `6`, `6` and `19` — the row's own geometry restated by
+        // hand, in the test whose whole subject is that the batcher READS the row. The
+        // sibling `grid_batcher_derives_shapes_and_is_grid` three functions above was
+        // already in the derived form; this one was not, so an r8 row could enter the
+        // registry and the Rust-side pin of run6's identity geometry would still assert 6.
+        let spec = gnn_spec();
+        assert_eq!(b.graph_win_length as usize, spec.win_length.expect("graph row states win_length"));
+        assert_eq!(b.graph_radius as usize, spec.graph_radius.expect("graph row states graph_radius"));
+        assert_eq!(b.graph_trunk_size as usize, spec.trunk_size);
         assert_eq!(b.graph_contract_version, 1);
     }
 

@@ -213,16 +213,25 @@ pub struct BuildParams {
     pub trunk_size: i32,
 }
 
-impl Default for BuildParams {
-    fn default() -> Self {
-        BuildParams {
-            win_length: 6,
-            radius: 6,
-            current_player: 1,
-            moves_remaining: 2,
-            trunk_size: 19,
-        }
-    }
+impl BuildParams {
+    /// The geometry of registry row `gnn_axis_v1`, as a NAMED constant.
+    ///
+    /// AUDIT-1 F-41: this was `impl Default`, so `BuildParams::V1_GEOMETRY` and
+    /// `..BuildParams::V1_GEOMETRY` read as "the usual geometry" at every call site while
+    /// meaning one specific registry row. A second graph row (`gnn_axis_r8`) exists and
+    /// differs in `radius`, so "the usual" had stopped being well defined. The value is
+    /// unchanged; what changed is that every site now names the row it means.
+    ///
+    /// `mantis-encoding`'s `axis_pin` holds this equal to the row itself — this crate is
+    /// dep-free by `repo_design` §2 and cannot read the registry, so the equality is pinned
+    /// in the lowest crate that sees both.
+    pub const V1_GEOMETRY: BuildParams = BuildParams {
+        win_length: 6,
+        radius: 6,
+        current_player: 1,
+        moves_remaining: 2,
+        trunk_size: 19,
+    };
 }
 
 // ── window geometry (byte-parity with the predecessor dense engine) ──────────
@@ -927,7 +936,7 @@ mod tests {
         // vacuous `[]` the Python graph oracle returns for a stoneless
         // `stone_map` (that fn is never exercised at n_stones==0 in real
         // oracle usage — see `legal_moves_from_stones`'s doc comment).
-        let g = build_axis_graph(&StoneList::default(), &BuildParams::default());
+        let g = build_axis_graph(&StoneList::default(), &BuildParams::V1_GEOMETRY);
         assert_eq!(g.n_stones, 0);
         assert_eq!(g.legal_node_gather.len(), 25, "empty board must yield the dense 5x5 = 25 legal cells");
         assert_eq!(g.num_nodes(), 25 + 1); // 25 legal + 1 dummy, no stones
@@ -960,7 +969,7 @@ mod tests {
         // `radius` must NOT change the empty-board fallback shape.
         let g2 = build_axis_graph(
             &StoneList::default(),
-            &BuildParams { radius: 1, ..BuildParams::default() },
+            &BuildParams { radius: 1, ..BuildParams::V1_GEOMETRY },
         );
         assert_eq!(g2.legal_node_gather.len(), 25, "empty-board fallback must be radius-independent, like dense");
     }
@@ -978,7 +987,14 @@ mod tests {
         // loop shape here (not `legal_moves_from_stones`'s hex-ball filter —
         // that would just be comparing the fn to itself) so a real
         // divergence between the two independent formulas would be caught.
-        let radius = 5i32; // dense DEFAULT_LEGAL_MOVE_RADIUS (predecessor dense engine)
+        // AUDIT-1 F-49 read this line as an unpinned copy of `mantis_core`'s
+        // `DEFAULT_LEGAL_MOVE_RADIUS`. It is NOT one, and the distinction is the point of the
+        // test: this crate is dep-free (`repo_design` §2) and cannot import that constant, and
+        // the whole value of this arm is that it replicates the predecessor dense engine's OWN
+        // loop shape INDEPENDENTLY. Importing the number would make it the same authority
+        // twice. What was missing is the cross-check, and it now exists in the lowest crate
+        // that sees both: `mantis-encoding/tests/axis_pin.rs`.
+        let radius = 5i32; // the predecessor dense engine's default, replicated independently
         let (sq, sr) = (3i32, -2i32);
         let mut expected: Vec<(i32, i32)> = Vec::new();
         for dq in -radius..=radius {
@@ -993,7 +1009,7 @@ mod tests {
         }
         expected.sort_unstable();
 
-        let params = BuildParams { radius: radius as u16, ..BuildParams::default() };
+        let params = BuildParams { radius: radius as u16, ..BuildParams::V1_GEOMETRY };
         let g = build_axis_graph(&StoneList { stones: vec![(sq, sr, 1)] }, &params);
         assert_eq!(g.n_stones, 1);
         let mut got: Vec<(i32, i32)> = g
@@ -1008,7 +1024,7 @@ mod tests {
     #[test]
     fn single_stone_smoke() {
         let stones = StoneList { stones: vec![(0, 0, 1)] };
-        let g = build_axis_graph(&stones, &BuildParams::default());
+        let g = build_axis_graph(&stones, &BuildParams::V1_GEOMETRY);
         assert_eq!(g.n_stones, 1);
         assert!(g.num_nodes() > 1); // 1 stone + legal ring + dummy
         assert!(g.stone_mask[0]);
@@ -1022,11 +1038,11 @@ mod tests {
         // with the LAST player. The builder must match on the whole domain.
         let g_dup = build_axis_graph(
             &StoneList { stones: vec![(0, 0, 1), (2, 0, -1), (0, 0, -1)] },
-            &BuildParams::default(),
+            &BuildParams::V1_GEOMETRY,
         );
         let g_dedup = build_axis_graph(
             &StoneList { stones: vec![(0, 0, -1), (2, 0, -1)] },
-            &BuildParams::default(),
+            &BuildParams::V1_GEOMETRY,
         );
         assert_eq!(g_dup.n_stones, 2);
         assert_eq!(g_dup.num_nodes(), g_dedup.num_nodes());
@@ -1046,7 +1062,7 @@ mod tests {
         // gather the same legal node (each passes the subrange + canonical
         // checks individually) and claim the same slot — aliasing fires.
         let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1)] };
-        let params = BuildParams::default();
+        let params = BuildParams::V1_GEOMETRY;
         let mut g = build_axis_graph(&stones, &params);
         let idx: Vec<usize> = g
             .policy_scatter_index
@@ -1070,7 +1086,7 @@ mod tests {
         // ADV-8 (the contract's headline semantic payload): an edge_attr row
         // inconsistent with its endpoints' geometry must be a NAMED panic.
         let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1)] };
-        let params = BuildParams::default();
+        let params = BuildParams::V1_GEOMETRY;
         let mut g = build_axis_graph(&stones, &params);
         // flip the signed_dist of the first real (non-dummy) edge
         g.edge_attr.0[3] = -g.edge_attr.0[3];
@@ -1083,7 +1099,7 @@ mod tests {
         // gather rows land in the legal subrange; slots are canonical or the
         // documented off-window sentinel.
         let stones = StoneList { stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)] };
-        let g = build_axis_graph(&stones, &BuildParams::default());
+        let g = build_axis_graph(&stones, &BuildParams::V1_GEOMETRY);
         let ns = g.n_stones as usize;
         for (i, &row) in g.legal_node_gather.iter().enumerate() {
             assert!((row as usize) >= ns && (row as usize) < g.num_nodes() - 1);

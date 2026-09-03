@@ -21,9 +21,6 @@ from mantis.model.arch import GnnArch
 from mantis.model.dist65 import N_VALUE_BINS, decode_binned_value
 from mantis.model.gine import PolicyHead, RepresentationNetwork
 
-EDGE_DIM = 5
-IN_DIM = 11
-
 # The two state-dict prefixes that load byte-compatibly from a BC-prefit
 # checkpoint. `value_head.*` is excluded — the probe's value head is unsupervised
 # and this module's dist65 head has a different architecture; it is always

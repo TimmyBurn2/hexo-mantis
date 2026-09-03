@@ -1,10 +1,11 @@
 """Shared loaders for the WP-SP ⊕ oracle suites (tests/selfplay/).
 
-Written by ORACLE-WRITE **before** any `mantis.selfplay` port code exists. This conftest
-imports ONLY already-present layers (stdlib + numpy) and NEVER `mantis.selfplay.*` — so it
-collects cleanly while the six ⊕ suites are RED at import. The suites import
-`mantis.selfplay.*`, which does not exist until IMPL lands; that is the correct
-oracle-first state (PREREG §3 global rule).
+Written by ORACLE-WRITE **before** any `mantis.selfplay` port code exists. It still imports
+NO `mantis.selfplay.*` — the suites import that, and the oracle-first separation is why. It
+does now import `_wire_geometry`, a sibling helper that reads `mantis.encoding.registry`, which
+AUDIT-1 F-41 made necessary: the collate's geometry parameters are required, so the fixture that
+supplies them must read the registry row the capture was built at rather than retype its numbers.
+That layer ships in the same package as every suite here and is not the module under test.
 
 Every golden here is dispatcher-captured old-side truth promoted into
 `tests/fixtures/selfplay/` (manifest-tracked, sha-pinned). Nothing is synthesized: if a
@@ -22,6 +23,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from _wire_geometry import COLLATE_FIXTURE_ENCODING, geometry_kwargs, spec_for
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay"
 COLLATE_DIR = FIXTURES / "collate"
@@ -128,6 +130,34 @@ def payload_fields(
         return fields
 
     return make
+
+
+@pytest.fixture(scope="session")
+def wire_geometry(_payload_bank: dict[str, dict[str, np.ndarray]]) -> dict[str, int]:
+    """The four geometry kwargs `collate_graph_batch` REQUIRES, read off the registry.
+
+    AUDIT-1 F-41: those parameters used to default to `gnn_axis_v1`'s values typed as literals
+    in `graph_collate.py`, and the defaults' only consumers were tests that omitted them. Every
+    test now states its geometry, and states it by asking the registry rather than by retyping
+    the row — so a registry edit moves the tests instead of leaving them asserting a stale fact.
+
+    The row-to-capture association is DERIVED here, not declared: the captured `node_feat` and
+    `edge_attr` arrays must divide by the row's dims. A re-capture at a row with different dims
+    fails this fixture rather than collating under the wrong geometry.
+    """
+    spec = spec_for(COLLATE_FIXTURE_ENCODING)
+    arrays = _payload_bank["b6"]
+    n_nodes = arrays["node_coords"].size // 2
+    n_edges = arrays["edge_index"].size // 2
+    assert arrays["node_feat"].size == n_nodes * spec.node_feat_dim, (
+        f"the captured payload does not carry {COLLATE_FIXTURE_ENCODING}'s node_feat_dim "
+        f"({spec.node_feat_dim}): {arrays['node_feat'].size} floats over {n_nodes} nodes"
+    )
+    assert arrays["edge_attr"].size == n_edges * spec.edge_feat_dim, (
+        f"the captured payload does not carry {COLLATE_FIXTURE_ENCODING}'s edge_feat_dim "
+        f"({spec.edge_feat_dim}): {arrays['edge_attr'].size} floats over {n_edges} edges"
+    )
+    return geometry_kwargs(COLLATE_FIXTURE_ENCODING)
 
 
 # ── drain fixture inputs (#C3b scripted `collect_data` rows + captured push args) ──────

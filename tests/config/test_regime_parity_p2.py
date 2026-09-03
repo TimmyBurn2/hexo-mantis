@@ -25,10 +25,25 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ── O9-O11 — UNCHANGED by Phase 2 ───────────────────────────────────────────────────────
 def test_o9_sims_regime_parity_unchanged(production_config):
-    assert production_config.eval.random_model_sims == 96
-    assert production_config.eval.sealbot_model_sims == 128
-    assert resolve_eval_model_sims("random", production_config.eval.random_model_sims) == 96
-    assert resolve_eval_model_sims("sealbot", production_config.eval.sealbot_model_sims) == 128
+    """O9 (twin) — the resolver is a PASSTHROUGH of the config's own value, no eval-only re-derivation.
+
+    AUDIT-1 F-49. This asserted `== 96` and `== 128` — run5's MINTED values — beside a
+    docstring claiming to derive. Re-pointing `production_config` at run6 would have reddened
+    four tests with "96 != N" and no line anywhere saying 96 was run5's. The PROVENANCE pin for
+    those two numbers lives in ONE place with its grounds:
+    `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`, against a NAMED
+    config. What THIS test is about is the relation, and the relation is what it now asserts.
+    """
+    for rung, value in (("random", production_config.eval.random_model_sims),
+                        ("sealbot", production_config.eval.sealbot_model_sims)):
+        assert resolve_eval_model_sims(rung, value) == value, (
+            f"the {rung} resolver did not hand back the shipped config value — an eval-only "
+            "re-derivation has appeared, which is the second-authority class O9 exists to refuse"
+        )
+    assert production_config.eval.random_model_sims != production_config.eval.sealbot_model_sims, (
+        "the two rungs' sims collapsed to one value, so a passthrough assertion could not tell "
+        "the two resolver arms apart"
+    )
 
 
 def test_o10_amp_is_bf16_on_graph_unchanged(production_config):

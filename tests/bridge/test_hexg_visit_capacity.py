@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from mantis import _engine
+from mantis.encoding.registry import lookup
 
 
 def _derive(**over):
@@ -76,19 +77,21 @@ def test_buffer_carries_and_honors_the_composed_capacity() -> None:
     hb = _engine.HexgBuffer(8, "gnn_axis_v1", 607)
     assert hb.visit_capacity == 607
     # 130 visit cells — over the deleted 128 literal — push AND sample intact.
-    # The cells are drawn from the legal set (within legal_move_radius=6 of a
-    # stone, unoccupied — registry.toml is the radius authority), so the
-    # sample-align mass guard sees full mass; a shrunken slot anywhere on the
-    # path reds this at push instead.
+    # The cells are drawn from the legal set (within `legal_move_radius` of a stone,
+    # unoccupied). AUDIT-1 F-41: that radius was typed `<= 6` here under a comment naming the
+    # registry as the authority, so the premise restated the very fact it cited. It is READ
+    # off the row this buffer is built for, and the search box is derived from it, so a row
+    # whose radius moves moves this test instead of leaving it asserting a stale disk.
+    radius = lookup("gnn_axis_v1").legal_move_radius
     stones = [(0, 0, 1), (1, 0, -1)]
     occupied = {(0, 0), (1, 0)}
     cells = sorted(
         {
             (q, r)
-            for q in range(-7, 9)
-            for r in range(-7, 8)
+            for q in range(-radius - 1, radius + 3)
+            for r in range(-radius - 1, radius + 2)
             if (q, r) not in occupied
-            and any(_hex_dist(q, r, sq, sr) <= 6 for sq, sr in occupied)
+            and any(_hex_dist(q, r, sq, sr) <= radius for sq, sr in occupied)
         }
     )[:130]
     assert len(cells) == 130, "premise: the legal disk must hold 130 target cells"

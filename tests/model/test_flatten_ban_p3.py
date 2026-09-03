@@ -21,6 +21,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from mantis.encoding.registry import lookup
 from mantis.model import GnnArch, build_net
 from mantis.model.gine import PolicyHead, RepresentationNetwork
 from mantis.model.gnn import GnnNet
@@ -29,8 +30,11 @@ from mantis.model.gnn import GnnNet
 # place the ban lives. Not a skip-marker: no test targets HexTacToeNet here.
 KNOWN_DENSE_HEADS_EXEMPT_FROM_FLATTEN_BAN = {"HexTacToeNet"}
 
-_IN_DIM = 11
-_EDGE_DIM = 5
+#: AUDIT-1 F-41: `11` and `5` typed here, mirroring two `gnn.py` module constants that had
+#: NO consumer at all (deleted with this commit). Read off the registry row instead.
+_SPEC = lookup("gnn_axis_v1")
+_IN_DIM = _SPEC.node_feat_dim
+_EDGE_DIM = _SPEC.edge_feat_dim
 
 
 def _tiny_gnn() -> GnnNet:

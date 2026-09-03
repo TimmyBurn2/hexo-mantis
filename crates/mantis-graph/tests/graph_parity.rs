@@ -213,7 +213,7 @@ fn window_boundary_slots_honest() {
     let trunk = 19i32;
     let half = (trunk - 1) / 2;
     let stones = mantis_graph::StoneList { stones: vec![(0, 0, 1), (28, 0, -1)] };
-    let params = mantis_graph::BuildParams::default(); // wl 6 / radius 6 / trunk 19
+    let params = mantis_graph::BuildParams::V1_GEOMETRY; // wl 6 / radius 6 / trunk 19
     let g = mantis_graph::build_axis_graph(&stones, &params);
     let (cq, cr) = g.window_center;
     assert_eq!((cq, cr), (14, 0), "bbox midpoint");

@@ -65,10 +65,17 @@ def test_schema_leaves_still_file_source_amp_still_derived():
 
 
 def test_payload_pins_production_values_unchanged_by_radius_removal():
+    """The EMIT carries the config's own values — a transport assertion, not a mint assertion.
+
+    AUDIT-1 F-49: `== 96` / `== 128` were typed here, a fourth copy of run5's minted sims with
+    no provenance line. The one provenance pin for those numbers, with its grounds, is
+    `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
+    """
+    cfg = load_config(REPO_ROOT / "configs" / "run5.yaml")
     knobs = _run5_payload()["knobs"]
-    assert knobs["schema_version"]["value"] == 1
-    assert knobs["identity.encoding"]["value"] == "gnn_axis_v1"
-    assert knobs["identity.representation"]["value"] == "graph"
-    assert knobs["eval.random_model_sims"]["value"] == 96
-    assert knobs["eval.sealbot_model_sims"]["value"] == 128
+    assert knobs["schema_version"]["value"] == cfg.schema_version
+    assert knobs["identity.encoding"]["value"] == cfg.identity.encoding
+    assert knobs["identity.representation"]["value"] == cfg.identity.representation
+    assert knobs["eval.random_model_sims"]["value"] == cfg.eval.random_model_sims
+    assert knobs["eval.sealbot_model_sims"]["value"] == cfg.eval.sealbot_model_sims
     assert knobs["amp_dtype"]["value"] == "bf16"

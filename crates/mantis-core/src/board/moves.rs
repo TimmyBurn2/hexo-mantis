@@ -59,6 +59,17 @@ pub const WIN_LENGTH: usize = 6;
 /// Boards (eval, bots, tests, corpus replay).
 pub const DEFAULT_LEGAL_MOVE_RADIUS: i32 = 5;
 
+/// Cells in a closed hex ball of the given radius, centre included: `3r² + 3r + 1`.
+///
+/// AUDIT-1 F-49. Eight assertions across `mantis-core`'s suites read `90` under the comment
+/// "radius 5 default: 91 - 1", with the formula living only in those comments. If the engine
+/// default follows R328's grounds, every one of them reds with a message asserting a false
+/// fact. The arithmetic has ONE home now, and the tests say `hex_ball_cells(R) - 1`.
+#[must_use]
+pub const fn hex_ball_cells(radius: i32) -> usize {
+    (3 * radius * radius + 3 * radius + 1) as usize
+}
+
 /// Default maximum hex distance between stones that share a single cluster
 /// for the `get_clusters()` partition.  Originally 8 to match the legal-move
 /// radius (one cluster per "reachable neighborhood"); lowered to 5 so that

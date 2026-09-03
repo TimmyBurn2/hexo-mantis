@@ -53,8 +53,6 @@ WIN_AXES: tuple[tuple[int, int], ...] = tuple(
 
 # Contract-fixed schema widths (single-sourced against the mantis-graph constants;
 # callers pass spec.node_feat_dim / spec.edge_feat_dim from the registry).
-_NODE_FEAT_DIM = 11  # fallback default for spec.node_feat_dim (registry gnn_axis_v1)
-_EDGE_FEAT_DIM = 5  # fallback default for spec.edge_feat_dim (registry gnn_axis_v1)
 _OFF_WINDOW_SLOT = -1
 _BUILDER_IMPL_NATIVE = 1
 
@@ -354,10 +352,10 @@ def collate_graph_batch(
     wire: Any,
     expected_version: int = 1,
     *,
-    trunk_size: int = 19,  # caller passes spec.trunk_size (registry)
-    win_length: int = 6,
-    node_feat_dim: int = _NODE_FEAT_DIM,
-    edge_feat_dim: int = _EDGE_FEAT_DIM,
+    trunk_size: int,
+    win_length: int,
+    node_feat_dim: int,
+    edge_feat_dim: int,
     device: str | None = None,
     semantic: str = "full",
     canary_period: int = 64,
@@ -369,6 +367,17 @@ def collate_graph_batch(
     `semantic`: "full" (trainer — every batch), "canary" (hot path — first +
     every Nth), or "off". The structural layer (13) always runs full. Raises a
     NAMED `GraphContractError` on any mismatch — never a silent fallback.
+
+    THE FOUR GEOMETRY PARAMETERS ARE REQUIRED (AUDIT-1 F-41). They used to default to the
+    `gnn_axis_v1` row's values typed here as literals. Every production caller already passed
+    `spec.*`, so the defaults' only consumers were tests that omitted them — which is the
+    shape that makes a re-captured payload at another radius collate under stale geometry with
+    nothing red. They are the EXPECTED geometry the wire is checked against, so a default is a
+    silent expectation.
+
+    Raises:
+        GraphContractError: any wire array disagrees with the declared geometry or the
+            structural contract.
     """
     import torch  # deferred: keeps this module import-safe in torch-free envs
 

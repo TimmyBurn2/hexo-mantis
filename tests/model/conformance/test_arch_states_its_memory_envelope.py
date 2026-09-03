@@ -386,19 +386,44 @@ def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
     }
 
 
-def _spec_for(arch_kind: str):
+def specs_for(arch_kind: str) -> tuple[Any, ...]:
+    """EVERY registered encoding whose representation this arch serves, NAME-SORTED.
+
+    AUDIT-1 F-41. This returned the FIRST match in `all_specs()` order, so the table measured
+    `gnn_axis_v1` and never `gnn_axis_r8` — run6's own identity — and a roster REORDER would
+    have changed which encoding the mint's memory partition was derived from without changing
+    a line of this file. Name-sorted so the order is a property of the registry's contents
+    rather than of its declaration order.
+
+    Raises:
+        ArchDeclaresNoMemoryEnvelope: no registered encoding serves this arch's representation.
+    """
     graph = arch_kind.startswith("GnnArch")
-    for spec in roster():
-        if bool(spec.is_graph) is graph:
-            return spec
-    raise ArchDeclaresNoMemoryEnvelope(
-        f"{arch_kind}: no registered encoding carries the representation this arch serves."
-    )
+    matches = tuple(sorted((s for s in roster() if bool(s.is_graph) is graph),
+                           key=lambda s: s.name))
+    if not matches:
+        raise ArchDeclaresNoMemoryEnvelope(
+            f"{arch_kind}: no registered encoding carries the representation this arch serves."
+        )
+    return matches
 
 
-def envelope_terms(arch_kind: str, narrow: bool = False) -> dict[str, MemoryTerm]:
+#: Every (arch kind, encoding) pair the envelope is defined over — the parametrisation roster,
+#: derived from the registry so a new row joins every arm below with no test edit.
+ARCH_SPEC_PAIRS: tuple[tuple[str, str], ...] = tuple(
+    (kind, spec.name)
+    for kind in sorted(registered_envelopes())
+    for spec in specs_for(kind)
+)
+
+
+def spec_by_name(arch_kind: str, encoding: str):
+    return next(s for s in specs_for(arch_kind) if s.name == encoding)
+
+
+def envelope_terms(arch_kind: str, encoding: str, narrow: bool = False) -> dict[str, MemoryTerm]:
     envelope = registered_envelopes(narrow=narrow)[arch_kind]
-    spec = _spec_for(arch_kind)
+    spec = spec_by_name(arch_kind, encoding)
     return check_terms(arch_kind, {name: fn(spec) for name, fn in envelope.terms.items()})
 
 
@@ -433,10 +458,10 @@ def test_an_EMPTY_dispatch_census_is_refused_rather_than_reported_clean():
         check_envelope_manifest(frozenset(), frozenset(registered_envelopes()))
 
 
-@pytest.mark.parametrize("arch_kind", sorted(registered_envelopes()))
-def test_the_envelope_emits_EXACTLY_the_partitions_three_terms(arch_kind, derived):
-    terms = envelope_terms(arch_kind)
-    derived(f"t8.{arch_kind}.terms", {n: t.nbytes for n, t in terms.items()})
+@pytest.mark.parametrize(("arch_kind", "encoding"), ARCH_SPEC_PAIRS)
+def test_the_envelope_emits_EXACTLY_the_partitions_three_terms(arch_kind, encoding, derived):
+    terms = envelope_terms(arch_kind, encoding)
+    derived(f"t8.{arch_kind}.{encoding}.terms", {n: t.nbytes for n, t in terms.items()})
     assert frozenset(terms) == frozenset(REQUIRED_TERMS)
 
 
@@ -493,14 +518,14 @@ def test_the_GIB_constructor_performs_the_partitions_own_conversion():
     assert MemoryTerm.from_bytes(1024 ** 3, BASIS_CPU_RESIDENT).gib == 1.0
 
 
-@pytest.mark.parametrize("arch_kind", sorted(registered_envelopes()))
-def test_EVERY_term_MOVES_when_the_archs_declared_width_moves(arch_kind, derived):
+@pytest.mark.parametrize(("arch_kind", "encoding"), ARCH_SPEC_PAIRS)
+def test_EVERY_term_MOVES_when_the_archs_declared_width_moves(arch_kind, encoding, derived):
     """The derivation control. This is the half that would have caught F-816-12: a term that
     stays put while the model changes is not a term, whatever it is typed as."""
-    narrow = envelope_terms(arch_kind, narrow=True)
-    wide = envelope_terms(arch_kind, narrow=False)
+    narrow = envelope_terms(arch_kind, encoding, narrow=True)
+    wide = envelope_terms(arch_kind, encoding, narrow=False)
     deltas = check_term_moves_with_arch(arch_kind, narrow, wide)
-    derived(f"t8.{arch_kind}.width_deltas", deltas)
+    derived(f"t8.{arch_kind}.{encoding}.width_deltas", deltas)
     assert all(delta > 0 for delta in deltas.values())
 
 
@@ -543,19 +568,19 @@ def test_report_the_per_arch_memory_envelope(derived):
     rows = [
         {
             "arch_kind": kind,
-            "encoding": _spec_for(kind).name,
+            "encoding": encoding,
             "term": name,
             "bytes": term.nbytes,
             "gib": term.gib,
             "basis": term.basis,
         }
-        for kind in sorted(registered_envelopes())
-        for name, term in envelope_terms(kind).items()
+        for kind, encoding in ARCH_SPEC_PAIRS
+        for name, term in envelope_terms(kind, encoding).items()
     ]
     derived("t8.measurement.rows", rows)
-    assert {(row["arch_kind"], row["term"]) for row in rows} == {
-        (kind, term) for kind in registered_envelopes() for term in REQUIRED_TERMS
-    }, "the measured table does not carry every arch's every term"
+    assert {(row["arch_kind"], row["encoding"], row["term"]) for row in rows} == {
+        (kind, encoding, term) for kind, encoding in ARCH_SPEC_PAIRS for term in REQUIRED_TERMS
+    }, "the measured table does not carry every arch's every term on every encoding it serves"
     assert {row["basis"] for row in rows} == {BASIS_CPU_RESIDENT}, (
         "a row carries a basis this run did not measure on"
     )

@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 from mantis import _engine
+from mantis.encoding.registry import lookup
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "encode_parity"
 # manifest.tsv header `encodings = v6,v6w25,v6_live2_ls` -> enc_name(id) index order.
@@ -91,9 +92,23 @@ def test_to_tensor_byte_exact_vs_golden(case_id):
 
 
 def test_size_pinned_bound_and_unbound():
-    assert _engine.Board.with_encoding_name("v6").size == 19
-    assert _engine.Board.with_encoding_name("v6w25").size == 25
-    assert _engine.Board().size == 19  # unbound -> BOARD_SIZE, a raw geometry default
+    """A bound board's size is the ROW's `board_size`; an unbound one is the raw geometry default.
+
+    AUDIT-1 F-49: the three expectations were `19`, `25`, `19` — the registry's own numbers
+    restated in a test whose subject is that the Board READS the registry.
+    `registry_census.rs` is the one literal home for a row's `board_size`.
+    """
+    for name in ("v6", "v6w25", "v6_live2_ls"):
+        assert _engine.Board.with_encoding_name(name).size == lookup(name).board_size, name
+    sizes = {lookup(n).board_size for n in ("v6", "v6w25")}
+    assert len(sizes) == 2, (
+        "the two rows now share a board_size, so this test can no longer tell a bound board "
+        "from a constant"
+    )
+    assert _engine.Board().size == lookup("v6").board_size, (
+        "unbound -> BOARD_SIZE, a raw geometry default that happens to equal v6's board_size; "
+        "if these ever diverge, the unbound arm needs its own authority rather than this one"
+    )
 
 
 def test_get_cluster_views_count_shape_dims():

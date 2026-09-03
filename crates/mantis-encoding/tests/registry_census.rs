@@ -133,283 +133,110 @@ fn per_field_pins_gnn_axis_v1() {
     assert_eq!(s.legal_move_radius, 6);
 }
 
-// ── O-5: wire_signature families + spec-derived strides ──────────────────────
+/// AUDIT-1 F-41. `gnn_axis_r8` — run6's own identity row — appeared ONLY in this file's name
+/// lists; every per-field pin covered the other four rows. A row with no per-field pin is a row
+/// whose geometry can be edited without a single assertion moving, and this is the row the next
+/// mint runs on.
 #[test]
-fn wire_signature_families() {
-    assert_eq!(lookup("v6").unwrap().wire_signature(), (8, 19, 362, true, "size_19"));
-    assert_eq!(lookup("v6w25").unwrap().wire_signature(), (8, 25, 626, true, "size_25"));
-    assert_eq!(lookup("v6_live2_ls").unwrap().wire_signature(), (4, 19, 362, true, "size_19"));
-    assert_eq!(lookup("gnn_axis_v1").unwrap().wire_signature(), (0, 19, 362, true, "size_19"));
-    // v6_live2_ls is the SOLE registered holder of (4,19,362,true,size_19).
-    let holders: Vec<&str> = all_specs()
-        .filter(|s| s.wire_signature() == (4, 19, 362, true, "size_19"))
-        .map(|s| s.name)
-        .collect();
-    assert_eq!(holders, ["v6_live2_ls"]);
-}
-
-#[test]
-fn strides_spec_derived() {
-    let v6 = lookup("v6").unwrap();
-    assert_eq!(v6.n_cells(), 361);
-    assert_eq!(v6.state_stride(), 8 * 361);
-    assert_eq!(v6.chain_stride(), 6 * 361);
-    assert_eq!(v6.aux_stride(), 361);
-    assert_eq!(v6.policy_stride(), 362);
-    assert_eq!(v6.half(), 9);
-
-    let w = lookup("v6w25").unwrap();
-    assert_eq!(w.n_cells(), 625);
-    assert_eq!(w.state_stride(), 8 * 625);
-    assert_eq!(w.chain_stride(), 6 * 625);
-    assert_eq!(w.policy_stride(), 626);
-    assert_eq!(w.half(), 12);
-
-    let ls = lookup("v6_live2_ls").unwrap();
-    assert_eq!(ls.state_stride(), 4 * 361);
-    assert_eq!(ls.chain_stride(), 6 * 361);
-    assert_eq!(ls.policy_stride(), 362);
-
-    // Derived slot accessors.
-    assert_eq!(v6.cur_stone_slot(), 0);
-    assert_eq!(v6.opp_stone_slot(), 4);
-    assert_eq!(ls.opp_stone_slot(), 1);
-    assert_eq!(ls.turn_phase_planes(), vec![2, 3]);
-    assert_eq!(v6.history_planes(), vec![1, 2, 3, 5, 6, 7]);
-}
-
-// ── valid TOML body helper (a grid v6-like block) ────────────────────────────
-fn valid_grid_body() -> String {
-    r#"
-representation = "grid"
-board_size = 19
-trunk_size = 19
-cluster_window_size = "none"
-cluster_threshold = "none"
-legal_move_radius = 5
-n_planes = 8
-plane_layout = ["a","b","c","d","e","f","g","h"]
-policy_logit_count = 362
-has_pass_slot = true
-is_multi_window = false
-value_pool = "none"
-policy_pool = "none"
-sym_table_id = "size_19"
-kept_plane_indices = [0,1,2,3,8,9,10,11]
-n_source_planes = 18
-k_max = 1
-n_chain_planes = 6
-schema_version = 3
-notes = "test"
-"#
-    .to_string()
-}
-
-fn valid_graph_body() -> String {
-    // gnn_axis_v1's shipped body, kept in the SAME column layout as registry.toml so a probe
-    // can `.replace()` a field by its exact source line (AUDIT-1 F-18).
-    r#"
-representation          = "graph"
-board_size              = 19
-trunk_size              = 19
-cluster_window_size     = "none"
-cluster_threshold       = "none"
-legal_move_radius       = 6
-n_planes                = 0
-plane_layout            = []
-policy_logit_count      = 362
-has_pass_slot           = true
-is_multi_window         = false
-value_pool              = "none"
-policy_pool             = "none"
-sym_table_id            = "size_19"
-kept_plane_indices      = []
-n_source_planes         = 0
-k_max                   = 1
-node_feat_dim           = 11
-edge_feat_dim           = 5
-win_length              = 6
-graph_radius            = 6
-win_axes                = 3
-contract_version        = 1
-builder_impl_required   = 1
-n_chain_planes          = 6
-schema_version          = 4
-notes                   = "test"
-"#
-    .to_string()
-}
-
-// ── O-6: unknown-key reject (collect-all with a co-present missing key) ───────
-#[test]
-fn unknown_key_rejected_collect_all() {
-    // A smuggled unknown key AND a simultaneously-missing required key.
-    let body = valid_grid_body()
-        .replace("schema_version = 3\n", "schema_version = 3\nsmuggled_key = 7\n")
-        .replace("board_size = 19\n", "");
-    let err = parse_encoding_toml("v6t", &body).unwrap_err();
-    assert!(err.contains("unknown key") && err.contains("smuggled_key"), "unknown-key: {err}");
-    assert!(err.contains("board_size"), "co-present missing key must ALSO report: {err}");
-}
-
-// ── O-7: missing-key + missing-representation (LAW-11) ────────────────────────
-#[test]
-fn missing_representation_is_error_not_grid_default() {
-    let body = valid_grid_body().replace("representation = \"grid\"\n", "");
-    let err = parse_encoding_toml("v6t", &body).unwrap_err();
-    assert!(
-        err.contains("missing required key") && err.contains("representation"),
-        "absent representation must be a named error, NEVER a grid default (LAW-11): {err}"
-    );
-}
-
-#[test]
-fn missing_required_key_is_named_error() {
-    let body = valid_grid_body().replace("policy_logit_count = 362\n", "");
-    let err = parse_encoding_toml("v6t", &body).unwrap_err();
-    assert!(err.contains("policy_logit_count"), "missing key must be named: {err}");
-}
-
-// ── O-8: validator collect-all-errors (no short-circuit) ─────────────────────
-#[test]
-fn validator_collects_all_violations() {
-    let mut s = *lookup("v6").unwrap();
-    s.n_planes = 9; // len(plane_layout)=8 != 9  AND  len(kept)=8 != 9
-    s.has_pass_slot = false; // policy_logit_count 362 != 361
-    let err = s.validate().unwrap_err();
-    assert!(err.contains("len(plane_layout)"), "violation 1 must appear: {err}");
-    assert!(err.contains("policy_logit_count"), "violation 2 must appear: {err}");
-    assert!(err.contains("len(kept_plane_indices)"), "violation 3 must appear: {err}");
-    // 3 distinct violations in ONE message → collect-all, no short-circuit.
-    assert!(err.matches("\n  - ").count() >= 2, "must list multiple violations: {err}");
-}
-
-// ── O-9: n_chain_planes TOML-field authority ─────────────────────────────────
-#[test]
-fn n_chain_planes_is_the_field_authority() {
-    for n in REGISTERED {
-        assert_eq!(lookup(n).unwrap().n_chain_planes, 6, "{n} ships n_chain_planes=6");
-    }
-    // The FIELD drives chain_stride (not a source constant / replay reach-through).
-    let mut s = *lookup("v6").unwrap();
-    s.n_chain_planes = 7;
-    assert_eq!(s.chain_stride(), 7 * s.n_cells(), "chain_stride must read the field");
-    // The validator rejects 0.
-    s.n_chain_planes = 0;
-    let err = s.validate().unwrap_err();
-    assert!(err.contains("n_chain_planes"), "validator must reject n_chain_planes=0: {err}");
-}
-
-// ── O-10: registry_sha() export + stability ──────────────────────────────────
-#[test]
-fn registry_sha_deterministic_and_matches_on_disk() {
-    assert_eq!(registry_sha(), registry_sha(), "registry_sha must be deterministic");
-    assert_eq!(registry_sha_hex().len(), 64);
-    let on_disk = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/registry.toml");
-    let bytes = std::fs::read(&on_disk).unwrap();
+fn per_field_pins_gnn_axis_r8() {
+    let s = lookup("gnn_axis_r8").unwrap();
+    assert_eq!(s.representation, Representation::Graph);
+    assert!(s.is_graph());
+    assert_eq!(s.board_size, 19);
+    assert_eq!(s.n_planes, 0);
+    assert!(s.plane_layout.is_empty());
+    assert!(s.kept_plane_indices.is_empty());
+    assert_eq!(s.n_source_planes, 0);
+    assert_eq!(s.policy_logit_count, 362);
+    assert!(s.has_pass_slot);
+    assert!(!s.is_multi_window);
+    assert_eq!(s.node_feat_dim, Some(11));
+    assert_eq!(s.edge_feat_dim, Some(5));
+    assert_eq!(s.win_length, Some(6));
+    assert_eq!(s.graph_radius, Some(8), "the row exists to be radius 8 (R328)");
+    assert_eq!(s.win_axes, Some(3));
+    assert_eq!(s.contract_version, Some(1));
+    assert_eq!(s.builder_impl_required, Some(1));
+    assert_eq!(s.n_chain_planes, 6);
+    assert_eq!(s.schema_version, 4, "graph entry schema_version = 4 (preserved)");
     assert_eq!(
-        registry_sha_hex(),
-        common::sha256_hex(&bytes),
-        "registry_sha() must equal sha256 of the on-disk registry.toml"
+        s.legal_move_radius, 8,
+        "the R328 identity: legal_move_radius and graph_radius are ONE number on a graph row, \
+         and REPAIR-2's F-18 validator refuses them typed apart"
     );
 }
 
-// ── O-13: mechanical-delta pins ──────────────────────────────────────────────
+/// The Rust port of `tests/encoding/test_r8_identity.py::test_r328b_03` (AUDIT-1 F-41's repair
+/// line, "port the field-diff to Rust"). The two graph rows must differ in EXACTLY the radius
+/// pair and their identifying strings — `gnn_axis_r8` exists to move ONE knob, so a stray
+/// `win_length` or `policy_logit_count` difference makes the r6/r8 comparison two comparisons.
+///
+/// DERIVED, not a typed field list. Rust has no reflection, so the walk is over the `{:#?}`
+/// dump `#[derive(Debug)]` generates from the struct definition: a field ADDED to
+/// `RegistrySpec` joins both dumps automatically, which is the property the Python original
+/// has and a hand-enumerated comparison does not — a typed list is edited in the same commit
+/// as the drift it would have caught.
 #[test]
-fn mechanical_delta_pins() {
-    assert_eq!(MY_STONE_PLANE, 0);
-    assert_eq!(OPP_STONE_PLANE, 8);
-    assert_eq!(MOVES_REMAINING_PLANE, 16);
-    assert_eq!(PLY_PARITY_PLANE, 17);
-    // board.ply.index() % 2 reproduces the old `ply % 2` on a decoupled state.
-    assert_eq!(mantis_core::Ply::new(4).index() % 2, 0, "ply 4 -> ply_val 0");
-    assert_eq!(mantis_core::Ply::new(41).index() % 2, 1, "ply 41 -> ply_val 1");
-    // chain_stride reads the field (see n_chain_planes_is_the_field_authority).
-}
+fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
+    let v1 = format!("{:#?}", lookup("gnn_axis_v1").unwrap());
+    let r8 = format!("{:#?}", lookup("gnn_axis_r8").unwrap());
+    let (a, b): (Vec<&str>, Vec<&str>) = (v1.lines().collect(), r8.lines().collect());
+    assert_eq!(a.len(), b.len(), "the two dumps have different shapes, so no field-wise diff \
+                                  is possible:\n{v1}\n---\n{r8}");
+    assert!(a.len() > 15, "the Debug dump collapsed to {} lines; this test would be vacuous", a.len());
 
-// ── AUDIT-1 F-37: the two registry values `sym_tables_for` would have panicked on ─────
-//
-// `mantis_selfplay::replay::sym::sym_tables_for` asserts `n_chain_planes == N_CHAIN_PLANES`
-// and matches `(sym_table_id, n_planes)` against `("size_19", _) | ("size_25", 8)`, panicking
-// on anything else — and it is reached from `SelfPlayRunner::start()`, INCLUDING on a graph
-// run where the tables are never read. `spec/validate.rs` checked `n_chain_planes >= 1` and
-// never mentioned `sym_table_id`, so a new registry row failed at the first runner start, in
-// a worker thread, instead of at load. Leg 3's radius-8 work edits this registry.
-
-#[test]
-fn an_unknown_sym_table_id_is_refused_at_LOAD_not_at_the_first_runner_start() {
-    let body = valid_grid_body().replace(
-        "sym_table_id = \"size_19\"", "sym_table_id = \"size_31\"");
-    let err = parse_encoding_toml("v6_symprobe", &body).unwrap_err();
-    assert!(err.contains("sym_table_id"), "the error must name the field: {err}");
-    assert!(err.contains("size_31"), "…and the value it refused: {err}");
-    assert!(err.contains("size_19") && err.contains("size_25"),
-        "…and what IS available, or the reader cannot act on it: {err}");
-}
-
-#[test]
-fn size_25_without_eight_planes_is_refused_because_the_MATCH_is_on_the_pair() {
-    // `("size_25", 8)` is one arm. `("size_25", 4)` falls through to the panic — and the
-    // pairing is exactly the thing a validator checking each field alone cannot see.
-    let body = valid_grid_body()
-        .replace("sym_table_id = \"size_19\"", "sym_table_id = \"size_25\"")
-        .replace("n_planes = 8", "n_planes = 4")
-        .replace(r#"plane_layout = ["a","b","c","d","e","f","g","h"]"#,
-                 r#"plane_layout = ["a","b","c","d"]"#);
-    let err = parse_encoding_toml("v6_pairprobe", &body).unwrap_err();
-    assert!(err.contains("size_25") && err.contains("n_planes"),
-        "the error must name the PAIR, not one half of it: {err}");
-    // The control: `size_25` with EIGHT planes is a real arm and must still load.
-    let ok = valid_grid_body().replace(
-        "sym_table_id = \"size_19\"", "sym_table_id = \"size_25\"");
-    assert!(parse_encoding_toml("v6_pairok", &ok).is_ok(),
-        "the valid (size_25, 8) pair was refused");
-}
-
-#[test]
-fn a_chain_plane_count_the_D6_tables_cannot_hold_is_refused() {
-    let body = valid_grid_body().replace("n_chain_planes = 6", "n_chain_planes = 7");
-    let err = parse_encoding_toml("v6_chainprobe", &body).unwrap_err();
-    assert!(err.contains("n_chain_planes"), "{err}");
-}
-
-#[test]
-fn the_two_radii_typed_APART_are_refused_at_parse() {
-    // AUDIT-1 F-18, the planted break. Before this relation existed, the only thing holding
-    // `legal_move_radius` equal to `graph_radius` was a COMMENT in registry.toml. The MCTS
-    // legal set is built at the first and the graph's legal nodes at the second: type them
-    // apart and the ragged policy covers a different cell set than the tree expands.
-    for (lm, gr) in [(6usize, 8usize), (8, 6)] {
-        let body = valid_graph_body()
-            .replace("legal_move_radius       = 6", &format!("legal_move_radius       = {lm}"))
-            .replace("graph_radius            = 6", &format!("graph_radius            = {gr}"));
-        let err = parse_encoding_toml("gnn_radprobe", &body)
-            .expect_err("two radii typed apart must be REFUSED, not loaded");
-        assert!(err.contains("graph_radius") && err.contains("legal_move_radius"),
-            "the error must name BOTH keys, or the reader cannot act on it: {err}");
-        assert!(err.contains(&lm.to_string()) && err.contains(&gr.to_string()),
-            "…and both values: {err}");
-    }
-    // The CONTROL: equal radii at a value neither shipped row uses must still load, so the
-    // relation is what reds and not the number.
-    let ok = valid_graph_body()
-        .replace("legal_move_radius       = 6", "legal_move_radius       = 7")
-        .replace("graph_radius            = 6", "graph_radius            = 7");
-    assert!(parse_encoding_toml("gnn_radok", &ok).is_ok(),
-        "equal radii must load: {:?}", parse_encoding_toml("gnn_radok", &ok).err());
-}
-
-#[test]
-fn every_SHIPPED_spec_clears_the_two_relations() {
-    // The control, and the R98 clean-baseline half: the rule is adopted over a registry that
-    // already satisfies it, so nothing here is a green over a tree nobody checked.
-    for name in REGISTERED {
-        let spec = lookup(name).expect("registered");
-        assert!(matches!(spec.sym_table_id, "size_19" | "size_25"),
-            "{name}: sym_table_id {:?}", spec.sym_table_id);
-        if spec.sym_table_id == "size_25" {
-            assert_eq!(spec.n_planes, 8, "{name}: size_25 requires 8 planes");
+    // `{:#?}` breaks an `Option<usize>` over three lines, so a differing line is often the
+    // INNER value rather than the field name. Carry the most recent `field:` line seen so a
+    // difference is attributed to the field that owns it, and de-duplicate.
+    let mut field = String::new();
+    let mut differing: Vec<String> = Vec::new();
+    for (x, y) in a.iter().zip(b.iter()) {
+        let trimmed = x.trim();
+        if let Some((name, _)) = trimmed.split_once(':') {
+            if !name.contains(' ') && !name.is_empty() {
+                field = name.to_string();
+            }
         }
-        assert_eq!(spec.n_chain_planes, 6, "{name}: n_chain_planes");
+        if x != y && differing.last() != Some(&field) {
+            differing.push(field.clone());
+        }
     }
+    differing.sort_unstable();
+    differing.dedup();
+    assert_eq!(
+        differing,
+        vec!["graph_radius", "legal_move_radius", "name", "notes"],
+        "the two graph rows differ in {differing:?}. This encoding exists to move ONE knob so \
+         the r6/r8 comparison IS a comparison; any other difference makes it two."
+    );
+}
+
+/// LAW-07 for the field-diff above: the extractor must ATTRIBUTE a difference to the field that
+/// owns it, including one buried inside a multi-line `Option`. Driven on two hand-built dumps so
+/// the control does not need a mutated registry.
+#[test]
+fn the_field_diff_attributes_a_nested_difference_to_its_owning_field() {
+    let a = "Spec {\n    board_size: 19,\n    win_length: Some(\n        6,\n    ),\n}";
+    let b = "Spec {\n    board_size: 19,\n    win_length: Some(\n        7,\n    ),\n}";
+    let (la, lb): (Vec<&str>, Vec<&str>) = (a.lines().collect(), b.lines().collect());
+    let mut field = String::new();
+    let mut differing: Vec<String> = Vec::new();
+    for (x, y) in la.iter().zip(lb.iter()) {
+        let trimmed = x.trim();
+        if let Some((name, _)) = trimmed.split_once(':') {
+            if !name.contains(' ') && !name.is_empty() {
+                field = name.to_string();
+            }
+        }
+        if x != y && differing.last() != Some(&field) {
+            differing.push(field.clone());
+        }
+    }
+    assert_eq!(
+        differing,
+        vec!["win_length"],
+        "a difference in the INNER line of a multi-line Option must be reported against \
+         `win_length`, not against the bare value line — otherwise a real drift is reported \
+         under a name no one can find and the assertion above is unreadable"
+    );
 }

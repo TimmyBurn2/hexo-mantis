@@ -917,7 +917,12 @@ def test_wire_round_trips_to_assemble_and_completes() -> None:
         assert len(ids) == n
 
         payload = graph_wire_from_rust(gw)
-        collate_mod.collate_graph_batch(payload, device="cpu", semantic="full")
+        collate_mod.collate_graph_batch(
+            payload, device="cpu", semantic="full",
+            trunk_size=_GRAPH_SPEC.trunk_size, win_length=_GRAPH_SPEC.win_length,
+            node_feat_dim=_GRAPH_SPEC.node_feat_dim,
+            edge_feat_dim=_GRAPH_SPEC.edge_feat_dim,
+        )
 
         lo = payload.legal_offsets.astype(np.int64)
         total_legal = int(lo[-1])
