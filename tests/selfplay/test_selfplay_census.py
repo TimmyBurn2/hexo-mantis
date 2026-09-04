@@ -93,8 +93,13 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
      [("graph_collate.py", "collate_graph_batch")], (0, 0, 0)),
     ("_check_structural",
      [("graph_collate.py", "_check_structural")], (2, 0, 0)),
+    # R335(e) DOWN-RATCHET, 2026-09-04: `(1, 0, 1)` -> `(1, 0, 0)`. Check 17's comprehension
+    # over a graph's legal nodes is gone, replaced by three linear numpy passes; the surviving
+    # `for` is the O(B) cell-array build (B = 55 graphs/part), not an O(Lg) per-legal-node
+    # walk. This row is a NO-NEW-LOOPS contract, so lowering it tightens the gate and can only
+    # be undone by putting the loop back — which is what it is here to notice.
     ("_check_semantic",
-     [("graph_collate.py", "_check_semantic")], (1, 0, 1)),
+     [("graph_collate.py", "_check_semantic")], (1, 0, 0)),
     ("segment_softmax / stone_mask_from_batch",
      [("graph_collate.py", "segment_softmax"),
       ("graph_collate.py", "stone_mask_from_batch")], (0, 0, 0)),

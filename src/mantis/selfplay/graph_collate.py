@@ -241,6 +241,11 @@ def _canary_should_run(period: int) -> bool:
 # Geometry helper — window_flat_idx_at_geom (byte-parity with the Rust builder
 # `mantis_graph::window_flat_idx`). Vectorized over coord arrays.
 # ---------------------------------------------------------------------------
+#: Fills the `(B, 2)` cell array for graphs with no usable target cell (check 17). `int64`'s
+#: minimum cannot be a board coordinate, so a sentinel row never matches a real one.
+_CELL_SENTINEL: int = np.iinfo(np.int64).min
+
+
 def _canonical_slot_vec(
     q: np.ndarray, r: np.ndarray, cq: np.ndarray, cr: np.ndarray, trunk: int
 ) -> np.ndarray:
@@ -773,6 +778,12 @@ def _check_semantic(
     # the target-argmax cell must map to a legal node whose slot equals the
     # canonical slot of that cell's (rotated) coord. Skipped on inference (no
     # target).
+    #
+    # R335(e): three linear passes over the flat legal arrays, replacing a per-graph
+    # `np.where` scan plus a Python comprehension that built two `tuple()`s per legal
+    # node. Measured 62.6 ms of a 106.4 ms semantic layer at the run5 train-path part
+    # shape. Same named error, same message, same precedence — pinned against a verbatim
+    # transcription of the loop in `tests/selfplay/test_check17_vectorized_parity.py`.
     if target_argmax_cells is not None:
         if len(target_argmax_cells) != B:
             raise AugRoundTripMismatch(
@@ -780,13 +791,28 @@ def _check_semantic(
             )
         legal_graph = _graph_of(legal_offsets, Lg) if Lg > 0 else np.array([], dtype=np.int64)
         gcoord = coords[legal_node_gather] if Lg > 0 else np.zeros((0, 2), dtype=np.int64)
-        for g in range(B):
-            cell = target_argmax_cells[g]
+        # Sentinel rows can never equal a coord, so a graph whose cell is None — or whose
+        # cell is not a 2-vector of integers, which the old `tuple()` compare also never
+        # matched — is left unmatchable rather than special-cased downstream.
+        want_cells = np.full((B, 2), _CELL_SENTINEL, dtype=np.int64)
+        has_cell = np.zeros(B, dtype=bool)
+        for g, cell in enumerate(target_argmax_cells):
             if cell is None:
                 continue
-            sel = np.where(legal_graph == g)[0]
-            match = [i for i in sel if tuple(gcoord[i]) == tuple(cell)]
-            if not match:
+            has_cell[g] = True
+            try:
+                as_pair = np.asarray(cell, dtype=np.int64).reshape(-1)
+            except (TypeError, ValueError):
+                continue
+            if as_pair.size == 2:
+                want_cells[g] = as_pair
+        if has_cell.any():
+            hit = (gcoord == want_cells[legal_graph]).all(axis=1)
+            found = np.bincount(legal_graph[hit], minlength=B).astype(bool)
+            missing = np.flatnonzero(has_cell & ~found)
+            if missing.size:
+                g = int(missing[0])
+                cell = target_argmax_cells[g]
                 raise AugRoundTripMismatch(
                     f"graph {g}: target cell {cell} is not a legal node (graph/target desync)"
                 )
