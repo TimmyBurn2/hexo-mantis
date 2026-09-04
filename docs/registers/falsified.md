@@ -83,3 +83,15 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   evaluated at run5's measured depth distribution: the delta wins only where
   `delta_cost × depth < build_cost`, which is exactly the arithmetic that killed the legal-set
   case (a tiny build_cost) and is an open question only where the per-leaf build is expensive.
+
+- **F-43 — mechanism annotation, per R335(a) (2026-09-04).** The row's FINDING is untouched: the
+  zero-games signature was an INVISIBLE-games signature on both paths, and that stands. What has
+  moved is ONE of the two mechanisms that made a healthy run invisible. R215's correction of
+  record reads *"dropped because `pool._sink=None` at `run.py:349`"*; at `736c4b5` both pool
+  constructions pass `sink=_DeferredSink()` (`src/mantis/run.py:528, 538`) — a late-binding
+  adapter bound in `compose_run` before `pool.start()` — so **`game_complete`, with its
+  `moves_list`, reaches the stream in production today**. The OTHER mechanism, `log_interval`
+  gating `iteration_complete` (R210), is NOT claimed to have moved and was not re-measured here.
+  Nothing in the row is re-opened: this note records that a reader citing the `sink=None` half as
+  live repo state would be citing something that is no longer true, which is exactly the drift an
+  append-only register corrects by annotation rather than by edit (R9).
