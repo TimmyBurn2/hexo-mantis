@@ -32,7 +32,11 @@ import mantis.train.checkpoints as _checkpoints
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, HeartbeatRegistry
 from mantis.monitor.sink import JsonlEventSink
-from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
+from mantis.train.lifecycle.heartbeat_watchdog import (
+    ActorLagSpec,
+    HeartbeatWatchdog,
+    MonitorLivenessSpec,
+)
 from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
 _LOG = logging.getLogger(__name__)
@@ -80,6 +84,7 @@ def build_run_safety(
     actor_ckpt_step_fn: Callable[[], int],
     learner_step_fn: Callable[[], int],
     monitor_cfg: MonitorConfig,
+    monitor_liveness: Sequence[MonitorLivenessSpec] = (),
     heartbeat_file: str | Path | None = None,
     exit_fn: Callable[[int], None] = os._exit,
 ) -> RunSafety:
@@ -108,6 +113,15 @@ def build_run_safety(
         check. They feed `ActorLagSpec` together with the monitor config's
         `actor_lag_threshold_steps` / `actor_lag_abort_enabled`, and are read LIVE at
         poll time;
+      * `monitor_liveness` (AUDIT-1 F-11 / R334(b)) names the MONITORS whose own counters
+        the watchdog reports the liveness of — a monitor thread that swallows its errors is
+        invisible on every observable it publishes, because what it stops publishing IS the
+        evidence. It carries a `()` default, DELIBERATELY unlike the three neighbours above,
+        and the distinction is the failure mode rather than the convenience: an omitted
+        `wired_sources` / `actor_ckpt_step_fn` / `monitor_cfg` makes a healthy run fire or
+        silently disarms a live abort, while an omitted monitor costs an observable and no
+        run. It is not silent either way — `arm()` emits `monitor_liveness_unwired` on an
+        empty tuple, and production's wiring is pinned structurally;
       * `monitor_cfg` is REQUIRED with NO default, for the SAME reason and by the same
         posture (WPAX RED-TEAM F-2). It used to default to `None` and fall back to a bare
         `MonitorConfig()`, whose `actor_lag_abort_enabled` is `False` — so a caller that
@@ -164,6 +178,7 @@ def build_run_safety(
             threshold_steps=cfg.actor_lag_threshold_steps,
             abort_enabled=cfg.actor_lag_abort_enabled,
         ),
+        monitor_liveness=monitor_liveness,
         save_snapshot=_save_snapshot,
         exit_fn=exit_fn,
     )

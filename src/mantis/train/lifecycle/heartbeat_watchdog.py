@@ -75,6 +75,58 @@ DEFAULT_CLOSE_OUT_DEADLINE_SEC: float = 14400.0
 #: suspends the fire before `exit_fn` and the process never dies.
 DEFAULT_FIRE_EFFECT_TIMEOUT_SEC: float = 30.0
 
+#: How many of a monitor's OWN poll intervals may pass with no completed check before the
+#: monitor is called stalled (AUDIT-1 F-11 / R334(b)).
+#:
+#: WHY THIS EXISTS. A monitor thread that swallows its own errors — which every one of them
+#: must, or a transient `statvfs` kills the run — is indistinguishable from a healthy one on
+#: every observable it publishes, because the thing it stops publishing is the evidence. The
+#: disk guard is the measured case: `check_once` raising on every tick emits no `disk_free`,
+#: so absence-of-alert reads as "plenty of space", and the rc-47 abort stays armed in the
+#: config for the whole run while the volume fills.
+#:
+#: WHY 3, and the grounds are that it separates SLOW from DEAD. One missed tick is a busy
+#: volume; three consecutive missed ticks is a mechanism, and the guard's own counters say
+#: which — `errors_total` advancing with `checks_total` frozen is a raising `check_once`,
+#: both frozen is a thread that is gone. The bound is in the monitor's OWN interval, so a
+#: 60 s guard is judged at 180 s and a 5 s one at 15 s; nothing here assumes a period.
+#:
+#: WHY IT IS NOT A CONFIG KEY, and this is `EARLIEST_FIRE_FRACTION`'s argument verbatim
+#: (`mantis.config.armed_aborts`): a config that could set its own liveness deadline could
+#: disable the check that says its monitors are dead, and the disarm this constant exists to
+#: refuse would be re-spellable as a large number nobody read. It is also NOT a fire — see
+#: `_check_monitor_liveness` — so it decides an OBSERVABLE, never a process exit.
+MONITOR_STALL_INTERVALS: int = 3
+
+
+@dataclass(frozen=True)
+class MonitorSample:
+    """One monitor's liveness reading: what it has completed, what it has swallowed, and the
+    period both are denominated in. All three come from the monitor itself."""
+
+    checks_total: int
+    errors_total: int
+    interval_sec: float
+
+
+@dataclass(frozen=True)
+class MonitorLivenessSpec:
+    """A monitor this watchdog reports the liveness of (AUDIT-1 F-11 / R334(b)).
+
+    `sample_fn` returns `None` while the monitor does not exist yet, which is a REAL state
+    and not an error: the composition root starts this watchdog BEFORE it builds the disk
+    guard (the pinned order is pool → watchdog, and the guard follows), so the first polls of
+    every run legitimately have nothing to read. `None` is therefore "not known yet" and is
+    silent; a monitor that appears and then stops advancing is the reportable thing.
+
+    Read LIVE at poll time, never at build time — the O-28 discipline `ActorLagSpec` states
+    one class up, and for the same reason: a value captured at construction would report the
+    monitor's birth forever.
+    """
+
+    name: str
+    sample_fn: Callable[[], MonitorSample | None]
+
 
 @dataclass(frozen=True)
 class ActorLagSpec:
@@ -115,6 +167,7 @@ class HeartbeatWatchdog:
         snapshot_timeout_sec: float = DEFAULT_FIRE_EFFECT_TIMEOUT_SEC,
         wired_sources: Sequence[str] | None = None,
         actor_lag: ActorLagSpec | None = None,
+        monitor_liveness: Sequence[MonitorLivenessSpec] = (),
     ) -> None:
         self._registry = registry
         self._deadlines = dict(deadlines)
@@ -128,6 +181,18 @@ class HeartbeatWatchdog:
         self._exit_fn = exit_fn
         self._close_out_deadline = float(close_out_deadline_sec)
         self._snapshot_timeout = float(snapshot_timeout_sec)
+        # AUDIT-1 F-11 / R334(b). The default is `()` and NOT the required-with-no-default
+        # posture `wired_sources` takes, because the two failure modes are different: an
+        # undeclared heartbeat source makes a HEALTHY run fire 42, so it may never be
+        # inferred; an undeclared monitor makes this watchdog quiet about a monitor it was
+        # never told about, which costs an observable and no run. It is also not silent —
+        # `arm()` emits `monitor_liveness_unwired` when the tuple is empty, and production's
+        # wiring is pinned structurally rather than by anyone remembering the kwarg.
+        self._monitor_liveness = tuple(monitor_liveness)
+        #: name -> (clock at the last OBSERVED advance, checks_total at that advance).
+        self._monitor_seen: dict[str, tuple[float, int]] = {}
+        self._monitor_stalled: set[str] = set()
+        self._last_monitor_sample: float | None = None
 
         sources = getattr(registry, "sources", None)
         self._sources: tuple[str, ...] = tuple(sources) if sources else tuple(self._deadlines)
@@ -224,6 +289,12 @@ class HeartbeatWatchdog:
                  "threshold_steps": int(self._actor_lag.threshold_steps)}
                 if self._actor_lag is not None else "absent"
             ),
+            # AUDIT-1 F-11 / R334(b): the monitors whose liveness this watchdog reports, and
+            # the empty case named rather than absent — an unwired monitor is a gap somebody
+            # must be able to see at arm time, exactly as an unwired heartbeat source is.
+            "monitor_liveness": ([m.name for m in self._monitor_liveness]
+                                 or "monitor_liveness_unwired"),
+            "monitor_stall_intervals": MONITOR_STALL_INTERVALS,
             "poll_interval_sec": self._poll_interval,
             "file_interval_sec": self._file_interval,
             "close_out_deadline_sec": self._close_out_deadline,
@@ -279,6 +350,26 @@ class HeartbeatWatchdog:
                        detail={"persist_errors_total": count})
             return
         if self._staleness_armed:
+            # AUDIT-1 F-11 / R334(b). Gated on `_staleness_armed`, INSIDE the armed branch,
+            # for a reason this leg learned by breaking the tier with the other placement.
+            #
+            # This check was first written to run on EVERY poll — armed or not — on the
+            # argument that a monitor's death is not a pipeline stall and close-out does not
+            # excuse it. That argument is about WHEN the reading is interesting. It ignored
+            # WHO takes the reading: this watchdog's OWN thread, which emits through the sink
+            # it also polices. A run tearing down closes its sink; an emit after that is a
+            # failed write; `JsonlEventSink` COUNTS a failed write rather than raising
+            # (LAW-14) — and the counter it increments is `counters_fn`, which is the FIRST
+            # thing `poll_once` reads and which it answers with `os._exit(43)`. **A periodic
+            # diagnostic emitted from the watchdog thread is self-fatal**, and it was measured
+            # so: `monitor_liveness_sample` into a closed sink, then rc 43 on the next poll,
+            # taking the whole test tier down from a leaked watchdog three files later.
+            #
+            # `_check_actor_lag` has always sat behind this same gate and
+            # `test_no_sample_during_close_out_and_none_without_a_spec` says why in as many
+            # words — the emission "inherits the two structural gates instead of becoming a
+            # third, independently-wrong one". This is that third one, corrected.
+            self._check_monitor_liveness()
             if self._check_actor_lag():
                 return
             if self._check_source_staleness():
@@ -286,6 +377,75 @@ class HeartbeatWatchdog:
         elif self._check_close_out_overrun():
             return
         self._mirror_file()
+
+    def _check_monitor_liveness(self) -> None:
+        """Report a monitor whose own counter has stopped advancing. NEVER fires (R334(b)).
+
+        The shape is deliberate and it is the ruling's, not a preference. Making the disk
+        guard a fifth `HEARTBEAT_SOURCES` member would put a monitor thread on an instrument
+        whose stall code is **42, the TRANSIENT class the supervisor RELAUNCHES on** — so a
+        guard raising every tick would stall-abort and be relaunched into the same broken
+        state, a crash loop into a filling volume, on the leg whose whole purpose is stopping
+        a run before the volume fills. It would also need a fifth REQUIRED schema key and a
+        re-mint of all seven configs. This reads the counters the guard already publishes and
+        says so out loud.
+
+        LAW-18: the reading is emitted on a healthy run too, bounded by the same file
+        interval `_mirror_file` and the lag sample use, so an observer can tell a live
+        reading from a frozen one. The stall event itself is LATCHED per monitor and clears
+        when the counter advances again, so a long outage is one event and a recovery is
+        visible.
+        """
+        if not self._monitor_liveness:
+            return
+        now = float(self._clock())
+        readings: list[dict[str, Any]] = []
+        for spec in self._monitor_liveness:
+            sample = spec.sample_fn()
+            if sample is None:
+                # Not built yet. A real state, not an error: the root starts this watchdog
+                # before it constructs the guard.
+                continue
+            seen = self._monitor_seen.get(spec.name)
+            if seen is None or sample.checks_total > seen[1]:
+                self._monitor_seen[spec.name] = (now, int(sample.checks_total))
+                if spec.name in self._monitor_stalled:
+                    self._monitor_stalled.discard(spec.name)
+                    _LOG.warning("monitor_recovered name=%s checks_total=%s",
+                                 spec.name, sample.checks_total)
+                    self._emit({"event": "monitor_recovered", "monitor": spec.name,
+                                "checks_total": int(sample.checks_total),
+                                "errors_total": int(sample.errors_total)})
+                seen = self._monitor_seen[spec.name]
+            age = now - seen[0]
+            deadline = MONITOR_STALL_INTERVALS * float(sample.interval_sec)
+            readings.append({"monitor": spec.name, "checks_total": int(sample.checks_total),
+                             "errors_total": int(sample.errors_total),
+                             "last_advance_age_sec": round(age, 3),
+                             "stall_deadline_sec": round(deadline, 3)})
+            if deadline > 0.0 and age > deadline and spec.name not in self._monitor_stalled:
+                self._monitor_stalled.add(spec.name)
+                _LOG.error(
+                    "monitor_stalled name=%s checks_total=%s errors_total=%s "
+                    "last_advance_age_sec=%.1f deadline_sec=%.1f — this monitor has "
+                    "published nothing for %d of its own intervals; the abort it feeds is "
+                    "armed in the config and absent in effect",
+                    spec.name, sample.checks_total, sample.errors_total, age, deadline,
+                    MONITOR_STALL_INTERVALS,
+                )
+                self._emit({"event": "monitor_stalled", "monitor": spec.name,
+                            "checks_total": int(sample.checks_total),
+                            "errors_total": int(sample.errors_total),
+                            "last_advance_age_sec": round(age, 3),
+                            "stall_deadline_sec": round(deadline, 3),
+                            "stall_intervals": MONITOR_STALL_INTERVALS})
+        if not readings:
+            return
+        if (self._last_monitor_sample is None
+                or (now - self._last_monitor_sample) >= self._file_interval):
+            self._last_monitor_sample = now
+            self._emit({"event": "monitor_liveness_sample", "seq": self._seq,
+                        "monitors": readings})
 
     def _check_actor_lag(self) -> bool:
         """The WP-UNFREEZE lag invariant. Returns True when a fire was issued.

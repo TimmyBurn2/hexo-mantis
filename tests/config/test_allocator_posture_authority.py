@@ -573,13 +573,22 @@ def test_ap08_the_token_predicate_is_real_in_both_directions(value, armed):
 @pytest.mark.parametrize("value", [None, 0, 1, -1, True, False])
 def test_ap08_the_existing_predicates_are_byte_unchanged_by_the_new_member(mechanism, value):
     """A new enum member must change no other row's verdict. `CONFIG_THRESHOLD_BELOW_CEILING`
-    is exercised with no ceiling, which is its own documented DISARMED answer."""
+    is exercised with no ceiling, which is its own documented DISARMED answer.
+
+    THIS CENSUS FIRED ON THE R334(b) MEMBER and that is it working: a `KeyError` on an
+    undeclared mechanism is what forces a new member's verdict to be STATED here rather than
+    inherited. `CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER`'s entry is not a copy of the
+    `> 0` row — it is the same OBJECT, which is the claim shape A rests on: with no probe
+    answer supplied the two mechanisms are one predicate, so CI gate 12's verdicts cannot
+    move. Spelling the expression out twice would let them drift apart silently, which is the
+    thing this test exists to catch.
+    """
+    gt_zero = (not isinstance(value, bool) and isinstance(value, (int, float))
+               and float(value) > 0.0)
     expected = {
         Mechanism.CONFIG_BOOL: value is True,
-        Mechanism.CONFIG_THRESHOLD_GT_ZERO: (
-            not isinstance(value, bool) and isinstance(value, (int, float))
-            and float(value) > 0.0
-        ),
+        Mechanism.CONFIG_THRESHOLD_GT_ZERO: gt_zero,
+        Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER: gt_zero,
         Mechanism.CONFIG_THRESHOLD_BELOW_CEILING: False,
     }[mechanism]
     assert mechanism.is_armed(value) is expected

@@ -42,6 +42,8 @@ The oracles, and the defect each one is the ONLY witness to:
 R9 posture: every drive uses the REAL `HeartbeatWatchdog`, the REAL `ActorLagSpec` and the
 REAL `JsonlEventSink` under `tmp_path`. No `*.jsonl` fixture is committed (R7 / gate 6,
 DESIGN §9.3) — the streams are built by driving the real objects and read back off disk.
+
+R8 >300 justify: ONE unit — the sample emission, the two structural gates it inherits (`_staleness_armed` and `spec is None`) and the constructor CENSUS that keeps its interval derived rather than parameterised are one negotiated remedy (TD-6 / MF-1, Remedy A). The census is only meaningful beside the rows it protects: read alone it looks like an arbitrary signature freeze, and read alone the emission rows give no reason the interval could not simply have been a new kwarg.
 """
 from __future__ import annotations
 
@@ -242,15 +244,33 @@ def test_heartbeat_watchdog_init_gains_NO_new_parameter() -> None:
     schedules for AFTER Phase P. A census (not `assert "lag_sample_interval_sec" not in
     params`) is what makes ANY re-shaping of this constructor visible, including the
     module-constant-default variant §7.2 also rejects.
+
+    `monitor_liveness` (AUDIT-1 F-11 / R334(b)) IS such a re-shaping and the census DID make
+    it visible — which is the pin working, not the pin being routed around. It is admitted
+    against the rule this census encodes, not despite it, and the grounds are measured rather
+    than argued: TD-6's shape was rejected because a REQUIRED kwarg turned 37 tests red across
+    five files, and this one is OPTIONAL (`()`) and turned exactly ONE test red — this census.
+    It also does not touch TD-6's subject: the lag sample interval still derives from
+    `file_interval_sec`, and so does the liveness sample, which is the same one rule with a
+    third consumer rather than a second authority. Neither of the two files this docstring
+    calls byte-frozen appears in ANY `wp/*/ORACLE_FREEZE*.sha256` row (grepped at the change,
+    rc 1, zero hits), so no frozen-file grant is owed; the "byte-frozen" wording is a WP12-R
+    working-tree convention and is left standing as the record of what it meant.
     """
     params = inspect.signature(HeartbeatWatchdog.__init__).parameters
     assert tuple(params) == (
         "self", "registry", "deadlines", "sink", "counters_fn", "heartbeat_file",
         "file_interval_sec", "poll_interval_sec", "clock", "save_snapshot", "exit_fn",
         "close_out_deadline_sec", "snapshot_timeout_sec", "wired_sources", "actor_lag",
+        "monitor_liveness",
     ), (
         "HeartbeatWatchdog.__init__ must be UNCHANGED by TD-6 (MF-1, Remedy A): the sample "
         f"interval derives from the existing file_interval_sec. Got {tuple(params)}"
+    )
+    assert params["monitor_liveness"].default == (), (
+        "monitor_liveness must stay OPTIONAL: a required kwarg here is exactly the shape "
+        "TD-6 measured at 37 red tests, and this parameter's whole admissibility rests on "
+        "not being that"
     )
     for name in ("registry", "deadlines", "sink", "counters_fn", "heartbeat_file",
                  "file_interval_sec", "poll_interval_sec", "save_snapshot"):

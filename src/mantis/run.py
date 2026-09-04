@@ -71,6 +71,7 @@ watchdog callables (`actor_ckpt_step` / learner step) into `build_run_safety`.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -81,8 +82,12 @@ from typing import Any, NamedTuple
 import torch
 
 from mantis.config.armed_aborts import (
+    DISK_GUARD_LIVENESS_PROBE,
     DISK_SPACE_ABORT_RULE,
     TERMINAL_EVAL_BROKEN_ABORT_RULE,
+    ArmingSurfaceMissingError,
+    ProducerProbeMissingError,
+    audit_arming_live,
     exit_code_for_abort,
 )
 from mantis.config.emit import resolve_config
@@ -123,6 +128,10 @@ from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.emit import NullEventSink, emit_via
 from mantis.train.lifecycle.disk_guard import DiskGuard
+from mantis.train.lifecycle.heartbeat_watchdog import (
+    MonitorLivenessSpec,
+    MonitorSample,
+)
 from mantis.train.lifecycle.signals import (
     ParentDeathDecision,
     ShutdownState,
@@ -646,6 +655,54 @@ def _parent_death_event(decision: ParentDeathDecision | None) -> dict[str, Any] 
     }
 
 
+#: This root's logger. It had none until R334(b) needed one, which is itself the shape
+#: AUDIT-1 F-08 describes: the composition root emitted diagnostics only through the JSONL
+#: sink, so anything happening before the sink exists, or after it closes, had no channel at
+#: all. `main` installs THE one mantis handler (`configure_logging`, F-08), so this logger has
+#: somewhere to go.
+_LOG = logging.getLogger(__name__)
+
+
+def _emit_live_arming_audit(config: Any, sink: Any, *,
+                            probes: Mapping[str, Callable[[], bool]]) -> None:
+    """Publish the LIVE arming verdict for this run (AUDIT-1 F-11 / R334(b)).
+
+    Best-effort by construction and that is deliberate: this runs inside the teardown
+    ladder, after the run's outcome is already decided, and an audit that could raise there
+    would replace a real failure with its own. The `except` is narrow — the two named
+    failures `audit_arming_live` documents — so a genuine programming error still surfaces.
+
+    Args:
+        config: the validated `RunConfig` this run was composed from.
+        sink: the run's event sink.
+        probes: liveness answers by probe name, read at call time.
+
+    Raises:
+        Nothing. `ProducerProbeMissingError` and `ArmingSurfaceMissingError` are caught and
+        emitted as the audit's own failure, because a teardown-time diagnostic must never be
+        the thing that ends the run.
+    """
+    try:
+        result = audit_arming_live(config, probes=probes)
+    except (ProducerProbeMissingError, ArmingSurfaceMissingError) as exc:
+        _LOG.error("armed_abort_live_audit_failed: %s", exc)
+        sink.emit({"event": "armed_abort_live_audit_failed",
+                   "error_class": type(exc).__name__, "detail": str(exc)[:300]})
+        return
+    disarmed = [row.name for row in result.disarmed]
+    if disarmed:
+        _LOG.error(
+            "armed_abort_live_audit: %s REQUIRED abort row(s) were NOT live this run: %s "
+            "— the config armed them and the producer did not run, so the run carried the "
+            "protection in writing and not in fact",
+            len(disarmed), ", ".join(disarmed),
+        )
+    sink.emit({"event": "armed_abort_live_audit",
+               "required": len(result.required),
+               "disarmed": disarmed,
+               "probes": sorted(probes)})
+
+
 def compose_run(
     *,
     config: RunConfig | Any,
@@ -721,6 +778,30 @@ def compose_run(
     if config.eval_enabled:
         wired_sources.append("eval_round")
 
+    # AUDIT-1 F-11 / R334(b). HOISTED above `build_run_safety` — it used to be initialised
+    # beside `coordinator` and `eval_pipeline` below — because `_disk_guard_sample` closes
+    # over this name and the watchdog polls it from its own thread. The order the composition
+    # is PINNED to is pool -> watchdog -> guard, so the watchdog's first polls run while the
+    # guard genuinely does not exist; a closure over an unassigned local would raise
+    # `NameError` on that thread instead of reading "not yet". The teardown ladder reads the
+    # same `None`-or-guard and is unaffected.
+    disk_guard = None
+
+    def _disk_guard_sample() -> MonitorSample | None:
+        """The disk guard's own counters, read LIVE at poll time (the O-28 discipline).
+
+        `None` while the guard does not exist yet — a real state, not an error. `interval_sec`
+        travels WITH the counters rather than being captured, so the stall deadline is always
+        denominated in the guard's own minted period and this root never holds a second copy
+        of it.
+        """
+        guard = disk_guard
+        if guard is None:
+            return None
+        return MonitorSample(checks_total=guard.checks_total,
+                             errors_total=guard.errors_total,
+                             interval_sec=guard.interval_sec)
+
     # WP-UNFREEZE §4.3: the lag-watchdog callables are read LIVE at poll time, never at
     # build time — `actor_sync` is assigned immediately below, before anything can start
     # (this root owns both the assignment and `watchdog.start()`). DESIGN §4.3's
@@ -733,6 +814,8 @@ def compose_run(
             wired_sources=wired_sources, monitor_cfg=monitor_cfg,
             actor_ckpt_step_fn=lambda: actor_sync.actor_ckpt_step(),
             learner_step_fn=lambda: int(trainer.step),
+            monitor_liveness=(MonitorLivenessSpec(name="disk_guard",
+                                                  sample_fn=_disk_guard_sample),),
         )
 
     # WP12R Step 3 narration (R216): bind the pool's `_DeferredSink` to the real sink now
@@ -778,7 +861,6 @@ def compose_run(
 
     pool_start_attempted = False
     coordinator = None
-    disk_guard = None
     eval_pipeline = None
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
     # TEARDOWN LADDER (§8, the pre-registered RED-TEAM lens: builder N succeeds, builder N+1
@@ -1040,6 +1122,35 @@ def compose_run(
                 on_drained=_stop_pool_if_start_attempted(
                     pool, start_attempted=pool_start_attempted))
     finally:
+        # AUDIT-1 F-11 / R334(b) — THE LIVE ARMING AUDIT, and this is its ONE production
+        # consumer. CI gate 12 audits the `disk_space_exhausted` row against a CONFIG NUMBER,
+        # with no process to ask, so it cannot tell a guard that ran from a guard whose
+        # `check_once` raised on every tick — the second emits no `disk_free`, and an absence
+        # of disk alerts reads as "plenty of space". `audit_arming_live` asks the same manifest
+        # the same question with the guard's own `checks_total` as the row's liveness operand.
+        # It REPORTS and does not refuse: the run is over, and the value is that the run's own
+        # record says whether its disk abort was ever live. The refusal half belongs at the
+        # mint preflight, which boots a real run.
+        #
+        # WHY IT SITS AT THE TOP OF THE LADDER AND NOT BESIDE THE GUARD'S OWN TEARDOWN, which
+        # is where it was first written and where it broke the tier: `run_safety.sink.close()`
+        # runs on the PARTIAL path, and `disk_guard.stop()` runs AFTER it. An emit there hits a
+        # closed file, `JsonlEventSink` COUNTS that as a persistence failure (LAW-14: count,
+        # never raise) — and the heartbeat watchdog turns a non-zero persist counter into
+        # `os._exit(43)`. A diagnostic emitted one line too late took the process down. THIS is
+        # the only point in the ladder where the sink is open on BOTH paths.
+        #
+        # WHAT THE EARLY READ COSTS, stated rather than hidden: the counters are read BEFORE
+        # `disk_guard.stop()` joins the thread, so a check completing during teardown is not
+        # counted. `checks_total` only ever RISES, so the reading can under-report and never
+        # over-report — and the under-report is the truthful one: a run shorter than a single
+        # guard interval reports DISARMED, which is exactly what `checks_total == 0` means.
+        # A composition that failed before the guard existed answers False for the same reason.
+        _emit_live_arming_audit(
+            config, run_safety.sink,
+            probes={DISK_GUARD_LIVENESS_PROBE:
+                    lambda: disk_guard is not None and disk_guard.checks_total > 0},
+        )
         if coordinator is None:
             # PARTIAL COMPOSITION. `close_out` — the epilogue that owns the drain, the
             # buffer save, the staleness DISARM and the guarded pool stop — never ran and

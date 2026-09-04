@@ -22,6 +22,12 @@ channel can now tell a failing guard from a quiet one. The ARMING mechanism is n
 still reads a config number for this row, and changing that is a mint-affecting decision
 about `armed_aborts.MANIFEST`, not a repair. Registering the guard as a heartbeat source would
 need a new collaborator threaded through the composition root and is likewise not this.
+
+THE ARMING HALF IS NOW CLOSED, by R334(b), in
+`tests/train/test_monitor_liveness_arming.py` — the paragraph above is kept as the record of
+what this file's scope WAS. The row's mechanism carries a producer-liveness operand and gate 12
+stays byte-untouched; the heartbeat-source route was REJECTED on the mechanism this paragraph
+only guessed at, namely that the stall code is 42, the class the supervisor relaunches on.
 """
 from __future__ import annotations
 

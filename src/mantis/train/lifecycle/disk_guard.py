@@ -183,6 +183,17 @@ class DiskGuard:
         return self._errors_total
 
     @property
+    def interval_sec(self) -> float:
+        """This guard's own poll period (AUDIT-1 F-11 / R334(b)).
+
+        Exposed so a liveness reader can denominate a stall deadline in the guard's OWN
+        interval instead of holding a second copy of a minted config value — the duplicated-
+        authority shape R1 exists to kill. A reader that captured 60.0 would judge a 5 s
+        smoke guard at twelve times its period.
+        """
+        return self._interval
+
+    @property
     def checks_total(self) -> int:
         """How many ticks completed. `checks_total == 0` with a started guard is the shape a
         reader must be able to see: nothing was measured, so nothing is known."""

@@ -73,6 +73,7 @@ a live gate whose DISPOSITION is owed, and it is what the row below carries.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -114,6 +115,16 @@ DISK_SPACE_ABORT_RULE: str = "disk_space_exhausted"
 #: R1 exists to kill: rename the row and the root goes on recording a rule the resolver
 #: answers `None` for, i.e. `UnregisteredAbortExitError` on every broken terminal battery.
 TERMINAL_EVAL_BROKEN_ABORT_RULE: str = "terminal_eval_broken"
+
+#: The disk guard's LIVENESS PROBE NAME (AUDIT-1 F-11 / R334(b)).
+#:
+#: Exported for exactly the reason `DISK_SPACE_ABORT_RULE` two lines above is: the name has
+#: TWO readers — the row below and `mantis.run.compose_run`, which owns the running guard and
+#: supplies the answer — and `mantis.train` may not import this module. A bare literal at each
+#: is the duplicated-authority shape R1 exists to kill, and here it fails LOUDLY rather than
+#: silently: rename one and `audit_arming_live` raises `ProducerProbeMissingError` naming both
+#: sides, which is the behaviour a phantom input must have.
+DISK_GUARD_LIVENESS_PROBE: str = "disk_guard_checks_completed"
 
 
 def _is_real_number(value: Any) -> bool:
@@ -181,8 +192,38 @@ class Mechanism(StrEnum):
     #: rather than a literal in this enum. This member answers exactly one question ("is a
     #: value minted here, or is this the placeholder"), which is what the audit needs.
     CONFIG_ENUM_VALUED = "config_enum_valued"
+    #: AUDIT-1 F-11 / R334(b). `CONFIG_THRESHOLD_GT_ZERO` with a SECOND operand: the row's
+    #: producer must have run at least once. Armed iff the config value is a real, finite,
+    #: positive number AND the probe named by `ArmedAbort.producer_probe` answers True — but
+    #: ONLY when a probe answer is supplied. With no answer the verdict is the `> 0` test
+    #: alone, byte-for-byte, which is what keeps `audit_arming` pure over config and CI gate
+    #: 12 untouched.
+    #:
+    #: THE DEFECT IT CLOSES, measured. `disk_space_exhausted` audits ARMED off
+    #: `monitor.disk_guard.fail_gb > 0`, a CONFIG NUMBER. A `DiskGuard` whose `check_once`
+    #: raises on every tick emits no `disk_free`, increments no `checks_total`, never sets
+    #: `critical_fired` — and every instrument still reports the abort armed, because a
+    #: threshold nobody reads is indistinguishable from a threshold being read. The rc-47
+    #: abort R132 closed can be dead for a whole run while the volume fills and the supervisor
+    #: relaunches into it. `Cadence` already asks "can this row still fire in time"; this asks
+    #: the prior question, "is anything producing the evidence at all".
+    #:
+    #: WHY A FIFTH MEMBER RATHER THAN A LIVENESS FLAG ON EVERY ROW. `audit_arming` never
+    #: branches on a row's identity: `status` picks the list, `mechanism` picks the predicate.
+    #: A flag read by every predicate would make liveness a property of the AUDIT rather than
+    #: of the ROW, and the four existing mechanisms would silently acquire a second operand
+    #: they were never judged against. One member, read by exactly one row, keeps every other
+    #: row's verdict unchanged by construction.
+    #:
+    #: WHY THE PROBE IS A NAME AND NOT A CALLABLE ON THE ROW. `MANIFEST` is import-time data
+    #: with no process behind it; a callable there would either close over nothing useful or
+    #: drag a live subsystem into a module whose whole discipline is making ZERO filesystem
+    #: calls (SF-4). The row names a probe; the caller that HAS the subsystem supplies the
+    #: answer — the same split `ceiling_path` uses, one layer up.
+    CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER = "config_threshold_gt_zero_with_live_producer"
 
-    def is_armed(self, value: Any, *, ceiling: Any = None) -> bool:
+    def is_armed(self, value: Any, *, ceiling: Any = None,
+                 producer_live: bool | None = None) -> bool:
         """True iff `value` arms the abort. A real predicate in BOTH directions — a
         constant here would silently arm or disarm every row at once.
 
@@ -211,6 +252,12 @@ class Mechanism(StrEnum):
             if not _is_real_number(value) or not _is_real_number(ceiling):
                 return False
             return 0.0 < float(value) <= float(ceiling)
+        if self is Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER:
+            # `producer_live is None` means NO ANSWER WAS SUPPLIED, which is not the same as
+            # "the producer is dead": it is the pure-config audit gate 12 runs, where no
+            # process exists to ask. Collapsing the two would make every CI run report the
+            # disk row DISARMED and turn a live gate red on every commit.
+            return float(value) > 0.0 and producer_live is not False
         return float(value) > 0.0
 
 
@@ -744,6 +791,16 @@ class ArmedAbort:
     #: in both directions, so a path the arithmetic never reads cannot sit on a row.
     cadence: Cadence | None = None
     cadence_paths: tuple[str, ...] = ()
+    #: AUDIT-1 F-11 / R334(b): the NAME of the liveness probe a
+    #: `CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER` row is judged by. A name, never a
+    #: callable, for the reason the mechanism's own comment gives: this module holds
+    #: import-time data and makes no filesystem call, so the caller that OWNS the running
+    #: subsystem supplies the answer and the row only says which one it needs. It carries a
+    #: default for the reason `ceiling_path` does — a no-default field would force every
+    #: synthetic-row construction site in the suite to type `producer_probe=None`, buying
+    #: nothing — and the default is safe because `__post_init__` REQUIRES it on the mechanism
+    #: that consumes it and FORBIDS it on the four that do not, in both directions.
+    producer_probe: str | None = None
 
     def __post_init__(self) -> None:
         if self.status is Status.DEFERRED and not self.owner:
@@ -775,6 +832,23 @@ class ArmedAbort:
                 f"({self.ceiling_path!r}) but its mechanism {self.mechanism.value} ignores "
                 "it: a config path the predicate never reads is a claim the audit does not "
                 "make (LAW-07's phantom-input class)"
+            )
+        needs_probe = (
+            self.mechanism is Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER
+        )
+        if needs_probe and not self.producer_probe:
+            raise ValueError(
+                f"armed-abort row {self.name!r} uses {self.mechanism.value} and names no "
+                "`producer_probe`: the liveness operand would have no subject, so the row "
+                "would fall back to a bare threshold while claiming to check a producer — "
+                "the phantom-input class this mechanism exists to close (LAW-07)"
+            )
+        if not needs_probe and self.producer_probe:
+            raise ValueError(
+                f"armed-abort row {self.name!r} names a `producer_probe` "
+                f"({self.producer_probe!r}) but its mechanism {self.mechanism.value} ignores "
+                "it: a probe the predicate never reads is a claim the audit does not make "
+                "(LAW-07's phantom-input class)"
             )
         wanted = 0 if self.cadence is None else self.cadence.arity
         if len(self.cadence_paths) != wanted:
@@ -877,7 +951,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
     ArmedAbort(
         name=DISK_SPACE_ABORT_RULE,
         config_path="monitor.disk_guard.fail_gb",
-        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER,
+        producer_probe=DISK_GUARD_LIVENESS_PROBE,
         cadence=Cadence.WALL_CLOCK_POLL,
         cadence_paths=(),
         status=Status.REQUIRED,
@@ -1433,6 +1508,80 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
         )
     )
     return AuditResult(required=required, deferred=deferred, disarmed=disarmed)
+
+
+class ProducerProbeMissingError(KeyError):
+    """A row names a `producer_probe` the caller did not supply (AUDIT-1 F-11 / R334(b)).
+
+    A NAMED refusal rather than a default, in either direction. Defaulting the answer to True
+    would arm a row whose producer nobody looked at — the phantom gate input this mechanism
+    exists to close, wearing the audit's own clothes. Defaulting it to False would report a
+    healthy run's abort DISARMED because a CALLER forgot a key, which teaches operators to
+    ignore the finding. So an unanswerable row raises and names itself.
+    """
+
+    def __init__(self, row: str, probe: str, supplied: tuple[str, ...]) -> None:
+        super().__init__(
+            f"armed-abort row {row!r} declares producer_probe {probe!r}, which is absent "
+            f"from the probes supplied ({list(supplied)}): a live arming audit that cannot "
+            "reach a row's producer must refuse, never assume — assuming True arms a row "
+            "nobody checked and assuming False reds a healthy run on a caller's omission"
+        )
+
+
+def audit_arming_live(
+    config: Any,
+    *,
+    probes: Mapping[str, Callable[[], bool]],
+    manifest: tuple[ArmedAbort, ...] = MANIFEST,
+) -> AuditResult:
+    """Assertion (c) again, with the LIVE producers a running process can supply (R334(b)).
+
+    The same predicate machinery as `audit_arming` and the same absence of any branch on a
+    row's name — `status` picks the list, `mechanism` picks the predicate, and the row now
+    supplies a third operand. What changes is only WHO answers: a row whose mechanism reads a
+    probe gets that probe's live answer instead of `None`.
+
+    WHY A SECOND ENTRY POINT RATHER THAN A KEYWORD ON THE FIRST. `audit_arming` is what CI
+    gate 12 runs, and its contract is that it is PURE OVER CONFIG — no process, no GPU, no
+    filesystem. A probes keyword defaulting to empty would keep that true in practice while
+    making it a property of the call site rather than of the function, and the first caller
+    to pass `probes=` from a place with no live subsystem would be auditing liveness against
+    fakes. Two functions, two contracts, one predicate.
+
+    Args:
+        config: a validated `RunConfig` (or anything `_dotted` can walk).
+        probes: liveness answers by probe NAME. Every probe a REQUIRED row names must be
+            present; extra entries are ignored, because a caller may own more subsystems than
+            the manifest asks about.
+        manifest: keyword for the same reason `audit_arming` has one — so a test can drive an
+            in-memory copy.
+
+    Returns:
+        The same `AuditResult` shape. `disarmed` is still the only field that gates.
+
+    Raises:
+        ProducerProbeMissingError: a REQUIRED row names a probe absent from `probes`.
+        ArmingSurfaceMissingError: a row's `config_path` or `ceiling_path` does not resolve.
+    """
+    required = tuple(row for row in manifest if row.status is Status.REQUIRED)
+    deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
+    supplied = tuple(probes)
+    disarmed: list[ArmedAbort] = []
+    for row in required:
+        live: bool | None = None
+        if row.producer_probe is not None:
+            if row.producer_probe not in probes:
+                raise ProducerProbeMissingError(row.name, row.producer_probe, supplied)
+            live = bool(probes[row.producer_probe]())
+        if not row.mechanism.is_armed(
+            _dotted(config, row.config_path, row=row.name),
+            ceiling=(None if row.ceiling_path is None
+                     else _dotted(config, row.ceiling_path, row=row.name)),
+            producer_live=live,
+        ):
+            disarmed.append(row)
+    return AuditResult(required=required, deferred=deferred, disarmed=tuple(disarmed))
 
 
 @dataclass(frozen=True)
