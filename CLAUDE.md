@@ -110,8 +110,10 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
   reaching for the panic in the first place). `expect()` is fine in tests and in startup
   invariants when its message names the invariant. clippy rides gate 2 (`-D clippy::all`);
-  rustfmt is house style and is NOT gated anywhere — run it yourself, do not assume a gate
-  caught it.
+  **rustfmt runs on TOUCHED FILES** and is NOT gated anywhere — run it yourself on what you
+  edited, do not assume a gate caught it, and do NOT sweep the tree (R336(e), standards on
+  contact). `rustfmt.toml` is committed with defaults so the style has a definition rather
+  than living in whichever toolchain happens to run.
 
 ## Build & test
 

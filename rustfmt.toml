@@ -1,0 +1,12 @@
+# The house Rust style has a DEFINITION rather than living in whichever toolchain runs
+# (R336(e)). rustfmt is deliberately NOT gated (CLAUDE.md, Rust section) — it is applied ON
+# CONTACT, never as a tree-wide pass.
+#
+# max_width IS rustfmt's default and is restated so the file names the style rather than
+# inheriting it silently. edition is NOT: rustfmt defaults to 2015, and a bare `rustfmt
+# some_file.rs` on this tree would format 2021 code under 2015 rules. `cargo fmt` reads the
+# edition from Cargo.toml and is unaffected either way — measured, 1130 diff hunks with this
+# file and 1130 without — so this line exists for the on-contact bare invocation the rule asks
+# for, and it tracks Cargo.toml's `edition`.
+edition = "2021"
+max_width = 100
