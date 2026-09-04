@@ -10,7 +10,9 @@ input), `winner`, `plies`.
 from __future__ import annotations
 
 import hashlib
+import threading
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -147,6 +149,44 @@ def _play_one_game(
     return winner, plies, tuple(moves), terminal, adjudication
 
 
+def _record_one(
+    candidate_player: Any,
+    opponent_bot: Any,
+    opening: Any,
+    candidate_color: int,
+    *,
+    regime_key: RegimeKey,
+    board_factory: Callable[[], Any],
+    max_plies: int,
+    adjudicator: PlyCapAdjudicator | None,
+) -> GameRecord:
+    """One slot of the paired match: play it and stamp its `GameRecord`.
+
+    Extracted so the serial loop and the G-in-flight arm share ONE record construction. Two
+    copies would be two authorities over `trajectory_hash`, which is LAW-04's dedupe input.
+
+    Raises:
+        Exception: whatever the players' `select_move` or the board raises; nothing is caught
+            here, so a defect in one game is not converted into a silently missing record.
+    """
+    winner, plies, moves, terminal, adjudication = _play_one_game(
+        candidate_player, opponent_bot, list(opening.moves),
+        candidate_color=candidate_color, board_factory=board_factory,
+        max_plies=max_plies, adjudicator=adjudicator,
+    )
+    return GameRecord(
+        regime_key=regime_key,
+        opening_id=opening.opening_id,
+        colors={"candidate": candidate_color, "opponent": -candidate_color},
+        trajectory_hash=_trajectory_hash(moves),
+        winner=winner,
+        plies=plies,
+        moves=moves,
+        terminal=terminal,
+        adjudication=adjudication,
+    )
+
+
 def play_paired_match(
     candidate_player: Any,
     opponent_bot: Any,
@@ -157,6 +197,8 @@ def play_paired_match(
     record_sink: Any = None,
     max_plies: int,
     adjudicator: PlyCapAdjudicator | None = None,
+    player_factory: Callable[[], tuple[Any, Any]] | None = None,
+    concurrency: int = 1,
 ) -> list[GameRecord]:
     """Play every opening TWICE (colors swapped); return one `GameRecord` per game.
 
@@ -165,30 +207,73 @@ def play_paired_match(
 
     `adjudicator` is the resolved `eval.ply_cap_adjudication` posture, forwarded unchanged;
     `None` (every shipped config) keeps the legacy capped-game draw.
+
+    `concurrency` > 1 runs that many games IN FLIGHT, one thread each, sharing whatever
+    inference server the players hold — the KataGo `match` shape (`numGameThreads` with
+    `numSearchThreads = 1`). It requires `player_factory`, a nullary callable returning a
+    FRESH `(candidate_player, opponent_bot)` pair, because the two players carry per-game
+    state (a search tree, `new_game()`) that cannot be shared across concurrent games. One
+    pair is built per worker thread and reused, so the factory is called at most
+    `concurrency` times, not once per game.
+
+    **THE DEFAULT IS UNCHANGED AND UNARMED.** `concurrency = 1` runs the serial loop that
+    was here before, on the same objects, in the same order; no shipped config sets it —
+    the value is an operator prereg row (R335(e)) and this signature is the CAPABILITY, not
+    its arming. Records are returned and `record_sink` is called in LOOP ORDER under every
+    concurrency, so a consumer indexing into the list sees a stable game index.
+
+    Raises:
+        ValueError: `concurrency < 1`, or `concurrency > 1` without a `player_factory`.
     """
-    records: list[GameRecord] = []
-    for opening in openings:
-        for candidate_color in (1, -1):
-            opponent_color = -candidate_color
-            winner, plies, moves, terminal, adjudication = _play_one_game(
-                candidate_player, opponent_bot, list(opening.moves),
-                candidate_color=candidate_color, board_factory=board_factory,
-                max_plies=max_plies, adjudicator=adjudicator,
-            )
-            record = GameRecord(
-                regime_key=regime_key,
-                opening_id=opening.opening_id,
-                colors={"candidate": candidate_color, "opponent": opponent_color},
-                trajectory_hash=_trajectory_hash(moves),
-                winner=winner,
-                plies=plies,
-                moves=moves,
-                terminal=terminal,
-                adjudication=adjudication,
-            )
-            records.append(record)
-            if record_sink is not None:
-                record_sink(record)
+    if concurrency < 1:
+        raise ValueError(
+            f"play_paired_match: concurrency={concurrency} must be >= 1; 1 is the serial "
+            "arm and is what every shipped config runs."
+        )
+    if concurrency == 1:
+        records: list[GameRecord] = []
+        for opening in openings:
+            for candidate_color in (1, -1):
+                record = _record_one(
+                    candidate_player, opponent_bot, opening, candidate_color,
+                    regime_key=regime_key, board_factory=board_factory,
+                    max_plies=max_plies, adjudicator=adjudicator,
+                )
+                records.append(record)
+                if record_sink is not None:
+                    record_sink(record)
+        return records
+
+    if player_factory is None:
+        raise ValueError(
+            f"play_paired_match: concurrency={concurrency} needs a `player_factory`. The two "
+            "players carry per-game state (search tree, `new_game()`), so G games in flight "
+            "need G pairs; sharing one pair across threads would interleave two searches on "
+            "one tree."
+        )
+
+    slots = [(o, c) for o in openings for c in (1, -1)]
+    local = threading.local()
+
+    def _run(slot: tuple[Any, int]) -> GameRecord:
+        pair = getattr(local, "pair", None)
+        if pair is None:
+            pair = local.pair = player_factory()
+        opening, candidate_color = slot
+        return _record_one(
+            pair[0], pair[1], opening, candidate_color,
+            regime_key=regime_key, board_factory=board_factory,
+            max_plies=max_plies, adjudicator=adjudicator,
+        )
+
+    # `Executor.map` yields IN SUBMISSION ORDER regardless of completion order, which is what
+    # keeps the game index stable; it also re-raises a worker's exception at the yield, so a
+    # failed game halts the match rather than shortening it.
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        records = list(pool.map(_run, slots))
+    if record_sink is not None:
+        for record in records:
+            record_sink(record)
     return records
 
 
