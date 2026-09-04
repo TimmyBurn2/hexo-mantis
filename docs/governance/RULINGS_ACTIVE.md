@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2a04738, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 446ccc0, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.43, 2026-09-04. Created under R271 (register hygiene: archive/index split);
+# v3.44, 2026-09-04. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1111,6 +1111,13 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # never gate the mint; the BC-recipe mis-citation ANNOTATED (13) and R336(b)'s R330(e) restatement
 # NOTED (14) at the register foot; Δ19 REFINED — an absent non-partition, non-identity key is
 # RECORDED and the sitting proceeds; SITTING-8 RESUMES at Δ12 with the box KEPT.**
+
+# **v3.44 = SITTING-9's OUTCOME folded in — R337's blocker CLEARED (all fourteen prereg cells armed,
+# `RUN6_MINT_PREREG.md` written, Δ12 passing all ten lines for the first time) and the mint HALTED
+# ONE STEP LATER, at Phase W: the ladder returned `n_workers = 2` from a knee band widened BELOW
+# EVERY RUNG, so the selection is independent of its own measurements. Three findings filed
+# (`F-816-34/35/36`); the halt is NARROW — STEP 1's terms are measured and the partition CLOSES at
+# every candidate. No mint, no config in `configs/`, no run. RUN6 REMAINS HELD.**
 
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
@@ -3029,6 +3036,22 @@ Verbatim text in the register; one-liners here are index only.
   same session under the same grant"* and this packet admits a FRESH session explicitly.
   **RUN6 REMAINS HELD** — R336(f) un-holds it for the shakedown only, and the shakedown is behind
   the mint.
+  **EXECUTED, AND THE OUTCOME IS A HALT ONE STEP FURTHER ON (SITTING-9, 2026-09-04).** (a)'s fill
+  rule WORKED: the fourteen cells armed, `RUN6_MINT_PREREG.md` was written with **zero cells
+  authored**, and **Δ12 passed all ten lines for the first time in three sittings**. (d)'s
+  resumption also worked — the grant carried, the box was synced and attested. **Phase W then
+  halted the mint on a cell R337 could not have foreseen:** `PICK = 2` from a R330(d) band widened
+  **below every rung**, so the selection carries no information (`adjusted_threshold 54.9167 <
+  min passing throughput 89.600`; unwidened the rule picks **16**; the card peak is **flat at
+  1.8587 GiB from 2 to 18 workers**, so the pick costs no memory). **The pick was RECORDED, NOT
+  MINTED** — minting a production geometry from a selection independent of its own data is
+  R309(g)'s own defect one layer up. `F-816-34` (the vacuous knee band), `F-816-35` (the r8 trainer
+  need is a DISTRIBUTION whose maximum exceeds both the minted `_SIZING_BUDGET_GIB` and R330(b)'s
+  armed 3 %), `F-816-36` (an unplayable rung sets every ring's composed visit capacity) are filed.
+  **R323(b) also turned out to have no mechanism:** `mint_config.py --set` refuses a key the
+  template omits, and `identity.arch_kind` / `identity.warm_start` are omitted from every template
+  BY DESIGN — so the mint could not write the rows R336(b)/(c) order. `--mint-row` supplies it,
+  authoring no value.
 
 
 ## 6. Dispatch & autopilot governance — LAW
@@ -6223,3 +6246,51 @@ Verbatim text in the register; one-liners here are index only.
   prereg value**, by recording the operator's forwarding as their signature, and it converts four
   rows that name no config key into RECORD rows. **WHAT IT DOES NOT DO:** it mints nothing, writes
   no `run6.yaml`, produces no checkpoint, trains nothing and starts no run. **RUN6 REMAINS HELD.**
+
+- 2026-09-04 — **v3.44** curated by the SITTING-9 session at its close, folding in **the sitting's
+  OUTCOME** (R337 itself landed at v3.43 and that entry stands). **No register append**: the
+  census is unchanged at `R23–R337 — 308 / 308 / 0, excluded 53`, re-run this curation, and
+  **`STAMP OK: v3.44`**.
+  **THE FILL RULE WORKED AND THE MINT STILL HALTED, one step further on.** R337(a) armed all
+  fourteen cells; `RUN6_MINT_PREREG.md` was written from the v2 table with **zero cells authored**
+  (15 rows in → 12 mint rows + 5 record rows, `run length` deferred to the shakedown); **Δ12 passed
+  all ten lines**, line 10 for the first time in three sittings. **Phase W then returned
+  `n_workers = 2` from a selection that is independent of its own measurements** — R330(d)'s
+  widening (3 × max rel-SE 17.574 % at rung 4) put the adjusted threshold at **54.9167**, below the
+  **89.600** of the weakest passing rung, so *"the smallest rung above the threshold"* is *"the
+  smallest rung"* for any data. **The rule is correctly implemented** (R330(d) verbatim: *"the
+  within-set expansion uses the max rel-SE over the candidate set"*); what it consumes is a
+  **monotone depth trend**, not noise — `games_per_min` is 0.000 from rung 8 up, so no game
+  finishes inside a round. **Unwidened the rule picks 16**, and the card peak is **1.8587 GiB at
+  every rung from 2 to 18**, so the pick costs no memory and buys 37 % throughput.
+  **THE SITTING MINTED NOTHING AND PROPOSED NO PICK.** R309(f)/R311 forbid touching a threshold
+  in-sitting and this sitting touched none; it also declined to mint a production geometry chosen
+  by a rule that could not see its own ladder, which is R309(g)'s defect one layer up.
+  **THREE FINDINGS FILED** in `plan/ADJUDICATION_QUEUE.md`: **`F-816-34`** the vacuous knee band
+  (with a pre-statable vacuity test, `adjusted_threshold < min passing throughput`);
+  **`F-816-35`** the r8 trainer need measured as a **DISTRIBUTION** (p50 7.9072, p95 8.3581, max
+  **8.6381** over 60 steps) whose maximum exceeds both the minted `_SIZING_BUDGET_GIB = 8.40` and
+  R330(b)'s armed 3 % over FINISH-1's single-draw point (8.3341) — **not a halt by itself**, the
+  peak is cap-bound and the caps are what STEP 3 re-fits, but *which statistic the allowance is
+  taken over* is worth 0.75 GiB; **`F-816-36`** the retained `strix_256` rung, which can never play
+  a game because only sealbot is pinned, setting the composed `visit_capacity` of every ring the
+  run writes and thereby refusing the corpus fit.
+  **R323(b) HAD NO MECHANISM, and that is now closed.** `mint_config.py --set` refuses a key the
+  template omits, and `identity.arch_kind` / `identity.warm_start` are omitted from every template
+  **by design** — so the one tool allowed to write a production config **could not write the two
+  rows R336(b)/(c) order it to write**. `--mint-row` supplies it as a SEPARATE flag (a typo'd
+  `--set` must still fail), with the stamped old value **derived from the validated template** so
+  `config_diff` agrees. **It authors no value.** Proven before the box needed it: mint validates,
+  `config_diff --from-header` **MATCH** including `identity.arch_kind`, gate-12 audit **rc 0**, and
+  the card built `GnnArchV2` from the minted row.
+  **ONE TERM IS CARRIED AND MARKED, and it is worse than carried:** `eval_child` 1.857422 GiB is
+  FINISH-1's, and FINISH-1's own snapshots read **`"arch": "GnnArch"`** — a **V1** measurement, at
+  ply cap 128. Run6 builds **V2 at 256**. Δ10.2's re-measure is therefore mandatory, not
+  housekeeping, and **no mint may take the carried term**.
+  **GATES, at leg exit (R311(b)):** `make gates.exit` → **ALL GREEN, 20 gates**, all three tiers
+  executed and printing their `TIER:` header — default **4808 passed / 4 skipped**, integration
+  **48 passed / 2 skipped**, slow **7 passed**. **Gate 1 NOT RUN** (`--with-fresh-sync`), the
+  accepted cost CLAUDE.md records. The collected-test floor **ratchets 4861 → 4869** for the eight
+  `--mint-row` cases, and gate 3c was re-run against the new floor.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, writes no `configs/` file, produces no
+  checkpoint, trains nothing and starts no run. **RUN6 REMAINS HELD.**

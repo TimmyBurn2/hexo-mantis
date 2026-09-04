@@ -1,4 +1,4 @@
-MIRROR — no redaction was needed. Canonical: mantis-migration/plan/COMMS_STYLE.md @ 2a04738, regenerated 2026-09-04.
+MIRROR — no redaction was needed. Canonical: mantis-migration/plan/COMMS_STYLE.md @ 446ccc0, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
