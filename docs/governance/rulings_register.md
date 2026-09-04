@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ fd5b0d2, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 2a04738, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -8239,3 +8239,143 @@ the landing so that it is a derivation on the record and not a silent choice ins
 > un-holds for the shakedown only.
 > ROUTE: land, census, ACTIVE next; Δ12; Phase W; STEP 0–3; 4a–4c; burst;
 > one exit screen.
+
+**ANNOTATION 13 — R336(d) AND LAUNCHER Δ18(4a) MIS-CITE BC-EXEC-1 FOR THE FIVE HELD-OUT TERMS; THE
+TERMS ARE `BC_EXEC_2_PREREG.md`'s, and BC-EXEC-1 records `NO MECHANISM` for exactly the two the
+citation needs. Ordered by R337(b), appended 2026-09-04 by the SITTING-8 UNBLOCK session under
+R336's foot on the ANNOTATION 7 / ANNOTATION 8 precedent (R290(f) shape), append-only. The error is
+the ARCHITECT'S and joins the architect's ledger beside R336(a)'s four.** R336(d) reads *"the BC
+checkpoint of record is a REPRODUCTION under BC-EXEC-1's pinned recipe"*; launcher Δ18(4a) reads
+*"recipe = BC-EXEC-1's hash-pinned recipe verbatim (the five heldout flags as pinned; not the
+operator's to re-fill)"*. **BC-EXEC-1's recipe pins none of the five.** That recipe is
+`MINT_CLOSE_BC_EXEC_1_EXIT.md` §3.2 — epochs 5, peak lr 0.001, batch 256, `augment: False`, a
+10 690-step budget — and its own rows record held-out split and early stop as **`NO MECHANISM`**
+(`:193`, `:194`) under the sentence *"The two failing terms are not knobs set wrongly — there is
+nothing to set"* (`:198`), with an envelope that explicitly does not close on them. The citation
+therefore names the one document written **before** the machinery existed: that gap is the R327
+blocker R328(d) was ordered to fix. **The five are `BC_EXEC_2_PREREG.md`'s** (RUN6-IDENTITY-1
+Leg 2): split **seed 328** and `heldout_frac` **0.05**, game-level, keyed
+`blake2b(game_hash, key=seed)` (`:38`); `eval_every` **500** (`:52`); `patience` **3** (`:53`);
+`min_delta` **measured at pre-flight** (`:54`) under a refusal raising `GraphPretrainError` if it
+sits inside the sampler's own noise (`:68`). **Nothing in the clause's intent moves** — a
+reproduction under the pinned recipe is exactly what STEP 4a runs, and R337(b) says so — what moves
+is which document the executor opens.
+
+**AND THE PHRASE "FIVE FLAGS" IS ITSELF OFF, in a way that matters to whoever runs 4a.** Measured at
+engine HEAD rather than read from either text: the five pinned terms reach a run through **two
+tools and two separate all-or-none groups**, not one flag group of five.
+`src/mantis/train/pretrain/cli.py:241-244` enforces *"--heldout-hexg, --eval-every, --patience and
+--min-delta are all-or-none: a patience without a ring, or a ring without a cadence, is a stopping
+rule nobody can read"* — **four** flags, and **the split's two terms are not among them**. Seed and
+fraction enter upstream, through `src/mantis/data/bootstrap_encode.py:464-471`, whose
+`--split-seed`, `--split-heldout-frac` and `--split-part` form their own all-or-none group and
+produce the ring that `--heldout-hexg` then names; the CLI verifies that ring's provenance rather
+than trusting its path (`cli.py:257` refuses a ring whose `split_part` is not `heldout`). **So 4a is
+two commands, not one**, and a reader who set four flags and stopped would have reproduced the
+recipe's stopping rule against a ring nobody split.
+
+**ANNOTATION 14 — R336(b)'s SHAPE HALF RESTATES A SHAPE R330(e) HAD ALREADY RULED. Noted by R337(b)
+on the same ledger, 2026-09-04, in the same act as ANNOTATION 13. This is a NOTE, not a correction:
+neither clause is wrong and neither is repaired.** R330(e), verbatim: *"ARCH-SELECTOR PLUMBING lands
+engine-side before the mint: config-less call sites resolve the arch from the artifact's stamp — one
+authority; the mint later writes only the row."* R336(b)'s shape half: *"config-less sites resolve
+from the stamp (R330(e)) — a site holding neither is a finding, not a third path."* **They agree,
+and R336(b) cites R330(e) as it restates it**, so no reader of the register is misled — which is
+why this is a ledger note and not an annotation of the ANNOTATION 13 class. **One sentence is
+genuinely new and is not a restatement:** *"a site holding neither is a finding, not a third path"*
+disposes of a case R330(e) left unaddressed, and it stands.
+
+**WHAT THE RESTATEMENT COST, stated because that is the ledger's job.** R330(e) settled the shape on
+2026-09-02 and the engine BUILT it — `stamped_arch_kind` (`src/mantis/train/checkpoints.py:214`),
+the tree's own *"ONE answer"*, with all three call sites routing through it. The SITTING-7 halt
+nevertheless carried the shape forward as an **open design question** quoted from a 2026-09-02
+working record, R336(b) then ruled it as though fresh, and SITTING-8 found it already built and said
+so. **The value half was the only live one for the whole of that sequence.** The verification is
+already in R336's own provenance block above; this note is what makes it findable from the ledger
+rather than only from inside the section it corrects, which is the whole purpose R290(f) gave the
+architect's ledger.
+
+# R337 — architect ruling, ARCH-ERA session, 2026-09-04 (SITTING-8's PRE-FLIGHT HALT RATIFIED AS A SUCCESS with the cause placed on the ARCHITECT'S ledger — the launcher's §0.4 read a PROPOSED value as an UNSIGNED one, so a table built for envelope arming turned fourteen filled cells into fourteen halting ones; THE FILL RULE OF RECORD — the operator's forwarding ARMS every proposed value in the filed table, only a row carrying NO proposed value halts, and rows that name no `run6.yaml` key are RECORD rows written to `RUN6_MINT_PREREG.md` which never gate the mint; THE BC-RECIPE MIS-CITATION ANNOTATED AND NOT PATCHED, execution reading BC-EXEC-2 while the clause's intent stands, with R336(b)'s restatement of an R330(e) shape noted on the same ledger; Δ19 REFINED so a non-partition, non-identity row whose key is absent at HEAD is RECORDED as "no key at HEAD" and the sitting PROCEEDS, only a partition or identity row's absent key halting; and SITTING-8 RESUMING at Δ12 under the vested grant with the box KEPT) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into the SITTING-8 UNBLOCK session's prompt rather than as a
+file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R337_SITTING8_UNBLOCK.md` §1. **The pre-existence grep returned `rc 1` in BOTH
+repositories** — `R337` appears nowhere in `mantis-migration` and nowhere in `hexo-mantis` — the
+first landing in this sequence with no prior hit to dispose of. The forwarded text carried the
+ruling-number placeholder in **three** positions (the dispatch heading, §0's clause-4 citation, and
+the quote-block lead), of which **exactly one is a substitution site inside the ruling text**, the
+lead; **no clause letter was rewritten**, and the canonical home's residual-placeholder grep returns
+**rc 1**. Head verified by script before substituting, never remembered: census `R23–R336, 307
+sections / 307 distinct / 0 duplicates, excluded set 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `--stamp RULINGS_ACTIVE.md` reported
+`STAMP OK: stamp v3.42 == §8 last entry v3.42`; `--self-test` all four controls fire; **R336 was the
+register's LAST section with no foot annotation after it**, its final line being its own `ROUTE:`
+line. Extraction into this register is by script over that §1 quote block, asserted **byte-identical
+on both sides**, never retyped. **This landing appends in ONE act with `ANNOTATION 13` and
+`ANNOTATION 14`** under R336's foot, which clause (b) orders; both headers are
+`**ANNOTATION n — …**`, which the `R<digits> —` pattern does not match, so **neither count moves**
+and the excluded set holds at 53.
+
+**The ruling's referents re-derived at point of use before landing.** **Clause (a)'s premise is
+arithmetic and it verifies against the filed table.** `RUN6_PREREG_PROPOSAL.md` v2 §1 carries
+**fifteen** rows; **fourteen** read `OWED` in the VALUE column (`allowance` is the fifteenth and
+already read ARMED by the R336 launcher's §0.3); and of those fourteen, **thirteen carry a proposed
+value and exactly one — `run length` — carries `—`**. So the clause's count is right and its
+diagnosis is right: under §0.4 as written, thirteen rows the architect had already valued halted the
+sitting alongside the one row that genuinely had no value. **Clause (b)'s two ledger items both
+verify and are annotated above** — the BC recipe citation (ANNOTATION 13, which also measures the
+phrase *"five flags"* as itself off: five pinned terms, four CLI flags, two all-or-none groups
+across two tools) and the R330(e) restatement (ANNOTATION 14). **Clause (c)'s two named rows were
+measured at HEAD, and the measurement splits them.** *Kill-grace*: the row's key is
+`monitor.supervisor_kill_grace_sec`, **present** at `configs/run5.yaml:254` = `30.0`, which is the
+proposed floor exactly; its **CEILING has no key at HEAD** — `src/mantis/config/schema/monitor.py:149`
+is `Field(ge=0)` and nothing else, which is `F-816-27`'s whole subject — so the ceiling is what (c)
+records as *"no key at HEAD"*. A second, differently-named key exists and is **not** this row's
+subject: `eval.worker_kill_grace_sec` (`run5.yaml:29` = `10.0`), which unlike the supervisor's
+**does** carry a schema ceiling (`core.py:415`, `le=_EVAL_TIMEOUT_CEILING_SEC`). *Random floor*:
+**both** of its keys are present — `eval.random_floor_games` (`run5.yaml:26` = `0`) and
+`eval.strength_floor` (`:31`, armed) — so (c)'s absent-key trigger **does not fire on this row at
+all**. What the row carries instead is a live consequence, unchanged by this ruling and recorded
+again at the fill: confirming *"as armed"* leaves the random probe playing **zero games**, with
+`min_winrate: 0.0` admitting on decisiveness alone. **Clause (d)'s grant is a resumption, not a new
+vesting** — the alias was confirmed by the operator in SITTING-8 and the instance was probed live
+and idle there; R317's *"resumes under the same grant"* precedent is what carries it across the
+halt, and no re-provisioning act (VAST-SETUP, TORCH-SELECT, Δ3 attestation) is re-run.
+
+**ONE STRUCTURAL FACT ABOUT THE ROUTE, recorded at the landing rather than discovered at STEP 3.**
+Clause (d) routes *"Phase W → STEP 0–3 → 4a–4c → burst as R336 orders"*, and R336(f) routes the mint
+*"as v1 Δ12–Δ19 with the amendments in §2"*. **The v1 launcher is not on disk in either repository**
+— it reached the SITTING-7 session as a forwarded prompt and was never written to a file, so `Δ13`
+and the base text of `Δ12`/`Δ14`/`Δ15`/`Δ16` exist only as they are quoted in the two sitting
+records. What IS recoverable is enough to execute and is named here so the next reader does not
+re-derive it: **`Δ12`'s ten lines** are transcribed identically in
+`RUN6_MINT_SITTING7_PREFLIGHT_HALT.md` §1 and `RUN6_MINT_SITTING8_EXIT.md` §2, and R336 §2 adds two
+more; **`Δ14`, `Δ15` and the mint's touch-set** are the standing box procedure's —
+`BOX_BLOCK_RECALIBRATION.md` §2.0 (Phase W, three drives), Δ10.2 (the term list, derived from its
+two authorities) and Δ8/Δ10.4/Δ11 (the mint-act touch-set, by command); **`Δ17`, `Δ18` and `Δ19`**
+are given in full by R336 §2 itself. **`Δ13` is recoverable from nothing** and is recorded as a
+stated gap rather than invented — no text in either repository cites it, so nothing is known to
+depend on it.
+
+> R337 — (a) SITTING-8's pre-flight HALT is RATIFIED as a success and
+> the cause is the ARCHITECT'S: §0.4 of the launcher read a proposed value
+> as an unsigned one, so a table built for envelope arming produced
+> fourteen halting cells. The rule of record: the operator's forwarding
+> ARMS every proposed value in the filed table; only a row with no
+> proposed value halts; rows that name no run6.yaml key (run length, slope
+> bar, rungs, ablation queue) are RECORD rows written to
+> RUN6_MINT_PREREG.md and never gate the mint.
+> (b) R336(d) and Δ18(4a) mis-cite BC-EXEC-1 for the five held-out flags;
+> the flags are BC_EXEC_2_PREREG.md's and BC-EXEC-1 records NO MECHANISM.
+> ANNOTATED at the register foot on the architect's ledger; execution reads
+> BC-EXEC-2 and the clause's intent — a reproduction under the pinned
+> recipe — stands. R336(b)'s restatement of a shape R330(e) had already
+> ruled is noted on the same ledger.
+> (c) Δ19 is REFINED: a non-partition, non-identity row whose key is
+> absent at HEAD is RECORDED as "no key at HEAD" and the sitting proceeds;
+> only a partition or identity row's absent key halts. Random-floor games
+> and kill-grace are the rows this reaches first.
+> (d) SITTING-8 RESUMES at Δ12 under the vested grant, alias vast; the box
+> is kept; Phase W → STEP 0–3 → 4a–4c → burst as R336 orders.
+> ROUTE: land, census, ACTIVE next; annotation; Δ12; run to done; one exit.

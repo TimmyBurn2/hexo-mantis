@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ fd5b0d2, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2a04738, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.42, 2026-09-04. Created under R271 (register hygiene: archive/index split);
+# v3.43, 2026-09-04. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1104,6 +1104,14 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # act SEQUENCED against itself (caps at STEP 3, `identity.warm_start` a separate pin act at
 # 4a/4b/4c); six prereg rows RE-SHAPED and two DROPPED; rustfmt ruled on contact.**
 
+# **v3.43 = R337 folded in — SITTING-8's pre-flight HALT RATIFIED as a SUCCESS with the cause on the
+# ARCHITECT'S ledger (§0.4 read a PROPOSED value as an UNSIGNED one, so thirteen already-valued rows
+# halted a sitting); THE FILL RULE OF RECORD — the operator's forwarding ARMS every proposed value,
+# only a row with NO proposed value halts, and rows naming no `run6.yaml` key are RECORD rows that
+# never gate the mint; the BC-recipe mis-citation ANNOTATED (13) and R336(b)'s R330(e) restatement
+# NOTED (14) at the register foot; Δ19 REFINED — an absent non-partition, non-identity key is
+# RECORDED and the sitting proceeds; SITTING-8 RESUMES at Δ12 with the box KEPT.**
+
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
 CLAUDE.md; `plan/rulings_register.md` remains the append-only verbatim ARCHIVE and is
@@ -1148,9 +1156,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R336 — **307 sections, 307 distinct numbers, no duplicates** (re-derived at v3.42; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R337 — **308 sections, 308 distinct numbers, no duplicates** (re-derived at v3.43; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 337)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 338)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -2984,6 +2992,43 @@ Verbatim text in the register; one-liners here are index only.
   `BC_EXEC_2_PREREG.md`** — split seed 328, `heldout_frac` 0.05 game-level, `eval_every` 500,
   `patience` 3, `min_delta` measured at pre-flight under a refusal if it sits inside sampler noise.
   Off by one document, not a missing recipe; **the execution reads BC-EXEC-2**.
+
+- **R337 — A PROPOSED VALUE IS AN ARMED VALUE ONCE FORWARDED. LIVE: (a) is the rule every prereg
+  table is read under from here; (c) refines Δ19 for the whole sitting; (d) resumes the grant.
+  (b) is DISCHARGED by two annotations at the register foot.**
+  **(a) SITTING-8's PRE-FLIGHT HALT IS RATIFIED AS A SUCCESS** and the cause is the ARCHITECT'S:
+  the launcher's §0.4 read a **PROPOSED** value as an **UNSIGNED** one, so a table built for
+  envelope arming produced **fourteen halting cells** — and thirteen of them were already valued.
+  **THE FILL RULE OF RECORD:** the operator's forwarding **ARMS every proposed value in the filed
+  table** (the paste is the signature); **only a row with NO proposed value halts**; **rows that
+  name no `run6.yaml` key** — `run length`, `slope bar`, `rungs`, `ablation queue` — are **RECORD
+  rows** written to `RUN6_MINT_PREREG.md` and **never gate the mint**. ENV rows execute within
+  their stated bounds, OP rows at the proposed value, CONFIRM rows at the value derived from HEAD.
+  **R282(b) is NOT overturned** — the values stay the operator's; what R337 fixes is which ACT
+  signs them.
+  **(b) THE BC-RECIPE MIS-CITATION IS ANNOTATED, NOT PATCHED.** R336(d) and Δ18(4a) cite BC-EXEC-1
+  for five held-out terms it does not pin — it records **`NO MECHANISM`** for two of them. The terms
+  are **`BC_EXEC_2_PREREG.md`'s**, **the execution reads BC-EXEC-2**, and the clause's intent (a
+  reproduction under the pinned recipe) **stands**. `ANNOTATION 13` carries it and measures the
+  phrase *"five flags"* as itself off: the five pinned terms reach a run as **four CLI flags plus a
+  three-flag split group in a SECOND tool**, so **STEP 4a is two commands, not one**. `ANNOTATION
+  14` notes **R336(b)'s restatement of a shape R330(e) had already ruled** — a note, not a
+  correction, with one genuinely new sentence (*"a site holding neither is a finding, not a third
+  path"*) that stands.
+  **(c) Δ19 IS REFINED.** A **non-partition, non-identity** row whose key is absent at HEAD is
+  **RECORDED as "no key at HEAD" and the sitting PROCEEDS**; **only a partition or identity row's
+  absent key HALTS.** Measured at HEAD this reaches the **kill-grace CEILING** — no key at all,
+  `config/schema/monitor.py:149` being `Field(ge=0)` and nothing else, which is `F-816-27`'s whole
+  subject — and it does **NOT** reach the random-floor row, **both** of whose keys are present
+  (`eval.random_floor_games` = `0`, `eval.strength_floor` armed). That row carries a **consequence,
+  not an absence**: confirming *"as armed"* leaves the random probe playing **zero games**.
+  **(d) SITTING-8 RESUMES AT Δ12 under the vested grant and THE BOX IS KEPT** — re-provisioning
+  (VAST-SETUP, TORCH-SELECT, Δ3 attestation) costs more than the idle hours. Order: Phase W →
+  STEP 0–3 → 4a–4c → burst, **as R336 orders**. The grant is a **RESUMPTION on R317(e)'s
+  precedent**, not a new vesting — and the precedent is stretched knowingly: R317(e) reads *"in the
+  same session under the same grant"* and this packet admits a FRESH session explicitly.
+  **RUN6 REMAINS HELD** — R336(f) un-holds it for the shakedown only, and the shakedown is behind
+  the mint.
 
 
 ## 6. Dispatch & autopilot governance — LAW
@@ -6127,3 +6172,54 @@ Verbatim text in the register; one-liners here are index only.
   operator-only items — the blank box alias (§0.2) and the unfilled prereg VALUE column (§0.4).
   RUN6 REMAINS HELD.**
 
+
+- 2026-09-04 — **v3.43** curated by the SITTING-8 UNBLOCK session, landing **R337**, authored in the
+  ARCH-ERA architect session under R303(d) and forwarded by the operator into this session's prompt.
+  **PRE-LANDING VERIFICATION, by script and not by memory:** census
+  `R23–R336 — 307 / 307 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`;
+  `--stamp RULINGS_ACTIVE.md` → `STAMP OK: stamp v3.42 == §8 last entry v3.42`; `--self-test` all
+  four controls fire; **R336 verified as the register's LAST section with no foot annotation after
+  it** (its final line is its own `ROUTE:` line). **The pre-existence grep returned `rc 1` in BOTH
+  repositories** — no `R337` anywhere in `mantis-migration`, none in `hexo-mantis` — the first
+  landing in this sequence with no hit to dispose of. Canonical home CREATED:
+  `PACKET_R337_SITTING8_UNBLOCK.md` §1; extraction into the register **by script**, asserted
+  **byte-identical on both sides** (21 lines, 1 415 chars, sha256 `b72d795728a9e81b…`), never
+  retyped. **POST-APPEND:** census `R23–R337 — 308 / 308 / 0, excluded 53`, missing-in-range
+  **unchanged**; `STAMP OK: v3.43`.
+  **THE ACT CARRIED THREE APPENDS, NOT ONE.** `ANNOTATION 13` and `ANNOTATION 14` land under R336's
+  foot (ordered by R337(b), R290(f) shape, on the ANNOTATION 7 / ANNOTATION 8 precedent), and R337's
+  own section lands below them. Both annotation headers are `**ANNOTATION n — …**`, which the
+  `R<digits> —` pattern does not match, so **neither count moved** and the excluded set held at
+  **53** across the whole act. The append was verified **purely additive**: `diff` against the
+  pre-act copy reports **zero deleted lines**.
+  **SPOT-CHECKS AGAINST THE VERBATIM REGISTER (R271(d)/R272(b), five):** **R282(b)** — read at
+  `rulings_register.md:4529`, *"preserved operator-only — box grants, run5 mint authorization,
+  judgment-valued prereg rows"*, which R337(a) does **not** overturn (the values stay the
+  operator's; the forwarding is the signing act) — the §5 row now says so explicitly rather than
+  leaving a reader to wonder. **R330(e)** — read verbatim at `:7987`, *"config-less call sites
+  resolve the arch from the artifact's stamp — one authority; the mint later writes only the row"*,
+  which is ANNOTATION 14's subject and confirms the restatement reading. **R317(e)** — read at
+  `:7274`, *"THE SITTING RESUMES in the same session under the same grant"*: the precedent is real
+  **and narrower than the use**, since this session is FRESH, so the §5 row records the stretch
+  instead of hiding it. **R336(d)** and **R336(f)** — read at `:8216` ff., confirming that (f)
+  routes *"as v1 Δ12–Δ19 with the amendments in §2"* and that (d) is the clause ANNOTATION 13
+  annotates.
+  **ONE STRUCTURAL FACT THIS CURATION PUT ON THE RECORD, before it is discovered at STEP 3.** R336(f)
+  routes the mint *"as v1 Δ12–Δ19"*, and **the v1 launcher exists in neither repository** — it
+  reached the SITTING-7 session as a forwarded prompt and was never written to a file. What is
+  recoverable is named in R337's provenance block: `Δ12`'s ten lines (transcribed identically in the
+  two sitting records, plus R336 §2's two additions), `Δ14`/`Δ15`/the touch-set (the standing
+  `BOX_BLOCK_RECALIBRATION.md` — §2.0, Δ10.2, Δ8/Δ10.4/Δ11), and `Δ17`/`Δ18`/`Δ19` (given in full by
+  R336 §2). **`Δ13` is recoverable from nothing and is recorded as a stated gap rather than
+  invented** — no text in either repository cites it.
+  **ONE CORRECTION TO THE v3.42 ENTRY ABOVE, made HERE rather than in it.** That entry closes *"THE
+  SITTING HALTED AT Δ12 on the two operator-only items — the blank box alias (§0.2) and the unfilled
+  prereg VALUE column (§0.4)"*. **The alias closed later in the same sitting** — an operator
+  confirmation of a dispatcher-proposed candidate, `RUN6_MINT_SITTING8_EXIT.md` §5.1 — leaving
+  **one** blocker, which is the one R337 clears. The v3.42 entry was **true when written** and is a
+  dated log line, so it is **not edited**; the correction lives in the latest entry, where a reader
+  arriving at the foot finds it.
+  **WHAT THIS CURATION DOES.** It **ARMS** — for the first time in this sequence — **every proposed
+  prereg value**, by recording the operator's forwarding as their signature, and it converts four
+  rows that name no config key into RECORD rows. **WHAT IT DOES NOT DO:** it mints nothing, writes
+  no `run6.yaml`, produces no checkpoint, trains nothing and starts no run. **RUN6 REMAINS HELD.**
