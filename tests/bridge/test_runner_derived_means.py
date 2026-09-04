@@ -85,3 +85,19 @@ def test_raw_count_getters_present():
     assert runner.cluster_variance_sample_count == 0
     assert runner.games_completed == 0
     assert runner.get_win_stats() == (0, 0, 0)
+
+
+def test_max_sims_per_search_is_on_the_surface_and_truthful_at_zero():
+    """R335(c)/LAW-18 — the served-sims lever reports its own rate in-run.
+
+    The clamp that made a search stop at exactly `n_simulations` is worthless as evidence if
+    the only place it can be read is a Rust test: the ledger's `53.46 sims/move` line was
+    measured in a run, and re-measuring it must not need a diagnostic rig branch. This pins
+    that the counter reaches Python at all, and that its zero is TRUTHFUL — no search has
+    completed on a fresh runner, so the honest reading is 0 and not the budget.
+
+    The exact-budget assertion lives where it can be driven:
+    `crates/mantis-selfplay/tests/served_sims_exact.rs`.
+    """
+    runner = _fresh_runner()
+    assert runner.max_sims_per_search == 0

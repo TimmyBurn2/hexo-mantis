@@ -580,6 +580,18 @@ impl PySelfPlayRunner {
     pub fn mcts_quiescence_fires(&self) -> u64 {
         self.snapshot().mcts_quiescence_fires
     }
+    /// R335(c)/LAW-18 — the largest leaf count ANY one search served, since `start()`.
+    ///
+    /// It must never exceed the run's sim budget. Before the batch clamp it read
+    /// `n_simulations + leaf_batch_size − 1`, which is what put the ledger's
+    /// `53.46 sims/move` against a configured 50; the lever under test therefore reports its
+    /// own rate in-run, and re-measuring that line no longer needs a diagnostic rig branch.
+    /// A run whose search budget is uniform reads exactly `n_simulations` here; the Gumbel arm
+    /// reads LESS, because sequential halving never allocates its integer-division remainder.
+    #[getter]
+    pub fn max_sims_per_search(&self) -> u64 {
+        self.snapshot().max_sims_per_search
+    }
     /// Mean per-cluster value spread, or `None` when nothing was measured (R249).
     ///
     /// `None` reaches Python as `None` and the event builder DROPS the field. The
