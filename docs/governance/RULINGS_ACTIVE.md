@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 966f224, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ fd5b0d2, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.41, 2026-09-04. Created under R271 (register hygiene: archive/index split);
+# v3.42, 2026-09-04. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1098,6 +1098,11 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
 # rather than a habit: THE STAMP RIDES THE §8 EDIT, in the same act, or the curation is not
 # finished. Derived from §8's last entry at every curation.)
+# **v3.42 = R336 folded in — PERF-TRANCHE-3 RATIFIED and the SITTING-7 pre-flight HALT ratified
+# as a SUCCESS with its four blockers on the ARCHITECT'S ledger; the arch-selector row RULED in
+# both halves (`gnn_axis_r8` + `GnnArchV2`), its SHAPE verified already BUILT at HEAD; the mint
+# act SEQUENCED against itself (caps at STEP 3, `identity.warm_start` a separate pin act at
+# 4a/4b/4c); six prereg rows RE-SHAPED and two DROPPED; rustfmt ruled on contact.**
 
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
@@ -1143,9 +1148,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R335 — **306 sections, 306 distinct numbers, no duplicates** (re-derived at v3.41; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R336 — **307 sections, 307 distinct numbers, no duplicates** (re-derived at v3.42; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 336)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 337)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -2920,6 +2925,65 @@ Verbatim text in the register; one-liners here are index only.
   tranche's exit is ratified) → WP-AXIS2 shakedown → run6. **The prereg table is FILED beside the
   launcher; every value in it is the operator's.**
   **RUN6 REMAINS HELD. R335 ARMS NOTHING.**
+
+- **R336 — THE LAUNCHER'S OWN BLOCKERS RULED, AND A MINT ACT SEQUENCED AGAINST ITSELF. LIVE: (b)
+  is the identity delta run6 is minted on; (c) governs the mint's ORDER; (d) re-shapes the prereg
+  table and DROPS two rows; (e)'s rustfmt half is executed, its other two halves are standing;
+  (f) un-holds run6 for the shakedown only.**
+  **(a) PERF-TRANCHE-3 IS RATIFIED** — served sims equal `n_simulations` on the PUCT path (three
+  loops in three states, mechanism to the unit); `S-CHECK17` landed with its **bar MISSED and
+  BANKED at ×1.18 derived**, the decomposition having falsified the bar's premise (check 14 is
+  compiled and is not free); `S-PREFUSE` **REFUTED** on a dev-host measurement with **HOT-14
+  RE-OPENED** (cross-core ownership explains ×1.66 of ×6.84); `S-BATTERY-G` landed **unarmed**,
+  CUDA arm owed at the mint's battery. **AND THE SITTING-7 PRE-FLIGHT HALT IS RATIFIED AS A
+  SUCCESS**: all four blockers were in the ARCHITECT'S texts and are on the ARCHITECT'S ledger — a
+  registry row named as an arch kind (inherited from the handoff and repeated), a circular mint
+  act, a forwarding precondition the packet could not carry, and two row-number collisions.
+  **(b) THE SELECTOR ROW IS RULED IN BOTH HALVES.** VALUE: `identity.encoding = gnn_axis_r8` and
+  the arch kind `GnnArchV2` — **W-C1 measured V1's hazard at 78.5× against V2's 2.49× under 64×
+  nodes**, and V2 is the seam's proving tenant with deliberate detectors (R309(d)). SHAPE: **one**
+  validated config key on `RunConfig`, consumed only by the one selector authority; **config-less
+  sites resolve from the STAMP** (R330(e)), and **a site holding neither is a FINDING, not a third
+  path**. **The shape half was verified ALREADY BUILT at HEAD** — `stamped_arch_kind`
+  (`train/checkpoints.py:214`) is the tree's own *"ONE answer"* and all three sites the halt named
+  route through it (`checkpoints.py:701`, `:803`, `pretrain/validate.py:56`), so the v1 halt's
+  §2.1 *"the shape is unchosen"* was reading a 2026-09-02 record rather than HEAD. Only the VALUE
+  was ever live.
+  **(c) THE MINT ACT IS THE CAPS' ACT — R281(d)(i) GOVERNS THE PARTITION, NOT EVERY ROW.** STEP 3
+  mints both caps, the allowance row, the identity rows and every ARMED prereg row.
+  **`identity.warm_start` is a SEPARATE PIN ACT**: **4a** re-produces the checkpoint of record on
+  the minted world (R329(b)); **4b** writes path + sha256 + net hash as its own commit with the
+  **F-32 pin DERIVED from it**; **4c** runs the step-0 witness. **A hash cannot be minted before
+  the artifact exists, and v1 asked for exactly that** — this is the halt's blocker 4, closed.
+  **(d) SIX PREREG ROWS ARE RE-SHAPED TO HEAD, BY THE FILING REPORT'S OWN FINDINGS, AND TWO ARE
+  DROPPED.** The ply cap is **ONE key** (F-816-11; a second number would have nowhere to go). The
+  BC checkpoint of record is a **REPRODUCTION under the pinned BC recipe**, so **no epoch row
+  applies to it**. The step-0 anchor **IS the `warm_start` artifact**, not a periodic checkpoint
+  (the periodic seam is post-increment and cannot reach step 0 for any `N`). **The NaN row is
+  DROPPED** — no mechanism exists, ADJ-D13's known gap under an R56 SOURCE PIN, and **an envelope
+  armed against a missing mechanism is the §3 error again**. **The collapse-abort row is DROPPED**
+  — G-3 stands; the external instrument is **READ on the dashboard, not armed**. **N per rung
+  stays at the MINTED gate geometry** (R319/R320 are NOT re-opened) and **witness (ii) is POOLED
+  over a window of four consecutive rounds**. **Eval concurrency has no config key at HEAD**
+  (`arena/match.py:201`, a keyword-only `concurrency: int = 1`; `games_in_flight` is absent from
+  the whole tree): **run6 runs the battery SERIAL, G=1** — today's path byte-for-byte, nothing
+  written — and **the key is ablation-era work**.
+  **(e) RUSTFMT IS RULED ON CONTACT**: `CLAUDE.md`'s line becomes *"rustfmt on touched files"*,
+  `rustfmt.toml` with defaults is committed **so the style has a definition**, and **NO tree-wide
+  format pass follows**. **Check 14's 41.4 ms/part is CARDED, NOT ORDERED — the trainer is not the
+  run's bottleneck.** **Gumbel's one-short undershoot is PINNED** (`served_sims_exact.rs:260`, 599
+  served at 600 configured) **and is a PRECONDITION of arming the PCR/Gumbel pair**.
+  **(f) THE MINT EXECUTES as v1 Δ12–Δ19 with the §2 amendments**; every prereg row is cited **BY
+  NAME** and v1's "row 14/16" cites are **VOID**; the sitting **adds no config key** — a row whose
+  key is absent at HEAD is a HALT with the key named, never an authoring. **RUN6 UN-HOLDS FOR THE
+  SHAKEDOWN ONLY.**
+  **ONE REFERENT LEDGERED, NOT REPAIRED SILENTLY.** Clause (d) and Δ18(4a) cite *"BC-EXEC-1's
+  pinned recipe"* for *"the five heldout flags as pinned"*. BC-EXEC-1's recipe
+  (`MINT_CLOSE_BC_EXEC_1_EXIT.md` §3.2) records held-out split and early stop as **`NO
+  MECHANISM`** and its envelope explicitly does NOT close on them. **The five are pinned in
+  `BC_EXEC_2_PREREG.md`** — split seed 328, `heldout_frac` 0.05 game-level, `eval_every` 500,
+  `patience` 3, `min_delta` measured at pre-flight under a refusal if it sits inside sampler noise.
+  Off by one document, not a missing recipe; **the execution reads BC-EXEC-2**.
 
 
 ## 6. Dispatch & autopilot governance — LAW
@@ -5998,3 +6062,68 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, **arms no VALUE** (`S-BATTERY-G`'s
   concurrency stays a prereg row, playout_cap stays the operator's), trains nothing, and starts no
   run. **RUN6 REMAINS HELD.**
+
+- 2026-09-04 — **v3.42** curated by the RUN6-MINT-LAUNCHER-v2 session, landing **R336**, authored
+  in the ARCH-ERA architect session under R303(d) and forwarded into this session's prompt.
+  **PRE-LANDING VERIFICATION, by script and not by memory:** census
+  `R23–R335 — 306 / 306 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`;
+  `--stamp RULINGS_ACTIVE.md` → `STAMP OK: stamp v3.41 == §8 last entry v3.41`; `--self-test` all
+  four controls fire; **R335 verified as the register's LAST section with no foot annotation after
+  it** (its final line is its own `ROUTE:` line). The pre-existence grep returned **ONE hit and it
+  is not a competing text** — `RUN6_MINT_SITTING7_PREFLIGHT_HALT.md:140` reads *"There is no
+  R336"*, a negative statement about the head at the moment the v1 sitting halted, which this
+  landing makes false rather than contradicts. The forwarded text carried the placeholder in
+  **FIVE** positions (heading, three §0 clause citations, quote-block lead); **exactly ONE is a
+  substitution site inside the ruling text** and no clause letter was rewritten; residual grep over
+  the canonical home **rc 1**, the placeholder's literal spelling absent from the file including
+  its own landing record. Extraction into the register by script over the canonical home's §1
+  quote block — **48 lines**, asserted **byte-identical** (3 201 chars both sides) rather than
+  re-typed. Post-append census `R23–R336 — 307 / 307 / 0, excluded 53`.
+  **SPOT-CHECKS THIS CURATION (≥5 per R272(b)), all against verbatim register text.** **R281(d)(i)**
+  (`> the two caps are ONE partition — box-sitting STEP 1c/3 fit train.microbatch_caps and
+  inference.fused_graph_caps JOINTLY … two independent mints are not a legal posture` — matches, and
+  it is the clause R336(c) reads NARROWLY: it governs the caps' partition, not a rule that every
+  minted row is one act, which is precisely what lets `identity.warm_start` become a separate pin
+  act); **R329(b)** (`> the checkpoint of record is re-produced on the minted world` — matches
+  verbatim, and it is the constraint that made v1's ordering circular); **R330(e)** (`> ARCH-SELECTOR
+  PLUMBING lands engine-side before the mint: config-less call sites resolve the arch from the
+  artifact's stamp — one authority; the mint later writes only the row` — matches, **and the
+  plumbing was verified BUILT at HEAD**, which is the finding below); **R282(b)** (`> preserved
+  operator-only — box grants, run5 mint authorization, judgment-valued prereg rows` — matches, and
+  it is why this sitting's two remaining blockers cannot be closed dispatcher-side at any level of
+  diligence); **R319/R320** on gate geometry (R320(b) WITHDREW the 2026-08-29 gate-geometry
+  adjudication as fatally flawed and defers re-adjudication — so R336(d)'s *"R319/R320 are not
+  re-opened"* is a decision to inherit the minted geometry, not a claim that it is settled well).
+  **EDITS, FOUR:** the header stamp `v3.41 → v3.42` with its v3.42 block appended after v3.41's;
+  **§1's census sentence re-derived by script** (`R23–R336 — 307/307/0`) with its `range(23, 337)`
+  bound — **the replacement was SCOPED to §1**, because `range(23, 336)` also appears inside v3.41's
+  own §8 entry, where it is a historical record and must not move; a **new §5 LIVE row for R336**;
+  and this entry. Nothing was deleted. **REGISTER EDITS, ONE:** the R336 append.
+  **§5'S VOIDED-CAPS ROW IS UNCHANGED, AND WAS VERIFIED SO.** R302(c) stays LIVE and
+  MINT-BLOCKING: the caps were fitted on an instance that no longer exists, and the row expires
+  only on the STEP 1–3 joint partition re-fit. **R336 does not touch it** — its clause (f) says
+  the mint *executes*, not that the re-fit has *run*, and this sitting opened no box. A reader
+  who took the ratification in (a) for a caps event would be wrong: **nothing on the mint path
+  moved.**
+  **ONE FINDING THIS CURATION PUT ON THE RECORD.** Clause (d) and Δ18(4a) cite *"BC-EXEC-1's pinned
+  recipe"* for *"the five heldout flags as pinned"*. **BC-EXEC-1 pins no such flags** — its recipe
+  (`MINT_CLOSE_BC_EXEC_1_EXIT.md` §3.2) records held-out split and early stop as **`NO MECHANISM`**
+  and states the envelope does not close on them; that gap is the R327 blocker R328(d) was ordered
+  to fix, and the five live in **`BC_EXEC_2_PREREG.md`** (seed 328, `heldout_frac` 0.05 game-level,
+  `eval_every` 500, `patience` 3, `min_delta` measured at pre-flight under a raise if it sits inside
+  sampler noise). Off by one document, referent unambiguous, execution reads BC-EXEC-2 — ledgered,
+  not silently repaired.
+  **WHAT THIS RULING SETTLES.** **A dispatcher's halt was ratified as a success and every one of its
+  four blockers was answered in the architect's own text rather than argued with** — which is what a
+  pre-flight is for, and it cost no box-hour to learn. Beside it, **the mint stops being one
+  indivisible act and becomes an ORDERED one**: R281(d)(i) binds the CAPS into a single partition and
+  says nothing about the rest, so the artifact-dependent rows can follow the artifact instead of
+  preceding it. And **the arch-selector question turned out to be half-closed already** — R330(e)'s
+  plumbing had landed, so only the value was ever live; the lesson is the standing one, that a
+  design question quoted forward from a two-day-old record is not a reading of HEAD.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, **arms no VALUE** (the 3% allowance arms on
+  a forwarding that names a box alias; every prereg VALUE stays the operator's under R282(b)),
+  produces no checkpoint, trains nothing and starts no run. **THE SITTING HALTED AT Δ12 on the two
+  operator-only items — the blank box alias (§0.2) and the unfilled prereg VALUE column (§0.4).
+  RUN6 REMAINS HELD.**
+
