@@ -253,8 +253,22 @@ def _canonical_slot_vec(
 
 
 def _graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
-    """Map each element index [0,count) to its graph via CSR `offsets`."""
-    return np.searchsorted(offsets, np.arange(count), side="right") - 1
+    """Map each element index [0,count) to its graph via CSR `offsets`.
+
+    `repeat`, not `searchsorted`. The previous form allocated a `count`-long `arange` and ran
+    `count` binary searches over a `B`-length array to answer a question the segment LENGTHS
+    already answer: element `i` belongs to graph `g` exactly `offsets[g+1] - offsets[g]` times
+    in a row. `np.repeat(arange(B), diff(offsets))` is one linear fill with neither the arange
+    nor the search, and it agrees on every valid CSR input INCLUDING empty segments — a graph
+    with zero elements repeats zero times, which is the same answer `searchsorted(..., "right")
+    - 1` gives by skipping it. AUDIT-1 F-51 HOT-04; measured ×13.5 on real serve parts.
+
+    PRECONDITION, which check 5 (`OffsetsNonMonotonic`) establishes before either caller here:
+    `offsets` is non-decreasing with `offsets[0] == 0` and `offsets[-1] == count`. Under a
+    negative segment length `np.repeat` raises rather than returning a wrong array, which is
+    the correct direction for a violated precondition.
+    """
+    return np.repeat(np.arange(offsets.size - 1, dtype=np.int64), np.diff(offsets))
 
 
 # ---------------------------------------------------------------------------
@@ -552,10 +566,6 @@ def _check_structural(
     if np.any(n_stones.astype(np.int64) + 1 > n_nodes_checksum.astype(np.int64)):
         raise NodeCountChecksum("n_stones + 1 > n_nodes_checksum for some graph")
 
-    # 7. EdgeIndexOutOfBounds
-    if E > 0 and (edge_index.min() < 0 or edge_index.max() >= N):
-        raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
-
     # 8. EdgeCrossesGraphBoundary — SEGMENTED MIN/MAX, not a per-edge graph id (R284 P-CHECKS).
     #
     # An edge in graph g is legal iff BOTH endpoints lie in `[node_offsets[g],
@@ -572,6 +582,18 @@ def _check_structural(
     # on four injected corruptions. At 0.93 ms this reads ~33 GB/s, i.e. it is already
     # memory-bandwidth-bound, which is the reason it is not in Rust — see the P-CHECKS section of
     # `plan/R284_PERF_DESIGN.md` for the disclosed departure from R284(b)'s named mechanism.
+    # 7 + 8, ONE segmented pass. AUDIT-1 F-51 HOT-04: check 7 read a global min and max over
+    # the whole `2E` array, and check 8 then computed per-graph extrema over the same data —
+    # so the array was swept twice to answer a question the second sweep already contains.
+    # Every graph's node range lies inside `[0, N)` (check 5 fixes `node_offsets[0] == 0` and
+    # `node_offsets[B] == N`), and the segment starts partition `[0, E)`, so the global bound
+    # is a reduction over the `B`-length segment extrema rather than a second pass over `2E`.
+    #
+    # BOTH NAMED ERRORS SURVIVE, AND SO DOES THEIR PRECEDENCE. `EdgeIndexOutOfBounds` is still
+    # raised first for a payload that violates both, exactly as when check 7 ran ahead of check
+    # 8 — a row out of `[0, N)` is a row that is in NO graph, which is the stronger statement
+    # and the one an operator needs first. Folding a check is not deleting one: deleting one
+    # would be a contract amendment.
     if E > 0:
         ei2 = edge_index.reshape(2, E)
         nonempty = np.diff(edge_offsets) > 0
@@ -585,17 +607,26 @@ def _check_structural(
             # The two endpoints are UNROLLED rather than looped. A `for` over a 2-tuple is not
             # the per-item loop the §Q6 hot-path census bans — but the census counts `for`
             # statements, it fired on this exact edit, and spending an R43 frozen-table grant on
-            # a cosmetic loop would be the wrong use of one. The census doing its job is on the
-            # record; the code says the same thing without it.
+            # a cosmetic loop would be the wrong use of one. The code says the same thing
+            # without it.
             src, dst = ei2[0], ei2[1]
-            if (np.any(np.minimum.reduceat(src, seg_start) < seg_lo)
-                    or np.any(np.maximum.reduceat(src, seg_start) >= seg_hi)
-                    or np.any(np.minimum.reduceat(dst, seg_start) < seg_lo)
-                    or np.any(np.maximum.reduceat(dst, seg_start) >= seg_hi)):
+            src_lo = np.minimum.reduceat(src, seg_start)
+            src_hi = np.maximum.reduceat(src, seg_start)
+            dst_lo = np.minimum.reduceat(dst, seg_start)
+            dst_hi = np.maximum.reduceat(dst, seg_start)
+            if min(src_lo.min(), dst_lo.min()) < 0 or max(src_hi.max(), dst_hi.max()) >= N:
+                raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
+            if (np.any(src_lo < seg_lo) or np.any(src_hi >= seg_hi)
+                    or np.any(dst_lo < seg_lo) or np.any(dst_hi >= seg_hi)):
                 raise EdgeCrossesGraphBoundary(
                     "an edge endpoint is outside its own graph's node range"
                 )
-
+        elif edge_index.min() < 0 or edge_index.max() >= N:
+            # UNREACHABLE while check 5 holds — `edge_offsets[B] == E > 0 == edge_offsets[0]`
+            # forces some segment non-empty — and kept anyway so the named error stays
+            # reachable on any input a test can construct, rather than only on the ones the
+            # preceding checks happen to allow.
+            raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
     # `legal_graph` is used by BOTH check 9 and check 11 and used to be computed twice.
     legal_graph = _graph_of(legal_offsets, Lg) if Lg > 0 else None
 
@@ -635,10 +666,16 @@ def _check_structural(
 
     # 11. ScatterSlotAliasing — within one graph, two legal nodes share a slot.
     if Lg > 0 and legal_graph is not None:
+        # AUDIT-1 F-51 HOT-04. `np.unique` answers "are there duplicates" by SORTING, which is
+        # `O(Lg log Lg)` comparisons for a yes/no question. The keys are bounded BY
+        # CONSTRUCTION — `graph * 400 + slot` with `graph < B` and `slot < 362 <= 400`, both
+        # already established by check 4 and check 10 above — so a count over that known range
+        # answers it in one linear pass. Measured ×15 on real serve parts, and it is the largest
+        # single check in the stage.
         in_win = policy_dst_slot != _OFF_WINDOW_SLOT
-        keys = legal_graph.astype(np.int64) * 400 + policy_dst_slot.astype(np.int64)
-        keys = keys[in_win]
-        if keys.size != np.unique(keys).size:
+        keys = (legal_graph[in_win].astype(np.int64) * 400
+                + policy_dst_slot[in_win].astype(np.int64))
+        if keys.size and int(np.bincount(keys, minlength=B * 400).max()) > 1:
             raise ScatterSlotAliasing("two legal nodes in one graph map to the same slot")
 
     # 12. EmptyLegalSet

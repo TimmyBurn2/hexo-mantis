@@ -316,6 +316,205 @@ impl Kind {
 /// The oracle's `node_threat_features` — returns
 /// `[own_max/wl, opp_max/wl, own_axes/3, opp_axes/3]` in f64. `stone_at`
 /// returns 0 for empty (0 never equals ±1, so it never counts as own/opp).
+/// How many table cells per real node a dense coordinate index may spend before the builder
+/// falls back to the hash map (AUDIT-1 F-51 HOT-09).
+///
+/// WHY A BUDGET AT ALL. A hash map is span-independent; a dense table over the position's
+/// bounding box is not, and this board is UNBOUNDED. Stones that walk in one direction give a
+/// bbox whose area grows with the span while the node count does not, so an unbudgeted table
+/// would trade a bounded hash for an unbounded allocation — on the leaf path, once per leaf.
+///
+/// WHY THIS NUMBER. It is expressed PER NODE rather than as a cell count so the bound is
+/// O(n_real) in every position: the table can never cost more than a fixed multiple of the data
+/// it indexes. 64 is comfortably above what real play produces — the legal set IS the union of
+/// the stones' radius-balls, so play stays inside a growing blob rather than scattering — and
+/// `axis_index_is_dense` is public so a test can assert which arm a given position takes
+/// instead of anyone assuming.
+pub const DENSE_INDEX_CELLS_PER_NODE: usize = 64;
+
+/// The bounding box of `coords[..2 * n_real]` as `(q0, q1, r0, r1)`, or `None` when empty.
+#[must_use]
+fn coord_bbox(coords: &[i32], n_real: usize) -> Option<(i32, i32, i32, i32)> {
+    if n_real == 0 {
+        return None;
+    }
+    let (mut q0, mut q1, mut r0, mut r1) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+    for i in 0..n_real {
+        let (q, r) = (coords[i * 2], coords[i * 2 + 1]);
+        q0 = q0.min(q);
+        q1 = q1.max(q);
+        r0 = r0.min(r);
+        r1 = r1.max(r);
+    }
+    Some((q0, q1, r0, r1))
+}
+
+/// Whether a position's node set is compact enough for the dense coordinate index.
+///
+/// Public so the choice is TESTABLE rather than inferred from a timing: a position that
+/// silently fell back would look like a perf regression with no observable saying why.
+#[must_use]
+pub fn axis_index_is_dense(coords: &[i32], n_real: usize) -> bool {
+    match coord_bbox(coords, n_real) {
+        None => false,
+        Some((q0, q1, r0, r1)) => {
+            let w = (r1 - r0 + 1) as usize;
+            let h = (q1 - q0 + 1) as usize;
+            w.saturating_mul(h) <= DENSE_INDEX_CELLS_PER_NODE.saturating_mul(n_real)
+        }
+    }
+}
+
+/// A dense `(q, r) -> node id` table over the position's bbox. `u32::MAX` is "no node here",
+/// which is the same answer `FnvMap::get` gives by returning `None`.
+struct CoordIndex {
+    q0: i32,
+    r0: i32,
+    w: usize,
+    h: usize,
+    cells: Vec<u32>,
+}
+
+impl CoordIndex {
+    fn build(coords: &[i32], n_real: usize) -> Option<Self> {
+        if !axis_index_is_dense(coords, n_real) {
+            return None;
+        }
+        let (q0, q1, r0, r1) = coord_bbox(coords, n_real)?;
+        let w = (r1 - r0 + 1) as usize;
+        let h = (q1 - q0 + 1) as usize;
+        let mut cells = vec![u32::MAX; w * h];
+        for i in 0..n_real {
+            let (q, r) = (coords[i * 2], coords[i * 2 + 1]);
+            cells[((q - q0) as usize) * w + (r - r0) as usize] = i as u32;
+        }
+        Some(Self { q0, r0, w, h, cells })
+    }
+
+    #[inline]
+    #[must_use]
+    fn get(&self, q: i32, r: i32) -> Option<u32> {
+        let (dq, dr) = (q - self.q0, r - self.r0);
+        if dq < 0 || dr < 0 || dq as usize >= self.h || dr as usize >= self.w {
+            return None;
+        }
+        let v = self.cells[(dq as usize) * self.w + dr as usize];
+        if v == u32::MAX { None } else { Some(v) }
+    }
+}
+
+/// The dense coordinate index's answer for one cell, or `None` when the position took the hash
+/// arm. Exists so the SUBSTITUTION is provable rather than inferred: a test can build the hash
+/// map itself and assert the two agree on every cell the axis walk could probe, which is the
+/// claim `all_1696_cases_byte_parity` cannot make (every golden position is compact, so it
+/// exercises one arm only).
+#[must_use]
+pub fn coord_index_probe(coords: &[i32], n_real: usize, q: i32, r: i32) -> Option<Option<u32>> {
+    CoordIndex::build(coords, n_real).map(|ix| ix.get(q, r))
+}
+
+/// A dense `(q, r) -> player` table over the STONES' bbox, expanded by the threat walk's reach.
+///
+/// The same substitution as `CoordIndex`, for HOT-09's SECOND map: the threat walk probes
+/// `stone_map` three axes by `2 * win_length - 1` cells for EVERY real node. `0` is returned
+/// both for "no stone" and for "outside the box", which is exactly what the map's
+/// `unwrap_or(0)` already meant — a cell beyond the expanded bbox cannot hold a stone.
+struct StoneIndex {
+    q0: i32,
+    r0: i32,
+    w: usize,
+    h: usize,
+    cells: Vec<i8>,
+}
+
+impl StoneIndex {
+    fn build(stones: &[(i32, i32, i8)], reach: i32) -> Option<Self> {
+        if stones.is_empty() {
+            return None;
+        }
+        let (mut q0, mut q1, mut r0, mut r1) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+        for &(q, r, _) in stones {
+            q0 = q0.min(q);
+            q1 = q1.max(q);
+            r0 = r0.min(r);
+            r1 = r1.max(r);
+        }
+        let (q0, q1, r0, r1) = (q0 - reach, q1 + reach, r0 - reach, r1 + reach);
+        let w = (r1 - r0 + 1) as usize;
+        let h = (q1 - q0 + 1) as usize;
+        if w.saturating_mul(h) > DENSE_INDEX_CELLS_PER_NODE.saturating_mul(stones.len()).max(4096)
+        {
+            return None;
+        }
+        let mut cells = vec![0i8; w * h];
+        for &(q, r, p) in stones {
+            cells[((q - q0) as usize) * w + (r - r0) as usize] = p;
+        }
+        Some(Self { q0, r0, w, h, cells })
+    }
+
+    #[inline]
+    fn at(&self, q: i32, r: i32) -> i8 {
+        let (dq, dr) = (q - self.q0, r - self.r0);
+        if dq < 0 || dr < 0 || dq as usize >= self.h || dr as usize >= self.w {
+            return 0;
+        }
+        self.cells[(dq as usize) * self.w + dr as usize]
+    }
+}
+
+/// `node_threat_features` over a `StoneIndex`. Same cells, same arithmetic, array reads.
+#[inline]
+fn node_threat_features_indexed(
+    sidx: &StoneIndex,
+    coord: (i32, i32),
+    to_move: i8,
+    win_length: usize,
+) -> [f64; 4] {
+    let wl = win_length as i32;
+    let opp = -to_move;
+    let mut cells = [0i8; 64];
+    let (mut own_max, mut opp_max, mut own_axes, mut opp_axes) = (0i32, 0i32, 0i32, 0i32);
+    for &(dq, dr) in &WIN_AXES {
+        for (slot, k) in ((-(wl - 1))..wl).enumerate() {
+            cells[slot] = sidx.at(coord.0 + k * dq, coord.1 + k * dr);
+        }
+        let (mut axis_own, mut axis_opp) = (0i32, 0i32);
+        for start in 0..win_length {
+            let mut own_n = 0i32;
+            let mut opp_n = 0i32;
+            for &c in &cells[start..start + win_length] {
+                if c == to_move {
+                    own_n += 1;
+                } else if c == opp {
+                    opp_n += 1;
+                }
+            }
+            if opp_n == 0 {
+                axis_own = axis_own.max(own_n);
+            }
+            if own_n == 0 {
+                axis_opp = axis_opp.max(opp_n);
+            }
+        }
+        own_max = own_max.max(axis_own);
+        opp_max = opp_max.max(axis_opp);
+        if axis_own >= wl - 2 {
+            own_axes += 1;
+        }
+        if axis_opp >= wl - 2 {
+            opp_axes += 1;
+        }
+    }
+    let wlf = f64::from(wl);
+    [
+        f64::from(own_max) / wlf,
+        f64::from(opp_max) / wlf,
+        f64::from(own_axes) / 3.0,
+        f64::from(opp_axes) / 3.0,
+    ]
+}
+
 #[inline]
 fn node_threat_features(
     stone_map: &FnvMap<i64, i8>,
@@ -528,6 +727,9 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     }
     coords.push(0); // dummy
     coords.push(0);
+    // HOT-09. `coord_to_idx` stays as the fallback: `CoordIndex` returns `None` for a position
+    // whose bbox exceeds the O(n_real) budget, and the walk below asks whichever is present.
+    let coord_index = CoordIndex::build(&coords, n_real);
 
     // centroid + spread over stones (f64, oracle-faithful).
     let (cq, cr, spread): (f64, f64, f64) = if n_stones > 0 {
@@ -606,6 +808,13 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let mut edge_src: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_dst: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_attr: Vec<f32> = Vec::with_capacity(cap * EDGE_FEAT_DIM);
+    // HOT-08. `dedup_axis_edges` re-derived each edge's axis by SCANNING the one-hot it had
+    // just been handed, five floats per edge over twice the final edge count. The emitter knows
+    // the axis, the sign and the distance — and `(src, axis, sign, d)` partitions the axis edges
+    // IDENTICALLY to `(src, dst, axis)`, because `dst = src + sign * d * axis_delta` — so the
+    // key is carried rather than reconstructed, and it is LINEAR in the node count where an
+    // `(src, dst)` key space is quadratic.
+    let mut edge_key: Vec<u32> = Vec::with_capacity(cap);
 
     for i in 0..n_real {
         let iq = coords[i * 2];
@@ -619,7 +828,11 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
                 for d in 1..=(window as i32) {
                     let tq = iq + sdq * d;
                     let tr = ir + sdr * d;
-                    let Some(&j) = coord_to_idx.get(&pack(tq, tr)) else {
+                    let hit = match coord_index {
+                        Some(ref ix) => ix.get(tq, tr),
+                        None => coord_to_idx.get(&pack(tq, tr)).copied(),
+                    };
+                    let Some(j) = hit else {
                         break;
                     };
                     let j_kind = node_kind[j as usize];
@@ -633,6 +846,13 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
                     edge_src.push(j);
                     edge_dst.push(i as u32);
                     push_attr(&mut edge_attr, axis_idx, -signed_dist, src_j);
+                    // The two directions get the SAME (axis, |d|) and OPPOSITE signs, which is
+                    // why one stride serves both: the edge j->i is i->j walked the other way.
+                    let sbit = u32::from(sign < 0);
+                    let wd = window as u32;
+                    let base = axis_idx as u32 * 2 * wd + (d - 1) as u32;
+                    edge_key.push(i as u32 * DEDUP_STRIDE_AXES * wd + base + sbit * wd);
+                    edge_key.push(j * DEDUP_STRIDE_AXES * wd + base + (1 - sbit) * wd);
                     // walk stopping
                     let should_stop = match i_kind {
                         Kind::Stone(ip) => matches!(j_kind, Kind::Stone(jp) if jp != ip),
@@ -647,7 +867,7 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     }
 
     // --- dedup axis edges: key (src, dst, axis_idx), keep FIRST ---
-    dedup_axis_edges(&mut edge_src, &mut edge_dst, &mut edge_attr);
+    dedup_axis_edges(&mut edge_src, &mut edge_dst, &mut edge_attr, &edge_key, n_real, window);
 
     // --- legacy dummy edges: bidirectional to all real nodes, all-zero attr ---
     for i in 0..n_real as u32 {
@@ -660,9 +880,16 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     }
 
     // --- threat features (real nodes only) ---
+    // The reach is the threat walk's own `win_length - 1` cells along an axis; nothing beyond
+    // the stones' bbox expanded by it can hold a stone, so the table is complete for every
+    // probe the walk makes.
+    let stone_index = StoneIndex::build(&stones, i32::from(params.win_length) - 1);
     for idx in 0..n_real {
         let c = (coords[idx * 2], coords[idx * 2 + 1]);
-        let tf = node_threat_features(&stone_map, c, to_move, win_length);
+        let tf = match stone_index {
+            Some(ref sidx) => node_threat_features_indexed(sidx, c, to_move, win_length),
+            None => node_threat_features(&stone_map, c, to_move, win_length),
+        };
         let base = idx * fdim + BASE_DIM;
         for (k, &v) in tf.iter().enumerate() {
             features[base + k] = v as f32;
@@ -723,19 +950,40 @@ fn axis_idx_of(a: &[f32]) -> u8 {
 /// IN PLACE (single pass, no reallocation) so `edge_attr[e]` stays bound to
 /// `edge_index[:, e]`. Key packs into one u64 (src/dst < ~1000 nodes, axis in
 /// 0..2) to skip tuple hashing on the hot dedup pass.
-fn dedup_axis_edges(src: &mut Vec<u32>, dst: &mut Vec<u32>, attr: &mut Vec<f32>) {
+/// `3 axes x 2 signs`, the per-node stride multiplier of the carried dedup key.
+const DEDUP_STRIDE_AXES: u32 = 6;
+
+fn dedup_axis_edges(
+    src: &mut Vec<u32>,
+    dst: &mut Vec<u32>,
+    attr: &mut Vec<f32>,
+    key_of: &[u32],
+    n_real: usize,
+    window: usize,
+) {
     let e = src.len();
-    let mut seen: FnvSet<u64> =
-        FnvSet::with_capacity_and_hasher(e, BuildHasherDefault::default());
+    debug_assert_eq!(key_of.len(), e, "one carried dedup key per emitted edge");
+    // The key space is `n_real * 3 axes * 2 signs * window`, LINEAR in the node count and
+    // independent of the board span, so a bit per key is a few kilobytes rather than a hash
+    // table sized to the edge count. `saturating_mul` keeps a pathological geometry from
+    // wrapping into a small, wrong allocation.
+    let bits = n_real
+        .saturating_mul(DEDUP_STRIDE_AXES as usize)
+        .saturating_mul(window.max(1));
+    let mut seen = vec![0u64; bits.div_ceil(64)];
     let mut w = 0usize; // write cursor for the compacted arrays
     for rd in 0..e {
-        let axis = axis_idx_of(&attr[rd * EDGE_FEAT_DIM..rd * EDGE_FEAT_DIM + EDGE_FEAT_DIM]);
-        let key = (u64::from(src[rd]) << 34) | (u64::from(dst[rd]) << 2) | u64::from(axis);
-        if seen.insert(key) {
+        let k = key_of[rd] as usize;
+        let (word, bit) = (k >> 6, 1u64 << (k & 63));
+        if seen[word] & bit == 0 {
+            seen[word] |= bit;
             if w != rd {
                 src[w] = src[rd];
                 dst[w] = dst[rd];
-                attr.copy_within(rd * EDGE_FEAT_DIM..rd * EDGE_FEAT_DIM + EDGE_FEAT_DIM, w * EDGE_FEAT_DIM);
+                attr.copy_within(
+                    rd * EDGE_FEAT_DIM..rd * EDGE_FEAT_DIM + EDGE_FEAT_DIM,
+                    w * EDGE_FEAT_DIM,
+                );
             }
             w += 1;
         }
