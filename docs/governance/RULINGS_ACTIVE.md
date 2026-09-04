@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5697fb1, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ fe3abff, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.40, 2026-09-04. Created under R271 (register hygiene: archive/index split);
+# v3.41, 2026-09-04. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1040,6 +1040,59 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # slopes upward over the run's first third. **N and the slope bar are OPERATOR PREREG ROWS** — the
 # shape carries no judgment, those two terms do.
 # **RUN6 REMAINS HELD. The mint follows the tranche's numbers, not this curation.**
+# **v3.41 = R335 folded in — the curation that ACCEPTS a research mission as EVIDENCE, DISPOSES its
+# six contradictions with four different instruments, REFUSES KLENT as a bundle on COVERAGE rather
+# than stability, and orders the perf tranche the run6 mint waits behind.**
+# **R335(a) ACCEPTS SCOUT-2 AS EVIDENCE and DISPOSES its §6 six ways with FOUR instruments** — an
+# append-only ANNOTATION for `falsified.md` F-43 (a curated register corrects only by annotation,
+# R9; the row's FINDING is untouched and only one of the two mechanisms that made the run invisible
+# has moved — at HEAD both pools are constructed with `sink=_DeferredSink()`, `run.py:528,538`, not
+# `sink=None`); ONE DISCLOSED LINE EACH for two WORKING docs (R311(c)) — `SEAM_V1_DESIGN` §6.3's
+# eval-battery row, whose `~85–87 % idle` denominator died against tranche-2 §10.1's measured
+# `gpu_util_mean` **31.1 %**, and `SESSION_HANDOFF_v5` §5.4's `hexo-bridge may carry a board
+# renderer`, which it does not; and an ANNOTATION for the INPUT document `klent_assessment.md`
+# §5.1/Amendment 2, whose `entropy_reg = −0.005` premise is FALSE AT HEAD THREE WAYS (0.0 in all
+# SEVEN committed configs; the value `never existed in this tree (ADJ-01)` in the schema's own
+# words, sign inverted besides; and a HARD RAISE on the graph path via
+# `GRAPH_FORBIDDEN_NONZERO_WEIGHTS`). **The instrument follows the document's STATUS, not the
+# finding's size** — which is the clause's actual content.
+# **R335(b) REFUSES KLENT AS A BUNDLE, AND NAMES THE GROUND.** Stability is NOT the blocker the
+# operator feared — a 27-point sweep with ONE failing corner. **COVERAGE is**: our `|A|` of
+# 356–1 788 is **3–15× outside the entire tested envelope** (every benchmark game has max legal
+# actions ≤ 121) on the very axis the method's advantage is attributed to; the cross-iteration
+# replay buffer is the one regime the paper never validates; **epochs-per-buffer is unreported**, so
+# the assessment's ~1.5× GPU-hour estimate cannot be computed from the paper at all. **λ-returns is
+# FIRST** because it is a LANDED codec; reverse-KL second with its anchor pre-registered BY
+# DIRECTION; **entropy normalization is RECLASSIFIED from fix to PRECONDITION**
+# (`S-ENTROPY-PRECOND`) — a precondition on ever ARMING an entropy term, not a repair to a live
+# defect, because there is no live defect. **R254/R258 STAND.** `S-AZAL-ONESIDED`'s witness (iii)
+# gains a **VETO over (ii)**.
+# **R335(c) ORDERS THE SERVED-SIMS OVERSHOOT FIXED AT CAUSE, BEFORE THE MINT** — 53.46 served
+# against 50 configured; a search stops at exactly N; the witness is the PER-SEARCH VISIT COUNT with
+# a planted break red-before. **NO FIXED-NODE CLAIM IS MADE UNTIL IT LANDS** — which is what makes
+# this a mint precondition and not a perf item: R334(f)(ii)'s `beats sealbot_d5 at FIXED NODES` is
+# unstatable while the node count is 7 % more than the config says.
+# **R335(d) PROPOSES playout_cap DISARMED for the run6 mint** (uniform sims), and **BINDS the PCR
+# preset to Gumbel root selection as ONE ablation pair AFTER the baseline, decided together.**
+# **The value is the operator's row.**
+# **R335(e) ORDERS PERF-TRANCHE-3, five severable legs**: (0) the overshoot fix; (1) `S-CHECK17`
+# **AFTER** tranche-2 §12.1's per-check decomposition runs (LAW-01 — the decomposition is not a
+# formality, it is what caught an unreachable bar in tranche-2 before an A/B was spent on it), bar
+# **×1.22–×1.36** on the trainer step PRE-REGISTERED; (2) `S-PREFUSE` TIME-BOXED, byte-identity of
+# the fused wire over the frozen corpus, **the bar is the CARD not the span**, banked if it does not
+# clear; (3) `S-BATTERY-G` as a CAPABILITY with a diagnostic override, **UNARMED**, serial default
+# byte-exact; (4) the doc-only leg of (a). **`S-INCR-GRAPH` STAYS PARKED.** Net-hash green and
+# memory deltas after every landed change (R334(e)).
+# **R335(f) ORDERS THE RUN6 SUCCESS WITNESS'S INSTRUMENT PROVEN BEFORE STEP 1** — the step-0 act at
+# the mint reads the BC checkpoint of record against the pinned external rungs and PUBLISHES ITS ELO
+# WITH CI. **A witness whose instrument has never fired is the F-27/F-30 class**: the dual-bank
+# canary sat above its gate for 46 k steps while SealBot WR collapsed 33 % → 5 %, and best-model was
+# promoted at step 45 k while external WR crashed to 2 %. SCOUT §2.3 supplies a THIRD instance from
+# OUTSIDE this project — a fine-tune that posted a study's largest tactical gain lost 258 Elo.
+# **R335(g) SETS THE ORDER AFTER THIS**: the RUN6 MINT LAUNCHER (its own packet, forwarding after
+# this tranche's exit is ratified) → WP-AXIS2 shakedown → run6. The prereg table is FILED beside the
+# launcher and **every value in it is the operator's**.
+# **RUN6 REMAINS HELD.**
 # Corrections
 # logged in §8. (This stamp read "v1.3" through the whole of v1.4 — fixed at v1.5, §8; it then
 # read "v1.6" through the whole of v1.7 — fixed at v1.8, §8. R284(f) makes the fix a CONVENTION
@@ -1090,9 +1143,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R334 — **305 sections, 305 distinct numbers, no duplicates** (re-derived at v3.40; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R335 — **306 sections, 306 distinct numbers, no duplicates** (re-derived at v3.41; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 335)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 336)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -2818,6 +2871,55 @@ Verbatim text in the register; one-liners here are index only.
   the run's first third. **N and the slope bar are OPERATOR PREREG ROWS** — the shape carries no
   judgment; those two terms do, and a run6 launch without them is a run with no failing condition.
   **RUN6 REMAINS HELD. The mint follows the tranche's numbers, not this row.**
+
+- **R335 — THE EVIDENCE MISSION ACCEPTED, KLENT REFUSED AS A BUNDLE, AND THE TRANCHE THE MINT WAITS
+  BEHIND. LIVE: (a)'s four disposals are Leg 4; (c) is a MINT PRECONDITION; (d) and (g) hold values
+  that are the operator's; (e) is the running packet; (f) binds the mint's step-0 act.**
+  **(a) ACCEPTS SCOUT-2 AS EVIDENCE** (labels MEASURED/ASSERTED/DERIVED stand) **and disposes its
+  six §6 contradictions with FOUR instruments, chosen by the DOCUMENT'S STATUS and not the finding's
+  size.** `falsified.md` F-43 gains an **ANNOTATION** because a curated register corrects only by
+  annotation (R9): at HEAD both pool constructions pass `sink=_DeferredSink()`
+  (`src/mantis/run.py:528, 538`), so R215's `pool._sink=None at run.py:349` mechanism no longer
+  holds — **but the row's FINDING is untouched**, the signature was invisible-games and log_interval
+  gating is the other half. `SEAM_V1_DESIGN` §6.3 and `SESSION_HANDOFF_v5` §5.4 are WORKING docs and
+  get **one disclosed line each** (R311(c)): the first's `~85–87 % idle` denominator is dead against
+  tranche-2 §10.1's measured `gpu_util_mean` **31.1 %**, the second's `hexo-bridge may carry a board
+  renderer` is false. `inputs/klent_assessment.md` §5.1/Amendment 2 gets an **annotation**: its
+  `entropy_reg = −0.005` is false at HEAD **three ways** — 0.0 in all seven committed configs, `a
+  sign-leak … never existed in this tree (ADJ-01)` in the schema's own words with the sign inverted,
+  and a hard raise on the graph path (`GRAPH_FORBIDDEN_NONZERO_WEIGHTS`). **The mechanism survives;
+  the live-defect claim does not.**
+  **(b) KLENT IS NOT ADOPTED AS A BUNDLE, AND STABILITY IS NOT THE GROUND — COVERAGE IS.** `|A|`
+  **3–15× outside the entire tested envelope**, the cross-iteration buffer never validated,
+  **epochs-per-buffer unreported** so the ~1.5× GPU-hour estimate is uncomputable from the paper.
+  **λ-returns FIRST** (a LANDED codec); reverse-KL second, anchor pre-registered **by direction**;
+  **entropy normalization is a PRECONDITION on ever arming an entropy term** (`S-ENTROPY-PRECOND`),
+  **not a fix** — there is no live defect to fix. **R254/R258 STAND.** `S-AZAL-ONESIDED`'s witness
+  (iii) gains a **VETO over (ii)**.
+  **(c) THE SERVED-SIMS OVERSHOOT IS FIXED AT CAUSE BEFORE THE MINT** — 53.46 served against 50
+  configured. A search stops at **exactly N**; the witness is the **per-search visit count**, with a
+  planted break red-before. **NO FIXED-NODE CLAIM UNTIL IT LANDS** — R334(f)(ii) says *beats
+  `sealbot_d5` at FIXED NODES*, and that is unstatable while the served count is 7 % above the
+  config's. **This is a MINT PRECONDITION, not a perf item.**
+  **(d) playout_cap IS PROPOSED DISARMED for the run6 mint** (uniform sims); **the PCR preset and
+  Gumbel root selection are ONE ablation pair AFTER the baseline, decided together.** **The value is
+  the operator's row.**
+  **(e) PERF-TRANCHE-3 IS ORDERED, five severable legs:** (0) the overshoot fix; (1) `S-CHECK17`
+  **after** tranche-2 §12.1's per-check decomposition (LAW-01), bar **×1.22–×1.36** on the trainer
+  step pre-registered, **outside the bracket either way the number is BANKED, not tuned toward**;
+  (2) `S-PREFUSE` **time-boxed**, byte-identity of the fused wire over the frozen corpus, **the bar
+  is the CARD not the span**; (3) `S-BATTERY-G` as a **capability with a diagnostic override,
+  UNARMED**, serial default byte-exact; (4) the doc-only leg of (a). **`S-INCR-GRAPH` STAYS
+  PARKED.** Net-hash green and memory deltas after every landed change (R334(e)).
+  **(f) THE RUN6 SUCCESS WITNESS'S INSTRUMENT IS PROVEN BEFORE STEP 1** — the mint's step-0 act
+  reads the BC checkpoint of record against the pinned external rungs and **publishes its Elo with
+  CI**. **A witness whose instrument has never fired is the F-27/F-30 class** (canary above its gate
+  for 46 k steps while SealBot WR collapsed 33 % → 5 %; best-model promoted at 45 k while external
+  WR crashed to 2 %), and **SCOUT §2.3 supplies a third instance from outside this project**.
+  **(g) THE ORDER AFTER THIS**: the RUN6 MINT LAUNCHER (its own packet, forwarding after this
+  tranche's exit is ratified) → WP-AXIS2 shakedown → run6. **The prereg table is FILED beside the
+  launcher; every value in it is the operator's.**
+  **RUN6 REMAINS HELD. R335 ARMS NOTHING.**
 
 
 ## 6. Dispatch & autopilot governance — LAW
@@ -5832,3 +5934,67 @@ Verbatim text in the register; one-liners here are index only.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms no VALUE, trains nothing, and starts no
   run. F-11's mechanism lands as code before the mint; F-32's lands AT the mint. **RUN6 REMAINS
   HELD.**
+
+- 2026-09-04 — **v3.41** curated by the PERF-TRANCHE-3 execution session, landing **R335**, authored
+  in the ARCH-ERA architect session and forwarded by the operator INLINE (no file), so the landing
+  session created the canonical home `plan/PACKET_R335_PERF_TRANCHE_3.md` §1.
+  **PRECONDITIONS, run before any edit:** census `R23–R334 — 305 sections / 305 distinct / 0
+  duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}` — matching the
+  dispatch's stated expectation term for term; `--stamp` `STAMP OK: stamp v3.40 == §8 last entry
+  v3.40`; `--self-test` all four controls fire; R334 verified as the register's LAST section with no
+  foot annotation after it. **`grep -rn 'R335' plan/` returned rc 1 and ZERO hits** before the
+  landing. The forwarded text carried `R{next}` in **TWO** places (the dispatch's own heading and
+  the quote-block lead) — both substituted, no other placeholder touched, residual grep over the
+  canonical home **rc 1**, exactly ONE `R335` token in §1. Extraction into the register by script
+  over the canonical home's §1 quote block — **39 lines**. Post-append census
+  `R23–R335 — 306 / 306 / 0, excluded 53`.
+  **A THIRD PLACEHOLDER OCCURRENCE, AND WHY IT IS NOT A THIRD SUBSTITUTION.** The dispatch's §1
+  landing sentence *names* the placeholder while ordering its substitution. Transcribing it verbatim
+  into the canonical home would have put a second `R335` token in §1 — breaking the very invariant
+  the sentence exists to establish — and would have left a reader an instruction they cannot act on.
+  It is recorded instead as a landing RECORD of what was executed. **The instruction is procedure;
+  only the quote block is ruling text.**
+  **REFERENTS RE-DERIVED AT POINT OF USE, and one of them changes a leg's shape.** (a)'s four
+  premises each checked at HEAD `736c4b5`: the F-43 sites verify at `run.py:528` and `538` where
+  SCOUT-2 cited `537-539` (**symbol, not line — R311(d)**); the seven-config `entropy_reg_weight`
+  census is a CENSUS (seven files, seven hits, no eighth), not a spot check; `ADJ-01` and
+  `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` read in the tree's own words. **(c)'s premise was checked for a
+  SUBJECT before the leg was ordered, and the subject is not where the handoff's one-liner puts
+  it**: `search_drive.rs:754` ALREADY clamps one batch loop
+  (`leaf_batch_size.min(sims_per.saturating_sub(cand_sims))`), while `replay/hexg/mod.rs:83-84`
+  derives the record capacity as `max(ARMED effective sim budgets) + leaf_batch_size − 1` and states
+  the reason in the tree's own voice — *"the production sim loops overshoot by up to
+  `leaf_batch_size − 1`"*. **So the overshoot is CONFIRMED to exist and CONFIRMED to be PARTIAL, and
+  Leg 0's halt condition is a LIVE one** — it is a structural search, not a one-line patch.
+  (d)'s *minted DISARMED* read off `configs/run5.yaml:201-207`; (f)'s `sealbot_d5` at
+  `configs/run5.yaml:48-49`.
+  **SPOT-CHECKS AGAINST THE VERBATIM REGISTER (curation protocol, ≥5):** **R289(o)** (§5 index line
+  vs register `> (o) RQ-17` — *host-attested, cross-host inadmissible for verdicts, mechanism
+  evidence only*: index matches, and it is the rule that keeps this session from quoting the dead
+  instance's fuse figure as a level); **R254** (`> R254 — KLENT … sample-efficiency lever, not a
+  throughput lever` — the index's *KLENT acting-cost half fenced* matches); **R258**
+  (`> R258 — … (ii) acting cost — Shrimp-Bot's KLENT is search-free … fenced off for run5 by your
+  own lock` — matches, and R335(b) explicitly re-affirms both); **R311(b)** (`> … the full local
+  sweep runs at leg exit and before any push, not per edit` — matches, and it is this packet's own
+  gate cadence); **R311(c)** (`> (c) DOCS FOLLOW REALITY. A non-canonical working document … is
+  repaired in place … Register text still corrects only by annotation` — matches, and it is the
+  instrument R335(a) selects for two of its four disposals). A sixth was read because Leg 0 depends
+  on it: **R318**'s heading confirms *the deploy head ADOPTS self-play's leaf batching, k read from
+  the same `leaf_batch_size` knob*, which is why the leg must search TWO sites and not one.
+  **EDITS, FOUR:** the header stamp `v3.40 → v3.41` with its v3.41 block appended after v3.40's;
+  **§1's census sentence re-derived by script** (`R23–R335 — 306/306/0`) together with its
+  `range(23, 336)` re-derivation instruction (the upper bound is `max+1` and is re-derived, never
+  carried — it went stale for five curations once); a **new §5 LIVE row for R335**; and this entry.
+  Nothing was deleted. **REGISTER EDITS, ONE:** the R335 append.
+  **WHAT THIS RULING SETTLES.** **A research mission becomes evidence, and its six collisions with
+  standing text get four different instruments — chosen by each document's STATUS, not by the size
+  of the finding.** That is the curation's transferable content: a curated register annotates, a
+  working doc is repaired in place, an input document is annotated, and no one of those is a
+  substitute for another. Beside it, **KLENT's refusal moves off the ground the operator feared** —
+  stability held across a 27-point sweep; **coverage is what fails**, on the exact axis the method's
+  advantage is attributed to. And **R335(f) turns the run6 witness from a shape into an instrument
+  that has fired at least once before the run depends on it**, which is the one lesson F-27 and F-30
+  cost this project twice.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, **arms no VALUE** (`S-BATTERY-G`'s
+  concurrency stays a prereg row, playout_cap stays the operator's), trains nothing, and starts no
+  run. **RUN6 REMAINS HELD.**

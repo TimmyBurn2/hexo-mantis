@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 5697fb1, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ fe3abff, regenerated 2026-09-04.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -8138,3 +8138,49 @@ the landing so that it is a derivation on the record and not a silent choice ins
 > pinned external rungs slopes upward over the run's first third. N and the
 > slope bar are operator prereg rows.
 > ROUTE: land, census, ACTIVE next; execute; one exit screen.
+
+# R335 — architect ruling, ARCH-ERA session, 2026-09-04 (SCOUT-2 ACCEPTED as evidence and its six §6 contradictions DISPOSED by FOUR DIFFERENT INSTRUMENTS — an append-only annotation for the register row, one disclosed line each for the two working docs, an annotation for the input document — because the doc's status decides the instrument, not the finding's size; KLENT REFUSED AS A BUNDLE and the ground is COVERAGE, NOT STABILITY: |A| 3–15× outside the whole tested envelope, the cross-iteration buffer never validated, epochs-per-buffer unreported, with λ-returns first as a LANDED codec, reverse-KL second with its anchor pre-registered BY DIRECTION, and entropy normalization RECLASSIFIED from fix to PRECONDITION; the SERVED-SIMS OVERSHOOT ordered fixed AT CAUSE before the mint with the per-search visit count as witness and no fixed-node claim until it lands; playout_cap PROPOSED DISARMED for run6 and bound to Gumbel root selection as ONE post-baseline ablation pair; PERF-TRANCHE-3 ORDERED as five severable legs with S-INCR-GRAPH parked and net-hash plus memory deltas riding every landed change; and the RUN6 SUCCESS WITNESS's INSTRUMENT ordered PROVEN BEFORE STEP 1 — a witness whose instrument has never fired is the F-27/F-30 class and SCOUT §7 supplies the third instance) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under R303(d), forwarded by the operator into this PERF-TRANCHE-3 execution session's prompt rather than as a file — so the landing session CREATED the ruling's one canonical home, `PACKET_R335_PERF_TRANCHE_3.md` §1, and no competing text existed under `plan/` before it: `grep -rn 'R335' plan/` returned **rc 1 and 0 hits**. **The forwarded text carried the placeholder `R{next}` in TWO places** — the dispatch's own heading and the quote-block lead — both substituted to `R335` after verifying the head is R334: census `R23–R334, 305 sections / 305 distinct / 0 duplicates, excluded set 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`, matching the dispatch's stated expectation term for term; `--stamp` reported `STAMP OK: stamp v3.40 == §8 last entry v3.40`; `--self-test` all four controls fire; and R334 is the register's LAST section with no foot annotation after it. The dispatch's third occurrence of the placeholder sits inside its own landing INSTRUCTION — a sentence about what to substitute, not a place to substitute — so it is recorded in the canonical home as a landing RECORD of what was executed rather than transcribed as an order to a reader who cannot act on it; §1 therefore carries exactly ONE `R335` token, the quote-block lead, and no clause number was rewritten. The residual-placeholder grep over the canonical home returns **rc 1**. Extraction into the register is by script over that §1 quote block, never retyped from the prompt a second time.
+
+**The ruling's referents re-derived at point of use before landing.** **Clause (a) disposes six contradictions with four different instruments, and the choice of instrument is itself the ruling's content** — a curated register row corrects only by annotation (R9), a NON-canonical working doc is repaired in place by whoever finds it (R311(c)), and an input document that is neither is annotated. Each premise was checked at HEAD `736c4b5` rather than accepted from SCOUT-2. *F-43's moved mechanism* — R215's correction of record reads *"dropped because `pool._sink=None` at `run.py:349`"*; at HEAD both pool constructions pass `sink=_DeferredSink()` (`src/mantis/run.py:528, 538`), a late-binding adapter whose own docstring states the mechanism it replaced (*"`sink=None` here meant every trainer-side emission … `bind()` is called … the pool is not started until"*, `run.py:182-198, 521-528`). SCOUT-2 cited `run.py:537-539`; the sites verify at **528 and 538**, so the line numbers are hints and the structure is the citation. **The row's FINDING is untouched** — the zero-games signature was invisible-games, and log_interval gating is the other half — which is exactly why an annotation and not an edit. *klent_assessment §5.1 / Amendment 2* — the document's *"our existing `entropy_reg = −0.005`"* (`inputs/klent_assessment.md:124, 206, 226-227`) is false at HEAD three independent ways: the value is **`entropy_reg_weight: 0.0` in ALL SEVEN committed configs** (a census of `configs/*.yaml`, seven files, seven hits, no eighth); the `−0.005` *"was a sign-leak from the loss formula and never existed in this tree (ADJ-01)"* in the schema's own words (`src/mantis/config/schema/train.py:289-290`), with the sign inverted besides; and on the graph path a nonzero value is a **hard raise**, `entropy_reg_weight` being a member of `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` (`src/mantis/train/trainer/core.py:81-84`) checked before `zero_grad` (`:633-638`). **The mechanism survives and the live-defect claim does not** — which is why Rank 2 moves from *"do this regardless"* to a precondition, clause (b)'s `S-ENTROPY-PRECOND`. *SEAM_V1_DESIGN §6.3* carries the dead denominator verbatim at `plan/SEAM_V1_DESIGN.md:300` (*"card measured **~85–87 % idle** (§0.2.ii) | 3–4× **on batteries**"*) against tranche-2 §10.1's measured `gpu_util_mean` **31.1 %**; *SESSION_HANDOFF_v5 §5.4* carries *"hexo-bridge may carry a board renderer"* at `plan/SESSION_HANDOFF_v5.md:148-149`. Both are working docs and both are repaired in place. **Clause (c)'s premise is verified to have a subject before the leg is ordered**, and the subject is not where the handoff's one-line statement puts it: `crates/mantis-selfplay/src/runner/search_drive.rs:754` ALREADY clamps one batch loop (`leaf_batch_size.min(sims_per.saturating_sub(cand_sims))`), while `crates/mantis-selfplay/src/replay/hexg/mod.rs:83-84` derives the record capacity as `max(ARMED effective sim budgets) + leaf_batch_size − 1` and states the reason in the tree's own voice — *"the production sim loops overshoot by up to `leaf_batch_size − 1` (the uncapped …)"*. **The overshoot is therefore CONFIRMED to exist and CONFIRMED to be partial**, so Leg 0's halt condition (*"if the overshoot is not where §5.2 says"*) is a live one and the leg is a structural search, not a one-line patch. **Clause (d)'s "minted DISARMED" is read off the config rather than carried**: `configs/run5.yaml:201-207` gives `fast_prob: 0.0`, `full_search_prob: 0.0`, `n_sims_quick: 0`, `n_sims_full: 0`, `standard_sims: 0` — every move runs at `mcts.n_simulations` flat, so *"the PCR average"* for run5 IS 50 and there is no second regime to average over. **Clause (f)'s `sealbot_d5` is a real rung**, `configs/run5.yaml:48-49`, and the clause adds nothing to R334(f)'s three terms except the demand that the INSTRUMENT fire once before the run depends on it — which is the one thing F-27 (the dual-bank canary above its gate for 46 k steps while SealBot WR collapsed 33 % → 5 %) and F-30 (best-model promoted at step 45 k while external WR crashed to 2 %) both cost this project, and SCOUT §2.3 supplies a third instance from outside it.
+
+> R335 — (a) The head is R334 at v3.40; SCOUT-2 is ACCEPTED as evidence.
+> Its §6 contradictions are DISPOSED: F-43 gains an ANNOTATION (R9) — the
+> `sink=None` mechanism no longer holds at HEAD, the finding stands;
+> SEAM_V1_DESIGN §6.3's eval-battery row and SESSION_HANDOFF_v5 §5.4's
+> hexo-bridge line are corrected in place, one disclosed line each
+> (R311(c)); klent_assessment §5.1/Amendment 2 gains an annotation — the
+> live-defect premise is false at HEAD three ways, the mechanism stands.
+> (b) KLENT is NOT adopted as a bundle, and stability is not the ground:
+> coverage is — |A| 3–15× outside the tested envelope, the cross-iteration
+> buffer never validated, epochs-per-buffer unreported. λ-returns (a landed
+> codec) is the first KLENT ablation candidate; reverse-KL second with its
+> anchor pre-registered by direction; entropy normalization is a
+> PRECONDITION on ever arming an entropy term (S-ENTROPY-PRECOND), not a fix.
+> R254/R258 stand. S-AZAL-ONESIDED's witness (iii) gains a VETO over (ii).
+> (c) SERVED SIMS: the leaf-batch overshoot (53.46 served at 50 configured)
+> is fixed AT CAUSE before the mint — a search stops at exactly N; witness
+> is the per-search visit count, planted break red-before. No fixed-node
+> claim is made until it lands.
+> (d) playout_cap is PROPOSED DISARMED for the run6 mint (uniform sims); the
+> PCR preset and Gumbel root selection are ONE ablation pair after the
+> baseline, decided together. The value is the operator's row.
+> (e) PERF-TRANCHE-3 is ORDERED, five severable legs: (0) the overshoot fix;
+> (1) S-CHECK17, AFTER the tranche-2 §12.1 per-check decomposition runs, bar
+> ×1.22–×1.36 on the trainer step pre-registered; (2) S-PREFUSE, time-boxed,
+> byte-identity of the fused wire over the frozen corpus, the bar is the
+> CARD not the span, banked if it does not clear; (3) S-BATTERY-G as a
+> capability with a diagnostic override, UNARMED, serial default byte-exact;
+> (4) the doc-only leg of (a). S-INCR-GRAPH stays parked. Net-hash green and
+> memory deltas after every landed change (R334(e)).
+> (f) The RUN6 SUCCESS WITNESS's instrument is PROVEN before step 1: the
+> step-0 act at the mint reads the BC checkpoint of record against the
+> pinned external rungs and publishes its Elo with CI. A witness whose
+> instrument has never fired is the F-27/F-30 class; SCOUT §7 supplies the
+> third instance.
+> (g) ORDER AFTER THIS: the RUN6 MINT LAUNCHER (its own packet, forwards
+> after this tranche's exit is ratified) → WP-AXIS2 shakedown → run6. The
+> prereg table is FILED beside the launcher; every value in it is the
+> operator's. Run6 remains held.
+> ROUTE: land, census, ACTIVE next; Legs 0–4; one exit screen.
