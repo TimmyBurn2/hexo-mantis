@@ -80,12 +80,17 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 
 /// R255/ADJ-D34 — THE derivation authority for the HEXG visit-slot capacity.
 ///
-/// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1` — the
-/// production sim loops overshoot by up to `leaf_batch_size − 1` (the uncapped
-/// final batch), so this is the largest positive-mass support a graph record
-/// can carry. Armed arms: standard (always; effective = `standard_sims` else
-/// `n_simulations`), fast iff `fast_prob > 0`, quick/full iff
-/// `full_search_prob > 0`.
+/// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1`, the largest
+/// positive-mass support a graph record can carry. Armed arms: standard (always;
+/// effective = `standard_sims` else `n_simulations`), fast iff `fast_prob > 0`,
+/// quick/full iff `full_search_prob > 0`.
+///
+/// THE `− 1` TERM IS NOW HEADROOM, NOT A BOUND (R335(c), 2026-09-04). It was derived
+/// from the sim loops overshooting by up to `leaf_batch_size − 1` on an uncapped final
+/// batch; `search_drive::run_mcts_search` now clamps that batch, so a PUCT search backs
+/// up exactly `max_armed` visits and the Gumbel arm backs up fewer. The FORMULA IS
+/// DELIBERATELY UNCHANGED: it is a mint-time validator, so tightening it changes which
+/// configs mint, which is a ruling's call and not a perf leg's.
 ///
 /// Called by BOTH enforcement surfaces — the mint-time schema validator
 /// (through the bridge twin `derived_hexg_visit_capacity`) and the

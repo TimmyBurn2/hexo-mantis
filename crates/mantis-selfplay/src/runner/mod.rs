@@ -78,6 +78,9 @@ pub struct RunnerStatsSnapshot {
     pub mcts_conc_accum: u64,
     pub mcts_stat_count: u64,
     pub mcts_quiescence_fires: u64,
+    /// R335(c) — the largest leaf count ANY one search served. Must never exceed the
+    /// search budget; `search_drive::run_mcts_search` `fetch_max`es it per search.
+    pub max_sims_per_search: u64,
     // `cluster_value_std_accum` / `cluster_policy_disagreement_accum` are ×1e6;
     // `cluster_variance_samples` is the shared divisor count for both means.
     pub cluster_value_std_accum: u64,
@@ -181,6 +184,7 @@ pub struct SelfPlayRunner {
     mcts_conc_accum: Arc<AtomicU64>,
     mcts_stat_count: Arc<AtomicU64>,
     mcts_quiescence_fires: Arc<AtomicU64>,
+    max_sims_per_search: Arc<AtomicU64>,
     cluster_value_std_accum: Arc<AtomicU64>,
     cluster_policy_disagreement_accum: Arc<AtomicU64>,
     cluster_variance_samples: Arc<AtomicU64>,
@@ -397,6 +401,7 @@ impl SelfPlayRunner {
             mcts_conc_accum: Arc::new(AtomicU64::new(0)),
             mcts_stat_count: Arc::new(AtomicU64::new(0)),
             mcts_quiescence_fires: Arc::new(AtomicU64::new(0)),
+            max_sims_per_search: Arc::new(AtomicU64::new(0)),
             cluster_value_std_accum: Arc::new(AtomicU64::new(0)),
             cluster_policy_disagreement_accum: Arc::new(AtomicU64::new(0)),
             cluster_variance_samples: Arc::new(AtomicU64::new(0)),
@@ -547,6 +552,7 @@ impl SelfPlayRunner {
             mcts_conc_accum: self.mcts_conc_accum.load(Ordering::Relaxed),
             mcts_stat_count: self.mcts_stat_count.load(Ordering::Relaxed),
             mcts_quiescence_fires: self.mcts_quiescence_fires.load(Ordering::Relaxed),
+            max_sims_per_search: self.max_sims_per_search.load(Ordering::Relaxed),
             cluster_value_std_accum: self.cluster_value_std_accum.load(Ordering::Relaxed),
             cluster_policy_disagreement_accum: self
                 .cluster_policy_disagreement_accum
@@ -796,6 +802,7 @@ mod seam_roundtrip {
         r.mcts_conc_accum.store(8, Ordering::Relaxed);
         r.mcts_stat_count.store(9, Ordering::Relaxed);
         r.mcts_quiescence_fires.store(10, Ordering::Relaxed);
+        r.max_sims_per_search.store(50, Ordering::Relaxed);
         r.cluster_value_std_accum.store(11, Ordering::Relaxed);
         r.cluster_policy_disagreement_accum.store(12, Ordering::Relaxed);
         r.cluster_variance_samples.store(13, Ordering::Relaxed);
@@ -830,6 +837,7 @@ mod seam_roundtrip {
             mcts_conc_accum: 8,
             mcts_stat_count: 9,
             mcts_quiescence_fires: 10,
+            max_sims_per_search: 50,
             cluster_value_std_accum: 11,
             cluster_policy_disagreement_accum: 12,
             cluster_variance_samples: 13,

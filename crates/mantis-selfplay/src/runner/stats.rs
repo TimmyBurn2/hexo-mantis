@@ -24,6 +24,11 @@ pub(crate) struct WorkerStats {
     pub(crate) mcts_conc_accum: Arc<AtomicU64>,
     pub(crate) mcts_stat_count: Arc<AtomicU64>,
     pub(crate) mcts_quiescence_fires: Arc<AtomicU64>,
+    /// R335(c) — the largest number of leaves ANY one search served. The budget
+    /// is `n_simulations` (or the playout-cap arm's), so this must never exceed
+    /// it; before the batch clamp it read `n_simulations + leaf_batch_size - 1`
+    /// and the run served ~7 % more sims than the config named.
+    pub(crate) max_sims_per_search: Arc<AtomicU64>,
     pub(crate) cluster_value_std_accum: Arc<AtomicU64>,
     pub(crate) cluster_policy_disagreement_accum: Arc<AtomicU64>,
     pub(crate) cluster_variance_samples: Arc<AtomicU64>,

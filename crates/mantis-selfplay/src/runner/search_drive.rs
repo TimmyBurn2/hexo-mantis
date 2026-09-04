@@ -114,6 +114,8 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_conc_accum: &'a AtomicU64,
     pub(crate) mcts_stat_count: &'a AtomicU64,
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
+    /// R335(c) — `fetch_max`ed with each search's served-leaf count.
+    pub(crate) max_sims_per_search: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
     pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
@@ -259,7 +261,9 @@ pub(crate) enum MoveOutcome {
 
 /// Result of `run_mcts_search`.
 enum McTSSearchResult {
-    Completed(Option<GumbelSearchState>),
+    /// The Gumbel state (PUCT: `None`) and the leaves this search actually served —
+    /// R335(c)'s per-search visit count, `fetch_max`ed by the caller.
+    Completed(Option<GumbelSearchState>, usize),
     RootExpansionFailed,
     /// R275(b) SEAM conjunct: a leaf inference FAILED. The search is abandoned
     /// here and never reports `Completed` — see [`InferenceSeamFailure`].
@@ -676,6 +680,9 @@ fn run_mcts_search(
     variance: ClusterVarianceAtomics,
 ) -> McTSSearchResult {
     let mut gumbel_state: Option<GumbelSearchState> = None;
+    // Assigned exactly once on each of the three completion paths (Gumbel fallback,
+    // Gumbel sequential-halving, PUCT); every other path returns a non-`Completed` arm.
+    let sims_served: usize;
 
     if gumbel_mcts {
         // ── Gumbel MCTS with Sequential Halving ──
@@ -698,8 +705,14 @@ fn run_mcts_search(
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
+                // R335(c), by SYMMETRY with the PUCT loop below, not by measurement: this
+                // is the `effective_m == 0` degenerate fallback, which needs a root that is
+                // expanded with zero children, and no tier drive reaches it. Leaving one of
+                // two structurally identical loops unclamped is the exact divergence that
+                // produced this defect — the two Python heads clamped and Rust did not.
+                let batch = leaf_batch_size.min(move_sims - sims_done);
                 let n = match infer_and_expand(
-                    tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+                    tree, batch, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
                 ) {
                     Ok(n) => n,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -709,6 +722,7 @@ fn run_mcts_search(
                 }
                 sims_done += n;
             }
+            sims_served = sims_done;
             gumbel_state = None;
         } else {
             let mut gs = GumbelSearchState::new(tree, effective_m, c_visit, c_scale, rng);
@@ -750,7 +764,13 @@ fn run_mcts_search(
                             break;
                         }
                         // Cap batch to this candidate's remaining budget so we don't
-                        // overshoot `sims_per`.
+                        // overshoot `sims_per`. R335(c) added a second `move_sims` clamp here
+                        // and then REMOVED it as provably dead: `n <= batch <= sims_per -
+                        // cand_sims` makes each candidate spend at most `sims_per`, and
+                        // `sims_per` is `remaining_budget / (remaining_phases * candidates)`,
+                        // so the phase cannot allocate past the budget; the `.max(1)` floor
+                        // is caught by the two `sims_used >= move_sims` breaks. Measured:
+                        // identical served counts with and without it.
                         let batch = leaf_batch_size.min(sims_per.saturating_sub(cand_sims));
                         let n = match infer_and_expand(
                             tree, batch.max(1), kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
@@ -776,6 +796,7 @@ fn run_mcts_search(
                 gs.halve_candidates(tree);
             }
             let _ = tree.set_forced_root_child(None);
+            sims_served = sims_used;
             gumbel_state = Some(gs);
         }
     } else {
@@ -804,8 +825,14 @@ fn run_mcts_search(
             if !running.load(Ordering::Relaxed) {
                 break;
             }
+            // R335(c): the last batch is sized to the REMAINING budget. Unclamped, this
+            // loop served 53-56 sims against a configured 50, which is what made the
+            // ledger's served-sims line disagree with the config and every "fixed nodes"
+            // claim unstatable. `arena/deploy_head.py` and `selfplay/worker.py` already
+            // clamped; this was the one loop that did not.
+            let batch = leaf_batch_size.min(move_sims - sims_done);
             let n = match infer_and_expand(
-                tree, leaf_batch_size, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
+                tree, batch, kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set, infer, variance,
             ) {
                 Ok(n) => n,
                 Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -815,9 +842,10 @@ fn run_mcts_search(
             }
             sims_done += n;
         }
+        sims_served = sims_done;
     }
 
-    McTSSearchResult::Completed(gumbel_state)
+    McTSSearchResult::Completed(gumbel_state, sims_served)
 }
 
 // ── Per-move dispatcher (warm/HOT path) ─────────────────────────────────────
@@ -871,7 +899,14 @@ pub(crate) fn play_one_move(
         kept_planes, n_cells, policy_stride, has_pass_slot, agg_trunk_sz, legal_set,
         infer, variance,
     ) {
-        McTSSearchResult::Completed(gs) => gs,
+        McTSSearchResult::Completed(gs, sims_served) => {
+            // R335(c): the per-search visit count, as a MAX rather than a mean — a mean
+            // hides a single overshooting search, and the property is an upper bound.
+            accumulators
+                .max_sims_per_search
+                .fetch_max(sims_served as u64, Ordering::Relaxed);
+            gs
+        }
         McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
         // R275(b) SEAM conjunct: LAW-14 store-then-halt on its OWN counter. The
         // message rides the shared latch slot to the drain face, so the supervisor

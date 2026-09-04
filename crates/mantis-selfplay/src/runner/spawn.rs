@@ -132,6 +132,7 @@ impl SelfPlayRunner {
             mcts_conc_accum: self.mcts_conc_accum.clone(),
             mcts_stat_count: self.mcts_stat_count.clone(),
             mcts_quiescence_fires: self.mcts_quiescence_fires.clone(),
+            max_sims_per_search: self.max_sims_per_search.clone(),
             cluster_value_std_accum: self.cluster_value_std_accum.clone(),
             cluster_policy_disagreement_accum: self.cluster_policy_disagreement_accum.clone(),
             cluster_variance_samples: self.cluster_variance_samples.clone(),
