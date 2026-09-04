@@ -12,12 +12,19 @@
 //! function than the one the ledger ranked.
 
 use std::collections::HashSet;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 
 use mantis_graph::AxisGraph;
 use mantis_selfplay::queues::{build_leaf_graph, GraphWire};
+
+// The SAME `concat_by_offset` the parity proof pins byte-identical to the whole-batch fuse
+// (`tests/prefuse_concat_parity.rs`). Timing a second copy would be timing unverified code.
+#[path = "../tests/common/mod.rs"]
+mod common;
 
 // ── Regime constants, pinned to the ledger's §2.2 contended reading ──────────
 /// Achieved batch at twelve workers was 39.29 of 64; 40 is that, rounded to the batch the
@@ -51,7 +58,13 @@ fn draw_range(s: &mut u64, lo: i64, hi: i64) -> i64 {
 
 /// One served pop's worth of built graphs, deterministic from `CORPUS_SEED`.
 fn build_pop_corpus() -> Vec<AxisGraph> {
-    let mut s = CORPUS_SEED;
+    build_pop_corpus_seeded(CORPUS_SEED)
+}
+
+/// The same corpus at a caller-chosen seed. The cross-thread arm needs a FRESH pop per
+/// sample — re-handing one corpus would leave it warm and measure nothing.
+fn build_pop_corpus_seeded(seed: u64) -> Vec<AxisGraph> {
+    let mut s = seed;
     let mut graphs = Vec::with_capacity(POP_GRAPHS);
     for _ in 0..POP_GRAPHS {
         let target = draw_range(&mut s, STONES_LO, STONES_HI) as usize;
@@ -122,6 +135,55 @@ fn queue_fuse_from_axis_graphs_pop40(c: &mut Criterion) {
     });
 }
 
+/// R335(e) Leg 2 — SCOUT §1.2's FALSIFIER, run without a GPU.
+///
+/// §1.2 argues the in-run fuse's 12.8 ms/pop remainder over cache-hot is not bandwidth but
+/// COLD READS: HOT-14's mechanism is that the graphs were written by OTHER worker cores and
+/// the server pays a cross-core transfer for every dirty line. The falsifier §1.2 states is
+/// *"re-run the criterion arm with the source arrays deliberately evicted"*.
+///
+/// EVICTION IS THE WRONG INSTRUMENT ON THIS SHAPE and this arm does better. The pop's source
+/// arrays are ~37 MB against a 16 MB L3, so they do not fit in either arm — a residency
+/// experiment cannot separate them. What DOES separate them is WHO WROTE THE LINES, which is
+/// the mechanism HOT-14 actually names. So: a builder thread builds each pop and hands it
+/// over, and the fuse is timed on a thread that has never touched those bytes. Against
+/// `..._pop40` — same corpus shape, same fuse, same process — the ratio is the mechanism's own
+/// number.
+///
+/// A ratio near 1.0 FALSIFIES the cold-read model on this host and HOT-14 needs re-opening.
+fn queue_fuse_cross_thread_pop40(c: &mut Criterion) {
+    let (want_tx, want_rx) = mpsc::channel::<u64>();
+    let (corpus_tx, corpus_rx) = mpsc::channel::<Vec<AxisGraph>>();
+    // The builder thread exists to make the bytes DIRTY IN ANOTHER CORE'S CACHE, which is the
+    // only property under test; it exits when the request channel closes.
+    let builder = thread::spawn(move || {
+        while let Ok(seed) = want_rx.recv() {
+            if corpus_tx.send(build_pop_corpus_seeded(seed)).is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut seed = CORPUS_SEED;
+    c.bench_function("queue_fuse_cross_thread_pop40", |b| {
+        b.iter_batched(
+            || {
+                seed = seed.wrapping_add(1);
+                want_tx.send(seed).expect("builder thread alive");
+                corpus_rx.recv().expect("builder thread produced a pop")
+            },
+            |graphs| {
+                let mut wire = GraphWire::from_axis_graphs(black_box(&graphs), 1);
+                let arrays = wire.take().expect("a freshly fused wire always has arrays");
+                black_box(&arrays);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    drop(want_tx);
+    let _ = builder.join();
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default()
@@ -129,4 +191,56 @@ criterion_group! {
         .sample_size(100);
     targets = queue_fuse_from_axis_graphs_pop40
 }
-criterion_main!(benches);
+
+/// R335(e) Leg 2 — THE NUMBER THAT DECIDES `S-PREFUSE`, and it is not the fuse's cost.
+///
+/// Under the card the workers fuse and the server CONCATENATES. The server therefore still
+/// touches every byte: `concat_by_offset` memcpys the bulk arrays and adds a running base to
+/// the index and offset arrays. The card's saving is `fuse − concat` on the server thread,
+/// not the whole fuse — so this arm is benched cross-thread, exactly like the fuse arm above,
+/// and the two are read as a pair.
+fn queue_concat_cross_thread_pop40(c: &mut Criterion) {
+    let (want_tx, want_rx) = mpsc::channel::<u64>();
+    let (parts_tx, parts_rx) = mpsc::channel::<Vec<mantis_selfplay::queues::GraphWireArrays>>();
+    // The builder thread does what a WORKER would under the card: build its slice AND fuse it,
+    // so the server-side arm receives already-fused wire written by another core.
+    let builder = thread::spawn(move || {
+        while let Ok(seed) = want_rx.recv() {
+            let graphs = build_pop_corpus_seeded(seed);
+            // 5 workers x 8 graphs — the pop composition `n_workers 12` most often produces.
+            let parts: Vec<_> = graphs.chunks(8).map(common::fuse).collect();
+            if parts_tx.send(parts).is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut seed = CORPUS_SEED;
+    c.bench_function("queue_concat_cross_thread_pop40", |b| {
+        b.iter_batched(
+            || {
+                seed = seed.wrapping_add(1);
+                want_tx.send(seed).expect("builder thread alive");
+                parts_rx.recv().expect("builder thread produced a pop")
+            },
+            |parts| {
+                let joined = common::concat_by_offset(black_box(parts));
+                black_box(&joined);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    drop(want_tx);
+    let _ = builder.join();
+}
+
+criterion_group! {
+    name = cross_thread;
+    config = Criterion::default()
+        .warm_up_time(Duration::from_secs(3))
+        // The setup builds a whole pop per sample, so this arm is deliberately smaller: the
+        // number wanted is a RATIO against the arm above, not a tight CI of its own.
+        .sample_size(30);
+    targets = queue_fuse_cross_thread_pop40, queue_concat_cross_thread_pop40
+}
+criterion_main!(benches, cross_thread);
