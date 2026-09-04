@@ -1,13 +1,37 @@
 """Mint a complete, schema-valid config from a named template + explicit deltas.
 
 CLI: uv run python tools/mint_config.py --template dev --out configs/<name>.yaml
-     [--set dotted.key=value ...] [--force]
+     [--set dotted.key=value ...] [--mint-row dotted.key=value ...] [--force]
 
 Every --set key MUST already exist in the template (creating a new key via mint is an
 error — the schema would reject it anyway). The delta is stamped into the file header
 (repo_design §5 copy-drift antidote) as REPLAYABLE YAML — see `_render_value` (R187). Exit 0
 ok; 2 on unknown template, unknown delta key, a delta value the header cannot record
 replayably, schema-invalid result, existing output without --force, or usage error.
+
+--mint-row IS THE OTHER HALF, AND IT EXISTS BECAUSE --set CANNOT WRITE THE ROWS A MINT IS FOR.
+`identity.arch_kind` and `identity.warm_start` are schema-OPTIONAL and every template omits
+them by design: R323(b) rules that they enter production configs ONLY as a minted row at run6's
+mint. Under --set's must-already-exist guard that ruling was unexecutable — the tool could not
+write the one kind of row it was told to write. --mint-row sets a key the template OMITS, and
+it is a separate flag rather than a relaxation of --set so a typo'd EXISTING key still fails
+loudly instead of being silently created.
+
+Its old value is DERIVED, never assumed to be null: the template is validated through
+`RunConfig` and the leaf is read out of the resulting dump, so the stamped `# delta:` line
+states the value the schema actually resolved the template to. That is what keeps
+`tools/config_diff.py` agreeing — it diffs the VALIDATED config against the VALIDATED template,
+so a header claiming `null -> X` on a leaf whose default is not None would be a lie the diff
+gate would catch. It refuses a key that is already present (use --set), a parent path that does
+not exist, and — through the same `RunConfig` validation every mint runs — any key the schema
+does not admit.
+
+R8 justification: WHY THIS IS ONE FILE, over the 300-line soft cap. Minting is one act with one invariant: the file it
+writes must be replayable from its own header. Splitting the renderer, the round-trip check, the
+two key resolvers and the CLI into separate modules would put the header's producer and the
+guarantee that the header can be read back in different files, and the guarantee only holds if
+they move together. Everything here is reachable from `main` and exists to keep one config
+honest about where it came from.
 
 `--out` takes a FREE path and puts no constraint on its shape (R75 declined the suffix guard
 that briefly stood here). The mint path is covered shape-agnostically instead: a config minted
@@ -125,6 +149,67 @@ def _delta_line(dotted: str, old: object, new: object) -> str:
     return f"# delta: {dotted}: {old_text}{HEADER_SEP}{new_text}"
 
 
+class MintRowError(ValueError):
+    """A --mint-row that names a key the tool must not create.
+
+    Raised, never swallowed: creating a key silently is how a typo becomes a config row nobody
+    ruled. The two refusals are `the leaf is already there` (that is --set's job) and `the
+    parent path is not a mapping in the template` (there is nothing to add the row to).
+    """
+
+
+def _resolve_new_parent(data: dict, dotted: str) -> tuple[dict, str]:
+    """Return (parent mapping, leaf key) for a dotted key the template does NOT carry.
+
+    Raises:
+        MintRowError: if the leaf already exists (--set owns that case) or an intermediate
+            segment is missing or is not a mapping.
+    """
+    parts = dotted.split(".")
+    node = data
+    for depth, part in enumerate(parts[:-1]):
+        if not isinstance(node, dict) or part not in node:
+            raise MintRowError(
+                f"--mint-row {dotted}: the parent path stops at "
+                f"{'.'.join(parts[:depth + 1])!r}, which the template does not carry. "
+                f"--mint-row adds a LEAF to an existing block; it does not build the block."
+            )
+        node = node[part]
+    leaf = parts[-1]
+    if not isinstance(node, dict):
+        raise MintRowError(f"--mint-row {dotted}: {'.'.join(parts[:-1])!r} is not a mapping")
+    if leaf in node:
+        raise MintRowError(
+            f"--mint-row {dotted}: the key is ALREADY in the template. Use --set, which "
+            f"records the real old value; --mint-row is only for a row the template omits."
+        )
+    return node, leaf
+
+
+def _schema_default_at(template_data: dict, dotted: str) -> object:
+    """The value `RunConfig` resolves the TEMPLATE to at `dotted` — the honest old value.
+
+    Not assumed to be None. `tools/config_diff.py` diffs the validated config against the
+    validated template, so the header's old slot has to be what validation produces or the
+    diff gate reds on a header that is merely plausible.
+
+    Raises:
+        ValidationError: if the template does not schema-validate (it always should; if it
+            does not, that is the finding and it must not be papered over).
+        MintRowError: if the dotted path does not exist in the validated dump — which means
+            the schema does not admit the key at all.
+    """
+    node: object = RunConfig.model_validate(template_data).model_dump()
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            raise MintRowError(
+                f"--mint-row {dotted}: the schema does not admit this key (it is absent from "
+                f"the validated template dump at {part!r}). A mint does not invent a row."
+            )
+        node = node[part]
+    return node
+
+
 def _resolve_parent(data: dict, dotted: str) -> tuple[dict, str]:
     """Return (parent mapping, leaf key) for an EXISTING dotted key; KeyError otherwise."""
     parts = dotted.split(".")
@@ -148,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--set", dest="deltas", action="append", default=[], metavar="dotted.key=value",
         help="delta applied to the template; the key must already exist",
+    )
+    parser.add_argument(
+        "--mint-row", dest="rows", action="append", default=[], metavar="dotted.key=value",
+        help="add a schema-optional row the template OMITS (R323(b)); the key must NOT exist",
     )
     parser.add_argument("--force", action="store_true", help="overwrite an existing output file")
     args = parser.parse_args(argv)
@@ -173,6 +262,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"unknown delta key (not in template): {dotted}", file=sys.stderr)
             return 2
         old = parent[leaf]
+        new = yaml.safe_load(raw_value)
+        try:
+            line = _delta_line(dotted, old, new)
+        except HeaderRenderError as exc:
+            print(f"cannot stamp a replayable header: {exc}", file=sys.stderr)
+            return 2
+        parent[leaf] = new
+        delta_lines.append(line)
+
+    # AFTER the deltas: a --set may legitimately move a value a --mint-row's parent depends
+    # on, and the old value is read from the UNMODIFIED template load either way.
+    template_data = parse_config_yaml(template_path)
+    for raw in args.rows:
+        if "=" not in raw:
+            print(f"malformed --mint-row (need dotted.key=value): {raw}", file=sys.stderr)
+            return 2
+        dotted, _, raw_value = raw.partition("=")
+        try:
+            parent, leaf = _resolve_new_parent(data, dotted)
+            old = _schema_default_at(template_data, dotted)
+        except MintRowError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        except ValidationError as exc:
+            print(f"template does not schema-validate:\n{exc}", file=sys.stderr)
+            return 2
         new = yaml.safe_load(raw_value)
         try:
             line = _delta_line(dotted, old, new)
