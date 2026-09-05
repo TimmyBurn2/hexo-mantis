@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 446ccc0, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ e48bb33, regenerated 2026-09-05.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -8379,3 +8379,100 @@ depend on it.
 > (d) SITTING-8 RESUMES at Δ12 under the vested grant, alias vast; the box
 > is kept; Phase W → STEP 0–3 → 4a–4c → burst as R336 orders.
 > ROUTE: land, census, ACTIVE next; annotation; Δ12; run to done; one exit.
+
+# R338 — architect ruling, ARCH-ERA session, 2026-09-05 (SITTING-9's PHASE-W HALT RATIFIED AS A SUCCESS with the defect placed on the ARCHITECT'S ledger — R330(d)'s widening read a within-round spread as a noise term and, at ply cap 256, that spread is a depth trend, so the widened threshold fell below every rung and the selection rule stopped seeing its own data; CORRECTION BY MECHANISM AND NOT BY THRESHOLD — the widening's noise term is the REPLICATE drive's dispersion, the instrument measuring itself, with an explicit VOID branch if the corrected widening still swallows the ladder and the unwidened R309(f) rule governing in that case; THE TRAINER ALLOWANCE TAKEN OVER THE MAX of the measured r8/V2 distribution and not p95, because a partition is a bound and a percentile readable as a bound is the "absent is not zero" family; the RANDOM FLOOR at 20 games BUDGETED rather than waived, with `deploy_matched = False` disclosed beside every floor reading and the floor never cited as the LAW-15 instrument; `eval_child` CONFIRMED ONCE at the picked worker count's leaf-build thread budget before STEP 3, being the one budget term the pick moves; and the v3 table CLOSED — one value armed, no further prereg text owed before the mint) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into the SITTING-10 RE-SIT session's prompt rather than as a
+file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R338_SITTING10_RESIT.md` §1. **The pre-existence grep returned `rc 1` in BOTH
+repositories** — `R338` appeared nowhere in `mantis-migration` and nowhere in `hexo-mantis` before
+the canonical home was written. The forwarded text carried the ruling-number placeholder in
+**three** positions, of which **exactly one** is a substitution site inside the ruling text (the
+quote-block lead); the other two are the packet's own prose. Byte-diff on append per R306(a):
+the block was transcribed **twice, independently**, with the placeholder intact, and the two
+transcriptions diffed BEFORE substitution — **IDENTICAL, 34 lines / 2 281 chars**; the
+substitution was applied mechanically by `sed` to both and re-diffed — **EMPTY**; the canonical
+home's `awk`-extracted block was then diffed against the substituted transcription — **EMPTY**,
+34 lines / 2 278 chars. Extraction by `awk` over the canonical home, never retyped, under
+`set -o pipefail` (R313(c)). Head verified from the file before substituting: census
+`R23-R337, 308 / 308 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`;
+`STAMP OK: stamp v3.44 == §8 last entry v3.44`; `--self-test` all four controls fire.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the exit
+screen — and clause (a)'s stated mechanism is measured TRUE FOR FIVE RUNGS AND FALSE FOR THE TWO
+THAT SET THE TERM, which is recorded here because a future reader would otherwise carry the
+generalisation.** **Clause (a)'s ladder figures are read from the ARTIFACT, not the record's
+table:** `/workspace/sitting9/worker_sweep.json` → `selection.threshold 123.40196`,
+`noise_adjustment 68.48531126925958`, `adjusted_threshold 54.91664873074042`,
+`noise_rel_se_max 0.17574287503428254` at `noise_source_rung 4`, `picked 2`; the seven passing
+rungs and their values reproduce the exit screen's §3 table exactly. **`games_per_min` is
+`0.000` at rungs 8, 12, 14, 16 and 18** — zero games completed across all five measured rounds —
+and at those five rungs the round series falls monotonically with a fitted slope of −10.4 to
+−15.7 moves/min per round, so the spread there IS the depth trend the clause names: detrending
+about that slope drops the rel-SE from 8.28–8.93 % to **1.81–2.45 %**. **But `games_per_min` is
+`0.400` at rungs 2 and 4** — four games completed at each — their fitted slopes are POSITIVE
+(+5.00, +8.55), their series are non-monotone (rung 4 reads `80.5, 70.0, 174.5, 132.5, 92.0`),
+and detrending makes their dispersion WORSE (14.26 % → 15.85 %, 17.57 % → 19.27 %). **Rung 4 is
+the rung whose rel-SE the widening consumes.** So the clause's parenthetical *"no game ends
+inside a round on the throwaway net"* holds from rung 8 up and not below it; what is wrong at the
+governing rung is not that its dispersion is a trend but that `max(rel_se)` over the candidate
+set lets the single noisiest rung set the admission band for rungs whose own estimates are four
+times tighter. Both defects push the same way and the ordered correction bypasses both, so
+nothing in (b) moves — but the mechanism is stated here as measured rather than as forwarded.
+**Clause (b)'s noise-floor drive** is `plan/SITTING4_EVIDENCE/phasew_noise_floor.json`, mode
+`noise_floor`, four fresh same-seed drives at `n_workers 4`, drive means
+`306.2987, 302.6989, 306.2983, 309.2989`, `mean_of_means 306.14870`, recorded `rel_std
+0.0076376472` with `n_sigma 3` — the artifact's own statistic, a coefficient of variation over
+replicates. **Its carry across regimes is the thing R326(a) measured FALSE**, and that tension is
+disclosed rather than smoothed: R326(a) retired the carried scalar because one rung's CV does not
+describe the others, and `worker_sweep.py`'s scalar mode, its reader and `--noise-floor-report`
+were DELETED with it. What makes the correction safe here is not the carry but the ANSWER'S
+INSENSITIVITY: the pick is **16** under the recorded `rel_std` (0.7638 %), under the sample CV
+(0.8819 %), under the strict rel-SE (0.4410 %), **and under no widening at all** — four readings,
+one answer — because rung 16 leaves the admitted set only when the noise term exceeds **1.7718 %**,
+2.3× the largest of them. **Clause (c)'s 8.6381 GiB** is `RUN6_MINT_SITTING9_RECORD.md` §8.2, the
+max of a 60-step distribution at batch 256 on the real r8 ring (min 7.4056 · p50 7.9072 · p90
+8.1861 · p95 8.3581), and **the 0.75 GiB is `8.8973 − 8.1444`**, the 3 % allowance over the max
+against the same allowance over p50 — the record's own table. **Clause (e)'s resolver** is
+`src/mantis/config/resolve/leaf_build_threads.py`, which delegates to `resolve_sample_threads`
+and returns `max(1, cpu_count − n_workers − 1)`; the box reports `nproc 24`, so a pick of 16
+derives **7**, against the 9 sitting-9's one measured point ran at. **Clause (f)'s v3** is
+`RUN6_PREREG_PROPOSAL.md` §5, committed `fa65401` in this workspace, and the one value it moves is
+`eval.random_floor_games` `0 → 20`.
+
+> R338 — (a) SITTING-9's refusal to mint n_workers = 2 is RATIFIED.
+> The defect is the ARCHITECT'S: R330(d)'s widening took the within-round
+> spread as its noise term; at ply cap 256 that spread is a MONOTONE DEPTH
+> TREND (no game ends inside a round on the throwaway net), so the widened
+> threshold fell below every rung and the rule stopped seeing its data —
+> a cross-regime carry, the §3 class-4 error, on the architect's ledger.
+> (b) CORRECTION BY MECHANISM, no threshold edited: the widening's noise
+> term is the NOISE-FLOOR DRIVE's rel-SE (replicates at one rung, the
+> instrument measuring itself), never a within-round spread. Recompute the
+> widening from the sitting-9 data already in hand; the pick is the rule's
+> output under the R311 thresholds. If the corrected widening still puts
+> the threshold below the weakest rung, the widening is VOID for this
+> ladder (its premise — noise-dominated spread — is false) and the
+> unwidened rule governs. Expected on the recorded numbers: 16. The
+> sitting reports which branch fired and the arithmetic.
+> (c) The trainer allowance is taken over the MAX of the r8/V2
+> distribution (8.6381 GiB), not p95. A partition is a bound; a percentile
+> readable as a bound is the "absent is not zero" family — an OOM at the
+> 5th-percentile step ends the run. The 0.75 GiB is headroom the eval share
+> gives up; the partition still closes with slack, and slack is what the
+> allowance exists to protect.
+> (d) The random floor at 20 games per round is BUDGETED: it joins the
+> eval_child term (measured at STEP 4c on the real BC net, whose games vs
+> random are short — 20/20 six-in-a-row) and the round-time record;
+> deploy_matched = False is disclosed beside every floor reading, and the
+> floor is never cited as the LAW-15 instrument.
+> (e) eval_child is CONFIRMED once at the picked n_workers's
+> leaf_build_threads before STEP 3 — the only term that moves with the
+> pick. Then STEP 3, 4a as two commands (ANNOTATION 13), 4b, 4c, burst.
+> (f) The v2 table forwarded after the fill was not a re-fill; it armed
+> one value (the floor) and is filed as v3. No further prereg text is owed
+> before the mint.
+> ROUTE: land, census, ACTIVE next; (b) recompute; (e) confirm; STEP 3;
+> 4a–4c; burst; one exit.
+

@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 446ccc0, regenerated 2026-09-04.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ e48bb33, regenerated 2026-09-05.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.44, 2026-09-04. Created under R271 (register hygiene: archive/index split);
+# v3.45, 2026-09-05. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1119,6 +1119,15 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # (`F-816-34/35/36`); the halt is NARROW — STEP 1's terms are measured and the partition CLOSES at
 # every candidate. No mint, no config in `configs/`, no run. RUN6 REMAINS HELD.**
 
+# **v3.45 = R338 folded in — SITTING-9's Phase-W halt RATIFIED AS A SUCCESS with the defect on the
+# ARCHITECT'S ledger; the widening CORRECTED BY MECHANISM and no threshold edited — its noise term
+# is the REPLICATE drive's dispersion, not a within-round spread, with an explicit VOID branch (if
+# the corrected widening still swallows the ladder, R309(f)'s unwidened rule governs); the TRAINER
+# ALLOWANCE taken over the MAX of the measured r8/V2 distribution, not p95; the RANDOM FLOOR at 20
+# BUDGETED with `deploy_matched = False` disclosed and never cited as the LAW-15 instrument;
+# `eval_child` CONFIRMED ONCE at the picked worker count's leaf-build threads before STEP 3; and
+# the v3 prereg table CLOSED — no further prereg text owed before the mint.**
+
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
 CLAUDE.md; `plan/rulings_register.md` remains the append-only verbatim ARCHIVE and is
@@ -1163,9 +1172,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R337 — **308 sections, 308 distinct numbers, no duplicates** (re-derived at v3.43; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R338 — **309 sections, 309 distinct numbers, no duplicates** (re-derived at v3.45; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 338)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 339)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -1738,6 +1747,24 @@ Verbatim text in the register; one-liners here are index only.
   class (R299(d)) applied to a partition term. **Measured by PHASE W** (R309(g)), which enters the
   box block AHEAD of STEP 1 precisely so STEP 1's four terms are measured at the geometry that will
   run: caps fit at the config that will run, or they are stale at birth.
+- **`R338(b)` — THE KNEE WIDENING'S NOISE TERM IS THE REPLICATE DRIVE'S, not a within-round spread.
+  LIVE for run6's Phase W pick; supersedes R330(d)'s reading of WHICH dispersion the widening
+  consumes, and edits NO threshold.** R330(d) armed `3 × max(per-rung rel-SE over the passing set)
+  × best`; at ply cap 256 that per-rung figure is not a noise estimate — sitting 9 measured
+  `games_per_min = 0.000` at rungs 8–18, so the round series is a monotone depth trend and the
+  widening inflated to **52.7 % of the best rung**, dropping the threshold BELOW EVERY RUNG. The
+  corrected term is the **noise-floor drive's** dispersion (replicates at one rung, the instrument
+  measuring itself). **VOID BRANCH, stated in the ruling rather than left to judgment:** if the
+  corrected widening still puts the threshold below the weakest passing rung, its premise —
+  noise-dominated spread — is false, the widening is VOID for that ladder, and **R309(f)'s
+  unwidened knee rule governs**. R309(f)'s bracket, PLATEAU requirement and OOM disposition are
+  UNTOUCHED, as is F-WS-7's largest-first fallback.
+  **THE TENSION WITH R326(a) IS DISCLOSED, NOT SMOOTHED:** R326(a) measured the carried-scalar
+  assumption FALSE and retired it, and `worker_sweep.py`'s scalar mode, its reader and
+  `--noise-floor-report` were DELETED. What makes the correction safe on THIS ladder is not the
+  carry but the answer's insensitivity — the pick is the same under every reading of the replicate
+  statistic and under no widening at all. **A future ladder does not inherit the carry from this
+  row**; it inherits the requirement that the widening's term be measured on replicates.
 - **`F-WS-2` — PREREG ROW, **ADOPTED BY THE OPERATOR 2026-08-22 (R311(h))** and PRE-REGISTERED as
   of that adoption; no longer re-sit-blocking. The adopted reading is the NARROWER one the
   architect recommended: an OOM during the ladder stops the ladder's EXTENSION only, never the
@@ -6294,3 +6321,30 @@ Verbatim text in the register; one-liners here are index only.
   `--mint-row` cases, and gate 3c was re-run against the new floor.
   **WHAT THIS CURATION DOES NOT DO:** it mints nothing, writes no `configs/` file, produces no
   checkpoint, trains nothing and starts no run. **RUN6 REMAINS HELD.**
+
+- 2026-09-05 — **v3.45** curated by the SITTING-10 RE-SIT session at the R338 landing, folding in
+  **R338** (canonical home `PACKET_R338_SITTING10_RESIT.md` §1, created by this session because
+  the text was forwarded into the prompt rather than as a file). **Register APPENDED**: census
+  moves `R23–R337 — 308 / 308 / 0` → **`R23–R338 — 309 / 309 / 0, excluded 53`**, re-run this
+  curation, missing-in-range unchanged `{24, 29, 32, 33, 227, 228, 267}`; **`STAMP OK: v3.45`**;
+  `--self-test` all four controls fire. The append is **purely additive** — `diff` reports **zero
+  deleted lines** in the register — and the four `<` lines in this file are the four intended
+  in-place replacements (stamp, census sentence, `range()` bound, and the v3.44 tail the v3.45
+  block was inserted after; the last is an insertion, so only THREE lines are actually deleted).
+  The register's R338 block was `awk`-extracted and diffed against the canonical home's —
+  **byte-identical, 34 lines / 2 278 chars**.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register (R271(d)/R272(b)), named so the
+  check is reproducible:** §5's `run5.n_workers` knee-rule wording against R309(f) at
+  `rulings_register.md:6806-6816` — MATCHES, including *"the smallest rung within 95 percent of
+  the best PASSING rung's throughput"* and the REFUSED/GROWING/OOM dispositions; the header's
+  R326(a) claim against `:7673` — MATCHES verbatim (*"R317(d)'s carried-noise assumption is
+  MEASURED FALSE"*); §5's `F-WS-2`/`F-WS-7` adoption lines against R311(h) — MATCHES, both the
+  extension-only OOM reading and the largest-first fallback; §5's `R302(c)` host-coupled-mint row
+  against R302(c) — MATCHES, the three named keys and *"INSTANCE RECREATION VOIDS THEM"*; and
+  R330(d) against its own text — MATCHES, which is what makes R338(b) a correction of WHICH
+  dispersion the term reads and not of the threshold.
+  **WHAT THIS CURATION DOES.** It lands the ruling that unblocks Phase W, records the widening's
+  corrected mechanism as a LIVE row with its VOID branch and its disclosed tension with R326(a),
+  and moves the trainer allowance's statistic to the MAX. **WHAT IT DOES NOT DO:** it mints
+  nothing, writes no `configs/` file, produces no checkpoint, trains nothing and starts no run.
+  **RUN6 REMAINS HELD.**
