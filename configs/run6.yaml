@@ -14,6 +14,7 @@
 # delta: selfplay.max_game_moves: 128 -> 256
 # delta: train.checkpoint_interval: 0 -> 1000
 # delta: identity.arch_kind: null -> GnnArchV2
+# delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
 schema_version: 1
 run_id: run6
 seed: 20260718
@@ -23,6 +24,9 @@ identity:
   encoding: gnn_axis_r8
   representation: graph
   arch_kind: GnnArchV2
+  warm_start:
+    checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt
+    net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128

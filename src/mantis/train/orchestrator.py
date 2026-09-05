@@ -145,11 +145,25 @@ def init_trainer(
     # (`checkpoint_path is not None`, returned above) already restored trained weights and
     # seeding over them would destroy them. An absent `identity.warm_start` row returns False
     # and this is a no-op, which is what every run before the row did.
-    from mantis.train.warmstart import maybe_warmstart_gnn_from_bc
+    from mantis.train.warmstart import maybe_warmstart_gnn_from_bc, resolve_bc_warm_start
 
     maybe_warmstart_gnn_from_bc(model, cfg, spec=spec)
 
     # Pass the DECLARED arch (the SOLE arch source at save) + the injected sink through so a
     # fresh-run Trainer stamps envelope-v2 checkpoints from `metadata.arch` and routes events.
-    return Trainer(model, dict(config), arch=arch, checkpoint_dir=checkpoint_dir,
-                   device=device, sink=sink)
+    trainer = Trainer(model, dict(config), arch=arch, checkpoint_dir=checkpoint_dir,
+                      device=device, sink=sink)
+
+    # AUDIT-1 F-32 / R338 — THE FRESH-INIT PIN'S SOURCE, and it is why arming the pin does not
+    # turn `resolve_anchor` into a launch refusal. `verify_launch_anchor_pin` reads
+    # `getattr(trainer, "checkpoint_source", None)` and FAILS CLOSED when a pin is set and no
+    # source is readable; before this line NOTHING in the tree ever set that attribute, so an
+    # armed pin refused every fresh launch — a guard nobody could reach becoming one nobody
+    # could pass. On this branch the fresh anchor is seeded from `trainer.model`, and what
+    # seeded THAT is the warm-start artifact (R336(d): "the step-0 anchor IS the warm_start
+    # artifact"), so the artifact the row names is exactly the file the guard should hash.
+    # `resolve_bc_warm_start` is the SAME resolver the call above reads the row through — a
+    # second READ of one authority, never a second authority.
+    declared = resolve_bc_warm_start(cfg)
+    trainer.checkpoint_source = None if declared is None else declared.checkpoint
+    return trainer

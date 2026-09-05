@@ -141,6 +141,7 @@ from mantis.train.lifecycle.signals import (
 )
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
+from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.train.subsystems import build_run_safety
 from mantis.util.determinism import seed_everything
 
@@ -1112,11 +1113,20 @@ def compose_run(
         # Fail-loud law wins: the loop's failure propagates, and `close_out` still runs in a
         # `finally` so the buffer save and the guarded pool stop are not lost. If `close_out`
         # also raises, Python chains the loop failure as its `__context__`.
+        # AUDIT-1 F-32 / R334(c) SHAPE A, ARMED AT THE RUN6 MINT (R338). The launch pin DERIVES
+        # from `identity.warm_start` — ONE source, no hand-synced twin and no second key: the row
+        # already names the artifact and its `net_param_hash`, and `checkpoint_state_sha256` is
+        # the SAME denomination since F-32 collapsed the two (`model/identity.py`). An absent
+        # row is `None`, which is the no-pin posture every run before the row had.
+        declared_warm_start = resolve_bc_warm_start(config.model_dump())
         try:
             run_training_loop(trainer=trainer, shutdown_state=shutdown,
                               eval_pipeline=eval_pipeline, coordinator=coordinator,
                               anchor_state=resolved_anchor, sink=run_safety.sink,
-                              best_model_path=canonical_anchor_path(checkpoint_dir))
+                              best_model_path=canonical_anchor_path(checkpoint_dir),
+                              expected_anchor_sha256=(
+                                  None if declared_warm_start is None
+                                  else declared_warm_start.net_hash))
         finally:
             coordinator.close_out(
                 on_drained=_stop_pool_if_start_attempted(

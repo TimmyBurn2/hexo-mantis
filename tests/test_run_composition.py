@@ -674,3 +674,73 @@ def test_revalidation_does_not_over_reject_a_good_config_or_a_validated_subclass
         f"re-validation downgraded a validated subclass to {type(out).__name__}; the type "
         "gate admits subclasses (LSP) and this hop must not undo that"
     )
+
+
+# ══ AUDIT-1 F-32 / R334(c) SHAPE A — the launch pin DERIVES from `identity.warm_start` ═══
+def _capture_anchor(monkeypatch) -> dict:
+    """`_patch_eval_side`'s anchor stub, but CAPTURING. The pin's consumer is
+    `resolve_anchor`, so asserting there proves the value crossed every hop rather than that
+    one call site spells the right kwarg."""
+    import mantis.train.anchor as _anchor
+
+    seen: dict = {}
+
+    def _fake_resolve_anchor(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(best_model=None, best_model_step=None,
+                               best_model_path=None, representation="graph")
+
+    monkeypatch.setattr(_anchor, "resolve_anchor", _fake_resolve_anchor)
+    return seen
+
+
+#: A row the RESOLVER accepts without touching the filesystem — `resolve_bc_warm_start` parses
+#: and never stats, and the pin's derivation happens before anything opens the artifact. A real
+#: checkpoint belongs in the suite that tests the HASH
+#: (`tests/train/test_f32_launch_pin_wiring.py`); what this drive owns is whether the row's value
+#: reaches the guard at all.
+_WARM_START_ROW = {"checkpoint": "/nonexistent/bc_of_record.ckpt", "net_hash": "b" * 64}
+
+
+def test_the_launch_pin_reaches_the_anchor_resolver_from_the_warm_start_row(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+) -> None:
+    """R338 arms F-32 shape A: ONE source, no hand-synced twin and no second config key. The
+    audit's own words were that `verify_launch_anchor_pin` is *"a refusal nobody can reach"* —
+    because `run.py` never set the value. This is the row that says it does now."""
+    _patch_eval_side(monkeypatch)
+    seen = _capture_anchor(monkeypatch)
+    # RE-VALIDATED, not `model_copy`-patched: a raw dict pushed onto a typed field serialises
+    # with a Pydantic warning and, more to the point, would let this drive assert on a config
+    # shape the loader would never produce.
+    base = _bounded(smoke_run_config, eval_enabled=True).model_dump()
+    base["identity"]["warm_start"] = _WARM_START_ROW
+    config = RunConfig.model_validate(base)
+    assert config.identity.warm_start is not None
+    mantis.run.compose_run(
+        config=config, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(_OrderSpy()),
+        buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
+        checkpoint_dir=str(tmp_path / "ckpt"),
+    )
+    assert seen.get("expected_anchor_sha256") == _WARM_START_ROW["net_hash"], (
+        "the launch pin must be the warm-start row's own net hash; got "
+        f"{seen.get('expected_anchor_sha256')!r}"
+    )
+
+
+def test_no_warm_start_row_means_NO_LAUNCH_PIN(
+    tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
+) -> None:
+    """The other direction, and it is the one that keeps every pre-row config launchable: an
+    absent row is `None`, never a guess and never a pin nothing can satisfy."""
+    _patch_eval_side(monkeypatch)
+    seen = _capture_anchor(monkeypatch)
+    config = _bounded(smoke_run_config, eval_enabled=True)
+    assert config.identity.warm_start is None, "the minted smoke config already carries a row"
+    mantis.run.compose_run(
+        config=config, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(_OrderSpy()),
+        buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
+        checkpoint_dir=str(tmp_path / "ckpt"),
+    )
+    assert "expected_anchor_sha256" in seen, "the drive never reached the anchor resolver"
+    assert seen["expected_anchor_sha256"] is None
