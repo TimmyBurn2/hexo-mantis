@@ -1345,6 +1345,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
 #: which is the confusion MF-7 exists to kill.
 PRODUCTION_CONFIGS: tuple[str, ...] = (
     "configs/run5.yaml",
+    "configs/run6.yaml",
     "configs/shakedown_20260807.yaml",
 )
 

@@ -82,7 +82,7 @@ _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps
 #: calibration tool's output (R119). `shakedown_20260807.yaml` joins run5 on run5's own
 #: grounds: it is a box-class config that already mints run5's `microbatch_caps`, and it is
 #: already excluded beside run5 from the train-side non-binding sweep (F-P2B/R259).
-_PRODUCTION = ("run5.yaml", "shakedown_20260807.yaml")
+_PRODUCTION = ("run5.yaml", "run6.yaml", "shakedown_20260807.yaml")
 _NON_PRODUCTION = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
                    "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
@@ -192,23 +192,54 @@ def test_fg5_02_the_production_configs_ship_the_minted_pair(name: str) -> None:
     assert block.max_fused_edges >= 1 and block.max_fused_nodes >= 1
 
 
-def test_fg5_02_both_production_configs_carry_the_SAME_minted_pair() -> None:
-    """ONE fit, ONE card, ONE partition (R281(d)) — so one pair, in both files.
+#: WHAT ONE FIT IS DENOMINATED IN, derived from the config rather than listed. `fusion_calibrate`
+#: reads the encoding (which fixes the graph geometry), `selfplay.max_game_moves` and
+#: `inference.inference_batch_size` off the config it is pointed at, and solves at THAT sweep's
+#: operating E/N; the arch decides the forward the peak is measured through. Two configs sharing
+#: all four share a fit and must share its answer. Two that differ in any of them are two fits,
+#: and demanding one pair from them would demand a number that fits neither.
+def _fit_identity(name: str) -> tuple:
+    cfg = load_config(_CONFIGS / name)
+    return (cfg.identity.encoding, cfg.identity.arch_kind,
+            int(cfg.selfplay.max_game_moves), int(cfg.inference.inference_batch_size))
 
-    MUTATION THAT REDS IT: re-minting one production config against a new calibration and
-    leaving the other on the old pair. Each file alone would still look correctly valued;
-    only the comparison sees it."""
-    pairs = {
-        name: (
-            load_config(_CONFIGS / name).inference.fused_graph_caps.max_fused_edges,
-            load_config(_CONFIGS / name).inference.fused_graph_caps.max_fused_nodes,
-        )
-        for name in _PRODUCTION
-    }
-    assert len(set(pairs.values())) == 1, (
-        f"the production configs disagree about the fused-graph bound: {pairs}. They "
-        "partition the SAME card from the SAME fit; a divergence means one was minted "
-        "without the other, which R281(d) rules is not a legal posture.")
+
+def test_fg5_02_production_configs_SHARING_A_FIT_carry_the_SAME_minted_pair() -> None:
+    """ONE fit, ONE card, ONE partition (R281(d)) — so one pair per FIT, in every file that
+    shares it.
+
+    **THE PREMISE MOVED AT R338's RUN6 MINT, and the row is re-scoped rather than deleted.** It
+    read "both production configs carry the SAME pair", true while every production config was
+    `gnn_axis_v1` at ply cap 128: one geometry, one sweep, one answer. run6 mints
+    `gnn_axis_r8` + `GnnArchV2` at ply cap 256 — a different graph geometry, a different
+    forward and a different budget — so its fit is a DIFFERENT fit and its pair legitimately
+    differs. Demanding one pair across both would demand a number sized for neither, which is
+    the opposite of what R281(d) protects.
+
+    MUTATION THAT REDS IT, unchanged: re-minting ONE config of a fit group against a new
+    calibration and leaving its twin on the old pair. Each file alone still looks correctly
+    valued; only the comparison sees it. What is gone is only the false part of the claim —
+    that configs which do not share a fit must share its output.
+
+    The grouping is DERIVED (`_fit_identity`), so a third production config joins the right
+    group by being what it is, and a re-mint that changes one config's geometry moves it into
+    its own group instead of silently reding a row about a different config's number."""
+    groups: dict[tuple, dict[str, tuple]] = {}
+    for name in _PRODUCTION:
+        block = load_config(_CONFIGS / name).inference.fused_graph_caps
+        groups.setdefault(_fit_identity(name), {})[name] = (
+            block.max_fused_edges, block.max_fused_nodes)
+    assert groups, "no production config was read, so this comparison asserts nothing"
+    for fit, pairs in groups.items():
+        assert len(set(pairs.values())) == 1, (
+            f"production configs sharing the fit {fit} disagree about the fused-graph bound: "
+            f"{pairs}. They partition the SAME card from the SAME sweep; a divergence means "
+            "one was minted without the other, which R281(d) rules is not a legal posture.")
+    assert any(len(pairs) > 1 for pairs in groups.values()), (
+        f"every production config is in a fit group of ONE ({ {k: sorted(v) for k, v in groups.items()} }), "
+        "so the cross-file comparison this row exists for compares nothing. A group of one is "
+        "legal; ALL groups being of one means the mutation above can no longer be caught and "
+        "the row needs a second config in some group, not a green tick")
 
 
 def test_fg5_02_the_placeholder_is_schema_valid_so_gate_7_stays_green() -> None:

@@ -335,7 +335,26 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
 #: quantity in two different denominations. **R327(d) rules it STAYS UNMOVED** and files the
 #: consolidation as debt at `plan/CARD-BUDGET-AUTHORITY-CONSOLIDATION.md`, with both measured
 #: arms as grounds — so the disagreement is ruled and carried, not open and not resolved.
-_SIZING_BUDGET_GIB = 8.40
+#:
+#: **R338(c) MOVES IT 8.40 -> 8.8972 AT THE RUN6 MINT, AND THE MOVE IS A CHANGE OF STATISTIC, NOT
+#: OF POLICY.** R326(b)'s pattern is unchanged — measured need plus a stated allowance — and the
+#: allowance is R330(b)'s armed 3 %. What moved is WHICH need: 8.40 was 12.9 % over an r6 peak,
+#: and FINISH-1's r8 figure (8.091338) was a POINT, `n = 1`, and said so. Sitting 9 sampled the
+#: r8/GnnArchV2 step delta 60 times on the real ring — min 7.405569 · p50 7.907190 · p90 8.186055
+#: · p95 8.358100 · MAX 8.638102 — so the old budget is exceeded by the measured maximum and
+#: R330(b)'s 3 % over the point figure by about one step in twenty. R338(c) takes the allowance
+#: over the MAX: *"a partition is a bound; a percentile readable as a bound is the 'absent is not
+#: zero' family — an OOM at the 5th-percentile step ends the run."*
+#:
+#:     8.638102 (measured MAX, 60 steps, batch 256, real r8 ring) x 1.03 = 8.897245
+#:     armed FLOORED to 8.8972 — 47 KiB below the derivation, conservative on both sides
+#:
+#: The cost is 0.7528 GiB of card the eval/self-play share gives up against a p50-based cap, and
+#: the partition still closes: at this value `L = 1.9316` against the `1.740313` the M = 0.35
+#: floor demands, and the largest cap the partition affords is 9.0508 — so it fits with 0.1536
+#: GiB of cap to spare. `plan/SITTING10_EVIDENCE/s10_partition_arithmetic.py` in the migration
+#: workspace is the arithmetic; this line is its one consumer in the tree.
+_SIZING_BUDGET_GIB = 8.8972
 _SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)
 
 #: PREREG_DFIX §4, OF2-10 leg 2: PASS is "<= the budget with >= 15% margin".

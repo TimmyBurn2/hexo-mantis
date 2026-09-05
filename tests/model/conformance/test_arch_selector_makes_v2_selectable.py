@@ -175,26 +175,39 @@ def test_the_selector_has_a_representation_with_a_REAL_choice(derived):
 
 
 # ── the incumbent: history, pinned against the real minted files ─────────────────────────
+#: The configs whose `identity.arch_kind` is MINTED, and the kind each is ruled to name. R323(b)
+#: reserved the row to run6's mint act; R336(b) IS that ruling and names `GnnArchV2` on W-C1's
+#: measured 78.5x-vs-2.49x hazard. Written here as data so the two pins below read the SAME
+#: authority: a config carrying the row without an entry still reds, and an entry naming a kind
+#: the file does not carry reds too. Widening it is a mint act with a ruling behind it.
+_MINTED_ARCH_KIND_ROW = {"run6.yaml": "GnnArchV2"}
+
+
 def test_every_shipped_config_still_selects_the_arch_it_has_always_selected(derived):
-    """R322(d)'s "every shipped production config still selects its current arch".
+    """R322(d)'s "every shipped production config still selects its current arch", plus the ONE
+    ruled departure from it.
 
     EXECUTED against every minted file, not argued: each config is loaded through the one
     loader, its encoding resolved through the registry, and the arch the production entry point
     (`arch_from_spec_and_config`) returns is asserted to be the incumbent for its
-    representation. A selector that quietly re-pointed production is what this catches, and it
-    is the row that makes the round trip below safe to add.
+    representation — EXCEPT where `_MINTED_ARCH_KIND_ROW` records a ruled minted row, where it
+    is asserted to be exactly the kind that ruling names. A selector that quietly re-pointed
+    production is still what this catches: an unruled move reds against the incumbent, and a
+    ruled one that built something other than its ruling's kind reds against the row.
     """
     seen = 0
     for path in sorted(CONFIGS.glob("*.yaml")):
         config = load_config(path)
         spec = lookup(config.identity.encoding)
         arch = arch_from_spec_and_config(spec, config.model_dump())
-        expected = ARCH_KINDS[INCUMBENT_ARCH_KIND[config.identity.representation]]
+        ruled = _MINTED_ARCH_KIND_ROW.get(path.name)
+        expected = ARCH_KINDS[ruled or INCUMBENT_ARCH_KIND[config.identity.representation]]
         derived(f"t10.incumbent.{path.name}", type(arch).__name__)
         assert type(arch) is expected, (
             f"{path.name} (representation={config.identity.representation}) now builds "
-            f"{type(arch).__name__}; the incumbent is {expected.__name__} and production must "
-            "not move without a ruling"
+            f"{type(arch).__name__}; the expected kind is {expected.__name__} "
+            f"({'the minted row R336(b) rules' if ruled else 'the incumbent'}) and production "
+            "must not move without a ruling"
         )
         seen += 1
     assert seen, "no shipped config was checked, so this pin asserts nothing"
@@ -359,12 +372,15 @@ def test_the_selected_V2_arch_is_the_SIBLING_dataclass_and_not_V1(diagnostic_con
 
 
 # ── the row (R330(e)): it exists, it is empty everywhere shipped, and it is honoured ──────
-def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_no_shipped_config_carries_it(
+def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_only_the_minted_set_carries_it(
     derived,
 ):
-    """R323(b): the row enters production configs ONLY as a minted row at run6's mint. Pinned in
-    both directions — the key is live in the schema (R330(e)), and every committed config omits
-    it — so a row minted early or a second arch-naming key both red this test."""
+    """R323(b): the row enters production configs ONLY as a minted row at run6's mint. That mint
+    has now happened (R336(b)/R338), so the pin's second half moves from "every config omits it"
+    to "exactly `_MINTED_ARCH_KIND_ROW` carries it, at exactly the kind its ruling names" — the
+    same refusal, re-aimed rather than relaxed: a row minted early still reds (no entry), a row
+    minted at a kind nobody ruled still reds (wrong value), and a second arch-naming key still
+    reds against the schema half, which is untouched."""
     from mantis.config.schema import RunConfig
 
     from test_config_partition_shared_vs_arch_scoped import live_leaf_paths
@@ -376,16 +392,23 @@ def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_no_shipped_co
     named = sorted(leaf for leaf in leaves if naming.search(leaf.split(".")[-1]))
     derived("t10.arch_naming_leaves", named)
     assert named == [ARCH_KIND_ROW], named
-    carrying = sorted(
-        path.name for path in CONFIGS.glob("*.yaml")
-        if yaml.safe_load(path.read_text(encoding="utf-8")).get("identity", {}).get("arch_kind")
-        is not None
-    )
+    carried = {
+        path.name: yaml.safe_load(path.read_text(encoding="utf-8"))
+        .get("identity", {}).get("arch_kind")
+        for path in CONFIGS.glob("*.yaml")
+    }
+    carrying = sorted(name for name, kind in carried.items() if kind is not None)
     derived("t10.configs_carrying_the_row", carrying)
-    assert not carrying, (
-        f"{carrying} carry identity.arch_kind before the run6 mint; R323(b) reserves the row to "
-        "that mint act"
+    assert carrying == sorted(_MINTED_ARCH_KIND_ROW), (
+        f"{carrying} carry identity.arch_kind; the ruled minted set is "
+        f"{sorted(_MINTED_ARCH_KIND_ROW)}. R323(b) reserves the row to a mint act and R336(b) "
+        "is the one ruling that has spent it"
     )
+    for name, kind in _MINTED_ARCH_KIND_ROW.items():
+        assert carried[name] == kind, (
+            f"{name} carries identity.arch_kind={carried[name]!r}; its ruling names {kind!r}. "
+            "The mint writes the ruling's value, never its own"
+        )
 
 
 @pytest.mark.parametrize("kind", sorted(ARCH_KINDS_BY_REPRESENTATION["graph"]))

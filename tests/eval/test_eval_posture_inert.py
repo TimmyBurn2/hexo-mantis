@@ -13,7 +13,10 @@ behaviour is identical to the tree before these keys existed.**
 
 **ONE HALF OF THAT IS NO LONGER TRUE, AND THE ROWS BELOW SAY SO BY NAME RATHER THAN BY GOING
 QUIET.** RECAL-SITTING-5's mint (R326, values R324(d), scope Δ10.5) ARMED `eval.strength_floor`
-on the PRODUCTION PAIR — `run5.yaml` and `shakedown_20260807.yaml` — and on nothing else.
+on the PRODUCTION SET — `run5.yaml`, `run6.yaml` and `shakedown_20260807.yaml` — and on
+nothing else. run6 joins at its own mint: `RUN6_MINT_PREREG.md`'s `strength floor` row is
+CONFIRM at run5's three armed values, carried unchanged, which is the ruling this row asks
+for (R338 / R337(a)).
 `ply_cap_adjudication` is untouched and still inert everywhere. So the claim splits:
 
   * `ply_cap_adjudication` — INERT on all seven, the original claim, unchanged;
@@ -132,7 +135,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #:
 #: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
 #: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
-_ARMED_STRENGTH_FLOOR = frozenset({"run5.yaml", "shakedown_20260807.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run5.yaml", "run6.yaml", "shakedown_20260807.yaml"})
 
 
 def _armed_config():

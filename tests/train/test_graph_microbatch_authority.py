@@ -681,6 +681,10 @@ def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory
     F-P2B (R259): `shakedown_20260807.yaml` joins run5 on the EXCLUDED side, on run5's own
     grounds — it mints run5's CARD-RUN5-GPU-OOM caps (4500000/170000) at run5's batch_size
     256, and those caps exist BECAUSE they bind on the production GPU. Putting it through
-    the "caps do not bind" sweep would assert the opposite of the caps' purpose."""
+    the "caps do not bind" sweep would assert the opposite of the caps' purpose.
+
+    R338 (the run6 mint): `run6.yaml` joins the EXCLUDED side for the SAME reason, and it is
+    the strongest instance of it — its `train.microbatch_caps` are fitted at the box against a
+    measured partition, so they bind by construction."""
     live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
-    assert live == sorted((*_NON_RUN5, "run5.yaml", "shakedown_20260807.yaml"))
+    assert live == sorted((*_NON_RUN5, "run5.yaml", "run6.yaml", "shakedown_20260807.yaml"))

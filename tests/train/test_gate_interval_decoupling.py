@@ -403,12 +403,14 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
     first mint carried gate_interval alone and this very assertion refused it. The count
     below ratchets 6 -> 7 so an eighth config cannot slip past the equality sweep unseen —
+    and 7 -> 8 at run6's mint (R338), which mints NEITHER knob: `RUN6_MINT_PREREG.md` proposes
+    no cadence row, so run6 carries the dev template's equal pair and the sweep still bites —
     enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7
     and 12 consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape
     (legal per ADJ-13 F-1) could escape (N4, F-P2B/N4).
     """
     configs = discover_configs(_REPO / "configs")
-    assert len(configs) == 7, f"expected the seven committed configs, found {configs}"
+    assert len(configs) == 8, f"expected the eight committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
         assert cfg.monitor.gate_interval == cfg.train.log_interval, (
