@@ -141,8 +141,8 @@ from mantis.train.lifecycle.signals import (
 )
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
-from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.train.subsystems import build_run_safety
+from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
 
 #: The 3 pipeline stages every run wires unconditionally; "eval_round" joins them iff an

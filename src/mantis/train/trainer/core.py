@@ -215,6 +215,15 @@ class Trainer:
         self.device = device or torch.device("cpu")
         self.model = model.to(self.device)
         self.config = config
+        #: AUDIT-1 F-32 / R338 — THE LAUNCH PIN'S VERIFICATION SOURCE, declared here rather than
+        #: attached from outside. `train/anchor.py::verify_launch_anchor_pin` reads it through
+        #: `getattr(trainer, "checkpoint_source", None)` and FAILS CLOSED when a pin is set and
+        #: this is `None`; before the run6 mint NOTHING in the tree ever set it, so arming the
+        #: pin would have refused every fresh launch. `init_trainer`'s fresh branch fills it from
+        #: `identity.warm_start` — the artifact the fresh anchor is seeded from (R336(d)) — and
+        #: leaves it `None` on a resume and on any run with no warm-start row, which is the
+        #: no-pin posture every run before the row had.
+        self.checkpoint_source: str | Path | None = None
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
