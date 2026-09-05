@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 8403c83, regenerated 2026-09-05.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2493485, regenerated 2026-09-05.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.46, 2026-09-05. Created under R271 (register hygiene: archive/index split);
+# v3.47, 2026-09-05. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1138,8 +1138,26 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # arming it alone would have refused every fresh launch. **STEP 4c's acceptance witness then died
 # RUN-FATALLY in the eval path** — `EdgeAttrGeometryMismatch`, a half-written axis one-hot — after
 # ~15 minutes; three full-check diagnostics over ~1 000 collates and pops to 1.78M edges could not
-# reproduce it, so the rung battery, the CUDA-arm aggregate and the burst are NOT RUN. RUN6 REMAINS
-# HELD.**
+# reproduce it. RUN6 REMAINS HELD.**
+
+# **v3.47 = the SITTING-10 SEQUENCE COMPLETED — 4c and the OWED BURST both landed after v3.46 was
+# written, so the outcome is AMENDED rather than left at its interim state. An identical second
+# witness run COMPLETED (7 115 s), so `F-816-37` is one occurrence, UNREPRODUCED and uncaused.
+# The step-0 witness reads BC **20/20 decisive** against a seeded control's **0/20** (longest run
+# exactly 6 beside 20 wins; the diffusion signature ABSENT). The rung battery reads `sealbot_d5`
+# **17/32**, Elo +21.7 CI [-89, +163] — INDISTINGUISHABLE at that width, not a win. The
+# S-BATTERY-G CUDA arm holds aggregate equivalence with the stable game index TRUE and per-game
+# identity REPORTED (1/8) as R335(e) requires. The random floor costs **25 s** per round on the BC
+# net and ~2 h on a fresh one — a VARIABLE, not a line item. **The OWED BURST PAID R303(c)'s price
+# and R282(b)'s CONJUNCT 1 with it:** 90 min, 2 100 steps, 2 165 games, EVERY game ending
+# `six_in_a_row`; five of six rules PASS with the minted cap BINDING 1 388 times and the largest
+# fused batch within FIVE EDGES of it; card peak 12.4971 GiB against a declared 14.8393. Two
+# minted prereg rows EXECUTED live — the checkpoint seam (0 -> 1000) fired twice, the strength
+# floor's probe fired in the round. **Rule 5 has NO READING** (rc 124 is `timeout`'s, and unlike
+# sitting 5 this burst reached no terminal round, so LAW-16's save-then-exit is undemonstrated).
+# **AND THE BURST PRICED R319(d):** run6's first eval round ran 50 min 22 s to 93 games and needs
+# 132-260 against `round_timeout_sec 3600` — **1.19x to 2.35x over its own budget**. RUN6 REMAINS
+# HELD, now against `F-816-37` AND R319(d).**
 
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
@@ -1778,6 +1796,15 @@ Verbatim text in the register; one-liners here are index only.
   carry but the answer's insensitivity — the pick is the same under every reading of the replicate
   statistic and under no widening at all. **A future ladder does not inherit the carry from this
   row**; it inherits the requirement that the widening's term be measured on replicates.
+- **`R319(d)` IS NOW PRICED AT RUN6's OWN GEOMETRY, and it is the SECOND thing holding the run.
+  LIVE, RUN-BLOCKING by R319(d)'s own words.** The sitting-10 burst's scheduled eval round at step
+  1000 ran **50 min 22 s to 93 games and did not finish**, under its own `round_timeout_sec 3600`
+  with `screen_games 80`, `confirm_games 128`, `deploy_sims 150`, `random_floor_games 20` and
+  `sealbot_d5 32`. At the measured **32.49 s/game** the round needs **132 games (4 289 s, 1.19x the
+  timeout)** at minimum and **260 on escalation (8 449 s, 2.35x)**. R319(b) predicted this — *"round
+  _timeout_sec 3600 cannot hold that geometry on this card class under ANY implementation"* — and
+  R319(d) already rules *"RUN6 DOES NOT START until this adjudication lands"*. What sitting 10 adds
+  is the NUMBER, on the config that will actually run, from a real round rather than an estimate.
 - **`F-816-37` — THE EVAL PATH PRODUCED A RUN-FATAL `EdgeAttrGeometryMismatch` AT RUN6's MINTED
   GEOMETRY, ONCE, AND IT IS NOT ROOT-CAUSED. LIVE and RUN-BLOCKING for run6's shakedown.** The
   STEP 4c acceptance witness died after 14 min 50 s: *"edge axis one-hot is not a clean one-hot
@@ -1795,6 +1822,10 @@ Verbatim text in the register; one-liners here are index only.
   SIXTY-FOUR** (`canary_period = batch_size`), so the rate is unknown and a passing run is weak
   evidence. Until it is root-caused an eval round can kill a run at any time, and a run6 shakedown
   is many eval rounds long.
+  **TWO LATER EXPOSURES, NEITHER OF WHICH CLOSES IT:** an identical re-run of the witness COMPLETED
+  (7 115 s), and the 90-minute owed burst produced **zero** occurrences over 2 100 steps and 2 165
+  games. So the event is RARE and unreproduced — which bounds the rate loosely and identifies
+  nothing. A green run is not a root cause.
 - **`F-WS-2` — PREREG ROW, **ADOPTED BY THE OPERATOR 2026-08-22 (R311(h))** and PRE-REGISTERED as
   of that adoption; no longer re-sit-blocking. The adopted reading is the NARROWER one the
   architect recommended: an OOM during the ladder stops the ladder's EXTENSION only, never the
@@ -6409,3 +6440,34 @@ Verbatim text in the register; one-liners here are index only.
   hand-synced twin"*, which is what §5's new row records as executed.
   **WHAT THIS CURATION DOES NOT DO:** it does not start run6, does not certify STEP 4c, and does
   not claim a witness reading. **RUN6 REMAINS HELD.**
+
+- 2026-09-05 — **v3.47** curated by the SITTING-10 RE-SIT session at its true close, AMENDING v3.46
+  rather than superseding it: v3.46 was written while the acceptance witness's second run and the
+  owed burst were still executing, and both landed afterwards. **No register append**: the census is
+  unchanged at `R23–R338 — 309 / 309 / 0, excluded 53`, re-run this curation; **`STAMP OK: v3.47`**;
+  `--self-test` all four controls fire.
+  **THE SEQUENCE COMPLETED.** STEP 4c has a reading for all four of its parts and **the owed burst
+  paid R303(c)'s price**, which carries **R282(b)'s conjunct 1** with it — so all three conjuncts
+  are now evaluated and all three PASS. Two rows this sitting MINTED executed in a real run: the
+  checkpoint seam (`train.checkpoint_interval` 0 → 1000) fired twice with stamped artifacts, and
+  `eval.strength_floor`'s probe fired inside the round. The minted fused pair **binds 1 388 times**
+  with the largest batch within **five edges** of the cap.
+  **WHAT THE AMENDMENT ADDS TO THE INDEX (§5):** `F-816-37` gains its two later exposures — a
+  completed re-run and a zero-occurrence 90-minute burst — recorded as bounding the rate and
+  identifying nothing, because **a green run is not a root cause**. And **R319(d) joins §5 as a
+  second run-blocking row, now PRICED**: run6's first eval round needs 1.19×–2.35× its own
+  `round_timeout_sec`, measured from a real round rather than estimated.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register, and TWO OF THE FIVE CAUGHT THIS
+  ENTRY'S OWN FIRST DRAFT CITING THE WRONG PLACE — which is what the spot-check is for:**
+  R319(b) at `:7357` — MATCHES verbatim, *"round_timeout_sec 3600 cannot hold that geometry on this
+  card class under ANY implementation"* — and R319(d)'s *"RUN6 DOES NOT START until this
+  adjudication lands"*; both are what §5's new row rests on. R319(c)'s two-point probe at `:7366` —
+  MATCHES, including the *"at least three diagnostic rounds"* this sitting did NOT supply and says
+  so. R283(d) at `:6220` — MATCHES, *"burst must respect the minted budget with the design margin"*,
+  which is what §2.4 evaluated; the draft attributed it to R303(c), which CARRIES the price but does
+  not contain the sentence. **R335(e) does NOT contain the CUDA disclosure** — its words are
+  *"S-BATTERY-G as a capability with a diagnostic override, UNARMED, serial default byte-exact"*,
+  and the `index_add_`-nondeterminism reasoning lives in `tests/arena/test_battery_concurrency.py`'s
+  own docstring, which cites R335(e) Leg 3. The finding is unchanged and its home is corrected.
+  **WHAT THIS CURATION DOES NOT DO:** it does not start run6 and does not lift either blocker.
+  **RUN6 REMAINS HELD.**
