@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ e48bb33, regenerated 2026-09-05.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 8403c83, regenerated 2026-09-05.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.45, 2026-09-05. Created under R271 (register hygiene: archive/index split);
+# v3.46, 2026-09-05. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1128,6 +1128,19 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # `eval_child` CONFIRMED ONCE at the picked worker count's leaf-build threads before STEP 3; and
 # the v3 prereg table CLOSED — no further prereg text owed before the mint.**
 
+# **v3.46 = SITTING-10's OUTCOME folded in — THE MINT LANDED and the sitting HALTED ONE STEP PAST
+# IT. The widening recompute returns `n_workers = 16` under EVERY reading of the replicate drive
+# and under no widening at all; `eval_child` at the pick reads 1902 MiB, agreeing with the 4-game
+# point to the MiB (R319(c) tolerance 1.0% pre-stated, observed 0.00%); the partition CLOSES at
+# R338(c)'s MAX-based cap 8.8972 with headroom 0.378691 vs M 0.35; `configs/run6.yaml` is MINTED
+# (15 deltas) and the warm-start row PINNED on a REPRODUCED BC checkpoint whose two hash
+# denominations agree; F-32's launch guard is ARMED and its fresh-init source WIRED, because
+# arming it alone would have refused every fresh launch. **STEP 4c's acceptance witness then died
+# RUN-FATALLY in the eval path** — `EdgeAttrGeometryMismatch`, a half-written axis one-hot — after
+# ~15 minutes; three full-check diagnostics over ~1 000 collates and pops to 1.78M edges could not
+# reproduce it, so the rung battery, the CUDA-arm aggregate and the burst are NOT RUN. RUN6 REMAINS
+# HELD.**
+
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
 CLAUDE.md; `plan/rulings_register.md` remains the append-only verbatim ARCHIVE and is
@@ -1765,6 +1778,23 @@ Verbatim text in the register; one-liners here are index only.
   carry but the answer's insensitivity — the pick is the same under every reading of the replicate
   statistic and under no widening at all. **A future ladder does not inherit the carry from this
   row**; it inherits the requirement that the widening's term be measured on replicates.
+- **`F-816-37` — THE EVAL PATH PRODUCED A RUN-FATAL `EdgeAttrGeometryMismatch` AT RUN6's MINTED
+  GEOMETRY, ONCE, AND IT IS NOT ROOT-CAUSED. LIVE and RUN-BLOCKING for run6's shakedown.** The
+  STEP 4c acceptance witness died after 14 min 50 s: *"edge axis one-hot is not a clean one-hot
+  (edge 803217): [0.0, 0.0, 0.5]"*, raised by `verify_edge_geometry` from
+  `inference_server.py::_run_graph_loop`'s collate. A half-written one-hot is not a value the
+  builder can emit. **WHAT IS RULED OUT, by measurement rather than by argument:** three
+  diagnostics forced `semantic="full"` on every collate AND verified the UNSLICED payload
+  (which production never does) — 2 BC games (184 collates), 8 BC games (781, both layers), and a
+  direct depth sweep to 254 plies reaching pops of **1 782 594 edges**, above `max_fused_edges` so
+  the minted caps really did split — all with **zero failures**, `edge_dim` 5 and an exact-multiple
+  `edge_attr` at every observation. Deep boards, pop size, the minted pair and a wrong stride are
+  each insufficient. **WHAT IT IS CONSISTENT WITH, unproven:** a rare timing-dependent corruption;
+  the parallel leaf build (`submit_graphs_and_wait_ls(..., leaf_build_threads=7)`, NIGHTRUN-1 E1)
+  is the obvious candidate and was NOT demonstrated. **The production check samples ONE COLLATE IN
+  SIXTY-FOUR** (`canary_period = batch_size`), so the rate is unknown and a passing run is weak
+  evidence. Until it is root-caused an eval round can kill a run at any time, and a run6 shakedown
+  is many eval rounds long.
 - **`F-WS-2` — PREREG ROW, **ADOPTED BY THE OPERATOR 2026-08-22 (R311(h))** and PRE-REGISTERED as
   of that adoption; no longer re-sit-blocking. The adopted reading is the NARROWER one the
   architect recommended: an OOM during the ladder stops the ladder's EXTENSION only, never the
@@ -6348,3 +6378,34 @@ Verbatim text in the register; one-liners here are index only.
   and moves the trainer allowance's statistic to the MAX. **WHAT IT DOES NOT DO:** it mints
   nothing, writes no `configs/` file, produces no checkpoint, trains nothing and starts no run.
   **RUN6 REMAINS HELD.**
+
+- 2026-09-05 — **v3.46** curated by the SITTING-10 RE-SIT session at its close, folding in **the
+  sitting's OUTCOME** (R338 itself landed at v3.45 and that entry stands). **No register append**:
+  the census is unchanged at `R23–R338 — 309 / 309 / 0, excluded 53`, re-run this curation, and
+  **`STAMP OK: v3.46`**; `--self-test` all four controls fire.
+  **THE MINT LANDED.** R338(b)'s recompute returns **`n_workers = 16`** under the recorded
+  `rel_std` (0.7638 %), the sample CV (0.8819 %), the strict rel-SE (0.4410 %) **and under no
+  widening at all** — four readings, one answer, because rung 16 only leaves the admitted set above
+  a 1.7718 % noise term. The LIVE branch of (b) fired: the corrected threshold 120.4256 sits 30.83
+  above the weakest rung, so the widening is not VOID. `eval_child` at the pick's
+  `leaf_build_threads = 7` reads **1 902 MiB**, agreeing with the 4-game point **to the MiB**
+  against a 1.0 % tolerance pre-stated before point B ran. The partition CLOSES at R338(c)'s
+  MAX-based cap **8.8972** (headroom 0.378691 vs M 0.35; the ceiling is 9.0508). `configs/run6.yaml`
+  is MINTED at 15 deltas, the BC checkpoint REPRODUCED on the minted world (`GnnArchV2`, 6 500
+  steps, both hash denominations agreeing on the artifact), and F-32's guard ARMED **with its
+  fresh-init source wired** — arming it alone would have refused every fresh launch, which this
+  sitting measured before it shipped.
+  **AND THE SITTING HALTED ONE STEP PAST THE MINT.** STEP 4c's acceptance witness died run-fatally
+  in the eval path (`F-816-37`, §5); the rung battery, the CUDA-arm aggregate and the burst are NOT
+  RUN and say so rather than being reported empty.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register (R271(d)/R272(b)):** §5's
+  `R338(b)` row against the register's R338 blockquote clause (b) — MATCHES, including the VOID
+  branch's wording; §5's `run5.n_workers` knee rule against R309(f) (`:6806-6816`) — MATCHES;
+  R319(c)'s two-point probe at `:7366` — MATCHES, *"a 4-game round, then an 8-game
+  round"* with the tolerance pre-stated from the first (`:7325` is R319(d)'s partition-HALT
+  sentence, checked and NOT the clause, so the line is the one read rather than the one carried); R336(c)'s mint/pin split against its
+  blockquote — MATCHES, *"a hash cannot be minted before the artifact exists"*; and R334(c)'s
+  F-32 shape A — MATCHES, *"the pin DERIVES from identity.warm_start when present — one source, no
+  hand-synced twin"*, which is what §5's new row records as executed.
+  **WHAT THIS CURATION DOES NOT DO:** it does not start run6, does not certify STEP 4c, and does
+  not claim a witness reading. **RUN6 REMAINS HELD.**
