@@ -30,12 +30,16 @@ torch-free environments.
 """
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from mantis.encoding.resolvers import resolve_from_config
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,39 @@ def resolve_step_spec(full_config: Any) -> Any:
     `MissingEncodingError`; there is no default arm and no second path (LAW-11, R1).
     """
     return resolve_from_config(full_config)
+
+
+def _dump_train_collate(
+    trainer: Any, wire: Any, error: BaseException, *, span: tuple[int, int], n_graphs: int
+) -> None:
+    """Write the offending training batch before the caller re-raises. Never raises.
+
+    The eval path has had this since R339(c); the training path had nothing, so when
+    `F-816-37` fired in the trainer at R340 leg 3 the run halted with no artifact — which is
+    the one thing R340(c)'s *"a firing halts with the artifact"* requires it not to do.
+
+    Raises:
+        Nothing. `write_collate_dump` swallows its own failures and returns `None`; a
+        diagnostic that could replace a named contract failure with its own exception would
+        destroy the evidence it exists to keep.
+    """
+    from mantis.selfplay.collate_dump import write_collate_dump
+
+    dump_dir = Path(getattr(trainer, "checkpoint_dir", "checkpoints")).parent / "collate_dumps"
+    context = {
+        "path": "train",
+        "phase": "train_step",
+        "fused_span": [int(span[0]), int(span[1])],
+        "n_graphs": int(n_graphs),
+        # No `run_id`: the Trainer has no such attribute (it lives in checkpoint metadata),
+        # so reaching for one would be a dead field AND an undeclared seam access.
+        "step": getattr(trainer, "step", None),
+    }
+    path = write_collate_dump(wire, dump_dir=str(dump_dir), context=context, error=error)
+    if path is None:
+        _LOG.error("F-816-37 train-path dump-on-fire FAILED to write under %s", dump_dir)
+    else:
+        _LOG.error("F-816-37 train-path dump-on-fire wrote %s", path)
 
 
 def run_declared_train_step(
@@ -189,6 +226,7 @@ def _build_graph_parts(
     import torch
 
     from mantis.selfplay.graph_collate import (
+        GraphContractError,
         collate_graph_batch,
         graph_wire_from_rust,
         stone_mask_from_batch,
@@ -228,17 +266,27 @@ def _build_graph_parts(
             # "canary"), and now on every PART, so each micro-batch passes the full
             # structural + semantic contract on its own rather than inheriting the whole
             # batch's verdict.
-            batch = collate_graph_batch(
-                sub,
-                expected_version=1,
-                trunk_size=spec.trunk_size,
-                win_length=spec.win_length,
-                node_feat_dim=spec.node_feat_dim,
-                edge_feat_dim=spec.edge_feat_dim,
-                device=str(device),
-                semantic="full",
-                target_argmax_cells=tsl.target_argmax_cells,
-            )
+            try:
+                batch = collate_graph_batch(
+                    sub,
+                    expected_version=1,
+                    trunk_size=spec.trunk_size,
+                    win_length=spec.win_length,
+                    node_feat_dim=spec.node_feat_dim,
+                    edge_feat_dim=spec.edge_feat_dim,
+                    device=str(device),
+                    semantic="full",
+                    target_argmax_cells=tsl.target_argmax_cells,
+                )
+            except GraphContractError as exc:
+                # Unconditionally armed: a contract failure is run-fatal, so the dump costs
+                # nothing on any path the run survives (R340 leg 3 — F-816-37 fired HERE and
+                # left nothing, because the eval path held the only dump).
+                try:
+                    _dump_train_collate(trainer, sub, exc, span=(g0, g1), n_graphs=n_graphs)
+                except Exception:  # noqa: BLE001 — a dump may NEVER replace the contract failure
+                    _LOG.exception("F-816-37 train-path dump-on-fire raised")
+                raise
             return GraphStepInputs(
                 x=batch.x, edge_index=batch.edge_index, edge_attr=batch.edge_attr,
                 legal_index=batch.legal_node_gather, stone_mask=stone_mask_from_batch(batch),

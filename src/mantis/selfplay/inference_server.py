@@ -562,8 +562,12 @@ class InferenceServer(threading.Thread):
         """R339(c): write the offending batch before the caller re-raises. Never raises.
 
         A server with no dump target configured (every self-play engine) does nothing here —
-        the instrument is armed per PATH, and arming it everywhere would put a multi-megabyte
-        write on the hot loop's failure path for a class that has only ever fired on eval.
+        the instrument is armed per PATH. It was once argued that arming it everywhere would
+        put a multi-megabyte write on the hot loop for "a class that has only ever fired on
+        eval": BOTH halves of that are now false. `F-816-37` fired on the TRAINING path at
+        R340 leg 3, and the write only ever happens on a contract failure, which is run-fatal
+        — so there is no hot path to protect. The trainer's own dump is
+        `train/coordinator/dispatch.py::_dump_train_collate`.
         """
         if self._collate_dump is None:
             return
