@@ -32,6 +32,7 @@ from mantis.config.schema import (
     TrainConfig,
     nested_block,
 )
+from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
 
@@ -412,7 +413,15 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # PARENT only: `checkpoint` and `net_hash` are REQUIRED inside it and are covered by the
     # required-field assertion below, which is exactly what makes a path with no expected hash
     # unconstructible. A FOURTH optional leaf anywhere is still a red.
-    exempt |= {ARCH_KIND_ROW, WARM_START_ROW}
+    #
+    # THE FOURTH EXEMPT ROW, grounded (R339(b)): `eval.concurrency`, the gate-block
+    # concurrency. Optional for the two rows above's reason and not a new one — it enters
+    # production configs only as a minted row — with one difference worth stating: its default
+    # is not a placeholder but the BEHAVIOUR ITSELF. `concurrency=1` is the serial loop
+    # `play_paired_match` ran before the parameter existed, taken on the same branch with the
+    # same objects, so an absent row and a minted `1` produce the same round rather than merely
+    # a legal one. A FIFTH optional leaf anywhere is still a red.
+    exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
     seen: set[str] = set()
     for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():

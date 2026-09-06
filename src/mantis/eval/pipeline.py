@@ -754,6 +754,10 @@ class EvalPipeline:
             # NIGHTRUN-1 E1, same seam and same reason: the leaf build's width is a HOST
             # reservation and the child has no config to derive one from.
             leaf_build_threads=self._leaf_build_threads,
+            # R339(b), same seam and same reason. Read straight off `cfg` rather than cached on
+            # the pipeline: it is one int with no resolver, and a cached copy is the second
+            # authority the neighbouring rows all exist to remove.
+            concurrency=cfg.concurrency,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's, and the child has no
             # config to resolve one from.

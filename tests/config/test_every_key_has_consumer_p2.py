@@ -55,6 +55,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",
     "eval.round_timeout_sec": "pipeline.py mid-round subprocess join bound",
+    "eval.concurrency":
+        "worker.py::_play_gate_block gate-block games in flight (R339(b))",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",
     "eval.ply_cap_adjudication.criterion":
         "resolve_ply_cap_adjudication -> RoundSpec.ply_cap_adjudication -> worker.py "

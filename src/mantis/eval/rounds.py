@@ -25,7 +25,13 @@ from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
+#: The contract-doc / schema-census name of the gate-block concurrency row (R339(b)). It lives
+#: beside the spec that carries it for `ARCH_KIND_ROW`'s reason: the name belongs with the
+#: consumer, not with the test that asserts on it.
+EVAL_CONCURRENCY_ROW = "eval.concurrency"
+
 __all__ = [
+    "EVAL_CONCURRENCY_ROW",
     "RoundSpec",
     "build_round_result",
     "resolve_ladder_rungs",
@@ -214,6 +220,14 @@ class RoundSpec:
     #: whenever `worker_device` is cuda and raises without one, so `None` can neither excuse
     #: an assertion nor pass for a posture. What it buys is that a round spec built by a test
     #: that has no opinion about allocators does not have to state one.
+    #: THE GATE-BLOCK CONCURRENCY (R339(b)), the config's own `eval.concurrency`. Here for
+    #: `leaf_batch_size`' reason and on the same seam: the child has no `RunConfig` to read it
+    #: from. NOT defaulted, for `leaf_batch_size`' reason exactly — a spec that silently
+    #: carried `1` while the config minted `4` is the silently-disabled-knob class (R1/LAW-08),
+    #: and this is the one row R339(b) makes run6's start conditional on. Its consumer is
+    #: `worker._play_gate_block`; every other block plays serial by construction, so this value
+    #: never reaches them.
+    concurrency: int
     allocator_posture: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

@@ -335,7 +335,17 @@ def _play_gate_block(
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
     `{"screen": [...], "confirm": [...]}` record lists, or None when there is no best
-    anchor to play against yet (run3 `run(best_model=None)` parity)."""
+    anchor to play against yet (run3 `run(best_model=None)` parity).
+
+    THE ROUND'S ONLY CONCURRENT BLOCK (R339(b)). It is 93 % of the round's wall, which is why
+    the key reaches here and nowhere else. At `spec.concurrency == 1` — the schema default and
+    every config that predates the row — `play_paired_match` never calls `_pair` and runs the
+    same serial loop on the same two objects, byte-exact. DISCLOSED at G > 1: the arena calls
+    `record_sink` in loop order AFTER the block completes rather than as each game lands, so
+    the R319(e)(ii) progress file goes quiet for the block's duration and then fills. Nothing
+    branches on it — `pipeline.read_progress` is reporting only, and its docstring forbids a
+    caller from branching on the value — but a reader watching the file will see a gap.
+    """
     if spec.best_snapshot is None or not spec.gate.run_gate:
         return None
 
@@ -359,16 +369,24 @@ def _play_gate_block(
         leaf_build_threads=spec.leaf_build_threads,
     )
     try:
-        candidate = build_candidate_player(
-            candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
-            leaf_batch_size=spec.leaf_batch_size,
-            c_visit=spec.c_visit, c_scale=spec.c_scale,
-        )
-        opponent = build_candidate_player(
-            best_engine, spec.gate.deploy_sims, spec=encoding_spec,
-            leaf_batch_size=spec.leaf_batch_size,
-            c_visit=spec.c_visit, c_scale=spec.c_scale,
-        )
+        def _pair() -> tuple[Any, Any]:
+            # R339(b): ONE construction expression for both the serial pair and every
+            # concurrent thread's pair. Two copies would be two authorities over the search
+            # regime the deploy-matched bar is read at (LAW-15).
+            return (
+                build_candidate_player(
+                    candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
+                    leaf_batch_size=spec.leaf_batch_size,
+                    c_visit=spec.c_visit, c_scale=spec.c_scale,
+                ),
+                build_candidate_player(
+                    best_engine, spec.gate.deploy_sims, spec=encoding_spec,
+                    leaf_batch_size=spec.leaf_batch_size,
+                    c_visit=spec.c_visit, c_scale=spec.c_scale,
+                ),
+            )
+
+        candidate, opponent = _pair()
 
         regime_key = RegimeKey(
             bot="best_anchor", variant="deploy", model_sims=spec.gate.deploy_sims,
@@ -382,6 +400,7 @@ def _play_gate_block(
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
             board_factory=board_factory, record_sink=progress.sink("gate_screen"), adjudicator=adjudicator, max_plies=spec.max_plies,
+            player_factory=_pair, concurrency=spec.concurrency,
         )
         screen_agg = [_agg_record(r) for r in screen_records]
 
@@ -396,6 +415,7 @@ def _play_gate_block(
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
                 board_factory=board_factory, record_sink=progress.sink("gate_confirm"), adjudicator=adjudicator, max_plies=spec.max_plies,
+                player_factory=_pair, concurrency=spec.concurrency,
             )
             confirm_agg = [_agg_record(r) for r in confirm_records]
         return {"screen": screen_agg, "confirm": confirm_agg}

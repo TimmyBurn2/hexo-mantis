@@ -244,7 +244,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # round-trips. Its own round-trip (both arms) is pinned by
     # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
-                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
+                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
                          fused_graph_caps=None,
                          inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
@@ -252,7 +252,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back == disarmed
 
     armed = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),
