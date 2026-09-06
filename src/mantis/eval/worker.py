@@ -155,9 +155,20 @@ class _RoundProgress:
         self._path = Path(path)
         self._games = 0
         self._disabled = False
+        #: R339(c): the phase whose sink was built most recently, i.e. the block about to play
+        #: or playing. Recorded here rather than threaded through a sixth parameter because
+        #: `sink(phase)` is already evaluated at each block's call site immediately before that
+        #: block runs — so this costs no new production call site and cannot fall out of step
+        #: with the blocks. Read only by the dump-on-fire context.
+        self.current_phase = "before_first_block"
 
     def sink(self, phase: str) -> Callable[[Any], None]:
-        """A `play_paired_match(record_sink=...)` callable for one phase of the round."""
+        """A `play_paired_match(record_sink=...)` callable for one phase of the round.
+
+        SIDE EFFECT, deliberate: records `current_phase`. See the attribute's own note.
+        """
+        self.current_phase = phase
+
         def _record(game_record: Any) -> None:
             self._games += 1
             adjudication = getattr(game_record, "adjudication", None)
@@ -286,6 +297,36 @@ def _build_adjudicator(spec: RoundSpec) -> PlyCapAdjudicator | None:
     return PlyCapAdjudicator(posture.criterion, posture.min_margin)
 
 
+def _collate_dump_target(spec: RoundSpec, progress: _RoundProgress) -> tuple[str, Any]:
+    """R339(c): where a graph-contract failure is dumped, and what context rides with it.
+
+    The directory is DERIVED from the round's own progress path — the eval work dir under the
+    run record — rather than named here, so the dump lands wherever the round's other artifacts
+    already do and no second path authority exists. Untracked by R7, like everything else there.
+
+    The context is a CALLABLE because its interesting half moves during the round: `phase` is
+    read at the moment of the fire, so a dump says whether the failure happened inside the one
+    CONCURRENT block or in one of the three serial ones. That distinction is what R339(c)'s
+    halt condition turns on, and a dict snapshotted at construction could not carry it.
+    """
+    def _context() -> dict[str, Any]:
+        phase = progress.current_phase
+        return {
+            "round_id": spec.round_id,
+            "step": spec.step,
+            "encoding": spec.encoding,
+            "phase": phase,
+            # THE CONCURRENCY IN FORCE, not the round's arming: only the gate block runs
+            # concurrently, so every other phase is serial by construction and says 1.
+            "concurrency": spec.concurrency if phase.startswith("gate_") else 1,
+            "gate_concurrency_armed": spec.concurrency,
+            "leaf_build_threads": spec.leaf_build_threads,
+            "worker_device": spec.worker_device,
+        }
+
+    return str(Path(spec.progress_path).parent), _context
+
+
 def _play_floor_probe(
     spec: RoundSpec, probe_games: int, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
@@ -367,6 +408,11 @@ def _play_gate_block(
         # `RunConfig` to derive a host reservation from, and a serial leaf build is 95 % of
         # this path's measured cost.
         leaf_build_threads=spec.leaf_build_threads,
+        # R339(c): 1-in-1 on the eval path. `F-816-37`'s only occurrence was here, and the
+        # production rate was 1-in-64, so the rate at which it could have been caught is
+        # unknown. ~93 games a round is what makes every-collate affordable on this path.
+        collate_check_period=1,
+        collate_dump=_collate_dump_target(spec, progress),
     )
     try:
         def _pair() -> tuple[Any, Any]:
@@ -591,6 +637,11 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         amp_dtype=spec.amp_dtype,
         # NIGHTRUN-1 E1 — see the gate block's site for the reason.
         leaf_build_threads=spec.leaf_build_threads,
+        # R339(c) — see the gate block's site. Both of the round's engines are armed: the
+        # failing collate came off whichever engine was serving the position, and arming one
+        # would leave half the round's forwards at 1-in-64.
+        collate_check_period=1,
+        collate_dump=_collate_dump_target(spec, progress),
     )
 
     adjudicator = _build_adjudicator(spec)

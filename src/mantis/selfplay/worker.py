@@ -140,6 +140,12 @@ class SelfPlayWorker:
             # this worker was built from. The dense decode below it autocast with no `dtype=`,
             # so it ran at torch's device default whatever the run declared.
             amp_dtype=str(config["train"]["amp_dtype"]),
+            # R339(c): EXPLICIT `None` = the batch-size-derived canary, which is what this
+            # path has always run and what R339(c) leaves alone. The self-play path is
+            # thousands of collates a minute; 1-in-1 there would be a throughput change made
+            # for a class that has only ever fired on eval. Stated rather than defaulted so
+            # the two paths' postures are both readable at their own call sites.
+            collate_check_period=None,
             # EXPLICIT `None` / `0` on the same grounds as the line above: the graph
             # representation is refused by name at this constructor, so this engine opens no
             # graph collector and there is no batching geometry or supply for it to carry.
