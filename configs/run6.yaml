@@ -12,9 +12,11 @@
 # delta: eval.strength_floor: null -> {probe_games: 4, min_decisive_rate: 0.25, min_winrate: 0.0}
 # delta: identity.encoding: gnn_axis_v1 -> gnn_axis_r8
 # delta: selfplay.max_game_moves: 128 -> 256
-# delta: train.checkpoint_interval: 0 -> 1000
+# delta: train.checkpoint_interval: 0 -> 750
+# delta: train.eval_interval: 1000 -> 750
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
+# delta: eval.concurrency: 1 -> 8
 schema_version: 1
 run_id: run6
 seed: 20260718
@@ -113,6 +115,7 @@ eval:
     bootstrap_ci_level: 0.95
     bt_prior_games: 1.0
     bootstrap_seed: 1234
+  concurrency: 8
 train:
   lr: 0.001
   weight_decay: 0.0001
@@ -125,7 +128,7 @@ train:
   scheduler_t_max: null
   eta_min: 0.0005
   min_lr: null
-  checkpoint_interval: 1000
+  checkpoint_interval: 750
   actor_sync_cadence_steps: 1
   ema:
     enabled: false
@@ -137,7 +140,7 @@ train:
     min_step: 25000
     N_pool_min: 50
     consec: 3
-  eval_interval: 1000
+  eval_interval: 750
   log_interval: 1000
   min_buf_size: 1
   replay_capacity: 100000
