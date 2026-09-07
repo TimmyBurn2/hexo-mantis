@@ -80,6 +80,9 @@ class Record:
     events: list[dict[str, Any]]
     ladder: dict[str, Any] | None = None
     source: str = ""
+    #: The run-record directory, for panels whose producer writes FILES rather than events.
+    #: `None` means "not supplied", which a panel must draw as an absence, never as zero.
+    record_dir: Path | None = None
     by: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -92,7 +95,8 @@ class Record:
         return self.by.get(name, [])
 
 
-def load_record(events_path: Path, ladder_path: Path | None = None) -> Record:
+def load_record(events_path: Path, ladder_path: Path | None = None,
+                record_dir: Path | None = None) -> Record:
     """Parse a JSONL event stream, and the ladder state file when one is given.
 
     Args:
@@ -131,7 +135,8 @@ def load_record(events_path: Path, ladder_path: Path | None = None) -> Record:
             ladder = json.loads(ladder_path.read_text(encoding="utf-8"))
         except ValueError:
             ladder = None
-    return Record(events=events, ladder=ladder, source=str(events_path))
+    return Record(events=events, ladder=ladder, source=str(events_path),
+                  record_dir=record_dir)
 
 
 # --------------------------------------------------------------------------------------- #
@@ -470,9 +475,48 @@ def panel_health(rec: Record) -> Panel:
 
 
 #: The page's panels, in order. The names are the census's names.
+def panel_f816_37(rec: Record) -> Panel:
+    """R342(b)(v) — firing count and location.
+
+    The arithmetic is IMPORTED from `mantis.diagnostics.f816_37_rate_bar`, never re-implemented
+    here. Two
+    surfaces disagreeing about how many firings a run had is the failure this shares code to
+    avoid: the bar condemns a host on the number, and a dashboard that drew a different one
+    would be the more visible of the two.
+
+    The producer is FILES (`collate_dumps/*.json` and the run's logs), not events, so this
+    panel needs the record directory. Without it the panel is an ABSENCE, not a zero — a run
+    with no dumps and a run nobody pointed at the dumps look identical otherwise.
+    """
+    title, reads = "F-816-37 firings", "collate_dumps/*.json + *.log (files, not events)"
+    if rec.record_dir is None:
+        return Panel(title, reads, '<p class="absent">ABSENT — no run-record directory was '
+                     'supplied (<code>--record-dir</code>), so the firing count is UNREAD. '
+                     'This is not a report of zero firings.</p>')
+
+    from mantis.diagnostics.f816_37_rate_bar import (
+        MAX_IN_WINDOW,
+        scan_dumps,
+        scan_logs,
+        worst_window,
+    )
+
+    dumps, logs = scan_dumps(rec.record_dir), scan_logs(rec.record_dir)
+    worst, _ = worst_window(dumps)
+    rows = [[f.channel, f.where, f"{f.when:.0f}", f.detail] for f in dumps + logs]
+    verdict = ("CONDEMNS under R342(b)(iv)" if logs or worst > MAX_IN_WINDOW
+               else "within the R342(b)(iv) bar")
+    body = table(["channel", "location", "epoch", "detail"], rows) if rows else (
+        '<p class="absent">No firings in this record — and the directory WAS read, which is '
+        'what makes this a zero rather than an absence.</p>')
+    note = (f"in-wire {len(dumps)} · out-of-wire {len(logs)} · worst 12 h window {worst} "
+            f"(limit {MAX_IN_WINDOW}) — {verdict}")
+    return Panel(title, reads, body, note)
+
+
 PANELS = (
     panel_throughput, panel_sims_per_move, panel_memory, panel_losses, panel_heldout,
-    panel_gates, panel_strength, panel_determinism, panel_health,
+    panel_gates, panel_strength, panel_determinism, panel_health, panel_f816_37,
 )
 
 
@@ -624,6 +668,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--events", type=Path, help="the run's JSONL event stream")
     ap.add_argument("--ladder-state", type=Path, default=None,
                     help="the run's eval_ladder_state.json (the per-rung wr/ci series)")
+    ap.add_argument("--record-dir", type=Path, default=None,
+                    help="the run-record directory holding collate_dumps/ and logs "
+                         "(R342(b)(v); omitted, the firings panel draws an ABSENCE)")
     ap.add_argument("--out", type=Path, help="the HTML file to write")
     ap.add_argument("--title", default=None, help="page title (default: the events file's name)")
     ap.add_argument("--self-test", action="store_true", help="prove the refusals fire")
@@ -634,7 +681,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.events or not args.out:
         ap.error("--events and --out are required (or pass --self-test)")
 
-    rec = load_record(args.events, args.ladder_state)
+    rec = load_record(args.events, args.ladder_state, args.record_dir)
     title = args.title or f"mantis run record — {args.events.name}"
     args.out.write_text(render(rec, title), encoding="utf-8")
     banked = len(BANKED_PANELS)

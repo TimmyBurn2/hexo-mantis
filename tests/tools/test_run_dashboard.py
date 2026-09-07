@@ -132,14 +132,32 @@ def test_the_tools_self_test_passes():
 
 
 def test_the_panel_roster_matches_the_ruling(tmp_path: Path):
-    """R333(d) names the panels. The page must carry one section per panel, so a panel silently
-    dropped is caught rather than simply not appearing."""
+    """R333(d) names the nine panels; R342(b)(v) adds the tenth. The page must carry one section
+    per panel, so a panel silently dropped is caught rather than simply not appearing.
+
+    The count is asserted alongside the titles ON PURPOSE: titles alone would pass while an
+    extra panel rode along unnamed, and this roster is the one place a panel has to be declared
+    against a ruling before it can appear on a page someone attaches to a run record.
+    """
     page = dash.render(dash.load_record(_write(tmp_path, [{"event": "run_boot_identity"}])), "t")
     for title in ("Throughput", "Average sims/move", "Memory shares vs minted caps",
                   "Training losses", "Held-out loss", "Gate outcomes and floor refusals",
-                  "Strength vs external rungs, with CIs", "Determinism hash", "Health"):
+                  "Strength vs external rungs, with CIs", "Determinism hash", "Health",
+                  # R342(b)(v): "firing count and location are dashboard lines".
+                  "F-816-37 firings"):
         assert f"<h2>{title}</h2>" in page, f"the ruling's {title!r} panel is not on the page"
-    assert len(dash.PANELS) == 9
+    assert len(dash.PANELS) == 10
+
+
+def test_the_firings_panel_draws_an_absence_when_it_was_given_no_record_dir(tmp_path: Path):
+    """R342(b)(v) against the dashboard's own governing rule: absent is not zero, in pixels.
+
+    A run with no firings and a run nobody pointed at the dumps must not render the same, or the
+    panel becomes a reassurance rather than a reading.
+    """
+    page = dash.render(dash.load_record(_write(tmp_path, [{"event": "run_boot_identity"}])), "t")
+    assert "ABSENT — no run-record directory" in page
+    assert "0 firings" not in page, "an unread firing count must never render as a zero"
 
 
 def test_the_page_carries_no_absolute_home_path(tmp_path: Path):

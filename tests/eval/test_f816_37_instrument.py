@@ -93,12 +93,18 @@ def _dumps(tmp_path: Path) -> list[Path]:
 
 
 # ── the rate ───────────────────────────────────────────────────────────────────────────
-def test_the_eval_path_asks_for_every_collate_and_selfplay_does_not() -> None:
-    """The two paths' postures, read off the call sites that state them.
+def test_every_collate_path_asks_for_one_in_one() -> None:
+    """All three paths' postures, read off the call sites that state them.
 
     Structural rather than behavioural on purpose: the alternative is counting checks in a
-    round, which measures the round's length as much as the posture. What R339(c) rules is
+    round, which measures the round's length as much as the posture. What R342(b)(i) rules is
     which VALUE each path passes, and that is what is asserted.
+
+    THIS TEST INVERTED AT R342(b)(i). It used to assert that self-play kept the
+    batch-size-derived rate; R339(c)'s ground for that was "a class that has only ever fired on
+    eval", and `F-816-37` has since fired on the training path (R340 leg 3). The condition now
+    is 1-in-1 on every path for the whole run, so the old assertion would pass only on a
+    configuration the ruling forbids.
     """
     import inspect
 
@@ -107,11 +113,37 @@ def test_the_eval_path_asks_for_every_collate_and_selfplay_does_not() -> None:
         "both eval engines (candidate and best-anchor) must ask for 1-in-1 — arming one "
         "leaves half the round's forwards sampled at the batch-size rate"
     )
-    from mantis.selfplay import worker as sp_worker
 
-    assert "collate_check_period=None" in inspect.getsource(sp_worker), (
-        "the self-play path must keep the derived canary rate, explicitly (R339(c))"
+    from mantis.selfplay import pool as sp_pool
+
+    pool_src = inspect.getsource(sp_pool)
+    assert "collate_check_period=1" in pool_src, (
+        "R342(b)(i): the self-play InferenceServer must ask for 1-in-1 for the WHOLE run; "
+        "at the batch-size-derived rate a corrupted batch had 63 chances in 64 of passing"
     )
+    assert "collate_dump=_collate_dump_target(config)" in pool_src, (
+        "R342(b)(i) is 1-in-1 AND dump-on-fire: a check that halts without the artifact is "
+        "the exact failure R340 leg 3 recorded on the training path"
+    )
+
+
+def test_the_selfplay_dump_target_is_a_sibling_of_the_other_two() -> None:
+    """The self-play dump lands beside the trainer's, under one run record.
+
+    Pins the DERIVATION, not a literal path: all three paths deriving from the run's own
+    checkpoint dir is what stops a second path authority appearing.
+    """
+    from mantis.selfplay.pool import _collate_dump_target
+
+    dump_dir, context_fn = _collate_dump_target({"train": {"checkpoint_dir": "/run/xyz/checkpoints"}})
+    assert dump_dir == "/run/xyz/collate_dumps", dump_dir
+    ctx = context_fn()
+    assert ctx["path"] == "selfplay" and ctx["concurrency"] == 1, ctx
+
+    # A config with no checkpoint_dir must not raise INSIDE a dump target: the dump exists to
+    # preserve evidence, so it degrades to a relative default rather than taking down the run.
+    fallback, _ = _collate_dump_target({})
+    assert fallback == "collate_dumps", fallback
 
 
 def test_period_one_runs_the_semantic_layer_on_every_batch() -> None:
