@@ -127,8 +127,20 @@ def run_training_loop(
         if saved:
             return
         emit_via(sink, {"event": "shutdown_save", "step": getattr(trainer, "step", None)})
-        trainer.save_checkpoint(loss_info)
+        checkpoint_path = trainer.save_checkpoint(loss_info)
         saved = True
+        # R343(c) — THE SIDECAR RIDES THIS LEG TOO, and a live box run is why. A signal stop
+        # has TWO save legs: the coordinator's O3 arm inside `step()`, and this one. When
+        # `step()` does not return — which is what a stop DURING a step means, and what the
+        # box test actually produced — only this leg runs, and the first cut wired only the
+        # other. The result was a checkpoint with no sidecar: a resume that silently refills
+        # the ring from empty, which is the one outcome R343(c) forbids. The coordinator owns
+        # the decision and the write (`persist_resume_state` guards its own resumable-stop
+        # predicate); a loop driven by a bare `step_fn` has no coordinator and no ring, so the
+        # absence is the no-op it should be, not a failure.
+        persist = getattr(coordinator, "persist_resume_state", None)
+        if persist is not None:
+            persist(checkpoint_path)
 
     # Observe shutdown_save even if already set at entry (0-step shutdown; T-LC-04).
     if shutdown_state.shutdown_save:

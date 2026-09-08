@@ -368,8 +368,28 @@ class StepCoordinator:
         return bool(guard is not None and getattr(guard, "critical_fired", False))
 
     # ── the RESUME sidecar (R343(c)/CARD-RESUME; NOT the watchdog snapshot above) ─────────
-    def _persist_resume_state(self, checkpoint_path: Any) -> Any:
+    def persist_resume_state(self, checkpoint_path: Any) -> Any:
         """Persist the ring and write the sidecar that makes `checkpoint_path` resumable.
+
+        PUBLIC, AND CALLED FROM TWO PLACES, because a live box run found that one was not
+        enough: a signal stop has TWO save legs — this coordinator's O3 arm, and `loop.py`'s
+        `_final_save()` — and the loop's is the one that completes the stop when `step()` does
+        not return. The first cut wired only O3; the box test stopped a run whose `step()` was
+        mid-flight, got a checkpoint from `_final_save` and NO sidecar, which is exactly the
+        silent empty-ring resume R343(c) forbids. Both legs now call this, and it is safe to
+        call twice: the ring write and the atomic sidecar replace are idempotent for a given
+        state, and the LAST caller wins with the truest step.
+
+        THE RESUMABLE-STOP GUARD LIVES HERE rather than at either call site, so the two legs
+        cannot drift apart on the question. Persisting the ring is a LARGE WRITE, and the one
+        abort that reaches these legs with `abort_rule` still unrecorded is the DISK GUARD's —
+        it stops a run by SIGTERMing its own process and `run.py` records its rule only in the
+        teardown. Persisting a 100k-position ring on the one abort that fires BECAUSE THE DISK
+        IS FULL would deepen the condition that fired, or raise ENOSPC out of a LAW-14 path and
+        turn a clean rc 47 into a crash. The guard latches `critical_fired` BEFORE it signals,
+        which is what makes it readable in time; absent a guard the term is False.
+
+        Returns the sidecar path, or `None` when the stop is not a resumable one.
 
         DISTINCT FROM `_snapshot_buffer` DIRECTLY ABOVE, and the distinction is the whole
         reason both exist. That one is the stall watchdog's abnormal-exit snapshot: best-effort,
@@ -384,6 +404,8 @@ class StepCoordinator:
             OSError: the ring or the sidecar could not be written.
             AttributeError: the buffer cannot persist itself — a wiring error, never a state.
         """
+        if self.shutdown.abort_rule is not None or self._disk_critical():
+            return None
         ring_path = _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir)
         self.buffer.save_to_path(str(ring_path))
         ring = _resume_state.RingRef(
@@ -542,17 +564,7 @@ class StepCoordinator:
         # would follow (a ring refilled from empty).
         if self.shutdown.shutdown_save:
             ckpt = self.trainer.save_checkpoint(self._last_loss_info or None)
-            # THE SAME "is this a resumable stop" QUESTION the epilogue asks, and it is
-            # load-bearing HERE for a sharper reason: persisting the ring is a LARGE WRITE, and
-            # the one abort that reaches this arm with `abort_rule` still unrecorded is the DISK
-            # GUARD's — it stops a run by SIGTERMing its own process, and `run.py` records its
-            # rule only in the teardown. Persisting a 100k-position ring on the one abort that
-            # fires BECAUSE THE DISK IS FULL would either deepen the condition that fired or
-            # raise ENOSPC out of a LAW-14 path and turn a clean rc 47 into a crash. The guard
-            # latches `critical_fired` BEFORE it signals, which is what makes it readable in
-            # time; absent a guard (every harness) the term is False and the ring is persisted.
-            if self.shutdown.abort_rule is None and not self._disk_critical():
-                self._persist_resume_state(ckpt)
+            self.persist_resume_state(ckpt)
             self.shutdown.running = False
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})

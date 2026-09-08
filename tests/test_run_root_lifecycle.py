@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import json
 import signal
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -169,6 +170,11 @@ class _Trainer:
         self.device = "cpu"
         self.saves: list = []
         self._on_step = on_step
+        # A REAL directory, and a `save_checkpoint` that returns a REAL path: R343(c) made both
+        # signal-save legs write a resume sidecar BESIDE the checkpoint they saved, so a fake
+        # that returned None would exercise the lifecycle rows while the leg that makes the
+        # stop resumable went unmeasured — which is precisely the gap a live box run found.
+        self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-root-lifecycle-"))
 
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
@@ -184,8 +190,11 @@ class _Trainer:
     def inference_state_dict(self) -> dict:
         return {}
 
-    def save_checkpoint(self, loss_info) -> None:
+    def save_checkpoint(self, loss_info) -> Path:
         self.saves.append(loss_info)
+        path = self.checkpoint_dir / f"fake_{self.step:08d}_deadbeef.ckpt"
+        path.write_bytes(b"fake-checkpoint")
+        return path
 
 
 class _RecordedDiskGuard(DiskGuard):
