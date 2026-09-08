@@ -68,8 +68,17 @@ are fed from ONE fan-out in loop order, so their per-round counters advance in l
 `play_paired_match` calls its sink in loop order under every concurrency, which is what makes
 that true at `concurrency > 1` as well.
 
-`search_stats` is a list of `{"ply": int, "root_value": float, "visits": [[q, r, n], …]}`, one
-entry per ply the CANDIDATE played. `visits` carries the SUPPORT only — visited children — because
+`search_stats` is a list of
+`{"ply": int, "by": "candidate"|"opponent", "root_value": float, "visits": [[q, r, n], …]}`, one
+entry per ply whose MOVER exposed a search root.
+
+**`by` is load-bearing, not decoration.** On the PROMOTION channel both players are deploy heads
+(candidate net vs anchor net), so the list covers every ply from BOTH sides; on a rung or the
+random floor the opponent is a plain bot with no root and only the candidate's plies appear. The
+two are otherwise indistinguishable, and a reader would take a two-sided list for a one-sided
+one — halving every per-move statistic it computed.
+
+`visits` carries the SUPPORT only — visited children — because
 a zero-visit child is part of the distribution, carries none of its information, and at radius 8
 would be most of the bytes. A reader takes absence as zero, which is what a visit distribution
 means.

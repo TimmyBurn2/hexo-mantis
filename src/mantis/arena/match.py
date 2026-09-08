@@ -55,10 +55,12 @@ class GameRecord:
     #: i.e. `None` on every game every shipped config plays. It is `None` on non-capped games
     #: even under an armed adjudicator, because those were decided by the rules.
     adjudication: PlyCapVerdict | None
-    #: R344(b) — per-position search stats for the plies the CANDIDATE played, or `None` when
-    #: no player in the game exposed a root (two plain bots, a stub head). `None` and `()` are
-    #: different facts and both occur: `None` is "nobody could produce these", `()` is "the
-    #: candidate never moved", and a viewer must not draw a heatmap for either.
+    #: R344(b) — per-position search stats for every ply whose MOVER exposed a search root,
+    #: each entry naming the side that produced it. On the promotion channel that is both
+    #: sides; elsewhere only the candidate's. `None` when no player exposed a root at all
+    #: (two plain bots, a stub head) — and `None` and `()` are different facts that both
+    #: occur: `None` is "nobody could produce these", `()` is "nobody who could, moved". A
+    #: viewer must not draw a heatmap for either.
     search_stats: tuple[dict[str, Any], ...] | None
 
 
@@ -147,6 +149,12 @@ def _play_one_game(
             # a visit distribution means.
             stats.append({
                 "ply": len(moves),
+                # WHICH SIDE searched. On the PROMOTION channel both players are deploy heads
+                # (candidate net vs anchor net), so a stats list there covers EVERY ply from
+                # BOTH sides; on a rung or the floor the opponent is a plain bot and only the
+                # candidate's plies appear. Without this field the two are indistinguishable,
+                # and a reader would take a two-sided list for a one-sided one.
+                "by": "candidate" if mover is candidate_player else "opponent",
                 "root_value": root_value,
                 "visits": [[int(c[0][0]), int(c[0][1]), int(c[3])]
                            for c in children if c[3] > 0],

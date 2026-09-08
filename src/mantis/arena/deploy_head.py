@@ -114,7 +114,9 @@ class DeployHeadPlayer:
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
         self._tree: MCTSTree | None = None
-        #: R344(b) — the LAST search's root, for the game record. `(root_value, children)`
+        #: R344(b) — the LAST search's root, for the game record. Read by
+        #: `arena.match._play_one_game` off WHICHEVER player just moved, so on a
+        #: deploy-head-vs-deploy-head game both sides publish one. `(root_value, children)`
         #: with `children` the `get_root_children_info()` rows this head already computes and,
         #: before this, discarded one line before returning its move. `None` until the first
         #: `select_move`. It is a plain attribute rather than a callback because the consumer

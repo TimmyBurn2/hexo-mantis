@@ -120,10 +120,17 @@ def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> Non
     """The claim that made R344(b)'s eval half a wiring job: the deploy head already computes
     the visit distribution and the root value, and only ever discarded them.
 
-    Also pins the two shape decisions a reader depends on: stats cover the CANDIDATE's plies
-    (the opponent is a different bot and exposes no root), and `visits` carries the SUPPORT —
-    visited children only — because a zero-visit child is part of the distribution, carries
-    none of its information, and at radius 8 would be most of the bytes.
+    Also pins the two shape decisions a reader depends on.
+
+    **`by` names the side that searched, and on THIS channel that is both of them.** The gate
+    plays candidate net against ANCHOR net — two deploy heads — so its stats list covers every
+    ply from both sides, while a rung or floor game (a plain bot opponent) carries only the
+    candidate's. A list without `by` reads identically in the two cases, and a consumer that
+    assumed one-sided would halve every per-move statistic it computed on the gate.
+
+    **`visits` carries the SUPPORT** — visited children only — because a zero-visit child is
+    part of the distribution, carries none of its information, and at radius 8 would be most of
+    the bytes.
 
     MUTATION THAT REDS IT: stop stashing `last_root`, or capture it AFTER the argmax where it
     could describe a different search than the move beside it."""
@@ -135,13 +142,15 @@ def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> Non
 
     for record in with_stats:
         stats = record["search_stats"]
-        assert len(stats) <= record["plies"], (
-            "more search roots than plies — the opponent's moves are being credited to the "
-            "candidate's search"
-        )
+        assert len(stats) <= record["plies"], "more search roots than plies were played"
         plies_seen = [entry["ply"] for entry in stats]
         assert plies_seen == sorted(plies_seen), "stats must be in ply order"
         assert len(set(plies_seen)) == len(plies_seen), "one root per ply, not two"
+        assert {e["by"] for e in stats} <= {"candidate", "opponent"}, "unknown searcher"
+        assert "opponent" in {e["by"] for e in stats}, (
+            "the gate plays two deploy heads, so the anchor's roots must be here and LABELLED "
+            "— an unlabelled two-sided list is the defect this field exists to prevent"
+        )
         for entry in stats:
             assert -1.0 <= entry["root_value"] <= 1.0, entry["root_value"]
             assert entry["visits"], "a recorded root with an empty support is not a search"
