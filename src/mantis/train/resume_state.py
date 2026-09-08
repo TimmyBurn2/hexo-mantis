@@ -36,7 +36,6 @@ import dataclasses
 import hashlib
 import json
 import os
-import pickle
 import random
 from pathlib import Path
 from typing import Any
@@ -94,8 +93,26 @@ def sidecar_path_for(checkpoint_path: str | Path) -> Path:
     return p.with_name(p.name + SIDECAR_SUFFIX)
 
 
-def capture_rng_streams() -> dict[str, str]:
+def _tensor_to_b64(t: Any) -> str:
+    """A torch ByteTensor of RNG state as base64. Plain bytes, no pickle."""
+    return base64.b64encode(bytes(bytearray(t.tolist()))).decode("ascii")
+
+
+def _b64_to_tensor(blob: str) -> Any:
+    return torch.tensor(list(base64.b64decode(blob)), dtype=torch.uint8)
+
+
+def capture_rng_streams() -> dict[str, Any]:
     """Snapshot the PYTHON-SIDE RNG streams `seed_everything` seeds.
+
+    NO PICKLE ANYWHERE ON THIS PATH, and that is a security property rather than a style
+    choice. The sidecar is UNAUTHENTICATED: unlike the checkpoint beside it, which carries a
+    `content_sha8` its loader re-derives and refuses on mismatch, nothing signs this file. A
+    `pickle.loads` over it would hand arbitrary code execution to anyone who can write one file
+    into the run's checkpoint directory — a strictly easier target than the checkpoint, and one
+    the ring's own hash check does nothing to protect. Every stream is therefore encoded as
+    plain JSON scalars, lists and base64 bytes, and `restore_rng_streams` rebuilds the native
+    objects from those by construction.
 
     DISCLOSED SCOPE, because the gap is the point (R343(c) witness 4): this captures python,
     numpy, torch-cpu and torch-cuda. It does NOT capture the replay ring's sampler, which is a
@@ -105,56 +122,76 @@ def capture_rng_streams() -> dict[str, str]:
     across two launches of the same config either, which is the older and larger fact. See
     `RESUME1_FINDINGS.md`; closing it is an engine change, not a wiring one.
     """
-    blobs: dict[str, Any] = {
-        "python": random.getstate(),
-        "numpy": np.random.get_state(),
-        "torch": torch.get_rng_state(),
+    py_version, py_state, py_gauss = random.getstate()
+    np_name, np_keys, np_pos, np_has_gauss, np_cached = np.random.get_state()
+    streams: dict[str, Any] = {
+        "python": {"version": int(py_version), "state": [int(v) for v in py_state],
+                   "gauss_next": None if py_gauss is None else float(py_gauss)},
+        "numpy": {"bit_generator": str(np_name), "keys": [int(v) for v in np_keys],
+                  "pos": int(np_pos), "has_gauss": int(np_has_gauss),
+                  "cached_gaussian": float(np_cached)},
+        "torch": {"state_b64": _tensor_to_b64(torch.get_rng_state())},
     }
     if torch.cuda.is_available():
-        blobs["torch_cuda"] = torch.cuda.get_rng_state_all()
-    return {k: base64.b64encode(pickle.dumps(v)).decode("ascii") for k, v in blobs.items()}
+        streams["torch_cuda"] = {
+            "states_b64": [_tensor_to_b64(s) for s in torch.cuda.get_rng_state_all()],
+        }
+    return streams
 
 
-def restore_rng_streams(blobs: dict[str, str]) -> list[str]:
+def restore_rng_streams(streams: dict[str, Any]) -> list[str]:
     """Restore what `capture_rng_streams` captured. Returns the stream names restored.
+
+    Rebuilds each native object FROM TYPED FIELDS — no pickle, so a hostile sidecar can at worst
+    produce a `ResumeStateError`, never code execution (see `capture_rng_streams`).
 
     A stream present in the sidecar but unrestorable on THIS host is an error, not a skip: the
     one case that is legitimately absent (`torch_cuda` on a cpu box) is absent from the sidecar
     too, because the capture side is equally conditional.
 
     Raises:
-        ResumeStateError: a stream name the sidecar carries is not one this function restores,
-            or its blob does not decode.
+        ResumeStateError: a stream name this build does not restore, or a malformed payload.
     """
-    # THE NAME IS CHECKED BEFORE THE BLOB IS DECODED, and the order is load-bearing twice over:
-    # an unknown name is what this build cannot honour, so reporting a decode failure for it
-    # would name the wrong defect; and decoding is `pickle.loads`, which must not run on a blob
-    # this build has already established it has no use for.
-    unknown = sorted(set(blobs) - _RESTORABLE_STREAMS)
+    # THE NAME IS CHECKED BEFORE THE PAYLOAD IS TOUCHED: an unknown name is what this build
+    # cannot honour, so reporting a decode failure for it would name the wrong defect.
+    unknown = sorted(set(streams) - _RESTORABLE_STREAMS)
     if unknown:
         raise ResumeStateError(
             f"unknown rng stream(s) {unknown} in the sidecar — this build does not know how to "
             "restore them, and proceeding would resume into an undeclared sampling regime"
         )
     restored: list[str] = []
-    for name, blob in blobs.items():
+    for name, payload in streams.items():
         try:
-            value = pickle.loads(base64.b64decode(blob))
+            if name == "python":
+                random.setstate((
+                    int(payload["version"]),
+                    tuple(int(v) for v in payload["state"]),
+                    None if payload["gauss_next"] is None else float(payload["gauss_next"]),
+                ))
+            elif name == "numpy":
+                np.random.set_state((
+                    str(payload["bit_generator"]),
+                    np.array(payload["keys"], dtype=np.uint32),
+                    int(payload["pos"]), int(payload["has_gauss"]),
+                    float(payload["cached_gaussian"]),
+                ))
+            elif name == "torch":
+                torch.set_rng_state(_b64_to_tensor(payload["state_b64"]))
+            elif name == "torch_cuda":
+                if not torch.cuda.is_available():
+                    raise ResumeStateError(
+                        "sidecar carries a torch_cuda rng stream but this host has no cuda "
+                        "device; resuming would silently change the sampling regime the run "
+                        "was stopped in"
+                    )
+                torch.cuda.set_rng_state_all(
+                    [_b64_to_tensor(b) for b in payload["states_b64"]]
+                )
+        except ResumeStateError:
+            raise
         except Exception as exc:  # noqa: BLE001 — re-raised as the named type, never swallowed
             raise ResumeStateError(f"rng stream {name!r} did not decode: {exc}") from exc
-        if name == "python":
-            random.setstate(value)
-        elif name == "numpy":
-            np.random.set_state(value)
-        elif name == "torch":
-            torch.set_rng_state(value)
-        elif name == "torch_cuda":
-            if not torch.cuda.is_available():
-                raise ResumeStateError(
-                    "sidecar carries a torch_cuda rng stream but this host has no cuda device; "
-                    "resuming would silently change the sampling regime the run was stopped in"
-                )
-            torch.cuda.set_rng_state_all(value)
         restored.append(name)
     return restored
 
@@ -186,7 +223,7 @@ class ResumeState:
     round_counter: int
     last_p_hat: dict[str, float]
     anchor_sha256: str | None
-    rng: dict[str, str]
+    rng: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -226,7 +263,7 @@ class ResumeState:
                 round_counter=int(payload["round_counter"]),
                 last_p_hat={str(k): float(v) for k, v in payload["last_p_hat"].items()},
                 anchor_sha256=payload["anchor_sha256"],
-                rng={str(k): str(v) for k, v in payload["rng"].items()},
+                rng={str(k): v for k, v in payload["rng"].items()},
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ResumeStateError(f"sidecar is malformed: {exc}") from exc

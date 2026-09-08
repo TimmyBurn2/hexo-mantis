@@ -15,6 +15,7 @@ The defect each row is the ONLY witness to:
 """
 from __future__ import annotations
 
+import ast
 import json
 import random
 from pathlib import Path
@@ -23,6 +24,7 @@ import numpy as np
 import pytest
 import torch
 
+from mantis.train import resume_state
 from mantis.train.resume_state import (
     SIDECAR_VERSION,
     ResumeState,
@@ -158,6 +160,48 @@ def test_an_unknown_rng_stream_is_refused(tmp_path: Path) -> None:
 def test_an_undecodable_rng_blob_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ResumeStateError, match="did not decode"):
         restore_rng_streams({"python": "!!!not-base64!!!"})
+
+
+def test_the_sidecar_path_never_unpickles(tmp_path: Path) -> None:
+    """THE SIDECAR IS UNAUTHENTICATED, so it must never be executable input.
+
+    Unlike the checkpoint beside it — whose loader re-derives a `content_sha8` and refuses a
+    mismatch — nothing signs this file. A `pickle.loads` over it would hand arbitrary code
+    execution to anyone able to write ONE file into the run's checkpoint directory, a strictly
+    easier target than the checkpoint, and one the ring's own hash check does nothing about.
+    So the module must not import pickle at all, and this row is structural because a
+    behavioural test cannot see a `pickle.loads` that simply has not been reached yet.
+    """
+    src = Path(resume_state.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "pickle" not in imported, (
+        "resume_state imports pickle — the sidecar is unauthenticated input and every RNG "
+        "stream it carries is representable as JSON scalars and base64 bytes"
+    )
+
+
+def test_the_sidecar_is_plain_json_with_no_opaque_stream_blob(tmp_path: Path) -> None:
+    """The positive half: the rng streams are TYPED FIELDS a reader can inspect, not one opaque
+    string per stream. A single blob would parse as JSON while still being a serialized object
+    graph, so 'it is JSON' is not on its own the property that matters."""
+    ckpt = tmp_path / "run6_00000750_abcdef12.ckpt"
+    ckpt.write_bytes(b"x")
+    write_resume_state(_state(tmp_path), ckpt)
+    rng = json.loads(sidecar_path_for(ckpt).read_text(encoding="utf-8"))["rng"]
+    assert set(rng["python"]) == {"version", "state", "gauss_next"}
+    assert isinstance(rng["python"]["state"], list)
+    assert set(rng["numpy"]) == {"bit_generator", "keys", "pos", "has_gauss", "cached_gaussian"}
+    assert set(rng["torch"]) == {"state_b64"}
 
 
 def test_sidecar_write_is_atomic_leaving_no_temp_behind(tmp_path: Path) -> None:
