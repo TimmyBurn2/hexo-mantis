@@ -22,6 +22,7 @@ FOUR ROWS, ONE CLASS. Each publishes a value that reads as a measurement and is 
 from __future__ import annotations
 
 import json
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -95,6 +96,12 @@ class _FakePipeline:
     class _Ladder:
         rungs: tuple = ()
         bt_prior_games = 1.0
+        # The three the external-channel assessment threads into its ONE CI authority
+        # (`aggregate.pair_bootstrap_wr_ci`); real values, not stubs, so the stand-in drives
+        # the same arithmetic production does.
+        bootstrap_resamples = 200
+        bootstrap_ci_level = 0.95
+        bootstrap_seed = 0
 
     def __init__(self, sink: Any, statuses: dict[str, str]) -> None:
         self._sink = sink
@@ -102,6 +109,17 @@ class _FakePipeline:
         self._eval_cfg = SimpleNamespace(ladder=self._Ladder())
         self._ladder_state_path = Path("/nonexistent/ladder.json")
         self._last_p_hat: dict = {}
+        # R343(b)(iii)/(iv): `_finalize_round` now also drives the external-channel
+        # assessment, so the stand-in carries the REAL method and the state it reads. Stubbing
+        # it out would make this harness green while the producer went unexercised — the same
+        # shape as a fake `save_checkpoint` returning None, which is how the resume sidecar's
+        # missing leg stayed invisible until a box run found it.
+        self._external_history: list = []
+        self._degradation_flags = 0
+        self._round_counter = 0
+        from mantis.eval.pipeline import EvalPipeline as _EP  # lazy, this file's own style
+
+        self._assess_external_channel = partial(_EP._assess_external_channel, self)
         self._floor_checked_total = 0
         self._floor_skipped_total = 0
         outer = self

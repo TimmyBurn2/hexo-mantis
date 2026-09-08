@@ -37,6 +37,8 @@ from mantis.config.resolve.eval_posture import (
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.bt import fit_bt, predict_p
+from mantis.eval.channel_health import RoundReading as ChannelRoundReading
+from mantis.eval.channel_health import assess as assess_channel
 from mantis.eval.child_memory import EVENT as EVAL_DEVICE_MEMORY_EVENT
 from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
 from mantis.eval.ladder import LadderState
@@ -558,6 +560,15 @@ class EvalPipeline:
         self._mailbox: list[dict[str, Any]] = []
         self._round_counter = 0
         self._last_p_hat: dict[str, float] = {}
+        # R343(b)(iii)/(iv) — the EXTERNAL channel's own history, and the consecutive-flag
+        # counter the ruling makes the operand of an architect read. IN-MEMORY and it resets on
+        # resume, which is stated rather than hidden: every reading is also EMITTED as
+        # `eval_channel_health`, so the durable series is the event stream (what a dashboard
+        # reads anyway) and this window is the in-run convenience. Unlike `_round_counter`,
+        # nothing downstream branches on it, so a reset costs a shortened window and never a
+        # changed cadence.
+        self._external_history: list[ChannelRoundReading] = []
+        self._degradation_flags = 0
         #: Times `_finalize_round` was re-entered for a round it had already finalised and
         #: the duplicate was SUPPRESSED. Reads 0 in a healthy run. Non-zero means the poll
         #: loop and a drain both reached the same in-flight round — see the guard in
@@ -708,6 +719,67 @@ class EvalPipeline:
             )
         self._round_counter = int(round_counter)
         self._last_p_hat = {str(k): float(v) for k, v in last_p_hat.items()}
+
+    def _assess_external_channel(
+        self, result: Mapping[str, Any], *, round_id: str, step: int,
+    ) -> None:
+        """Read R343(b)(iii)'s SATURATION label and (iv)'s DEGRADATION flag, and publish them.
+
+        THE PRODUCER for both. `channel_health.assess` is the arithmetic; this is the live
+        consumer that gives it a round to read and a stream to report on — without it the two
+        rules would be a library nobody calls, which is the phantom-gate shape LAW-07 forbids
+        and exactly what a dashboard line with no producer means.
+
+        Reads `wr_sealbot` / `wr_sealbot_games` / `wr_sealbot_rung` — the trio
+        `_first_sealbot_wr` publishes out of ONE walk precisely so the value and the identity
+        cannot drift apart (AUDIT-1 F-14) — and never re-derives them here.
+
+        WARN-ONLY for run6 (G-3 stands): this emits and counts; it stops nothing. Two
+        CONSECUTIVE flags are an architect read, which is a decision for a person.
+        """
+        wr = result.get("wr_sealbot")
+        games = result.get("wr_sealbot_games")
+        rung = result.get("wr_sealbot_rung")
+        if wr is None or not games or rung is None:
+            # No sealbot rung recorded a game this round (skip-counted, or off-cadence). NOT a
+            # zero: a round the instrument did not play is absent from the series, never a loss.
+            return
+        self._external_history.append(ChannelRoundReading(
+            round_idx=self._round_counter, games=int(games),
+            wins=int(round(float(wr) * int(games))),
+            promoted=bool(result.get("promoted")), rung=str(rung),
+        ))
+        health = assess_channel(
+            self._external_history,
+            bootstrap_resamples=self._eval_cfg.ladder.bootstrap_resamples,
+            bootstrap_ci_level=self._eval_cfg.ladder.bootstrap_ci_level,
+            bootstrap_seed=self._eval_cfg.ladder.bootstrap_seed,
+            previous_consecutive_flags=self._degradation_flags,
+        )
+        self._degradation_flags = health.consecutive_degradation_flags
+        if health.saturated:
+            _LOG.info(
+                "eval_channel_saturated round_id=%s rung=%s pooled_wr=%.4f over %d games — "
+                "the rung has stopped discriminating; strength claims answer to the NEXT rung",
+                round_id, rung, health.pooled_wr, health.pooled_games,
+            )
+        if health.degraded:
+            _LOG.warning(
+                "eval_channel_degraded round_id=%s rung=%s pooled_wr=%.4f vs running max "
+                "%.4f while promotions continue (flag %d of 2 before an architect read) — "
+                "WARN-ONLY for run6 (G-3)",
+                round_id, rung, health.pooled_wr, health.running_max_wr or 0.0,
+                health.consecutive_degradation_flags,
+            )
+        _emit(self._sink, {
+            "event": "eval_channel_health", "round_id": round_id, "step": step,
+            "rung": rung, "label": health.label, "pooled_wr": health.pooled_wr,
+            "pooled_games": health.pooled_games, "rounds_pooled": health.rounds_pooled,
+            "ci_lower": health.ci_lower, "ci_upper": health.ci_upper,
+            "running_max_wr": health.running_max_wr, "saturated": health.saturated,
+            "degraded": health.degraded,
+            "consecutive_degradation_flags": health.consecutive_degradation_flags,
+        })
 
     def _current_p_hat(self) -> dict[str, float]:
         if self._last_p_hat:
@@ -1153,6 +1225,8 @@ class EvalPipeline:
             wr_sealbot=result["wr_sealbot"],
             progress=read_progress(inflight.get("spec")),
         )
+        self._assess_external_channel(result, round_id=inflight["round_id"],
+                                      step=inflight["step"])
         emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
         device_memory = raw.get("device_memory")
         if device_memory is not None:

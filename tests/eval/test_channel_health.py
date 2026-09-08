@@ -21,8 +21,9 @@ import pytest
 from mantis.eval.channel_health import RoundReading, assess
 
 
-def _r(idx: int, wins: int, games: int = 32, promoted: bool = True) -> RoundReading:
-    return RoundReading(round_idx=idx, games=games, wins=wins, promoted=promoted)
+def _r(idx: int, wins: int, games: int = 32, promoted: bool = True,
+       rung: str = "sealbot_d5") -> RoundReading:
+    return RoundReading(round_idx=idx, games=games, wins=wins, promoted=promoted, rung=rung)
 
 
 def test_no_history_is_no_data_never_a_zero() -> None:
@@ -120,7 +121,8 @@ def test_consecutive_flags_accumulate_and_a_clean_round_resets_them() -> None:
 def test_an_impossible_reading_is_refused_not_pooled() -> None:
     """More wins than games would pool to a win rate above 1 and silently poison both rules."""
     with pytest.raises(ValueError, match="cannot have happened"):
-        assess([RoundReading(round_idx=1, games=4, wins=9, promoted=False)])
+        assess([RoundReading(round_idx=1, games=4, wins=9, promoted=False,
+                             rung="sealbot_d5")])
 
 
 def test_zero_game_rounds_are_no_data_not_a_loss() -> None:
@@ -128,3 +130,84 @@ def test_zero_game_rounds_are_no_data_not_a_loss() -> None:
     wins would manufacture a collapse out of an operator-authorized skip."""
     h = assess([_r(i, 0, games=0) for i in range(1, 5)])
     assert h.pooled_wr is None and h.label == "NO-DATA" and not h.degraded
+
+
+def test_the_window_refuses_to_pool_across_a_rung_identity_change() -> None:
+    """AUDIT-1 F-14 applied to a pooled window, and the reason it is not optional.
+
+    `_first_sealbot_wr`'s own docstring: once `sealbot_d5` saturates it draws 0 games
+    off-cadence and the reported number silently becomes `sealbot_d6`'s — so a trajectory rule
+    over a mixed window compares two OPPONENTS and calls the difference a regression. Here a
+    strong d5 history is followed by a weak d6 reading: the pooled WR must be d6's alone, and
+    the degradation flag must NOT fire on the opponent having changed.
+    """
+    history = [_r(i, 30, rung="sealbot_d5") for i in range(1, 5)]
+    history += [_r(5, 8, rung="sealbot_d6")]
+    h = assess(history)
+    assert h.rounds_pooled == 1, "the window must stop at the identity change"
+    assert h.pooled_wr == pytest.approx(8 / 32)
+    assert not h.degraded, (
+        "a weaker reading against a HARDER opponent is not degradation; flagging it would "
+        "make the counter that gates an architect read fire on the ladder working as designed"
+    )
+
+
+# ══ THE PRODUCER (LAW-07): the rules must reach the event stream, not just compute ═══════
+def test_the_pipeline_emits_channel_health_from_a_real_round_result() -> None:
+    """R4/LAW-07 — every monitor input cites a LIVE PRODUCER.
+
+    THE DEFECT THIS CLOSES, and it was mine: `channel_health.assess` shipped first with 12
+    green rows and NO caller anywhere in `src/`. The saturation label and the degradation flag
+    were named as dashboard lines in an exit screen while nothing emitted them — a dashboard
+    line with no producer is the phantom-gate shape LAW-07 exists to forbid, and naming one is
+    the overclaim the curation protocol forbids. This row drives the real
+    `EvalPipeline._assess_external_channel` over a real round-result mapping and asserts the
+    event lands.
+    """
+    from types import SimpleNamespace
+
+    from mantis.eval.pipeline import EvalPipeline
+
+    emitted: list[dict] = []
+    fake = SimpleNamespace(
+        _sink=SimpleNamespace(emit=emitted.append),
+        _eval_cfg=SimpleNamespace(ladder=SimpleNamespace(
+            bootstrap_resamples=200, bootstrap_ci_level=0.95, bootstrap_seed=0)),
+        _external_history=[], _degradation_flags=0, _round_counter=3,
+    )
+    result = {"wr_sealbot": 0.875, "wr_sealbot_games": 32,
+              "wr_sealbot_rung": "sealbot_d5", "promoted": True}
+
+    EvalPipeline._assess_external_channel(fake, result, round_id="r000004_4000", step=4000)
+
+    assert len(emitted) == 1, "the assessment must publish exactly one reading per round"
+    ev = emitted[0]
+    assert ev["event"] == "eval_channel_health"
+    assert ev["rung"] == "sealbot_d5" and ev["label"] == "SATURATED"
+    assert ev["pooled_wr"] == pytest.approx(0.875) and ev["pooled_games"] == 32
+    assert ev["consecutive_degradation_flags"] == 0
+    assert fake._external_history and fake._external_history[-1].wins == 28
+
+
+def test_a_round_the_instrument_did_not_play_is_absent_not_a_loss() -> None:
+    """THE PLANTED BREAK for the producer. A skipped or off-cadence sealbot rung reports no
+    games; recording that as 0 wins would manufacture a collapse out of an operator-authorized
+    skip and trip the degradation flag on the ladder working as designed."""
+    from types import SimpleNamespace
+
+    from mantis.eval.pipeline import EvalPipeline
+
+    emitted: list[dict] = []
+    fake = SimpleNamespace(
+        _sink=SimpleNamespace(emit=emitted.append),
+        _eval_cfg=SimpleNamespace(ladder=SimpleNamespace(
+            bootstrap_resamples=200, bootstrap_ci_level=0.95, bootstrap_seed=0)),
+        _external_history=[], _degradation_flags=0, _round_counter=1,
+    )
+    EvalPipeline._assess_external_channel(
+        fake, {"wr_sealbot": None, "wr_sealbot_games": 0, "wr_sealbot_rung": None,
+               "promoted": False},
+        round_id="r000002_2000", step=2000)
+
+    assert emitted == [], "a round the instrument did not play publishes nothing"
+    assert fake._external_history == [], "and it does not enter the series as a loss"

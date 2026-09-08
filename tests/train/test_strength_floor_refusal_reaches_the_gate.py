@@ -205,6 +205,10 @@ class _FakePipeline:
     class _Ladder:
         rungs: tuple = ()
         bt_prior_games = 1.0
+        # Threaded into the ONE CI authority the assessment reuses; real values, not stubs.
+        bootstrap_resamples = 200
+        bootstrap_ci_level = 0.95
+        bootstrap_seed = 0
 
     class _State:
         def status(self, rung: str) -> str:
@@ -224,6 +228,18 @@ class _FakePipeline:
         self._eval_cfg = SimpleNamespace(ladder=self._Ladder())
         self._ladder_state_path = Path("/nonexistent/ladder.json")
         self._last_p_hat: dict = {}
+        # R343(b)(iii)/(iv): `_finalize_round` also drives the external-channel assessment now.
+        # The stand-in carries the REAL method rather than a stub, for this file's own stated
+        # reason — "the code exercised is production". A stub here would keep these rows green
+        # while the producer went unexercised.
+        from functools import partial
+
+        from mantis.eval.pipeline import EvalPipeline as _EP
+
+        self._external_history: list = []
+        self._degradation_flags = 0
+        self._round_counter = 0
+        self._assess_external_channel = partial(_EP._assess_external_channel, self)
         self._floor_checked_total = 0
         self._floor_skipped_total = 0
         self._state = self._State()

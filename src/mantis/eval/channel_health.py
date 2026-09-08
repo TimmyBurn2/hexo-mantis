@@ -55,6 +55,13 @@ class RoundReading:
     games: int
     wins: int
     promoted: bool
+    #: WHICH rung produced this reading. Load-bearing, and AUDIT-1 F-14 is why: the sealbot WR
+    #: alone is NOT a series — *"once `sealbot_d5` saturates it draws 0 games off-cadence and
+    #: the reported number silently becomes `sealbot_d6`'s, so a trajectory rule testing
+    #: `wr < peak * ratio` compares two opponents"* (`eval/rounds.py::_first_sealbot_wr`). Both
+    #: rules here are trajectory rules over a POOLED WINDOW, so they are exposed to exactly
+    #: that, and `_window` below is what refuses to pool across an identity change.
+    rung: str
 
 
 @dataclasses.dataclass(frozen=True)
@@ -79,6 +86,27 @@ class ChannelHealth:
         if self.degraded:
             return "DEGRADED"
         return "SATURATED" if self.saturated else "MEASURING"
+
+
+def _window(history: Sequence[RoundReading], width: int) -> list[RoundReading]:
+    """The trailing window, TRUNCATED at the most recent rung-identity change.
+
+    AUDIT-1 F-14 applied to a pooled window: comparing a pooled WR against a running maximum
+    taken over a DIFFERENT opponent is not a trajectory, it is two instruments averaged. So the
+    window stops at the first reading (walking back) whose rung differs from the newest one. A
+    window that shrinks to one round is the honest answer after a rung change, and both rules
+    degrade gracefully — saturation still reads, and the running maximum has fewer prior
+    windows to draw on until the new rung has history of its own.
+    """
+    if not history:
+        return []
+    newest = history[-1].rung
+    out: list[RoundReading] = []
+    for r in reversed(history):
+        if r.rung != newest or len(out) >= width:
+            break
+        out.append(r)
+    return list(reversed(out))
 
 
 def _pooled_outcomes(window: Sequence[RoundReading]) -> np.ndarray:
@@ -131,7 +159,7 @@ def assess(
         return ChannelHealth(None, 0, None, None, 0, False, None, False,
                              previous_consecutive_flags)
 
-    current = list(history)[-window:]
+    current = _window(history, window)
     pooled_games = sum(r.games for r in current)
     if pooled_games == 0:
         return ChannelHealth(None, 0, None, None, len(current), False, None, False,
@@ -147,9 +175,18 @@ def assess(
     # Every EARLIER window, so the maximum is a fact about the run's past rather than about
     # this reading. Windows are taken at the same width; a partial early window is included
     # because excluding it would blind the rule for the run's first `window` rounds.
+    #
+    # SCOPED TO THE CURRENT RUNG, and this is the second half of AUDIT-1 F-14 — the half a
+    # truncating window alone does NOT fix. Truncation makes the CURRENT reading single-opponent;
+    # if the running maximum still ranged over every earlier window, the rule would compare a
+    # fresh `sealbot_d6` reading against `sealbot_d5`'s peak and report the ladder ADVANCING as
+    # a degradation. A maximum and the value judged against it must be the same instrument.
+    current_rung = current[-1].rung
     running_max = None
     for end in range(1, len(history)):
-        prior = list(history)[max(0, end - window):end]
+        prior = _window(list(history)[:end], window)
+        if not prior or prior[-1].rung != current_rung:
+            continue
         g = sum(r.games for r in prior)
         if g:
             wr = sum(r.wins for r in prior) / g
