@@ -198,8 +198,10 @@ def test_the_newest_complete_bundle_is_the_one_offered(tmp_path: Path) -> None:
 
 
 # ── retention ───────────────────────────────────────────────────────────────────────────
-def test_two_complete_bundles_are_retained_and_older_ones_go_whole(tmp_path: Path) -> None:
-    """Retention deletes BUNDLES, not files: a surviving orphan member is the failure mode."""
+def test_two_complete_bundles_are_retained_and_the_rest_are_de_committed(
+    tmp_path: Path,
+) -> None:
+    """Retention removes the manifest, the ring and the sidecar — and KEEPS the checkpoint."""
     for step in (10, 20, 30, 40):
         _publish_a_bundle(tmp_path, step=step)
 
@@ -207,13 +209,31 @@ def test_two_complete_bundles_are_retained_and_older_ones_go_whole(tmp_path: Pat
 
     kept = sorted(m.step for m in B.complete_bundles(tmp_path))
     assert kept == [30, 40], f"retention kept {kept}"
-    assert removed, "prune reported removing nothing while two bundles disappeared"
+    assert removed, "prune reported removing nothing while two bundles were de-committed"
     survivors = _member_files(tmp_path)
     for step in (10, 20):
-        assert not any(f"{step:08d}" in name for name in survivors), (
-            f"step {step}'s bundle left members behind: "
-            f"{sorted(n for n in survivors if f'{step:08d}' in n)}"
+        stale = sorted(n for n in survivors if f"{step:08d}" in n)
+        assert stale == [f"run_{step:08d}_abcd1234.ckpt"], (
+            f"step {step} should have kept ONLY its checkpoint; survivors are {stale}"
         )
+
+
+def test_retention_never_deletes_a_checkpoint(tmp_path: Path) -> None:
+    """R3/LAW-12 and R345(d) both need old checkpoints; only the resume point is retired.
+
+    R345(d) measures STRENGTH-FRONTIER-1 on run6's own frozen checkpoints at steps ~5k, ~12k
+    and 25k. A retention that swept `.ckpt` files would delete two of those three before the
+    block ended — the ruling's later clause defeated by its earlier one, silently, months
+    after the code was written.
+    """
+    for step in (10, 20, 30, 40):
+        _publish_a_bundle(tmp_path, step=step)
+    before = {n for n in _member_files(tmp_path) if n.endswith(".ckpt")}
+
+    B.prune_bundles(tmp_path, keep=2)
+
+    after = {n for n in _member_files(tmp_path) if n.endswith(".ckpt")}
+    assert after == before, f"retention deleted checkpoint(s): {sorted(before - after)}"
 
 
 def test_retention_never_drops_below_one_complete_bundle(tmp_path: Path) -> None:

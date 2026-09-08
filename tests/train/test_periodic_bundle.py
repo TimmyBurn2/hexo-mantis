@@ -36,11 +36,14 @@ def _drive(trainer: Any, buffer: Any, n: int) -> None:
 
     for _ in range(n):
         wire, _targets = buffer.sample_graph_batch(4, augment=False, recent_frac=0.0)
-        max_edges, max_nodes = H.non_binding_caps(wire)
+        # Bound as default arguments, not captured: a closure over the loop variables reads
+        # whatever the LAST iteration left them at, so every step past the first would be
+        # planned against the wrong caps (ruff B023).
+        caps = MicrobatchCapsSpec(*H.non_binding_caps(wire))
         production_graph_step(
             trainer, buffer, H.GSPEC,
             batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
-            caps_provider=lambda: MicrobatchCapsSpec(max_edges=max_edges, max_nodes=max_nodes),
+            caps_provider=lambda caps=caps: caps,
             sample_threads_provider=lambda: 1,
         )
 

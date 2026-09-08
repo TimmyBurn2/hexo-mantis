@@ -52,17 +52,33 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
+from mantis.config.schema import (
+    EvalConfig,
+    GateConfig,
+    LadderConfig,
+    LadderRung,
+    PlyCapAdjudicationConfig,
+)
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
+from mantis.encoding import lookup
 from mantis.model import CnnArch, build_net
 
 pytestmark = pytest.mark.integration
 
 
+#: A DENSE encoding at radius 8, not radius-5 `v6`: this round replays real openings from
+#: `book_v1_s20260625_p4`, which is minted against `gnn_axis_v1` and 292 of whose 512 openings
+#: need radius >= 6 (tests/arena/test_book_geometry_pairing.py). Under `v6` the round dies in
+#: the eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
+_ENC = "v6w25"
+
+
 def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
-    # Registry-true "v6" dims (board_size=19, n_planes=8 — crates/mantis-encoding/src/
-    # registry.toml `[encodings.v6]`); minimal width/depth (filters/res_blocks) for speed.
+    # Registry-TRUE dims, DERIVED from the spec rather than written as literals. They used to
+    # be `board_size=19, in_channels=8` beside a comment naming `[encodings.v6]` — correct
+    # then, and exactly the coincidence that breaks the moment the encoding moves, which it
+    # just did. `test_graph_round_encoding._net` makes the same argument for the same reason.
     # `weight_seed` is DETERMINISTIC-but-DIFFERENT per round: with n_sims=4 (a genuinely
     # shallow search) most individual games between two weak/untrained players end in the
     # ply-cap draw (`arena/match.py::DEFAULT_MAX_PLIES=128` — the board is unbounded, a
@@ -72,13 +88,15 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
     # keeps `test_second_round_scheduling_reflects_first_round_bt` from being flaky across
     # runs while still exercising the REAL worker/arena/BT path end to end.
     torch.manual_seed(weight_seed)
-    arch = CnnArch(board_size=19, in_channels=8, filters=8, res_blocks=1)
+    spec = lookup(_ENC)
+    arch = CnnArch(board_size=spec.board_size, in_channels=spec.n_planes,
+                   filters=8, res_blocks=1)
     net = build_net(arch)
     net.arch = arch
     return net
 
 
-def _eval_cfg() -> EvalConfig:
+def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
     rungs = [
         # index 0: `LadderState.initial()` starts ONLY the first rung ACTIVE (STATE §5's
         # real chained activation law, post deviation-#3-revert) — the resolvable stub
@@ -106,7 +124,11 @@ def _eval_cfg() -> EvalConfig:
         random_model_sims=4, sealbot_model_sims=4, kraken_model_sims=4,
         strix_model_sims=4, random_floor_games=2, worker_device="cpu",
         round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
-        ply_cap_adjudication=None, strength_floor=None,
+        ply_cap_adjudication=(
+            PlyCapAdjudicationConfig(criterion="longest_run_margin", min_margin=1)
+            if adjudicate else None
+        ),
+        strength_floor=None,
     )
 
 
@@ -117,25 +139,25 @@ def _promotion_hooks(tmp_path: Path) -> DeployTagHooks:
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         best_model_path=tmp_path / "best_model.pt",
         run_id="oracle_e2e_run",
-        encoding="v6",
+        encoding=_ENC,
         save_anchor=lambda *a, **k: None,
         guarded_load=lambda *a, **k: None,
     )
 
 
-def _build_pipeline(tmp_path: Path):
+def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
     spool_dir = tmp_path / "spool"
     spool_dir.mkdir(exist_ok=True)
     return build_eval_pipeline(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128,
-        eval_cfg=_eval_cfg(),
+        eval_cfg=_eval_cfg(adjudicate=adjudicate),
         coordinator_cfg_caps=DrainCaps(
             final_eval_drain_timeout_sec=600.0,
             eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=600.0,
             terminal_eval_hard_cap_sec=600.0,
         ),
-        encoding="v6",
+        encoding=_ENC,
         run_id="oracle_e2e_run",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
@@ -216,7 +238,15 @@ def test_second_round_scheduling_reflects_first_round_bt(tmp_path) -> None:
     # be reproducibly decisive-outcome-yielding at this fixture's game count, so the BT
     # fit's p_hat genuinely differs between rounds instead of racing "will a 6-in-a-row
     # happen to form before the ply cap" on an unseeded net (see `_tiny_model` docstring).
-    pipeline = _build_pipeline(tmp_path)
+    # THE ADJUDICATOR IS ARMED FOR THIS ROW ONLY, and it is the mechanism rather than a
+    # workaround. `arena/adjudicate.py`'s own docstring describes this exact fixture state:
+    # *"every game reached the ply cap and `draw_rate` sat at 1.0, so at early strength the
+    # eval instrument's entire outcome channel was one constant. A constant carries no
+    # signal."* Two untrained nets at `random_model_sims=4` on an unbounded board do not
+    # complete a six-in-a-row inside the cap, so every game draws and both rounds fit
+    # `p_hat = 0.5` — the assertion below cannot see the difference it exists to check.
+    # The sibling rows keep the disarmed posture every shipped config mints.
+    pipeline = _build_pipeline(tmp_path, adjudicate=True)
     try:
         pipeline.run_evaluation(_tiny_model(weight_seed=42), 1000, None,
                                  full_config={}, best_model_step=None)

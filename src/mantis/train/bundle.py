@@ -358,7 +358,25 @@ def newest_complete_bundle(directory: str | Path) -> BundleManifest | None:
 
 
 def prune_bundles(directory: str | Path, *, keep: int = 2) -> list[str]:
-    """Delete all but the `keep` newest COMPLETE bundles, whole. Returns the names removed.
+    """De-commit all but the `keep` newest COMPLETE bundles. Returns the names removed.
+
+    **THE CHECKPOINT IS NEVER DELETED.** Retention removes the manifest, the ring and the
+    sidecar; the `.ckpt` stays. Four grounds, and the first two are binding:
+
+    * R3 / LAW-12 make the checkpoint the ARTEFACT OF RECORD — run-id and content hash in its
+      own filename, stamped once, immutable. Retention is a disk-budget mechanism and has no
+      business deleting provenance.
+    * R345(d) requires STRENGTH-FRONTIER-1 to measure *"run6's own frozen checkpoints (steps
+      ~5k, ~12k, 25k)"*. A retention that deleted checkpoints would destroy two of those three
+      before the block ended — the ruling's own later clause, defeated by its earlier one.
+    * The budget exists for the RING (~24 MB each); a checkpoint is a fraction of that, so
+      deleting it buys almost nothing.
+    * Anchors and `strip_and_restamp` read old checkpoints; sweeping them breaks inputs a
+      later leg still needs.
+
+    A de-committed bundle stops being a RESUME POINT — its manifest is gone, so
+    `complete_bundles` no longer sees it — while remaining a readable artefact. That is the
+    distinction the two words are for.
 
     Completeness is what is counted, and that is the point: counting manifests would let a
     torn bundle occupy one of the two retention slots, leaving the run with one usable resume
@@ -393,6 +411,8 @@ def prune_bundles(directory: str | Path, *, keep: int = 2) -> list[str]:
             except (BundleError, OSError):
                 continue
         for member in manifest.members():
+            if member.name == manifest.checkpoint.name:
+                continue  # the artefact of record — see this function's docstring
             (base / member.name).unlink(missing_ok=True)
             removed.append(member.name)
         if manifest_name is not None:

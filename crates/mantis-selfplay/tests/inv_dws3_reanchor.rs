@@ -25,6 +25,7 @@ const CONFIG: &str = include_str!("../src/runner/config.rs");
 /// string is not mistaken for a comment. (The pinned files carry no raw strings or
 /// `'"'` char literals, so this minimal scanner is exact for them.)
 fn strip_comments(src: &str) -> String {
+    // The caller normalises chains afterwards; this stage only removes comments.
     let chars: Vec<char> = src.chars().collect();
     let mut out = String::with_capacity(src.len());
     let mut i = 0;
@@ -65,13 +66,51 @@ fn strip_comments(src: &str) -> String {
     out
 }
 
+/// Collapse the whitespace AROUND `.` so a method chain matches however rustfmt broke it.
+///
+/// R345 — this suite greps SOURCE TEXT for markers like
+/// `solver_counters.seeded_games_started`, and rustfmt splits a long chain across lines the
+/// moment the statement grows past the width. It did exactly that here (a neighbouring edit
+/// made the enclosing function wider), and the counter this test guards was still present and
+/// still incrementing while the test reported it REMOVED. A re-anchor that a formatter can red
+/// is a re-anchor that will be silenced the first time it cries wolf, which is the opposite of
+/// what it is for — so the matcher is made insensitive to the one thing formatting moves, and
+/// nothing else. It still matches TEXT, deliberately: the point of these markers is that a
+/// named site exists in a named file, which is a fact about the source and not about a value
+/// a structural check could read.
+fn normalise_chains(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut pending_ws = false;
+    for c in src.chars() {
+        if c.is_whitespace() {
+            pending_ws = true;
+            continue;
+        }
+        if c == '.' {
+            // drop whitespace before the dot
+            out.push('.');
+            pending_ws = false;
+            continue;
+        }
+        if pending_ws {
+            // keep ONE separator, unless the previous emitted char was a dot
+            if !out.ends_with('.') {
+                out.push(' ');
+            }
+            pending_ws = false;
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// The per-move target-extraction override must (1) gate on the config flag,
 /// (2) call the native solver, (3) SOFT-inject the proven win, (4) surface
 /// off-window wins (`window_half: None` on the legal_set path), and (5) force the
 /// injected row full-search. All five live in `runner/search_drive.rs` now.
 #[test]
 fn dws3_solver_override_wired_in_search_drive() {
-    let search = strip_comments(SEARCH);
+    let search = normalise_chains(&strip_comments(SEARCH));
     assert!(
         search.contains("ctx.solver_enabled"),
         "solver-in-loop override must be gated on the config-driven enabled flag",
@@ -100,9 +139,9 @@ fn dws3_solver_override_wired_in_search_drive() {
 /// the worker-thread destructure (`runner/game.rs`).
 #[test]
 fn dws3_solver_knobs_thread_end_to_end() {
-    let config = strip_comments(CONFIG);
-    let params = strip_comments(PARAMS);
-    let game = strip_comments(GAME);
+    let config = normalise_chains(&strip_comments(CONFIG));
+    let params = normalise_chains(&strip_comments(PARAMS));
+    let game = normalise_chains(&strip_comments(GAME));
     for field in [
         "solver_enabled",
         "solver_depth",
@@ -131,10 +170,10 @@ fn dws3_solver_knobs_thread_end_to_end() {
 /// relative gate span `search_drive.rs` + `game.rs`.
 #[test]
 fn dws3v3_seeding_and_counters_wired() {
-    let search = strip_comments(SEARCH);
-    let game = strip_comments(GAME);
-    let params = strip_comments(PARAMS);
-    let config = strip_comments(CONFIG);
+    let search = normalise_chains(&strip_comments(SEARCH));
+    let game = normalise_chains(&strip_comments(GAME));
+    let params = normalise_chains(&strip_comments(PARAMS));
+    let config = normalise_chains(&strip_comments(CONFIG));
     let search_and_game = format!("{search}\n{game}");
     for marker in [
         "solver_counters.moves_eligible",
