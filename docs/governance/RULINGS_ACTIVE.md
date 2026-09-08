@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ a88fdb2, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c3d6c06, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.63, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.64, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1239,6 +1239,24 @@ every curation appends one line to §8.
 # alert that fires on every emission trains its reader to ignore alerts. RUN LENGTH is a 12 h block
 # whose extension is decided on readings. **R341(e)'s armed 750 cadence is SUPERSEDED by 1000 and
 # `checkpoint_interval` RE-DERIVES with it — the relation row R242 required, working as designed.**
+# **v3.64 = R344 folded in — R343 RATIFIED, the anchor-pin collision (R343(c) against R343(d))
+# placed on the ARCHITECT'S ledger with the landed fix — the pin follows launch mode — standing, and
+# the rate bar HELD at R342(b)(iv)'s written **3 firings per 12 h** because RESUME-1 delivered inside
+# its time-box, so R343(c)'s tightening clause never fires. The RING SAMPLER is ordered SEEDED FROM
+# `config.seed` — the cheaper alternative the R343 close-out costed — and capturing ChaCha state
+# through rand's backend is REFUSED BY NAME as the coupling `mantis-selfplay`'s own pin exists to
+# prevent; witness 4's residual is pre-authorised as **nondeterminism DISCLOSED, not chased**.
+# **GAME-RECORD-1 is ORDERED BEFORE THE START**: a run that does not write its games cannot be
+# viewed, replayed or mined, so the producer must exist at step 0 — every game on every channel,
+# moves in axial coordinates, per-position search stats on the eval channel and a 1-in-N self-play
+# sample. The PROMOTION INTERVAL is confirmed at 1000 on both channels with the split still carded.
+# **DASH-2 is ORDERED** as a read-only SERVER over the run record carrying the GAME VIEWER, its
+# design DECIDED in the packet rather than offered as an option list; RUNG-2 follows it, strix
+# first, shrimp held for an architect read on the R257 radius fence. And **RUN LENGTH is RE-DERIVED
+# from R343(f)'s 12 h to a 25 001-step block minimum** — 12 h at the measured 1 581 steps/h is
+# ~19 000 steps, which ends before `draw_rate_abort.min_step` and `wr_collapse_min_step` (both
+# 25 000) can fire at all, i.e. a block that reads its aborts as armed while they are unarmable
+# inside it.**
 
 **Curation protocol (R271(d), extended by R272(b) — binding, not optional).** Every
 curation spot-checks **≥5 index lines against the verbatim register text** and records
@@ -1275,9 +1293,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R343 — **314 sections, 314 distinct numbers, no duplicates** (re-derived at v3.58; this sentence read R308/279 from v3.0 through v3.35, was repaired at v3.45, and then went STALE AGAIN — it still read R338/309 at v3.48 and v3.49 while the register carried R339, because those curations ran the script and left the sentence. Repaired in place under R311(c) a SECOND time. The lesson the first repair drew is now measured: the sentence is the thing that drifts, the script is the thing that is right, and a reader should trust `ruling_census.py` over this clause) — and **every number
+  R23–R344 — **315 sections, 315 distinct numbers, no duplicates** (re-derived at v3.58; this sentence read R308/279 from v3.0 through v3.35, was repaired at v3.45, and then went STALE AGAIN — it still read R338/309 at v3.48 and v3.49 while the register carried R339, because those curations ran the script and left the sentence. Repaired in place under R311(c) a SECOND time. The lesson the first repair drew is now measured: the sentence is the thing that drifts, the script is the thing that is right, and a reader should trust `ruling_census.py` over this clause) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 344)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 345)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -1824,10 +1842,24 @@ Verbatim text in the register; one-liners here are index only.
   envelope carries **no RNG state at all** (`checkpoints.py:453-491`). **Out of time-box: run6
   starts anyway with the manual cost restated and the R342(b)(iv) rate bar TIGHTENED to 1 firing
   per 12 h.**
+  - **SETTLED by R344(a): the tightening clause DOES NOT FIRE.** RESUME-1 delivered inside its
+    box — four of five witnesses, the fifth halted with its cause costed rather than skipped — so
+    **the rate bar stands at R342(b)(iv) as written, 3 firings per 12 h**. The manual cost is
+    restated anyway and is now smaller than when R342 priced it: each firing costs one operator
+    `--resume-from` with the ring INTACT (persisted, sha256-verified on load, refused if altered)
+    rather than a ring refill, until `CARD-RESUME-LAUNCHER-FLAG` lands. Witness 4 is RE-RUN
+    against the seeded ring under R344(a); a residual after that is **recorded as nondeterminism
+    disclosed, not chased**.
 - **R343(b) — THE EVAL INSTRUMENT IS TWO DECOUPLED CHANNELS. LIVE, armed by unedited forwarding.**
   (i) PROMOTION (candidate vs anchor) every **1000** steps for the whole run. (ii) EXTERNAL
   (sealbot_d5 at fixed nodes) every **1000** through the first third — 6 points at the measured
-  1 581 steps/h, witness (iii)'s `≥ 5` with margin — then every **2000**. (iii) **SATURATION
+  1 581 steps/h, witness (iii)'s `≥ 5` with margin — then every **2000**.
+  - **THE `6 POINTS` FIGURE RE-DERIVES UNDER R344 §0.5, and the witness clears by MORE.** That 6
+    was arithmetic over R343(f)'s 12 h block, which §0.5 withdraws for a **25 001-step minimum**.
+    A first third of ~8 334 steps at cadence 1000 is **~8 external points**, not 6, against
+    witness (iii)'s `≥ 5`. Nothing in (b) is re-authored — the CADENCE is unchanged at 1000 and
+    the halving rule is unchanged; only the count of points the block affords moves, because the
+    block moved. (iii) **SATURATION
   RULE**: pooled external WR over the last four rounds `≥ 0.85` means the instrument has stopped
   discriminating (32-game CIs cannot separate 0.85 from 0.95) — the cadence halves again, the
   reading is labelled SATURATED, and **strength claims from then on answer to the NEXT RUNG, not
@@ -7506,3 +7538,42 @@ Verbatim text in the register; one-liners here are index only.
   processes, GPU 2 MiB. **RUN6 IS STILL NOT STARTED** — the START remains a separate operator
   forward naming the block and the anchor hash, drafted at `EXIT.md` §9 with the one clause
   (R342(b)(iv)'s rate bar) deliberately left to the operator because it selects an armed value.
+
+- 2026-09-08 — **v3.64** curated at the **R344 LANDING** (dispatcher A). Census re-run by script:
+  `R23–R344 — 315 / 315 / 0, excluded 53` (was 314 / 314 / 0 — R344's one header, and the
+  ANNOTATION under R343's foot moves neither count, as every annotation before it has not);
+  missing-in-range unchanged at `{24, 29, 32, 33, 227, 228, 267}`; `STAMP OK: v3.64`;
+  `--self-test` all four controls fire. §1's range sentence and its `range(23, 345)` re-derivation
+  bound both advanced with the append.
+  **THE RULING'S ONE CANONICAL HOME IS `PACKET_R344_GAME_RECORD_START_DASH2.md` §1** (R285/R289(v)),
+  created by this landing because the text arrived in the session prompt and not as a file. R306(a)
+  byte-diff protocol executed in full: two independent transcriptions IDENTICAL at 40 lines /
+  2 790 chars with the placeholder intact, `sed` substitution re-diffed EMPTY, and the canonical
+  home's `awk`-extracted block diffed EMPTY against it at 40 lines / 2 787 chars, sha256
+  `659d82d6…`. `R344` pre-existed in NEITHER repository.
+  **FIVE INDEX LINES SPOT-CHECKED AGAINST VERBATIM REGISTER TEXT** (R271(d)/R272(b)):
+  §5's R343(b) row (*"6 points at the measured 1 581 steps/h … then every 2000"*) — MATCHES the
+  register verbatim, and is the line this curation ANNOTATES rather than repairs, because the
+  cadence is right and only the block it was counted over moved · §5's R343(c) out-of-time-box row
+  (*"the rate bar (b)(iv) tightened to 1 firing per 12 h"*) — MATCHES; SETTLED this curation, the
+  clause does not fire · §5's R342(b)(iv) row (*"more than 3 firings in any 12 h … CONDEMNS the
+  host again with no further ruling needed"*) — MATCHES, and is the bar R344(a) holds · §4's
+  R289(v)/R291(h) one-text row — MATCHES, and is the rule this landing executed by creating the
+  canonical home rather than copying the text into the register · §4/§6's R333(d) dashboard
+  admission — MATCHES, and its own landing note (*"`PANELS` **9** and `BANKED_PANELS` **2**
+  (`average sims/move`, `held-out loss`), i.e. seven live"*) is confirmed AT HEAD by this landing's
+  independent read of `tools/run_dashboard.py:50-66`. No index line was found overclaiming.
+  **THE LANDING'S OWN PREMISE FINDINGS ARE IN THE REGISTER, NOT HERE** — ten of them, each a
+  citation, because clause (b) orders a producer partly present and partly absent-by-construction,
+  clause (d) orders a surface `repo_design.md` names as deliberately absent, and §0.5 moves a term
+  R343(f) had set. **The two that change what a dispatcher may assume:** (b)'s per-position search
+  stats are a PYTHON WIRING JOB on the eval channel (`get_root_children_info()` is computed and
+  discarded one line before `select_move` returns) and a PERF-HOST ENGINE ACT on the self-play
+  channel (`GameResultRow` has no stats slot and every ring row is pushed `game_id=-1` by
+  construction) — one sentence, two jobs; and (d) is a **DEVIATION FROM `repo_design.md` §1 owing
+  an R9 AMENDMENT COMMIT in the same commit as the code**, which is dispatcher B's first
+  obligation and not a post-hoc note.
+  **RUN6 IS STILL NOT STARTED.** The START remains the operator's separate forward, and R343's
+  drafted §9 line is now stale in its block term — §0.5 replaces 12 h with a 25 001-step minimum,
+  so the forward is a RE-DERIVATION and the anchor half (`net_hash 2e72abd4…`) is what carries
+  forward unchanged.

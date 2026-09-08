@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ a88fdb2, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ c3d6c06, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -9048,3 +9048,190 @@ throughput. **`train.checkpoint_interval` re-derives rather than being re-author
 whole reason R242 required that row be stated as a relation** — `RUN6_MINT_PREREG.md:135` names
 this exact event in advance. The two `# delta:` headers in `configs/run6.yaml` are re-minted from
 the recorded deltas, not hand-edited.
+
+---
+
+# R344 — architect ruling, ARCH-ERA session, 2026-09-08 (R343 RATIFIED with the anchor-pin collision placed on the ARCHITECT'S ledger and the rate bar held at R342(b)(iv)'s written 3-per-12 h because RESUME-1 delivered inside its box; the ring sampler ordered SEEDED FROM `config.seed` — the cheaper alternative the close-out costed — with the ChaCha-state capture REFUSED by name as the coupling the crate's own pin exists to prevent, and witness 4's residual pre-authorised as nondeterminism DISCLOSED rather than chased; GAME-RECORD-1 ORDERED BEFORE THE START on the ground that a run which does not write its games cannot be viewed, replayed or mined, with the producer required to exist at step 0; the PROMOTION INTERVAL confirmed at 1000 on both channels with the split still carded; DASH-2 ORDERED as a read-only SERVER over the run record carrying the GAME VIEWER, its design DECIDED in the packet rather than offered as options; RUNG-2 sequenced behind it with strix first and shrimp held for an architect read on the R257 radius fence; and the RUN LENGTH RE-DERIVED from 12 h to a 25 001-step block minimum because 12 h is shorter than the armed aborts' own floor) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into THIS session's prompt rather than as a file — so the
+landing session CREATED the ruling's one canonical home,
+`PACKET_R344_GAME_RECORD_START_DASH2.md` §1 (R285's ONE-TEXT rule). **The pre-existence grep
+returned NO MATCH in BOTH repositories** — `R344` appeared nowhere in `mantis-migration` and
+nowhere in `hexo-mantis` before the canonical home was written. The forwarded text carried the
+ruling-number placeholder in **two** positions, of which **exactly one** is a substitution site
+inside the ruling text (the quote-block lead); the other is the packet's own dispatch heading.
+Byte-diff on append per R306(a): the block was transcribed **twice, independently**, with the
+placeholder intact, and the two transcriptions diffed BEFORE substitution — **IDENTICAL, 40
+lines / 2 790 chars**; the substitution was applied mechanically by `sed` to both and re-diffed
+— **EMPTY**; the canonical home's `awk`-extracted block was then diffed against the substituted
+transcription — **EMPTY**, 40 lines / 2 787 chars, sha256 `659d82d6…`. Extraction by `awk`
+under `set -o pipefail` (R313(c)), never retyped. Head verified from the file before
+substituting: census `R23-R343, 314 / 314 / 0, excluded 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `STAMP OK: v3.63 == §8 last entry`; `--self-test` all four
+controls fire.
+
+**THE PREMISES WERE VERIFIED AT HEAD BEFORE ANY CLAUSE WAS EXECUTED (R289).** Clause (b) orders
+a producer described as absent, clause (d) orders a surface the structural contract names as
+deliberately absent, and §0.5 moves a run-length term R343(f) had already set — so each had to be
+read at HEAD rather than recalled. Findings, each a citation:
+
+* **(b)'s SELF-PLAY MOVE LIST IS ALREADY WRITTEN, AND ITS SEARCH STATS HAVE NO PRODUCER
+  ANYWHERE.** `pool_drain.py:178-215` emits a `game_complete` event for **every** self-play game,
+  unconditionally, through the injected sink — carrying `game_id` (uuid4), `game_id_byte_hash`
+  (the LAW-04 dedupe input), `winner`, `moves` (a ply COUNT), **`moves_list` (the axial move list
+  as `"(q,r)"` strings)**, `worker_id`, `terminal_reason`, `seeded`, `solver_fires` and eight
+  structural metrics. So the MOVES half of *"every game is SAVED"* is already true at HEAD on the
+  self-play channel; what (b) adds there is a per-game FILE and the fields the event lacks (run
+  id, step at start, channel, colors, seed, served sims). What is `None` in that same payload,
+  with the reason written beside it, is `moves_detail` and `value_trace` — *"None until the Rust
+  game runner stores top_visits / root_value per move in its drain"* (`:185-187`).
+  `GameResultRow` is a 10-tuple with no stats slot
+  (`crates/mantis-selfplay/src/runner/mod.rs:53`). The per-position visit distribution IS computed
+  in Rust and IS projected into the training record (`runner/record.rs:73-151`,
+  `target_policy: &MovePolicy`) — but every row reaches the ring as
+  `push_graph_position(*rec, game_id=-1)`, *"the untagged sentinel … resume-collision-free by
+  construction"* (`selfplay/pool_push.py:38-48`). **The stats therefore exist per position and
+  are un-associable to a game BY CONSTRUCTION**, and associating them changes the hot drain
+  path — LAW-09, one change / one commit / one IQR-gated bench against 28 attested floors, a
+  PERF-HOST act, which is the same disposition `CARD-RING-SAMPLER-SEED` took for the same crate.
+* **(b)'s EVAL-CHANNEL STATS, BY CONTRAST, NEED NO ENGINE CHANGE — they are computed and
+  discarded one line before the return.** `DeployHeadPlayer.select_move` calls
+  `tree.get_root_children_info()`, hands it to `select_argmax_child`, and returns the move alone
+  (`arena/deploy_head.py:159-164`). The row shape is `(coord, pool_idx, prior, visits, q)`
+  (`:22-24`) — exactly (b)'s *"visit distribution over legal moves"* — and
+  `MCTSTree.root_value()` is already on the bridge (`crates/mantis-bridge/src/mcts.rs:474`).
+  **(b) asks for both halves in one sentence, and they are not one job:** the eval half is Python
+  wiring at a live call site, the self-play half is a perf-host engine act. The asymmetry is
+  stated here so it is not discovered as a slip mid-leg.
+* **(b)'s STORAGE FALLBACK IS TRIGGERED BY MEASUREMENT, and the run record ALREADY SHARDS.**
+  `msgpack` appears nowhere in `pyproject.toml` — dependencies are `pydantic`, `pyyaml`,
+  `mantis-engine`, `torch`, and the `analysis` extra is `matplotlib`, `rich`, `scipy`. The
+  clause's own conditional (*"falls back to JSONL if msgpack is not already a dependency — no new
+  hard dependency for this"*) therefore FIRES, and the format is JSONL with nothing left to
+  decide. Separately, the run record is already an append-only shard set with an ATOMIC claim
+  protocol: `events_<run_id>_seg<NNNN>.jsonl`, claimed `O_CREAT|O_EXCL` per process start so
+  *"no JSONL file ever spans two run segments"*, after a scan-then-append TOCTOU put two headers
+  in one file under 12 concurrent constructions (`monitor/sink.py:84-124`). **A second sharding
+  key — (b)'s per-hour rotation — would be a second authority over the question the segment
+  protocol already answers**, and it answers it in the dimension that actually matters here,
+  which is the resume boundary rather than the wall clock.
+* **(b)'s BUDGET, DERIVED at the shakedown's own rates rather than carried.** R342's exit
+  measured **1 627 self-play games/h** and 1 581 steps/h (`R342_EVIDENCE/SHAKEDOWN_EXIT.md:33`),
+  with **54.5 mean plies/game, 223 max** (`R342_EVIDENCE/00_INDEX.md:67`). A 25 001-step block at
+  1 581 steps/h is 15.8 h, i.e. ~25 700 games; a moves-only JSONL record at ~54.5 plies × ~8 B
+  plus a ~250 B header is ~700 B/game ⇒ **~18 MB for the block** — which is where (b)'s "~20 MB
+  per 12 h" comes from and it survives the re-derivation. The SAMPLED-STATS figure does not
+  survive as stated: a visit distribution is one row per LEGAL MOVE, and run6's identity is
+  radius **8**, so the per-position support is hundreds of cells, not tens. **The 300 MB ceiling
+  is therefore a term to MEASURE on the box burst, not to assert**, and the 1-in-N row is the
+  knob that holds it.
+* **(c)'s CADENCE IS ALREADY MINTED, AND ITS LAST SENTENCE IS THE PART §0.5 MOVES.**
+  `configs/run6.yaml` mints `train.eval_interval: 1000` (`:142`), `train.checkpoint_interval:
+  1000` (`:130`) and `eval.gate.stride: 1` (`:46`) — R343's leg already landed exactly what (c)
+  confirms, so (c) is a confirmation and not an edit. But *"6 external points in the first third"*
+  was arithmetic over R343(f)'s **12 h** block, and §0.5 withdraws that block. At a 25 001-step
+  minimum the first third is ~8 334 steps ⇒ **~8 rounds at cadence 1000**, not 6. The witness
+  R343(b)(iii) set (`≥ 5`) clears with MORE margin, not less; the number in (c)'s prose is simply
+  stale against §0.5 and is corrected here rather than repeated.
+* **§0.5's 25 001-STEP FLOOR IS THE ARMED ABORTS' OWN, AND IT VERIFIES.** `run6.yaml` mints
+  `train.draw_rate_abort.min_step: 25000` (`:139`) and `monitor.wr_collapse_min_step: 25000`
+  (`:247`); the rules compare `current_step < min_step` and `current_step > cfg.wr_collapse_
+  min_step` (`monitor/rules.py:384,310`), so at step 25 000 **no** armed abort has yet become
+  able to fire and 25 001 is the first step at which the whole armed set is live. §0.5's
+  "~16–20 h at 1260–1581 steps/h" is 15.8–19.8 h — accurate. **12 h at the measured 1 581
+  steps/h is ~19 000 steps, i.e. a block that would have ended before two of its own armed
+  aborts could ever have fired.** That is why the withdrawal is a correction and not a
+  preference, and it is annotated under R343's foot below.
+* **(d) IS A DEVIATION FROM `repo_design.md` AND OWES AN AMENDMENT COMMIT (R9).** §1 reads
+  *"Display surfaces (web dashboard, game viewer, TUI monitors) are deliberately absent"*
+  (`docs/design/repo_design.md:64`). The R333(d) amendment at that file's foot admits
+  `tools/run_dashboard.py` narrowly and, in the same breath, re-states what stays out: *"The web
+  dashboard, the game viewer and the TUI monitor. The distinction is not size, it is COUPLING: an
+  absent surface is one that would have to watch a run, and everything on that list would"*
+  (`:951-958`). **DASH-2 is both of those named absences at once, watching a live run.** R344(d)
+  has the authority to order it; what a ruling does not do is WRITE the amendment, and R9 puts it
+  in the same commit as the code rather than after it. Recorded as dispatcher B's first
+  obligation, ahead of the first line of `src/mantis/dash/`.
+* **(d)'s COMMAND SURFACE DOES NOT EXIST IN THE FORM THE CLAUSE WRITES IT.** `mantis dash serve`
+  is a console-script invocation and `pyproject.toml` declares **no `[project.scripts]` table at
+  all**; CLAUDE.md's rule is *"Entry points are `python -m mantis.*` or console scripts — no loose
+  script files"*. So B either mints a console script (a packaging change, with `uv sync` in its
+  blast radius) or the command is `python -m mantis.dash serve`. Recorded, not decided — the
+  substance of (d) is unaffected either way, and picking for B would be picking inside B's leg.
+* **(d)'s TWO BANKED PANELS ARE NAMED HERE so B does not re-derive them.** `BANKED_PANELS`
+  (`tools/run_dashboard.py:50-66`) carries exactly two: **average sims/move** (no producer —
+  `SelfPlayHParams.effective_sims_per_move` is derived in-process to BILL `sims_per_sec` and is
+  emitted by nothing; the quotient of two differently-windowed rates is not the quantity) and
+  **held-out loss** (`HeldOutMonitor.counters()` is LAW-18-shaped but sits on the BC pretrain path
+  and reports through a logger line, never through the sink).
+* **(e)'s TWO RUNGS ARE UNCHANGED FROM R343's READING, re-verified rather than carried.** `strix`
+  is minted at `run6.yaml:91,99` (`strix_128`, `strix_256`) and REFUSED per rung by `resolve_bot`
+  on R139's operator-authorized *"actively changing"* grounds (`bots/resolve.py:41,49`) — a
+  dormant rung emitting an authorized skip every round, not an absent one. `shrimp` still has
+  **zero hits** across `src/`, `crates/` and `tools/`.
+* **THE R343 EXIT's DRAFTED START LINE IS NOW STALE IN ONE TERM.** `R343_EVIDENCE/EXIT.md` §9
+  drafts the forward as *"Block: 12 h, first third 4 h"*. §0.5 replaces that block. The START
+  forward this packet's §4 owes is therefore a RE-DERIVATION, not a copy of the draft, and the
+  anchor half of the draft (`net_hash 2e72abd4…`, hash-asserted by `verify_launch_anchor_pin`) is
+  the half that carries forward unchanged.
+
+> R344 — (a) R343 is RATIFIED. The rate bar is 3 per 12 h. The
+> anchor-pin conflict (R343(c) against R343(d)) was the architect's and is
+> on the architect's ledger; the fix — the pin follows launch mode — stands.
+> The ring sampler is SEEDED FROM config.seed (S, the cheaper alternative);
+> capturing ChaCha state through rand's backend is refused as the coupling
+> the pin exists to prevent. RESUME-1's witness 4 is re-run against the
+> seeded ring; if it still fails, the residual is recorded as nondeterminism
+> disclosed, not chased.
+> (b) GAME-RECORD-1 — every game is SAVED, from step 0: self-play, promotion,
+> external rung, random floor. One record per game: game id, run id, step
+> at start, channel and rung, colors, worker or game index, seed, served
+> sims, plies, result and termination kind, the move list in axial
+> coordinates (two stones a turn, first move one), and per-position search
+> stats (visit distribution over legal moves, root value) on every
+> eval-channel game and on a fixed 1-in-N sample of self-play games (N a
+> record row, proposed 8). Storage: append-only shards per (run, hour),
+> length-delimited msgpack (falls back to JSONL if msgpack is not already a
+> dependency — no new hard dependency for this), fsync at shard close, a
+> shard index file. Reuse the corpus pipeline's record shape if one exists
+> at HEAD so the viewer reads one format for corpus, self-play and eval;
+> otherwise this shape becomes it. Budget derived, not carried: moves-only
+> is ~20 MB per 12 h at the shakedown's rates; with sampled stats under
+> 300 MB; the producer test asserts the shard closes and re-opens
+> byte-exact and that a planted truncated shard is skipped, not fatal.
+> (c) The PROMOTION INTERVAL is 1000 steps, both channels (the split is
+> CARD-EVAL-CHANNEL-SPLIT; the round spec bundles them at HEAD). At the
+> measured rates that is a round every 40–48 min, ~15 min long, 6 external
+> points in the first third.
+> (d) DASH-2 — the monitor becomes a SERVER: `mantis dash serve --run
+> <dir> [--port 8787] [--bind 127.0.0.1]`, read-only over the run record
+> on disk, stdlib HTTP, no build step, no new hard dependency; viewed
+> locally or through `ssh -L`. Bind is loopback by default; 0.0.0.0 is a
+> flag documented as unsafe, never the default. It carries the GAME VIEWER,
+> which reads GAME-RECORD-1 shards from the run dir and nothing else. The
+> design is §2; it is the packet's design, not an option list.
+> (e) RUNG-2: strix is pinned first as a rung row over hexo-bridge after
+> DASH-2 lands; shrimp waits on the R257 radius fence the design note found
+> closed on run6's identity — an architect read before any pin.
+> ROUTE: A: land, census, ACTIVE next; legs 1–2; START forward. B: legs
+> 3–5 against the live run; exit.
+
+**ANNOTATION under R343's foot — R343(f)'s 12 h BLOCK IS SUPERSEDED, NOT WITHDRAWN (R344 §0.5,
+2026-09-08).** R343(f) set run6's block at *"a 12 h block (~19k steps at the measured rate), the
+first third 4 h"*. **R344 §0.5 replaces the block term with a 25 001-step minimum**, extendable by
+resume, and the ground is arithmetic rather than preference: `run6.yaml` mints
+`train.draw_rate_abort.min_step: 25000` and `monitor.wr_collapse_min_step: 25000`, and both rules
+compare against `current_step` before they can fire at all (`monitor/rules.py:384,310`). At the
+shakedown's measured **1 581 steps/h** a 12 h block is ~19 000 steps — **so it would have ended
+roughly 6 000 steps before two of its own armed aborts became able to fire**, which makes those
+two aborts unarmable for the whole block while the config reads them as armed. That is the
+LAW-07 family in the time dimension: a gate that cannot fire inside the window it guards.
+R343(f)'s reasoning about EXTENSION is untouched and stands — *"extension is decided on readings,
+not pre-committed: at the first-third screen and at block end"* — and the first-third screen
+simply moves with the block, from 4 h to ~8 334 steps (~5.3 h at the measured rate), which
+carries **~8** external points at cadence 1000 against R343(b)(iii)'s `≥ 5`. The 12 h figure was
+correct on its own evidence at the time it was set: it was chosen against R343(b)'s eval geometry,
+before the block was read against the abort floors at all. Nothing in R343(f) is re-authored — one
+term is re-derived, and R344 §1(c)'s own "6 external points in the first third" is stale for the
+same reason and is corrected in R344's landing rather than propagated.
