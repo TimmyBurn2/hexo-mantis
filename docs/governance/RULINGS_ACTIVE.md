@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2cf5b16, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 16f6bd4, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.60, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.61, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7389,3 +7389,44 @@ Verbatim text in the register; one-liners here are index only.
   **THIS CURATION DOES NOT START RUN6.** The START is still a separate operator forward naming the
   block and the anchor hash. `run6-mint` is left in place at `63f64f7` rather than deleted — the
   tree's convention is `dev` as the only branch, but deletion was not asked for.
+
+- 2026-09-08 — **v3.61** curated after the operator asked *"are you completely finished"*. The
+  honest answer was **NO**, and the question found two residuals the exit had not surfaced — one
+  of them a claim the exit had already made falsely. Census unchanged at `R23–R343 — 314 / 314 /
+  0, excluded 53`; `STAMP OK: v3.61`.
+  **AN INDEX LINE OF MY OWN WAS OVERCLAIMING, WHICH IS THE ONE FAILURE THE CURATION PROTOCOL
+  NAMES AS UNDOABLE DAMAGE.** The R343 exit §3 listed the saturation label, `pooled_wr`,
+  `running_max_wr` and `consecutive_degradation_flags` as **dashboard lines**. They were not:
+  `eval/channel_health.py` had **twelve green tests and no caller anywhere in `src/`**. A
+  dashboard line with no producer is the phantom-gate shape R4/LAW-07 exists to forbid.
+  **REPAIRED rather than withdrawn**: `EvalPipeline._assess_external_channel` is the live
+  producer, emitting `eval_channel_health` every round off the `wr_sealbot` trio
+  `_first_sealbot_wr` publishes from ONE walk; pinned by a live drive plus its planted break (a
+  round the instrument did not play publishes nothing and does not enter the series as a loss).
+  **WIRING IT FOUND A CORRECTNESS BUG NO UNIT TEST COULD HAVE**, and it is AUDIT-1 F-14 arriving
+  on a new instrument: both rules pool a window against a running maximum, and the sealbot WR
+  **is not a series** — *"once `sealbot_d5` saturates it draws 0 games off-cadence and the
+  reported number silently becomes `sealbot_d6`'s"*. The first cut would have compared a fresh
+  `sealbot_d6` reading against `sealbot_d5`'s peak and **reported the ladder ADVANCING as a
+  degradation**, firing the counter that gates an architect read. Fixed in BOTH halves — the
+  window truncates at an identity change, and the running maximum is scoped to the current rung.
+  **THE SUPERVISOR AUTO-RESUME IS DECLARED NOT BUILT, on a CONTRACT and not a time-box.**
+  R343(c) asks for it; `supervise.py` states *"ONE thing is injected and it is NOT the child's
+  argv"*, so passing `--resume-from` would break a documented host-neutrality contract to satisfy
+  a clause. Carded onto `CARD-RESUME-LAUNCHER-FLAG` with the three admissible shapes and one
+  sharpened cost: the rc-42/43 relaunches now discard a ring that is persisted and verifiable,
+  where before RESUME-1 there was nothing to discard.
+  **TWO FORKED TEST HARNESSES BOTH NEEDED THE REAL METHOD**, and neither was stubbed — the same
+  judgement as the resume sidecar's fakes, and for the same measured reason: a stub keeps rows
+  green while the producer goes unexercised, which is exactly how the missing save leg survived
+  until a box run found it.
+  **THE §3 EXIT'S LAST ITEM IS NOW DISCHARGED**: the run6 START forward is DRAFTED in `EXIT.md`
+  §9 with the block, the anchor hash and the guard that asserts it — and with the ONE clause left
+  to the operator, because it selects an ARMED VALUE (R342(b)(iv)'s rate bar at 3 per 12 h, or
+  tightened to 1 under R343(c)'s out-of-time-box clause). A dispatcher does not pick armed values.
+  **GATES:** tier **4904 passed / 5 skipped / 0 failed** `PYTEST_RC=0` (an intermediate run read
+  **6 failed / `PYTEST_RC=1`** and is recorded rather than buried — the producer wiring broke two
+  forked harnesses and the tier said so); gate 14 GREEN; gate 17 clean; gates 9/13/15/16 clean;
+  floor **4963 → 4966**.
+  **STILL OWED, UNCHANGED:** witness 4 (`CARD-RING-SAMPLER-SEED`), the round CIs, and leg 3's
+  *"one full round completes"*. **Run6 is still not started.**
