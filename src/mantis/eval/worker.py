@@ -46,7 +46,13 @@ from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
 from mantis.eval.rounds import GameRecordTarget, RoundSpec, RungJob
 from mantis.eval.snapshot import load_model_snapshot
-from mantis.monitor.game_record import GameRecordWriter, eval_record, seat_result
+from mantis.monitor.game_record import (
+    GameRecordError,
+    GameRecordWriter,
+    eval_record,
+    seat_result,
+)
+from mantis.monitor.sink import RunIdError
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 #: confirm-phase opening seed offset (deploy_strength_eval.py:519 parity) — the confirm
@@ -218,13 +224,30 @@ class _RoundGameRecords:
     contracts.
 
     `None` for `target` is the no-op arm — the state every test-built `RoundSpec` is in.
+
+    A CONSTRUCTION FAILURE IS NOT FATAL HERE, and that is the opposite of the trainer's arm on
+    purpose. In `mantis.run` an un-openable store raises, because the run has not started and a
+    run that cannot write its games should say so before it plays 25 000 of them. Inside a
+    round the calculus inverts: the round produces the promotion decision the run gates on, and
+    killing it over an unwritable directory would convert a lost record into a broken round, a
+    skipped gate and a `eval_broken` the operator has to read. So the failure is reported ONCE
+    on stderr and recording is off for this round — `_RoundProgress`'s posture under
+    R319(e)(ii), for R319(e)(ii)'s reason.
     """
 
     def __init__(self, target: GameRecordTarget | None, *, round_id: str, step: int) -> None:
-        self._writer = (
-            None if target is None
-            else GameRecordWriter(record_dir=target.record_dir, run_id=target.run_id)
-        )
+        self._writer: GameRecordWriter | None = None
+        if target is not None:
+            try:
+                self._writer = GameRecordWriter(
+                    record_dir=target.record_dir, run_id=target.run_id)
+            except (OSError, GameRecordError, RunIdError) as exc:
+                print(
+                    f"eval game records DISABLED for round {round_id} after {exc!r} on "
+                    f"{target.record_dir} — the round continues and its promotion decision "
+                    f"is unaffected; only this round's games are unrecorded",
+                    file=sys.stderr, flush=True,
+                )
         self._run_id = "" if target is None else target.run_id
         self._round_id = round_id
         self._step = int(step)

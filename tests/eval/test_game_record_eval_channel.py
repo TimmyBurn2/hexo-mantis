@@ -185,3 +185,27 @@ def test_the_pipeline_ALWAYS_gives_its_rounds_a_record_target() -> None:
         "the target must be a constructed GameRecordTarget, not a name that could be None"
     )
     assert getattr(bound["game_record"].func, "id", None) == "GameRecordTarget"
+
+
+def test_an_unwritable_record_dir_does_NOT_break_the_round(tmp_path: Path, capsys) -> None:
+    """The posture inversion between the two writers, pinned because it is easy to get
+    backwards and expensive when it is.
+
+    In `mantis.run` an un-openable store RAISES: the run has not started, and a run that
+    cannot write its games should say so before it plays 25 000 of them. Inside a ROUND the
+    calculus inverts — the round produces the promotion decision the run gates on, so killing
+    it over an unwritable directory converts a lost record into a broken round, a skipped
+    gate and an `eval_broken` an operator has to read.
+
+    MUTATION THAT REDS IT: let the `GameRecordWriter` construction propagate out of
+    `_RoundGameRecords.__init__`."""
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory", encoding="utf-8")   # mkdir will fail on this path
+
+    result = worker.run_round(_round_spec(
+        tmp_path, GameRecordTarget(record_dir=str(blocked / "games"), run_id=_RUN_ID)))
+
+    assert result, "the round must still produce a result"
+    assert "DISABLED" in capsys.readouterr().err, (
+        "the loss must be reported once and loudly, not swallowed"
+    )
