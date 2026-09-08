@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ a7cb442, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 010d297, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.61, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.62, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7430,3 +7430,57 @@ Verbatim text in the register; one-liners here are index only.
   floor **4963 → 4966**.
   **STILL OWED, UNCHANGED:** witness 4 (`CARD-RING-SAMPLER-SEED`), the round CIs, and leg 3's
   *"one full round completes"*. **Run6 is still not started.**
+
+- 2026-09-08 — **v3.62** curated at the R343 CLOSE-OUT, on the operator's *"finish completely"*.
+  Census unchanged at `R23–R343 — 314 / 314 / 0, excluded 53`; `STAMP OK: v3.62`.
+  **LEG 3's ROUND HALF WAS RUN, AND IT FOUND THE MOST CONSEQUENTIAL DEFECT OF THE SITTING.**
+  On `configs/run6.yaml` (run6's own identity, into a DISTINCT out-dir carrying a first-line
+  `WHAT_THIS_IS.txt`; **the run6 START was NOT sent**): trained to step 1052 at a steady
+  **1 260 steps/h**, ran an eval round, **PROMOTED once**, was stopped with that round IN FLIGHT,
+  and wrote a **14.9 MB / 62 382-position ring** with `WITNESS-RING-HASH: MATCH`.
+  **THE RESUME THEN REFUSED TO LAUNCH** — `anchor sha256 mismatch: best_model.pt resolved to
+  f260a827… but the run config pinned 2e72abd4…`. **R343(c) and R343(d) were in direct
+  conflict.** R343(d) pins the anchor to the warm-start artifact *"at step 0"*, but
+  `resolve_anchor` asserts that pin on EVERY launch — and a run that promotes has legitimately
+  moved `best_model.pt` past it. **From its first promotion onward run6 could not be resumed**,
+  and RESUME-1 exists so a 12 h block can be EXTENDED, i.e. exactly for runs that promote. Eight
+  existing rows pin that guard and every one of them exercises the FRESH-INIT path; the earlier
+  box test resumed a run that had never promoted. **Only a real post-promotion resume could find
+  it, which is precisely what leg 3 was for.** `F-15`.
+  **FIXED, AND VERIFIED ON THE BOX WITHOUT A 90-MINUTE RE-RUN.** The pin's SOURCE now follows the
+  LAUNCH MODE and neither mode is unpinned: a fresh launch asserts the config's warm-start hash
+  (R343(d)'s halt, untouched); a RESUME asserts the anchor the stop recorded on its sidecar. A
+  SECOND defect fell out of the diagnosis — the sidecar was recording a FILE sha256 while the
+  guard compares `checkpoint_state_sha256` (AUDIT-1 F-32's one denomination), i.e. a
+  plausible-looking value **useless to its only consumer**. Re-derived in the guard's units it
+  came out **byte-identical to the value `resolve_anchor` had itself reported**, and the same
+  checkpoint then resumed clean: `best_model_loaded` where there had been a `RuntimeError`, step
+  **1109** from a resume at 1052, buffer **65 481** from a restored 62 382, GPU **11 740 / 16 303
+  MiB**.
+  **A SECOND MEASURED FACT FOR THE OPERATOR: a stop taken MID-ROUND costs the round's remaining
+  time.** `flush_pending_eval` at 08:56:10, process released at **09:22:21 — ~25 min** — because
+  the drain waits for the in-flight round to finish naturally and `final_eval_drain_timeout_sec:
+  900` did NOT cut it short. **The resumable state was durable in seconds either way**: the
+  checkpoint, ring and sidecar were all on disk at 08:56. So "the stop is cheap" must be said as
+  two facts, not one — and it is still a large improvement on the inherited stop, which ALSO ran
+  the terminal battery afterwards (bounded at 14 400 s, once measured still running at t+67 min)
+  and no longer does. `F-14`.
+  **THE ROUND CIs ARE CLOSED, and v3.57's stated reason was FALSE.** That entry recorded them
+  absent because *"recovering it needs the ladder state file"*. It did not: `aggregate_rung`
+  already bootstraps the interval and the worker already publishes it per rung — it simply stopped
+  at the round RESULT and never reached the round EVENT. Closed by extending the walk
+  `_first_sealbot_wr` already makes, so the CI cannot belong to a different rung than the win rate
+  beside it.
+  **`CARD-RING-SAMPLER-SEED` IS NOW COSTED RATHER THAN VAGUE.** Read to the source: `rand 0.10.2`
+  defines `use chacha20::ChaCha12Rng as Rng; pub struct StdRng(Rng)`, so the state IS capturable
+  exactly — but only by taking a DIRECT dependency on rand's internal backend choice, which is the
+  very coupling `crates/mantis-selfplay/Cargo.toml`'s hard pin exists to prevent (*"a silent
+  resolve to rand 0.9 breaks the fixed-seed sample streams"*). Plus a type change on the ring's hot
+  struct, i.e. a LAW-09 perf-host bench act. **A dispatcher does not add a dependency on another
+  crate's internals to satisfy a witness.** A cheaper alternative is recorded: seeding the ring
+  from `config.seed` closes the LARGER gap (two launches never reproduced at all) with no type
+  change and no new dependency.
+  **GATES:** tier **4908 passed / 5 skipped / 0 failed** `PYTEST_RC=0`; gate 14 GREEN; gate 17
+  clean; gates 7/9/15 clean; floor **4966 → 4970**. `dev` = `origin/dev` = `00cb89c`. Gate 2 and
+  gate 4 were taken at `63f64f7` and **no Rust has changed since** (verified by diff).
+  **RUN6 IS STILL NOT STARTED.**
