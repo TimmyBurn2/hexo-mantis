@@ -379,6 +379,29 @@ class WorkerPool:
                 "self-play buffer feeder died — training cannot continue on a "
                 "stale buffer (see the selfplay_producer_died log for the cause)"
             ) from self._producer_exc
+        # R345(b)(7). `guard_worker` catches a worker panic, counts it and halts the runner —
+        # and nothing in Python read the count, so the failure presented as a healthy pool
+        # draining nothing until `selfplay_stall_timeout_sec` (1800 s) noticed. Read here
+        # because this is the hook the trainer already calls every step; thirty minutes of a
+        # promoting run training on data no worker is producing is the cost of not reading it.
+        #
+        # `worker_panics` and NOT `is_running()`: `running` also goes false on a CLEAN stop,
+        # so reading it would abort every orderly shutdown. The counter is zero in a healthy
+        # run and non-zero only because a worker died. `getattr` because a runner double or an
+        # older wheel may not expose it, and an absent instrument must read as no measurement —
+        # never as a failure, which would make this check the thing that stops runs.
+        # The name is a METHOD on the engine runner (`pub fn worker_panics`) and a plain int
+        # FIELD on `RunnerStats`; doubles use both shapes. Accepting either is not laxity —
+        # picking one would make this check pass vacuously against half the callers it has.
+        raw = getattr(self._runner, "worker_panics", 0)
+        panics = int(raw() if callable(raw) else raw)
+        if panics > 0:
+            raise RuntimeError(
+                f"{panics} self-play worker thread(s) died by panic — the runner has halted "
+                "and the replay buffer is no longer being fed. Training on a ring nothing "
+                "fills produces a curve that looks like convergence; the run stops here "
+                "instead (see the worker's own panic message on stderr)."
+            )
 
     def _stats_loop(self) -> None:
         """Guard wrapper around the drain loop — see :meth:`check_producer_health`.
