@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c3d6c06, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5fb4084, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.64, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.65, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7577,3 +7577,39 @@ Verbatim text in the register; one-liners here are index only.
   drafted §9 line is now stale in its block term — §0.5 replaces 12 h with a 25 001-step minimum,
   so the forward is a RE-DERIVATION and the anchor half (`net_hash 2e72abd4…`) is what carries
   forward unchanged.
+
+- 2026-09-08 — **v3.65** curated at **DISPATCHER A's EXIT**. Census unchanged at `R23–R344 —
+  315 / 315 / 0, excluded 53`; `STAMP OK: v3.65`.
+  **BOTH LEGS LANDED AND THE GATE SET IS ALL GREEN, 20 of 20** (`make gates.exit`, the
+  packet-exit form — a `slow`-marked test is deselected from BOTH tiers, so `make gates` would
+  not have run one): default tier **4 937 passed / 5 skipped / 0 failed** RE-TAKEN on the final
+  tree, integration **48 / 2 skipped**, slow **7 passed**, gate 14 GREEN (pyright 198 files, 0
+  errors), floor ratcheted **4 970 → 4 997**. `dev` = `origin/dev` = **`56992ba`**.
+  **WITNESS 4 READS BETTER THAN THE CLAUSE EXPECTED.** Two launches of one config now draw the
+  same batches; a resumed run REWINDS to draw 1 rather than continuing — a deterministic offset,
+  not the nondeterminism R344(a) pre-authorised recording. Both halves pinned, the second as a
+  KNOWN-GAP row that reds the day the gap closes.
+  **EVERY GAME A RUN PLAYS IS NOW WRITTEN, AND THE BOX PROVED IT AT SCALE.** 71 minutes of run6
+  on the box: **2 055 games, 0 skipped, three shards all closed and indexed, every index row
+  agreeing with its file on BOTH the game count and the byte count.** The hour turned mid-burst
+  and both trainer shards kept `seg0001` while the round child took `seg0002`; a full 264-game
+  round closed its own shard through `finally`. Contract `docs/contracts/game_record.md`, seam
+  contract **#11** in `repo_design.md` with its amendment.
+  **THE BUDGET IS MEASURED, NOT ASSERTED — ~57 MB per 25 001-step block against R344(b)'s
+  300 MB.** Self-play 816 B/game, eval 5 509 B/game at run6's own `deploy_sims: 150`; the visit
+  support is median **4**, max 23. Neither pre-registered lever is needed.
+  **FOUR DEFECTS FOUND AND FIXED BEFORE THE BOX, EACH PINNED WITH A PLANTED BREAK THAT WAS RUN**
+  — the shard rotation stealing segments from the eval child; a line torn mid-character taking
+  the whole file; stats documented one-sided that are TWO-SIDED on the promotion channel
+  (witnessed on hardware at 1 420 candidate against 1 380 opponent roots); and a test assertion
+  the tree falsifies at `deploy_sims: 1`.
+  **TWO THINGS HANDED TO THE ARCHITECT, NEITHER CAUSED BY THIS PACKET.** (1) A real round was
+  timed at **1 777.7 s — 29.6 min** against R343 leg 3's 915.9 s for the IDENTICAL 264-game
+  composition, 1.94×; no cause is claimed, one round is one sample, but R344(c)'s *"~15 min
+  long"* is not a safe planning figure at a 1 000-step cadence. (2) Under `eval.concurrency: 8`
+  a block writes every progress row at BLOCK END, so **a concurrent block working flat out is
+  indistinguishable from a wedged one from outside** — for 14.5 minutes here. It fooled this
+  dispatcher twice and is recorded as a DASH-2 finding for leg B4.
+  **RUN6 IS STILL NOT STARTED.** The START forward is RE-DERIVED, not copied: R343's draft is
+  stale in its BLOCK term, and the one clause it left to the operator — the rate bar — is
+  SETTLED by R344(a) at 3 firings per 12 h.
