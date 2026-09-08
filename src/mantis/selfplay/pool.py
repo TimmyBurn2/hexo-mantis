@@ -393,8 +393,12 @@ class WorkerPool:
         # The name is a METHOD on the engine runner (`pub fn worker_panics`) and a plain int
         # FIELD on `RunnerStats`; doubles use both shapes. Accepting either is not laxity —
         # picking one would make this check pass vacuously against half the callers it has.
-        raw = getattr(self._runner, "worker_panics", 0)
-        panics = int(raw() if callable(raw) else raw)
+        # `int(...)` over a `getattr` default is `object` to pyright, which cannot know the
+        # two real shapes are `() -> int` and `int`; the runtime `callable` branch is the
+        # narrowing it cannot express. Suppressed at the ONE line rather than widened in
+        # pyproject (gate 14: exclusions are enumerated with grounds, and this is not a class).
+        raw: Any = getattr(self._runner, "worker_panics", 0)
+        panics = int(raw() if callable(raw) else raw)  # pyright: ignore[reportArgumentType]
         if panics > 0:
             raise RuntimeError(
                 f"{panics} self-play worker thread(s) died by panic — the runner has halted "
