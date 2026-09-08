@@ -240,6 +240,7 @@ fn check_roundtrip(src: &str, i: usize) {
         outcome: 0.0,
         value_valid: true,
         game_length: 0,
+        game_id: -1,
     };
     let mut buf = HexgBuffer::new(2, "gnn_axis_v1", 128).expect("graph buffer");
     buf.push_record_impl(&rec, 1).unwrap_or_else(|e| panic!("{}: push refused: {e}", pos.id));

@@ -59,6 +59,12 @@ optimization or experiment (LAW-05).
   gate against the run's OWN warm-start anchor baseline, not a generic bootstrap baseline —
   a bootstrap-gated floor was measured to be nearly vacuous against a 12×-sharper anchor.
   (Numeric thresholds re-anchor when the probe ports; the criterion structure is the law.)
+  **ANNOTATION (R345(e)) — GRID-ERA.** Every threshold above was measured on the DENSE
+  threat-logit head, and `GnnNet` ships policy + dist65 value only: it has no threat head,
+  so `train.threat_weight` is one of the `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` a graph config
+  must zero. On run6's lineage this law has no producer and therefore gates nothing. The
+  criterion structure stands and the numbers are grid history; a graph-era threat probe
+  would re-anchor all four before this law binds again.
 - **LAW-11 Identity-keys law.** No dense-by-default anywhere. An absent
   encoding/representation is an error, never a default. Representation is a closed enum on
   both sides of the FFI; no wildcard match arm on the kind.

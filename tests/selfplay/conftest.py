@@ -190,12 +190,20 @@ def graph_rows_input() -> list[tuple[Any, ...]]:
     """The scripted `collect_graph_data()` rows, rebuilt from the capture recipe.
 
     Recipe (`drain_goldens.json._constants.graph_rows_recipe`): 3 opaque tuples
-    (f32[6], i64[4], int, float) — the pool forwards each verbatim and inspects nothing.
+    (f32[6], i64[4], int, float) the pool forwards verbatim, plus a TRAILING runner game id
+    (R345(b)(6)). The id is the one field the drain reads and translates; everything before
+    it is still forwarded uninspected, which is what C-02 asserts.
+
+    The first two rows share game 100 and the third is game 101, so the row exercises the
+    property that matters: two positions of one game must land under ONE allocated buffer id.
+    A fixture where every row had its own game would pass an implementation that allocated
+    per ROW, which is the `-1` sentinel's behaviour wearing real numbers.
+
     Rebuilt (not loaded) so the *input* identity objects are ours: C-02 asserts the drain
     forwards these exact objects, so they must be constructible test-side.
     """
     return [
-        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5),
-        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0),
-        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0),
+        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 100),
+        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0, 100),
+        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0, 101),
     ]

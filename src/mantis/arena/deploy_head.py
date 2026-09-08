@@ -1,7 +1,16 @@
 """DeployHeadPlayer — the deploy-matched candidate head (design §a.2 deploy_head.py).
 
-Gumbel-SH completed-Q ARGMAX with gumbel scale g=0 (no root noise, no softmax knob): with
-g=0 every Gumbel(0,1) root-noise term is exactly 0, so the SH-winner score collapses to
+PUCT WITH TRANSFORMED-Q ROOT SELECTION (R345(e), a naming correction and not a behaviour
+one). This used to be described as "Gumbel-SH completed-Q ARGMAX", and only the last two
+words were true of what runs: the TREE is plain PUCT — `select_leaves` descends by the PUCT
+formula and there is no Sequential Halving anywhere, no budget partition and no halving
+schedule — while the ROOT pick is the Gumbel scoring function with its noise term set to
+zero. Calling the whole thing Gumbel-SH made the live eval path look like an algorithm the
+repo has not in fact enabled, which is the confusion R345(d) separates: Gumbel is REPAIRED
+and measured on run6's own checkpoints, and is enabled in no run.
+
+The root score, with gumbel scale g=0 (no root noise, no softmax knob): with
+g=0 every Gumbel(0,1) root-noise term is exactly 0, so the score collapses to
 `log(max(prior_i, 1e-8)) + sigma_i` with `sigma_i = (c_visit + max_n_all) * c_scale *
 clamp(q_i, -1, 1)` and `max_n_all` = the max visit count over ALL root children (ported
 mechanics: hexo_rl/eval/deploy_strength_eval.py:109-207, gumbel_search_py.py:178-227).

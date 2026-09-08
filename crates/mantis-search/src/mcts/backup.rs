@@ -2,12 +2,12 @@
 // quiescence, finish_expansion, backup, and the pool-overflow path port together.
 //! Expansion and backup for the MCTS tree.
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use fxhash::FxHashSet;
-use mantis_core::board::{Board, WIN_LENGTH};
-use crate::legal_set::LegalSetPolicy;
 use super::node::{CachedPolicy, Node};
 use super::{MCTSTree, MAX_CHILDREN_PER_NODE};
+use crate::legal_set::LegalSetPolicy;
+use fxhash::FxHashSet;
+use mantis_core::board::{Board, WIN_LENGTH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Output of `pick_topk_children`: `(chosen, sort_used)` where `chosen` is a
 /// vector of `((q, r), prior)` entries and `sort_used` flags whether the
@@ -38,6 +38,51 @@ pub fn take_pool_overflow_count() -> u64 {
 /// loops that want a running tally rather than a per-window delta.
 pub fn pool_overflow_count() -> u64 {
     POOL_OVERFLOW_COUNT.load(Ordering::Relaxed)
+}
+
+/// R345(b)(5) — the OMITTED PRIOR MASS the Top-K cap has dropped, and how many expansions
+/// dropped any. Fixed-point (mass x 1e6) because there is no atomic f32 and a float sum across
+/// threads would not be reproducible anyway.
+///
+/// WHY MASS AND NOT A COUNT. `topk_truncated` — the boolean the cap already returned — says
+/// only that SOME legal move was dropped, and at radius 8 that is true on essentially every
+/// ply (measured: the legal set exceeds 192 on 98% of plies even under clustered play). A
+/// boolean that is always true carries no information. What decides whether the cap costs
+/// anything is how much PRIOR the dropped moves held: a policy concentrated on a handful of
+/// moves loses nothing by dropping the 193rd, while a flat one loses most of its distribution.
+/// This is the quantity the clause's witness reads, and the quantity a decision to raise the
+/// cap has to be made against.
+pub static OMITTED_PRIOR_MASS_MICROS: AtomicU64 = AtomicU64::new(0);
+pub static OMITTED_PRIOR_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
+pub static TOTAL_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
+
+/// `(omitted_mass_micros, expansions_that_omitted, total_expansions)`, read without reset.
+pub fn omitted_prior_stats() -> (u64, u64, u64) {
+    (
+        OMITTED_PRIOR_MASS_MICROS.load(Ordering::Relaxed),
+        OMITTED_PRIOR_EXPANSIONS.load(Ordering::Relaxed),
+        TOTAL_EXPANSIONS.load(Ordering::Relaxed),
+    )
+}
+
+/// Read-and-reset all three, for a bracketed measurement window.
+pub fn take_omitted_prior_stats() -> (u64, u64, u64) {
+    (
+        OMITTED_PRIOR_MASS_MICROS.swap(0, Ordering::Relaxed),
+        OMITTED_PRIOR_EXPANSIONS.swap(0, Ordering::Relaxed),
+        TOTAL_EXPANSIONS.swap(0, Ordering::Relaxed),
+    )
+}
+
+/// Accumulate one expansion's dropped prior. `dropped` is the tail the cap truncated away.
+#[inline]
+fn record_omitted_prior(dropped_mass: f32) {
+    TOTAL_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
+    if dropped_mass > 0.0 {
+        OMITTED_PRIOR_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
+        OMITTED_PRIOR_MASS_MICROS
+            .fetch_add((f64::from(dropped_mass) * 1e6) as u64, Ordering::Relaxed);
+    }
 }
 
 /// Pick up to `MAX_CHILDREN_PER_NODE` children for a leaf expansion.
@@ -94,7 +139,11 @@ pub(crate) fn pick_topk_children(
         .iter()
         .map(|&(q, r)| {
             let flat = Board::window_flat_idx_at_geom(q, r, cq, cr, trunk_sz, half);
-            let sort_prior = if flat < policy.len() { policy[flat] } else { 0.0 };
+            let sort_prior = if flat < policy.len() {
+                policy[flat]
+            } else {
+                0.0
+            };
             ((q, r), sort_prior, flat)
         })
         .collect();
@@ -104,6 +153,12 @@ pub(crate) fn pick_topk_children(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.2.cmp(&b.2))
     });
+    let dropped_mass: f32 = all
+        .iter()
+        .skip(MAX_CHILDREN_PER_NODE)
+        .map(|&(_, sort_prior, _)| sort_prior)
+        .sum();
+    record_omitted_prior(dropped_mass);
     all.truncate(MAX_CHILDREN_PER_NODE);
 
     let mut chosen: Vec<((i32, i32), f32)> = Vec::with_capacity(all.len());
@@ -155,9 +210,18 @@ pub(crate) fn pick_topk_children_ls(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.2.cmp(&b.2))
     });
+    let dropped_mass: f32 = all
+        .iter()
+        .skip(MAX_CHILDREN_PER_NODE)
+        .map(|&(_, prior, _)| prior)
+        .sum();
+    record_omitted_prior(dropped_mass);
     all.truncate(MAX_CHILDREN_PER_NODE);
 
-    let chosen: Vec<((i32, i32), f32)> = all.into_iter().map(|((q, r), prior, _)| ((q, r), prior)).collect();
+    let chosen: Vec<((i32, i32), f32)> = all
+        .into_iter()
+        .map(|((q, r), prior, _)| ((q, r), prior))
+        .collect();
     (chosen, n_legal > MAX_CHILDREN_PER_NODE)
 }
 
@@ -244,13 +308,20 @@ impl MCTSTree {
             }
         };
         if fired > 0 {
-            self.quiescence_fire_count.fetch_add(fired, std::sync::atomic::Ordering::Relaxed);
+            self.quiescence_fire_count
+                .fetch_add(fired, std::sync::atomic::Ordering::Relaxed);
         }
         result
     }
 
     /// Expand a single leaf node and backup its value.
-    pub(crate) fn expand_and_backup_single(&mut self, leaf_idx: u32, board: &Board, policy: &[f32], value: f32) {
+    pub(crate) fn expand_and_backup_single(
+        &mut self,
+        leaf_idx: u32,
+        board: &Board,
+        policy: &[f32],
+        value: f32,
+    ) {
         if self.pool[leaf_idx as usize].is_terminal {
             let tv = self.pool[leaf_idx as usize].terminal_value;
             self.backup(leaf_idx, tv);
@@ -272,8 +343,12 @@ impl MCTSTree {
             // move ⇒ +1.0; `mr==2` ⇒ the player flipped to the loser ⇒ -1.0.
             // The old hardcode scored a first-stone win as a loss, biasing the
             // policy target toward filler-first move orders.
-            let tv = if board.moves_remaining == 1 { 1.0 } else { -1.0 };
-            self.pool[leaf_idx as usize].is_terminal    = true;
+            let tv = if board.moves_remaining == 1 {
+                1.0
+            } else {
+                -1.0
+            };
+            self.pool[leaf_idx as usize].is_terminal = true;
             self.pool[leaf_idx as usize].terminal_value = tv;
             self.backup(leaf_idx, tv);
             return;
@@ -281,7 +356,7 @@ impl MCTSTree {
 
         let legal_moves = board.legal_moves_set();
         if legal_moves.is_empty() {
-            self.pool[leaf_idx as usize].is_terminal    = true;
+            self.pool[leaf_idx as usize].is_terminal = true;
             self.pool[leaf_idx as usize].terminal_value = 0.0;
             self.backup(leaf_idx, 0.0);
             return;
@@ -303,8 +378,14 @@ impl MCTSTree {
     /// Policy-representation-agnostic (operates on the already-picked `chosen`
     /// list), so the dense and legal-set expansion paths share it verbatim —
     /// keeping the dense path's behaviour byte-identical.
-    fn finish_expansion(&mut self, leaf_idx: u32, board: &Board, chosen: Vec<((i32, i32), f32)>, value: f32) {
-        let n_ch        = chosen.len();
+    fn finish_expansion(
+        &mut self,
+        leaf_idx: u32,
+        board: &Board,
+        chosen: Vec<((i32, i32), f32)>,
+        value: f32,
+    ) {
+        let n_ch = chosen.len();
         let first_child = self.next_free;
 
         if first_child as usize + n_ch > self.pool.len() {
@@ -318,33 +399,36 @@ impl MCTSTree {
                 "MCTS pool overflow: next_free={} n_ch={} pool_len={} K={}. \
                  Pool sizing assumption violated — increase MAX_NODES or \
                  reduce n_simulations × leaf_batch.",
-                first_child, n_ch, self.pool.len(), MAX_CHILDREN_PER_NODE
+                first_child,
+                n_ch,
+                self.pool.len(),
+                MAX_CHILDREN_PER_NODE
             );
         }
         self.next_free += n_ch as u32;
 
-        let leaf_mr      = self.pool[leaf_idx as usize].moves_remaining;
+        let leaf_mr = self.pool[leaf_idx as usize].moves_remaining;
         let child_mr: u8 = if leaf_mr == 1 { 2 } else { 1 };
 
         self.pool[leaf_idx as usize].first_child = first_child;
-        self.pool[leaf_idx as usize].n_children  = n_ch as u16;
+        self.pool[leaf_idx as usize].n_children = n_ch as u16;
 
         for (j, &((q, r), prior)) in chosen.iter().enumerate() {
-            let ci             = first_child as usize + j;
+            let ci = first_child as usize + j;
             let action_encoded = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
 
             self.pool[ci] = Node {
-                parent:              leaf_idx,
-                action_idx:          action_encoded,
-                n_visits:            0,
-                w_value:             0.0,
+                parent: leaf_idx,
+                action_idx: action_encoded,
+                n_visits: 0,
+                w_value: 0.0,
                 prior,
-                first_child:         u32::MAX,
-                n_children:          0,
-                moves_remaining:     child_mr,
-                is_terminal:         false,
-                terminal_value:      0.0,
-                virtual_loss_count:  0,
+                first_child: u32::MAX,
+                n_children: 0,
+                moves_remaining: child_mr,
+                is_terminal: false,
+                terminal_value: 0.0,
+                virtual_loss_count: 0,
             };
         }
 
@@ -357,7 +441,13 @@ impl MCTSTree {
     /// source — `pick_topk_children_ls` reads the ragged `ls` by coord
     /// (off-window covered cells get real priors, no uniform sink). Shares
     /// `finish_expansion`.
-    pub(crate) fn expand_and_backup_single_ls(&mut self, leaf_idx: u32, board: &Board, ls: &LegalSetPolicy, value: f32) {
+    pub(crate) fn expand_and_backup_single_ls(
+        &mut self,
+        leaf_idx: u32,
+        board: &Board,
+        ls: &LegalSetPolicy,
+        value: f32,
+    ) {
         // Board-frame variant: read the ragged priors back in the SAME window
         // frame the CNN legal-set producer indexed `ls.dense` with
         // (`board.window_center()` / `board.cluster_window_size()`).
@@ -400,15 +490,19 @@ impl MCTSTree {
             return;
         }
         if board.check_win() {
-            let tv = if board.moves_remaining == 1 { 1.0 } else { -1.0 };
-            self.pool[leaf_idx as usize].is_terminal    = true;
+            let tv = if board.moves_remaining == 1 {
+                1.0
+            } else {
+                -1.0
+            };
+            self.pool[leaf_idx as usize].is_terminal = true;
             self.pool[leaf_idx as usize].terminal_value = tv;
             self.backup(leaf_idx, tv);
             return;
         }
         let legal_moves = board.legal_moves_set();
         if legal_moves.is_empty() {
-            self.pool[leaf_idx as usize].is_terminal    = true;
+            self.pool[leaf_idx as usize].is_terminal = true;
             self.pool[leaf_idx as usize].terminal_value = 0.0;
             self.backup(leaf_idx, 0.0);
             return;
@@ -443,12 +537,15 @@ impl MCTSTree {
         for i in 0..n {
             let (leaf_idx, board) = &pending[i];
             let policy = &policies[i];
-            let value  = values[i];
+            let value = values[i];
 
-            self.transposition_table.insert(board.zobrist_hash, super::node::TTEntry {
-                policy: CachedPolicy::Dense(std::sync::Arc::new(policy.clone())),
-                value,
-            });
+            self.transposition_table.insert(
+                board.zobrist_hash,
+                super::node::TTEntry {
+                    policy: CachedPolicy::Dense(std::sync::Arc::new(policy.clone())),
+                    value,
+                },
+            );
 
             self.expand_and_backup_single(*leaf_idx, board, policy, value);
         }
@@ -475,10 +572,13 @@ impl MCTSTree {
             let ls = &policies[i];
             let value = values[i];
 
-            self.transposition_table.insert(board.zobrist_hash, super::node::TTEntry {
-                policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
-                value,
-            });
+            self.transposition_table.insert(
+                board.zobrist_hash,
+                super::node::TTEntry {
+                    policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
+                    value,
+                },
+            );
 
             self.expand_and_backup_single_ls(*leaf_idx, board, ls, value);
         }
@@ -518,10 +618,13 @@ impl MCTSTree {
                 "builder window_center != Board::window_center (coord/slot drift)"
             );
 
-            self.transposition_table.insert(board.zobrist_hash, super::node::TTEntry {
-                policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
-                value,
-            });
+            self.transposition_table.insert(
+                board.zobrist_hash,
+                super::node::TTEntry {
+                    policy: CachedPolicy::Ls(std::sync::Arc::new(ls.clone())),
+                    value,
+                },
+            );
 
             self.expand_and_backup_single_ls_framed(*leaf_idx, board, ls, value, cq, cr, trunk_sz);
         }
@@ -532,7 +635,7 @@ impl MCTSTree {
         loop {
             let node = &mut self.pool[node_idx as usize];
             node.n_visits += 1;
-            node.w_value  += value;
+            node.w_value += value;
             if node.virtual_loss_count > 0 {
                 node.virtual_loss_count -= 1;
             }
@@ -574,7 +677,11 @@ mod ls_prior_tests {
         assert!(!truncated);
         assert_eq!(chosen.len(), 3);
         // sorted by prior desc: (28,0)=0.5 (overflow), (1,0)=0.3, (0,0)=0.2 (dense)
-        assert_eq!(chosen[0], ((28, 0), 0.5), "off-window prior read from overflow, ranks first");
+        assert_eq!(
+            chosen[0],
+            ((28, 0), 0.5),
+            "off-window prior read from overflow, ranks first"
+        );
         assert_eq!(chosen[1], ((1, 0), 0.3));
         assert_eq!(chosen[2], ((0, 0), 0.2));
     }

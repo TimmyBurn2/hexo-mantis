@@ -183,6 +183,7 @@ impl HexgBuffer {
             outcome: self.outcomes[slot],
             value_valid: self.value_valid[slot] != 0,
             game_length: self.game_length[slot],
+            game_id: self.game_ids[slot],
         }
     }
 }

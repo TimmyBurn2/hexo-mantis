@@ -37,6 +37,7 @@ fn sample_record() -> GraphRecord {
         outcome: 1.0,
         value_valid: true,
         game_length: 30,
+        game_id: -1,
     }
 }
 
@@ -377,6 +378,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
         outcome: 0.0,
         value_valid: false,
         game_length: 10,
+        game_id: -1,
     };
     buf.push_record_impl(&rec, 0).unwrap();
     for _ in 0..48 {
@@ -447,6 +449,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
         outcome: 1.0,
         value_valid: true,
         game_length: 30,
+        game_id: -1,
     };
     buf.push_record_impl(&rec, 7).unwrap();
     assert!(

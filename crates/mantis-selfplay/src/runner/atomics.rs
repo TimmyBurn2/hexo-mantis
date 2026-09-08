@@ -24,4 +24,9 @@ pub(crate) struct WorkerAtomics {
     /// keeps its OWN count so the two conjuncts of the F-816-9 class stay
     /// distinguishable in the event stream.
     pub(crate) inference_failures_total: Arc<AtomicU64>,
+    /// R345(b)(6): the runner-wide monotonic GAME id, one `fetch_add` per completed graph
+    /// game. Its own counter rather than `games_completed`: that one is a STAT a monitor reads
+    /// and could legitimately be reset, and an id derived from a resettable counter collides
+    /// the moment it is (R1's duplicate-authority class, applied to an identifier).
+    pub(crate) graph_game_seq: Arc<AtomicU64>,
 }

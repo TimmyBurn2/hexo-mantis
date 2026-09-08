@@ -151,6 +151,11 @@ impl PyHexgBuffer {
             outcome,
             value_valid,
             game_length,
+            // The id travels as a separate argument to `push_record_impl`, which is the
+            // ring's own authority over which slot it lands in; carrying it on the record too
+            // would be two copies of one fact, so the record's own field is the untagged
+            // sentinel here and the ring writes the real one.
+            game_id: -1,
         };
         // GIL-FREE WAIT. This is the sole producer's write path; the trainer holds the ring
         // for the length of a sample, so this call can block for over a second. Waiting under
@@ -274,6 +279,48 @@ impl PyHexgBuffer {
     #[getter]
     pub fn capacity(&self, py: Python<'_>) -> usize {
         py.detach(|| self.ring().capacity())
+    }
+
+    /// The LAST sampled batch's composition (R345(b)(6)), as a plain dict.
+    ///
+    /// `distinct_games` and `max_rows_per_game` say whether the ring's same-game dedupe is
+    /// doing anything; `untagged_rows` says how much of the batch it could not see at all.
+    /// `age_p50/p90/p99` are rows back from the newest — a ring that has stopped being fed
+    /// samples happily from older and older data, and the loss curve never says so.
+    /// All zeros before the first sample, which is the honest reading for "no batch yet".
+    pub fn last_batch_composition(&self, py: Python<'_>) -> std::collections::HashMap<String, u32> {
+        let (distinct, max_rows, untagged, ages) = py.detach(|| {
+            let r = self.ring();
+            (
+                r.last_batch_distinct_games,
+                r.last_batch_max_rows_per_game,
+                r.last_batch_untagged_rows,
+                r.last_batch_age_quantiles,
+            )
+        });
+        std::collections::HashMap::from([
+            ("distinct_games".to_string(), distinct),
+            ("max_rows_per_game".to_string(), max_rows),
+            ("untagged_rows".to_string(), untagged),
+            ("age_p50".to_string(), ages[0]),
+            ("age_p90".to_string(), ages[1]),
+            ("age_p99".to_string(), ages[2]),
+        ])
+    }
+
+    /// The `game_id` stored in ring slot `index`, oldest-first (`-1` = untagged).
+    ///
+    /// R345(b)(6): the read half of the ids the push now writes. Oldest-first rather than
+    /// raw-slot, so `[game_id_at(i) for i in range(size)]` is the insertion order a reader
+    /// expects — a raw-slot index would expose the ring's head rotation as if it were data.
+    ///
+    /// # Errors
+    /// `IndexError` when `index >= size`.
+    pub fn game_id_at(&self, py: Python<'_>, index: usize) -> PyResult<i64> {
+        py.detach(|| self.ring().game_id_at(index))
+            .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err(
+                format!("game_id_at: index {index} is past the ring's size"),
+            ))
     }
 
     #[getter]

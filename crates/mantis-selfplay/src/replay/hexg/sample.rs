@@ -30,7 +30,12 @@ use super::{GraphRecord, GraphTargets, HexgBuffer};
 /// Compare aligned visit mass against the mass stored at push time; LOUD-fail,
 /// naming the record's `game_id`/`ply`, when they diverge beyond tolerance.
 /// Pure (no bindings) so it is directly unit-testable.
-pub fn mass_drop_check(game_id: i64, ply_idx: u16, stored_mass: f32, aligned_mass: f32) -> Result<(), String> {
+pub fn mass_drop_check(
+    game_id: i64,
+    ply_idx: u16,
+    stored_mass: f32,
+    aligned_mass: f32,
+) -> Result<(), String> {
     const REL_TOL: f32 = 1e-4;
     const ABS_FLOOR: f32 = 1e-6;
     let dropped = stored_mass - aligned_mass;
@@ -88,6 +93,44 @@ impl HexgBuffer {
             .collect()
     }
 
+    /// R345(b)(6) — remember WHAT this batch was made of, for the per-batch line the trainer
+    /// logs. Two quantities, and each answers a question loss alone cannot:
+    ///
+    /// * ROWS PER GAME. With every row tagged `-1` the dedupe was inert, so a batch could be
+    ///   a dozen positions from one game counted as a dozen samples. The max tells a reader
+    ///   whether the guard is doing anything.
+    /// * AGE, in rows back from the newest. A ring that has stopped being fed keeps sampling
+    ///   happily from older and older data, and the loss curve does not say so — the age
+    ///   distribution is the thing that does.
+    ///
+    /// Stored rather than returned so the hot sample path keeps its signature; a reader that
+    /// wants the numbers asks for them after the batch it cares about.
+    fn record_batch_composition(&mut self, indices: &[usize]) {
+        let mut per_game: FxHashMap<i64, u32> = FxHashMap::default();
+        let mut ages: Vec<u32> = Vec::with_capacity(indices.len());
+        for &idx in indices {
+            let gid = self.game_ids[idx];
+            if gid != -1 {
+                *per_game.entry(gid).or_insert(0) += 1;
+            }
+            // Rows back from the newest, in insertion order. `head` points one past the
+            // newest, so the newest slot is `head - 1` modulo the capacity.
+            let newest = (self.head + self.capacity - 1) % self.capacity;
+            ages.push(((newest + self.capacity - idx) % self.capacity) as u32);
+        }
+        ages.sort_unstable();
+        self.last_batch_distinct_games = per_game.len() as u32;
+        self.last_batch_max_rows_per_game = per_game.values().copied().max().unwrap_or(0);
+        self.last_batch_untagged_rows =
+            indices.iter().filter(|&&i| self.game_ids[i] == -1).count() as u32;
+        self.last_batch_age_quantiles = if ages.is_empty() {
+            [0, 0, 0]
+        } else {
+            let at = |q: f64| ages[(((ages.len() - 1) as f64) * q).round() as usize];
+            [at(0.5), at(0.9), at(0.99)]
+        };
+    }
+
     /// Sample `batch_size` slot indices, deduping by `game_id` (untagged -1 slots
     /// skip the guard). `recent_frac == 0.0` is byte-identical to the full-ring
     /// weighted sample; `> 0.0` draws `round(batch_size * recent_frac)` from the
@@ -101,7 +144,9 @@ impl HexgBuffer {
             idx.extend((n_recent..batch_size).map(|_| self.weighted_sample_one()));
             idx
         } else {
-            (0..batch_size).map(|_| self.weighted_sample_one()).collect()
+            (0..batch_size)
+                .map(|_| self.weighted_sample_one())
+                .collect()
         };
         let mut seen: HashSet<i64> = HashSet::with_capacity(batch_size);
         for _ in 0..MAX_RETRIES {
@@ -173,6 +218,7 @@ impl HexgBuffer {
             return Err("Cannot sample from an empty HEXG buffer".to_string());
         }
         let indices = self.sample_indices(batch_size, recent_frac);
+        self.record_batch_composition(&indices);
 
         let params_base = BuildParams {
             win_length: self.win_length,
@@ -270,16 +316,24 @@ fn build_and_align_batch(
     }
     let threads = n_threads.max(1).min(items.len());
     if threads == 1 {
-        return items.iter().map(|it| build_and_align_one(it, params_base)).collect();
+        return items
+            .iter()
+            .map(|it| build_and_align_one(it, params_base))
+            .collect();
     }
     let chunk = items.len().div_ceil(threads);
     let mut per_chunk: Vec<Result<Vec<SampleOut>, String>> = Vec::new();
     std::thread::scope(|scope| {
         let handles: Vec<_> = items
             .chunks(chunk)
-            .map(|slice| scope.spawn(move || {
-                slice.iter().map(|it| build_and_align_one(it, params_base)).collect()
-            }))
+            .map(|slice| {
+                scope.spawn(move || {
+                    slice
+                        .iter()
+                        .map(|it| build_and_align_one(it, params_base))
+                        .collect()
+                })
+            })
             .collect();
         for h in handles {
             // A panicking worker is turned into the NAMED error the caller already handles,

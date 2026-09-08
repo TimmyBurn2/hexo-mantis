@@ -77,6 +77,12 @@ class ReplayBufferLike(Protocol):
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
+    #: R345(b)(6) — the last sampled batch's rows-per-game and age quantiles. Declared on the
+    #: SHARED protocol rather than the graph route key because it is a fact about a ring, not
+    #: about which sampler it carries; the dense ring simply does not implement it yet, and
+    #: `_batch_composition` probes with `getattr` and publishes nothing when it is absent —
+    #: which is why the absence is a gap and not a route mismatch.
+    def last_batch_composition(self) -> dict[str, int]: ...
 
 
 @runtime_checkable

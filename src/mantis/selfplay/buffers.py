@@ -163,6 +163,30 @@ class ReplayFacade:
     ) -> None:
         self.raw.set_weight_schedule(thresholds, weights, default_weight)
 
+    def next_game_id(self) -> int:
+        """Allocate the next buffer-global game id (R345(b)(6)).
+
+        FORWARDED EXPLICITLY, like everything else here — this class has no `__getattr__`, by
+        design, *"so the forwarded surface is greppable"*. `pool_push.push_graph` calls this
+        once per distinct runner game to translate the runner's own restart-at-zero sequence
+        into an id that cannot collide with a resumed ring's history, and the push arm sees
+        the FACADE, not the raw handle. Omitting it here would have made the whole self-play
+        write path raise `AttributeError` on its first drained game while every unit test that
+        used a raw `HexgBuffer` stayed green.
+        """
+        return self.raw.next_game_id()
+
+    def last_batch_composition(self) -> dict[str, int]:
+        """The last sampled batch's rows-per-game and age quantiles (R345(b)(6)).
+
+        Forwarded even though the production SAMPLING path reaches the raw buffer rather than
+        this facade (`run.py` hands the coordinator the raw handle and the pool the wrapped
+        one). The dispatcher probes for this member with `getattr` and publishes nothing when
+        it is absent — so if the two ever converge on the facade, the instrument must not go
+        silently missing, and an absent instrument looks exactly like a healthy zero.
+        """
+        return self.raw.last_batch_composition()
+
     def outcome_in_range_count(self, lo: float, hi: float) -> int:
         """Count buffered outcomes in `[lo, hi)`.
 

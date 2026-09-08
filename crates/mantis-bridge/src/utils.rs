@@ -13,7 +13,9 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
-use mantis_search::{pool_overflow_count, take_pool_overflow_count};
+use mantis_search::{
+    omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
+};
 use mantis_selfplay::records::finalize_graph_outcome;
 use mantis_selfplay::replay::sample::apply_symmetry_state;
 use mantis_selfplay::replay::sym::{SymTables, N_SYMS};
@@ -108,6 +110,27 @@ pub(crate) fn take_mcts_pool_overflow_count() -> u64 {
     take_pool_overflow_count()
 }
 
+/// R345(b)(5) — `(omitted_prior_mass_micros, expansions_that_omitted, total_expansions)`.
+///
+/// The Top-K cap keeps the highest-prior `MAX_CHILDREN_PER_NODE` children of a leaf and drops
+/// the rest. `topk_truncated` said only that SOMETHING was dropped, which at radius 8 is true
+/// on essentially every ply and therefore carries no information. This says how much PRIOR
+/// MASS went with it — the quantity that decides whether the cap costs the search anything,
+/// and the one a decision to raise it has to be argued against.
+///
+/// Mass is fixed-point (x 1e6): there is no atomic f32, and a float sum across worker threads
+/// would not be reproducible even if there were.
+#[pyfunction]
+pub(crate) fn mcts_omitted_prior_stats() -> (u64, u64, u64) {
+    omitted_prior_stats()
+}
+
+/// Atomically read-and-reset all three, to bracket a measurement window.
+#[pyfunction]
+pub(crate) fn take_mcts_omitted_prior_stats() -> (u64, u64, u64) {
+    take_omitted_prior_stats()
+}
+
 /// The `(outcome, value_valid)` a graph training row carries, from THE authority.
 ///
 /// NIGHTRUN-1 Leg 3. A bootstrap corpus encoder has to stamp the same value target
@@ -175,6 +198,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(apply_symmetries_batch, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;
+    m.add_function(wrap_pyfunction!(mcts_omitted_prior_stats, m)?)?;
+    m.add_function(wrap_pyfunction!(take_mcts_omitted_prior_stats, m)?)?;
     m.add_function(wrap_pyfunction!(graph_row_outcome, m)?)?;
     Ok(())
 }

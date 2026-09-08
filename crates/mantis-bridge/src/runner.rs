@@ -46,8 +46,10 @@ type CollectDataOut<'py> = (
     Bound<'py, PyArray1<u8>>,
 );
 
-/// Per-row tuple returned by `collect_graph_data`, field order matching
-/// `HexgBuffer.push_graph_position`'s positional signature (`game_id` excluded).
+/// Per-row tuple returned by `collect_graph_data`: the first NINE fields are
+/// `HexgBuffer.push_graph_position`'s positional signature verbatim, and the tenth is the
+/// runner-assigned `game_id` (R345(b)(6)), which that signature takes as a KEYWORD. The
+/// split is what lets the Python push forward the nine unchanged and pass the tenth by name.
 type GraphRecordRow = (
     Vec<(i16, i16, i8)>,
     Vec<(i16, i16, f32)>,
@@ -58,6 +60,7 @@ type GraphRecordRow = (
     f32,
     bool,
     u16,
+    i64,
 );
 
 /// Derived fixed-point mean in f64 arithmetic (`mcts_mean_depth` /
@@ -506,6 +509,10 @@ impl PySelfPlayRunner {
                     r.outcome,
                     r.value_valid,
                     r.game_length,
+                    // R345(b)(6): the game this position came from. Appended LAST so the
+                    // leading nine stay exactly `HexgBuffer.push_graph_position`'s positional
+                    // signature and the Python push can forward them verbatim.
+                    r.game_id,
                 )
             })
             .collect())

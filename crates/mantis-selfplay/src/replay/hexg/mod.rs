@@ -201,6 +201,13 @@ pub struct GraphRecord {
     pub value_valid: bool,
     /// Completed-game length (compound moves) — sampling weight.
     pub game_length: u16,
+    /// R345(b)(6) — WHICH GAME this position came from, stamped once per game at
+    /// `finalize_game_graph`. `-1` is the untagged sentinel and means the record was built
+    /// outside a game (a test, a fixture); a production self-play record always carries a real
+    /// id. Before this field every self-play row was pushed with `-1`, so `sample_indices`'s
+    /// same-game dedupe — which skips the guard on `-1` — had never once fired on real data,
+    /// and a batch could be a dozen positions from one game reported as a dozen samples.
+    pub game_id: i64,
 }
 
 // ── HexgBuffer ─────────────────────────────────────────────────────────────────
@@ -225,24 +232,33 @@ pub struct HexgBuffer {
     pub visit_capacity: usize,
 
     // ── fixed-slot record storage (SoA) ──
-    pub stones_qr: Vec<i16>,     // flat [cap * MAX_STONES * 2]
-    pub stone_players: Vec<i8>,  // flat [cap * MAX_STONES]
-    pub n_stones: Vec<u16>,      // [cap]
-    pub visit_qr: Vec<i16>,      // flat [cap * visit_capacity * 2]
-    pub visit_probs: Vec<f32>,   // flat [cap * visit_capacity]
-    pub n_visits: Vec<u16>,      // [cap]
-    pub current_player: Vec<i8>, // [cap]
+    pub stones_qr: Vec<i16>,      // flat [cap * MAX_STONES * 2]
+    pub stone_players: Vec<i8>,   // flat [cap * MAX_STONES]
+    pub n_stones: Vec<u16>,       // [cap]
+    pub visit_qr: Vec<i16>,       // flat [cap * visit_capacity * 2]
+    pub visit_probs: Vec<f32>,    // flat [cap * visit_capacity]
+    pub n_visits: Vec<u16>,       // [cap]
+    pub current_player: Vec<i8>,  // [cap]
     pub moves_remaining: Vec<u8>, // [cap]
-    pub ply_index: Vec<u16>,     // [cap]
-    pub is_full_search: Vec<u8>, // [cap]
-    pub outcomes: Vec<f32>,      // [cap]
-    pub value_valid: Vec<u8>,    // [cap]
-    pub game_length: Vec<u16>,   // [cap]
-    pub game_ids: Vec<i64>,      // [cap]; -1 = untagged
-    pub weights: Vec<u16>,       // f16 bits; [cap]
+    pub ply_index: Vec<u16>,      // [cap]
+    pub is_full_search: Vec<u8>,  // [cap]
+    pub outcomes: Vec<f32>,       // [cap]
+    pub value_valid: Vec<u8>,     // [cap]
+    pub game_length: Vec<u16>,    // [cap]
+    pub game_ids: Vec<i64>,       // [cap]; -1 = untagged
+    pub weights: Vec<u16>,        // f16 bits; [cap]
 
     pub weight_schedule: WeightSchedule,
     pub next_game_id: i64,
+    //: R345(b)(6) — the LAST sampled batch's composition, written by
+    //: `record_batch_composition` and read by the per-batch line the trainer logs. Kept on the
+    //: buffer rather than returned from `sample_graph_batch` so the hot path keeps its
+    //: signature; a reader asks after the batch it cares about.
+    pub last_batch_distinct_games: u32,
+    pub last_batch_max_rows_per_game: u32,
+    pub last_batch_untagged_rows: u32,
+    /// Rows back from the newest, at p50 / p90 / p99.
+    pub last_batch_age_quantiles: [u32; 3],
     pub rng: StdRng,
     pub weight_buckets: [AtomicU64; 3],
 }
@@ -263,8 +279,9 @@ impl HexgBuffer {
         // refusal here is a named `ValueError` — and `SelfPlayRunner::new` and
         // `PyRegistrySpec::from_registry` both already return the sorted known list.
         let spec = mantis_encoding::registry::lookup(encoding).ok_or_else(|| {
-            let mut known: Vec<&str> =
-                mantis_encoding::registry::all_specs().map(|s| s.name).collect();
+            let mut known: Vec<&str> = mantis_encoding::registry::all_specs()
+                .map(|s| s.name)
+                .collect();
             known.sort_unstable();
             format!("HexgBuffer: unknown encoding {encoding:?}; registered: {known:?}")
         })?;
@@ -280,9 +297,11 @@ impl HexgBuffer {
         // `panic = "unwind"` cannot convert into a Python exception, so it takes the process
         // with it. Both are refused here, by name, before anything is allocated.
         if capacity == 0 {
-            return Err("HexgBuffer: capacity 0 stores nothing and panics on the first push \
+            return Err(
+                "HexgBuffer: capacity 0 stores nothing and panics on the first push \
                         (an index out of bounds and a modulo by zero)"
-                .to_string());
+                    .to_string(),
+            );
         }
         if capacity > HEXG_CAPACITY_CEILING {
             return Err(format!(
@@ -301,8 +320,12 @@ impl HexgBuffer {
                  (R255/ADJ-D34)"
             ));
         }
-        let win_length = spec.win_length.expect("validate guarantees win_length for a graph spec") as u8;
-        let radius = spec.graph_radius.expect("validate guarantees graph_radius for a graph spec") as u16;
+        let win_length =
+            spec.win_length
+                .expect("validate guarantees win_length for a graph spec") as u8;
+        let radius =
+            spec.graph_radius
+                .expect("validate guarantees graph_radius for a graph spec") as u16;
         let contract_version = spec
             .contract_version
             .expect("validate guarantees contract_version for a graph spec");
@@ -334,6 +357,10 @@ impl HexgBuffer {
             weights: vec![default_w; capacity],
             weight_schedule: WeightSchedule::uniform(),
             next_game_id: 0,
+            last_batch_distinct_games: 0,
+            last_batch_max_rows_per_game: 0,
+            last_batch_untagged_rows: 0,
+            last_batch_age_quantiles: [0, 0, 0],
             rng: StdRng::from_rng(&mut rand::rng()),
             weight_buckets: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
         })
@@ -357,6 +384,16 @@ impl HexgBuffer {
     }
 
     /// Fresh monotonic game id.
+    /// The `game_id` of the `index`-th record in insertion order (oldest first), or `None`
+    /// when `index` is past `size`. R345(b)(6)'s read half.
+    pub fn game_id_at(&self, index: usize) -> Option<i64> {
+        if index >= self.size {
+            return None;
+        }
+        let slot = (self.head + self.capacity - self.size + index) % self.capacity;
+        Some(self.game_ids[slot])
+    }
+
     pub fn next_game_id(&mut self) -> i64 {
         let id = self.next_game_id;
         self.next_game_id += 1;

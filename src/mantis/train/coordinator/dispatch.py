@@ -318,6 +318,7 @@ def _build_graph_parts(
         "total_nodes": int(payload.node_offsets[-1]),
         "caps_max_edges": max_edges,
         "caps_max_nodes": max_nodes,
+        "batch_composition": _batch_composition(buffer),
     }
 
 
@@ -332,6 +333,32 @@ def _graph_step(
         recency_weight=recency_weight, recent_buffer=recent_buffer,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
     ))
+
+
+def _batch_composition(buffer: Any) -> dict[str, int]:
+    """R345(b)(6) — what the batch was MADE OF, read off the ring that just sampled it.
+
+    Two facts, and each answers a question the loss curve cannot. ROWS PER GAME says whether
+    the ring's same-game dedupe is doing anything: with every row tagged `-1` it was inert,
+    and a batch could be a dozen positions from one game counted as a dozen samples. AGE, in
+    rows back from the newest, says whether the ring is still being fed — a ring whose
+    producer has died keeps sampling happily from older and older data and reports nothing.
+
+    Returned rather than emitted here: the sink belongs to the trainer, and reaching into its
+    private `_sink` from the dispatcher is the undeclared-seam access the conformance gate
+    exists to refuse. The trainer puts these on its own `trainer_step` event, beside the edge
+    and node counts that are already there.
+
+    An empty dict on a buffer with no such reading (the dense ring, a test double). Absence of
+    an instrument is not a measurement and must not be published as zeros.
+    """
+    reader = getattr(buffer, "last_batch_composition", None)
+    if reader is None:
+        return {}
+    try:
+        return {str(k): int(v) for k, v in dict(reader()).items()}
+    except (AttributeError, TypeError, ValueError):
+        return {}
 
 
 def run_declared_eval_step(

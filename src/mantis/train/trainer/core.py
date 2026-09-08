@@ -560,6 +560,7 @@ class Trainer:
         total_nodes: int,
         caps_max_edges: int,
         caps_max_nodes: int,
+        batch_composition: dict[str, int] | None = None,
     ) -> dict[str, float]:
         """FORWARD-ONLY loss over a partitioned graph batch — no gradient, no state (R328(d)).
 
@@ -644,6 +645,7 @@ class Trainer:
         total_nodes: int,
         caps_max_edges: int,
         caps_max_nodes: int,
+        batch_composition: dict[str, int] | None = None,
     ) -> dict[str, float]:
         """One gradient update from a PARTITIONED graph batch (WP12-R F2, CARD-RUN5-GPU-OOM).
 
@@ -810,7 +812,12 @@ class Trainer:
                                   "caps_max_nodes": int(caps_max_nodes),
                                   "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
                                   "nonfinite_grad_steps": self.nonfinite_grad_steps,
-                                  "skipped_steps": self.skipped_steps})
+                                  "skipped_steps": self.skipped_steps,
+                                  # R345(b)(6): what the sampled batch was made of. Rides the
+                                  # step event rather than its own, because it is a property
+                                  # OF this step's batch and a second event at the same
+                                  # cadence is a second thing to keep in sync.
+                                  **(batch_composition or {})})
             self._maybe_periodic_checkpoint(result)
         return result
 

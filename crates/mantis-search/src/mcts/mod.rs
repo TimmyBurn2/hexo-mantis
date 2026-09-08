@@ -19,16 +19,18 @@
 //!   `Q(s,a) + c_puct · P(s,a) · √N(s) / (1 + N(s,a))`
 //!   where Q is from the *parent's* perspective.
 
+mod backup;
+mod completed_q;
 pub mod dirichlet;
 pub mod gumbel;
 pub mod node;
-mod selection;
-mod backup;
 pub mod policy;
-mod completed_q;
+mod selection;
 
+pub use backup::{
+    omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
+};
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
-pub use backup::{pool_overflow_count, take_pool_overflow_count};
 pub use selection::{ForcedChildOutOfRange, SelectionDesync};
 
 /// Maximum children created per leaf expansion.
@@ -66,8 +68,8 @@ pub const MAX_CHILDREN_PER_NODE: usize = 192;
 /// own indices and must not continue. This constant is what stops a config reaching it.
 pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
 
-use mantis_core::board::{Board, BOARD_SIZE};
 use fxhash::FxHashMap;
+use mantis_core::board::{Board, BOARD_SIZE};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // ── Tree ─────────────────────────────────────────────────────────────────────
@@ -190,7 +192,10 @@ impl MCTSTree {
     /// does not own — including an uninitialised slot, whose `action_idx` of `u32::MAX`
     /// decodes to the axial cell `(32767, 32767)`, which an unbounded board ACCEPTS. That arm
     /// produced no panic and no error: it silently searched a subtree belonging to nothing.
-    pub fn set_forced_root_child(&mut self, child: Option<u32>) -> Result<(), ForcedChildOutOfRange> {
+    pub fn set_forced_root_child(
+        &mut self,
+        child: Option<u32>,
+    ) -> Result<(), ForcedChildOutOfRange> {
         if let Some(idx) = child {
             let root = &self.pool[0];
             let first = root.first_child;
@@ -294,7 +299,9 @@ impl MCTSTree {
             // healthy search, and a tree that has desynchronised from its board is not one
             // (AUDIT-1 F-02). `run_simulations_cpu_only` has no production caller, so this
             // is the one place the error is legitimately dropped instead of propagated.
-            let Ok(boards) = self.select_leaves(1) else { return };
+            let Ok(boards) = self.select_leaves(1) else {
+                return;
+            };
             if boards.is_empty() {
                 continue;
             }

@@ -422,7 +422,11 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     # materialises — asserted below so the pass-through is still checked at tensor level and
     # this row did not quietly shrink to a signature check.
     assert set(kw) == {"parts", "policy_denominator", "value_denominator", "total_edges",
-                       "total_nodes", "caps_max_edges", "caps_max_nodes"}
+                       "total_nodes", "caps_max_edges", "caps_max_nodes",
+                       # R345(b)(6): what the sampled batch was made of, carried to the step
+                       # so the trainer can put it on its own event beside the edge and node
+                       # counts. `{}` on a buffer that exposes no reading.
+                       "batch_composition"}
     assert len(kw["parts"]) >= 1
     inputs = kw["parts"][0]()
     for name in ("x", "edge_index", "edge_attr", "legal_index", "stone_mask",

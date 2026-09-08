@@ -36,16 +36,39 @@ def _draw_outcome_band(
 
 
 def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
-    """Push one drained batch of graph records, one row per position.
+    """Push one drained batch of graph records, one row per position, WITH its game id.
 
-    Each record is forwarded VERBATIM and inspected by nothing on the way: the tuple order
-    already matches the engine's positional signature. `game_id=-1` is the untagged
-    sentinel — a whole-board graph position is one row with no intra-position correlation
-    to dedupe, so the self-play write path never consumes a real game id and is
-    resume-collision-free by construction.
+    Each row is the engine's nine positional fields followed by the runner's own game
+    sequence number. The nine are forwarded verbatim; the tenth is translated.
+
+    R345(b)(6). This used to push `game_id=-1` for every row and argue the sentinel was
+    correct because *"a whole-board graph position is one row with no intra-position
+    correlation to dedupe"* — which answers a question LAW-04 does not ask. The dedupe is
+    over copies of a GAME, and `sample_indices` skips its uniqueness guard entirely on `-1`,
+    so a batch of 256 could be a dozen positions from one game counted as a dozen independent
+    samples and the ring's own guard had never fired on real data.
+
+    THE ID IS TRANSLATED, NOT FORWARDED. The runner's sequence restarts at 0 every launch,
+    while a RESUMED ring already holds ids from before the stop — `load_from_path_impl`
+    re-bases `next_game_id` past the highest it read for exactly this reason. Allocating
+    through the buffer's own `next_game_id()`, once per distinct runner id in the batch, is
+    what keeps a resumed run's first game distinct from its own history. The map is per-BATCH
+    and bounded: `finalize_game_graph` pushes a game's records under one lock, so a game's
+    rows arrive contiguously in one drain.
     """
+    allocated: dict[int, int] = {}
     for rec in rows:
-        pool.replay_buffer.push_graph_position(*rec, game_id=-1)
+        runner_game_id = int(rec[-1])
+        if runner_game_id < 0:
+            # A genuinely untagged row (a corpus preload, a fixture). Inventing an id would
+            # make unrelated positions look like one game and thin a batch for no reason.
+            buffer_game_id = -1
+        else:
+            buffer_game_id = allocated.get(runner_game_id, -1)
+            if buffer_game_id < 0:
+                buffer_game_id = int(pool.replay_buffer.next_game_id())
+                allocated[runner_game_id] = buffer_game_id
+        pool.replay_buffer.push_graph_position(*rec[:-1], game_id=buffer_game_id)
     n = len(rows)
     with pool._lock:
         pool.positions_pushed += n

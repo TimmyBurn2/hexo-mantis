@@ -932,7 +932,8 @@ class.** Recorded here rather than left as silent drift (R9).
 
 ## 12. Strength-claim + eval discipline
 
-- Deploy-matched eval (argmax Gumbel-greedy head) is the DEFAULT promotion bar; a
+- Deploy-matched eval (PUCT with transformed-Q root selection — R345(e); the tree is PUCT
+  and no Sequential Halving runs) is the DEFAULT promotion bar; a
   missing deploy decision blocks promotion, never falls back to a proxy regime.
 - Strength claims ship protocol + n + eff_n (distinct games by trajectory hash) +
   per-side compute. Opening books are versioned, sha-pinned, paired; CI on pairs is a

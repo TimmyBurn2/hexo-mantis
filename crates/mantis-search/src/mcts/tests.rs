@@ -5,7 +5,11 @@
 // VERBATIM-ported unit fixtures: the action-index encodings (`0u32 + 32768`),
 // the range-membership assertion, and the `&vec![0.0; n]` calls are kept as in
 // the source; suppress the cosmetic style lints they trip.
-#![allow(clippy::identity_op, clippy::manual_range_contains, clippy::useless_vec)]
+#![allow(
+    clippy::identity_op,
+    clippy::manual_range_contains,
+    clippy::useless_vec
+)]
 
 use super::*;
 use mantis_core::board::{Cell, Player};
@@ -17,21 +21,35 @@ pub(super) fn setup_two_child_tree(c_puct: f32) -> (MCTSTree, u32, u32) {
     let first_child = 1u32;
     tree.next_free = 3;
     tree.pool[0].first_child = first_child;
-    tree.pool[0].n_children  = 2;
+    tree.pool[0].n_children = 2;
 
     let action_a = ((0u32 + 32768) << 16) | (0u32 + 32768);
     let action_b = ((0u32 + 32768) << 16) | (1u32 + 32768);
 
     tree.pool[1] = Node {
-        parent: 0, action_idx: action_a, n_visits: 0, w_value: 0.0,
-        prior: 0.7, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 1, is_terminal: false, terminal_value: 0.0,
+        parent: 0,
+        action_idx: action_a,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 0.7,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 1,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     tree.pool[2] = Node {
-        parent: 0, action_idx: action_b, n_visits: 0, w_value: 0.0,
-        prior: 0.3, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 1, is_terminal: false, terminal_value: 0.0,
+        parent: 0,
+        action_idx: action_b,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 0.3,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 1,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     (tree, 1, 2)
@@ -44,8 +62,10 @@ fn test_puct_prefers_higher_prior_when_unvisited() {
     // fpu_value=0.0: both children unvisited, Q=0 for both; prior drives selection.
     let score_a = tree.puct_score(child_a, 0, 1.0, 0.0);
     let score_b = tree.puct_score(child_b, 0, 1.0, 0.0);
-    assert!(score_a > score_b,
-        "child with prior 0.7 should score higher than 0.3: {score_a:.4} vs {score_b:.4}");
+    assert!(
+        score_a > score_b,
+        "child with prior 0.7 should score higher than 0.3: {score_a:.4} vs {score_b:.4}"
+    );
 }
 
 #[test]
@@ -53,14 +73,16 @@ fn test_puct_visits_reduce_exploration() {
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 100;
     tree.pool[child_a as usize].n_visits = 99;
-    tree.pool[child_a as usize].w_value  = 0.0;
+    tree.pool[child_a as usize].w_value = 0.0;
 
     // child_a is visited (n_visits=99), child_b is unvisited → fpu_value applies.
     // With fpu_value=0.0 the unvisited child still looks like Q=0, but has higher U.
     let score_a = tree.puct_score(child_a, 0, 100.0, 0.0);
     let score_b = tree.puct_score(child_b, 0, 100.0, 0.0);
-    assert!(score_b > score_a,
-        "less-visited child_b should be preferred: {score_b:.4} vs {score_a:.4}");
+    assert!(
+        score_b > score_a,
+        "less-visited child_b should be preferred: {score_b:.4} vs {score_a:.4}"
+    );
 }
 
 #[test]
@@ -68,15 +90,29 @@ fn test_backup_single_value_reaches_root() {
     let mut tree = MCTSTree::new(1.5);
     tree.pool[0].moves_remaining = 1;
     tree.pool[1] = Node {
-        parent: 0, action_idx: (32768u32 << 16) | 32768u32, n_visits: 0, w_value: 0.0,
-        prior: 1.0, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 2, is_terminal: false, terminal_value: 0.0,
+        parent: 0,
+        action_idx: (32768u32 << 16) | 32768u32,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 1.0,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 2,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     tree.pool[2] = Node {
-        parent: 1, action_idx: (32768u32 << 16) | 32769u32, n_visits: 0, w_value: 0.0,
-        prior: 1.0, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 1, is_terminal: false, terminal_value: 0.0,
+        parent: 1,
+        action_idx: (32768u32 << 16) | 32769u32,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 1.0,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 1,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     tree.next_free = 3;
@@ -96,9 +132,16 @@ fn test_backup_negamax_player_change() {
     let mut tree = MCTSTree::new(1.5);
     tree.pool[0].moves_remaining = 1;
     tree.pool[1] = Node {
-        parent: 0, action_idx: (32768u32 << 16) | 32768u32, n_visits: 0, w_value: 0.0,
-        prior: 1.0, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 2, is_terminal: false, terminal_value: 0.0,
+        parent: 0,
+        action_idx: (32768u32 << 16) | 32768u32,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 1.0,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 2,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     tree.next_free = 2;
@@ -106,8 +149,11 @@ fn test_backup_negamax_player_change() {
     tree.backup(1, 0.6);
 
     assert!((tree.pool[1].w_value - 0.6).abs() < 1e-6, "child w = 0.6");
-    assert!((tree.pool[0].w_value - (-0.6)).abs() < 1e-6,
-        "root w should be -0.6, got {}", tree.pool[0].w_value);
+    assert!(
+        (tree.pool[0].w_value - (-0.6)).abs() < 1e-6,
+        "root w should be -0.6, got {}",
+        tree.pool[0].w_value
+    );
 }
 
 #[test]
@@ -116,7 +162,8 @@ fn test_select_leaves_returns_root_when_empty() {
     let board = Board::new();
     tree.new_game(board.clone());
 
-    let leaves = tree.select_leaves(1)
+    let leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     assert_eq!(leaves.len(), 1);
     assert_eq!(leaves[0].ply, board.ply);
@@ -129,7 +176,8 @@ fn test_expand_and_backup_creates_children() {
     let board = Board::new();
     tree.new_game(board);
 
-    let leaves = tree.select_leaves(1)
+    let leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     let n_legal = leaves[0].legal_move_count();
 
@@ -152,8 +200,9 @@ fn test_full_search_runs_n_simulations() {
     let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
 
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values: Vec<f32> = (0..n).map(|_| 0.0).collect();
@@ -167,7 +216,8 @@ fn test_full_search_runs_n_simulations() {
 fn test_virtual_loss_applied_during_select() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
-    let _leaves = tree.select_leaves(1)
+    let _leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     assert_eq!(tree.pool[0].virtual_loss_count, 1);
 }
@@ -177,7 +227,8 @@ fn test_virtual_loss_reversed_after_backup() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
 
-    let leaves = tree.select_leaves(1)
+    let leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     let n = leaves.len();
     let uniform = vec![1.0 / (BOARD_SIZE * BOARD_SIZE + 1) as f32; BOARD_SIZE * BOARD_SIZE + 1];
@@ -185,8 +236,10 @@ fn test_virtual_loss_reversed_after_backup() {
     tree.expand_and_backup(&policies, &vec![0.0; n]);
 
     for i in 0..tree.next_free as usize {
-        assert_eq!(tree.pool[i].virtual_loss_count, 0,
-            "node {i} should have virtual_loss_count=0 after backup");
+        assert_eq!(
+            tree.pool[i].virtual_loss_count, 0,
+            "node {i} should have virtual_loss_count=0 after backup"
+        );
     }
 }
 
@@ -195,7 +248,8 @@ fn test_virtual_loss_causes_path_divergence() {
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 1;
 
-    let batch = tree.select_leaves(2)
+    let batch = tree
+        .select_leaves(2)
         .expect("select_leaves: no desync in this fixture");
     assert_eq!(batch.len(), 2);
 
@@ -211,10 +265,16 @@ fn test_virtual_loss_causes_path_divergence() {
 #[test]
 fn test_virtual_loss_q_adjustment() {
     let node = Node {
-        parent: u32::MAX, action_idx: (32768u32 << 16) | 32768u32,
-        n_visits: 4, w_value: 2.0,
-        prior: 0.5, first_child: u32::MAX, n_children: 0,
-        moves_remaining: 1, is_terminal: false, terminal_value: 0.0,
+        parent: u32::MAX,
+        action_idx: (32768u32 << 16) | 32768u32,
+        n_visits: 4,
+        w_value: 2.0,
+        prior: 0.5,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: 1,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 2,
     };
     let q = node.q_value_vl(VIRTUAL_LOSS_PENALTY);
@@ -227,11 +287,11 @@ fn test_dynamic_fpu_reduces_unvisited_q() {
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.fpu_reduction = 0.25;
     tree.pool[0].n_visits = 10;
-    tree.pool[0].w_value  = 3.0; // parent Q = 0.3
+    tree.pool[0].w_value = 3.0; // parent Q = 0.3
 
     // child_a: visited (n_visits=1), Q from w_value/n_visits.
     tree.pool[child_a as usize].n_visits = 1;
-    tree.pool[child_a as usize].w_value  = 0.2;
+    tree.pool[child_a as usize].w_value = 0.2;
 
     // child_b: unvisited → should get fpu_value.
     // explored_mass = prior of child_a = 0.7  → reduction = 0.25*sqrt(0.7) ≈ 0.209
@@ -252,7 +312,6 @@ fn test_dynamic_fpu_reduces_unvisited_q() {
 }
 
 // ── Quiescence tests ──────────────────────────────────────────────────────
-
 
 #[test]
 fn test_quiescence_overrides_value_for_3_winning_moves() {
@@ -283,8 +342,10 @@ fn test_quiescence_overrides_value_for_3_winning_moves() {
     assert!(wins >= 3, "expected ≥3 winning moves for P1, got {wins}");
 
     let corrected = tree.apply_quiescence(&board, 0.0);
-    assert_eq!(corrected, 1.0,
-        "quiescence should override to 1.0 for 3+ winning moves");
+    assert_eq!(
+        corrected, 1.0,
+        "quiescence should override to 1.0 for 3+ winning moves"
+    );
 }
 
 #[test]
@@ -307,11 +368,16 @@ fn test_quiescence_overrides_value_for_3_opponent_winning_moves() {
     let board = Board::from_stones(&stones, Player::One, 1, 20, None);
 
     let opp_wins = board.count_winning_moves(Player::Two);
-    assert!(opp_wins >= 3, "expected ≥3 winning moves for P2, got {opp_wins}");
+    assert!(
+        opp_wins >= 3,
+        "expected ≥3 winning moves for P2, got {opp_wins}"
+    );
 
     let corrected = tree.apply_quiescence(&board, 0.0);
-    assert_eq!(corrected, -1.0,
-        "quiescence should override to -1.0 when opponent has 3+ winning moves");
+    assert_eq!(
+        corrected, -1.0,
+        "quiescence should override to -1.0 when opponent has 3+ winning moves"
+    );
 }
 
 #[test]
@@ -321,19 +387,23 @@ fn test_quiescence_blend_for_2_winning_moves() {
     tree.quiescence_blend_2 = 0.3;
 
     // P1 has exactly 2 winning moves (unblocked 5-in-a-row along E axis)
-    let stones: Vec<((i32, i32), Cell)> =
-        (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
+    let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
     // ply must be ≥ 8 so the early-game ply gate does not short-circuit.
     let board = Board::from_stones(&stones, Player::One, 1, 10, None);
 
     let wins = board.count_winning_moves(Player::One);
-    assert_eq!(wins, 2, "unblocked 5-in-a-row should have exactly 2 winning moves");
+    assert_eq!(
+        wins, 2,
+        "unblocked 5-in-a-row should have exactly 2 winning moves"
+    );
 
     let nn_value = 0.5f32;
     let corrected = tree.apply_quiescence(&board, nn_value);
     let expected = (nn_value + 0.3).min(1.0);
-    assert!((corrected - expected).abs() < 1e-6,
-        "blend for 2 winning moves: expected {expected}, got {corrected}");
+    assert!(
+        (corrected - expected).abs() < 1e-6,
+        "blend for 2 winning moves: expected {expected}, got {corrected}"
+    );
 }
 
 #[test]
@@ -342,13 +412,15 @@ fn test_quiescence_disabled_does_not_change_value() {
     tree.quiescence_enabled = false;
 
     // Give P1 a huge number of winning moves
-    let stones: Vec<((i32, i32), Cell)> =
-        (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
+    let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
     let board = Board::from_stones(&stones, Player::One, 1, 0, None);
 
     let nn_value = 0.42f32;
     let corrected = tree.apply_quiescence(&board, nn_value);
-    assert_eq!(corrected, nn_value, "disabled quiescence must not change value");
+    assert_eq!(
+        corrected, nn_value,
+        "disabled quiescence must not change value"
+    );
 }
 
 #[test]
@@ -377,18 +449,27 @@ fn test_quiescence_fire_count_increments_and_resets() {
     // First call fires → counter = 1.
     let result = tree.apply_quiescence(&board, 0.5);
     assert_eq!(result, 1.0, "forced win should override to 1.0");
-    assert_eq!(tree.quiescence_fire_count.load(Ordering::Relaxed), 1,
-        "counter should be 1 after one firing call");
+    assert_eq!(
+        tree.quiescence_fire_count.load(Ordering::Relaxed),
+        1,
+        "counter should be 1 after one firing call"
+    );
 
     // Second call fires again → counter = 2.
     tree.apply_quiescence(&board, 0.5);
-    assert_eq!(tree.quiescence_fire_count.load(Ordering::Relaxed), 2,
-        "counter should accumulate across calls");
+    assert_eq!(
+        tree.quiescence_fire_count.load(Ordering::Relaxed),
+        2,
+        "counter should accumulate across calls"
+    );
 
     // new_game() resets counter to 0.
     tree.new_game(Board::new());
-    assert_eq!(tree.quiescence_fire_count.load(Ordering::Relaxed), 0,
-        "counter should reset to 0 after new_game()");
+    assert_eq!(
+        tree.quiescence_fire_count.load(Ordering::Relaxed),
+        0,
+        "counter should reset to 0 after new_game()"
+    );
 }
 
 #[test]
@@ -401,16 +482,21 @@ fn test_quiescence_no_override_in_early_game() {
     let board = Board::new();
     let nn_value = 0.123f32;
     let corrected = tree.apply_quiescence(&board, nn_value);
-    assert_eq!(corrected, nn_value, "early game should not trigger quiescence");
+    assert_eq!(
+        corrected, nn_value,
+        "early game should not trigger quiescence"
+    );
 }
 
 #[test]
 fn test_no_forced_win_short_circuit_in_expansion() {
-    let stones: Vec<((i32, i32), Cell)> =
-        (0..4i32).map(|r| ((0, r), Cell::P1)).collect();
+    let stones: Vec<((i32, i32), Cell)> = (0..4i32).map(|r| ((0, r), Cell::P1)).collect();
     let board = Board::from_stones(&stones, Player::One, 1, 7, None);
 
-    assert!(!board.check_win(), "test setup: board should not be a terminal win");
+    assert!(
+        !board.check_win(),
+        "test setup: board should not be a terminal win"
+    );
 
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board);
@@ -422,8 +508,10 @@ fn test_no_forced_win_short_circuit_in_expansion() {
     tree.expand_and_backup(&[uniform_policy], &[nn_value]);
 
     let root = &tree.pool[0];
-    assert!(!root.is_terminal,
-        "root must NOT be marked terminal for a forced-win formation");
+    assert!(
+        !root.is_terminal,
+        "root must NOT be marked terminal for a forced-win formation"
+    );
 }
 
 // ── CF-1: compound-turn terminal sign ────────────────────────────────────
@@ -444,10 +532,12 @@ fn test_no_forced_win_short_circuit_in_expansion() {
 /// Build a P1 6-in-a-row along the E/W axis with `last_move` on the line.
 /// `mr`/`player` are set by the caller to model stone-1 vs stone-2 wins.
 fn make_stone1_win_board(mr: u8, player: Player) -> Board {
-    let six: Vec<((i32, i32), Cell)> =
-        (0..6i32).map(|q| ((q, 0), Cell::P1)).collect();
+    let six: Vec<((i32, i32), Cell)> = (0..6i32).map(|q| ((q, 0), Cell::P1)).collect();
     let board = Board::from_stones(&six, player, mr, 11, Some((5, 0)));
-    assert!(board.check_win(), "test setup: board must be a terminal win");
+    assert!(
+        board.check_win(),
+        "test setup: board must be a terminal win"
+    );
     board
 }
 
@@ -460,9 +550,16 @@ fn run_terminal_leaf(parent_mr: u8, leaf_mr: u8, board: &Board) -> (f32, f32) {
     tree.pool[0].n_children = 1;
     tree.next_free = 2;
     tree.pool[1] = Node {
-        parent: 0, action_idx: (32768u32 << 16) | 32773u32, n_visits: 0, w_value: 0.0,
-        prior: 1.0, first_child: u32::MAX, n_children: 0,
-        moves_remaining: leaf_mr, is_terminal: false, terminal_value: 0.0,
+        parent: 0,
+        action_idx: (32768u32 << 16) | 32773u32,
+        n_visits: 0,
+        w_value: 0.0,
+        prior: 1.0,
+        first_child: u32::MAX,
+        n_children: 0,
+        moves_remaining: leaf_mr,
+        is_terminal: false,
+        terminal_value: 0.0,
         virtual_loss_count: 0,
     };
     tree.expand_and_backup_single(1, board, &[], 0.0);
@@ -478,11 +575,15 @@ fn run_terminal_leaf(parent_mr: u8, leaf_mr: u8, board: &Board) -> (f32, f32) {
 fn test_cf1_stone1_win_scored_as_win() {
     let board = make_stone1_win_board(1, Player::One);
     let (leaf_tv, parent_w) = run_terminal_leaf(2, 1, &board);
-    assert_eq!(leaf_tv, 1.0,
-        "stone-1 win leaf (mr==1, winner to move) must score +1.0, not -1.0");
-    assert_eq!(parent_w, 1.0,
+    assert_eq!(
+        leaf_tv, 1.0,
+        "stone-1 win leaf (mr==1, winner to move) must score +1.0, not -1.0"
+    );
+    assert_eq!(
+        parent_w, 1.0,
         "winning stone-1 child must back up +1.0 to its mr==2 parent \
-         (policy target points at the winning move, not filler-first)");
+         (policy target points at the winning move, not filler-first)"
+    );
 }
 
 /// Case B — stone-2 / turn-final win: leaf `mr==2` (opponent to move) from a
@@ -493,11 +594,15 @@ fn test_cf1_stone1_win_scored_as_win() {
 fn test_cf1_stone2_win_still_scored_as_loss_to_mover() {
     let board = make_stone1_win_board(2, Player::Two);
     let (leaf_tv, parent_w) = run_terminal_leaf(1, 2, &board);
-    assert_eq!(leaf_tv, -1.0,
-        "turn-final win leaf (mr==2, loser to move) must stay -1.0");
-    assert_eq!(parent_w, 1.0,
+    assert_eq!(
+        leaf_tv, -1.0,
+        "turn-final win leaf (mr==2, loser to move) must stay -1.0"
+    );
+    assert_eq!(
+        parent_w, 1.0,
         "negamax flip at the mr==1 parent turns the -1.0 leaf into +1.0 \
-         for the player who completed the line");
+         for the player who completed the line"
+    );
 }
 
 // ── CF-6: FPU sign consistency (pinning test, no production-logic change) ──
@@ -522,7 +627,7 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
     // c1: visited child, known decisive own-frame Q. virtual_loss_count==0 from
     // setup, so q_value_vl == w_value / n_visits.
     tree.pool[c1 as usize].n_visits = 4;
-    tree.pool[c1 as usize].w_value  = 2.0; // own-frame Q = 2.0 / 4 = 0.5
+    tree.pool[c1 as usize].w_value = 2.0; // own-frame Q = 2.0 / 4 = 0.5
     let own_q = tree.pool[c1 as usize].q_value_vl(tree.virtual_loss);
     assert!((own_q - 0.5).abs() < 1e-6, "precondition: own_q = {own_q}");
     // c2 stays unvisited (n_visits == 0 from setup).
@@ -531,20 +636,28 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
     // --- mr == 2 parent (children are the SAME player) ---
     assert_eq!(tree.pool[0].moves_remaining, 2);
     let q_visited_mr2 = tree.puct_score(c1, 0, sqrt_n, FPU);
-    assert!((q_visited_mr2 - 0.5).abs() < 1e-6,
-        "mr2 visited q = {q_visited_mr2}, want +0.5 (not negated)");
+    assert!(
+        (q_visited_mr2 - 0.5).abs() < 1e-6,
+        "mr2 visited q = {q_visited_mr2}, want +0.5 (not negated)"
+    );
     let q_unvisited_mr2 = tree.puct_score(c2, 0, sqrt_n, FPU);
-    assert!((q_unvisited_mr2 - FPU).abs() < 1e-6,
-        "mr2 unvisited q = {q_unvisited_mr2}, want fpu_value {FPU}");
+    assert!(
+        (q_unvisited_mr2 - FPU).abs() < 1e-6,
+        "mr2 unvisited q = {q_unvisited_mr2}, want fpu_value {FPU}"
+    );
 
     // --- mr == 1 parent (children are the OTHER player) ---
     tree.pool[0].moves_remaining = 1;
     let q_visited_mr1 = tree.puct_score(c1, 0, sqrt_n, FPU);
-    assert!((q_visited_mr1 - (-0.5)).abs() < 1e-6,
-        "mr1 visited q = {q_visited_mr1}, want -0.5 (negated into parent frame)");
+    assert!(
+        (q_visited_mr1 - (-0.5)).abs() < 1e-6,
+        "mr1 visited q = {q_visited_mr1}, want -0.5 (negated into parent frame)"
+    );
     let q_unvisited_mr1 = tree.puct_score(c2, 0, sqrt_n, FPU);
-    assert!((q_unvisited_mr1 - FPU).abs() < 1e-6,
-        "mr1 unvisited q = {q_unvisited_mr1}, want fpu_value {FPU} (UNCHANGED by mr)");
+    assert!(
+        (q_unvisited_mr1 - FPU).abs() < 1e-6,
+        "mr1 unvisited q = {q_unvisited_mr1}, want fpu_value {FPU} (UNCHANGED by mr)"
+    );
 }
 
 // ── Gumbel MCTS tests ────────────────────────────────────────────────────
@@ -555,7 +668,8 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
     tree.new_game(board);
 
     // Expand root with uniform priors.
-    let _leaves = tree.select_leaves(1)
+    let _leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy = vec![1.0 / n_actions as f32; n_actions];
@@ -573,20 +687,39 @@ fn test_wp6_driver_setters_roundtrip() {
     // needs a root that HAS children — a bare tree owns none and index 3 belongs to nothing.
     let mut tree = setup_expanded_root();
     let first = tree.pool[0].first_child;
-    tree.set_forced_root_child(Some(first)).expect("the root's own first child is in range");
-    assert_eq!(tree.forced_root_child, Some(first),
-        "set_forced_root_child(Some(first_child)) must set the field");
-    tree.set_forced_root_child(None).expect("clearing is always in range");
-    assert_eq!(tree.forced_root_child, None,
-        "set_forced_root_child(None) must clear the field");
+    tree.set_forced_root_child(Some(first))
+        .expect("the root's own first child is in range");
+    assert_eq!(
+        tree.forced_root_child,
+        Some(first),
+        "set_forced_root_child(Some(first_child)) must set the field"
+    );
+    tree.set_forced_root_child(None)
+        .expect("clearing is always in range");
+    assert_eq!(
+        tree.forced_root_child, None,
+        "set_forced_root_child(None) must clear the field"
+    );
 
     tree.configure_quiescence(false, 0.7);
-    assert!(!tree.quiescence_enabled, "configure_quiescence must set enabled=false");
-    assert_eq!(tree.quiescence_blend_2, 0.7, "configure_quiescence must set blend_2=0.7");
+    assert!(
+        !tree.quiescence_enabled,
+        "configure_quiescence must set enabled=false"
+    );
+    assert_eq!(
+        tree.quiescence_blend_2, 0.7,
+        "configure_quiescence must set blend_2=0.7"
+    );
 
     tree.configure_quiescence(true, 0.3);
-    assert!(tree.quiescence_enabled, "configure_quiescence must set enabled=true");
-    assert_eq!(tree.quiescence_blend_2, 0.3, "configure_quiescence must set blend_2=0.3");
+    assert!(
+        tree.quiescence_enabled,
+        "configure_quiescence must set enabled=true"
+    );
+    assert_eq!(
+        tree.quiescence_blend_2, 0.3,
+        "configure_quiescence must set blend_2=0.3"
+    );
 }
 
 #[test]
@@ -607,8 +740,9 @@ fn test_forced_root_child_selection() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -617,13 +751,19 @@ fn test_forced_root_child_selection() {
 
     // The forced child should have gotten all visits (minus root expansion).
     let forced_visits = tree.pool[target_child as usize].n_visits;
-    assert!(forced_visits >= n_sims as u32 - 1,
-        "forced child should have >= {} visits, got {}", n_sims - 1, forced_visits);
+    assert!(
+        forced_visits >= n_sims as u32 - 1,
+        "forced child should have >= {} visits, got {}",
+        n_sims - 1,
+        forced_visits
+    );
 
     // First child (not forced) should have 0 visits.
     let other_visits = tree.pool[first as usize].n_visits;
-    assert_eq!(other_visits, 0,
-        "non-forced child should have 0 visits, got {other_visits}");
+    assert_eq!(
+        other_visits, 0,
+        "non-forced child should have 0 visits, got {other_visits}"
+    );
 
     tree.forced_root_child = None;
 }
@@ -638,8 +778,9 @@ fn test_forced_root_none_uses_puct() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -652,8 +793,10 @@ fn test_forced_root_none_uses_puct() {
     let visited_count = (first..first + n_ch)
         .filter(|&i| tree.pool[i].n_visits > 0)
         .count();
-    assert!(visited_count >= 2,
-        "PUCT should visit multiple children, only {visited_count} visited");
+    assert!(
+        visited_count >= 2,
+        "PUCT should visit multiple children, only {visited_count} visited"
+    );
 }
 
 #[test]
@@ -669,8 +812,9 @@ fn test_gumbel_disabled_no_behavior_change() {
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
         let uniform = vec![1.0 / n_actions as f32; n_actions];
         for _ in 0..10 {
-            let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+            let leaves = tree
+                .select_leaves(1)
+                .expect("select_leaves: no desync in this fixture");
             let n = leaves.len();
             let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
             let values = vec![0.0f32; n];
@@ -680,14 +824,18 @@ fn test_gumbel_disabled_no_behavior_change() {
         // Extract visit counts for root children
         let first = tree.pool[0].first_child as usize;
         let n_ch = tree.pool[0].n_children as usize;
-        (first..first + n_ch).map(|i| tree.pool[i].n_visits).collect()
+        (first..first + n_ch)
+            .map(|i| tree.pool[i].n_visits)
+            .collect()
     };
 
     let visits_a = run_search();
     let visits_b = run_search();
     // With deterministic input (uniform policy, value=0), results should match.
-    assert_eq!(visits_a, visits_b,
-        "search with forced_root_child=None should be deterministic");
+    assert_eq!(
+        visits_a, visits_b,
+        "search with forced_root_child=None should be deterministic"
+    );
 }
 
 #[test]
@@ -703,8 +851,9 @@ fn test_nonroot_uses_puct_when_root_forced() {
 
     // Run enough sims to expand the forced child and go deeper.
     for _ in 0..30 {
-        let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -720,8 +869,10 @@ fn test_nonroot_uses_puct_when_root_forced() {
         let gc_visited = (gc_first..gc_first + gc_n)
             .filter(|&i| tree.pool[i].n_visits > 0)
             .count();
-        assert!(gc_visited >= 2,
-            "PUCT at non-root should visit multiple grandchildren, got {gc_visited}");
+        assert!(
+            gc_visited >= 2,
+            "PUCT at non-root should visit multiple grandchildren, got {gc_visited}"
+        );
     }
     // If forced child isn't expanded (e.g., terminal), the test still passes.
     tree.forced_root_child = None;
@@ -736,8 +887,9 @@ fn test_last_search_stats_bounds_after_sims() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
     for _ in 0..n_sims {
-        let leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         let n = leaves.len();
         let policies: Vec<Vec<f32>> = (0..n).map(|_| uniform.clone()).collect();
         let values = vec![0.0f32; n];
@@ -745,19 +897,111 @@ fn test_last_search_stats_bounds_after_sims() {
     }
 
     let (mean_depth, root_concentration) = tree.last_search_stats();
-    assert!(mean_depth >= 0.0,
-        "mean_depth must be >= 0.0, got {mean_depth}");
-    assert!(root_concentration >= 0.0 && root_concentration <= 1.0,
-        "root_concentration must be in [0.0, 1.0], got {root_concentration}");
+    assert!(
+        mean_depth >= 0.0,
+        "mean_depth must be >= 0.0, got {mean_depth}"
+    );
+    assert!(
+        root_concentration >= 0.0 && root_concentration <= 1.0,
+        "root_concentration must be in [0.0, 1.0], got {root_concentration}"
+    );
 }
 
 // ── Top-K leaf cap tests ─────────────────────────────────────────────────
 
 #[test]
-fn test_topk_truncates_at_max_children() {
+fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
+    // R345(b)(5). The cap's own `topk_truncated` flag says only that SOMETHING was dropped,
+    // and at radius 8 that is true on essentially every ply — measured 3009 of 3010
+    // expansions on a driven game — so the flag carries no information. This pins the
+    // quantity that does: the summed PRIOR of the children the cap threw away.
+    use super::backup::{pick_topk_children, take_omitted_prior_stats};
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
+
+    let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
+    'fill: for q in -HALF..=HALF {
+        for r in -HALF..=HALF {
+            cells.insert((q, r));
+            if cells.len() == MAX_CHILDREN_PER_NODE + 8 {
+                break 'fill;
+            }
+        }
+    }
+    assert_eq!(cells.len(), MAX_CHILDREN_PER_NODE + 8);
+
+    // A UNIFORM policy over the whole window: every kept child and every dropped child holds
+    // the same prior, so the dropped mass is exactly `8 * p` and is hand-checkable.
+    let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+    let p = 1.0f32 / n_actions as f32;
+    let policy = vec![p; n_actions];
+
+    take_omitted_prior_stats();
+    let (chosen, truncated) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
+
+    assert!(
+        truncated,
+        "the fixture must exceed the cap for this to measure anything"
+    );
+    assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE);
+    assert_eq!(total_expansions, 1, "one call must count as one expansion");
+    assert_eq!(
+        omitted_expansions, 1,
+        "the truncating call was not counted as omitting"
+    );
+    let expected = (8.0 * f64::from(p) * 1e6) as u64;
+    let delta = mass_micros.abs_diff(expected);
+    assert!(
+        delta <= 8,
+        "dropped mass {mass_micros} micros != the 8 uniform children's {expected} \
+         (fixed-point rounding allows one micro per child, saw {delta})"
+    );
+}
+
+#[test]
+fn an_untruncated_expansion_records_no_omitted_mass() {
+    // The mutation half: a counter that always fires reports a cap cost on a node that has
+    // fewer legal moves than the cap, which is most of the early game.
+    use super::backup::{pick_topk_children, take_omitted_prior_stats};
+    use fxhash::FxHashSet;
+    use mantis_core::board::HALF;
+
+    let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
+    for q in -2..=2 {
+        for r in -2..=2 {
+            cells.insert((q, r));
+        }
+    }
+    assert!(cells.len() < MAX_CHILDREN_PER_NODE);
+
+    let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+    let policy = vec![1.0f32 / n_actions as f32; n_actions];
+
+    take_omitted_prior_stats();
+    let (_chosen, truncated) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
+
+    assert!(!truncated);
+    assert_eq!(
+        total_expansions, 1,
+        "an untruncated expansion must still be counted"
+    );
+    assert_eq!(
+        omitted_expansions, 0,
+        "an untruncated expansion reported an omission"
+    );
+    assert_eq!(
+        mass_micros, 0,
+        "an untruncated expansion reported dropped mass"
+    );
+}
+
+#[test]
+fn test_topk_truncates_at_max_children() {
     use super::backup::pick_topk_children;
+    use fxhash::FxHashSet;
+    use mantis_core::board::HALF;
 
     // 600 unique cells split between 200 in-window (high priors) and
     // 400 out-of-window (sort prior 0.0). Top K will be drawn from the
@@ -766,13 +1010,17 @@ fn test_topk_truncates_at_max_children() {
     'iw: for q in -HALF..=HALF {
         for r in -HALF..=HALF {
             cells.insert((q, r));
-            if cells.len() == 200 { break 'iw; }
+            if cells.len() == 200 {
+                break 'iw;
+            }
         }
     }
     'ow: for q in 30..=60 {
         for r in 30..=60 {
             cells.insert((q, r));
-            if cells.len() == 600 { break 'ow; }
+            if cells.len() == 600 {
+                break 'ow;
+            }
         }
     }
     assert_eq!(cells.len(), 600, "test setup must produce 600 cells");
@@ -780,37 +1028,50 @@ fn test_topk_truncates_at_max_children() {
     // Strictly increasing prior with flat_idx → unique priors for
     // every in-window cell.
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
-    let policy: Vec<f32> =
-        (0..n_actions).map(|i| (i + 1) as f32 / n_actions as f32).collect();
+    let policy: Vec<f32> = (0..n_actions)
+        .map(|i| (i + 1) as f32 / n_actions as f32)
+        .collect();
 
     let (chosen, sort_used) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
     assert!(sort_used, "600 > K must take sort path");
-    assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE,
-        "chosen must equal K, got {}", chosen.len());
+    assert_eq!(
+        chosen.len(),
+        MAX_CHILDREN_PER_NODE,
+        "chosen must equal K, got {}",
+        chosen.len()
+    );
 
     // Top K should all be in-window since out-of-window sort_prior=0.0
     // and 200 in-window cells with policy > 0 dominate.
     for &((q, r), prior) in &chosen {
         let flat = Board::window_flat_idx_at(q, r, 0, 0);
-        assert!(flat < n_actions,
-            "top-K must be drawn from in-window cells, got flat={flat} for ({q},{r})");
-        assert!(prior > 0.0,
-            "in-window cell prior must be >0 for this fixture, got {prior}");
+        assert!(
+            flat < n_actions,
+            "top-K must be drawn from in-window cells, got flat={flat} for ({q},{r})"
+        );
+        assert!(
+            prior > 0.0,
+            "in-window cell prior must be >0 for this fixture, got {prior}"
+        );
     }
 
     // With all-in-window selection and priors monotonic in flat, the
     // chosen Vec's priors must be non-increasing.
     for w in chosen.windows(2) {
-        assert!(w[0].1 >= w[1].1,
-            "priors must be non-increasing: {} then {}", w[0].1, w[1].1);
+        assert!(
+            w[0].1 >= w[1].1,
+            "priors must be non-increasing: {} then {}",
+            w[0].1,
+            w[1].1
+        );
     }
 }
 
 #[test]
 fn test_topk_tie_break_by_flat_idx() {
+    use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
-    use super::backup::pick_topk_children;
 
     // K + 1 cells inside window with identical priors → exactly one is
     // dropped. Tie-break = flat_idx asc, so the cell with the largest
@@ -823,7 +1084,9 @@ fn test_topk_tie_break_by_flat_idx() {
             let flat = Board::window_flat_idx_at(q, r, 0, 0);
             cells.insert((q, r));
             flats_inserted.push(flat);
-            if cells.len() == target { break 'outer; }
+            if cells.len() == target {
+                break 'outer;
+            }
         }
     }
     assert_eq!(cells.len(), target);
@@ -831,7 +1094,8 @@ fn test_topk_tie_break_by_flat_idx() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform_high = vec![0.5_f32; n_actions];
 
-    let (chosen, sort_used) = pick_topk_children(&cells, 0, 0, &uniform_high, BOARD_SIZE as i32, HALF);
+    let (chosen, sort_used) =
+        pick_topk_children(&cells, 0, 0, &uniform_high, BOARD_SIZE as i32, HALF);
     assert!(sort_used);
     assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE);
 
@@ -841,16 +1105,18 @@ fn test_topk_tie_break_by_flat_idx() {
         .collect();
 
     let max_flat = *flats_inserted.iter().max().unwrap();
-    assert!(!chosen_flats.contains(&max_flat),
-        "highest flat_idx must be the dropped cell under tie (max_flat={max_flat})");
+    assert!(
+        !chosen_flats.contains(&max_flat),
+        "highest flat_idx must be the dropped cell under tie (max_flat={max_flat})"
+    );
     assert_eq!(chosen_flats.len(), MAX_CHILDREN_PER_NODE);
 }
 
 #[test]
 fn test_topk_fast_path_keeps_all_when_under_cap() {
+    use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
-    use super::backup::pick_topk_children;
 
     // 50 cells, K=192 → fast path; all cells must appear in the output
     // and `sort_used` is false.
@@ -858,7 +1124,9 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
     'outer: for q in -3..=4 {
         for r in -3..=4 {
             cells.insert((q, r));
-            if cells.len() == 50 { break 'outer; }
+            if cells.len() == 50 {
+                break 'outer;
+            }
         }
     }
     assert_eq!(cells.len(), 50);
@@ -872,8 +1140,11 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
 
     let chosen_set: std::collections::HashSet<(i32, i32)> =
         chosen.iter().map(|&(coord, _)| coord).collect();
-    assert_eq!(chosen_set, cells.iter().copied().collect(),
-        "fast path must include every legal move");
+    assert_eq!(
+        chosen_set,
+        cells.iter().copied().collect(),
+        "fast path must include every legal move"
+    );
 }
 
 #[test]
@@ -883,21 +1154,29 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
     // order. A `legal_moves_set` capacity-reserve changed the hashbrown table
     // layout; before the fix the `n_legal <= K` path collected children in raw
     // iteration order, leaking that layout into MCTS.
+    use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
-    use super::backup::pick_topk_children;
 
-    let coords: Vec<(i32, i32)> =
-        (-3..=3).flat_map(|q| (-3..=3).map(move |r| (q, r))).collect();
+    let coords: Vec<(i32, i32)> = (-3..=3)
+        .flat_map(|q| (-3..=3).map(move |r| (q, r)))
+        .collect();
 
     // Same elements, deliberately different table capacities → the two sets
     // iterate in different orders (exactly the layout-drift scenario).
     let mut set_small: FxHashSet<(i32, i32)> = FxHashSet::default();
-    for &c in &coords { set_small.insert(c); }
+    for &c in &coords {
+        set_small.insert(c);
+    }
     let mut set_large: FxHashSet<(i32, i32)> = FxHashSet::default();
     set_large.reserve(4096);
-    for &c in &coords { set_large.insert(c); }
-    assert_eq!(set_small, set_large, "the two sets must hold identical moves");
+    for &c in &coords {
+        set_large.insert(c);
+    }
+    assert_eq!(
+        set_small, set_large,
+        "the two sets must hold identical moves"
+    );
 
     // Non-uniform policy so there is a real prior ordering to canonicalize.
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
@@ -906,10 +1185,8 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         *p = ((i % 17) as f32) * 0.013;
     }
 
-    let (chosen_small, _) =
-        pick_topk_children(&set_small, 0, 0, &policy, BOARD_SIZE as i32, HALF);
-    let (chosen_large, _) =
-        pick_topk_children(&set_large, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen_small, _) = pick_topk_children(&set_small, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen_large, _) = pick_topk_children(&set_large, 0, 0, &policy, BOARD_SIZE as i32, HALF);
 
     assert_eq!(
         chosen_small, chosen_large,
@@ -917,7 +1194,6 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
          capacity / iteration order (see backup.rs fn-doc)"
     );
 }
-
 
 // ── AUDIT-1 F-02: the desync is a NAMED error, and the forced child is bounded ────────
 //
@@ -937,9 +1213,13 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
 fn desynchronised_root() -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     let mut board = Board::new();
-    board.apply_move(0, 0).expect("an empty board accepts (0, 0)");
+    board
+        .apply_move(0, 0)
+        .expect("an empty board accepts (0, 0)");
     tree.new_game(board);
-    let _leaves = tree.select_leaves(1).expect("the fresh root selects itself");
+    let _leaves = tree
+        .select_leaves(1)
+        .expect("the fresh root selects itself");
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);
 
@@ -952,7 +1232,9 @@ fn desynchronised_root() -> MCTSTree {
 #[test]
 fn a_child_pointing_at_an_occupied_cell_is_an_ERR_not_a_panic() {
     let mut tree = desynchronised_root();
-    let err = tree.select_leaves(1).expect_err("a desynchronised child must not be a panic");
+    let err = tree
+        .select_leaves(1)
+        .expect_err("a desynchronised child must not be a panic");
     assert_eq!(err.q, 0, "the error names the cell the board refused");
     assert_eq!(err.r, 0);
     assert_eq!(err.node, 0, "…and the node whose child was selected");
@@ -967,8 +1249,10 @@ fn the_failing_descent_leaves_no_virtual_loss_behind() {
     let mut tree = desynchronised_root();
     let before = tree.pool[0].virtual_loss_count;
     let _ = tree.select_leaves(1);
-    assert_eq!(tree.pool[0].virtual_loss_count, before,
-        "the root kept the virtual loss from a descent that produced no leaf");
+    assert_eq!(
+        tree.pool[0].virtual_loss_count, before,
+        "the root kept the virtual loss from a descent that produced no leaf"
+    );
 }
 
 #[test]
@@ -987,23 +1271,36 @@ fn a_forced_root_child_outside_the_roots_range_is_refused() {
     // `action_idx = u32::MAX`, which decodes to (32767, 32767), a cell an UNBOUNDED board
     // accepts. That arm produced neither a panic nor an error.
     let mut tree = setup_expanded_root();
-    let err = tree.set_forced_root_child(Some(u32::MAX)).expect_err("u32::MAX is not a child");
+    let err = tree
+        .set_forced_root_child(Some(u32::MAX))
+        .expect_err("u32::MAX is not a child");
     assert_eq!(err.child, u32::MAX);
     assert!(err.to_string().contains("not a child of the root"), "{err}");
 
     let first = tree.pool[0].first_child;
     let past_end = first + u32::from(tree.pool[0].n_children);
-    assert!(tree.set_forced_root_child(Some(past_end)).is_err(),
-        "one past the last child is still not a child");
-    assert!(tree.set_forced_root_child(Some(first)).is_ok(), "the first child IS in range");
-    assert!(tree.set_forced_root_child(None).is_ok(), "clearing is always allowed");
+    assert!(
+        tree.set_forced_root_child(Some(past_end)).is_err(),
+        "one past the last child is still not a child"
+    );
+    assert!(
+        tree.set_forced_root_child(Some(first)).is_ok(),
+        "the first child IS in range"
+    );
+    assert!(
+        tree.set_forced_root_child(None).is_ok(),
+        "clearing is always allowed"
+    );
 }
 
 #[test]
 fn a_root_with_no_children_accepts_no_forced_child_at_all() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
-    assert_eq!(tree.pool[0].n_children, 0, "an unexpanded root owns nothing");
+    assert_eq!(
+        tree.pool[0].n_children, 0,
+        "an unexpanded root owns nothing"
+    );
     assert!(tree.set_forced_root_child(Some(0)).is_err());
     assert!(tree.set_forced_root_child(Some(1)).is_err());
     assert!(tree.set_forced_root_child(None).is_ok());
@@ -1035,9 +1332,11 @@ fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {
     tree.expand_and_backup(&[vec![1.0 / n_actions as f32; n_actions]], &[0.0]);
 
     for idx in dropped {
-        assert_eq!(tree.pool[idx as usize].virtual_loss_count, 0,
+        assert_eq!(
+            tree.pool[idx as usize].virtual_loss_count, 0,
             "leaf {idx} was dropped from the batch and kept its virtual loss — its PUCT \
-             score stays depressed for the rest of the search");
+             score stays depressed for the rest of the search"
+        );
     }
 }
 
@@ -1049,7 +1348,9 @@ fn a_FULL_batch_is_unaffected_by_the_unwind() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let leaves = tree.select_leaves(2).expect("no desync");
     let n = leaves.len();
-    let policies: Vec<Vec<f32>> = (0..n).map(|_| vec![1.0 / n_actions as f32; n_actions]).collect();
+    let policies: Vec<Vec<f32>> = (0..n)
+        .map(|_| vec![1.0 / n_actions as f32; n_actions])
+        .collect();
     tree.expand_and_backup(&policies, &vec![0.0; n]);
     assert!(tree.pending.is_empty(), "every pending leaf was consumed");
 }

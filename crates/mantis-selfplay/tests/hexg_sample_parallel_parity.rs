@@ -73,6 +73,7 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
             outcome: if i % 3 == 0 { 1.0 } else { -1.0 },
             value_valid: true,
             game_length: 40,
+            game_id: -1,
         };
         buf.push_record_impl(&rec, (10 + i) as i64).expect("push");
     }

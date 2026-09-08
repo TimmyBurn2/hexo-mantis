@@ -64,6 +64,7 @@ class RecordingBuffer:
         self.capacity = capacity
         self.dense_calls: list[dict[str, Any]] = []
         self.graph_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.next_game_id_calls = 0
 
     def _record_dense(self, method: str, args: tuple, kwargs: dict) -> None:
         assert len(args) <= len(DENSE_PUSH_NAMES), f"{method}: too many positional args"
@@ -84,6 +85,16 @@ class RecordingBuffer:
 
     def push_graph_position(self, *args: Any, **kwargs: Any) -> None:
         self.graph_calls.append((args, dict(kwargs)))
+
+    def next_game_id(self) -> int:
+        """The ring's own id allocator (R345(b)(6)), which the push now calls once per GAME.
+
+        Recorded so C-02 can assert the CALL COUNT: allocating once per row would tag every
+        position as its own game, which is the untagged sentinel's behaviour with real numbers
+        in it, and no assertion on the ids alone would catch that.
+        """
+        self.next_game_id_calls += 1
+        return 900 + self.next_game_id_calls
 
 
 class RecordingRecentBuffer:
@@ -305,10 +316,17 @@ def test_dense_zero_rows_pushes_nothing(run_drain, drain_goldens):
 
 # ═══ C-02 — graph push rows ═══════════════════════════════════════════════════════════
 def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_rows_input):
-    """C-02 — PASS iff each `collect_graph_data()` row is forwarded, in order, as
-    `push_graph_position(*record, game_id=-1)` with the record objects UNCHANGED (identity —
-    the drain inspects nothing and copies nothing). FAIL = the HEXG write path drifted, or
-    the untagged-game_id ruling (-1) changed, or a row got re-materialized."""
+    """C-02 — PASS iff each `collect_graph_data()` row's leading fields are forwarded, in
+    order, with the record objects UNCHANGED (identity — the drain inspects nothing and copies
+    nothing), and its TRAILING runner game id is translated to a buffer-allocated one.
+
+    THE `game_id=-1` PIN IS GONE, and R345(b)(6) is why: every self-play row used to be pushed
+    untagged, which made `sample_indices`'s same-game dedupe inert on all real data. What is
+    pinned instead is the translation — one allocation per GAME, not per row — because that is
+    the property an implementation can get wrong while still passing "the ids are not -1".
+
+    FAIL = the HEXG write path drifted, a row got re-materialized, or the allocation moved
+    off the game boundary."""
     pool, _ = run_drain(is_graph=True)
     golden = _variant(drain_goldens, "graph")
 
@@ -319,14 +337,25 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
 
     for i, (args, kwargs) in enumerate(pool.replay_buffer.graph_calls):
         expected_row = graph_rows_input[i]
-        assert kwargs == {"game_id": -1}, f"row {i}: game_id must be the -1 untagged sentinel"
-        assert len(args) == len(expected_row), f"row {i}: arity changed"
+        assert len(args) == len(expected_row) - 1, (
+            f"row {i}: arity changed — the trailing game id must be consumed, not forwarded"
+        )
         _assert_array(args[0], graph_pushed[f"push_graph_position_{i}_arg0"], f"row{i}.arg0")
         _assert_array(args[1], graph_pushed[f"push_graph_position_{i}_arg1"], f"row{i}.arg1")
         assert args[2] == expected_row[2] and args[3] == expected_row[3]
         assert args[0] is expected_row[0] and args[1] is expected_row[1], (
             f"row {i}: arrays were re-materialized — the push path must forward, not copy"
         )
+
+    pushed_ids = [kw["game_id"] for _a, kw in pool.replay_buffer.graph_calls]
+    assert pushed_ids[0] == pushed_ids[1], (
+        f"rows 0 and 1 are the same runner game and got different ids: {pushed_ids}"
+    )
+    assert pushed_ids[2] != pushed_ids[0], f"two games collapsed to one id: {pushed_ids}"
+    assert pool.replay_buffer.next_game_id_calls == 2, (
+        f"the buffer allocated {pool.replay_buffer.next_game_id_calls} ids for 2 games — "
+        "allocation is per ROW, which tags every position as its own game"
+    )
 
 
 # ═══ C-03 — the game_complete event payload golden ════════════════════════════════════
