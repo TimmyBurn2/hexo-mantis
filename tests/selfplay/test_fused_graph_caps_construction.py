@@ -231,6 +231,7 @@ def _round_spec_base() -> dict:
         kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
     )
 

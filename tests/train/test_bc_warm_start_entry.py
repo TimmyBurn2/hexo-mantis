@@ -216,7 +216,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
                 expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2, c_visit=50.0, c_scale=1.0,
             )
 
-        winner, plies, moves, terminal, _adj = _play_one_game(
+        winner, plies, moves, terminal, _adj, _stats = _play_one_game(
             _player(), _player(), [],
             candidate_color=1,
             board_factory=lambda: Board.with_encoding_name(_ENC),

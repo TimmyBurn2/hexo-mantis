@@ -159,6 +159,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
         kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=10,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=_CAPS,
         inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
     )

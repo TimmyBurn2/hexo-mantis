@@ -560,7 +560,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                                        eval_final_drain_safety_factor=1.0,
                                        eval_final_drain_hard_cap_sec=0.05,
                                        terminal_eval_hard_cap_sec=0.05),
-        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool,
+        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool, game_record_dir=str(spool) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),

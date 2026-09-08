@@ -191,6 +191,7 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=None,
         inference_batching=InferenceBatchingSpec(
@@ -225,9 +226,31 @@ def _phase_of(kwargs: dict[str, Any]) -> str:
 
     Reading the phase from the object the production code already built beats threading a
     label through the spy: a label the test invents could agree with the wrong call.
-    """
-    sink = kwargs["record_sink"]
-    return sink.__closure__[0].cell_contents if sink.__closure__ else "?"
+
+    R344(b) put a FAN-OUT between the two — `record_sink` is now `_both(progress.sink(...),
+    games.sink(...))`, whose own closure holds a tuple of sinks rather than a phase — so the
+    walk descends through nested closures and tuples to the first string it finds. Reading
+    cell 0 of the outermost closure was never a contract, only the shape that happened to
+    hold; this states what is actually being asked for."""
+    return _first_str_in_closure(kwargs["record_sink"])
+
+
+def _first_str_in_closure(value: Any, depth: int = 0) -> str:
+    if depth > 4:                                    # a wrapper stack this deep is a defect
+        return "?"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, tuple):
+        for item in value:
+            found = _first_str_in_closure(item, depth + 1)
+            if found != "?":
+                return found
+        return "?"
+    for cell in getattr(value, "__closure__", None) or ():
+        found = _first_str_in_closure(cell.cell_contents, depth + 1)
+        if found != "?":
+            return found
+    return "?"
 
 
 @pytest.mark.parametrize("armed", [1, 3])

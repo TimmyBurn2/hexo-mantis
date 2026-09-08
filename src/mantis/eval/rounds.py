@@ -32,6 +32,7 @@ EVAL_CONCURRENCY_ROW = "eval.concurrency"
 
 __all__ = [
     "EVAL_CONCURRENCY_ROW",
+    "GameRecordTarget",
     "RoundSpec",
     "build_round_result",
     "resolve_ladder_rungs",
@@ -72,6 +73,23 @@ def _rehydrate(cls: Any, payload: Any) -> Any:
     return cls(**payload)
 
 
+@dataclass(frozen=True)
+class GameRecordTarget:
+    """Where the eval CHILD writes its game records (R344(b)).
+
+    Paths-and-primitives, in the shape the three posture specs beside it already use: the
+    parent resolves it once and it crosses the process seam as data. `None` on `RoundSpec`
+    means this round records no games — the state every test-constructed spec is in, and one
+    production must never be in, which is why the pipeline's supply of it is pinned.
+
+    The child claims its OWN shard segment under `record_dir` (`O_CREAT|O_EXCL`), so a round
+    child and the live trainer writing into one directory can never share a file.
+    """
+
+    record_dir: str
+    run_id: str
+
+
 #: The optional resolver-produced specs `from_dict` must REHYDRATE, as DATA rather than as
 #: three transcribed statements. One loop over one table is what keeps the set closed: a field
 #: added to `RoundSpec` and forgotten here arrives in the child as a raw mapping and fails at
@@ -82,6 +100,7 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     ("strength_floor", StrengthFloorSpec),
     ("fused_graph_caps", FusedGraphCapsSpec),
     ("inference_batching", InferenceBatchingSpec),
+    ("game_record", GameRecordTarget),
 )
 
 
@@ -142,6 +161,10 @@ class RoundSpec:
     ladder_bootstrap_resamples: int
     ladder_bootstrap_ci_level: float
     ladder_bootstrap_seed: int
+    #: R344(b): where this round's games are WRITTEN, or `None` for a round that records
+    #: none. Same shape and same reason as the three postures below — resolved once in the
+    #: parent, carried across the seam as data, rehydrated by the table above.
+    game_record: GameRecordTarget | None
     #: The two early-strength eval postures (F-R-P2B-5), resolved ONCE in the parent by
     #: `mantis.config.resolve.eval_posture` and carried across the process seam as plain
     #: dataclasses — paths-and-primitives still holds, since both are frozen records of

@@ -625,7 +625,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 11
+     "plies": 11
     },
     {
      "moves": [
@@ -647,7 +647,7 @@
       ]
      ],
      "winner_code": 2,
-     "game_length": 24
+     "plies": 24
     },
     {
      "moves": [
@@ -665,12 +665,12 @@
       ]
      ],
      "winner_code": 0,
-     "game_length": 250
+     "plies": 250
     },
     {
      "moves": [],
      "winner_code": 0,
-     "game_length": 30
+     "plies": 30
     },
     {
      "moves": [
@@ -692,7 +692,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 15
+     "plies": 15
     },
     {
      "moves": [
@@ -710,7 +710,7 @@
       ]
      ],
      "winner_code": 3,
-     "game_length": 9
+     "plies": 9
     }
    ],
    "log_calls": [
@@ -1687,7 +1687,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 11
+     "plies": 11
     },
     {
      "moves": [
@@ -1709,7 +1709,7 @@
       ]
      ],
      "winner_code": 2,
-     "game_length": 24
+     "plies": 24
     },
     {
      "moves": [
@@ -1727,12 +1727,12 @@
       ]
      ],
      "winner_code": 0,
-     "game_length": 250
+     "plies": 250
     },
     {
      "moves": [],
      "winner_code": 0,
-     "game_length": 30
+     "plies": 30
     },
     {
      "moves": [
@@ -1754,7 +1754,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 15
+     "plies": 15
     },
     {
      "moves": [
@@ -1772,7 +1772,7 @@
       ]
      ],
      "winner_code": 3,
-     "game_length": 9
+     "plies": 9
     }
    ],
    "log_calls": [
@@ -2501,7 +2501,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 11
+     "plies": 11
     },
     {
      "moves": [
@@ -2523,7 +2523,7 @@
       ]
      ],
      "winner_code": 2,
-     "game_length": 24
+     "plies": 24
     },
     {
      "moves": [
@@ -2541,12 +2541,12 @@
       ]
      ],
      "winner_code": 0,
-     "game_length": 250
+     "plies": 250
     },
     {
      "moves": [],
      "winner_code": 0,
-     "game_length": 30
+     "plies": 30
     },
     {
      "moves": [
@@ -2568,7 +2568,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 15
+     "plies": 15
     },
     {
      "moves": [
@@ -2586,7 +2586,7 @@
       ]
      ],
      "winner_code": 3,
-     "game_length": 9
+     "plies": 9
     }
    ],
    "log_calls": [
@@ -3310,7 +3310,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 11
+     "plies": 11
     },
     {
      "moves": [
@@ -3332,7 +3332,7 @@
       ]
      ],
      "winner_code": 2,
-     "game_length": 24
+     "plies": 24
     },
     {
      "moves": [
@@ -3350,12 +3350,12 @@
       ]
      ],
      "winner_code": 0,
-     "game_length": 250
+     "plies": 250
     },
     {
      "moves": [],
      "winner_code": 0,
-     "game_length": 30
+     "plies": 30
     },
     {
      "moves": [
@@ -3377,7 +3377,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 15
+     "plies": 15
     },
     {
      "moves": [
@@ -3395,7 +3395,7 @@
       ]
      ],
      "winner_code": 3,
-     "game_length": 9
+     "plies": 9
     }
    ],
    "log_calls": [
@@ -4021,7 +4021,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 11
+     "plies": 11
     },
     {
      "moves": [
@@ -4043,7 +4043,7 @@
       ]
      ],
      "winner_code": 2,
-     "game_length": 24
+     "plies": 24
     },
     {
      "moves": [
@@ -4061,12 +4061,12 @@
       ]
      ],
      "winner_code": 0,
-     "game_length": 250
+     "plies": 250
     },
     {
      "moves": [],
      "winner_code": 0,
-     "game_length": 30
+     "plies": 30
     },
     {
      "moves": [
@@ -4088,7 +4088,7 @@
       ]
      ],
      "winner_code": 1,
-     "game_length": 15
+     "plies": 15
     },
     {
      "moves": [
@@ -4106,7 +4106,7 @@
       ]
      ],
      "winner_code": 3,
-     "game_length": 9
+     "plies": 9
     }
    ],
    "log_calls": [

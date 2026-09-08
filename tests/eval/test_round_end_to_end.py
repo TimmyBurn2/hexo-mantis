@@ -137,7 +137,7 @@ def _build_pipeline(tmp_path: Path):
         ),
         encoding="v6",
         run_id="oracle_e2e_run",
-        spool_dir=spool_dir,
+        spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
         # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in the

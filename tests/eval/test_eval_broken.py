@@ -119,7 +119,7 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: EvalConfig | None = None, **ov
         max_plies=128,
         c_visit=50.0, c_scale=1.0,
         run_id="oracle_test_run",
-        spool_dir=spool_dir,
+        spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
         # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in

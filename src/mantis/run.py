@@ -118,6 +118,7 @@ from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.monitor.config import MonitorConfig
+from mantis.monitor.game_recorder import GameRecorder
 from mantis.monitor.logging_setup import configure_logging
 from mantis.selfplay.pool import WorkerPool
 from mantis.train.actor_sync import ActorSync
@@ -628,13 +629,22 @@ def build_run_collaborators(
     if checkpoint_path is not None:
         with _seam("restore_resume_state"):
             resume_state = _restore_resume_state(buffer, checkpoint_path)
+    # R344(b) — THE GAME RECORD'S SELF-PLAY PRODUCER, CONSTRUCTED BEFORE THE POOL THAT FEEDS
+    # IT. `RecorderLike` has been injected and defaulted to `NullRecorder` since WP13-A; this
+    # is its first concrete implementation, so from step 0 every self-play game is written.
+    # Construction here rather than lazily on the first game because an un-openable store is a
+    # loud STARTUP failure — the `JsonlEventSink` posture — and a run that cannot write its
+    # games should say so before it plays 25 000 of them.
+    with _seam("GameRecorder"):
+        recorder = GameRecorder(record_dir=log_dir / "games", run_id=config.run_id,
+                                seed=config.seed)
     with _seam("WorkerPool"):
         # R-SELFPLAYCONFIG-SCHEMA (unchanged debt, now cited from the builder rather than
         # from an injection-first disclaimer): the pool still builds only via the legacy
         # hparams dict path elsewhere, so it is handed `config.model_dump()`.
         pool = WorkerPool(model=trainer.model, config=config.model_dump(), device=device,
                           replay_buffer=buffer, arch=trainer.arch, sink=_DeferredSink(),
-                          heartbeat=_DeferredHeartbeat())
+                          recorder=recorder, heartbeat=_DeferredHeartbeat())
     return RunCollaborators(trainer=trainer, pool=pool, buffer=buffer, log_dir=log_dir,
                             checkpoint_dir=checkpoint_dir, resume_state=resume_state)
 
@@ -1134,6 +1144,10 @@ def compose_run(
                     # not the player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
+                    # R344(b): the SAME directory the self-play recorder writes into, named
+                    # once here. The eval child claims its own shard segment inside it, so
+                    # one run's four channels land in one store a viewer reads as one run.
+                    game_record_dir=log_dir / "games",
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(
                         anchor_state=resolved_anchor,

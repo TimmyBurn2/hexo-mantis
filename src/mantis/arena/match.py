@@ -1,3 +1,8 @@
+# >300 justify (R8): one game record and the loop that produces it. `_play_one_game`,
+# `_record_one` and the two concurrency arms of `play_paired_match` share ONE record
+# construction on purpose — two copies would be two authorities over `trajectory_hash`,
+# LAW-04's dedupe input — so the dataclass, the loop that fills it and the two callers that
+# must not diverge stay in one file.
 """play_paired_match — drives compound-turn paired games on the engine Board (design §a.2
 match.py). ARGMAX ONLY: there is no softmax-knob parameter anywhere in this signature —
 structurally unrepresentable (dispatch item 7).
@@ -50,6 +55,11 @@ class GameRecord:
     #: i.e. `None` on every game every shipped config plays. It is `None` on non-capped games
     #: even under an armed adjudicator, because those were decided by the rules.
     adjudication: PlyCapVerdict | None
+    #: R344(b) — per-position search stats for the plies the CANDIDATE played, or `None` when
+    #: no player in the game exposed a root (two plain bots, a stub head). `None` and `()` are
+    #: different facts and both occur: `None` is "nobody could produce these", `()` is "the
+    #: candidate never moved", and a viewer must not draw a heatmap for either.
+    search_stats: tuple[dict[str, Any], ...] | None
 
 
 def _trajectory_hash(moves: Iterable[tuple[int, int]]) -> str:
@@ -90,7 +100,7 @@ def _play_one_game(
     board_factory: Callable[[], Any],
     max_plies: int,
     adjudicator: PlyCapAdjudicator | None = None,
-) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None]:
+) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None, tuple[dict[str, Any], ...] | None]:
     """Play one game from `opening_moves`; return
     `(winner, plies, all_moves, terminal, adjudication)`.
 
@@ -114,6 +124,11 @@ def _play_one_game(
         board.apply_move(q, r)
         moves.append((q, r))
 
+    #: Collected iff a mover EXPOSES a root — structural, not a flag. A knob here would be a
+    #: way to silently turn the record's stats half off, and the ruling asks for them on every
+    #: eval-channel game; a bot that cannot produce them yields `None`, which says so.
+    stats: list[dict[str, Any]] = []
+    saw_a_root = False
     while (
         not board.check_win()
         and board.legal_move_count() > 0
@@ -122,6 +137,20 @@ def _play_one_game(
         current = board.current_player
         mover = candidate_player if current == candidate_color else opponent_bot
         q, r = mover.select_move(board)
+        root = getattr(mover, "last_root", None)
+        if root is not None:
+            saw_a_root = True
+            root_value, children = root
+            # ONLY the visited children. A zero-visit child is part of the distribution and
+            # carries none of its information, while at radius 8 it is most of the bytes — so
+            # the record stores the support and a reader takes absence as zero, which is what
+            # a visit distribution means.
+            stats.append({
+                "ply": len(moves),
+                "root_value": root_value,
+                "visits": [[int(c[0][0]), int(c[0][1]), int(c[3])]
+                           for c in children if c[3] > 0],
+            })
         board.apply_move(q, r)
         moves.append((q, r))
 
@@ -146,7 +175,8 @@ def _play_one_game(
     else:
         winner = "draw"
         terminal = TERMINAL_EXHAUSTED
-    return winner, plies, tuple(moves), terminal, adjudication
+    return (winner, plies, tuple(moves), terminal, adjudication,
+            tuple(stats) if saw_a_root else None)
 
 
 def _record_one(
@@ -169,7 +199,7 @@ def _record_one(
         Exception: whatever the players' `select_move` or the board raises; nothing is caught
             here, so a defect in one game is not converted into a silently missing record.
     """
-    winner, plies, moves, terminal, adjudication = _play_one_game(
+    winner, plies, moves, terminal, adjudication, stats = _play_one_game(
         candidate_player, opponent_bot, list(opening.moves),
         candidate_color=candidate_color, board_factory=board_factory,
         max_plies=max_plies, adjudicator=adjudicator,
@@ -184,6 +214,7 @@ def _record_one(
         moves=moves,
         terminal=terminal,
         adjudication=adjudication,
+        search_stats=stats,
     )
 
 

@@ -95,6 +95,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=floor,
         fused_graph_caps=None,
         inference_batching=InferenceBatchingSpec(
@@ -108,7 +109,7 @@ def _record(regime_key: RegimeKey, *, winner: str, terminal: str, idx: int) -> G
         regime_key=regime_key, opening_id=f"synthetic_{idx}",
         colors={"candidate": 1, "opponent": -1},
         trajectory_hash=f"{idx:064x}", winner=winner, plies=128, moves=(),
-        terminal=terminal, adjudication=None,
+        terminal=terminal, adjudication=None, search_stats=None,
     )
 
 

@@ -219,10 +219,18 @@ def run_stats_loop(pool: Any) -> None:
                 plies, winner, game_length, pool._sims_per_sec,
                 _ext_count, _ext_total, _ext_frac,
             )
+            # R344(b): the injected recorder is the GAME RECORD's self-play producer. It
+            # is handed the SAME facts `game_complete` carries, from the same locals, so the
+            # event stream and the record store can never disagree about one game.
             pool._recorder.maybe_record(
+                game_id=game_complete_payload["game_id"],
                 moves=move_history,
                 winner_code=winner_code,
-                game_length=plies,
+                plies=plies,
+                worker_id=worker_id,
+                terminal_reason=terminal_reason_name,
+                game_id_byte_hash=_game_id_byte_hash,
+                served_sims=int(pool._effective_sims_per_move),
             )
 
         # Buffer stats at ~5 s resolution. `_last_buf_emit` is a LOCAL of this loop: a

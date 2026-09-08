@@ -254,7 +254,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
             final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
         ),
-        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir,
+        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in the
         # parent and carries it to every `RoundSpec` — the eval child is a SECOND

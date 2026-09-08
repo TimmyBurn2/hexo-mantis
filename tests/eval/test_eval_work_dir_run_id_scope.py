@@ -49,7 +49,7 @@ def _pipeline(tmp_path: Path, run_id: str, spool_name: str = "spool") -> Any:
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
-        encoding=cfg.identity.encoding, run_id=run_id, spool_dir=spool,
+        encoding=cfg.identity.encoding, run_id=run_id, spool_dir=spool, game_record_dir=str(spool) + "_games",
         ladder_state_path=tmp_path / f"ladder_{run_id}.json", promotion=None, sink=None,
         fused_graph_caps=None,
         inference_batching=None,

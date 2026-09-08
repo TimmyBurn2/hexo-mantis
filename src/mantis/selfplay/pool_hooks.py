@@ -57,12 +57,30 @@ HeartbeatFn = Callable[[str], None]
 
 class RecorderLike(Protocol):
     """The replay-recorder seam. A concrete recorder is a display-surface concern and
-    does not live here; the pool talks to this shape and defaults to `NullRecorder`."""
+    does not live here; the pool talks to this shape and defaults to `NullRecorder`.
+
+    R344(b) FILLED IT — `mantis.monitor.game_recorder.GameRecorder` is the first concrete
+    implementation, and the signature widened to carry what a GAME RECORD needs and a replay
+    file did not: which worker played it, how it ended, its id and its dedupe hash, and the
+    sims each move was served. `game_length` became `plies` in the same act because that is
+    what the one call site always passed (`game_length=plies`) — the old name described a
+    quantity the drain computes separately as `(plies + 1) // 2`, so a reader of this
+    Protocol was being told the wrong unit (LAW-03).
+    """
 
     def set_step(self, step: int) -> None: ...
 
     def maybe_record(
-        self, *, moves: list[tuple[int, int]], winner_code: int, game_length: int
+        self,
+        *,
+        game_id: str,
+        moves: list[tuple[int, int]],
+        winner_code: int,
+        plies: int,
+        worker_id: int,
+        terminal_reason: str,
+        game_id_byte_hash: str,
+        served_sims: int,
     ) -> None: ...
 
     def latest_replay_path(self) -> Path | None: ...
@@ -100,7 +118,16 @@ class NullRecorder:
         return None
 
     def maybe_record(
-        self, *, moves: list[tuple[int, int]], winner_code: int, game_length: int
+        self,
+        *,
+        game_id: str,
+        moves: list[tuple[int, int]],
+        winner_code: int,
+        plies: int,
+        worker_id: int,
+        terminal_reason: str,
+        game_id_byte_hash: str,
+        served_sims: int,
     ) -> None:
         return None
 

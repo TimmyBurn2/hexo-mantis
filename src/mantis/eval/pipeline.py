@@ -44,6 +44,7 @@ from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContrac
 from mantis.eval.ladder import LadderState
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import (
+    GameRecordTarget,
     GateSpec,
     RoundSpec,
     RungJob,
@@ -435,6 +436,7 @@ class EvalPipeline:
         leaf_build_threads: int = 1,
         run_id: str,
         spool_dir: str | Path,
+        game_record_dir: str | Path,
         allocator_posture: str | None = None,
         ladder_state_path: str | Path,
         promotion: DeployTagHooks,
@@ -518,6 +520,11 @@ class EvalPipeline:
         self._run_id = run_id
         self._spool_dir = Path(spool_dir)
         self._spool_dir.mkdir(parents=True, exist_ok=True)
+        #: R344(b): the run's game-record directory, THREADED from the composition root
+        #: rather than derived from `spool_dir.parent`. Deriving it would make this a second
+        #: authority for a path `mantis.run` already owns, and the two would agree until the
+        #: day one of them moved.
+        self._game_record_dir = Path(game_record_dir)
         # Spec/result/progress sidecar files live in a SIBLING directory, never nested
         # under spool_dir: spool_dir holds ONLY model snapshot (.pt) files — the LAW-12
         # one-loader carve-out this WP pins (test_snapshots_are_not_checkpoints walks
@@ -842,6 +849,8 @@ class EvalPipeline:
             ladder_bootstrap_resamples=cfg.ladder.bootstrap_resamples,
             ladder_bootstrap_ci_level=cfg.ladder.bootstrap_ci_level,
             ladder_bootstrap_seed=cfg.ladder.bootstrap_seed,
+            game_record=GameRecordTarget(record_dir=str(self._game_record_dir),
+                                        run_id=self._run_id),
             # The two early-strength postures, resolved through their ONE read path (R1/LAW-08)
             # and carried to the child. Both are `None` for every committed config.
             ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
@@ -1395,6 +1404,7 @@ def build_eval_pipeline(
     c_scale: float,
     run_id: str,
     spool_dir: str | Path,
+    game_record_dir: str | Path,
     ladder_state_path: str | Path,
     promotion: DeployTagHooks,
     leaf_build_threads: int = 1,
@@ -1415,7 +1425,8 @@ def build_eval_pipeline(
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,
-        spool_dir=spool_dir, ladder_state_path=ladder_state_path, promotion=promotion,
+        spool_dir=spool_dir, game_record_dir=game_record_dir,
+        ladder_state_path=ladder_state_path, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,
     )
 

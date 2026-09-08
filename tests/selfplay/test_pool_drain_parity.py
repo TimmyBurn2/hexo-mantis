@@ -516,17 +516,34 @@ def test_heartbeat_emission_at_drain(run_drain):
 
 
 # ═══ recorder seam (captured alongside C-03; the DV-4 no-op-default collaborator) ══════
+#: Every kwarg `maybe_record` is called with, asserted as a SET so drift reds in BOTH
+#: directions — a dropped field and a smuggled one. Only the golden-valued subset is
+#: compared by value below: `game_id` is a fresh uuid4 per game and can never be a golden.
+_RECORDER_KWARGS = {
+    "game_id", "moves", "winner_code", "plies", "worker_id", "terminal_reason",
+    "game_id_byte_hash", "served_sims",
+}
+
+
 def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
     """C-03 (recorder arm) — PASS iff `recorder.maybe_record` is called once per drained game
-    with the captured moves / winner_code / game_length. FAIL = the replay-recorder seam
-    (DV-4's injected collaborator) silently stops seeing games."""
+    with the captured moves / winner_code / plies. FAIL = the replay-recorder seam
+    (DV-4's injected collaborator) silently stops seeing games.
+
+    R344(b) WIDENED the seam and the golden moved with it: `game_length` was RENAMED to
+    `plies` carrying the same values, because `game_length=plies` is what this call site
+    always passed while the drain computes a real game length separately as `(plies + 1) //
+    2` — the golden was recording plies under a name that means something else (LAW-03). The
+    seam is now this run's GAME RECORD producer, so a silent stop here is not a lost display
+    surface any more; it is a run that plays 25 000 games and writes none of them."""
     pool, _ = run_drain()
     expected = _variant(drain_goldens, "dense_5s_crossed")["recorder_calls"]
 
     assert len(pool._recorder.records) == len(expected) == 6
     for i, (actual, want) in enumerate(
             zip(pool._recorder.records, expected, strict=True)):
-        assert set(actual) == set(want), f"recorder call {i}: kwarg set drift"
+        assert set(actual) == _RECORDER_KWARGS, f"recorder call {i}: kwarg set drift"
+        assert set(want) <= set(actual), f"recorder call {i}: golden field missing"
         assert [list(m) for m in actual["moves"]] == want["moves"], f"recorder call {i}: moves"
         assert actual["winner_code"] == want["winner_code"]
-        assert actual["game_length"] == want["game_length"]
+        assert actual["plies"] == want["plies"]

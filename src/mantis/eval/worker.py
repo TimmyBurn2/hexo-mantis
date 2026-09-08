@@ -44,8 +44,9 @@ from mantis.eval.aggregate import aggregate_gate, aggregate_rung
 from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
-from mantis.eval.rounds import RoundSpec, RungJob
+from mantis.eval.rounds import GameRecordTarget, RoundSpec, RungJob
 from mantis.eval.snapshot import load_model_snapshot
+from mantis.monitor.game_record import GameRecordWriter, eval_record, seat_result
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 #: confirm-phase opening seed offset (deploy_strength_eval.py:519 parity) — the confirm
@@ -206,6 +207,78 @@ class _RoundProgress:
             )
 
 
+class _RoundGameRecords:
+    """The eval channels' GAME-RECORD-1 producer (R344(b)).
+
+    SEPARATE FROM `_RoundProgress` ON PURPOSE, and the separation is a property of that class
+    rather than a preference: its docstring states *"PLAIN COUNTERS, LABELS AND TIMESTAMPS
+    ONLY — no moves, no positions, no trajectory hash … nothing here CAN carry a position, so
+    there is nothing to redact."* Moves are exactly what a game record is for, so putting
+    them in that file would delete a discipline it satisfies by construction. Two files, two
+    contracts.
+
+    `None` for `target` is the no-op arm — the state every test-built `RoundSpec` is in.
+    """
+
+    def __init__(self, target: GameRecordTarget | None, *, round_id: str, step: int) -> None:
+        self._writer = (
+            None if target is None
+            else GameRecordWriter(record_dir=target.record_dir, run_id=target.run_id)
+        )
+        self._run_id = "" if target is None else target.run_id
+        self._round_id = round_id
+        self._step = int(step)
+        self._games = 0
+
+    def sink(
+        self, phase: str, *, channel: str, rung: str, served_sims: int, seed: int
+    ) -> Callable[[Any], None]:
+        """A `play_paired_match(record_sink=...)` callable for one block of the round.
+
+        `channel` is the ruling's own vocabulary and is passed rather than derived from
+        `phase`: the gate's two phases are one channel and the floor's two are another, so a
+        phase->channel map here would be a second place the round's shape is written down.
+        """
+        def _record(game_record: Any) -> None:
+            if self._writer is None:
+                return
+            self._games += 1
+            colour = int(game_record.colors["candidate"])
+            self._writer.write(eval_record(
+                # DETERMINISTIC, unlike self-play's uuid4: an eval game is identified by
+                # where it sits in a round, so a reader who has the round's logs can name
+                # the game those logs are about.
+                game_id=f"{self._round_id}_{phase}_{self._games:05d}",
+                run_id=self._run_id, step=self._step, channel=channel, rung=rung,
+                phase=phase, game_index=self._games,
+                moves=game_record.moves,
+                result=seat_result(game_record.winner, colour),
+                plies=int(game_record.plies), termination=str(game_record.terminal),
+                candidate_color=colour, seed=seed, served_sims=served_sims,
+                trajectory_hash=getattr(game_record, "trajectory_hash", None),
+                search_stats=getattr(game_record, "search_stats", None),
+            ))
+        return _record
+
+    def close(self) -> None:
+        if self._writer is not None:
+            self._writer.close()
+
+    @property
+    def games_written(self) -> int:
+        return 0 if self._writer is None else self._writer.games_written
+
+
+def _both(*sinks: Callable[[Any], None]) -> Callable[[Any], None]:
+    """One `record_sink` that feeds several. `play_paired_match` calls its sink in LOOP
+    ORDER under every concurrency, so both consumers see the same games in the same order —
+    which is what lets a progress row and a game record be matched up after the fact."""
+    def _fan(record: Any) -> None:
+        for sink in sinks:
+            sink(record)
+    return _fan
+
+
 def _agg_record(game_record: Any) -> dict[str, Any]:
     """Arena `GameRecord` -> the aggregate.py record convention `{p1,p2,winner,moves,
     regime_key}` (p1 == candidate always, by this worker's own construction)."""
@@ -331,6 +404,7 @@ def _play_floor_probe(
     spec: RoundSpec, probe_games: int, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
     progress: _RoundProgress,
+    games: _RoundGameRecords,
 ) -> list:
     """Play the strength-floor probe: `probe_games` games against the CHEAPEST opponent.
 
@@ -359,7 +433,7 @@ def _play_floor_probe(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("floor_probe"), adjudicator=adjudicator, max_plies=spec.max_plies,
+        board_factory=board_factory, record_sink=_both(progress.sink("floor_probe"), games.sink("floor_probe", channel="random_floor", rung="random", served_sims=spec.random_model_sims, seed=spec.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return list(records[:probe_games])
 
@@ -372,6 +446,7 @@ def _play_gate_block(
     encoding_spec: EncodingSpec,
     adjudicator: PlyCapAdjudicator | None,
     progress: _RoundProgress,
+    games: _RoundGameRecords,
 ) -> dict | None:
     """The gate block: candidate vs the best anchor, deploy-matched, screen -> confirm
     escalation (`should_escalate`, the SINGLE lower-bound test). Returns the raw
@@ -445,7 +520,7 @@ def _play_gate_block(
         )
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
-            board_factory=board_factory, record_sink=progress.sink("gate_screen"), adjudicator=adjudicator, max_plies=spec.max_plies,
+            board_factory=board_factory, record_sink=_both(progress.sink("gate_screen"), games.sink("gate_screen", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
             player_factory=_pair, concurrency=spec.concurrency,
         )
         screen_agg = [_agg_record(r) for r in screen_records]
@@ -460,7 +535,7 @@ def _play_gate_block(
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
-                board_factory=board_factory, record_sink=progress.sink("gate_confirm"), adjudicator=adjudicator, max_plies=spec.max_plies,
+                board_factory=board_factory, record_sink=_both(progress.sink("gate_confirm"), games.sink("gate_confirm", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base + _CONFIRM_SEED_OFFSET)), adjudicator=adjudicator, max_plies=spec.max_plies,
                 player_factory=_pair, concurrency=spec.concurrency,
             )
             confirm_agg = [_agg_record(r) for r in confirm_records]
@@ -481,6 +556,7 @@ def _play_rung_block(
     spec: RoundSpec, rung_job: RungJob, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
     progress: _RoundProgress,
+    games: _RoundGameRecords,
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
@@ -507,7 +583,7 @@ def _play_rung_block(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("rung"), adjudicator=adjudicator, max_plies=spec.max_plies,
+        board_factory=board_factory, record_sink=_both(progress.sink("rung"), games.sink("rung", channel="external", rung=rung_job.name, served_sims=_model_sims_for_kind(spec, rung_job.bot), seed=spec.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 
@@ -516,6 +592,7 @@ def _play_random_floor(
     spec: RoundSpec, candidate_engine: LocalInferenceEngine, board_factory,
     *, encoding_spec: EncodingSpec, adjudicator: PlyCapAdjudicator | None,
     progress: _RoundProgress,
+    games: _RoundGameRecords,
 ) -> list[dict[str, Any]]:
     if spec.random_floor_games <= 0:
         return []
@@ -543,7 +620,7 @@ def _play_random_floor(
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
-        board_factory=board_factory, record_sink=progress.sink("random_floor"), adjudicator=adjudicator, max_plies=spec.max_plies,
+        board_factory=board_factory, record_sink=_both(progress.sink("random_floor"), games.sink("random_floor", channel="random_floor", rung="random", served_sims=spec.random_model_sims, seed=spec.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
     )
     return [_agg_record(r) for r in records[: spec.random_floor_games]]
 
@@ -613,6 +690,10 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
     # R319(e)(ii): per-game progress, written as the round plays. Constructed HERE, beside the
     # memory probe, because both are round-scoped observability the phases below share.
     progress = _RoundProgress(spec.progress_path)
+    # R344(b): the round's game records, beside the progress file and deliberately not in it
+    # (see `_RoundGameRecords`). Constructed here so a claim failure is loud at round START
+    # rather than on the round's first finished game.
+    games = _RoundGameRecords(spec.game_record, round_id=spec.round_id, step=spec.step)
     probe.mark("round_start")
 
     # ONE resolution of the round's DECLARED encoding. Board geometry and the inference
@@ -656,7 +737,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         if spec.strength_floor is not None:
             probe_records = _play_floor_probe(
                 spec, spec.strength_floor.probe_games, candidate_engine, board_factory,
-                encoding_spec=enc_spec, adjudicator=adjudicator, progress=progress,
+                encoding_spec=enc_spec, adjudicator=adjudicator, progress=progress, games=games,
             )
             verdict = evaluate_strength_floor(probe_records, spec.strength_floor)
             floor_payload = verdict.as_payload()
@@ -676,7 +757,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
         gate_records = _play_gate_block(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
-            adjudicator=adjudicator, progress=progress,
+            adjudicator=adjudicator, progress=progress, games=games,
         )
         # The one phase that puts a SECOND model and a SECOND engine on the card, and the one
         # that is skipped WHOLE while there is no anchor. Marked whichever branch it took, so
@@ -702,7 +783,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             try:
                 records = _play_rung_block(
                     spec, rung_job, candidate_engine, board_factory, encoding_spec=enc_spec,
-                    adjudicator=adjudicator, progress=progress,
+                    adjudicator=adjudicator, progress=progress, games=games,
                 )
             except RungUnresolvable as exc:
                 skipped_rungs.append({"rung": rung_job.name, "reason": exc.reason})
@@ -731,7 +812,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
 
         random_records = _play_random_floor(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
-            adjudicator=adjudicator, progress=progress,
+            adjudicator=adjudicator, progress=progress, games=games,
         )
         probe.mark("random_floor")
         random_agg = (
@@ -758,6 +839,11 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             device_memory=probe.payload(),
         )
     finally:
+        # The shard is closed and INDEXED on every exit path — including the two early
+        # returns above and any raise. A shard left open by a round that broke is a shard the
+        # index never names, which is the one state a reader cannot distinguish from "this
+        # round played no games".
+        games.close()
         candidate_engine.close()
 
 

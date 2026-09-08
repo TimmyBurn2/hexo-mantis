@@ -86,7 +86,7 @@ def test_poller_thread_beats_eval_round() -> None:
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16",
         max_plies=128,
         eval_cfg=object(), coordinator_cfg_caps=object(), encoding="gnn_axis_v1",
-        run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test",
+        run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test", game_record_dir=str("/tmp/mantis-eval-heartbeat-test") + "_games",
         ladder_state_path="/tmp/mantis-eval-heartbeat-test/ladder.json",
         promotion=object(), sink=None, heartbeat=_spy_beat,
         # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec. This

@@ -178,7 +178,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
-        encoding=cfg.identity.encoding, run_id=cfg.run_id, spool_dir=tmp_path / "spool",
+        encoding=cfg.identity.encoding, run_id=cfg.run_id, spool_dir=tmp_path / "spool", game_record_dir=str(tmp_path / "spool") + "_games",
         ladder_state_path=tmp_path / "ladder.json", promotion=None, sink=None,
         # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec.
         # These fixtures assert the POSTURE fields, so the bound is `None` here.
@@ -238,6 +238,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
+        game_record=None,
     )
     # F-816-10 D-1: `RoundSpec` carries the fused-forward memory bound in the SAME shape
     # as the two postures — a resolver-produced frozen dataclass that `asdict`/`from_dict`

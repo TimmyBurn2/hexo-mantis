@@ -119,6 +119,7 @@ def _round_spec(
         result_path=str(tmp_path / "result.json"), progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=_caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),

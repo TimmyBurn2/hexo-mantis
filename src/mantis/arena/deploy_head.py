@@ -114,12 +114,19 @@ class DeployHeadPlayer:
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
         self._tree: MCTSTree | None = None
+        #: R344(b) — the LAST search's root, for the game record. `(root_value, children)`
+        #: with `children` the `get_root_children_info()` rows this head already computes and,
+        #: before this, discarded one line before returning its move. `None` until the first
+        #: `select_move`. It is a plain attribute rather than a callback because the consumer
+        #: (`arena.match._play_one_game`) reads it once per ply and owns what to keep.
+        self.last_root: tuple[float, list[ChildInfo]] | None = None
 
     def name(self) -> str:
         return "deploy_head"
 
     def new_game(self) -> None:
         self._tree = MCTSTree()
+        self.last_root = None
 
     def select_move(self, board: Any) -> tuple[int, int]:
         tree = self._tree if self._tree is not None else MCTSTree()
@@ -157,6 +164,9 @@ class DeployHeadPlayer:
                 tree.expand_and_backup(policies, values)
             sims_done += len(leaves)
         children_info = tree.get_root_children_info()
+        # Captured BEFORE the argmax, from the same `children_info` the decision reads, so a
+        # recorded root can never describe a different search than the move beside it.
+        self.last_root = (float(tree.root_value()), children_info)
         try:
             move = select_argmax_child(children_info, c_visit=self._c_visit, c_scale=self._c_scale)
         finally:

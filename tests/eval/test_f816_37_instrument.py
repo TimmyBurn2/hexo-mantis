@@ -80,6 +80,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
+        game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(
