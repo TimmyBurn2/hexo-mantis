@@ -190,6 +190,39 @@ def test_the_subset_is_derived_from_the_seed_and_the_round_index() -> None:
     assert first != other_seed, "the seed does not move the subset"
 
 
+def test_the_confirm_block_does_not_replay_the_screen_block() -> None:
+    """The confirm phase must draw its own slice, on its own PERMUTATION.
+
+    Found by measuring, not by reading. The first cut of this leg moved
+    `_CONFIRM_SEED_OFFSET` from the seed to the ROUND INDEX, which looks equivalent and is
+    not: screen and confirm take windows of DIFFERENT widths (40 and 64 pairs at run6's
+    settings) out of the SAME permutation, so an index offset merely shifts where each lands
+    and they collide on a schedule. Round 2's confirm block drew ALL FORTY of the screen's
+    openings; rounds 1 and 3 drew 24 and 32. With deterministic argmax players a replayed
+    opening yields the SAME game, so escalation bought 128 games of wall-clock and no new
+    evidence — and `pair_units` correctly merges them, so the pooled `eff_n` silently
+    collapses instead of growing.
+
+    A different permutation makes the overlap incidental rather than scheduled. This asserts
+    the property (no round is a near-replay), not a particular number.
+    """
+    screen_pairs, confirm_pairs = 40, 64
+    seed_base, offset = 20260625, 7919
+    for round_index in range(12):
+        screen = {o.opening_id for o in round_openings(
+            "book_v1_s20260625_p4", n_pairs=screen_pairs,
+            seed_base=seed_base, round_index=round_index)}
+        confirm = {o.opening_id for o in round_openings(
+            "book_v1_s20260625_p4", n_pairs=confirm_pairs,
+            seed_base=seed_base + offset, round_index=round_index)}
+        shared = len(screen & confirm)
+        assert shared <= screen_pairs // 2, (
+            f"round {round_index}: the confirm block re-played {shared} of the screen's "
+            f"{screen_pairs} openings — an escalation that mostly repeats the screen is "
+            "wall-clock without evidence"
+        )
+
+
 def test_the_window_wraps_rather_than_running_out() -> None:
     """A block outlasts the book: round `n_openings/k` must still get a full subset.
 

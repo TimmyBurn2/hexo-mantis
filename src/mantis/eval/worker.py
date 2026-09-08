@@ -565,8 +565,18 @@ def _play_gate_block(
         if escalate:
             confirm_openings = round_openings(
                 spec.gate.opening_book, n_pairs=max(spec.gate.confirm_games // 2, 1),
-                seed_base=spec.gate.seed_base,
-                round_index=spec.round_index + _CONFIRM_SEED_OFFSET,
+                # The offset stays on the SEED, which is where it always was and where it has
+                # to be. Moving it to the ROUND INDEX (the first cut of R345(b)(4)) looked
+                # equivalent and was not: screen and confirm draw windows of DIFFERENT widths
+                # from the SAME permutation, so an index offset only shifts where each lands
+                # and they collide on a schedule. MEASURED at run6's own 40/64 pair widths:
+                # round 2's confirm block drew ALL FORTY of the screen's openings, rounds 1
+                # and 3 drew 24 and 32 — a confirm phase that mostly REPLAYS the screen, with
+                # deterministic argmax players producing the same games, for 128 games of
+                # wall-clock and no new evidence. On its own permutation the overlap is
+                # incidental: worst 8 of 40 over twelve rounds against ~5 expected by chance.
+                seed_base=spec.gate.seed_base + _CONFIRM_SEED_OFFSET,
+                round_index=spec.round_index,
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
