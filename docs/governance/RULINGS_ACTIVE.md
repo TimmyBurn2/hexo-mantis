@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 010d297, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ a88fdb2, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.62, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.63, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7484,3 +7484,25 @@ Verbatim text in the register; one-liners here are index only.
   clean; gates 7/9/15 clean; floor **4966 → 4970**. `dev` = `origin/dev` = `00cb89c`. Gate 2 and
   gate 4 were taken at `63f64f7` and **no Rust has changed since** (verified by diff).
   **RUN6 IS STILL NOT STARTED.**
+
+- 2026-09-08 — **v3.63** curated at **LEG 3's CLOSE**. Census unchanged at `R23–R343 — 314 / 314
+  / 0, excluded 53`; `STAMP OK: v3.63`.
+  **EVERY LEG-3 WITNESS IS NOW READ ON HARDWARE, INCLUDING THE ONE v3.62 LEFT OWED.** The stop was
+  taken with round `r000001_1000` genuinely IN FLIGHT; the resumed run then ran
+  **`r000002_2000` to COMPLETION — `wall_sec 915.9`, 264 games fully escalated,
+  `promoted: false`, `wr_sealbot 0.375`** — with GPU **12 535 MiB against a 16 303 MiB card**
+  while trainer and eval child were both live. Ring **62 382 positions / 14.9 MB** restored and
+  grown to 65 481; step 1052 → 2285; **round id `r000002`, not `r000001`**, which is the restored
+  counter witnessed by what the run DID rather than by reading the sidecar back.
+  **AND THAT ROUND CARRIED BOTH NEW INSTRUMENTS, LIVE.** The box was at `00cb89c` for the resume,
+  so this is production code emitting them: `eval_round_complete` carried
+  `wr_sealbot_ci_lower 0.21875 / ci_upper 0.5625` — **the round CI R341 §3 asked for and v3.57
+  recorded absent** — and `eval_channel_health` carried
+  `rung=sealbot_d5 label=MEASURING pooled_wr=0.375 ci=[0.21875, 0.53125] running_max_wr=null
+  saturated=false degraded=false flags=0`, every field correct for a first observation. **The two
+  instruments this sitting was told off for naming without a producer are now witnessed on
+  hardware.**
+  **THE `run6-mint` MERGE AND EVERY CLOSE-OUT FIX ARE ON `dev` AND PUSHED.** Box left clean: 0
+  processes, GPU 2 MiB. **RUN6 IS STILL NOT STARTED** — the START remains a separate operator
+  forward naming the block and the anchor hash, drafted at `EXIT.md` §9 with the one clause
+  (R342(b)(iv)'s rate bar) deliberately left to the operator because it selects an armed value.
