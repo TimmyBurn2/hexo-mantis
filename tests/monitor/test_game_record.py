@@ -355,3 +355,27 @@ def test_an_hour_rotation_KEEPS_the_writers_own_segment(tmp_path: Path, monkeypa
     assert [r["game_id"] for r in iter_run_games(tmp_path, "testrun")] == [
         "g0001", "g0003", "g0002",
     ], "shard order is (segment, hour): the writer first, in its own time order"
+
+
+def test_a_shard_torn_MID_CHARACTER_is_still_only_one_skipped_line(tmp_path: Path) -> None:
+    """The narrow crash mode the byte-level read closes.
+
+    A text-mode reader raises `UnicodeDecodeError` on a line torn inside a multi-byte
+    character, and it raises while ITERATING — so it takes the whole file, including every
+    intact record before the tear. That is the one outcome `read_shard` exists to prevent, and
+    the fact that `json.dumps` defaults to `ensure_ascii=True` makes the case unreachable
+    TODAY rather than impossible: the guarantee would then rest on a default in another module.
+
+    MUTATION THAT REDS IT: open the shard in text mode."""
+    writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
+    for i in range(3):
+        writer.write(_game(i))
+    path = writer.shard_path
+    writer.close()
+
+    with path.open("ab") as handle:
+        handle.write('{"game_id": "torn", "note": "é'.encode()[:-1] + b"\n")
+
+    records, skipped = read_shard(path)
+    assert skipped == 1, f"the torn line and only the torn line; skipped={skipped}"
+    assert len(records) == 3, "every intact record before the tear must survive"

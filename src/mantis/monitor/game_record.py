@@ -247,9 +247,18 @@ def read_shard(path: Path | str) -> tuple[list[dict[str, Any]], int]:
     """
     records: list[dict[str, Any]] = []
     skipped = 0
-    with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
+    # BINARY, decoded per line. Text mode would raise `UnicodeDecodeError` on a line torn
+    # mid-character and take the whole file with it — the one outcome this function exists to
+    # prevent. `json.dumps` defaults to `ensure_ascii=True` so a torn line is ASCII today and
+    # the case is unreachable; relying on that would make the guarantee depend on a default in
+    # another module. A line that will not decode is skipped and counted like any other.
+    with Path(path).open("rb") as handle:
+        for raw in handle:
+            try:
+                stripped = raw.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                skipped += 1
+                continue
             if not stripped:
                 continue
             try:
