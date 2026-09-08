@@ -78,6 +78,13 @@ random floor the opponent is a plain bot with no root and only the candidate's p
 two are otherwise indistinguishable, and a reader would take a two-sided list for a one-sided
 one — halving every per-move statistic it computed.
 
+**An EMPTY `visits` is a real state and is KEPT.** At a very low simulation budget the root is
+expanded and nothing is backed up to a child, so there is no visited child to record: a local
+boot at `eval.gate.deploy_sims: 1` produced 127 roots, every one with an empty support. The
+entry stays because `root_value` is still information and because `len(search_stats)` must keep
+counting the plies that were searched. Empty is DIFFERENT from the field being absent — absent
+means no producer, empty means a search whose support was empty.
+
 `visits` carries the SUPPORT only — visited children — because
 a zero-visit child is part of the distribution, carries none of its information, and at radius 8
 would be most of the bytes. A reader takes absence as zero, which is what a visit distribution

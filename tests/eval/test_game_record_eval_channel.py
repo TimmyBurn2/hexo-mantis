@@ -153,10 +153,32 @@ def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> Non
         )
         for entry in stats:
             assert -1.0 <= entry["root_value"] <= 1.0, entry["root_value"]
-            assert entry["visits"], "a recorded root with an empty support is not a search"
             for q, r, n in entry["visits"]:
                 assert isinstance(q, int) and isinstance(r, int)
                 assert n > 0, "only the SUPPORT is stored; a zero-visit row is dead weight"
+
+
+def test_an_EMPTY_support_is_recorded_not_dropped(tmp_path: Path) -> None:
+    """An entry whose support is empty is still a search, and it is kept.
+
+    MEASURED, not hypothesised: a local boot of `configs/smoke_preflight_armed.yaml` — which
+    mints `eval.gate.deploy_sims: 1` — produced 127 roots and **every one of them had an empty
+    support**. At one simulation the root is expanded and nothing is backed up to a child, so
+    there is no visited child to record. That is correct behaviour, and a first cut of this
+    file asserted it could not happen.
+
+    Dropping such an entry would be worse than keeping it twice over: `root_value` is real
+    information, and `len(search_stats)` would stop counting the plies that were searched.
+
+    MUTATION THAT REDS IT: skip the append when the support is empty."""
+    records = [r for r in _play(tmp_path) if r.get("search_stats")]
+    assert records, "no stats to check"
+    for record in records:
+        for entry in record["search_stats"]:
+            assert "visits" in entry, "the field must be present even when the support is empty"
+            assert "root_value" in entry, (
+                "root_value is the information an empty-support entry still carries"
+            )
 
 
 def test_a_round_with_no_target_writes_nothing_and_does_not_raise(tmp_path: Path) -> None:
