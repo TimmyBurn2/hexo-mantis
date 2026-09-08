@@ -62,6 +62,12 @@ is counted off the record rather than recomputed).
 Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats),
 `trajectory_hash`, and `search_stats` when the candidate's search exposed its root.
 
+**`game_index` JOINS a record to its progress row.** The round's progress writer and this one
+are fed from ONE fan-out in loop order, so their per-round counters advance in lockstep and a
+`<round_id>_progress.txt` row and a game record carrying the same index are the same game.
+`play_paired_match` calls its sink in loop order under every concurrency, which is what makes
+that true at `concurrency > 1` as well.
+
 `search_stats` is a list of `{"ply": int, "root_value": float, "visits": [[q, r, n], …]}`, one
 entry per ply the CANDIDATE played. `visits` carries the SUPPORT only — visited children — because
 a zero-visit child is part of the distribution, carries none of its information, and at radius 8

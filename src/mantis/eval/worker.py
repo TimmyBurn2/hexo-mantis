@@ -862,10 +862,13 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             device_memory=probe.payload(),
         )
     finally:
-        # The shard is closed and INDEXED on every exit path — including the two early
-        # returns above and any raise. A shard left open by a round that broke is a shard the
-        # index never names, which is the one state a reader cannot distinguish from "this
-        # round played no games".
+        # The shard is closed and INDEXED on every exit path OUT OF THIS TRY — the two early
+        # returns above and any raise inside it. A shard left open by a round that broke is a
+        # shard the index never names, which is the one state a reader cannot distinguish from
+        # "this round played no games". It is NOT every exit path of the function: a raise
+        # BEFORE the try (engine construction) leaves the shard open and unindexed, and that
+        # is stated rather than claimed away — the records are still readable, because
+        # `iter_run_games` scans shards and does not trust the index to enumerate them.
         games.close()
         candidate_engine.close()
 
