@@ -82,18 +82,25 @@ _LOG = logging.getLogger(__name__)
 
 
 def _anchor_sha256(anchor_state: Any) -> str | None:
-    """The live anchor's sha256, or None when there is no anchor file to hash.
+    """The live anchor's PARAMETER identity, or None when there is no anchor file to hash.
 
-    Hashed from the FILE rather than from the in-memory module, because that is what R343(d)'s
-    "hash-asserted" is about: the artifact a resumed run will reload is the one on disk, and a
-    digest taken over the live weights would agree with itself no matter what `best_model.pt`
-    actually holds. None is honest — a run with no anchor yet has no hash to assert — and the
-    pre-flight assert is what refuses to START such a run, not this recorder.
+    IN THE GUARD'S OWN DENOMINATION, and a live box run is why. `checkpoint_state_sha256` is what
+    `resolve_anchor` compares the launch pin against (AUDIT-1 F-32: one denomination with
+    `net_param_hash` and `state_dict_param_hash`). The first cut recorded a FILE sha256 here,
+    which reads plausibly and is useless to the one consumer that matters — the resume could not
+    compare it against the pin at all, so it could not answer the question the pin asks.
+
+    Hashed from the STORED weights rather than the live module: the artifact a resumed run
+    reloads is the one on disk, and a digest over the in-memory net would agree with itself no
+    matter what `best_model.pt` actually holds. `None` is honest — a run with no anchor yet has
+    no hash to assert — and the pre-flight assert is what refuses to START such a run.
     """
     path = getattr(anchor_state, "best_model_path", None)
     if path is None or not Path(path).exists():
         return None
-    return _resume_state.sha256_file(path)
+    from mantis.train.anchor import checkpoint_state_sha256
+
+    return checkpoint_state_sha256(Path(path))
 
 #: The gate keys carried by the LAW-18 `monitor_gates` summary (checks/fires/skips/warns).
 #: The KEPT WP10 grad-norm abort is in the list so the one hard-abort that is unconditionally

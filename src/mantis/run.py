@@ -1221,14 +1221,31 @@ def compose_run(
         # the SAME denomination since F-32 collapsed the two (`model/identity.py`). An absent
         # row is `None`, which is the no-pin posture every run before the row had.
         declared_warm_start = resolve_bc_warm_start(config.model_dump())
+        # R343(d) SAYS "AT STEP 0", AND A LIVE BOX RUN SHOWED WHY THAT QUALIFIER IS LOAD-BEARING.
+        # The config pin is the WARM-START artifact's hash — the anchor a FRESH launch must have.
+        # A RESUMED run's anchor has legitimately moved: run6 promotes, `best_model.pt` is
+        # rewritten, and asserting the step-0 pin against it refuses the launch. Measured: a
+        # resume after ONE promotion died with `anchor sha256 mismatch … Refusing to launch`,
+        # which would make a run unresumable from its first promotion onward — and RESUME-1
+        # exists so a 12 h block can be EXTENDED, i.e. exactly for runs that promote.
+        #
+        # So the pin's SOURCE follows the launch mode, and neither mode is unpinned: a fresh
+        # launch asserts the config's warm-start hash (R343(d)'s halt, unchanged); a resume
+        # asserts the anchor THE STOP RECORDED, carried on the sidecar in the guard's own
+        # `checkpoint_state_sha256` denomination. That is strictly stronger than clearing the pin,
+        # which is what `resolve_anchor`'s own error message offers a human ("update the pin or
+        # clear it") and what an unattended resume cannot do.
+        resumed_anchor_sha = getattr(resume_state, "anchor_sha256", None)
+        expected_anchor = (
+            resumed_anchor_sha if resumed_anchor_sha is not None
+            else (None if declared_warm_start is None else declared_warm_start.net_hash)
+        )
         try:
             run_training_loop(trainer=trainer, shutdown_state=shutdown,
                               eval_pipeline=eval_pipeline, coordinator=coordinator,
                               anchor_state=resolved_anchor, sink=run_safety.sink,
                               best_model_path=canonical_anchor_path(checkpoint_dir),
-                              expected_anchor_sha256=(
-                                  None if declared_warm_start is None
-                                  else declared_warm_start.net_hash))
+                              expected_anchor_sha256=expected_anchor)
         finally:
             # R343(c) — THE RESUMABLE-STOP DECISION, taken HERE because this is the only
             # scope holding all three terms. `shutdown_save` says a signal arrived; the guard's

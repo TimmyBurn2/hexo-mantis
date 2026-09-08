@@ -149,3 +149,71 @@ def test_the_witness_fails_against_a_pre_fix_resume(tmp_path: Path, mk_graph_buf
         "the pre-fix resume path leaves the ring empty — which is precisely why witness 1 is "
         "a witness and not a tautology"
     )
+
+
+# ══ R343(d) vs R343(c): the anchor pin must not make a promoting run unresumable ═════════
+def test_the_resume_pin_comes_from_the_SIDECAR_not_the_step_zero_config_pin() -> None:
+    """THE COLLISION A LIVE BOX RUN FOUND, and it would have stopped run6 dead.
+
+    R343(d) pins the anchor to `identity.warm_start.net_hash` — the artifact a FRESH launch must
+    start from, "at step 0". `resolve_anchor` asserts that pin on EVERY launch. But a run that
+    PROMOTES rewrites `best_model.pt`, so on the next launch the anchor legitimately differs from
+    the step-0 pin and the guard refuses:
+
+        RuntimeError: anchor sha256 mismatch: best_model.pt resolved to f260a827… but the run
+        config pinned 2e72abd4…. Refusing to launch (WRONG INCUMBENT, or a legitimate
+        post-promotion resume — update the pin or clear it).
+
+    MEASURED on the box: run6's config, one promotion (`"promoted": true`), stop at step 1052,
+    and the resume died on exactly this. **A run would be unresumable from its first promotion
+    onward** — and RESUME-1 exists so a 12 h block can be EXTENDED, i.e. precisely for runs that
+    promote. The error's own advice ("update the pin or clear it") is a human act an unattended
+    resume cannot perform, and clearing the pin would disarm R343(d) altogether.
+
+    THE FIX, asserted here as a property of the composition root's source: the pin's SOURCE
+    follows the launch mode. A fresh launch asserts the config's warm-start hash; a RESUME
+    asserts the anchor the stop recorded on its sidecar. Neither mode is unpinned.
+    """
+    import ast
+
+    src = Path(__import__("mantis.run", fromlist=["run"]).__file__).read_text(encoding="utf-8")
+    assert "resumed_anchor_sha" in src, (
+        "the composition root no longer derives a resume-time anchor pin — a promoting run is "
+        "unresumable again"
+    )
+    tree = ast.parse(src)
+    # The call must pass the DERIVED name, not the config's warm-start hash directly.
+    passed = [
+        kw.value for node in ast.walk(tree) if isinstance(node, ast.Call)
+        for kw in node.keywords if kw.arg == "expected_anchor_sha256"
+    ]
+    assert passed, "nothing passes expected_anchor_sha256 — the pin is unwired"
+    assert any(isinstance(v, ast.Name) and v.id == "expected_anchor" for v in passed), (
+        "expected_anchor_sha256 must be the mode-dependent value, not the config pin inlined: "
+        "inlining it is exactly what refused the post-promotion resume"
+    )
+
+
+def test_the_sidecar_records_the_anchor_in_the_GUARDS_denomination() -> None:
+    """The other half, and the first cut got it wrong. `resolve_anchor` compares against
+    `checkpoint_state_sha256` (AUDIT-1 F-32's one denomination). A FILE sha256 recorded on the
+    sidecar reads plausibly and is useless to the only consumer that matters — it cannot be
+    compared to the pin at all. Asserted structurally because the values agree only on a real
+    checkpoint, which this row does not build."""
+    import ast
+
+    from mantis.train.coordinator import step as step_mod
+
+    src = Path(step_mod.__file__).read_text(encoding="utf-8")
+    fn = next(
+        n for n in ast.walk(ast.parse(src))
+        if isinstance(n, ast.FunctionDef) and n.name == "_anchor_sha256"
+    )
+    body = ast.dump(fn)
+    assert "checkpoint_state_sha256" in body, (
+        "_anchor_sha256 must record the anchor in the denomination the launch pin compares "
+        "against, or the resume cannot assert it"
+    )
+    assert "sha256_file" not in body, (
+        "a FILE hash here is not comparable to the pin — that was the first cut's defect"
+    )
