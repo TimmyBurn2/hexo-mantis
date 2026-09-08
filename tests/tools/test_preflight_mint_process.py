@@ -1775,6 +1775,11 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
     (`tests/test_run_buffer_route.py`, `tests/bridge/test_hexg_visit_capacity.py`)."""
     return SimpleNamespace(
         identity=SimpleNamespace(representation=representation, encoding=encoding),
+        # R344(a): the selector now SEEDS the ring's sampler from `config.seed`, so a stub
+        # that omitted it would fail on an attribute rather than on the route this test is
+        # about. The value is arbitrary and only its presence is load-bearing here — the
+        # seeding itself is pinned in `tests/test_run_buffer_route.py`.
+        seed=20260719,
         selfplay=SimpleNamespace(
             leaf_batch_size=8,
             completed_q_values=False,

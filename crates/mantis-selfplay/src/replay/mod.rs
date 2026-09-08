@@ -221,6 +221,12 @@ impl ReplayBuffer {
         Self::build(capacity, spec, StdRng::from_rng(&mut rand::rng()))
     }
 
+    /// Re-seed the SAMPLER from a caller-supplied seed, replacing the OS-entropy stream
+    /// `new` installs. Twin of `HexgBuffer::seed_sampler`; see that method for the grounds.
+    pub fn seed_sampler(&mut self, seed: u64) {
+        self.rng = StdRng::seed_from_u64(seed);
+    }
+
     /// Return the encoding name driving this buffer's geometry.
     #[must_use]
     pub fn size(&self) -> usize {

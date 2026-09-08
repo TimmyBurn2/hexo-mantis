@@ -339,6 +339,23 @@ impl HexgBuffer {
         })
     }
 
+    /// Re-seed the SAMPLER from a caller-supplied seed, replacing the OS-entropy stream
+    /// `new` installs.
+    ///
+    /// `new` seeds from `rand::rng()` because a ring with no declared seed must not pretend
+    /// to a reproducible stream. That left production with no way to declare one: two
+    /// launches of the same config drew different batch sequences, and no Python-side
+    /// `seed_everything` could reach this field. This is that declaration — one method, the
+    /// same `StdRng` type, no new dependency, and no per-sample cost (R344(a); the
+    /// alternative it was chosen over is costed in `CARD-RING-SAMPLER-SEED`).
+    ///
+    /// It does NOT make a resumed run continue the pre-stop stream — capturing ChaCha word
+    /// position needs rand's private backend, which the crate's `rand` pin exists to keep
+    /// this crate away from. What it buys is run-to-run reproducibility from a fixed seed.
+    pub fn seed_sampler(&mut self, seed: u64) {
+        self.rng = StdRng::seed_from_u64(seed);
+    }
+
     /// Fresh monotonic game id.
     pub fn next_game_id(&mut self) -> i64 {
         let id = self.next_game_id;

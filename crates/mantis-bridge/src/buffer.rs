@@ -108,6 +108,12 @@ impl PyReplayBuffer {
         self.inner.spread_draws()
     }
 
+    /// Re-seed the sampler so this ring's batch stream is reproducible from a declared
+    /// seed. Twin of `PyHexgBuffer::seed_sampler`; same one production call site.
+    pub fn seed_sampler(&mut self, seed: u64) {
+        self.inner.seed_sampler(seed);
+    }
+
     /// Fresh monotonic position id.
     pub fn next_game_id(&mut self) -> i64 {
         self.inner.next_game_id()

@@ -116,11 +116,19 @@ def capture_rng_streams() -> dict[str, Any]:
 
     DISCLOSED SCOPE, because the gap is the point (R343(c) witness 4): this captures python,
     numpy, torch-cpu and torch-cuda. It does NOT capture the replay ring's sampler, which is a
-    Rust `StdRng` seeded from OS entropy at construction
-    (`crates/mantis-selfplay/src/replay/hexg/mod.rs:337`) with no Python surface to read or set
-    it. Batch-index draws therefore do not reproduce across a stop/resume — and do not reproduce
-    across two launches of the same config either, which is the older and larger fact. See
-    `RESUME1_FINDINGS.md`; closing it is an engine change, not a wiring one.
+    Rust `StdRng` living in the engine
+    (`crates/mantis-selfplay/src/replay/hexg/mod.rs`) rather than behind
+    `seed_everything`.
+
+    WHAT THAT COSTS, MEASURED, and it is narrower than it was (R344(a)). The ring is now
+    SEEDED from `config.seed` at the one construction site (`mantis.run._select_buffer`), so
+    two launches of the same config DO reproduce their batch draws — the older and larger half
+    of this gap is closed. What remains is stop/resume CONTINUITY: a resumed ring restarts its
+    stream at draw 1 instead of continuing from where the stop left it, a deterministic REWIND
+    rather than the nondeterminism this note used to describe. Both halves are pinned in
+    `tests/train/test_resume_ring_roundtrip.py`, so the disclosure cannot silently go stale.
+    Closing the remainder needs `StdRng`'s ChaCha word position, reachable only through rand's
+    private backend — refused with grounds, not deferred (`CARD-RING-SAMPLER-SEED`).
     """
     py_version, py_state, py_gauss = random.getstate()
     np_name, np_keys, np_pos, np_has_gauss, np_cached = np.random.get_state()

@@ -21,9 +21,7 @@
 use mantis_graph::AxisGraph;
 use mantis_selfplay::replay::hexg::{GraphRecord, GraphTargets, HexgBuffer};
 use mantis_selfplay::replay::sym::N_SYMS;
-use rand::rngs::StdRng;
 use rand::RngExt;
-use rand::SeedableRng;
 
 const CAP: usize = 512;
 const VISIT_CAP: usize = 128;
@@ -42,8 +40,9 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
     let mut buf = HexgBuffer::new(CAP, "gnn_axis_v1", VISIT_CAP).expect("graph buffer");
     // The buffer seeds its generator from ENTROPY (`StdRng::from_rng(&mut rand::rng())`), so
     // two buffers never agree by construction. Pinning it is what makes serial-vs-parallel a
-    // comparison of the REBUILD rather than of two different samples.
-    buf.rng = StdRng::seed_from_u64(0xB1_0000_0001);
+    // comparison of the REBUILD rather than of two different samples. Through the method
+    // rather than the field since R344(a): this line is why the method exists.
+    buf.seed_sampler(0xB1_0000_0001);
     let mut s = SEED;
     for i in 0..n_records {
         // A compact line of stones plus two legal cells at its ends, so the aligned mass is

@@ -428,6 +428,16 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     (The tool class is named by DESCRIPTION and not spelled, because the oracle for this
     rule scans this very docstring — see `tests/test_run_buffer_route.py`.)
 
+    R344(a) — BOTH ARMS SEED THE RING'S SAMPLER FROM `config.seed`, here rather than at the
+    caller. `seed_everything(config.seed)` cannot reach it: the sampler is a Rust `StdRng`
+    seeded from OS entropy at construction, so two launches of the same config drew different
+    batch sequences and R343(c)'s determinism-seam witness was comparing against a
+    counterfactual that was never true. The call sits INSIDE this function because this is the
+    run's ONE buffer construction site — a caller-side call is a call that can be forgotten,
+    and the failure it would leave behind is silent. It does NOT make a resumed run continue
+    the pre-stop stream; that needs rand's private backend and is refused with grounds in
+    `CARD-RING-SAMPLER-SEED`.
+
     RIDER, recorded here so the next reader finds it in-tree (R125): the third arm is
     UNREACHABLE from a validated `RunConfig` today — `Literal["grid","graph"]` plus the
     registry cross-check make an unknown representation unrepresentable. LAW-11 makes
@@ -460,11 +470,15 @@ def _select_buffer(config: Any, capacity: int) -> Any:
             leaf_batch_size=sp.leaf_batch_size,
             completed_q_values=sp.completed_q_values,
         )
-        return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
+        buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
+        buffer.seed_sampler(config.seed)
+        return buffer
     if representation == "grid":
         from mantis._engine import ReplayBuffer
 
-        return ReplayBuffer(capacity, config.identity.encoding)
+        buffer = ReplayBuffer(capacity, config.identity.encoding)
+        buffer.seed_sampler(config.seed)
+        return buffer
     raise RepresentationRouteError(
         f"identity.representation {representation!r} selects no buffer — an absent or "
         "unknown representation is an ERROR, never a dense default (LAW-11)"

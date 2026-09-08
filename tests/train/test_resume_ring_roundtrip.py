@@ -1,3 +1,8 @@
+# >300 justify (R8): R343(c) and R344(a)'s witnesses over ONE subject — a stopped run's
+# replay ring. The ring coming back, the planted corruption being refused, the round counter
+# continuing and the sample stream's two halves are one mechanism read from five angles;
+# separating them would let a change to the restorer red one file and leave a stale
+# disclosure green in another.
 """⊕ R343(c) witnesses 1, 2 and 5 END TO END, on a REAL engine ring.
 
 `test_resume_state.py` pins the sidecar's own contract against byte payloads. This file pins
@@ -216,4 +221,103 @@ def test_the_sidecar_records_the_anchor_in_the_GUARDS_denomination() -> None:
     )
     assert "sha256_file" not in body, (
         "a FILE hash here is not comparable to the pin — that was the first cut's defect"
+    )
+
+
+# --------------------------------------------------------------------------------------- #
+# R344(a) — witness 4 RE-RUN against the seeded ring
+# --------------------------------------------------------------------------------------- #
+_BATCH = 24
+_PRE_STOP_DRAWS = 5
+
+
+def _fill(buffer, n_records: int = 64) -> None:
+    """Unique `outcome` per record, so `GraphTargets.outcomes` transcribes WHICH slots a
+    draw took — the observable the sampler's seed is supposed to determine."""
+    for i in range(n_records):
+        k = 6 + (i % 7)
+        stones = [(q, (q % 3) - 1, 1 if q % 2 == 0 else -1) for q in range(k)]
+        buffer.push_graph_position(
+            stones, [(-1, 0, 0.6), (k, 0, 0.4)], 1 if i % 2 == 0 else -1, 2, i % 50,
+            True, -1.0 + 2.0 * i / (n_records - 1), True, 40, 10 + i,
+        )
+
+
+def _seeded_filled_ring(seed: int):
+    from mantis._engine import HexgBuffer
+
+    buffer = HexgBuffer(_CAPACITY, _ENCODING, 128)
+    buffer.seed_sampler(seed)          # what `mantis.run._select_buffer` does at launch
+    _fill(buffer)
+    return buffer
+
+
+def _draw(buffer) -> list[float]:
+    return list(buffer.sample_graph_batch(_BATCH)[1].outcomes)
+
+
+def test_witness_4_half_a_two_launches_of_one_config_now_draw_the_same_batches() -> None:
+    """R344(a). The half witness 4 uncovered and did not name: before the seeding, two
+    launches of the SAME config drew different batch sequences, so the witness's own
+    counterfactual — "an uninterrupted run" — was not a fixed object to compare against.
+
+    MUTATION THAT REDS IT: make `HexgBuffer::seed_sampler` a no-op."""
+    seed = 20260719
+    assert _draw(_seeded_filled_ring(seed)) == _draw(_seeded_filled_ring(seed)), (
+        "two launches of one config drew different batches"
+    )
+    assert _draw(_seeded_filled_ring(seed)) != _draw(_seeded_filled_ring(seed + 1)), (
+        "the draw did not move with the seed — the assertion above would then be vacuous"
+    )
+
+
+def test_witness_4_half_b_a_resumed_ring_REWINDS_its_sample_stream(tmp_path: Path) -> None:
+    """R344(a) — THE RESIDUAL, PINNED AS THE STATE IT ACTUALLY IS.
+
+    Witness 4 as R343(c) wrote it asks that a resumed run's first step consume the batch an
+    uninterrupted run would have consumed at that step. It does not, and this row asserts the
+    exact shape of the miss rather than leaving it as prose in an exit screen.
+
+    **The residual is a deterministic REWIND, not nondeterminism.** A resumed ring is seeded
+    from the same `config.seed` and therefore restarts the sample stream at draw 1 — so the
+    first resumed draw equals the uninterrupted run's FIRST draw, not its (k+1)-th. Before
+    R344(a) it equalled neither, because construction seeded from OS entropy. That is a
+    strictly better disclosure than the ruling anticipated, and it is why this is a pin and
+    not a `xfail`: the miss is now a known offset a reader can reason about.
+
+    It is not a data defect. The index sequence repeats; the ring CONTENTS behind those
+    indices have moved on, so the resumed run does not re-train on the positions the
+    pre-stop run trained on.
+
+    Closing it needs `StdRng`'s ChaCha word position, which is reachable only through rand's
+    private backend — refused with grounds in `CARD-RING-SAMPLER-SEED`, not deferred. **IF
+    THIS ROW EVER REDS, the gap was closed and the disclosure above must be rewritten** —
+    which is the whole point of pinning a known gap instead of describing one.
+    """
+    seed = 20260719
+
+    uninterrupted = _seeded_filled_ring(seed)
+    first_draw = _draw(uninterrupted)
+    for _ in range(_PRE_STOP_DRAWS - 1):
+        _draw(uninterrupted)
+    draw_after_the_stop_point = _draw(uninterrupted)
+
+    stopped = _seeded_filled_ring(seed)
+    for _ in range(_PRE_STOP_DRAWS):
+        _draw(stopped)
+    ring_path = tmp_path / "ring.bin"
+    stopped.save_to_path(str(ring_path))
+
+    resumed = _seeded_filled_ring(seed)
+    restored = resumed.load_from_path(str(ring_path))
+    assert restored > 0, "the ring must actually come back, or this measures nothing"
+    resumed_draw = _draw(resumed)
+
+    assert resumed_draw != draw_after_the_stop_point, (
+        "the resumed stream CONTINUED the pre-stop stream — witness 4 as written now "
+        "passes, and this row's disclosure is stale"
+    )
+    assert resumed_draw == first_draw, (
+        "the resumed stream neither continued nor rewound — the residual is no longer the "
+        "deterministic rewind this row documents"
     )

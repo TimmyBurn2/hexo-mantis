@@ -236,6 +236,16 @@ impl PyHexgBuffer {
         py.detach(|| self.ring().get_buffer_stats_impl())
     }
 
+    /// Re-seed the sampler so this ring's batch stream is reproducible from a declared
+    /// seed. Construction seeds from OS entropy; production calls this immediately after,
+    /// from `config.seed` (`mantis.run::_select_buffer`, the one construction site).
+    ///
+    /// It buys RUN-TO-RUN reproducibility, not stop/resume continuity — see
+    /// `HexgBuffer::seed_sampler` for why the latter is refused rather than deferred.
+    pub fn seed_sampler(&self, py: Python<'_>, seed: u64) {
+        py.detach(|| self.ring().seed_sampler(seed));
+    }
+
     /// Fresh monotonic game id.
     pub fn next_game_id(&self, py: Python<'_>) -> i64 {
         py.detach(|| self.ring().next_game_id())

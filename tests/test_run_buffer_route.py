@@ -1,3 +1,8 @@
+# >300 justify (R8): one function's oracle. Every row here drives `_select_buffer` — which
+# buffer each representation selects, that an unknown one is a named refusal, and that both
+# arms seed their sampler. Splitting the seeding rows out would put two claims about one
+# function in two files, where a change to its routing and a change to its seeding stop
+# being one diff to read.
 """⊕ WPMAIN ORACLE — the buffer selector at its new home (DESIGN §1.2 item 5 / §9 O-F1).
 
 RED-at-import until IMPL lands `mantis.run._select_buffer` — the lift of
@@ -200,4 +205,117 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     assert _derived(pcr) != _derived(minted), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "
         "derivation from a constant — the whole point of driving both shapes"
+    )
+
+
+def _fill_graph_ring(buffer, n_records: int = 32) -> None:
+    """Push `n_records` distinguishable positions so a draw has a readable signature.
+
+    Every record carries a UNIQUE `outcome`, which makes `GraphTargets.outcomes` a faithful
+    transcript of WHICH slots a sample drew and in what order — the observable the seed is
+    supposed to determine. A shared outcome value would collapse different draws onto equal
+    vectors and the assertions below would pass on a broken sampler.
+    """
+    for i in range(n_records):
+        n_stones = 6 + (i % 7)
+        stones = [(q, (q % 3) - 1, 1 if q % 2 == 0 else -1) for q in range(n_stones)]
+        buffer.push_graph_position(
+            stones, [(-1, 0, 0.6), (n_stones, 0, 0.4)],
+            1 if i % 2 == 0 else -1, 2, i % 50, True,
+            -1.0 + 2.0 * i / (n_records - 1), True, 40, 10 + i,
+        )
+
+
+def test_the_graph_arm_seeds_its_sampler_from_config_seed(smoke_run_config) -> None:
+    """R344(a), arm 1. Two rings built from the SAME config draw the SAME batch.
+
+    The ring's sampler is a Rust `StdRng` seeded from OS entropy at construction, so before
+    this it was structurally impossible for two launches of one config to agree — which is
+    the gap R343(c)'s determinism-seam witness uncovered and which no Python-side
+    `seed_everything` could close.
+
+    MUTATION THAT REDS IT: delete the `buffer.seed_sampler(config.seed)` line from the graph
+    arm. The buffers still construct, still carry the right encoding, still sample — and
+    disagree, which is exactly the silence this pins. A source grep for the call would not
+    survive the line moving to a caller that forgets it; this asserts the BEHAVIOUR at the
+    one construction site.
+    """
+    config = smoke_run_config("smoke_gnn.yaml")
+
+    first = _select_buffer(config, _CAPACITY)
+    _fill_graph_ring(first)
+    second = _select_buffer(config, _CAPACITY)
+    _fill_graph_ring(second)
+
+    _, targets_a = first.sample_graph_batch(24)
+    _, targets_b = second.sample_graph_batch(24)
+    assert list(targets_a.outcomes) == list(targets_b.outcomes), (
+        "two rings built from one config drew different batches — the sampler is not being "
+        "seeded from config.seed, so the run is not reproducible across launches"
+    )
+
+
+def test_a_different_config_seed_moves_the_graph_draw(smoke_run_config) -> None:
+    """R344(a), arm 2 — the control WITHOUT which arm 1 is vacuous.
+
+    Arm 1 would pass on a sampler that ignored its seed and happened to be deterministic
+    (a fixed constructor seed, say, or a draw that stopped consuming the generator). Only
+    this arm shows the draw is a function OF `config.seed`.
+
+    MUTATION THAT REDS IT: seed from a literal instead of `config.seed`."""
+    config = smoke_run_config("smoke_gnn.yaml")
+    other = smoke_run_config("smoke_gnn.yaml", seed=config.seed + 1)
+
+    baseline = _select_buffer(config, _CAPACITY)
+    _fill_graph_ring(baseline)
+    moved = _select_buffer(other, _CAPACITY)
+    _fill_graph_ring(moved)
+
+    assert list(baseline.sample_graph_batch(24)[1].outcomes) != list(
+        moved.sample_graph_batch(24)[1].outcomes
+    ), "changing config.seed did not change the batch stream"
+
+
+def _fill_dense_ring(buffer, encoding: str, n_records: int = 32) -> None:
+    """Dense twin of `_fill_graph_ring`: unique `outcome` per record, geometry from the
+    registry spec rather than from literals (the same authority the buffer itself was
+    built through)."""
+    import numpy as np
+
+    from mantis._engine import RegistrySpec
+
+    spec = RegistrySpec.from_registry(encoding)
+    size = spec.board_size
+    state = np.zeros((8, size, size), dtype=np.float16)
+    chain = np.zeros((6, size, size), dtype=np.float16)
+    policy = np.zeros(spec.policy_stride, dtype=np.float32)
+    policy[0] = 1.0
+    ownership = np.ones(spec.n_cells, dtype=np.uint8)
+    winning_line = np.zeros(spec.n_cells, dtype=np.uint8)
+    for i in range(n_records):
+        buffer.push(state, chain, policy, -1.0 + 2.0 * i / (n_records - 1),
+                    ownership, winning_line, 10 + i)
+
+
+def test_the_dense_arm_seeds_its_sampler_too(smoke_run_config) -> None:
+    """R344(a), arm 3. The grid route carries the same contract — asserted rather than
+    assumed, because the two arms are two `return`s and a repair applied to only one of them
+    is a shape this file already has precedent for (arms 1 and 2 above each pin one route
+    because routing them both to one buffer type was the measured defect).
+
+    `sample_batch`'s element 3 is `outcomes` (`SampleBatch`'s field order: states, chain,
+    policies, outcomes, …), so it is the same draw transcript the graph arms read.
+
+    MUTATION THAT REDS IT: delete the seeding line from the grid arm only."""
+    config = smoke_run_config("smoke_radius_curriculum.yaml")
+    encoding = config.identity.encoding
+
+    first = _select_buffer(config, _CAPACITY)
+    _fill_dense_ring(first, encoding)
+    second = _select_buffer(config, _CAPACITY)
+    _fill_dense_ring(second, encoding)
+
+    assert list(first.sample_batch(24, False)[3]) == list(second.sample_batch(24, False)[3]), (
+        "two dense rings built from one config drew different batches — the grid arm is not "
+        "seeding its sampler"
     )
