@@ -9235,3 +9235,115 @@ correct on its own evidence at the time it was set: it was chosen against R343(b
 before the block was read against the abort floors at all. Nothing in R343(f) is re-authored — one
 term is re-derived, and R344 §1(c)'s own "6 external points in the first third" is stale for the
 same reason and is corrected in R344's landing rather than propagated.
+
+---
+
+# R345 — architect ruling, ARCH-ERA session, 2026-09-09 (AUDIT-2 ACCEPTED as evidence and FOUR of its findings ruled run-breaking for a promoting, resumable run — a non-finite gradient reaching `optimizer.step`, an arena that scores moves it never checked against the legal set, periodic checkpoints that are not continuation points beside a ring truncated in place on write, and a gate CI that resamples games rather than opening pairs on openings that repeat every round — so run6 is HELD for REPAIR-A2, seven severable legs in a two-day box, each carrying a planted break and a mutation self-test; the GATE CADENCE re-ruled on arithmetic with `eval_interval` held at 1000 and `gate.stride` moved to 3, correcting R344(c)'s "1000 for both channels" and placing the split-that-was-already-a-key on the ARCHITECT'S ledger; SIMS AND GUMBEL SEPARATED — run6 runs PUCT at 50 as the minted, gate-armed control arm, 96 REFUSED on projection, with STRENGTH-FRONTIER-1 measuring the question at block end on run6's own frozen checkpoints and GUMBEL-REPAIR-1 landing to Mctx invariants DURING the block but enabled in no run until the frontier compares it at equal NN work; KLENT's search-free Shrimp target REFUSED BY NAME because it trusts an action-Q head this repo does not train; and everything else in AUDIT-2 CARDED with its priority rather than adopted wholesale) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into THIS session's prompt rather than as a file — so the
+landing session CREATED the ruling's one canonical home,
+`PACKET_R345_AUDIT2_ADJUDICATION_REPAIR_A2.md` §1 (R285's ONE-TEXT rule). **The pre-existence
+grep returned NO MATCH in BOTH repositories** — `R345` appeared nowhere in `mantis-migration`
+and nowhere in `hexo-mantis` before the canonical home was written. The forwarded text carried
+the ruling-number placeholder in **two** positions, of which **exactly one** is a substitution
+site inside the ruling text (the quote-block lead); the other is the packet's own dispatch
+heading. Byte-diff on append per R306(a): the block was transcribed **twice, independently**,
+with the placeholder intact, and the two transcriptions diffed BEFORE substitution —
+**IDENTICAL, 71 lines / 4 914 chars**; the substitution was applied mechanically by `sed` to
+both and re-diffed — **EMPTY**; the canonical home's `awk`-extracted block was then diffed
+against the substituted transcription — **EMPTY**, 71 lines / 4 911 chars, sha256
+`154563571710ee59…`. Head verified from the file before substituting: census
+`R23-R344, 315 / 315 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`.
+
+**THE PREMISES WERE VERIFIED AT HEAD BEFORE ANY LEG WAS EXECUTED (R289), AND THE PACKET'S OWN
+STANDING RULE REQUIRED IT** — every audit line is a hypothesis at `97e814e` while HEAD is
+`16f2e6b` and has moved three times since. **All seven of clause (b)'s legs verify as LIVE at
+`16f2e6b`; none was already false.** That is itself the finding worth recording, because
+AUDIT-1's comparable sweep had ~6 of 52 lines wrong at contact and the packet budgeted for the
+same class here. Each verification is a citation:
+
+* **(b)(1) — THE GUARD IS AFTER THE STEP, NOT BEFORE IT.** `train_step_from_graph_batch` calls
+  `clip_and_step` UNCONDITIONALLY at `src/mantis/train/trainer/core.py:713`, increments
+  `self.step` at `:714`, and only then tests `if not math.isfinite(grad_norm)` at `:721` — by
+  which point `clip_and_step` (`src/mantis/train/losses.py:392-397`) has already run
+  `clip_grad_norm_` and `optimizer.step()`. The existing per-microbatch guard at `:697` skips a
+  non-finite **loss**, which is a different quantity: a finite loss can still backward into a
+  non-finite **gradient**, and that path reaches the optimizer unguarded. The comment at `:722`
+  states the cascade correctly — *"`clip_and_step` scaled by a NaN/inf coefficient"* — and then
+  counts it after the fact. **A second, independent half of the same leg:** when EVERY
+  microbatch is skipped, the loop leaves `.grad` zeroed, `clip_and_step` returns a finite
+  `0.0`, and the step, the scheduler and the EMA all advance on a gradient that does not exist —
+  the "all-skipped microbatch set advances no clock" half of the clause has no mechanism at all
+  at HEAD.
+* **(b)(2) — NEITHER THE ARENA NOR THE BOARD CHECKS THE LEGAL SET.** `_play_one_game`
+  (`src/mantis/arena/match.py:307,331`) calls `board.apply_move(q, r)` for the replayed opening
+  and for every `mover.select_move(board)` result, consulting `legal_move_count()` only as a
+  loop-termination test. The board underneath does not close the gap: `Board::apply_move`
+  (`crates/mantis-core/src/board/state/core.rs:494-497`) rejects **only** an occupied cell, so a
+  move outside the radius-8 legal ball is silently accepted and scored. The bridge docstring at
+  `crates/mantis-bridge/src/board.rs:109` says *"Raises ValueError if the move is illegal"*,
+  which is true of occupancy and false of the legal set — a doc line the leg's repair must
+  correct rather than inherit.
+* **(b)(3) — NEITHER ARTEFACT IS WRITTEN ATOMICALLY AND THE RING IS TRUNCATED IN PLACE.**
+  `_write_v2_payload` calls `torch.save(payload, path)` straight to the final path
+  (`src/mantis/train/checkpoints.py:410`) — no temp file, no `fsync`, no rename. The ring is
+  worse: `save_to_path_impl` opens with `std::fs::File::create(path)`
+  (`crates/mantis-selfplay/src/replay/hexg/persist.rs:40`), which **truncates the existing file
+  before the first byte of the new one is written**, so a death mid-save leaves no ring at all
+  rather than the previous one. And `_maybe_periodic_checkpoint`
+  (`src/mantis/train/trainer/core.py:764-803`) writes the checkpoint ALONE — it calls
+  `self.save_checkpoint` and nothing else, so a periodic artefact carries no ring and no
+  sidecar and is not a continuation point.
+* **(b)(4) — THE BOOTSTRAP RESAMPLES GAMES AND THE OPENINGS NEVER MOVE.** `pair_bootstrap_wr_ci`
+  is named for pairs but resamples `_distinct_outcomes` (`src/mantis/eval/aggregate.py`), which
+  is one value per distinct **game**; `_traj_key` deliberately qualifies by seat so the two legs
+  of one opening are two independent draws, and `opening_id` — which `GameRecord` does carry
+  (`src/mantis/arena/match.py:238`) — never enters the aggregate record shape at all.
+  `GateAggregate` carries no W/L/D. Separately, every round's openings are drawn at a CONSTANT
+  seed: `paired_openings(..., seed=spec.gate.seed_base)` for the screen
+  (`src/mantis/eval/worker.py:540-542`), `seed_base + _CONFIRM_SEED_OFFSET` for the confirm
+  (`:555-557`), `spec.seed_base` for every rung and the floor — no round index reaches any of
+  them, so round N and round N+1 play the same games.
+* **(b)(5) — THE CAP IS LIVE, ITS TELEMETRY IS A BOOLEAN, AND "THE r8 LEGAL MAXIMUM" IS NOT A
+  CONSTANT.** `MAX_CHILDREN_PER_NODE = 192` (`crates/mantis-search/src/mcts/mod.rs:52`) and both
+  `pick_topk_children` and `pick_topk_children_ls` truncate to it
+  (`crates/mantis-search/src/mcts/backup.rs:107,158`), returning a `topk_truncated` **bool** and
+  no omitted-mass figure. **The clause's target needs a measurement rather than a lookup:** the
+  legal set is the union of radius-8 hex balls around EVERY placed stone minus the occupied
+  cells (`crates/mantis-core/src/board/moves.rs:130-170`) on a board CLAUDE.md calls unbounded,
+  so it grows with the stone count and has no closed-form maximum. A coupled term rides with it —
+  `MAX_ARMED_SIMS = MAX_NODES / (4 · MAX_CHILDREN_PER_NODE)` (`mcts/mod.rs:69`) — so raising K
+  lowers the armed-sims ceiling in the same edit, and the leg owes that arithmetic beside the
+  memory delta it was already asked for.
+* **(b)(6) — EVERY SELF-PLAY ROW IS PUSHED UNTAGGED.** `push_graph` passes `game_id=-1` for
+  every row (`src/mantis/selfplay/pool_push.py`), its docstring calling the sentinel correct on
+  the ground that *"a whole-board graph position is one row with no intra-position correlation
+  to dedupe"* — which answers a question LAW-04 does not ask, since the dedupe is over copies of
+  a GAME and every position from one game is such a copy. The drain cannot supply better:
+  `collect_graph_data` returns a 9-tuple with no game-id field
+  (`crates/mantis-bridge/src/runner.rs:478-510`). Downstream the guard is consequently inert —
+  `sample_indices` skips the uniqueness check on `-1`
+  (`crates/mantis-selfplay/src/replay/hexg/sample.rs:111,118,125`) — so same-game dedupe has
+  never once fired on a self-play row.
+* **(b)(7) — THE PANIC IS COUNTED AND THEN READ BY NOBODY.** `guard_worker`
+  (`crates/mantis-selfplay/src/runner/spawn.rs:44-54`) does catch the panic, increment
+  `worker_panics` and store `running = false`, and the counter reaches Python as
+  `RunnerStats.worker_panics` (`src/mantis/selfplay/pool_hooks.py:293`). But
+  `check_producer_health` — the *"fail-fast hook the trainer calls every step"*
+  (`src/mantis/selfplay/pool.py:369-381`, called from
+  `src/mantis/train/coordinator/step.py:524-526`) — tests ONLY `self._producer_exc`, the death of
+  the **Python** drain thread. It never reads `worker_panics` or `is_running()`, and a
+  tree-wide grep finds no reader of either under `src/mantis/monitor/` or `src/mantis/train/`.
+  A halted Rust worker therefore presents as a healthy pool draining nothing until
+  `selfplay_stall_timeout_sec: 1800.0` (`configs/run6.yaml:162`) fires — the audit's figure,
+  confirmed from the minted config rather than from the schema default.
+
+**ONE CLAUSE COULD NOT BE EXECUTED AS WRITTEN AND IS RECORDED RATHER THAN IMPROVISED.** §0.1
+enacts filing the external analysis at `plan/AUDIT_2026-09-09.md`. **The analysis text was not
+forwarded** — the packet carries the operator's summary of its findings and its §2 card list,
+but not the document itself, and the path holds no file in either repository. The seven legs are
+specified in clause (b) independently of it and are executed from clause (b); the FILING is
+owed and named here so the evidence label AUDIT-2 does not point at an absent document. This is
+the R337 class — a forwarding precondition the packet could not itself carry — and it joins the
+architect's ledger beside clause (c)'s own self-recorded `gate.stride` finding.

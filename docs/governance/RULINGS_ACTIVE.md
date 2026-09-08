@@ -4,7 +4,7 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.65, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.66, 2026-09-09. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1257,6 +1257,26 @@ every curation appends one line to §8.
 # ~19 000 steps, which ends before `draw_rate_abort.min_step` and `wr_collapse_min_step` (both
 # 25 000) can fire at all, i.e. a block that reads its aborts as armed while they are unarmable
 # inside it.**
+# **v3.66 = R345 folded in — AUDIT-2 ACCEPTED as evidence and run6 HELD for REPAIR-A2, seven
+# severable legs in a two-day box, each carrying a planted break and a mutation self-test. FOUR
+# findings are ruled run-breaking for a promoting, resumable run: a non-finite gradient reaching
+# `optimizer.step` (the HEAD guard counts the damage AFTER the weights are gone), an arena that
+# scores moves it never checked against the legal set (and a board that rejects only occupancy),
+# periodic checkpoints that are not continuation points beside a ring truncated in place on write,
+# and a gate CI that resamples GAMES rather than opening pairs on openings that repeat every round.
+# **All seven legs verified LIVE at HEAD `16f2e6b`; none was already false** — recorded because
+# AUDIT-1's comparable sweep had ~6 of 52 lines wrong at contact. GATE CADENCE is re-ruled on
+# arithmetic — `eval_interval` HELD at 1000, `gate.stride` MOVED to 3 — which corrects R344(c)'s
+# *"1000 for both channels"* and puts the split-that-was-already-a-key on the ARCHITECT'S ledger.
+# **SIMS AND GUMBEL ARE SEPARATED**: run6 runs PUCT at 50 as the minted, gate-armed control arm and
+# 96 is REFUSED on projection; STRENGTH-FRONTIER-1 measures the question at block end on run6's own
+# frozen checkpoints, and GUMBEL-REPAIR-1 lands to Mctx invariants DURING the block but is enabled
+# in no run until the frontier compares it at equal NN work. KLENT's search-free Shrimp target is
+# REFUSED BY NAME — it trusts an action-Q head this repo does not train. Everything else in AUDIT-2
+# is CARDED with its priority rather than adopted wholesale. **One clause could not be executed as
+# written and is recorded rather than improvised: §0.1's evidence filing at
+# `plan/AUDIT_2026-09-09.md` — the analysis TEXT was never forwarded, only the operator's summary
+# of its findings, so the label AUDIT-2 currently points at an absent document (R337 class).**
 
 **Curation protocol (R271(d), extended by R272(b) — binding, not optional).** Every
 curation spot-checks **≥5 index lines against the verbatim register text** and records
@@ -1293,9 +1313,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R344 — **315 sections, 315 distinct numbers, no duplicates** (re-derived at v3.58; this sentence read R308/279 from v3.0 through v3.35, was repaired at v3.45, and then went STALE AGAIN — it still read R338/309 at v3.48 and v3.49 while the register carried R339, because those curations ran the script and left the sentence. Repaired in place under R311(c) a SECOND time. The lesson the first repair drew is now measured: the sentence is the thing that drifts, the script is the thing that is right, and a reader should trust `ruling_census.py` over this clause) — and **every number
+  R23–R345 — **316 sections, 316 distinct numbers, no duplicates** (re-derived at v3.58; this sentence read R308/279 from v3.0 through v3.35, was repaired at v3.45, and then went STALE AGAIN — it still read R338/309 at v3.48 and v3.49 while the register carried R339, because those curations ran the script and left the sentence. Repaired in place under R311(c) a SECOND time. The lesson the first repair drew is now measured: the sentence is the thing that drifts, the script is the thing that is right, and a reader should trust `ruling_census.py` over this clause) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 345)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 346)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -7613,3 +7633,48 @@ Verbatim text in the register; one-liners here are index only.
   **RUN6 IS STILL NOT STARTED.** The START forward is RE-DERIVED, not copied: R343's draft is
   stale in its BLOCK term, and the one clause it left to the operator — the rate bar — is
   SETTLED by R344(a) at 3 firings per 12 h.
+
+- 2026-09-09 — **v3.66** curated at the **R345 LANDING**. Census re-run by script:
+  `R23–R345 — 316 / 316 / 0, excluded 53` (was 315 / 315 / 0 — R345's one header, and the
+  excluded set is unmoved, which is the check that the new header is a SECTION and not a
+  banner). Missing-in-range unchanged at `{24, 29, 32, 33, 227, 228, 267}`.
+  **THE RULING'S ONE CANONICAL HOME IS `PACKET_R345_AUDIT2_ADJUDICATION_REPAIR_A2.md` §1**
+  (R285/R289(v)), created by this session because the operator forwarded the text into the
+  prompt rather than as a file. R306(a) byte-diff executed in full: two independent
+  transcriptions with the placeholder intact diffed **IDENTICAL** at 71 lines / 4 914 chars;
+  `sed` substitution applied to both and re-diffed **EMPTY**; the canonical home's
+  `awk`-extracted block diffed against the substituted transcription **EMPTY**, 71 lines /
+  4 911 chars, sha256 `154563571710ee59…`. `R345` pre-existed in NEITHER repository.
+  **FIVE INDEX LINES SPOT-CHECKED AGAINST VERBATIM REGISTER TEXT (R271(d)/R272(b)).** (1) the
+  header's *"PROMOTION INTERVAL is confirmed at 1000 on both channels"* — MATCHES R344's
+  section header at `rulings_register.md:9050` (and is the clause R345(c) now corrects, so the
+  line is left standing and the correction carried in v3.66's own paragraph, never by editing
+  R344's); (2) **R56 is NOT what the packet's §0.5 assumes it is, and the check is what found
+  it** — the register's R56 (`:432`) is *"ten-arm count accepted; arm 8 stays registered-open"*,
+  SATISFIED-AND-SUPERSEDED at R228, with no grad-norm content whatsoever; the "R56 source pin
+  on the grad-norm line" is the repo-side TAMPER-EVIDENCE mechanism named after it
+  (`src/mantis/config/armed_aborts.py:1085-1088` pinning the literal
+  `if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:` in
+  `src/mantis/train/coordinator/step.py:658`); the annotation §0.5 orders is therefore written
+  against THAT pin, and the distinction is recorded here so no later reader chases grad-norm
+  text into R56's actual section and finds nothing; (3) R335(e)'s PERF-TRANCHE-3 ordering
+  (`:1074`) — MATCHES, and its *"does NOT contain the CUDA disclosure"* qualifier at `:6846`
+  is intact; (4) R343(b)(iii)'s external-points bar `≥ 5` — MATCHES at
+  `rulings_register.md:9131,9229`, and is the bar R345(c)'s cadence must still clear
+  (`eval_interval` unmoved at 1000, so it does); (5) R344's own ANNOTATION on the 25 001-step
+  block — MATCHES at `rulings_register.md:9226-9233`, and R345 moves no run-length term.
+  **ALL SEVEN REPAIR-A2 LEGS VERIFIED LIVE AT HEAD `16f2e6b` BEFORE ANY EDIT; NONE WAS ALREADY
+  FALSE.** The seven citations are in R345's landing block and are not repeated here. Two of
+  them changed the shape of the work rather than merely confirming it: leg 5's *"the r8 legal
+  maximum"* is **not a constant** — the legal set is the union of radius-8 balls around every
+  stone on an unbounded board — so the clause needs a MEASUREMENT and carries a coupled term,
+  `MAX_ARMED_SIMS = MAX_NODES / (4 · MAX_CHILDREN_PER_NODE)`, that moves in the same edit; and
+  leg 2's gap is **two layers deep**, since `Board::apply_move` rejects only an occupied cell,
+  so the board cannot be the authority the arena failed to consult.
+  **ONE FORWARDING PRECONDITION COULD NOT BE MET AND IS RECORDED, NOT IMPROVISED.** §0.1's
+  evidence filing at `plan/AUDIT_2026-09-09.md` has no document to file: the analysis TEXT was
+  never forwarded, only the operator's summary of its findings and its §2 card list. The seven
+  legs execute from clause (b), which is self-contained; the FILING is OWED. This is the R337
+  class — a forwarding precondition the packet could not itself carry — and it is on the
+  architect's ledger beside clause (c)'s own self-recorded `gate.stride` finding.
+  **RUN6 IS STILL HELD.** It is held BY THIS RULING now, not merely un-started.
