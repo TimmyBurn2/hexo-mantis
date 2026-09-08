@@ -199,6 +199,22 @@ impl PyBoard {
         self.inner.legal_move_count()
     }
 
+    /// Is `(q, r)` in the board's authoritative legal-move set?
+    ///
+    /// R345(b)(2): the O(1) membership test the arena's legality boundary needs. It reads the
+    /// SAME `FxHashSet` `legal_moves` collects from, so there is one authority over the rules
+    /// rather than a second radius arithmetic in Python. Cheap where the arena uses it: the
+    /// game loop already calls `legal_move_count` each iteration, which is what rebuilds the
+    /// cache, so this is a hash lookup on an already-clean cache.
+    ///
+    /// `apply_move` is deliberately NOT changed to consult this. It rejects an occupied cell
+    /// and nothing more, and it is the search's inner-loop primitive — traversal replays moves
+    /// already known legal, and a set membership test per `apply_move` would be paid millions
+    /// of times per search to catch a defect that cannot occur there.
+    pub fn is_legal(&self, q: i32, r: i32) -> bool {
+        self.inner.legal_moves_set().contains(&(q, r))
+    }
+
     /// Returns the cell value at (q, r): 0=empty, 1=P1, -1=P2.
     pub fn get(&self, q: i32, r: i32) -> i8 {
         match self.inner.get(q, r) {

@@ -838,7 +838,8 @@ class EvalPipeline:
         result_path = self._work_dir / f"{round_id}_result.json"
         progress_path = self._work_dir / f"{round_id}_progress.txt"
         spec = RoundSpec(
-            round_id=round_id, step=step, candidate_snapshot=str(candidate_path),
+            round_id=round_id, round_index=int(round_idx), step=step,
+            candidate_snapshot=str(candidate_path),
             best_snapshot=(str(best_path) if best_path is not None else None),
             best_step=None, encoding=self._encoding, worker_device=cfg.worker_device,
             gate=gate_spec, rung_jobs=rung_jobs, random_floor_games=cfg.random_floor_games,

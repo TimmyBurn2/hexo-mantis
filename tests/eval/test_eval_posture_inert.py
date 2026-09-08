@@ -228,7 +228,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     from mantis.eval.rounds import GameRecordTarget, GateSpec
 
     base = dict(
-        round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
+        round_index=0, round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
         encoding="gnn_axis_v1", worker_device="cpu",
         gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",

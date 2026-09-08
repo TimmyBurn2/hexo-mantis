@@ -24,7 +24,9 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import CnnArch, build_net
 from mantis.monitor.game_record import iter_run_games
 
-_ENC = "v6"
+#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
+#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+_ENC = "v6w25"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 _RUN_ID = "grec-eval"
@@ -53,7 +55,7 @@ def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=16,
         leaf_build_threads=1, concurrency=1,
-        round_id="r000007_7000", step=7000, candidate_snapshot=str(candidate),
+        round_index=0, round_id="r000007_7000", step=7000, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=2,
         random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,

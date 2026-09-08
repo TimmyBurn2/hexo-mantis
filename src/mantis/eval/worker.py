@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from mantis.arena.adjudicate import PlyCapAdjudicator
-from mantis.arena.books import paired_openings
+from mantis.arena.books import round_openings
 from mantis.arena.deploy_head import DeployHeadPlayer
 from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
@@ -320,6 +320,12 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
         # outcome is typically the OPPOSITE of the leg it kept — a WR biased toward whichever
         # leg arrived first, on half the eff_n. Carrying the colour keeps both legs distinct.
         "candidate_color": game_record.colors["candidate"],
+        # R345(b)(4). The PAIR the two legs above belong to. `candidate_color` keeps the legs
+        # DISTINCT for LAW-04's dedupe; this keeps them RELATED for the bootstrap, which must
+        # resample openings rather than games because the two legs of one opening start from
+        # the same position and their outcomes are correlated. The arena has always stamped
+        # `opening_id` on the record and nothing downstream ever read it.
+        "opening_id": game_record.opening_id,
     }
 
 
@@ -451,8 +457,9 @@ def _play_floor_probe(
         opponent_spec="random:uniform", opening_book=spec.gate.opening_book,
         deploy_matched=True, encoding=spec.encoding,
     )
-    openings = paired_openings(
-        spec.gate.opening_book, n_pairs=max(probe_games // 2, 1), seed=spec.seed_base,
+    openings = round_openings(
+        spec.gate.opening_book, n_pairs=max(probe_games // 2, 1),
+        seed_base=spec.seed_base, round_index=spec.round_index,
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
@@ -537,9 +544,13 @@ def _play_gate_block(
             opponent_spec="best_anchor:deploy_matched", opening_book=spec.gate.opening_book,
             deploy_matched=True, encoding=spec.encoding,
         )
-        screen_openings = paired_openings(
+        # R345(b)(4): a per-ROUND window over a seed_base-seeded permutation, so round N and
+        # round N+1 do not play the same games. The confirm phase offsets its round index by
+        # `_CONFIRM_SEED_OFFSET` so an escalation draws openings the screen did not, which is
+        # what the old `seed_base + offset` was doing on the seed axis.
+        screen_openings = round_openings(
             spec.gate.opening_book, n_pairs=max(spec.gate.screen_games // 2, 1),
-            seed=spec.gate.seed_base,
+            seed_base=spec.gate.seed_base, round_index=spec.round_index,
         )
         screen_records = play_paired_match(
             candidate, opponent, screen_openings, regime_key=regime_key,
@@ -552,9 +563,10 @@ def _play_gate_block(
         escalate = wr_screen is not None and wr_screen >= spec.gate.screen_confirm_lo
         confirm_agg: list[dict[str, Any]] = []
         if escalate:
-            confirm_openings = paired_openings(
+            confirm_openings = round_openings(
                 spec.gate.opening_book, n_pairs=max(spec.gate.confirm_games // 2, 1),
-                seed=spec.gate.seed_base + _CONFIRM_SEED_OFFSET,
+                seed_base=spec.gate.seed_base,
+                round_index=spec.round_index + _CONFIRM_SEED_OFFSET,
             )
             confirm_records = play_paired_match(
                 candidate, opponent, confirm_openings, regime_key=regime_key,
@@ -601,8 +613,9 @@ def _play_rung_block(
         opponent_spec=f"{rung_job.bot}:{rung_job.variant}", opening_book=rung_job.opening_book,
         deploy_matched=rung_job.deploy_matched, encoding=spec.encoding,
     )
-    openings = paired_openings(
-        rung_job.opening_book, n_pairs=max(rung_job.games // 2, 1), seed=spec.seed_base,
+    openings = round_openings(
+        rung_job.opening_book, n_pairs=max(rung_job.games // 2, 1),
+        seed_base=spec.seed_base, round_index=spec.round_index,
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
@@ -638,8 +651,9 @@ def _play_random_floor(
         # construction and stays.
         deploy_matched=False, encoding=spec.encoding,
     )
-    openings = paired_openings(
-        spec.gate.opening_book, n_pairs=max(spec.random_floor_games // 2, 1), seed=spec.seed_base,
+    openings = round_openings(
+        spec.gate.opening_book, n_pairs=max(spec.random_floor_games // 2, 1),
+        seed_base=spec.seed_base, round_index=spec.round_index,
     )
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,

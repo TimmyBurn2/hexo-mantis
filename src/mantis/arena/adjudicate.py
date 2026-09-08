@@ -45,7 +45,17 @@ from typing import Any
 TERMINAL_WIN = "win"
 TERMINAL_EXHAUSTED = "exhausted"
 TERMINAL_PLY_CAP = "ply_cap"
-TERMINAL_REASONS: tuple[str, ...] = (TERMINAL_WIN, TERMINAL_EXHAUSTED, TERMINAL_PLY_CAP)
+#: R345(b)(2) — a player returned a coordinate outside the board's legal set, so the game
+#: ended against it. A FOURTH way the loop can end, and it belongs in the closed vocabulary
+#: for the same reason the other three are here: a consumer branching exhaustively on
+#: `terminal` must not silently fall through on it. It is NOT a draw and NOT a win under the
+#: rules — the strength-floor probe's decisive-rate must be able to tell a forfeit from a
+#: game somebody actually won, because a run whose forfeit rate is climbing has a broken head,
+#: not a strong one.
+TERMINAL_FORFEIT = "forfeit"
+TERMINAL_REASONS: tuple[str, ...] = (
+    TERMINAL_WIN, TERMINAL_EXHAUSTED, TERMINAL_PLY_CAP, TERMINAL_FORFEIT,
+)
 
 #: The criteria this module implements, in the order the schema `Literal` declares them. A
 #: CLOSED set, checked at construction: a criterion name nothing here implements must be a
@@ -187,6 +197,7 @@ __all__ = [
     "PlyCapCriterionError",
     "PlyCapVerdict",
     "TERMINAL_EXHAUSTED",
+    "TERMINAL_FORFEIT",
     "TERMINAL_PLY_CAP",
     "TERMINAL_REASONS",
     "TERMINAL_WIN",

@@ -221,7 +221,7 @@ def _round_spec_base() -> dict:
     lifted from `tests/eval/test_eval_posture_inert.py`'s round-trip row so the two stay one
     shape."""
     return dict(
-        round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
+        round_index=0, round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
         encoding="gnn_axis_v1", worker_device="cpu",
         gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",

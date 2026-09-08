@@ -1,3 +1,7 @@
+# >300 justify (R8): one row, and its arming question cannot be split. The fixtures that
+# build a match, the G=1-versus-factory byte-equality arm and the which-block-carries-it arm
+# all read the SAME constructed round; separating them would let two files disagree about
+# what an unarmed default does, which is the only thing this row asserts.
 """R339(b) — `eval.concurrency`: the row exists, reaches ONE block, and is inert at its default.
 
 WHAT THE ROW IS FOR. Run6's first real eval round ran 50 min 22 s to 93 games without
@@ -39,7 +43,9 @@ from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import CnnArch, build_net
 
-_ENC = "v6"
+#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
+#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+_ENC = "v6w25"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run5.yaml"
@@ -122,9 +128,25 @@ class _CountingBot:
 
 
 class _Opening:
+    """One four-ply opening DERIVED from the engine's legal set, not hand-written.
+
+    The coordinates this replaces ran off the legal set at `op3`: an empty board's legal
+    region is the 5x5 block around the origin whatever the radius, so `(3, 0)` was never a
+    playable first move. R345(b)(2)'s legality boundary is what surfaced it.
+    """
+
     def __init__(self, i: int) -> None:
+        from mantis._engine import Board
+
         self.opening_id = f"op{i}"
-        self.moves = [(i, 0), (i, 1), (i + 1, 0), (i + 1, 1)]
+        board = Board.with_encoding_name("v6_live2_ls")
+        moves: list[tuple[int, int]] = []
+        for ply in range(4):
+            legal = sorted(board.legal_moves())
+            move = legal[(i * 7 + ply * 3) % len(legal)]
+            board.apply_move(*move)
+            moves.append(move)
+        self.moves = moves
 
 
 def _play(*, with_factory: bool):
@@ -182,7 +204,7 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=32,
         leaf_build_threads=1, concurrency=concurrency,
-        round_id="concurrency_wiring", step=1, candidate_snapshot=str(candidate),
+        round_index=0, round_id="concurrency_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=2,
         random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,

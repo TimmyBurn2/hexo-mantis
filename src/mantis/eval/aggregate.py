@@ -47,6 +47,7 @@ __all__ = [
     "aggregate_rung",
     "gate_promotion_decision",
     "pair_bootstrap_wr_ci",
+    "pair_units",
     "should_escalate",
 ]
 
@@ -112,6 +113,39 @@ def _distinct_outcomes(records: Sequence[Mapping[str, Any]]) -> np.ndarray:
         if key not in seen:
             seen[key] = _outcome_value(record)
     return np.asarray(list(seen.values()), dtype=np.float64)
+
+
+def _unit_key(record: Mapping[str, Any]) -> str:
+    """The PAIR key: a matchup and an opening, with the SEAT deliberately absent.
+
+    `_traj_key` qualifies by seat because two colour-swapped legs are two genuinely different
+    games (LAW-04). This key is the level above: both legs of one opening are ONE observation,
+    because they start from the same position and their outcomes are correlated — an opening
+    that is winning for whoever moves first yields a win and a loss almost deterministically,
+    and one the candidate simply understands better yields two wins.
+
+    A record with NO `opening_id` falls back to its own trajectory key, so it is its own unit.
+    Pairing legacy records on a missing field would collapse a whole round into one
+    observation, which reads as a catastrophic loss of power rather than as an absent field.
+    """
+    opening = record.get("opening_id")
+    if opening is None:
+        return _traj_key(record)
+    return f"{record.get('p1')}|{record.get('p2')}|{opening}"
+
+
+def pair_units(records: Sequence[Mapping[str, Any]]) -> list[float]:
+    """One draw-aware outcome value per OPENING PAIR — the bootstrap's resampling unit.
+
+    Both legs of an opening average into one value; an opening with only one leg (a forfeit
+    took the other) contributes that leg. Order is the first-seen order of the keys, which is
+    deterministic for a deterministic record order and is what keeps a seeded bootstrap
+    reproducible.
+    """
+    by_unit: dict[str, list[float]] = {}
+    for record in records:
+        by_unit.setdefault(_unit_key(record), []).append(_outcome_value(record))
+    return [sum(values) / len(values) for values in by_unit.values()]
 
 
 def _distinct_per_pair(records: Sequence[Mapping[str, Any]]) -> int:
@@ -229,6 +263,14 @@ class GateAggregate:
     low_power: bool
     eff_n: int
     promoted: bool
+    #: R345(b)(4) — the pooled game counts, RETAINED beside the decision. A promotion recorded
+    #: as a win rate and a boolean cannot be re-read afterwards: 0.58 over 24 games and 0.58
+    #: over 240 are the same field, and the second is the one worth acting on. Counted over
+    #: GAMES (the pooled set) while the CI is over PAIRS, and that asymmetry is deliberate —
+    #: these are the raw tallies, not the estimator's unit.
+    wins: int = 0
+    losses: int = 0
+    draws: int = 0
 
 
 def aggregate_gate(
@@ -285,8 +327,14 @@ def aggregate_gate(
     pooled_draws = sum(1 for r in pooled if r["winner"] == "draw")
     wr_confirm = (pooled_wins + 0.5 * pooled_draws) / n_pooled if n_pooled > 0 else None
 
-    distinct_outcomes = _distinct_outcomes(pooled)
-    eff_n = int(distinct_outcomes.shape[0])
+    # R345(b)(4): the resampling UNIT is the opening pair, not the game. Resampling games
+    # treats two legs of one opening as independent draws, which understates the between-
+    # opening variance the interval is supposed to carry — and it understates it on the LOWER
+    # bound `gate_promotion_decision` reads, so the bar cleared more often than its stated
+    # confidence. `eff_n` moves with it: an effective-n counted in games beside a CI computed
+    # over pairs would be two answers to one question, which is LAW-04's own subject.
+    unit_outcomes = np.asarray(pair_units(pooled), dtype=np.float64)
+    eff_n = int(unit_outcomes.shape[0])
     # Distinct-game bootstrap Elo-CI-vs-best (:526-528), seeded from `gate.seed_base`: the
     # pooled distinct-game WR bootstrap lower bound, RE-CENTERED to the Elo zero-point (a
     # fair 50% WR <-> a zero Elo gap) — positive iff the candidate's bootstrap-lower WR
@@ -296,7 +344,7 @@ def aggregate_gate(
     # seed-sensitivity, and pooled-set consumption, all satisfied here); recorded as an
     # implementation choice, not a design contradiction.
     wr_lower_boot, _wr_upper_boot = pair_bootstrap_wr_ci(
-        distinct_outcomes, resamples=gate_cfg.bootstrap_resamples,
+        unit_outcomes, resamples=gate_cfg.bootstrap_resamples,
         ci_level=0.95, seed=gate_cfg.seed_base,
     )
     elo_ci_lower_boot = (wr_lower_boot - 0.5) if wr_lower_boot is not None else None
@@ -328,4 +376,5 @@ def aggregate_gate(
         wr_screen=wr_screen, wr_confirm=wr_confirm, n_screen=n_screen, n_confirm=n_confirm,
         n_pooled=n_pooled, escalated=escalated, elo_ci_lower_boot=elo_ci_lower_boot,
         low_power=low_power, eff_n=eff_n, promoted=promoted,
+        wins=pooled_wins, losses=n_pooled - pooled_wins - pooled_draws, draws=pooled_draws,
     )

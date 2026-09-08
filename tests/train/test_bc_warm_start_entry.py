@@ -221,6 +221,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
             candidate_color=1,
             board_factory=lambda: Board.with_encoding_name(_ENC),
             max_plies=8,
+            opening_id="<no opening>",
         )
     finally:
         engine.close()

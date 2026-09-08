@@ -44,7 +44,9 @@ from mantis.model import CnnArch, build_net
 
 #: The grid encoding and the one shipped book — a real registry row and a real book, so the
 #: round this file drives is the production round shape and not a fixture-only one.
-_ENC = "v6"
+#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
+#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+_ENC = "v6w25"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 
@@ -86,7 +88,7 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
-        round_id="floor_wiring", step=1, candidate_snapshot=str(candidate),
+        round_index=0, round_id="floor_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=0,
         random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,

@@ -67,7 +67,7 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
     ]
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
-        round_id=f"guard_order_{enc_name}", step=1,
+        round_index=0, round_id=f"guard_order_{enc_name}", step=1,
         candidate_snapshot=str(tmp_path / "candidate.pt"),
         best_snapshot=str(tmp_path / "best.pt"), best_step=None,
         encoding=enc_name, worker_device="cpu", gate=gate, rung_jobs=rung_jobs,

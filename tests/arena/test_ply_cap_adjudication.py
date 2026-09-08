@@ -44,18 +44,25 @@ _ENCODING = "v6_live2_ls"
 #: rather than assumed, because a balanced position would make every award test vacuous. The
 #: cell assignment follows the engine's own compound-turn order (1, then pairs), verified by
 #: the two `longest`/`count_winning_moves` assertions in `test_the_planted_position_is_lopsided`.
+#: REACHABLE, and that is now load-bearing rather than incidental. The cells this replaces
+#: put player -1 on row `r = 9`, up to 18 hex-steps from the nearest stone — a position no
+#: legal sequence can produce at any encoding's `legal_move_radius`, so the adjudicator was
+#: being measured on input the game cannot hand it. R345(b)(2)'s legality boundary refuses to
+#: replay it. Every property the assertions below read is preserved and re-derived from the
+#: engine, not asserted here: unfinished, `longest(1) = 5` against `longest(-1) = 1`, and
+#: `count_winning_moves(1) = 2` against `0`.
 _PLANTED = [
     (0, 0),          # ply 0  -> player  1
-    (9, 9), (0, 9),  # plies 1,2 -> player -1
+    (0, 4), (2, 4),  # plies 1,2 -> player -1
     (1, 0), (2, 0),  # plies 3,4 -> player  1
-    (2, 9), (4, 9),  # plies 5,6 -> player -1
+    (4, 4), (6, 4),  # plies 5,6 -> player -1
     (3, 0), (4, 0),  # plies 7,8 -> player  1
-    (6, 9),          # ply 9  -> player -1
+    (8, 4),          # ply 9  -> player -1
 ]
 #: The same position CONTINUED to a genuine win on the last permitted ply: player -1 takes
 #: plies 9,10 and player 1 completes its six at ply 11, so the game ends `plies == 12` WITH a
 #: winner — the shape that is indistinguishable from a cap without the `terminal` field.
-_WIN_ON_CAP = [*_PLANTED, (8, 9), (5, 0)]
+_WIN_ON_CAP = [*_PLANTED, (10, 4), (5, 0)]
 
 
 @dataclass(frozen=True)

@@ -136,6 +136,13 @@ class RoundSpec:
     """PATHS AND PRIMITIVES ONLY — a torch module is not representable here."""
 
     round_id: str
+    #: R345(b)(4) — the round's ordinal within the run, monotone and resume-restored
+    #: (`EvalPipeline.restore_round_state`). It is what makes each round's opening subset
+    #: non-overlapping with the last: `round_openings` windows a `seed_base`-seeded
+    #: permutation of the book by this index. Parsing it back out of `round_id` was the
+    #: alternative and is the transcription class R192(e) refuses — the id's format is a
+    #: display decision, not a data contract.
+    round_index: int
     step: int
     candidate_snapshot: str
     best_snapshot: str | None

@@ -52,6 +52,7 @@ def test_a_game_ends_at_the_cap_it_was_given(cap: int) -> None:
     winner, plies, moves, terminal, _adj, stats = _play_one_game(
         _FirstLegalBot(), _FirstLegalBot(), [],
         candidate_color=1, board_factory=_board_factory, max_plies=cap,
+        opening_id="<no opening>",
     )
     assert stats is None, (
         "two `_FirstLegalBot`s expose no search root, so the record must carry `None` — "

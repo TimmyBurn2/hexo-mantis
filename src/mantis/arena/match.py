@@ -23,12 +23,29 @@ from typing import Any
 
 from mantis.arena.adjudicate import (
     TERMINAL_EXHAUSTED,
+    TERMINAL_FORFEIT,
     TERMINAL_PLY_CAP,
     TERMINAL_WIN,
     PlyCapAdjudicator,
     PlyCapVerdict,
 )
 from mantis.arena.regime import RegimeKey
+
+
+class IllegalOpeningError(ValueError):
+    """A book opening did not replay: one of its moves is outside the board's legal set.
+
+    FATAL, and deliberately not the forfeit a player's illegal move gets (R345(b)(2)). The
+    book is shared by every game in the round, so a forfeit would score each affected game a
+    loss for whichever side happened to be the candidate — and the colour-swap law means that
+    is BOTH sides in turn, producing a perfectly balanced 50% win rate from a broken
+    instrument.
+
+    NOT `books.BookError`, though it is the same family of fact: this module does not import
+    `mantis.arena.books` (the openings are duck-typed so the match stays decoupled from the
+    book package), and only the loop holds a board, so only the loop can detect this.
+    """
+
 
 #: `colors` shape: {"candidate": <player int>, "opponent": <player int>} — engine
 #: convention (1 / -1). ORACLE-CHOSEN SEAM (tests/arena/test_match_fairness.py docstring).
@@ -101,6 +118,7 @@ def _play_one_game(
     candidate_color: int,
     board_factory: Callable[[], Any],
     max_plies: int,
+    opening_id: str,
     adjudicator: PlyCapAdjudicator | None = None,
 ) -> tuple[str, int, tuple[tuple[int, int], ...], str, PlyCapVerdict | None, tuple[dict[str, Any], ...] | None]:
     """Play one game from `opening_moves`; return
@@ -116,6 +134,13 @@ def _play_one_game(
     With one armed, that ONE branch consults it instead (see `DEFAULT_MAX_PLIES` and
     `mantis.arena.adjudicate`). The exhausted-legal-moves exit is deliberately NOT routed
     through adjudication: that is a finished game under the rules, not a budget expiry.
+
+    Every move — the replayed opening's and every player's — is checked against the board's
+    own legal set before it is applied (R345(b)(2)). A player's illegal move ends the game
+    `TERMINAL_FORFEIT` against that player; an opening's raises `IllegalOpeningError`.
+
+    Raises:
+        IllegalOpeningError: a move in `opening_moves` is not in the board's legal set.
     """
     board = board_factory()
     candidate_player.new_game()
@@ -123,6 +148,14 @@ def _play_one_game(
 
     moves: list[tuple[int, int]] = []
     for q, r in opening_moves:
+        if not board.is_legal(q, r):
+            raise IllegalOpeningError(
+                f"opening {opening_id!r} does not replay: move ({q}, {r}) at ply "
+                f"{len(moves)} is not in the board's legal set under encoding geometry "
+                f"(occupied, or outside every stone's legal_move_radius ball). The board "
+                f"would have accepted an off-radius cell — `apply_move` refuses only an "
+                f"occupied one — so this is checked here or nowhere."
+            )
         board.apply_move(q, r)
         moves.append((q, r))
 
@@ -139,6 +172,16 @@ def _play_one_game(
         current = board.current_player
         mover = candidate_player if current == candidate_color else opponent_bot
         q, r = mover.select_move(board)
+        # R345(b)(2) — THE LEGALITY BOUNDARY. Checked BEFORE `apply_move`, because
+        # `apply_move` refuses an occupied cell and nothing else: an off-radius coordinate
+        # was accepted, played on, and scored. The check is cheap here and only here — the
+        # `while` condition above has just called `legal_move_count()`, which is what rebuilds
+        # the engine's legal-set cache, so this is an O(1) lookup on an already-clean cache.
+        if not board.is_legal(q, r):
+            forfeiting = "candidate" if mover is candidate_player else "opponent"
+            winner = "opponent" if forfeiting == "candidate" else "candidate"
+            return (winner, len(moves), tuple(moves), TERMINAL_FORFEIT, None,
+                    tuple(stats) if saw_a_root else None)
         root = getattr(mover, "last_root", None)
         if root is not None:
             saw_a_root = True
@@ -210,7 +253,7 @@ def _record_one(
     winner, plies, moves, terminal, adjudication, stats = _play_one_game(
         candidate_player, opponent_bot, list(opening.moves),
         candidate_color=candidate_color, board_factory=board_factory,
-        max_plies=max_plies, adjudicator=adjudicator,
+        max_plies=max_plies, opening_id=str(opening.opening_id), adjudicator=adjudicator,
     )
     return GameRecord(
         regime_key=regime_key,
@@ -316,4 +359,5 @@ def play_paired_match(
     return records
 
 
-__all__ = ["DEFAULT_MAX_PLIES", "Colors", "GameRecord", "play_paired_match"]
+__all__ = ["DEFAULT_MAX_PLIES", "Colors", "GameRecord", "IllegalOpeningError",
+           "play_paired_match"]

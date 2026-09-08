@@ -24,7 +24,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from mantis.arena.books import Opening, paired_openings
+from mantis._engine import Board
+from mantis.arena.books import Opening
 from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.eval_posture import StrengthFloorSpec
 from mantis.diagnostics.acceptance_witness import (
@@ -46,13 +47,17 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 #: A finished game: player 1 completes a six-in-a-row along `(1, 0)` at ply 11. Cells follow
 #: the ENGINE's compound-turn order (ply 0 to player 1, then pairs), which is exactly the order
 #: the ply-parity expression gets wrong.
+#: REACHABLE, which R345(b)(2) made a requirement rather than a nicety. Player -1's cells used
+#: to sit on row `r = 9`, up to 18 hex-steps from the nearest stone — a position no legal
+#: sequence produces at any encoding's `legal_move_radius`, so the witness was reading a
+#: finished game the rules cannot reach. Player 1's winning six is unchanged.
 _WIN_LINE: list[tuple[int, int]] = [
     (0, 0),          # ply 0      -> player  1
-    (9, 9), (0, 9),  # plies 1,2  -> player -1
+    (0, 4), (1, 4),  # plies 1,2  -> player -1 (adjacent: the loser's longest run is 2)
     (1, 0), (2, 0),  # plies 3,4  -> player  1
-    (2, 9), (4, 9),  # plies 5,6  -> player -1
+    (4, 4), (6, 4),  # plies 5,6  -> player -1
     (3, 0), (4, 0),  # plies 7,8  -> player  1
-    (6, 9), (8, 9),  # plies 9,10 -> player -1
+    (8, 4), (10, 4), # plies 9,10 -> player -1
     (5, 0),          # ply 11     -> player  1, and the six is complete
 ]
 _ENCODING = "v6"
@@ -90,6 +95,27 @@ def _tiny_arch() -> CnnArch:
     return CnnArch(board_size=19, in_channels=8, filters=8, res_blocks=1)
 
 
+def _derived_opening() -> Opening:
+    """A four-ply opening DERIVED at `_ENCODING`'s own geometry, not drawn from the book.
+
+    `book_v1_s20260625_p4` is minted against `gnn_axis_v1` (radius 6) and 292 of its 512
+    openings need radius >= 6 to replay, while `_ENCODING` here is radius-5 `v6` — a pairing
+    R345(b)(2)'s legality boundary refuses, and one the seeded draw at `seed=7` happened to
+    land on. The encoding is NOT incidental in this suite (`_tiny_arch` is sized from v6's
+    19x19 geometry), so the opening moves rather than the encoding. What the suite reads —
+    the seat, the run lengths, the decisive count — is unaffected by WHICH legal opening the
+    second game starts from; that it is legal is the part that was never true.
+    """
+    board = Board.with_encoding_name(_ENCODING)
+    moves: list[tuple[int, int]] = []
+    for ply in range(4):
+        legal = sorted(board.legal_moves())
+        move = legal[(7 + ply * 3) % len(legal)]
+        board.apply_move(*move)
+        moves.append(move)
+    return Opening(opening_id="derived-r5", moves=moves)
+
+
 def _readout(seed: int) -> dict:
     """One full witness pass for a SEEDED control arm, on CPU."""
     spec = lookup(_ENCODING)
@@ -101,7 +127,7 @@ def _readout(seed: int) -> dict:
     try:
         openings = [
             Opening(opening_id="planted-win", moves=list(_WIN_LINE)),
-            *paired_openings("book_v1_s20260625_p4", n_pairs=1, seed=7),
+            _derived_opening(),
         ]
         records = play_arm(
             build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0),

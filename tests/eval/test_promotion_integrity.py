@@ -155,7 +155,12 @@ def test_the_eval_worker_actually_emits_the_seat() -> None:
         winner="candidate", moves=((0, 0), (1, 1)),
         regime_key=SimpleNamespace(canonical=lambda: "r"),
         trajectory_hash="h", colors={"candidate": -1, "opponent": 1},
+        opening_id="op7",
     ))
+    assert record["opening_id"] == "op7", (
+        "the eval worker drops the opening, so the gate's bootstrap cannot resample PAIRS "
+        "and falls back to treating two correlated legs as independent games (R345(b)(4))"
+    )
     assert record["candidate_color"] == -1, (
         "the eval worker drops the seat, so every production record keys the same as its "
         "colour twin and the LAW-04 fix never fires in a real round"

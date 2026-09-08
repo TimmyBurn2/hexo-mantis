@@ -1,3 +1,7 @@
+# >300 justify (R8): one question — which encoding an eval round binds and decodes — asked
+# once per arm over ONE shared round-spec builder. The grid arms, the graph arm and the
+# refusal arm are only comparable because they are constructed identically; split across
+# files, a builder edit could move one arm's geometry while every file stayed green.
 """⊕ WP12-R Phases B+C — an eval round must decode the encoding the round DECLARED.
 
 Oracle-first (PREREG WP12-R §1), byte-frozen through IMPL. At HEAD `mantis.eval.worker`
@@ -111,7 +115,7 @@ def _round_spec(
     ]
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
-        round_id=f"oracle_{enc_name}", step=1, candidate_snapshot=str(candidate),
+        round_index=0, round_id=f"oracle_{enc_name}", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=enc_name, worker_device="cpu",
         gate=gate, rung_jobs=rung_jobs, random_floor_games=floor_games,
         random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,
@@ -124,6 +128,43 @@ def _round_spec(
         fused_graph_caps=_caps_for(enc_name),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
+
+
+def _openings_at(enc_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drive the round from openings DERIVED at `enc_name`'s own geometry.
+
+    `book_v1_s20260625_p4` is the repo's only book and is minted against `gnn_axis_v1`
+    (`tools/mint_opening_book.py`, radius 6). Measured over its 512 openings, 292 of them
+    (57.03%) require `legal_move_radius >= 6` to replay — so under a radius-5 grid encoding
+    like `v6` the round starts from positions the rules cannot reach. Nothing detected that
+    until R345(b)(2) put a legality boundary in the match loop; before it, those openings
+    were simply played.
+
+    This suite's subject is which SPEC the round binds and whether the round is
+    deterministic, not which openings it draws, so the openings are derived here rather than
+    drawn from a book whose geometry does not match. Deriving them also removes a silent
+    dependency on WHICH single opening `seed_base` happened to select. Whether the repo
+    should ALSO ship a radius-5 book is an artifact decision on the architect's ledger, not
+    this suite's to make.
+    """
+    from mantis._engine import Board
+    from mantis.arena.books import Opening
+
+    def _derived(book_id: str, *, n_pairs: int, seed_base: int, round_index: int,
+                 **_kw) -> list[Opening]:
+        openings: list[Opening] = []
+        for i in range(max(int(n_pairs), 1)):
+            board = Board.with_encoding_name(enc_name)
+            moves: list[tuple[int, int]] = []
+            for ply in range(4):
+                legal = sorted(board.legal_moves())
+                move = legal[(seed_base + round_index + i * 7 + ply * 3) % len(legal)]
+                board.apply_move(*move)
+                moves.append(move)
+            openings.append(Opening(opening_id=f"{book_id}-derived-{i}", moves=moves))
+        return openings
+
+    monkeypatch.setattr(worker, "round_openings", _derived)
 
 
 def _recorded_bindings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]]:
@@ -201,6 +242,7 @@ def test_dense_v6_round_is_byte_stable_and_deterministic(
     evidence in PREREG §3, reproducible from the preserved probe, not the gate.
     """
     bound = _recorded_bindings(monkeypatch)
+    _openings_at("v6", monkeypatch)
     spec = _round_spec(tmp_path, "v6", rung_games=2, floor_games=2)
 
     first = worker.run_round(spec)
@@ -227,6 +269,7 @@ def test_declared_grid_encoding_is_bound_and_decodes(
     graph arm green would pass every other oracle in this file.
     """
     bound = _recorded_bindings(monkeypatch)
+    _openings_at(enc_name, monkeypatch)
 
     result = worker.run_round(_round_spec(tmp_path, enc_name))
 

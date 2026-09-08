@@ -74,10 +74,26 @@ def _regime_key() -> RegimeKey:
 
 
 def _openings(n: int = 6) -> list[_Opening]:
-    return [
-        _Opening(opening_id=f"op{i}", moves=[(i, 0), (i, 1), (i + 1, 0), (i + 1, 1)])
-        for i in range(n)
-    ]
+    """`n` distinct four-ply openings DERIVED from the engine's own legal set.
+
+    The hand-written coordinates this replaces were off the legal set from `op3` onward —
+    they started at `(3, 0)`, and an EMPTY board's legal region is the 5x5 block around the
+    origin regardless of radius, so half these openings were positions the rules cannot
+    reach. Nothing noticed until R345(b)(2) put a legality boundary in the match loop.
+    Asking the board what is legal, rather than asserting it here, is what stops the fixture
+    drifting off the rules again (R192(e), derive-or-delete).
+    """
+    openings: list[_Opening] = []
+    for i in range(n):
+        board = _board_factory()
+        moves: list[tuple[int, int]] = []
+        for ply in range(4):
+            legal = sorted(board.legal_moves())
+            move = legal[(i * 7 + ply * 3) % len(legal)]
+            board.apply_move(*move)
+            moves.append(move)
+        openings.append(_Opening(opening_id=f"op{i}", moves=moves))
+    return openings
 
 
 def _pair():

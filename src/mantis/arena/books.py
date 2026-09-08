@@ -77,4 +77,63 @@ def paired_openings(
     ]
 
 
-__all__ = ["BookError", "Opening", "paired_openings"]
+def round_openings(
+    book_id: str,
+    *,
+    n_pairs: int,
+    seed_base: int,
+    round_index: int,
+    books_dir: Path | str | None = None,
+) -> list[Opening]:
+    """The openings for ONE eval round: a non-overlapping window over a seeded permutation.
+
+    R345(b)(4). `paired_openings` draws with a fixed seed, so every round of a run played the
+    SAME openings — round 40's promotion look was the same games as round 1's. Correlated
+    looks make a promotion series far less informative than its game count suggests, and the
+    degradation flag then reads a series that is mostly one sample repeated.
+
+    THE SHAPE. `seed_base` permutes the whole book ONCE; round `r` takes the `n_pairs`-wide
+    window starting at `r * n_pairs`, modulo the book size. Consecutive rounds are therefore
+    DISJOINT by construction rather than by luck, which is the property a fixed seed cannot
+    have and a per-round random seed only has in expectation. Past `len(book) / n_pairs`
+    rounds the window wraps; a wrapped round is a fresh alignment of the same permutation, not
+    a replay of round 0, and the disjointness guarantee is stated for CONSECUTIVE rounds only.
+
+    Args:
+        book_id: the book to draw from.
+        n_pairs: openings in this round (each is later played twice, colours swapped).
+        seed_base: the run's own `gate.seed_base` — the permutation's only entropy.
+        round_index: the round's ordinal, monotone within a run.
+        books_dir: override for the packaged book directory (tests).
+
+    Returns:
+        `n_pairs` distinct openings, or the whole book when it is smaller than `n_pairs`.
+
+    Raises:
+        BookError: unknown id, missing file, or a sha256 mismatch.
+        ValueError: `n_pairs` or `round_index` is negative.
+    """
+    if n_pairs < 0 or round_index < 0:
+        raise ValueError(
+            f"round_openings: n_pairs={n_pairs} and round_index={round_index} must both be "
+            ">= 0; a negative window has no meaning and would silently wrap backwards"
+        )
+    directory = Path(books_dir) if books_dir is not None else _DEFAULT_BOOKS_DIR
+    raw_openings = _load_book_openings(book_id, directory)
+    total = len(raw_openings)
+    if total == 0:
+        return []
+    order = list(range(total))
+    random.Random(seed_base).shuffle(order)
+    take = min(n_pairs, total)
+    start = (round_index * take) % total
+    # `% total` on each index rather than a slice: the window must stay `take` wide when it
+    # runs off the end, and a slice would silently return a short round instead.
+    chosen = [raw_openings[order[(start + i) % total]] for i in range(take)]
+    return [
+        Opening(opening_id=str(o["id"]), moves=[tuple(m) for m in o["moves"]])
+        for o in chosen
+    ]
+
+
+__all__ = ["BookError", "Opening", "paired_openings", "round_openings"]

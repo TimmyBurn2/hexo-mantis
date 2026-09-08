@@ -149,7 +149,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
 
     batching = InferenceBatchingSpec(inference_batch_size=32, inference_max_wait_ms=7)
     spec = RoundSpec(
-        round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
+        round_index=0, round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
         encoding="gnn_axis_v1", worker_device="cpu",
         gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
                       screen_confirm_lo=0.5, deploy_sims=8, opening_book="none",
