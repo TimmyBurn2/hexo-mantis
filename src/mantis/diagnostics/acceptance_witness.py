@@ -278,7 +278,8 @@ def play_arm(
 
 
 def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
-                device: torch.device) -> LocalInferenceEngine:
+                device: torch.device,
+                dump_dir: Path | None = None) -> LocalInferenceEngine:
     """Build one arm's inference engine: seeded net, then the arm's weights if it has any.
 
     Raises:
@@ -302,11 +303,23 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
         # AUDIT-1 F-31: the declared autocast dtype, from the config this witness already
         # holds. `amp_dtype_for` resolves it (LAW-06); this site names no dtype.
         amp_dtype=cfg.train.amp_dtype,
+        # R339(c): 1-in-1. THIS DRIVER IS WHERE `F-816-37` FIRED — the STEP 4c acceptance
+        # witness died on it after 14 min 50 s — so it is the last place the class should be
+        # sampled at 1-in-64. The dump rides only when the caller named an output location:
+        # a diagnostic that writes megabytes into whatever directory it was launched from is
+        # the wrong default, and the CLI's `--out` is the one place a location is stated.
+        collate_check_period=1,
+        collate_dump=None if dump_dir is None else (
+            str(dump_dir),
+            lambda: {"driver": "acceptance_witness", "arm": arm.label,
+                     "encoding": spec.name, "concurrency": 1,
+                     "round_id": f"witness_{arm.label}"},
+        ),
     )
 
 
 def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
-                device: torch.device) -> dict[str, Any]:
+                device: torch.device, dump_dir: Path | None = None) -> dict[str, Any]:
     """Play every arm against the random bot and return the full readout.
 
     The encoding is the CONFIG's (`identity.encoding`) with no override: LAW-11 makes the
@@ -337,7 +350,8 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
         "arms": {},
     }
     for arm in arms:
-        engine = _arm_engine(arm, cfg=cfg, dump=dump, spec=spec, device=device)
+        engine = _arm_engine(arm, cfg=cfg, dump=dump, spec=spec, device=device,
+                             dump_dir=dump_dir)
         try:
             records = play_arm(
                 build_candidate_player(engine, sims, spec=spec,
@@ -376,7 +390,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     readout = run_witness(args.config, [ArmSpec.parse(a) for a in args.arm],
-                          games=args.games, device=torch.device(args.device))
+                          games=args.games, device=torch.device(args.device),
+                          dump_dir=None if args.out is None else args.out.parent)
     text = json.dumps(readout, indent=1, sort_keys=True)
     if args.out is not None:
         args.out.write_text(text + "\n", encoding="utf-8")

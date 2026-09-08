@@ -175,6 +175,13 @@ def _occupancy_agg(
     }
 
 
+#: What a caller hands the server so a contract failure lands on disk: where to write, and a
+#: CALLABLE for the context. A callable and not a dict because the interesting half —  which
+#: block is playing and at what concurrency — changes DURING the round, and a snapshot taken at
+#: construction would record the round's arming rather than the state at the fire (R339(c)).
+CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
+
+
 class InferenceServer(threading.Thread):
     """Thin Python inference loop backed by a Rust-owned batching queue."""
 
@@ -189,6 +196,8 @@ class InferenceServer(threading.Thread):
         heartbeat: Callable[[str], None] | None = None,
         sink: EventSink | None = None,
         fused_graph_caps: FusedGraphCapsSpec | None = None,
+        collate_check_period: int | None = None,
+        collate_dump: CollateDumpTarget | None = None,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
@@ -206,6 +215,13 @@ class InferenceServer(threading.Thread):
         # do nothing at all. The consuming watchdog is not built here.
         self._heartbeat = heartbeat
 
+        # R339(c). `None` is the PRE-EXISTING rate and says so: the canary period derived from
+        # the pop width, which run6's `inference_batch_size: 64` makes 1-in-64. The eval path
+        # passes `1` — that path is ~93 games a round, so 1-in-1 is affordable there and
+        # nowhere else, and `F-816-37`'s only occurrence was on it. Not a config key: the rate
+        # is a property of WHICH PATH is running, not of the run.
+        self._collate_check_period = collate_check_period
+        self._collate_dump = collate_dump
         hp = InferenceHParams.from_config(config)
         self._batch_size = hp.inference_batch_size
         self._max_wait_ms = hp.inference_max_wait_ms
@@ -540,6 +556,36 @@ class InferenceServer(threading.Thread):
         bucket = _pow2_bucket(n_requests)
         self._occupancy_hist[bucket] = self._occupancy_hist.get(bucket, 0) + 1
 
+    def _dump_collate_failure(
+        self, wire: Any, error: BaseException, span: tuple[int, int]
+    ) -> None:
+        """R339(c): write the offending batch before the caller re-raises. Never raises.
+
+        A server with no dump target configured (every self-play engine) does nothing here —
+        the instrument is armed per PATH. It was once argued that arming it everywhere would
+        put a multi-megabyte write on the hot loop for "a class that has only ever fired on
+        eval": BOTH halves of that are now false. `F-816-37` fired on the TRAINING path at
+        R340 leg 3, and the write only ever happens on a contract failure, which is run-fatal
+        — so there is no hot path to protect. The trainer's own dump is
+        `train/coordinator/dispatch.py::_dump_train_collate`.
+        """
+        if self._collate_dump is None:
+            return
+        from mantis.selfplay.collate_dump import write_collate_dump
+
+        dump_dir, context_fn = self._collate_dump
+        context: dict[str, Any]
+        try:
+            context = dict(context_fn())
+        except Exception:  # noqa: BLE001 — a context that raises must not eat the dump
+            context = {"context_error": "context callable raised"}
+        context["fused_span"] = [int(span[0]), int(span[1])]
+        path = write_collate_dump(wire, dump_dir=dump_dir, context=context, error=error)
+        if path is None:
+            _LOG.error("F-816-37 dump-on-fire FAILED to write under %s", dump_dir)
+        else:
+            _LOG.error("F-816-37 dump-on-fire wrote %s", path)
+
     def _record_collate(self, collate_s: float) -> None:
         """Accumulate ONE successful `collate_graph_batch`. Counted SEPARATELY from the
         wait: a batch whose collate raises still contributes a real wait sample, and
@@ -755,6 +801,7 @@ class InferenceServer(threading.Thread):
         catch-and-retry R276(f) forbids by name.
         """
         from mantis.selfplay.graph_collate import (
+            GraphContractError,
             collate_graph_batch,
             graph_wire_from_rust,
             reset_semantic_canary,
@@ -789,7 +836,10 @@ class InferenceServer(threading.Thread):
             )
         # First batch after (re)start runs the FULL semantic/geometric layer.
         reset_semantic_canary()
-        canary_period = int(self._batch_size)  # cheap; a knob if it ever matters
+        canary_period = (
+            int(self._batch_size) if self._collate_check_period is None
+            else int(self._collate_check_period)
+        )
 
         try:
             while not self._stop_event.is_set():
@@ -837,17 +887,27 @@ class InferenceServer(threading.Thread):
                         for g0, g1 in plan:
                             sub = slice_graph_wire(payload, g0, g1)
                             _t_collate_start = time.perf_counter()
-                            batch = collate_graph_batch(
-                                sub,
-                                expected_version=1,
-                                trunk_size=spec.trunk_size,
-                                win_length=win_length,
-                                node_feat_dim=node_feat_dim,
-                                edge_feat_dim=edge_feat_dim,
-                                device=str(self.device),
-                                semantic="canary",
-                                canary_period=canary_period,
-                            )
+                            try:
+                                batch = collate_graph_batch(
+                                    sub,
+                                    expected_version=1,
+                                    trunk_size=spec.trunk_size,
+                                    win_length=win_length,
+                                    node_feat_dim=node_feat_dim,
+                                    edge_feat_dim=edge_feat_dim,
+                                    device=str(self.device),
+                                    semantic="canary",
+                                    canary_period=canary_period,
+                                )
+                            except GraphContractError as exc:
+                                # R339(c) DUMP-ON-FIRE. The SLICE is what the check read, so
+                                # the slice is what is saved; the unsliced payload is a
+                                # different object and saving it would answer a question
+                                # nobody asked. The dump can only ADD an artifact — it never
+                                # replaces this raise, and `write_collate_dump` swallows its
+                                # own failures for exactly that reason.
+                                self._dump_collate_failure(sub, exc, (g0, g1))
+                                raise
                             # Per PART, not per pop: `collate.count == sum(M)` where it used to
                             # equal `queue_wait.count`. The asymmetry is intended and recorded
                             # so it is not read as a leak.

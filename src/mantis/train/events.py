@@ -328,15 +328,22 @@ def emit_axis_distribution(
     axis_alert = float(monitor_cfg.axis_alert)
     max_frac = max(axis_q, axis_r, axis_s)
 
-    if max_frac >= axis_alert:
-        _LOG.warning(
-            "axis_distribution_alert: step=%d axis_max=%s max_frac=%.4f (>= %.2f, n_games=%d)",
-            train_step, axis_max, max_frac, axis_alert, len(recent_games),
-        )
-    elif max_frac >= axis_warn:
-        _LOG.warning(
-            "axis_distribution_warn: step=%d axis_max=%s max_frac=%.4f (>= %.2f, n_games=%d)",
-            train_step, axis_max, max_frac, axis_warn, len(recent_games),
+    # R343(e) — DEMOTED TO A METRIC, and the ground is alert fatigue rather than a belief that
+    # the number does not matter. The R342 burst fired `axis_distribution_alert` on 193 of 193
+    # emissions: a warning that fires every time carries no information and trains its reader to
+    # skip the whole channel, including the warnings that do. The THRESHOLD is what is wrong
+    # (`run6.yaml` mints `axis_alert: 0.5`, and three axes make ~0.33 the floor by pigeonhole),
+    # and re-deriving it needs the shakedown's own distribution — carded, `AUDIT-1 F-01`
+    # cross-referenced. Until then the comparison is still MADE and still PUBLISHED, on the
+    # event where a dashboard reads it; only the log level moves. Deleting the comparison would
+    # have thrown away the measurement the re-derivation needs.
+    band = "alert" if max_frac >= axis_alert else ("warn" if max_frac >= axis_warn else "ok")
+    if band != "ok":
+        _LOG.info(
+            "axis_distribution_%s: step=%d axis_max=%s max_frac=%.4f (>= %.2f, n_games=%d) — "
+            "METRIC, not an alert (R343(e)): the threshold is under re-derivation",
+            band, train_step, axis_max, max_frac,
+            axis_alert if band == "alert" else axis_warn, len(recent_games),
         )
 
     emit_via(sink, {
@@ -347,6 +354,11 @@ def emit_axis_distribution(
         "axis_s": axis_s,
         "axis_max": axis_max,
         "n_games": len(recent_games),
+        # The band the dashboard draws. Carried on the event because that is what "demoted to a
+        # dashboard metric" means: the reading survives the demotion, the interruption does not.
+        "axis_band": band,
+        "axis_warn_threshold": axis_warn,
+        "axis_alert_threshold": axis_alert,
     })
 
     if tb_writer is not None:

@@ -104,7 +104,7 @@ _CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml", "smoke_preflight_
 #: the membership test asserts each declared row's own `# template:` header line matches the
 #: declared template AND that some baselined config carries the same line (derived from the
 #: baseline files at point of use, never transcribed).
-_POST_BASELINE_MINTS = (("shakedown_20260807.yaml", "dev"),)
+_POST_BASELINE_MINTS = (("shakedown_20260807.yaml", "dev"), ("run6.yaml", "dev"))
 
 #: Exactly what this WP's re-mint may add — one key, one family of three leaves, one key.
 _ADDED_LEAVES = {

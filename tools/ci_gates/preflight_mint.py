@@ -1157,7 +1157,8 @@ def _boot_main(args) -> int:
         )
     handles = compose_run(config=booted, trainer=collab.trainer, pool=collab.pool,
                           buffer=collab.buffer, log_dir=collab.log_dir,
-                          checkpoint_dir=collab.checkpoint_dir)
+                          checkpoint_dir=collab.checkpoint_dir,
+                          resume_state=collab.resume_state)
     return _abort_rc(handles.shutdown.abort_rule)
 
 

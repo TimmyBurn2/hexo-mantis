@@ -1084,14 +1084,19 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
     R59's "smoke configs may legally be disarmed" was expressed by ABSENCE — which made
     "deliberately exempt" and "forgotten" the same observable.
 
-    The fix is the partition, and this is its producer: the same planted `run6.yaml`, and the
-    gate now refuses to guess.
+    The fix is the partition, and this is its producer: the same plant, and the gate now
+    refuses to guess. THE PLANT'S NAME MOVED (R338): `configs/run6.yaml` is a declared
+    production config since the run6 mint, so the plant would now be DECLARED-and-disarmed
+    (rc 30) rather than UNDECLARED (rc 31) — a different refusal wearing the same red. The
+    stem is `_F1_PLANT_STEM`, asserted undeclared by its own row above; the history in the
+    paragraphs before this one is left naming `run6.yaml`, because that is what happened.
     """
     root = _mini_tree(tmp_path)
-    run6 = root / "configs" / "run6.yaml"
-    run6.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                             "actor_lag_abort_enabled: false"))
-    assert "actor_lag_abort_enabled: false" in run6.read_text(), (
+    rel = f"{_F1_PLANT_STEM}.yaml"
+    plant = root / "configs" / rel
+    plant.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
+                                              "actor_lag_abort_enabled: false"))
+    assert "actor_lag_abort_enabled: false" in plant.read_text(), (
         "the planted config must really be disarmed, or this test is vacuous"
     )
     result = _mini_audit(root)
@@ -1100,7 +1105,7 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
         "a config on disk that neither tuple names must FAIL the gate — it was rc 0 before "
         f"(never audited at all); got {result.returncode}\n{output[-3000:]}"
     )
-    assert "configs/run6.yaml" in output and "UNDECLARED" in output, (
+    assert f"configs/{rel}" in output and "UNDECLARED" in output, (
         f"the failure must name the undeclared config and say what to do; got {output[-2000:]}"
     )
 
@@ -2306,8 +2311,34 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
 #: is loadable, so each must be discovered, so each must be UNDECLARED. `run6.txt` / `run6.YAML`
 #: (recheck R-2), `run6.yaml.bak`, `.yaml` and `run6.yamlx` (RED-TEAM) were previously caught by
 #: `load_config` refusing them; they are caught HERE now, which is the whole re-ruling.
-_F1_PLANT_PATHS = ("run6.yaml", "run6.yml", "prod/run6.yaml", "prod/nested/run6.yml",
-                   "run6.txt", "run6.YAML", "run6.yaml.bak", ".yaml", "run6.yamlx")
+#: THE STEM IS NOT `run6` ANY MORE, and the reason is the class this file exists for. R338's
+#: mint DECLARED `configs/run6.yaml` in `PRODUCTION_CONFIGS`, so a plant at that name is no
+#: longer UNDECLARED — the rig would report rc 30 (a declared config with a disarmed required
+#: row) and this row would be asserting the wrong refusal while still looking red-on-break.
+#: The stem is therefore ASSERTED undeclared at collection rather than chosen and hoped for:
+#: `test_the_F1_plant_stem_is_declared_by_NEITHER_tuple` below re-derives it from both tuples,
+#: so the next mint that claims this name reds THERE with its reason instead of silently
+#: re-aiming nine parametrised rows. The historical account in the docstrings keeps
+#: `run6.yaml` — that IS what was demonstrated.
+_F1_PLANT_STEM = "run7"
+_F1_PLANT_PATHS = (f"{_F1_PLANT_STEM}.yaml", f"{_F1_PLANT_STEM}.yml",
+                   f"prod/{_F1_PLANT_STEM}.yaml", f"prod/nested/{_F1_PLANT_STEM}.yml",
+                   f"{_F1_PLANT_STEM}.txt", f"{_F1_PLANT_STEM}.YAML",
+                   f"{_F1_PLANT_STEM}.yaml.bak", ".yaml", f"{_F1_PLANT_STEM}.yamlx")
+
+
+def test_the_F1_plant_stem_is_declared_by_NEITHER_tuple() -> None:
+    """The premise every plant row rests on, asserted instead of assumed.
+
+    A stem that some future mint declares turns nine UNDECLARED rows into nine rows about a
+    different refusal, and every one of them would still be red-on-break — which is why the
+    premise needs its own row rather than a comment."""
+    declared = {*PRODUCTION_CONFIGS, *(path for path, _why in EXEMPT_CONFIGS)}
+    collides = sorted(d for d in declared if Path(d).name.split(".")[0] == _F1_PLANT_STEM)
+    assert not collides, (
+        f"the F1 plant stem {_F1_PLANT_STEM!r} is declared by {collides} — a plant at a "
+        "DECLARED name tests rc 30 (disarmed) and not rc 31 (undeclared). Move the stem"
+    )
 
 
 def _plant_disarmed(root: Path, rel: str) -> Path:
@@ -2343,7 +2374,7 @@ def test_an_undeclared_config_fails_the_gate_at_ANY_suffix_and_ANY_depth(tmp_pat
     output = result.stdout + result.stderr
     assert result.returncode == 31, (
         f"a disarmed config at configs/{rel} must FAIL the gate; it was rc 0 for every "
-        f"shape but `run6.yaml` before ADJ-13. got {result.returncode}\n{output[-3000:]}"
+        f"shape but the flat `.yaml` before ADJ-13. got {result.returncode}\n{output[-3000:]}"
     )
     assert f"configs/{rel}" in output and "UNDECLARED" in output, (
         "the failure must name the undeclared config by the SAME relative path a declaration "

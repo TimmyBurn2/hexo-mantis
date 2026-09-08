@@ -34,6 +34,9 @@ repo-wide. The graph leg reuses the production graph seam — it constructs and 
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 import torch
 
@@ -109,6 +112,8 @@ class LocalInferenceEngine:
         inference_batching: InferenceBatchingSpec | None,
         max_in_flight: int,
         amp_dtype: str,
+        collate_check_period: int | None = None,
+        collate_dump: tuple[str, Callable[[], dict[str, Any]]] | None = None,
         leaf_build_threads: int = 1,
     ) -> None:
         self.model = model
@@ -134,6 +139,15 @@ class LocalInferenceEngine:
         # keeps the serial width, because each worker is already one of `n_workers` threads
         # and widening one worker's build takes threads from the others.
         self._leaf_build_threads = max(1, int(leaf_build_threads))
+        # R339(c). DEFAULTED, unlike `leaf_batch_size` and `amp_dtype` two lines up, and the
+        # difference is worth stating because those two carry the opposite rule. A wrong value
+        # on THOSE axes silently changes what the run measures; the worst a defaulted value
+        # does HERE is run the check at the rate every path already ran it at. `None` names
+        # that rate — the batch-size-derived canary — and cannot express "off", so a caller
+        # who says nothing inherits the status quo rather than a disabled check. The eval
+        # sites state `1` explicitly because theirs is the posture R339(c) actually moved.
+        self._collate_check_period = collate_check_period
+        self._collate_dump = collate_dump
         self._graph_batcher = None
         self._graph_server = None
         if self._is_graph:
@@ -187,6 +201,11 @@ class LocalInferenceEngine:
                 # `eval.worker_device: cuda` with its OWN allocator, so a wrong value here is
                 # unbounded in practice on the very arm that OOM'd.
                 fused_graph_caps=fused_graph_caps,
+                # R339(c), threaded for `fused_graph_caps`' reason exactly: the rate and the
+                # dump target are properties of the PATH this engine serves, and the server
+                # has no way to know which path built it.
+                collate_check_period=self._collate_check_period,
+                collate_dump=self._collate_dump,
             )
             self._graph_server.start()
 

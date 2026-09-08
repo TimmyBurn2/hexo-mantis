@@ -421,6 +421,16 @@ class EvalConfig(StrictModel):
     #: and arming either one is a mint event, never an IMPL edit (R1).
     ply_cap_adjudication: PlyCapAdjudicationConfig | None = Field(default=...)
     strength_floor: StrengthFloorConfig | None = Field(default=...)
+    #: THE GATE-BLOCK CONCURRENCY ROW (R339(b)): how many gate games run IN FLIGHT, one thread
+    #: each, sharing the round's two inference engines. OPTIONAL with a real default for
+    #: `identity.arch_kind`'s reason and not a new one — it enters production configs only as a
+    #: minted row, and `1` is not a fallback carrying a guess: it is the SERIAL loop
+    #: `play_paired_match` ran before the parameter existed, byte-exact, so an absent row and a
+    #: minted `1` are the same round. Its ONE consumer is `mantis.eval.worker._play_gate_block`,
+    #: reached through `RoundSpec.concurrency`; the floor probe, the rung battery and the random
+    #: floor keep the serial arm deliberately (a LAW-07 gate input and LAW-04's Elo channel must
+    #: not become nondeterministic to save ~200 s of a ~7 000 s round).
+    concurrency: int = Field(ge=1, default=1)
     gate: GateConfig
     ladder: LadderConfig
 

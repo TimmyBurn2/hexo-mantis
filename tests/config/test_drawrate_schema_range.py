@@ -366,6 +366,23 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         f"delta, R259/F-P2B); got {shakedown}. Changing one in place is R1's hand-varied "
         "config; it is re-minted with a recorded delta or not at all"
     )
+    # R338 / the run6 mint: the THIRD armed production config. Its four values are run5's
+    # pre-registered constants CARRIED, not re-authored — `RUN6_MINT_PREREG.md` proposes no
+    # draw-rate row, and F-WS-4's `N_pool_min` DOES NOT MOVE is the same fact from the other
+    # side. The pin is on the minted file, so an in-place edit of run6's armed block reds here
+    # exactly as run5's and the shakedown's do; gate 12 audits it by name.
+    run6 = postures.pop("run6.yaml", None)
+    assert run6 is not None, (
+        "configs/run6.yaml is a declared PRODUCTION config and must ARM the draw-rate row — "
+        "a disarmed production config is rc 30 at gate 12 (R59/R61)"
+    )
+    assert (run6.threshold, run6.min_step, run6.N_pool_min, run6.consec) == (
+        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
+        RUN5_PREREG["consec"]), (
+        f"run6 CARRIES the four pre-registered constants unchanged; got {run6}. No prereg row "
+        "proposes a new draw-rate value, and a dispatcher authors none (R1/R119)"
+    )
+
     others = {name: block for name, block in postures.items() if name != "run5.yaml"}
     armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
     assert armed_smoke is not None, (

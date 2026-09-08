@@ -431,7 +431,7 @@ def test_compose_runs_parameter_list_is_pinned_so_no_re_add_can_be_silent():
     to a signature census. That route is F9's collaborator seam, deliberately left injectable.
     """
     assert tuple(inspect.signature(mantis.run.compose_run).parameters) == (
-        "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir",
+        "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
     ), (
         "compose_run's parameter list is pinned: no parameter may carry a CONFIG FACT into "
         "this root (WPAX MF-1 — monitor_cfg bypassed the gate and silently disarmed the "
@@ -440,7 +440,16 @@ def test_compose_runs_parameter_list_is_pinned_so_no_re_add_can_be_silent():
         "parameters carrying config facts, and they are DELETED rather than merely stripped "
         "of their defaults — a required parameter is a forcing route with the default "
         "removed, not a closed one, so R64's 'the preflight may never force False' is only "
-        "structurally unrepresentable with the parameter gone."
+        "structurally unrepresentable with the parameter gone. R343(c) added the SEVENTH, "
+        "`resume_state`, and it is admissible on this census's own terms: it carries no "
+        "config fact. It is RESTORED RUNTIME STATE — a round counter, a p_hat and a ring "
+        "identity read from the sidecar beside the checkpoint being resumed — and its only "
+        "producer is `build_run_collaborators`, the same builder every other collaborator on "
+        "this list arrives from. The alternative shapes were both worse: a second read of the "
+        "sidecar inside this root would be a second authority for what the boot resumed from, "
+        "and smuggling it through `trainer` is the invisible route this docstring already "
+        "names as the census's blind spot. Adding it is a design decision and it is recorded "
+        "as one, which is what this tuple exists to force."
     )
 
 

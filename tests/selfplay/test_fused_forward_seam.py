@@ -176,8 +176,13 @@ def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
 
     * exactly ONE `submit_graph_inference_failure` call and ONE `submit_graph_inference_results`
       call in the whole loop (the ONE submit per pop, design §4.1 property 3);
-    * exactly TWO `except` handlers, the inner and the outer that HEAD already carries — a
-      third is a new arm, and the only reason to add one on this path is to retry;
+    * exactly TWO BROAD (`except Exception`) handlers — the inner arm that submits the failure
+      over the seam and the outer loop guard — and every OTHER handler must be NARROW (a named
+      exception) and end in a BARE `raise`. R339(c) replaced a flat count of handlers with this
+      because the count was a PROXY: it reds on an arm that merely observes and re-raises
+      (harmless) and stays green if someone rewrites one of the two existing broad arms into a
+      degrade (the actual hazard), so it was wrong in both directions. What may not appear is a
+      third BROAD catch or any arm that swallows; observe-and-re-raise arms are unlimited;
     * no handler naming `OutOfMemoryError` or `MemoryError` anywhere.
 
     This row is GREEN at authorship and that is its job: it is the pin that must STAY held
@@ -193,9 +198,25 @@ def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
         "sites; the ONE submit per pop is what makes the FFI's self-consistency checks hold "
         "against the UNSLICED `legal_offsets`")
     handlers = [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)]
-    assert len(handlers) == 2, (
-        f"the loop carries {len(handlers)} except handlers; HEAD carries 2 (inner + outer) "
-        "and the split adds none — a third arm is the catch-and-degrade R276(f) forbids")
+    # A handler is SUBMITTING if it routes the failure over the seam (the two HEAD arms), and
+    # OBSERVING if it only looks and re-raises. R339(c) added one observing arm — the
+    # F-816-37 dump — and observing arms are unlimited PROVIDED they cannot swallow.
+    def _is_broad(h: ast.ExceptHandler) -> bool:
+        return h.type is None or ast.unparse(h.type) in {"Exception", "BaseException"}
+
+    broad = [h for h in handlers if _is_broad(h)]
+    assert len(broad) == 2, (
+        f"the loop carries {len(broad)} BROAD except handlers; HEAD carries 2 — the inner arm "
+        "that submits the failure over the seam, and the outer loop guard. A third broad catch "
+        "on this path is the catch-and-degrade R276(f) forbids")
+    for handler in [h for h in handlers if not _is_broad(h)]:
+        reraises = any(
+            isinstance(n, ast.Raise) and n.exc is None for n in ast.walk(handler)
+        )
+        assert reraises, (
+            f"the narrow handler for `{ast.unparse(handler.type) if handler.type else ''}` does "
+            "not end in a bare `raise`. An arm that observes a failure and lets execution "
+            "continue is the catch-and-degrade R276(f) forbids, whatever it logs on the way")
     for handler in handlers:
         named = ast.unparse(handler.type) if handler.type is not None else ""
         assert "OutOfMemoryError" not in named and "MemoryError" not in named, (

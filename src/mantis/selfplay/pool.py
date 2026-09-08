@@ -63,6 +63,30 @@ from mantis.selfplay.pool_push import buffer_composition as _buffer_composition
 _LOG = logging.getLogger(__name__)
 
 
+def _collate_dump_target(config: Any) -> tuple[str, Any]:
+    """R342(b)(i): where a self-play graph-contract failure is dumped, and its context.
+
+    The directory is DERIVED from the run's own checkpoint directory, exactly as the trainer's
+    dump is (`train/coordinator/dispatch.py::_dump_train_collate`), so all three paths' dumps
+    land as siblings under one run record and no second path authority exists.
+
+    The context is a CALLABLE for the eval path's reason — what is interesting about it is read
+    at the moment of the fire, not at construction. This server is never concurrent in the eval
+    sense, so `concurrency` is 1 by construction and SAYS so rather than leaving a reader of the
+    artifact to infer it.
+    """
+    try:
+        ckpt_dir = config["train"]["checkpoint_dir"]
+    except (KeyError, TypeError):
+        ckpt_dir = "checkpoints"
+    dump_dir = str(Path(ckpt_dir).parent / "collate_dumps")
+
+    def _context() -> dict[str, Any]:
+        return {"path": "selfplay", "phase": "selfplay_inference", "concurrency": 1}
+
+    return dump_dir, _context
+
+
 class WorkerPool:
     """Runs concurrent self-play games on Rust-owned worker threads."""
 
@@ -134,6 +158,13 @@ class WorkerPool:
             encoding_spec=spec,
             heartbeat=heartbeat,
             sink=sink,
+            # R342(b)(i): 1-in-1 on the self-play path too, for the WHOLE run. The
+            # batch-size-derived 1-in-64 that stood here does not return. It rested on
+            # "a class that has only ever fired on eval", and `F-816-37` has since fired on
+            # the training path (R340 leg 3) — at 1-in-64 a corrupted batch had 63 chances
+            # in 64 of passing through untouched.
+            collate_check_period=1,
+            collate_dump=_collate_dump_target(config),
         )
 
         self._stop_event = threading.Event()
