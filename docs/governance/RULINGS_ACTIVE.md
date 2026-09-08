@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c7999bb, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2cf5b16, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.59, 2026-09-08. Created under R271 (register hygiene: archive/index split);
+# v3.60, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7348,3 +7348,44 @@ Verbatim text in the register; one-liners here are index only.
   the landing, nine clean, re-verified here by the same script.
   **WHAT THIS CURATION DOES NOT DO: it does not start run6.** The START remains a separate
   operator forward naming the block and the anchor hash, as R343's ROUTE says.
+
+- 2026-09-08 — **v3.60** curated at the **R343 MERGE**, on the operator's conditional grant
+  *"if you think run6 mint is finished you may merge to dev"*. **No register append**: census
+  unchanged at `R23–R343 — 314 / 314 / 0, excluded 53`; `STAMP OK: v3.60`; `--self-test` all four
+  controls fire.
+  **THE CONDITION WAS TESTED, NOT ASSUMED — R285 is the precedent, where a conditional grant was
+  tested, FAILED, and nothing merged.** The test could not be run against `run6.yaml` at all:
+  its armed aborts set a **25 001-step floor** on any admissible burst (`draw_rate_abort.min_step`
+  25000), i.e. **~15.8 h at the measured rate — longer than the 12 h block R343(f) sets**. So
+  **there is no short boot of run6**, and the boot question went to `smoke_preflight_armed.yaml`,
+  the config minted for it. **F-12.**
+  **MY OWN INSTRUMENT PRODUCED A FALSE RED FIRST, AND TWO CONTROLS SETTLED IT.** A preflight at
+  `--burst-steps 60` returned **rc 46** (`PreflightArmedAbortFiredError`), which reads as "the
+  branch cannot boot". It is not: the sanctioned oracle `test_preflight_armed_smoke.py` drives the
+  same preflight at its own `BURST_STEPS = 16` and **PASSES on the R343 branch**, and the
+  identical 60-step invocation at **`65ef46f`, the parent of all seven R343 commits, returns the
+  SAME rc 46**. The code is a property of the burst length against a fresh net that draws every
+  game — the abort WORKING. **This is the third instrument error of the sitting and they are ONE
+  class**: a `tail`-terminated pipeline's rc read as pytest's; a step polled as `"train_step"`
+  when the field is `"step"`; and this. **Each was caught by a control, not by care — which is the
+  lesson: the control is the mechanism.** All three are on the ledger. **F-13.**
+  **VERDICT: THE RUN6 MINT IS FINISHED, AND THE MERGE IS EXECUTED.** `dev` = `origin/dev` =
+  **`1b1ff2d`**, a `--no-ff` merge of `run6-mint` (`63f64f7`), conflict-free. **The governance
+  mirrors were regenerated in the same act** — the merge would otherwise have left `dev` carrying
+  **v3.47** mirrors against a v3.59 workspace; `sync_governance.py` wrote all three with **12
+  fragments redacted** and `--check` now reads **0 stale, audit CLEAN**.
+  **GATES ON THE MERGED `dev`, EACH FROM ITS OWN rc** (never a pipeline's): tier **4901 passed /
+  5 skipped / 0 failed** `PYTEST_RC=0`; gate 14 GREEN; **gate 17 clean over 65 changed files
+  INCLUDING the redacted mirrors**, which is the check that matters when governance text enters a
+  public repo; `GATE6/8/10/12/13_RC=0`; gates 7/9/11/15/16 clean; floor 4963 held. Gate 2
+  (`CARGO_RC=0`, `CLIPPY_RC=0`) and gate 4 (`WASM_RC=0`) were taken on `63f64f7` and the merge
+  adds no Rust.
+  **WHAT REMAINS OPEN, AND WHY NEITHER BLOCKED THE MERGE.** Witness 4 is halted on
+  `CARD-RING-SAMPLER-SEED`, but R343(c) makes that a run-START question carrying its own
+  out-of-time-box clause — the operator's call, bearing on starting run6 rather than on whether
+  the mint is finished. `F-10`/`F-10b`'s wedge is on `gnn_axis_v1`, **not** run6's `gnn_axis_r8`,
+  and `run6.yaml` measured 4 h clean on this same container at R342. Round CIs remain a carded
+  instrument gap.
+  **THIS CURATION DOES NOT START RUN6.** The START is still a separate operator forward naming the
+  block and the anchor hash. `run6-mint` is left in place at `63f64f7` rather than deleted — the
+  tree's convention is `dev` as the only branch, but deletion was not asked for.
