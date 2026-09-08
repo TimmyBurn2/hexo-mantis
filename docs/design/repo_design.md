@@ -182,6 +182,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 8 | community bot API | bot-api v1 (SKELETON) | PLANNED: a vendored OpenAPI 3.1 spec + a BKE-notation round-trip suite. NEITHER EXISTS: the contract file carries two `TODO`s and there are zero `openapi`/`bke` tokens under `src/`, `tests/` or `vendor/`. Recorded as planned rather than deleted — it is a real intention — but it is not a shipped seam (AUDIT-1 F-52) |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
+| 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
 
 Contract changes bump the version and update the contract doc + its tests in the same
 commit. The PyO3 seam stays thin flat arrays (marshaling is a measured cost); per-field
@@ -974,3 +975,39 @@ commit as the tool, rather than as drift.
    on the BC pretrain path and reports through a logger line, never through the sink).
 5. **§4.7 is unchanged.** The contract this reads through is the one that was already there;
    nothing about the event manifest moves, and no row is added to it.
+
+---
+
+### AMENDMENT — contract #11 ADDED: the game record
+
+**R344(b).** A run's games are now WRITTEN. Under §4's own clause — *"each has
+docs/contracts/<name>.md"* and *"contract changes … update the contract doc + its tests in the
+same commit"* — a new seam contract lands as a table row and this note, in the commit that adds
+it, rather than as an eleventh doc nobody's index names (R9).
+
+1. **What it is.** `docs/contracts/game_record.md`, owned by `mantis.monitor.game_record`.
+   Every game on all four channels — self-play, promotion, external rung, random floor — is
+   written to `<out_dir>/logs/games/` as one JSON object per line, from step 0. It is a RUN
+   RECORD, the same kind of artifact as the event stream and the preflight report (contract
+   #10), and it is not a display surface: nothing here renders, serves, or watches.
+2. **Why it is not §4.7's JSONL stream wearing a new name.** `game_complete` already carries a
+   self-play game's move list into the event channel and continues to. That stream is keyed by
+   TIME and interleaves forty event kinds, which cannot answer *"show me game 1 837"* without
+   reading the whole run. This store is keyed by GAME and carries an index over its shards.
+   **§4.7 is unchanged and no row is added to the event manifest** — `persist_errors_total`
+   here feeds no gate, and contract #7 is headless-gate scope by its own text.
+3. **The one law it inherits rather than re-invents.** Shards are claimed `O_CREAT|O_EXCL` and
+   keyed on (run, SEGMENT, hour), which is `monitor/sink.py`'s law — *"no JSONL file ever spans
+   two run segments"* — applied to a second writer. A run writes from two kinds of process (the
+   trainer continuously, each eval round's child for its own lifetime), so an hour-only key
+   would let a resume append into a stopped process's file.
+4. **What is ABSENT and stated as a gap, not a zero.** Per-position search stats are LIVE on the
+   eval channels and have **no producer** on the self-play channel: the visit distribution
+   exists in the engine and reaches the replay ring, but every row is pushed `game_id=-1` by
+   construction, so no position can be attributed to a game without an engine change on the hot
+   drain path (LAW-09). The field is OMITTED from self-play records — never written as an empty
+   list — and a test asserts the omission, so the day a producer lands the row reds.
+   `CARD-GAME-RECORD-SELFPLAY-STATS`.
+5. **§1's "deliberately absent" list does NOT move.** No display surface is admitted here. The
+   game VIEWER R344(d) orders is a separate act that owes its own amendment, and this one does
+   not pre-authorise it.
