@@ -50,6 +50,9 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import hashlib
+import json
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -63,6 +66,7 @@ from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import _step_coordinator_config
+from mantis.train.resume_state import sidecar_path_for
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
@@ -138,6 +142,10 @@ class _Trainer:
         self.model = object()
         self.device = "cpu"
         self.saves = 0
+        # A REAL directory, because R343(c) made the O3 arm write a resume sidecar beside the
+        # checkpoint it saves. A fake `checkpoint_dir` would have made the O3 row assert a
+        # clean stop while the leg that makes the stop RESUMABLE went unexercised.
+        self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-abort-exit-"))
 
     # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
     # conforms to the DECLARED seam (typed entry points + `device`).
@@ -150,8 +158,11 @@ class _Trainer:
     def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
         return self.train_step_from_tensors()
 
-    def save_checkpoint(self, loss_info) -> None:
+    def save_checkpoint(self, loss_info) -> Path:
         self.saves += 1
+        path = self.checkpoint_dir / f"fake_{self.step:08d}_deadbeef.ckpt"
+        path.write_bytes(b"fake-checkpoint")
+        return path
 
 
 class _Buffer:
@@ -163,7 +174,9 @@ class _Buffer:
         self.capacity = n
 
     def save_to_path(self, p) -> None:
-        return None
+        # Writes REAL bytes: the resume sidecar hashes this file, so a no-op here would make
+        # the hash a hash of nothing and the identity witness vacuous.
+        Path(p).write_bytes(b"fake-ring" * 8)
 
     def sample_batch_with_pos(self, n: int, augment: bool):
         # The grid route's sampler (WPTS dispatcher); rows are opaque to the fake.
@@ -336,6 +349,20 @@ def test_the_O3_shutdown_save_is_a_clean_stop() -> None:
     assert h.shutdown.abort_rule is None, (
         "an operator-requested shutdown is a CLEAN stop; got "
         f"{h.shutdown.abort_rule!r}"
+    )
+    # R343(c): the O3 stop is the ORDERED stop, and an ordered stop is RESUMABLE. The sidecar
+    # beside the checkpoint is what makes it so — without it the next launch reads this
+    # checkpoint as a warm start and refills the ring from empty.
+    ckpt = h.trainer.checkpoint_dir / "fake_00000000_deadbeef.ckpt"
+    side = sidecar_path_for(ckpt)
+    assert side.exists(), (
+        "O3 saved a checkpoint but wrote no resume sidecar — the stop is not resumable, and "
+        "R343(c) forbids the resume that would follow"
+    )
+    state = json.loads(side.read_text(encoding="utf-8"))
+    assert state["ring"]["path"].endswith("replay_buffer.bin")
+    assert state["ring"]["sha256"] == hashlib.sha256(b"fake-ring" * 8).hexdigest(), (
+        "the sidecar must hash the ring it actually persisted, not record a placeholder"
     )
 
 

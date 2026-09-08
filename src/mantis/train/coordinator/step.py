@@ -44,6 +44,7 @@ from typing import Any, cast
 import mantis.data.loss_counters as _data_loss
 import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
 import mantis.train.buffer_persist as _buffer_persist
+import mantis.train.resume_state as _resume_state
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.monitor.config import MonitorConfig
@@ -78,6 +79,21 @@ from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_pat
 from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
 
 _LOG = logging.getLogger(__name__)
+
+
+def _anchor_sha256(anchor_state: Any) -> str | None:
+    """The live anchor's sha256, or None when there is no anchor file to hash.
+
+    Hashed from the FILE rather than from the in-memory module, because that is what R343(d)'s
+    "hash-asserted" is about: the artifact a resumed run will reload is the one on disk, and a
+    digest taken over the live weights would agree with itself no matter what `best_model.pt`
+    actually holds. None is honest — a run with no anchor yet has no hash to assert — and the
+    pre-flight assert is what refuses to START such a run, not this recorder.
+    """
+    path = getattr(anchor_state, "best_model_path", None)
+    if path is None or not Path(path).exists():
+        return None
+    return _resume_state.sha256_file(path)
 
 #: The gate keys carried by the LAW-18 `monitor_gates` summary (checks/fires/skips/warns).
 #: The KEPT WP10 grad-norm abort is in the list so the one hard-abort that is unconditionally
@@ -341,6 +357,67 @@ class StepCoordinator:
         if saver is not None:
             saver(str(path))
 
+    def _disk_critical(self) -> bool:
+        """Has the disk guard already fired? Read through `subsystems`, defensively.
+
+        `False` when no guard is wired, which is every test harness and every composition
+        without a disk guard — the safe direction: an absent guard means no disk abort is in
+        flight, so the ring is persisted as normal.
+        """
+        guard = getattr(self.subsystems, "disk_guard", None)
+        return bool(guard is not None and getattr(guard, "critical_fired", False))
+
+    # ── the RESUME sidecar (R343(c)/CARD-RESUME; NOT the watchdog snapshot above) ─────────
+    def _persist_resume_state(self, checkpoint_path: Any) -> Any:
+        """Persist the ring and write the sidecar that makes `checkpoint_path` resumable.
+
+        DISTINCT FROM `_snapshot_buffer` DIRECTLY ABOVE, and the distinction is the whole
+        reason both exist. That one is the stall watchdog's abnormal-exit snapshot: best-effort,
+        written to a `.watchdog` path precisely so it can never truncate the resume buffer. This
+        one IS the resume buffer, and it is LAW-14 — a failure here propagates and stops the run
+        loudly, because the alternative is an exit that reports success and a resume that
+        silently refills the ring from empty (R343(c)).
+
+        Returns the sidecar path.
+
+        Raises:
+            OSError: the ring or the sidecar could not be written.
+            AttributeError: the buffer cannot persist itself — a wiring error, never a state.
+        """
+        ring_path = _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir)
+        self.buffer.save_to_path(str(ring_path))
+        ring = _resume_state.RingRef(
+            path=str(ring_path), sha256=_resume_state.sha256_file(ring_path),
+            positions=int(self.buffer.size),
+        )
+        pipeline = self.eval_pipeline
+        state = _resume_state.ResumeState(
+            version=_resume_state.SIDECAR_VERSION,
+            run_id=str(self.full_config.get("run_id", "")),
+            step=int(self._train_step),
+            checkpoint_filename=Path(checkpoint_path).name,
+            ring=ring,
+            # The counters with no HEAD mechanism (`pipeline.py` resets both every launch).
+            # Read through the pipeline's own accessor so this site never reaches into its
+            # private state — a second authority for "which round is next" is exactly what
+            # `gate.stride`'s modular arithmetic cannot survive.
+            round_counter=(0 if pipeline is None else int(pipeline.round_counter)),
+            last_p_hat=({} if pipeline is None else dict(pipeline.last_p_hat)),
+            anchor_sha256=_anchor_sha256(self.anchor_state),
+            rng=_resume_state.capture_rng_streams(),
+        )
+        side = _resume_state.write_resume_state(state, checkpoint_path)
+        _LOG.info(
+            "resume_state_persisted sidecar=%s ring=%s positions=%d round_counter=%d",
+            side, ring.path, ring.positions, state.round_counter,
+        )
+        emit_via(self._sink, {
+            "event": "resume_state_persisted", "step": state.step, "sidecar": str(side),
+            "ring_positions": ring.positions, "ring_sha256": ring.sha256,
+            "round_counter": state.round_counter,
+        })
+        return side
+
     # ── outcome builder ───────────────────────────────────────────────────────────────────
     def _build_outcome(self, **kw: Any) -> StepOutcome:
         return StepOutcome(
@@ -456,13 +533,26 @@ class StepCoordinator:
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
 
-        # O3: shutdown-save (signal-handler flag) — save the checkpoint, then stop. The
-        # `_try_save_buffer(..., "shutdown_signal", ...)` call that stood here is DELETED by
-        # R178(a) (R116/LAW-08): F-CS-2 measured it a no-op on the production path
-        # (`mixing_cfg={}`, nothing in `src/` sets `buffer_persist`), so removing it changes
-        # no production behaviour and stops the signal leg claiming a save it never made.
+        # O3: shutdown-save (signal-handler flag) — save the checkpoint, persist the ring and
+        # its sidecar, then stop. R178(a) deleted the old `_try_save_buffer(...,
+        # "shutdown_signal", ...)` call here as a measured production no-op, and it was right
+        # to: that helper is best-effort by design and the key it gates on was never set. What
+        # replaces it is NOT that call re-added. `persist_resume_state` is LAW-14 — a stop that
+        # cannot record its ring has not stopped resumably, and R343(c) forbids the resume that
+        # would follow (a ring refilled from empty).
         if self.shutdown.shutdown_save:
-            self.trainer.save_checkpoint(self._last_loss_info or None)
+            ckpt = self.trainer.save_checkpoint(self._last_loss_info or None)
+            # THE SAME "is this a resumable stop" QUESTION the epilogue asks, and it is
+            # load-bearing HERE for a sharper reason: persisting the ring is a LARGE WRITE, and
+            # the one abort that reaches this arm with `abort_rule` still unrecorded is the DISK
+            # GUARD's — it stops a run by SIGTERMing its own process, and `run.py` records its
+            # rule only in the teardown. Persisting a 100k-position ring on the one abort that
+            # fires BECAUSE THE DISK IS FULL would either deepen the condition that fired or
+            # raise ENOSPC out of a LAW-14 path and turn a clean rc 47 into a crash. The guard
+            # latches `critical_fired` BEFORE it signals, which is what makes it readable in
+            # time; absent a guard (every harness) the term is False and the ring is persisted.
+            if self.shutdown.abort_rule is None and not self._disk_critical():
+                self._persist_resume_state(ckpt)
             self.shutdown.running = False
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
@@ -1401,6 +1491,8 @@ class StepCoordinator:
         from mantis.train.coordinator import drain
         return drain.run_terminal_eval(self)
 
-    def close_out(self, on_drained: Callable[[], None] | None = None) -> None:
+    def close_out(
+        self, on_drained: Callable[[], None] | None = None, *, resumable_stop: bool = False,
+    ) -> None:
         from mantis.train.coordinator import drain
-        drain.close_out(self, on_drained=on_drained)
+        drain.close_out(self, on_drained=on_drained, resumable_stop=resumable_stop)

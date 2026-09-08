@@ -668,6 +668,47 @@ class EvalPipeline:
         )
         return {"kicked": True, "round_id": round_id, "step": step, "reason": None}
 
+    # ── resume seam (R343(c) witness 2) ──────────────────────────────────────────────────
+    @property
+    def round_counter(self) -> int:
+        """Rounds this pipeline has kicked. READ-ONLY; `restore_round_state` is the writer."""
+        return self._round_counter
+
+    @property
+    def last_p_hat(self) -> dict[str, float]:
+        """The last observed per-rung win rates, as a copy. READ-ONLY."""
+        return dict(self._last_p_hat)
+
+    def restore_round_state(self, *, round_counter: int, last_p_hat: Mapping[str, float]) -> None:
+        """Resume the round counter and `p_hat` a stopped process left behind.
+
+        THE DEFECT THIS CLOSES (R343(c) witness 2). `_round_counter` and `_last_p_hat` are
+        in-memory and reset to 0/{} on every launch, while `_build_round_spec` gates the
+        PROMOTION channel on `round_idx % cfg.gate.stride` and allocates the EXTERNAL channel
+        from `allocate_games(round_idx, p_hat)`. So a resumed run re-enters both at a phase the
+        stopped process did not leave it in: round ids restart at `r000001`, the gate's modular
+        arithmetic realigns to the restart rather than to the run, and the ladder allocates
+        against a `p_hat` of 0.5 it has already measured otherwise. `LadderState` survives a
+        restart on disk; these two did not, which is why the eval history could look continuous
+        while the cadence underneath it silently changed.
+
+        Refuses a BACKWARD move: round ids are monotonic within a run and a counter that went
+        down would mint a `round_id` that already exists on disk.
+
+        Raises:
+            ValueError: `round_counter` is negative, or lower than the counter already reached.
+        """
+        if round_counter < 0:
+            raise ValueError(f"round_counter must be >= 0, got {round_counter}")
+        if round_counter < self._round_counter:
+            raise ValueError(
+                f"refusing to restore round_counter {round_counter} below the counter already "
+                f"reached ({self._round_counter}) — round ids are monotonic within a run and "
+                "reusing one would overwrite a result already on disk"
+            )
+        self._round_counter = int(round_counter)
+        self._last_p_hat = {str(k): float(v) for k, v in last_p_hat.items()}
+
     def _current_p_hat(self) -> dict[str, float]:
         if self._last_p_hat:
             return dict(self._last_p_hat)

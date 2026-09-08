@@ -109,7 +109,7 @@ def flush_pending_eval(coord: Any) -> Any:
     return _route_eval_result(coord, drain())
 
 
-def run_terminal_eval(coord: Any) -> Any:
+def run_terminal_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
     """Terminal full-battery eval on the FINAL checkpoint (stride ignored). No-op when no eval
     pipeline is injected or `terminal_eval_enabled` is False."""
     pipeline = getattr(coord, "eval_pipeline", None)
@@ -122,6 +122,41 @@ def run_terminal_eval(coord: Any) -> Any:
     # `dataclasses.fields()` assertion still green. An absent attribute must be an
     # AttributeError naming the field, not an inherited posture (R1/LAW-08).
     if pipeline is None or not cfg.terminal_eval_enabled:
+        return None
+    # R343(c) — A RUN BEING STOPPED TO BE RESUMED HAS NOT CLOSED, so it does not run its
+    # closing measurement. The cost this removes is MEASURED, not supposed — F-R-P2B-4 timed a
+    # SIGTERM's checkpoint at seconds and the terminal battery that followed it at t+67 min and
+    # still running, bounded by `terminal_eval_hard_cap_sec` (14400 s in `run6.yaml`) rather
+    # than by `round_timeout_sec`. On the 12 h block R343(f) sets that is up to a THIRD of the
+    # run spent closing a run about to be reopened, and RESUME-1 exists to make stopping cheap
+    # enough to be worth doing.
+    #
+    # THE DECISION IS PASSED IN, NOT RE-DERIVED HERE, AND A FAILING TEST IS WHY. The first cut
+    # keyed the skip on `shutdown.shutdown_save` alone, reasoning that only a signal sets it.
+    # That is false: the DISK GUARD stops a run by SIGTERMing its OWN process
+    # (`lifecycle/disk_guard.py`), so an rc-47 abort arrives here indistinguishable from an
+    # operator's Ctrl-C. The obvious repair — also require `abort_rule is None` — is ALSO false
+    # here, because the disk rule is recorded in `run.py`'s teardown STRICTLY AFTER `close_out`
+    # (that ordering is deliberate: it is what makes `record_abort`'s first-fire-wins keep the
+    # ROOT CAUSE when the terminal round breaks too). At this point in the epilogue `abort_rule`
+    # is still None on a disk abort.
+    #
+    # So the fact cannot be reconstructed from the coordinator's own state at all, and the ONE
+    # place that holds every term — the shutdown state, the guard's latched `critical_fired`,
+    # and the recorded rule — is the composition root's `finally`. It decides; this function
+    # obeys. The default is FALSE, so anything that does not positively assert a resumable stop
+    # still runs its terminal battery: an ABORTED run is being diagnosed, not resumed, and its
+    # terminal round is part of the record the rc-48 seam reads.
+    if resumable_stop:
+        _LOG.info(
+            "terminal_eval_skipped_on_signal_stop step=%s — this stop is an interruption, not "
+            "a terminus; the terminal battery runs when the run ENDS",
+            getattr(coord, "_train_step", None),
+        )
+        emit_via(getattr(coord, "_sink", None), {
+            "event": "terminal_eval_skipped", "reason": "signal_stop",
+            "step": getattr(coord, "_train_step", None),
+        })
         return None
     best = getattr(coord.anchor_state, "best_model", None)
     best_step = getattr(coord.anchor_state, "best_model_step", None)
@@ -181,7 +216,9 @@ def _record_terminal_outcome(coord: Any, result: Any) -> None:
     coord.record_terminal_eval_reason(result["eval_broken_reason"])
 
 
-def close_out(coord: Any, on_drained: Callable[[], None] | None = None) -> None:
+def close_out(
+    coord: Any, on_drained: Callable[[], None] | None = None, *, resumable_stop: bool = False,
+) -> None:
     """The run epilogue (§D-LOOPFIX W1): (0) DISARM the heartbeat watchdog's staleness fire,
     (1) DRAIN the in-flight eval, (2) ``on_drained()`` (the caller passes ``pool.stop`` so
     the terminal eval runs on an UNLOADED GPU), (3) TERMINAL full-battery eval on the final
@@ -212,4 +249,4 @@ def close_out(coord: Any, on_drained: Callable[[], None] | None = None) -> None:
     flush_pending_eval(coord)
     if on_drained is not None:
         on_drained()
-    run_terminal_eval(coord)
+    run_terminal_eval(coord, resumable_stop=resumable_stop)

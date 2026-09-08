@@ -69,7 +69,14 @@ _SANCTIONED_SITES = {
 }
 
 #: DESIGN §1.5 — the re-cut composer's parameter tuple, as the CHILD must pass it.
-_COMPOSE_KWARGS = ("config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir")
+#:
+#: `resume_state` joined it at R343(c) and the CHILD's inclusion is the point, not an
+#: afterthought: the preflight's whole claim is that it boots what the run boots, so a
+#: parameter the launcher passes and the child omits is a divergent boot wearing the
+#: one-authority name — exactly what this tuple is checked against at both call sites.
+_COMPOSE_KWARGS = (
+    "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
+)
 
 #: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries, and the second is
 #: argued rather than typed — an allowlist that grows by edit is not an allowlist.

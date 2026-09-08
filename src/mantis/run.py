@@ -141,6 +141,13 @@ from mantis.train.lifecycle.signals import (
 )
 from mantis.train.loop import run_training_loop
 from mantis.train.orchestrator import init_trainer
+from mantis.train.resume_state import (
+    RingIdentityError,
+    load_resume_state,
+    restore_rng_streams,
+    sidecar_path_for,
+    verify_ring,
+)
 from mantis.train.subsystems import build_run_safety
 from mantis.train.warmstart import resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
@@ -312,6 +319,12 @@ class RunCollaborators(NamedTuple):
     buffer: Any
     log_dir: Path
     checkpoint_dir: Path
+    #: The resume sidecar this boot restored FROM, or None on a fresh run (R343(c)). It rides
+    #: the tuple rather than being re-read in `compose_run` for the reason every other field
+    #: here does: the ring is loaded in the builder, and a second read of the same sidecar
+    #: would be a second authority for what this boot resumed from — free to disagree the
+    #: first time the two reads race a rewritten file.
+    resume_state: Any = None
 
 
 @contextmanager
@@ -458,6 +471,67 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     )
 
 
+def _restore_resume_state(buffer: Any, checkpoint_path: str) -> Any:
+    """Load the sidecar beside `checkpoint_path`, verify the ring, and reload it into `buffer`.
+
+    THE ORDER IS THE MECHANISM (R343(c) witnesses 1 and 5): the sidecar is read, the ring's
+    sha256 is RE-DERIVED and compared, and only then is the file loaded. Verifying after
+    loading would mean the corrupt bytes are already in the ring when the refusal fires, which
+    is the phantom-gate shape LAW-07 forbids — the check has to be able to prevent the thing it
+    reports.
+
+    The reloaded position count is cross-checked against the sidecar's own record, because the
+    two come from different places (the engine's return value against a number written at the
+    stop) and a disagreement means the file is not the ring the sidecar describes.
+
+    Returns the loaded `ResumeState`, or None when there is no sidecar — see the body: that
+    absence is a WARM START, not a failure, and it is announced.
+
+    Raises:
+        ResumeStateError: the sidecar exists but is malformed, or names another checkpoint.
+        RingIdentityError: the persisted ring hashes differently than recorded, or reloads a
+            different number of positions.
+    """
+    # THE SIDECAR'S PRESENCE IS WHAT DISCRIMINATES A RESUME FROM A WARM START, and nothing
+    # else at HEAD can. `--resume-from` carries BOTH meanings — `resolve_bootstrap` returns the
+    # same `source="cli"` for "continue this run" and for "start from these weights" — which is
+    # the conflation R178(c) named as the owed S-2 work. A checkpoint WITH a sidecar was written
+    # by a stop of this machinery and is a continuation; one WITHOUT was not, and refusing it
+    # would refuse run6's own launch, whose anchor is a BC warm-start checkpoint (R343(d)).
+    # So the absence is not an error — it is a different mode, and it is announced rather than
+    # inferred, because the one thing that must never happen quietly is a CONTINUATION that
+    # refills its ring from empty.
+    if not sidecar_path_for(checkpoint_path).exists():
+        _LOG.warning(
+            "resume_state_absent checkpoint=%s — no sidecar beside this checkpoint, so it is "
+            "read as a WARM START, not a continuation: the replay ring starts EMPTY and the "
+            "round counter starts at zero. If this was meant to continue a stopped run, that "
+            "run did not write a sidecar and its ring is gone", checkpoint_path,
+        )
+        return None
+    state = load_resume_state(checkpoint_path)
+    if state.ring is None:
+        _LOG.warning(
+            "resume_state_no_ring checkpoint=%s — the sidecar records no persisted ring, so "
+            "this resume starts from an empty replay buffer", checkpoint_path,
+        )
+        return state
+    verify_ring(state.ring)
+    loaded = int(buffer.load_from_path(state.ring.path))
+    if loaded != state.ring.positions:
+        raise RingIdentityError(
+            f"persisted ring {state.ring.path} reloaded {loaded} positions but the resume "
+            f"sidecar recorded {state.ring.positions} — the file verified by hash and then "
+            "disagreed on its own contents, which means the sidecar does not describe it"
+        )
+    restored = restore_rng_streams(state.rng)
+    _LOG.info(
+        "resume_state_restored step=%d ring_positions=%d round_counter=%d rng=%s",
+        state.step, loaded, state.round_counter, ",".join(sorted(restored)),
+    )
+    return state
+
+
 def build_run_collaborators(
     *, config: RunConfig, out_dir: str | Path, checkpoint_path: str | None = None,
 ) -> RunCollaborators:
@@ -531,6 +605,15 @@ def build_run_collaborators(
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
+    # R343(c) — THE RING IS A RESUME INPUT, NOT A BUFFER THAT REFILLS FROM EMPTY. Placed HERE,
+    # immediately after construction and before `WorkerPool` can push into it, because a load
+    # into a ring self-play has already written is a load into a ring whose contents nobody
+    # declared. On a fresh run this is a no-op; on a resume a failure PROPAGATES (LAW-14) —
+    # a resume that cannot restore its ring must not quietly become a fresh run.
+    resume_state = None
+    if checkpoint_path is not None:
+        with _seam("restore_resume_state"):
+            resume_state = _restore_resume_state(buffer, checkpoint_path)
     with _seam("WorkerPool"):
         # R-SELFPLAYCONFIG-SCHEMA (unchanged debt, now cited from the builder rather than
         # from an injection-first disclaimer): the pool still builds only via the legacy
@@ -539,7 +622,7 @@ def build_run_collaborators(
                           replay_buffer=buffer, arch=trainer.arch, sink=_DeferredSink(),
                           heartbeat=_DeferredHeartbeat())
     return RunCollaborators(trainer=trainer, pool=pool, buffer=buffer, log_dir=log_dir,
-                            checkpoint_dir=checkpoint_dir)
+                            checkpoint_dir=checkpoint_dir, resume_state=resume_state)
 
 
 def _step_coordinator_config(
@@ -712,6 +795,7 @@ def compose_run(
     buffer: Any,
     log_dir: str | Path,
     checkpoint_dir: str | Path,
+    resume_state: Any = None,
 ) -> RunHandles:
     """The run composition root (§c.6). Injection-first: every COLLABORATOR arrives via a
     kwarg, never built here (R-10) — but no parameter may carry a CONFIG FACT: the gate on
@@ -1046,6 +1130,19 @@ def compose_run(
                     sink=run_safety.sink, heartbeat=run_safety.heartbeat,
                 )
 
+        # R343(c) WITNESS 2 — the round counter and `p_hat` a stopped process left behind.
+        # HERE, immediately after the pipeline is built and strictly before `pool.start()`, so
+        # no round can be kicked against a counter that restarted at zero. `LadderState`
+        # already survives on disk; these two did not, and `_build_round_spec` gates the
+        # promotion channel on `round_idx % gate.stride` — so without this a resumed run's
+        # promotion cadence silently realigns to the restart instead of to the run.
+        if resume_state is not None and eval_pipeline is not None:
+            with _seam("restore_round_state"):
+                eval_pipeline.restore_round_state(
+                    round_counter=resume_state.round_counter,
+                    last_p_hat=resume_state.last_p_hat,
+                )
+
         # ORDER PINNED (subsystems.py:213-215 contract): pool starts, THEN the watchdog.
         # The flag is set BEFORE the call and not after (RED-TEAM RT-3): `WorkerPool.start()`
         # is three sub-starts, so a raise inside it leaves a HALF-started pool that a
@@ -1096,7 +1193,12 @@ def compose_run(
             coordinator = StepCoordinator(
                 trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
                 pool=pool, eval_pipeline=eval_pipeline,
-                subsystems=SimpleNamespace(gpu_monitor=None),
+                # `disk_guard` rides the EXISTING subsystems carrier (no signature change):
+                # the O3 arm persists the ring, which is a LARGE write, and the one abort
+                # that reaches O3 with `abort_rule` still unrecorded is the disk guard's —
+                # it latches `critical_fired` BEFORE it signals, so this is the only term
+                # that can see it in time. Built at `:1174`, above this call.
+                subsystems=SimpleNamespace(gpu_monitor=None, disk_guard=disk_guard),
                 anchor_state=resolved_anchor, shutdown=shutdown,
                 eval_model=getattr(trainer, "model", None), bufs=None,
                 config=step_coordinator_cfg, full_config=config.model_dump(),
@@ -1128,9 +1230,24 @@ def compose_run(
                                   None if declared_warm_start is None
                                   else declared_warm_start.net_hash))
         finally:
+            # R343(c) — THE RESUMABLE-STOP DECISION, taken HERE because this is the only
+            # scope holding all three terms. `shutdown_save` says a signal arrived; the guard's
+            # LATCHED `critical_fired` says whether that signal was the disk guard's own
+            # (`disk_guard.py` latches it BEFORE it signals, which is what makes it readable
+            # here at all); and `abort_rule` catches every rule that recorded before the
+            # epilogue. The teardown below records the disk rule AFTER this call by design, so
+            # `abort_rule` alone cannot see a disk abort — the guard's flag is the term that
+            # can. Anything short of all three saying "operator stop" runs the terminal
+            # battery, because an aborted run is being diagnosed, not resumed.
+            resumable_stop = bool(
+                shutdown.shutdown_save
+                and shutdown.abort_rule is None
+                and not (disk_guard is not None and disk_guard.critical_fired)
+            )
             coordinator.close_out(
                 on_drained=_stop_pool_if_start_attempted(
-                    pool, start_attempted=pool_start_attempted))
+                    pool, start_attempted=pool_start_attempted),
+                resumable_stop=resumable_stop)
     finally:
         # AUDIT-1 F-11 / R334(b) — THE LIVE ARMING AUDIT, and this is its ONE production
         # consumer. CI gate 12 audits the `disk_space_exhausted` row against a CONFIG NUMBER,
@@ -1277,7 +1394,8 @@ def launch_run(
         config=config, out_dir=out_dir, checkpoint_path=checkpoint_path)
     return compose_run(config=config, trainer=collaborators.trainer, pool=collaborators.pool,
                        buffer=collaborators.buffer, log_dir=collaborators.log_dir,
-                       checkpoint_dir=collaborators.checkpoint_dir)
+                       checkpoint_dir=collaborators.checkpoint_dir,
+                       resume_state=collaborators.resume_state)
 
 
 def _lazy_save_anchor(*args: Any, **kwargs: Any) -> None:
