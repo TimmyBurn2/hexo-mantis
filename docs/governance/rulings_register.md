@@ -1,4 +1,4 @@
-REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ 2493485, regenerated 2026-09-05.
+REDACTED DERIVATIVE — 7 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/rulings_register.md @ c7999bb, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
@@ -8476,3 +8476,575 @@ derives **7**, against the 9 sitting-9's one measured point ran at. **Clause (f)
 > ROUTE: land, census, ACTIVE next; (b) recompute; (e) confirm; STEP 3;
 > 4a–4c; burst; one exit.
 
+
+# R339 — architect ruling, ARCH-ERA session, 2026-09-06 (SITTING-10 RATIFIED and run6 MINTED, with the step-0 witness's single real-games reading — the BC net INDISTINGUISHABLE from `sealbot_d5` at 32 games — recorded as the BASELINE the success witness measures against rather than as a strength claim; R319(d) ADJUDICATED BY MEASUREMENT AND NOT BY AUTHORSHIP — the gate GEOMETRY does not move, the lever is the landed-and-unarmed battery concurrency, and the VALUE is picked by a rule executed on the box against a stated bar with an explicit ENV-row branch when the rule cannot pick; F-816-37 CONVERTED FROM A HUNT INTO AN INSTRUMENT — 1-in-1 on the eval path with DUMP-ON-FIRE proven by a planted corruption, one 2 h STRUCTURAL diff banked if empty, and the original firing's concurrency read from the record as a HALT condition on the arming; TWO TOOLING LAWS promoted from memory to checks after each missed twice — the governance mirror refusing to write off `dev`, and `git reset --hard` on a dirty tree banned without a stash ref in the record; and the WP-AXIS2 SHAKEDOWN ORDERED on the minted config as the LAST SCREEN before the operator's run6 word) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into the RUN6 PRE-START session's prompt rather than as a
+file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R339_RUN6_PRESTART.md` §1. **The pre-existence grep returned `rc 1` in BOTH
+repositories** — `R339` appeared nowhere in `mantis-migration` and nowhere in `hexo-mantis` before
+the canonical home was written. The forwarded text carried the ruling-number placeholder in
+**three** positions, of which **exactly one** is a substitution site inside the ruling text (the
+quote-block lead); the other two are the packet's own prose. Byte-diff on append per R306(a):
+the block was transcribed **twice, independently**, with the placeholder intact, and the two
+transcriptions diffed BEFORE substitution — **IDENTICAL, 42 lines / 2 848 chars**; the
+substitution was applied mechanically by `sed` to both and re-diffed — **EMPTY**; the canonical
+home's `awk`-extracted block was then diffed against the substituted transcription — **EMPTY**,
+42 lines / 2 845 chars, sha256 `1aa6cbf2…`. Extraction by `awk` over the canonical home, never
+retyped, under `set -o pipefail` (R313(c)). Head verified from the file before substituting:
+census `R23-R338, 309 / 309 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`;
+`STAMP OK: stamp v3.47 == §8 last entry v3.47`; `--self-test` all four controls fire.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the exit
+screen.** Clause (b)'s *"93 games, 50 min 22 s, unfinished"* is `RUN6_MINT_SITTING10_EXIT.md`
+§8.1; its `round_timeout_sec` is read from `configs/run6.yaml:34` — **3600.0** — so the bar
+`0.66 × 3600 = 2 376 s` and the ENV band `[1.5×, 2.0×]` are derived here rather than carried.
+Clause (b)'s *"landed, unarmed battery concurrency"* is `src/mantis/arena/match.py:201`
+`concurrency: int = 1`, whose docstring at `:219` reads *"THE DEFAULT IS UNCHANGED AND UNARMED"*;
+the `player_factory` requirement at `:246` is what makes a call site's arming a two-part edit
+rather than a kwarg. Clause (c)'s *"1-in-64"* is **not a literal in the tree** and was verified
+as a derived value: `src/mantis/selfplay/inference_server.py:792` sets
+`canary_period = int(self._batch_size)`, and `configs/run6.yaml` ships
+`inference.inference_batch_size: 64` — so the rate is 64 **because run6's batch size is 64**, and
+a config that moved that key would move the sample rate with it. The check itself is check 14 of
+18, `EdgeAttrGeometryMismatch`, raised from `crates/mantis-bridge/src/graph_contract.rs:194`
+through `src/mantis/selfplay/graph_collate.py:748`. **The eval path and the self-play path run the
+SAME `semantic="canary"` collate** (`inference_server.py:848`), reached from both
+`eval/worker.py:343`/`:563` and `selfplay/worker.py:130` through one `LocalInferenceEngine`, which
+is why (c)'s split — 1-in-1 on one path, 1-in-64 on the other — is a THREADING change and not a
+constant edit.
+
+**ONE OPERATOR DIRECTION WAS TAKEN AT THE SITTING, and it is a disclosed deviation from the
+forwarded leg text rather than an interpretation of it.** The packet's §2 Leg 1 ordered the key
+wired *"at the battery site only; the other five call sites keep the kwarg default"*, while §1(b)
+makes the ROUND the unit that must fit. `play_paired_match` is invoked **six** times in `src/`, so
+every single-invocation choice leaves exactly five others and the numeral disambiguates nothing;
+the measured decomposition does. The gate block is **93 %** of the round (80 + 128 games at
+~33.9 s against a 32-game rung block at ~5.5 s and a 20-game floor at ~1.25 s), so arming the rung
+block — *"the battery"* in the record's own vocabulary — leaves **≥ 2 742 s** serial at any G and
+the (b) rule would fail **by construction**. The operator ruled the key onto the **GATE BLOCK,
+both invocations**, on that arithmetic. The two properties bought are stated with it: the
+strength-floor probe stays serial and deterministic (a **LAW-07** gate input) and the rung block
+stays serial (**LAW-04**'s Elo channel, whose per-game identity is unprovable under threading on
+CUDA — `RUN6_MINT_SITTING10_EXIT.md` §7). Full arithmetic and grounds: the canonical home's §1.1.
+
+> R339 — (a) SITTING-10 is RATIFIED; run6 is MINTED; the step-0
+> witness's instrument has fired once on real games and the reading —
+> BC net indistinguishable from sealbot_d5 at 32 games — is the baseline
+> the success witness measures against. Witness (ii) pools four rounds
+> as pre-registered.
+> (b) R319(d) ADJUDICATED. The first real round (93 games, 50 min 22 s,
+> unfinished) exceeds its timeout by measurement. The gate GEOMETRY does
+> not move (R319/R320 stand). The lever is the landed, unarmed battery
+> concurrency: `eval.concurrency` becomes a schema key (default 1, serial
+> path byte-exact, the S-BATTERY-G kwarg wired to it and to nothing
+> else). The value is picked by RULE on the box, BC checkpoint of record,
+> full round at G ∈ {4, 8}: the smallest G whose round completes within
+> 0.66 × the existing minimum timeout (1.5× headroom). If G = 8 does not,
+> the round time at G = 8 is reported and `eval.timeout` becomes an ENV
+> row [1.5×, 2.0×] of it, armed by the operator's next forward; the
+> timeout is otherwise untouched, because it is the stall watchdog's limit
+> and lengthening it buys stalls. The random floor's 25 s is inside the
+> round and needs no row.
+> (c) F-816-37 is an INSTRUMENT, not a hunt. The eval-path collate check
+> runs at 1-in-1 (the eval path is ~93 games a round; the 1-in-64 sample
+> stays on the training path), with DUMP-ON-FIRE: the offending batch,
+> its graph ids, the concurrency in force, saved before the raise, proven
+> by a planted corruption that dumps and reds. One bounded hunt: 2 h, the
+> eval-path collate diffed against the training path by STRUCTURE (what
+> it does differently, not what it looks like), banked if empty. The
+> original firing's concurrency is READ from the record: if it fired
+> under G > 1, (b)'s arming is a HALT until the class reproduces or the
+> shakedown bounds it at 1-in-1. Zero firings across the shakedown at
+> 1-in-1 is the bound run6 starts under; one firing halts with the
+> artifact, and that halt is the instrument working.
+> (d) TOOLING LAWS from the record: the governance mirror REFUSES to
+> write when HEAD is not dev (shared-tree commit law becomes a check, not
+> a memory — it has now missed twice); `git reset --hard` on a dirty tree
+> is BANNED without a stash ref written to the sitting record first.
+> (e) The WP-AXIS2 SHAKEDOWN is ORDERED on the minted config, time-boxed
+> 4 h of training at the minted caps, under (c)'s 1-in-1 check: it
+> produces steps/hour (fills the run-length record row), measured drain
+> times (re-proposes kill-grace from data), one completed gate round at
+> the armed G inside its timeout, dashboard panels live, and the memory
+> peaks inside the partition. Its exit is the last screen before the
+> operator's run6 word.
+> ROUTE: land, census, ACTIVE next; legs 1–3; shakedown; one exit.
+
+# R340 — architect ruling, ARCH-ERA session, 2026-09-06 (the R339 exit RATIFIED and R319(d) CLOSED BY MEASUREMENT — the round that could not finish is re-read as a WEAK-NET ARTIFACT on three readings, so the geometry needed no relief and the lever needed no arming; `eval.concurrency` PINNED AT 1 for run6 on the ground that arming a value the round never needed is arming a default readable as a measurement, with an ESCALATION ENVELOPE pre-registered against a measured round time rather than a prediction; F-816-37's first instrument reading REFUTING the race family from two directions and the class put to a HARDWARE-vs-SOFTWARE DISCRIMINATION — a memory stress at the wire footprint with error bit indices logged plus the kernel's ECC channel, against a tree-wide constant search and a structural sweep of integer views over float wire storage — with all three verdict branches pre-stated INCLUDING condemnation of the box; the SHAKEDOWN admitted only on a cleared box at 1-in-1 on BOTH collate paths; its exit screen REQUIRED to carry three named numbers before any time-to-signal estimate is given; and the 19-vs-20 gate-count discrepancy made a FINDING unless the exit names the absent gate) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into the F-816-37 DISCRIMINATION session's prompt rather than
+as a file — so the landing session CREATED the ruling's one canonical home,
+`PACKET_R340_F816_37_DISCRIMINATION.md` §1. **The pre-existence grep returned NO MATCH in BOTH
+repositories** — `R340` appeared nowhere in `mantis-migration` and nowhere in `hexo-mantis`
+before the canonical home was written. The forwarded text carried the ruling-number placeholder
+in **two** positions, of which **exactly one** is a substitution site inside the ruling text (the
+quote-block lead); the other is the packet's own dispatch heading. Byte-diff on append per
+R306(a): the block was transcribed **twice, independently**, with the placeholder intact, and the
+two transcriptions diffed BEFORE substitution — **IDENTICAL, 46 lines / 3 186 chars**; the
+substitution was applied mechanically by `sed` to both and re-diffed — **EMPTY**; the canonical
+home's `awk`-extracted block was then diffed against the substituted transcription — **EMPTY**,
+46 lines / 3 183 chars, sha256 `89150c0e…`. Extraction by `awk` over the canonical home, never
+retyped, under `set -o pipefail` (R313(c)). Head verified from the file before substituting:
+census `R23-R339, 310 / 310 / 0, excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`;
+`STAMP OK: stamp v3.49 == §8 last entry v3.49`; `--self-test` all four controls fire.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the
+prior exit.** Clause (a)'s *"2.3× headroom"* is derived here and its DENOMINATOR is named,
+because the ruling does not name it: `configs/run6.yaml:37` `round_timeout_sec: 3600.0`, R339(b)'s
+bar `0.66 × 3600 = 2 376 s`, and leg 2's `g1/readout.json` `round_wall_sec 1031.1` give
+`2376 / 1031.1 =` **2.304×** against the BAR — against the raw timeout it is 3.49×, so the
+ruling's figure is the bar-relative one. Clause (a)'s *"16–17 median plies"* and *"under 1%"* are
+`RULINGS_ACTIVE.md` §8's v3.49 entry; the 1 % is re-derived from the readouts as
+`(2357.5 − 2332.3) / 2357.5 =` **1.06%**. Clause (a)'s *"~310 s"* is the strength-floor refusal
+regime, `expensive/exp_g{1,4,8}/readout.json` **311.2 / 313.4 / 317.2 s**. Clause (b)'s *"the
+measured G=4 row"* is `leg2/g4/readout.json` `round_wall_sec` **430.6 s**, `concurrency 4`,
+`host_child_peak_gib` **1.715**, `eval_child_peak_reserved_gib` **0.470703** against
+`eval_child_budget_gib` **1.857422**, `eval_child_fits_budget` **True**. The v3.49 entry's
+*"(3.56×)"* and *"(4.39×)"* were re-derived and are CORRECT AS LABELLED — they are the GATE-BLOCK
+speedups net of the serial phases (`floor_probe` + `rung` + `random_floor` ≈ 196.7 s), not
+whole-round ratios: `(1031.1 − 196.7) / (430.6 − 196.7) =` 3.57 and `/(388.8 − 196.7) =` 4.34.
+Clause (c)'s bit-23 signature is `R339_EVIDENCE/F816_37_HALT.md` §3 and was recomputed from the
+saved arrays. Clause (d)'s *"the trainer is 47% idle"* is `SESSION_HANDOFF_v5.md:130`. Clause
+(e)'s *"17/32 vs sealbot_d5"* is R339's own preamble. **Clause (f) is ANSWERED BY READING at this
+landing rather than deferred to the exit**: `tools/ci_gates/run_all.sh` makes **19** unconditional
+`run_gate` calls and gates gate 1 behind `WITH_FRESH_SYNC` (`:105-107`), so 19 is the default
+invocation and 20 is the same invocation with `--with-fresh-sync`; the absent gate at a 19-count
+exit is **gate 1, the fresh-clone `uv sync`**, which CLAUDE.md already names as the one check no
+local run reproduces. The slow tier is deliberately NOT numbered (`:127-128`, *"it is not one of
+CLAUDE.md's seventeen gates"*) and is not part of either count. **It is a flag difference, not a
+discrepancy, and therefore not a finding.**
+
+> R340 — (a) The R339 exit is RATIFIED. The R319(d) round that could
+> not finish was a weak-net artifact: warm-started, every gate game ends
+> in 16–17 median plies and the round fits its timeout at G=1 with 2.3×
+> headroom; in the cap-length regime concurrency buys under 1% and the
+> strength_floor refusal caps that regime at ~310 s. R319(d) is CLOSED by
+> these three readings.
+> (b) eval.concurrency = 1 for run6. Arming a value the round never
+> needed is arming a default readable as a measurement. The escalation
+> in §0.2 is PRE-REGISTERED: the trigger is a measured round time, the
+> value is the measured G=4 row, the arm is the operator's forward. The
+> serial path is the deploy-matched one and stays the LAW-15 instrument.
+> (c) F-816-37 — the instrument's first reading REFUTES the race family
+> (fires at concurrency 1; twice on float32 bit 23, once clear-only,
+> once clear-and-set on a sibling word). The two live hypotheses are
+> DISCRIMINATED, not argued: (i) HARDWARE — a host DRAM bit-lane fault on
+> a no-ECC instance; test: a memory stress at the wire arrays' size for
+> ≥ 1 h with the error bit index recorded, plus the kernel's EDAC/MCE
+> log; a single reported error is POSITIVE; (ii) SOFTWARE — a masked
+> write of 0x00800000 / 1<<23 / 8388608 reaching a float buffer; test:
+> the constant searched over the whole tree by text (negative-search
+> corollary: absence is evidence about the pattern) AND, by structure,
+> every site that views the wire's float storage as integer storage.
+> Verdicts: HARDWARE POSITIVE → the box is CONDEMNED: instance recreated,
+> caps void (R302(c)), a re-mint sitting on the rehearsed procedure
+> (Δ12 → burst ran in one sitting), then the shakedown there; nothing
+> trains on a host that flips bits, and 1-in-64 on the training path
+> would have let 63 of 64 through. SOFTWARE POSITIVE → the site is fixed
+> at cause with a planted break reproducing both signatures. BOTH
+> NEGATIVE → the class stays open, the shakedown runs at 1-in-1 on both
+> paths, and its firing count is the bound run6 starts under; a firing
+> halts with the artifact.
+> (d) The SHAKEDOWN runs only on a cleared box: 4 h of training at the
+> minted caps, 1-in-1 on eval AND training collate paths (the trainer is
+> 47% idle; the check's cost is paid for one shakedown, not the run), a
+> gate round at its end, drain times measured, dashboard live.
+> (e) Its exit screen carries the three numbers the operator asked for:
+> games/hour and plies/game on the warm-started net (self-play, not the
+> gate); trainer steps/hour; and the gate reading at hour 4 vs the step-0
+> baseline (17/32 vs sealbot_d5), with the round time. From these the
+> architect states the time-to-signal estimate WITH GROUNDS — the run
+> length row (record) and the first-third denominator fill from them.
+> Before them, any estimate is a guess and is not given.
+> (f) The gate count reads 19 at this exit and 20 at R338's; the exit
+> names which gate is absent and why, or the discrepancy is a finding.
+> ROUTE: land, census, ACTIVE next; discrimination; verdict; (box
+> survives) shakedown → exit; (box condemned) recreate → re-mint → shakedown.
+
+# R341 — architect ruling, ARCH-ERA session, 2026-09-06 (the host CONDEMNED ON SIGNATURE rather than on a test that could not be run, with relocation made the DECISIVE experiment and both its branches pre-stated; R340(a)'s closure of R319(d) WITHDRAWN as a cross-regime carry, mint-blocking and host-independent; the contended G table ordered as shakedown-2's FIRST ACT with the mechanism expectation stated BEFORE the data and a no-code prereg fallback if the reading refutes it; time-to-signal given as MEASURED screen readings with the screen's non-promotion status named; run length and gate cadence PROPOSED and armed by unedited forwarding; and two laws from the record — teardown-blocks-until-hashes-verify, and `pgrep -f` BANNED outright — ordered as checks) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into THIS session's prompt rather than as a file — so the
+landing session CREATED the ruling's one canonical home,
+`PACKET_R341_RELOCATE_REMINT_SHAKEDOWN2.md` §1. **The pre-existence grep returned NO MATCH in BOTH
+repositories** — `R341` appeared nowhere in `mantis-migration` and nowhere in `hexo-mantis`
+before the canonical home was written. The forwarded text carried the ruling-number placeholder
+in **two** positions, of which **exactly one** is a substitution site inside the ruling text (the
+quote-block lead); the other is the packet's own dispatch heading. Byte-diff on append per
+R306(a): the block was transcribed **twice, independently**, with the placeholder intact, and the
+two transcriptions diffed BEFORE substitution — **IDENTICAL, 46 lines / 3 212 chars**; the
+substitution was applied mechanically by `sed` to both and re-diffed — **EMPTY**; the canonical
+home's `awk`-extracted block was then diffed against the substituted transcription — **EMPTY**,
+46 lines / 3 209 chars, sha256 `5c6a2b97…`. Extraction by `awk` under `set -o pipefail` (R313(c)),
+never retyped. Head verified from the file before substituting: census `R23-R340, 311 / 311 / 0,
+excluded 53`, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`; `STAMP OK: stamp v3.54 == §8
+last entry v3.54`; `--self-test` all four controls fire.
+
+**The ruling's referents re-derived at point of use before landing, not transcribed from the prior
+exit.** Clause (a)'s *"three firings, five words, two code paths"* is `R340_EVIDENCE/LEG3_HALT.md:67-68`
+verbatim — *"Five corrupted 32-bit words, three firings, weeks apart, two different code paths, two
+different nets — every one is bit 23, and every one is at byte offset ≡ 4 (mod 8)"*; the per-word
+offsets are `F816_37_BIT_SIGNATURE.md:36-38` (16 064 348, 1 976 100, 1 976 108, all ≡ 4 mod 8).
+Clause (a)'s *"102 min"* is `F816_37_HARDWARE_ARM.md:178` — *"2.85 TiB verified, 102 minutes, 81
+cycles, TWO page sets"* — the SUM of run 1 (3 714 s = 61.9 min) and run 2 (2 422 s = 40.4 min), not
+a single run; a reader who checks only the run-1 row will find 62 and think the ruling wrong.
+Clause (a)'s *"no-ECC host with no EDAC"* was **re-read LIVE at this landing, not carried**:
+`/sys/devices/system/edac/mc/` holds no controller, `nvidia-smi -q` reports `ECC Mode`/`Single Bit
+ECC`/`Double Bit ECC` all `N/A`, `dmidecode` ABSENT. Clause (b)'s *"4.0 → 25.9 s"* is
+`R319D_CONTENTION_FINDING.md:28` and `:96`; the stated *"~7×"* is the finding's own label at `:67`
+and the strict quotient is **6.48×**, which rounds to 6.5 — the ruling's figure is the label, and
+this is recorded so no later reader re-derives 6.5 and reports a discrepancy. The *"timeout
+returning null"* is `:87-88` — `wall_sec 3600.114`, `games_total null`, `wr_sealbot null`.
+Clause (d)'s three screen readings, `1209 steps/h` and `1505 self-play games/h` are
+`LEG4_EXIT.md:53-55`, `:30` and `:15`; the same file's `:34` names **1 004 steps/h** as *"the
+planning figure"* for the near-continuous-eval regime, so (d)'s 1 209 is the WHOLE-RUN mixed average
+and (e)'s *"~1200 steps/h"* inherits it — the distinction is load-bearing for (e) and is derived
+below rather than assumed. Clause (e)'s *"≥ 5 rounds in a 4 h first third"* is DERIVED here:
+`4 h × 1 209 steps/h = 4 836 steps ÷ 750 = 6.4` → **6 rounds**, and at the conservative 1 004
+steps/h it is `4 016 ÷ 750 = 5.4` → **5 rounds** — the claim holds at BOTH rates, which is why it
+survives the ambiguity just named. Clause (f)(ii)'s *"third self-match on record"* is an
+**UNDERCOUNT of the record and is annotated, not amended**: R302(e) already logs *"three self-match
+bites in the VAST-REBUILD sitting alone"* (`RULINGS_ACTIVE.md:1576-1577`) on top of prior bites at
+`Q6_BOX_EVIDENCE/PREP_RECORD.md` §2, `RECAL_SITTING_RECORD_2026-08-22.md:85-88` and
+`FINISH1_EXIT.md:58`. The ordinal understates; the law is strengthened by the correction, not
+weakened, and the operative change is that **(f)(ii) RETIRES the bracket idiom R302(e) still
+admitted** — `[m]antis` failed twice more after R302(e) landed (`mantis-migration` commits
+`616d66d`, `c107f3b`), because the wrapper's own argv carries the path `/workspace/hexo-mantis`.
+That is the whole reason a marker replaces a pattern.
+
+> R341 — (a) The host is CONDEMNED on SIGNATURE, not on test: three
+> firings, five words, two code paths, every one float32 bit 23 at byte
+> offset ≡ 4 (mod 8) — one bit lane of a 64-bit word — after a software
+> arm that is NEGATIVE AND STRONG (the producer writes 1.0, verify_contract
+> proves the bytes before emit, only memcpy follows). A memory stress that
+> finds nothing in 102 min on a no-ECC host with no EDAC does not clear an
+> intermittent lane; it is un-convicted, and un-convicted is not the bar a
+> host must clear to train on. RELOCATION IS THE DECISIVE TEST: the class
+> firing at 1-in-1 on a different physical host would convict the software
+> arm and lift the confound; not firing across shakedown-2 is the hardware
+> verdict by discrimination. F-816-37 stays OPEN until one of those reads.
+> (b) R340(a)'s closure of R319(d) is WITHDRAWN — a cross-regime carry
+> (standalone → contended) on the architect's ledger. Contended gate
+> rounds are ~7× slower per game (4.0 → 25.9 s) and hit the 3600 s
+> timeout returning null; the slope witness (iii) cannot fire on nulls.
+> This is mint-blocking and host-independent.
+> (c) The FIRST ACT of shakedown-2, after the re-mint: three contended
+> gate rounds — G ∈ {1, 4, 8} — with self-play at n_workers 16 and the
+> trainer live, one hour, s/game and round time recorded with card and
+> host peaks. Rule: the smallest G whose CONTENDED round completes within
+> 0.66 × timeout arms by the operator's forward of the reading (the R340
+> escalation, now with a reading in the regime that fires it). The
+> mechanism expectation, stated before the data: under contention the
+> gate is latency-bound behind the server's self-play batches, so G
+> amortizes each slice at near-zero marginal card cost; if the reading
+> refutes that, the FALLBACK is a prereg change, no code — round geometry
+> shrinks to what fits at the contended s/game with 1.5× headroom, and
+> the pooled window widens to keep 128 games per rung. The timeout does
+> not move; it is the watchdog. The trainer's 34% loss during rounds is
+> accepted for run6 and carded.
+> (d) TIME-TO-SIGNAL is MEASURED, not estimated: the gate SCREEN read
+> 53.1% → 72.5% → 78.8% vs sealbot_d5 at steps 0 / 1000 / 2004 (~40 min
+> to a signal; ~1.7 h to a screen reading three CIs clear of the
+> baseline) at 1209 steps/h contended, 1505 self-play games/h. The screen
+> is not the promotion instrument and is not deploy-matched; the claim
+> stands only when a contended ROUND completes — which is what (c) buys.
+> Plies/game is owed by shakedown-2.
+> (e) Run length 12 h and gate cadence every 750 steps are PROPOSED (≥ 5
+> rounds in a 4 h first third at ~1200 steps/h); first third = 4 h.
+> (f) LAWS: (i) a box is never torn down or rebuilt until the run record
+> and driver logs are copied off and their hashes verified — teardown is
+> a HALT until that line reads; (ii) `pgrep -f` is BANNED in packets and
+> scripts; a process wrapper that matches on the launcher's own marker
+> replaces it (third self-match on record).
+> ROUTE: land, census, ACTIVE next; provision; re-mint (Δ12 → burst);
+> shakedown-2 first act (c); 4 h training at 1-in-1 both paths; exit.
+
+
+# R342 — architect ruling, ARCH-ERA session, 2026-09-07 (R341(a)'s condemnation STAYED on the operator's override, with the architect recording that the condemnation OVERSHOT — at the measured firing rate, with 1-in-1 on both collate paths, a lane fault is an UPTIME cost and not a correctness breach, and relocation was overstated as decisive because only a FIRING elsewhere convicts; five CONDITIONS armed as checks rather than memories, of which the rate bar CONDEMNS again with no further ruling; the SITTING-10 caps confirmed void by the container rebuild alone, so the re-mint is owed on this host regardless; and the new terms recorded beside SITTING-10's as a same-hardware reproduction that is a READING, never an input) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into THIS session's prompt rather than as a file — so the
+landing session CREATED the ruling's one canonical home, `PACKET_R342_STAY_AND_RESUME.md` §1.
+**The pre-existence grep returned NO MATCH in BOTH repositories** — `R342` appeared nowhere in
+`mantis-migration` and nowhere in `hexo-mantis` before the canonical home was written. The
+forwarded text carried the ruling-number placeholder in **two** positions, of which **exactly one**
+is a substitution site inside the ruling text (the quote-block lead); the other is the packet's own
+dispatch heading. Byte-diff on append per R306(a): the block was transcribed **twice,
+independently**, with the placeholder intact, and the two transcriptions diffed BEFORE substitution
+— **IDENTICAL, 33 lines / 2 143 chars**; the substitution was applied mechanically by `sed` to both
+and re-diffed — **EMPTY**; the canonical home's `awk`-extracted block was then diffed against the
+substituted transcription — **EMPTY**, 33 lines / 2 140 chars, sha256 `5dddf1ce…`. Extraction by
+`awk` under `set -o pipefail` (R313(c)), never retyped. Head verified from the file before
+substituting: census `R23-R341, 312 / 312 / 0, excluded 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `STAMP OK: stamp v3.55 == §8 last entry v3.55`; `--self-test`
+all four controls fire.
+
+**The ruling's referents re-derived at point of use before landing.** Clause (a)'s *"one firing in
+~825 eval games"* is `R339_EVIDENCE/F816_37_HALT.md:103`; *"one in a shakedown"* is
+`R340_EVIDENCE/LEG3_HALT.md` (the 38-minute training-path firing); *"none in 2004 steps"* is
+`LEG3_RUN2_RECORD.md:13,40` — 2 004 trainer steps and ~2 500 games, **zero firings**, and that
+file's own caution that run 1 *"describe[s] an anomalous run and should not be used as a shakedown
+baseline"* is why (a) cites run 2. **Clause (a)'s *"check 14"* is NOT CI gate 14 and the ambiguity
+is live in this repo**: it is `verify_edge_geometry`, the collate-layer structural check
+(`CARD-CHECK14-EDGE-GEOMETRY.md:1,12`; `src/mantis/selfplay/graph_collate.py:740`), which
+re-derives edge geometry in Rust against the raw flat array. CI gate 14 is the lint/type gate and
+has nothing to do with illegal moves or out-of-range indices. A future reader following the wrong
+one would conclude the safety argument rests on a linter.
+
+**CLAUSE (b) WAS SURVEYED AGAINST HEAD AT THE LANDING, because (b)(iii) makes its own disposition
+conditional on what exists there** — *"if no such mechanism exists at HEAD it is built"*. Findings,
+each a citation rather than a recollection:
+* **(b)(i) is TWO-THIRDS ALREADY TRUE, and the remaining third is the self-play path, not the
+  trainer.** The trainer collate runs `semantic="full"` on EVERY batch and every part with
+  dump-on-fire unconditionally armed (`train/coordinator/dispatch.py:264-289`); the eval path
+  passes period `1` (`eval/worker.py:411`). The **self-play/inference-server path** takes
+  `collate_check_period=None`, which `inference_server.py:218-223` documents as *"the canary period
+  derived from the pop width, which run6's `inference_batch_size: 64` makes 1-in-64"*. That one
+  path is what (b)(i) changes, and its comment — *"Not a config key: the rate is a property of
+  WHICH PATH is running, not of the run"* — is the design premise (b)(i) overrides.
+* **(b)(ii) ALREADY EXISTS at HEAD and is not new work.** `checkpoints.py:286-296` hashes the whole
+  v2 payload (`content_sha8`, a truncated sha256 over a key-ordered serialization) and puts it in
+  the filename `{run_id}_{step:08d}_{sha8}.ckpt`; the load path re-derives it and raises on
+  *"content hash {actual} disagrees with the filename sha8"* (`:498-524`), alongside run_id and
+  step cross-checks against the embedded metadata. What the landing owes is therefore a PLANTED
+  BREAK proving it fires, not an implementation.
+* **(b)(iii)'s mechanism PARTLY exists**: `--resume-from <checkpoint>` is a production flag
+  (`run.py:1362-1363`) and `init_trainer` dispatches fresh-vs-resume on it. What does NOT exist is
+  the AUTOMATIC step — nothing relaunches on a firing — so absent new work this falls to the
+  ruling's own fallback, *"each firing costs an operator restart and that cost is stated on the
+  exit screen"*.
+
+> R342 — (a) R341(a) is STAYED on the operator's override, and the
+> architect records that the condemnation overshot: at the measured rate
+> (one firing in ~825 eval games; one in a shakedown; none in 2004
+> steps) and with 1-in-1 checks on both collate paths, a lane fault is
+> an UPTIME cost, not a correctness breach — every firing is caught,
+> dumped, and halts. What is unchecked (a stored sample in the ring, a
+> host-side game state) either fails loudly (illegal move, out-of-range
+> index — check 14) or perturbs one sample among millions. The
+> discrimination-by-relocation R341 called decisive was overstated at
+> this rate: only a FIRING elsewhere convicts software; a quiet 4 h
+> elsewhere proves little. F-816-37 stays OPEN; its firings are its
+> evidence, wherever they occur.
+> (b) CONDITIONS under which this host trains, each a check, not a
+> memory: (i) 1-in-1 on both collate paths for the WHOLE run, dump-on-
+> fire, halt on fire — the 1-in-64 sample does not return; (ii) every
+> checkpoint sha256'd on write and verified on load, mismatch = halt;
+> (iii) on a firing the run RESUMES from the last verified checkpoint —
+> if no such mechanism exists at HEAD it is built (S, planted break) or,
+> failing the time-box, each firing costs an operator restart and that
+> cost is stated on the exit screen; (iv) RATE BAR, pre-registered: more
+> than 3 firings in any 12 h of the run, or any firing outside the wire
+> arrays (weights, ring headers, indices), CONDEMNS the host again with
+> no further ruling needed — the operator relocates; (v) firing count and
+> location are dashboard lines.
+> (c) The 2026-09-06 rebuild voided the SITTING-10 caps (R302(c)); the
+> re-mint runs on this container under R341 leg 1 unchanged. The exit
+> records the new terms beside SITTING-10's as a same-hardware
+> reproduction — a reading, not an input.
+> (d) Order: re-mint → R341(c) contended G table (first act) → 4 h
+> shakedown under (b) → exit per R341 §3 plus the firing count and (iii)'s
+> state → the operator's word on run6.
+> ROUTE: land, census, ACTIVE next; annotation on R341(a); leg 1; leg 2;
+> exit.
+
+**ANNOTATION under R341's foot — R341(a) IS STAYED, NOT PATCHED (R342(a), 2026-09-07).** R341(a)
+CONDEMNED this host on signature. The operator has OVERRIDDEN that condemnation on
+price/performance grounds and R342(a) stays it: **the host is SUSPECT, not condemned.** R341(a)'s
+text stands unaltered and is still the correct reading of the SIGNATURE evidence — three firings,
+five words, two code paths, every one float32 bit 23 at byte offset ≡ 4 (mod 8). What R342(a)
+withdraws is the CONSEQUENCE, on a ground R341 did not weigh: at the measured rate, with 1-in-1 on
+both collate paths, every firing is caught, dumped and halts, so a lane fault is an UPTIME cost
+rather than a correctness breach. R342(a) also records that R341(a) **OVERSTATED
+discrimination-by-relocation as decisive** — only a firing elsewhere convicts software; a quiet 4 h
+elsewhere proves little at this rate. **R341 leg 0 is VOID for the R342 sitting**; R341 legs 1–2
+run unchanged on `vast`, and R341 leg 3 is done. The condemned-host check built at R341 leg 3
+STAYS AS BUILT and is disabled for this packet only, re-arming the moment R342(b)(iv) trips.
+`F-816-37` remains OPEN under both rulings.
+
+
+# R343 — architect ruling, ARCH-ERA session, 2026-09-08 (R341 and R342 RATIFIED as executed, with the G table's refutation of R341(b) scoped to G=8 ONLY and the cuda_context pivot generalised into the no-term-is-ever-carried law; the EVAL INSTRUMENT SPLIT INTO TWO DECOUPLED CHANNELS — a promotion gate that runs the whole run and an external rung whose cadence halves after the first third — with a SATURATION RULE that retires an instrument once its CIs can no longer separate it from ceiling, and a DEGRADATION FLAG carrying the self-play-cycling signature as WARN-ONLY; RESUME-1 ORDERED BEFORE RUN6 with the ring made a persisted, byte-identity-witnessed resume input rather than a buffer that refills from empty, and the determinism seam pre-registered as a witness; the ANCHOR fixed as the warm-start checkpoint of record with a self-seeded anchor made a pre-flight HALT; `axis_distribution_alert` DEMOTED to a metric on the ground that an alert firing on every emission trains its reader to ignore alerts; and RUN LENGTH set as a 12 h block whose extension is decided on readings rather than pre-committed) [INLINE]
+
+**Provenance: [INLINE], authored.** Text originates in the ARCH-ERA architect session under
+R303(d), forwarded by the operator into THIS session's prompt rather than as a file — so the
+landing session CREATED the ruling's one canonical home,
+`PACKET_R343_EVAL_DESIGN_AND_RESUME.md` §1 (R285's ONE-TEXT rule). **The pre-existence grep
+returned NO MATCH in BOTH repositories** — `R343` appeared nowhere in `mantis-migration` and
+nowhere in `hexo-mantis` before the canonical home was written. The forwarded text carried the
+ruling-number placeholder in **two** positions, of which **exactly one** is a substitution site
+inside the ruling text (the quote-block lead); the other is the packet's own dispatch heading.
+Byte-diff on append per R306(a): the block was transcribed **twice, independently**, with the
+placeholder intact, and the two transcriptions diffed BEFORE substitution — **IDENTICAL, 61
+lines / 4 156 chars**; the substitution was applied mechanically by `sed` to both and re-diffed
+— **EMPTY**; the canonical home's `awk`-extracted block was then diffed against the substituted
+transcription — **EMPTY**, 61 lines / 4 153 chars, sha256 `78f5fe88…`. Extraction by `awk`
+under `set -o pipefail` (R313(c)), never retyped. Head verified from the file before
+substituting: census `R23-R342, 313 / 313 / 0, excluded 53`, missing-in-range
+`{24, 29, 32, 33, 227, 228, 267}`; `STAMP OK: v3.57 == §8 last entry`; `--self-test` all four
+controls fire.
+
+**THE PREMISES WERE VERIFIED AT HEAD BEFORE ANY CLAUSE WAS EXECUTED (R289).** Clause (b)(v)
+makes its own disposition conditional on what the round spec can carry, and clause (c) orders a
+build whose parts turn out to be half-present, so both had to be surveyed rather than recalled.
+Findings, each a citation:
+
+* **(b)'s TWO CHANNELS ARE ALREADY TWO CHANNELS AT HEAD, and exactly one of them has a cadence
+  term.** A round fires every `train.eval_interval` coordinator steps; inside it the PROMOTION
+  channel runs iff `round_idx % cfg.gate.stride == 0 or terminal`
+  (`eval/pipeline.py:698`), while the EXTERNAL channel's games come from
+  `LadderState.allocate_games(round_idx, p_hat)` (`:696`) — an allocation driven by activation
+  state and `p_hat`, carrying **no cadence term at all**. So the round spec CAN carry a
+  channel-specific cadence, but only in the direction (b) does not need: `gate.stride` makes the
+  gate RARER than the rung, and (b) wants the rung rarer than the gate after the first third.
+  **(b)(v)'s conditional therefore does not trip on "the round spec bundles channels" — it
+  trips, if at all, on the rung side having no stride**, which is a narrower and more repairable
+  fact than the conditional anticipated.
+* **(b)'s CADENCE OF 1000 SUPERSEDES R341(e)'s ARMED 750, and the checkpoint row re-derives with
+  it.** `configs/run6.yaml` mints `train.eval_interval: 750` and `train.checkpoint_interval: 750`
+  (its own `# delta:` headers record `1000 -> 750` and `0 -> 750`). The checkpoint row is stated
+  in the prereg as a RELATION — *"≥ 1 checkpoint per eval round"*, `RUN6_MINT_PREREG.md:113-135`
+  — *"so it survives a gate-cadence change"*, and its own text pre-authorises this: *"If the
+  shakedown's measured round length moves `eval_interval`, this row re-derives with it rather
+  than being re-authored."* **That is the clause earning its keep on its first test.** Annotated
+  under R341's foot rather than silently applied.
+* **(b)(v)'s TWO RUNGS ARE IN OPPOSITE STATES, and neither is a fresh build.** `strix` is a
+  KNOWN kind that `resolve_bot` REFUSES per rung with R139's verbatim operator-authorized
+  grounds *"actively changing"* (`bots/resolve.py:41,49`), and `run6.yaml` already MINTS
+  `strix_128` and `strix_256` as ladder rungs (`:91,99`) — so strix is a minted-and-dormant rung
+  emitting an operator-authorized skip every round, not an absent one. **`shrimp` does not exist
+  anywhere in the repository**: zero hits across `src/`, `crates/` and `tools/`. Leg 4's design
+  note is therefore two different jobs wearing one name.
+* **(c)'s RING HAS ITS PERSISTENCE MECHANISM AND NO PRODUCTION CALLER.** `save_to_path` /
+  `load_from_path` exist on both engine buffers (`crates/mantis-bridge/src/buffer.rs:359,364`;
+  `hexg.rs:245,251`) and are forwarded by `ReplayFacade` (`selfplay/buffers.py:152,155`). What
+  is missing is the ARMING: `buffer_persist.try_save_buffer` returns unless
+  `mixing_cfg["buffer_persist"]` is truthy, **the production root passes `mixing_cfg={}` and
+  nothing in `src/` sets that key**, and `run6.yaml` mints no such row. R178(a) deleted the O3
+  shutdown-signal save arm on exactly that measurement (`coordinator/step.py:459-462`). The one
+  live writer is the stall watchdog's `_snapshot_buffer` (`:339-341`), and it writes a
+  `.watchdog`-suffixed path **precisely so an abnormal-exit save can never truncate the resume
+  buffer** (`buffer_persist.py:63-66`) — a resume buffer nothing yet reads.
+* **(c) IS `CARD-RESUME`, AND THE CARD'S OWN TERMS ARE R343(c)'s TERMS.** R178(c) opened
+  CARD-RESUME *"POST-MINT, owning the run.py:317-318 'owed S-2 work' as ONE design: weights +
+  optimizer/scheduler + buffer persistence + launcher surface together — half-resumes are the
+  trap this WP just spent a phase killing; nobody builds any piece of it separately."* The mint
+  is complete (R342), so the card's precondition is met, and `schema/train.py:410-423` still
+  carries the deletion's forwarding note naming the same four pieces. **R343(c) is not new
+  scope; it is the card being called.**
+* **(c)'s EVAL HISTORY ALREADY SURVIVES A RESTART; ITS COUNTERS DO NOT.** `LadderState.save` /
+  `.load` (`eval/ladder.py:226,238`) persist rung status, graduation streaks and history to a
+  state file, and `_load_or_init_ladder_state` RAISES on a corrupt file rather than starting
+  fresh, *"[LAW-14] it must never silently discard graduation streaks/saturation history"*
+  (`pipeline.py:594-599`). What is purely in-memory and resets to zero on every launch is
+  `self._round_counter` and `self._last_p_hat` (`:559-560`) — so a resumed run re-numbers its
+  rounds from `r000001` and re-enters `gate.stride`'s modular arithmetic at a phase the previous
+  process did not leave it in. **That is the concrete defect behind (c)'s "step and round
+  counters continue" witness.**
+* **(c)'s RNG STREAMS ARE NOT IN THE ENVELOPE.** `save_checkpoint` writes model, optimizer,
+  scaler, scheduler, step, config and metadata (`train/checkpoints.py:453-491`) and nothing
+  else. There is no torch/numpy/python RNG state in envelope v2, so *"the trainer's first
+  resumed step consumes the same sampled batch ids an uninterrupted run would"* is new work, not
+  a wiring job.
+* **(d)'s HALT HAS ITS SITE ALREADY NAMED.** `resolve_anchor` (`train/anchor.py:499`) tries
+  `best_model.pt` → `.bak` → bootstrap candidates, and on exhausting them logs
+  `anchor_fresh_init_no_bootstrap` and **seeds `best_model.pt` from the live trainer**
+  (`:611-621`) — which is precisely the burst's condition and precisely what (d) forbids for a
+  run whose promotion bar is read against an anchor. `verify_launch_anchor_pin` (`:256`) already
+  exists and already fails closed on an armed pin, so (d) is an arming plus a refusal at one
+  known line, not a new mechanism.
+* **(e)'s ALERT IS ONE `logger.warning`, AND ITS THRESHOLD IS THE DEFECT.** `train/events.py:333`
+  fires `axis_distribution_alert` whenever `max_frac >= monitor.axis_alert`; `run6.yaml` mints
+  `axis_alert: 0.5` (`:253`). The `axis_distribution` EVENT is emitted unconditionally
+  regardless (`:343`), so the dashboard metric (e) asks for **already exists** — the demotion is
+  a removal of a warning, not the construction of a metric.
+
+**AN OPERATOR PRE-STEP NAMES THE WRONG BRANCH, AND IT IS RECORDED RATHER THAN QUIETLY
+RE-AIMED.** §0 item 6 reads *"Operator pre-step: `git push origin dev` (65ef46f, three commits
+unpushed)"*. Measured at the landing: `dev` is **b135332 and equals `origin/dev` exactly** —
+nothing on `dev` is unpushed, so that command is a no-op. The named commit `65ef46f` and the
+three unpushed commits (`3b057f3`, `0bb4798`, `65ef46f` — the R342(b) arming and the two mint
+commits) are on **`run6-mint`**, which is 3 ahead of `origin/run6-mint` and 12 ahead of `dev`.
+The act the item intends is `git push origin run6-mint`. Stated because the branch a mint lands
+on is not a detail: pushing `dev` would have reported success while leaving the entire re-mint
+unpushed.
+
+> R343 — (a) R341 and R342 are RATIFIED as executed. The G table
+> refuted R341(b) at G=8 only (rounds complete, real winrates, 900.6 s
+> steady wall = 37.9% of bar, no growth over 4 h); 1-in-1 on all three
+> paths returned zero firings — the first bound that means what R342(b)
+> intends. cuda_context measured 18.7% larger on the same container: no
+> partition term is ever carried, not even across a container on the
+> same card.
+> (b) EVAL DESIGN — two channels, decoupled. (i) The PROMOTION channel
+> (candidate vs anchor, the gate the run promotes on) runs every 1000
+> steps for the whole run. (ii) The EXTERNAL channel (sealbot_d5 at fixed
+> nodes, the witness's instrument) runs every 1000 steps through the
+> first third — 6 points at the measured 1581 steps/h, witness (iii)'s
+> ≥ 5 with margin — then every 2000. (iii) SATURATION RULE: when the
+> pooled external WR over the last four rounds is ≥ 0.85, sealbot_d5 has
+> stopped discriminating (32-game CIs cannot separate 0.85 from 0.95);
+> the cadence halves again and the reading is labelled SATURATED on the
+> dashboard; strength claims from then on answer to the next rung, not to
+> a saturated one. (iv) DEGRADATION FLAG, the operator's proposal
+> adopted: a pooled external WR more than 2×CI below its running maximum
+> while promotions continue is the self-play-cycling signature; it is a
+> dashboard flag with a counter, WARN-ONLY for run6 (G-3 stands), and any
+> two consecutive flags are an architect read before the run continues.
+> (v) RUNG-2 is ORDERED as MID-RUN work: pin strix and shrimp as rungs
+> over hexo-bridge (shrimp's radius-8 divergence fenced per R257 as
+> annotated), landing behind the round spec so an added rung is a row,
+> not a rebuild; the saturation rule is expected to trip inside the first
+> third (the burst's screen read 79% at step 2004), so this is not
+> optional, only deferrable to after the start. If the round spec cannot
+> carry channel-specific cadences at HEAD, run6 runs both channels
+> uniformly at 1000 and the split is carded — no round-spec surgery in
+> this packet.
+> (c) RESUME-1 is ORDERED, M, time-box one day, before run6: a STOP
+> (SIGTERM → drain under kill-grace → checkpoint → exit 0) and a RESUME
+> that restores trainer + optimizer + scheduler state, the RING (persisted
+> on stop, reloaded on resume — never refilled from empty), the anchor
+> and promotion state, the eval history and both cadence counters, the
+> RNG streams, and the step counter, with the F-816-37 supervisor
+> restarting on a resumable halt class automatically. Witnesses,
+> pre-registered: ring byte-identical across stop/resume; step and round
+> counters continue; anchor hash unchanged; the trainer's first resumed
+> step consumes the same sampled batch ids an uninterrupted run would (the
+> determinism seam), and its loss lies inside the shakedown's step-to-
+> step noise; a planted corruption of the persisted ring is refused on
+> load. Box test: stop at a mid-round step, resume, one full round
+> completes, memory inside the partition. Out of time-box: run6 starts
+> anyway with the manual cost restated and the rate bar (b)(iv) tightened
+> to 1 firing per 12 h.
+> (d) ANCHOR: run6's best_model.pt is the warm-start checkpoint of record
+> at step 0 (hash-asserted); a self-seeded anchor is a pre-flight HALT.
+> (e) axis_distribution_alert is DEMOTED to a dashboard metric for run6 —
+> an alert that fires on every emission trains its reader to ignore
+> alerts; its threshold is re-derived from the shakedown's distribution
+> later (card, AUDIT-1 F-01 cross-referenced). Round CIs join the exit
+> screen and the dashboard as R341 §3 asked.
+> (f) RUN LENGTH: a 12 h block (~19k steps at the measured rate), the
+> first third 4 h. Extension is decided on readings, not pre-committed:
+> at the first-third screen and at block end. G=8's knee and game-length
+> growth are CARDED with their dashboard lines (round wall vs bar) and the
+> R340 escalation trigger standing at 0.66× bar.
+> ROUTE: land, census, ACTIVE next; RESUME-1; eval wiring; exit. The
+> run6 START is a separate forward naming the block and the anchor hash.
+
+**ANNOTATION under R341's foot — R341(e)'s ARMED CADENCE IS SUPERSEDED, NOT WITHDRAWN (R343(b),
+2026-09-08).** R341(e) armed `train.eval_interval: 750` and, through the prereg's relation row,
+`train.checkpoint_interval: 750`, by unedited forwarding (R337(a)). **R343(b)(i)/(ii) set both
+eval channels at 1000, so the minted pair re-derives 750 → 1000.** R341(e)'s reasoning stands
+unaltered and was correct on its own evidence: at the rates available to it — R340's 1 209
+steps/h, and a conservative contended 1 004 — a 4 h first third yields 6 and 5 rounds at 750, and
+only **4** at 1000, which fails witness (iii)'s `≥ 5`. What changed is the RATE, not the
+arithmetic: R342's shakedown measured **1 581 steps/h**, and 1 581 × 4 ÷ 1000 = **6 rounds at
+1000**, clearing the witness with the same margin 750 was chosen to buy. The cadence was tight
+because the round wall was unknown when it was set (`REAL_RUN_OPEN_DECISIONS.md` §1, which priced
+the eval channel at ~70 % duty cycle at 750); relaxing to 1000 spends that measurement on
+throughput. **`train.checkpoint_interval` re-derives rather than being re-authored, which is the
+whole reason R242 required that row be stated as a relation** — `RUN6_MINT_PREREG.md:135` names
+this exact event in advance. The two `# delta:` headers in `configs/run6.yaml` are re-minted from
+the recorded deltas, not hand-edited.

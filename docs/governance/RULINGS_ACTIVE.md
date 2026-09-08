@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 2493485, regenerated 2026-09-05.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ c7999bb, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.47, 2026-09-05. Created under R271 (register hygiene: archive/index split);
+# v3.59, 2026-09-08. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -1158,6 +1158,39 @@ NOT the authoritative text; never edit here; edits land in mantis-migration.
 # **AND THE BURST PRICED R319(d):** run6's first eval round ran 50 min 22 s to 93 games and needs
 # 132-260 against `round_timeout_sec 3600` — **1.19x to 2.35x over its own budget**. RUN6 REMAINS
 # HELD, now against `F-816-37` AND R319(d).**
+# **v3.48 = R339 folded in — SITTING-10 RATIFIED, run6 MINTED, and the two things holding the run
+# are now a RULE and an INSTRUMENT rather than two open questions. **R319(d) is ADJUDICATED BY
+# MEASUREMENT**: the gate geometry does NOT move (R319/R320 stand), the lever is the landed-unarmed
+# `play_paired_match(concurrency=)`, and the VALUE is picked on the box by a stated rule — smallest
+# G in {4, 8} whose FULL round finishes inside `0.66 x round_timeout_sec` (2 376 s at run6's 3 600),
+# with an explicit ENV-row branch `[1.5x, 2.0x]` of the G=8 round time if neither clears. **The
+# timeout itself is deliberately not lengthened: it is the stall watchdog's limit, and buying room
+# there buys stalls.** **`F-816-37` becomes an INSTRUMENT, not a hunt** — 1-in-1 on the eval path
+# (the self-play path keeps the batch-size-derived 1-in-64), DUMP-ON-FIRE proven by a planted
+# corruption, ONE 2 h bounded STRUCTURAL diff banked if empty, and zero firings across the shakedown
+# is the bound run6 starts under. **The original firing's concurrency was READ from the record at
+# this landing and it is G = 1** (`diagnostics/acceptance_witness.py:272` passes no `concurrency`,
+# and the token appears nowhere in the file), so (c)'s HALT-the-arming condition does NOT fire.
+# **TWO TOOLING LAWS promoted from memory to checks, each after missing twice** (§4): the governance
+# mirror refuses to write when HEAD is not `dev`, and `git reset --hard` on a dirty tree is banned
+# without a stash ref written to the sitting record first. **ONE DISCLOSED DEVIATION from the
+# forwarded leg text, ruled by the operator at the sitting on measured arithmetic**: the key is
+# wired to the GATE BLOCK's two invocations, not to the rung "battery" — the gate is 93 % of the
+# round, so arming the ladder alone leaves >= 2 742 s serial and the (b) rule would fail BY
+# CONSTRUCTION. **RUN6 REMAINS HELD**; the shakedown is the last screen before the operator's word.**
+# **v3.50 = R340 folded in — the R339 exit RATIFIED and **R319(d) CLOSED**: the round that could
+# not finish is re-read as a WEAK-NET ARTIFACT on three readings, so the geometry never needed
+# relief and the lever never needed arming. **`eval.concurrency` = 1 IS THE RUN6 VALUE, by
+# measurement and not by rule** — R339(b)'s own rule would have armed G=4 on a round finishing at
+# 0.434x its bar, and arming a value the round never needed is arming a default readable as a
+# measurement. An **ESCALATION ENVELOPE** is PRE-REGISTERED instead: trigger = a measured gate
+# round over 0.66x its timeout, value = the measured G=4 row, arm = the operator's forward.
+# **`F-816-37` goes to a HARDWARE-vs-SOFTWARE DISCRIMINATION before any shakedown minute is
+# spent**, all three verdict branches pre-stated INCLUDING condemnation of the box. The shakedown
+# is admitted only on a cleared box, at 1-in-1 on BOTH collate paths, and its exit screen must
+# carry three named numbers BEFORE any time-to-signal estimate is given — *"before them, any
+# estimate is a guess and is not given"*. **RUN6 REMAINS HELD.**
+
 
 **What this file is.** The working set of rulings with FORWARD FORCE, one line each,
 with status and pointer. Sessions seed from THIS file + docs/registers/laws.md +
@@ -1167,6 +1200,45 @@ use, never from a summary). **This file is an INDEX, never authority** — on an
 conflict: register verbatim > laws.md/CLAUDE.md > this file. Absence from this file
 claims a ruling has no forward force; it deletes nothing. Curated at session close;
 every curation appends one line to §8.
+
+# **v3.55 = R341 folded in — the host CONDEMNED ON SIGNATURE (three firings / five words / two
+# code paths, all bit 23 at byte offset ≡ 4 mod 8, against a NEGATIVE-AND-STRONG software arm), with
+# RELOCATION made the decisive experiment and both branches pre-stated; **R340(a)'s closure of
+# R319(d) WITHDRAWN** as a cross-regime carry — mint-blocking and HOST-INDEPENDENT, so it survives
+# any box move; the contended G table ordered as shakedown-2's FIRST ACT with its mechanism
+# expectation stated BEFORE the data and a no-code prereg fallback; run length 12 h and gate cadence
+# 750 steps ARMED by unedited forwarding (R337(a)); and two laws ordered as checks — teardown blocks
+# until the run record's hashes verify, and `pgrep -f` BANNED outright, RETIRING the bracket idiom
+# R302(e) still admitted. **LEG 0 HALTED AT THIS LANDING: the alias cell was forwarded BLANK and the
+# standing alias resolves to the CONDEMNED host on four identity lines.**
+
+# **v3.56 = R342 folded in — R341(a)'s CONDEMNATION STAYED on the operator's override; the host is
+# SUSPECT, not condemned, and R341(a) is ANNOTATED, never patched. The architect records the
+# condemnation OVERSHOT: at the measured rate, with 1-in-1 on both collate paths, a lane fault is an
+# UPTIME cost, not a correctness breach — and relocation was OVERSTATED as decisive, since only a
+# FIRING elsewhere convicts software. Five CONDITIONS armed as checks, the rate bar among them
+# CONDEMNING again with no further ruling. R341 leg 0 VOID for this sitting; legs 1-2 run on `vast`.
+# **The caps were void anyway** — the 2026-09-06 container rebuild tripped R302(c) on its own, so the
+# re-mint is owed on this host regardless of the override.
+
+# **v3.57 = R342's EXIT — the re-mint COMPLETE (all three conjuncts on terms measured entirely on
+# this container), G=8 ARMED on the operator's forward, and a CLEAN 4 h shakedown: zero F-816-37
+# firings at 1-in-1 on all three collate paths, SEVEN completed rounds with real `wr_sealbot` and
+# ZERO nulls, zero skips, two promotions. **R341(b)'s premise is REFUTED at G=8.** `plies/game`,
+# OWED since R340 leg 4, is measured. RUN6 IS NOT STARTED — what remains is the operator's word.**
+# **v3.58 = R343 folded in — R341 and R342 RATIFIED as executed, with R341(b)'s refutation SCOPED
+# to G=8 alone and the `cuda_context` pivot generalised: **no partition term is ever carried, not
+# even across a container on the same card.** The EVAL INSTRUMENT becomes TWO DECOUPLED CHANNELS —
+# promotion every 1000 steps for the whole run, the external rung every 1000 through the first
+# third then every 2000 — with a **SATURATION RULE** retiring an instrument whose CIs can no longer
+# separate it from ceiling, and a **DEGRADATION FLAG** carrying the self-play-cycling signature
+# WARN-ONLY. **RESUME-1 is ORDERED BEFORE RUN6**, M, time-boxed one day: the ring becomes a
+# persisted resume input with byte-identity and determinism-seam witnesses, never a buffer that
+# refills from empty. The ANCHOR is fixed as the warm-start checkpoint of record and a self-seeded
+# anchor becomes a pre-flight HALT; `axis_distribution_alert` is DEMOTED to a metric because an
+# alert that fires on every emission trains its reader to ignore alerts. RUN LENGTH is a 12 h block
+# whose extension is decided on readings. **R341(e)'s armed 750 cadence is SUPERSEDED by 1000 and
+# `checkpoint_interval` RE-DERIVES with it — the relation row R242 required, working as designed.**
 
 **Curation protocol (R271(d), extended by R272(b) — binding, not optional).** Every
 curation spot-checks **≥5 index lines against the verbatim register text** and records
@@ -1203,9 +1275,9 @@ re-confirmed this session — check before relying.
   clause (f); the packet's own "the ONE canonical text" line nominated the numbered block and the
   variant is recorded in the carriage note, not promoted). The register
   now runs
-  R23–R338 — **309 sections, 309 distinct numbers, no duplicates** (re-derived at v3.45; this sentence read R308/279 from v3.0 through v3.35 while every curation ran the script, repaired in place under R311(c) and re-derived every curation since) — and **every number
+  R23–R343 — **314 sections, 314 distinct numbers, no duplicates** (re-derived at v3.58; this sentence read R308/279 from v3.0 through v3.35, was repaired at v3.45, and then went STALE AGAIN — it still read R338/309 at v3.48 and v3.49 while the register carried R339, because those curations ran the script and left the sentence. Repaired in place under R311(c) a SECOND time. The lesson the first repair drew is now measured: the sentence is the thing that drifts, the script is the thing that is right, and a reader should trust `ruling_census.py` over this clause) — and **every number
   appears at most once as a section header** (re-derive: `grep -nE '^#{1,4} R[0-9]+ —'`,
-  then diff the number set against `range(23, 339)` — the upper bound is `max+1` and is
+  then diff the number set against `range(23, 344)` — the upper bound is `max+1` and is
   re-derived, not carried: it read `289` from v2.5 through v2.9 while the register ran to R294,
   which made the instruction wrong for five curations without making any count wrong, because
   every curation ran the script rather than the sentence; the ` —` the pattern demands immediately
@@ -1341,6 +1413,30 @@ re-confirmed this session — check before relying.
 ## 4. Standing process laws — LAW, most flagged GRAD into laws.md/CLAUDE.md
 
 Verbatim text in the register; one-liners here are index only.
+
+- **R341(f)(i) — A BOX IS NEVER TORN DOWN OR REBUILT UNTIL THE RUN RECORD AND DRIVER LOGS ARE OFF
+  IT AND THEIR HASHES VERIFY. LAW, and teardown is a HALT until that line reads.** Earned: R340
+  leg 3's **run 2 driver log was destroyed with the box before it was copied off**, with a rebuild
+  known to be coming, which is why `plies/game` is still OWED (`RULINGS_ACTIVE.md` §8 v3.54; the
+  exit calls the shortfall *"this session's own fault"*). The law is not "back things up" — it is
+  that the teardown **blocks** on a verified hash line, so the check cannot be deferred past the
+  moment it stops being possible. **First application, 2026-09-06 (this landing):** the condemned
+  host was swept before condemnation — nothing was running, no `reports/`, `logs/`, `benchmarks/`
+  or stray `*.jsonl`, tree clean at `d3ba75e`, and the one artifact on it
+  (`checkpoints/bc/run6_00006500_5191bd09.ckpt`) verified `sha256 f16d34ee…`, 3 695 909 bytes,
+  **byte-identical to the off-box backup**. The line reads; teardown is CLEARED for that host.
+- **R341(f)(ii) — `pgrep -f` IS BANNED in packets and scripts; a wrapper matching the LAUNCHER'S OWN
+  MARKER replaces it. LAW, and it RETIRES the bracket idiom R302(e) still admitted.** R302(e) told
+  greps to "exclude the grepping process by construction" and offered `[X]` bracketing as one way;
+  bracketing then failed **twice more** (`mantis-migration` `616d66d`, `c107f3b`) because the
+  wrapper's own argv contains the path `/workspace/hexo-mantis`, which the pattern legitimately
+  matches. A pattern cannot exclude itself when the pattern is part of the environment it searches.
+  **A marker written by the launcher can**, because the launcher chooses a string nothing else
+  carries. R341's *"third self-match on record"* UNDERCOUNTS — R302(e) alone logs three bites in the
+  VAST-REBUILD sitting, on top of `Q6_BOX_EVIDENCE/PREP_RECORD.md` §2,
+  `RECAL_SITTING_RECORD_2026-08-22.md:85-88` and `FINISH1_EXIT.md:58` — and the undercount
+  strengthens the law rather than weakening it. **R302(e) is NOT superseded: its untrusted-box-
+  instruction-files half stands unchanged; only its process-grep half is hardened.**
 
 - **R289 preamble — PREMISE VERIFICATION BEFORE EXECUTION. LAW.** Before executing any lettered
   clause of a ruling, the executor verifies the clause's stated premise **against the subject's own
@@ -1693,9 +1789,116 @@ Verbatim text in the register; one-liners here are index only.
   **caps VOID, `F-R302-1` OPEN, R61 UNSATISFIED.** `F-R302-1`'s mechanism is now fully explained as
   a **posture artefact**, and an explanation is not a mint — **it closes at a standing mint.**
 
+- **R339(d) — THE GOVERNANCE MIRROR REFUSES TO WRITE WHEN HEAD IS NOT `dev`. LAW, standing;
+  `plan/sync_governance.py`.** The shared-tree commit law was carried as a memory and **has now
+  missed twice**, so it becomes a check. R313(b) already confines WRITING to the main tree; this
+  adds the second half — the write also refuses when the main tree's HEAD is parked on some other
+  branch, because a mirror regenerated off `dev` is a mirror of the wrong thing while claiming to
+  be the mirror. Companion to R314(c), which made the READ side derive from the ref: the read now
+  reads `dev`, and the write now refuses unless it IS `dev`. Armed with a planted break.
+- **R339(d) — `git reset --hard` ON A DIRTY TREE IS BANNED WITHOUT A STASH REF IN THE RECORD FIRST.
+  LAW, standing.** The ban is on the SEQUENCE, not the command: uncommitted work is destroyed with
+  no artifact naming what was destroyed, which is the one git operation whose damage the archive
+  cannot undo. The permitted form writes `git stash create`'s ref into the sitting record BEFORE
+  the reset, so the discarded state remains addressable. Armed with a planted break.
+
 ## 5. Live pre-mint force — LIVE (rows expire at mint or on their event)
 
 - R59 — actor-lag abort armed at run5, not at mint.
+- **R343(c) — RESUME-1 IS ORDERED BEFORE RUN6. LIVE, RUN-BLOCKING, time-boxed ONE DAY, M.** A STOP
+  (SIGTERM → drain under kill-grace → checkpoint → exit 0) and a RESUME restoring trainer +
+  optimizer + scheduler, **the RING (persisted on stop, reloaded on resume — never refilled from
+  empty)**, anchor + promotion state, eval history and BOTH cadence counters, the RNG streams and
+  the step counter, with the F-816-37 supervisor auto-restarting on a resumable halt class.
+  Witnesses are PRE-REGISTERED: ring byte-identical across stop/resume; step and round counters
+  continue; anchor hash unchanged; the first resumed step consumes the SAME sampled batch ids an
+  uninterrupted run would (the determinism seam) with loss inside shakedown step-to-step noise; a
+  planted ring corruption is REFUSED on load. **THIS IS `CARD-RESUME` BEING CALLED, not new
+  scope** — R178(c) opened it POST-MINT owning *"weights + optimizer/scheduler + buffer
+  persistence + launcher surface together … nobody builds any piece of it separately"*, and the
+  mint is complete. Surveyed at the landing: the ring's `save_to_path`/`load_from_path` EXIST
+  (`buffer.rs:359,364`; `hexg.rs:245,251`; `selfplay/buffers.py:152,155`) and have **no production
+  caller** — `mixing_cfg={}` and nothing in `src/` sets `buffer_persist`; `LadderState` ALREADY
+  persists eval history and raises on corruption (`eval/ladder.py:226,238`), while
+  `_round_counter`/`_last_p_hat` reset to zero every launch (`pipeline.py:559-560`); and the v2
+  envelope carries **no RNG state at all** (`checkpoints.py:453-491`). **Out of time-box: run6
+  starts anyway with the manual cost restated and the R342(b)(iv) rate bar TIGHTENED to 1 firing
+  per 12 h.**
+- **R343(b) — THE EVAL INSTRUMENT IS TWO DECOUPLED CHANNELS. LIVE, armed by unedited forwarding.**
+  (i) PROMOTION (candidate vs anchor) every **1000** steps for the whole run. (ii) EXTERNAL
+  (sealbot_d5 at fixed nodes) every **1000** through the first third — 6 points at the measured
+  1 581 steps/h, witness (iii)'s `≥ 5` with margin — then every **2000**. (iii) **SATURATION
+  RULE**: pooled external WR over the last four rounds `≥ 0.85` means the instrument has stopped
+  discriminating (32-game CIs cannot separate 0.85 from 0.95) — the cadence halves again, the
+  reading is labelled SATURATED, and **strength claims from then on answer to the NEXT RUNG, not
+  to a saturated one**. (iv) **DEGRADATION FLAG**: pooled external WR more than `2×CI` below its
+  running maximum while promotions continue is the self-play-cycling signature — dashboard flag +
+  counter, **WARN-ONLY for run6 (G-3 stands)**, and any two CONSECUTIVE flags are an architect
+  read before the run continues. (v) **RUNG-2 ORDERED as MID-RUN work**, deferrable to after the
+  start but not optional — the saturation rule is expected to trip inside the first third (the
+  burst's screen read 79 % at step 2004). **The escape hatch is CONDITIONAL on HEAD**: if the
+  round spec cannot carry channel-specific cadences, both channels run uniformly at 1000 and the
+  split is CARDED — no round-spec surgery in this packet.
+- **R343(d) — THE ANCHOR IS THE WARM-START CHECKPOINT OF RECORD. LIVE, PRE-FLIGHT HALT.** run6's
+  `best_model.pt` is that checkpoint at step 0, **hash-asserted**; a SELF-SEEDED anchor is a HALT,
+  not a warning. The site is known: `resolve_anchor` currently logs
+  `anchor_fresh_init_no_bootstrap` and seeds `best_model.pt` from the live trainer
+  (`train/anchor.py:611-621`) — the burst's exact condition, and what (d) forbids for a run whose
+  promotion bar is read against an anchor.
+- **R343(e) — `axis_distribution_alert` IS DEMOTED TO A DASHBOARD METRIC for run6. LIVE.** *An
+  alert that fires on every emission trains its reader to ignore alerts* (193/193 in the burst).
+  Its threshold is re-derived from the shakedown's distribution LATER (card, `AUDIT-1 F-01`
+  cross-referenced) — the demotion is not the fix, it is the removal of a false instrument. The
+  `axis_distribution` EVENT is emitted unconditionally already (`train/events.py:343`), so the
+  metric (e) asks for exists; what goes is the warning at `:333`. **Round CIs join the exit screen
+  and the dashboard, as R341 §3 asked and v3.57 recorded absent.**
+- **R343(f) — RUN LENGTH IS A 12 h BLOCK, EXTENSION DECIDED ON READINGS. LIVE.** ~19k steps at the
+  measured rate; the first third is 4 h. Extension is **not pre-committed** — it is decided at the
+  first-third screen and at block end, and **RESUME-1 is what buys it**. G=8's knee and
+  game-length growth are CARDED with their dashboard lines (round wall vs bar); the R340
+  escalation trigger stands at `0.66 × timeout = 2 376 s`, which the measured escalated round
+  (1 872.8 s) clears with 21 % margin and the steady-state wall (900.6 s) clears with 62 %.
+- **R342(b) — FIVE CONDITIONS under which this host trains, EACH A CHECK. LIVE, and (iv) is armed
+  to condemn without a further ruling.** (i) 1-in-1 on BOTH collate paths for the whole run, dump-on-
+  fire, halt on fire — *"the 1-in-64 sample does not return"*; (ii) every checkpoint sha256'd on write
+  and verified on load, mismatch = halt; (iii) resume from the last verified checkpoint on a firing,
+  or the operator-restart cost is STATED on the exit screen; (iv) **RATE BAR: more than 3 firings in
+  any 12 h, or ANY firing outside the wire arrays (weights, ring headers, indices), CONDEMNS the host
+  again with no further ruling — the operator relocates**; (v) firing count and location are dashboard
+  lines. Surveyed against HEAD at the landing: (ii) already exists (`checkpoints.py:286-296,498-524`),
+  (i) is already true on the trainer and eval paths and false only on self-play's 1-in-64
+  (`inference_server.py:218-223`), and (iii) has `--resume-from` but no automatic relaunch.
+- **R342(a) — THE HOST IS SUSPECT, NOT CONDEMNED. LIVE.** R341(a) stands as the correct reading of the
+  SIGNATURE evidence; what is withdrawn is the CONSEQUENCE, on a ground R341 did not weigh. The
+  condemned-host check from R341 leg 3 is disabled for this packet ONLY and re-arms on a (b)(iv) trip.
+  **`F-816-37` remains OPEN under both rulings** — its firings are its evidence, wherever they occur.
+- **R341(b) — R340(a)'s CLOSURE OF R319(d) IS WITHDRAWN. LIVE, MINT-BLOCKING, and HOST-INDEPENDENT.**
+  R340(a) closed R319(d) on three STANDALONE readings; the round that must actually finish is the
+  CONTENDED one, and contended rounds run **~7× slower per game (4.0 → 25.9 s;** strict quotient
+  6.48×, the "~7×" being `R319D_CONTENTION_FINDING.md:67`'s own label**)**, hit the 3 600 s
+  `round_timeout_sec` and return `wr_sealbot: null`. **A null is not a slow reading — witness (iii)
+  fits Elo slope over ≥ 5 rounds in the first third and cannot fit nulls, so the geometry failure
+  DISARMS one of run6's three success witnesses.** This row does not move when the box moves: it is
+  the one blocker relocation cannot touch. Discharged only by R341(c)'s contended G table
+  completing a round inside 0.66 × timeout, or by the stated no-code prereg fallback.
+  **DISCHARGED at G=8 ONLY (R343(a)): the contended escalated round completed in 1 872.8 s against
+  the 2 376 s bar with a real `wr_sealbot`, and the shakedown's steady wall held 900.6 s with no
+  growth over 4 h. The scope is the ruling's own — at G=1 and G=4 the round still returns `null`,
+  so this row is discharged by the ARMED VALUE, not by the geometry becoming safe.**
+- **R341(a) — THE HOST IS CONDEMNED; F-816-37 STAYS OPEN. LIVE, MINT-BLOCKING.** Condemnation is on
+  SIGNATURE, not on a passed test: the 102-minute memory stress (2.85 TiB, 81 cycles, two page
+  sets) found nothing on a host with **no ECC channel at all** — EDAC registers zero controllers,
+  `nvidia-smi -q` reports every ECC field `N/A`, `dmidecode` is absent — and un-convicted is not
+  the bar. **RELOCATION IS THE EXPERIMENT**, and both branches are pre-stated: firing at 1-in-1 on a
+  different physical host CONVICTS the software arm; not firing across shakedown-2 is the hardware
+  verdict by discrimination. **Nothing trains on the condemned host.**
+- **R341(e) — RUN LENGTH 12 h AND GATE CADENCE 750 STEPS ARE ARMED by unedited forwarding
+  (R337(a)). LIVE, and they belong to the RE-MINT, not to the standing mint.** The `run length`
+  record row (`RUN6_MINT_PREREG.md:54`) and a gate-cadence ENV row take these values. The ≥ 5-rounds
+  claim was re-derived at the landing and **holds at both candidate rates**: 4 h × 1 209 steps/h =
+  4 836 ÷ 750 = **6 rounds**; at the conservative contended 1 004 steps/h, 4 016 ÷ 750 = **5**.
+  Note the rows are armed and the witness they feed is still disarmed by R341(b) — arming a cadence
+  does not create Elo points a null round never produced.
 - **R302(c) — THE MINTED MEMORY CAPS ARE VOID ON THE NEW HOST. LIVE, MINT-BLOCKING, and this is
   the marker on the mint path.** The instance the caps were fitted on was destroyed (R301(c)).
   `train.microbatch_caps`, `inference.fused_graph_caps` and `_SIZING_BUDGET_GIB` therefore
@@ -1805,6 +2008,18 @@ Verbatim text in the register; one-liners here are index only.
   _timeout_sec 3600 cannot hold that geometry on this card class under ANY implementation"* — and
   R319(d) already rules *"RUN6 DOES NOT START until this adjudication lands"*. What sitting 10 adds
   is the NUMBER, on the config that will actually run, from a real round rather than an estimate.
+  **ADJUDICATED BY R339(b), 2026-09-06 — the row stays LIVE until the box picks the value, but it is
+  no longer an open question.** The GEOMETRY does not move: R319/R320 stand, no screen/confirm count
+  is cut and no power argument is re-fitted. The lever is the landed-unarmed `concurrency` kwarg,
+  raised to a schema key `eval.concurrency` (default 1, serial path byte-exact). **The value is
+  picked by RULE, on the box, not authored**: BC checkpoint of record, minted config, one FULL round
+  at G = 4 then G = 8, and the smallest G whose round finishes inside **0.66 x 3600 = 2 376 s**
+  (1.5x headroom) is the row. If G = 8 does not clear, the G=8 round time is reported and
+  `eval.timeout` becomes an ENV row at **[1.5x, 2.0x]** of it for the operator's next forward.
+  **`round_timeout_sec` is otherwise UNTOUCHED, by ruling: it is the stall watchdog's limit, and
+  lengthening it buys stalls.** The random floor's 25 s sits inside the round and needs no row of
+  its own. Wiring site, ruled at the sitting on measured arithmetic: the GATE BLOCK's two
+  invocations (93 % of the round), NOT the rung battery — see `PACKET_R339_RUN6_PRESTART.md` §1.1.
 - **`F-816-37` — THE EVAL PATH PRODUCED A RUN-FATAL `EdgeAttrGeometryMismatch` AT RUN6's MINTED
   GEOMETRY, ONCE, AND IT IS NOT ROOT-CAUSED. LIVE and RUN-BLOCKING for run6's shakedown.** The
   STEP 4c acceptance witness died after 14 min 50 s: *"edge axis one-hot is not a clean one-hot
@@ -1826,6 +2041,121 @@ Verbatim text in the register; one-liners here are index only.
   (7 115 s), and the 90-minute owed burst produced **zero** occurrences over 2 100 steps and 2 165
   games. So the event is RARE and unreproduced — which bounds the rate loosely and identifies
   nothing. A green run is not a root cause.
+  **CONVERTED INTO AN INSTRUMENT BY R339(c), 2026-09-06 — explicitly NOT a resolve-it-first order.**
+  The eval-path collate check runs at **1-in-1** (that path is ~93 games a round, so the cost is
+  affordable there and nowhere else); the **self-play path keeps 1-in-64**, which is
+  `canary_period = int(self._batch_size)` at `inference_server.py:792` against run6's
+  `inference.inference_batch_size: 64` — a DERIVED rate, not a literal, and a config that moved the
+  batch size would move the sample rate with it. **DUMP-ON-FIRE**: the offending batch, its graph
+  ids and the concurrency in force are written before the raise, proven by a planted corruption that
+  dumps and reds. ONE bounded 2 h hunt diffs the eval-path collate against the training path **by
+  STRUCTURE** (what it does differently, not what it looks like), banked if empty. **THE ORIGINAL
+  FIRING'S CONCURRENCY IS READ FROM THE RECORD AND IT IS G = 1** —
+  `diagnostics/acceptance_witness.py:272` passes no `concurrency` and the token appears nowhere in
+  that file — so R339(c)'s "if it fired under G > 1, halt the arming" condition **does NOT fire**
+  and R339(b) may arm. **Zero firings across the shakedown at 1-in-1 is the bound run6 starts
+  under; one firing halts with the artifact, and that halt is the instrument working.**
+  **AND THE BOUNDED HUNT REFUTED THE CANDIDATE THIS ROW CARRIED — read this before planning any
+  further work on the finding.** The row above names the parallel leaf build
+  (`leaf_build_threads=7`) *"the obvious candidate"*. **It cannot be the cause of the observed
+  occurrence:** F-816-37 fired in the STEP 4c ACCEPTANCE WITNESS, and
+  `diagnostics/acceptance_witness.py` passes no `leaf_build_threads` (grep → 0 occurrences), so the
+  engine takes `inference_local.py:114`'s default of `1`, and `queues/graph.rs:546-549` takes the
+  FULLY SERIAL arm at `threads == 1` — it never constructs a `thread::scope`. `7` is the eval
+  ROUND's value; the round is not the driver that fired. The candidate was never demonstrated and
+  is now a DEAD END for this firing. Also closed by reading: a torn read of a still-building graph
+  (`build_leaf_graphs_batch` binds its owned Vec and joins every handle before submit) and a
+  moved-out array read as data (`take()`'s `Option` latch raises `WireAlreadyConsumed` instead).
+  What survives: the eval path builds from LIVE boards where the trainer replays STORED records,
+  and it runs AT the fused-cap boundary (the cap bound 1 388 times in the burst) where the trainer
+  does not. **One thing the hunt makes WORSE rather than better:** self-play shares the same serial
+  builder, so its zero firings bound the same code path — but at the 1-in-64 canary, which R339(c)
+  deliberately leaves alone, so the strongest remaining exposure stays 64x under-sampled. Full
+  chain, every link cited: `R339_EVIDENCE/F816_37_STRUCTURAL_HUNT.md`.
+  **AND THEN IT FIRED. 2026-09-06, ON THE EVAL PATH, UNDER THE 1-IN-1 INSTRUMENT, WITH THE
+  BATCH CAPTURED — R339(c)'s HALT is LIVE and RUN6 DOES NOT START.** *"edge axis one-hot is not a
+  clean one-hot (edge 98805): [0.5, 0.0, 1.1754944e-38]"*, `phase gate_screen`, **`concurrency`
+  1** (so R339(b)'s arming is NOT implicated), `leaf_build_threads` 7, two graphs of ~398 k edges
+  in a seeded-fresh-net round at a 128-ply cap — a corner nothing in the register had exercised.
+  **ONE edge of 796 788 is wrong and its own `signed_dist`/`src_player` are intact**, so it is
+  not a torn row. **THE SIGNATURE IS ONE BIT, AND IT IS THE SAME BIT IN BOTH OCCURRENCES:**
+  Hamming distance to the nearest legal one-hot is **1** for the original (`word 2, bit 23`) and
+  **2** for this one (`word 0 bit 23`, `word 2 bit 23`). Bit 23 is the float32 EXPONENT LSB —
+  clearing it is exactly `1.0 -> 0.5`, setting it in a zero word is exactly `FLT_MIN =
+  1.1754944e-38`. **A race produces whole wrong values or arbitrary patterns, not a lone
+  exponent-LSB flip twice on the same bit**, so the concurrency family is refuted from a SECOND
+  direction on top of the structural hunt's. Points at (unproven, both testable): a memory fault
+  on a host-side array on a card class with no ECC, or a narrow bit-manipulation defect. Rate
+  this session: **1 firing in ~825 eval games at 1-in-1**. Artifact preserved OFF-BOX at
+  `R339_EVIDENCE/F816_37_ARTIFACT/` (sidecar `404d61aa…`, batch `af0724e2…`, hashes verified
+  against the box). Full record: `R339_EVIDENCE/F816_37_HALT.md`.
+  **AND IT HAS NOW BEEN DISCRIMINATED, R340(c), 2026-09-06 — VERDICT `BOTH NEGATIVE`, so the class
+  STAYS OPEN and the box is NOT condemned.** **SOFTWARE NEGATIVE and it is the STRONG half**: the
+  mask (`0x00800000` / `1<<23` / `8388608`) is absent in 15 spellings over 777 files / 146 Rust
+  files with the scope proven, NO site views the wire's float storage as integer storage (no
+  `bytemuck`; `transmute` only in a comment; every `from_raw_parts` is f16↔u16 in the REPLAY path;
+  the two `.view(` calls are torch RESHAPES), and — the decisive part — **the producer writes a
+  literal `1.0` and `verify_contract` passes an EXACT-EQUALITY one-hot test on those bytes before
+  the graph is emitted** (`mantis-graph/src/lib.rs:923,930,1082`; *"runs once per built graph in
+  EVERY profile, release included"*), leaving a corruption window that is **memcpy only** — no
+  arithmetic, no mask, no cast. **HARDWARE NEGATIVE BY THE RULING'S TEST BUT WEAK, AND THE
+  DISTINCTION IS LOAD-BEARING**: 2.85 TiB verified over 102 min / 81 cycles / TWO page sets (32 GiB
+  static + 42 GiB re-`mmap`ed each cycle), 0 errors, under BOTH idle and LOADED conditions
+  (100 %, 69–70 °C, 306–313 W — the state the firings occurred in, which the ruling does not ask
+  for); the probe is LAW-07-proven to fire on a planted bit-23 flip; **`memtester` was unusable**
+  (`RLIMIT_MEMLOCK` hard 64 KB, no `CAP_IPC_LOCK`/`CAP_SYS_RESOURCE`) so R340 §2's *"or
+  equivalent"* was taken, adding the RETENTION dwells the write-correct-read-wrong signature
+  demands. **The ECC/MCE half returned NO VERDICT AND COULD NOT** — EDAC registers ZERO memory
+  controllers, `dmesg` is `Operation not permitted` — so it is UNAVAILABLE, never clean (a zero
+  from a channel with no producer is the phantom-gate class). **Coverage is the binding limit:
+  32/42 GiB against 60.53 GiB host DRAM under a 50.81 GiB cgroup ceiling. THE BOX IS UN-CONVICTED,
+  NOT CLEARED.** **And the positive evidence still points at hardware**: bit 23 in every corrupted
+  word across both firings with NO selection effect (the check catches a flip at any of the 32
+  positions, so `P ≈ 1/32` per occurrence), and **all three corrupted words at byte offset ≡ 4
+  (mod 8)** — the same half of the 64-bit bus — with the triple's other-parity word intact. A
+  fixed bit on a fixed bus half is a DRAM signature, not a race, a mask or an SEU. Records:
+  `R340_EVIDENCE/LEG1_VERDICT.md`, `F816_37_SOFTWARE_ARM.md`, `F816_37_HARDWARE_ARM.md`,
+  `F816_37_BIT_SIGNATURE.md`.
+  **AND THEN THE SHAKEDOWN FIRED IT AGAIN — ON THE TRAINING PATH, AT 38 MINUTES. R340 leg 3
+  HALTS AND RUN6 DOES NOT START.** `[0.5, 0.0, 1.1754944e-38]` at edge 4019769, byte-identical to
+  leg 1's values, raised from `dispatch.py:231 _materialise` → `collate_graph_batch(semantic=
+  "full")` — the TRAINER's own step, not eval and not self-play. The run reached step **54** in
+  **38 min 04 s** (56 games, card peak 11.97 GiB). **CORRECTED SAME SESSION — the "≈ 85 steps/h"
+  first written here is WITHDRAWN and so is the rate it implied**: of those 38 minutes only ~2 were
+  TRAINING; `coordinator.drain flush_pending_eval`/`terminal_eval step=54` then ran an EVAL block
+  for ~36 min, and the crash came on the training step AFTER it. A SECOND shakedown on the same box,
+  same config, same commit is **past run 1's death point with ~1 070 steps and ~1 057 games and
+  ZERO eval blocks** — so the class is NOT a reliable ~38-minute event, run 1 was one draw, and the
+  honest throughput is run 2's **≈ 1 500 steps/h**. Two things this opens, neither resolved: **run 1
+  terminal-evaluated at step 54 against `eval_interval: 1000` with no logged reason** (a finding in
+  itself), and the firing followed 36 min of eval on the very next step (a LEAD at n = 1, not a
+  mechanism). The halt, the path and the signature are unaffected.
+  **THIS REFUTES THE LAST SOFTWARE-SPECIFIC CANDIDATE THE REGISTER CARRIED.** R339's structural
+  hunt left exactly one: *"the eval/witness path builds graphs from LIVE board positions; the
+  training path replays STORED ring records … invisible to the trainer no matter how many steps it
+  ran"*. The trainer has now fired, and it REBUILDS rather than replays
+  (`replay/hexg/sample.rs:321` → `mantis_graph::build_axis_graph`), so `verify_contract`'s
+  exact-equality one-hot test passed on those bytes there too. **Both paths now share the one
+  structure that matters — verified correct at build, read wrong at collate, nothing but memcpy
+  between** — and concurrency is not the discriminator either (this rebuild is under
+  `std::thread::scope`, leg 1's eval firing ran `leaf_build_threads=7`, the original ran serial).
+  **THE SIGNATURE IS 5 FOR 5 ON BOTH AXES**: five corrupted 32-bit words, three firings, weeks
+  apart, two code paths, two nets — **every one bit 23, every one at byte offset ≡ 4 (mod 8)**,
+  with the triple's other-parity word intact each time. No selection effect (the check catches a
+  flip at any of the 32 positions), so bit-agreement across three firings is `P ≈ 1/1 000` and
+  parity multiplies a further `1/4`. **A fixed bit on a fixed half of the 64-bit bus is a DRAM
+  signature, not a race, a mask or an SEU.**
+  **THE ARTIFACT WAS NOT CAPTURED, AND THAT IS AN INSTRUMENT GAP AGAINST R340(c)'s OWN WORDS**
+  (*"a firing halts with the artifact"*): dump-on-fire was wired to the EVAL path only
+  (`inference_server.py:579`, fed by `eval/worker.py`), and the trainer's collate had none. **Now
+  fixed** — `train/coordinator/dispatch.py::_dump_train_collate`, unconditionally armed (a contract
+  failure is run-fatal, so there is no hot path to protect), with the call site wrapped so a dump
+  can NEVER replace the contract error, and a LAW-07 mutation self-test at
+  `tests/train/test_f816_37_train_path_dump.py` (3 rows: clean-dumps-nothing control, planted
+  corruption DUMPS-and-REDS, and dump-writer-explodes still raises the ORIGINAL error). The
+  mutation was verified to FIRE: deleting the dump call reds the suite. Floor 4906 → **4909**.
+  The now-false docstring claiming the class *"has only ever fired on eval"* was corrected in the
+  same edit rather than left as misinformation a later reader would trust.
 - **`F-WS-2` — PREREG ROW, **ADOPTED BY THE OPERATOR 2026-08-22 (R311(h))** and PRE-REGISTERED as
   of that adoption; no longer re-sit-blocking. The adopted reading is the NARROWER one the
   architect recommended: an OOM during the ladder stops the ladder's EXTENSION only, never the
@@ -6471,3 +6801,550 @@ Verbatim text in the register; one-liners here are index only.
   own docstring, which cites R335(e) Leg 3. The finding is unchanged and its home is corrected.
   **WHAT THIS CURATION DOES NOT DO:** it does not start run6 and does not lift either blocker.
   **RUN6 REMAINS HELD.**
+
+- 2026-09-06 — **v3.48** curated by the RUN6 PRE-START session at its landing step (ROUTE: *land,
+  census, ACTIVE next*), BEFORE any leg executed — so this entry records a RULING, never a result.
+  Register APPENDED: census `R23–R339 — 310 / 310 / 0, excluded 53`, re-run after the append;
+  **`STAMP OK: v3.48`**; `--self-test` all four controls fire. Canonical home
+  `PACKET_R339_RUN6_PRESTART.md` §1; pre-existence grep `rc 1` in BOTH repositories.
+  **WHAT THE RULING CHANGES IN THE INDEX.** §5's two run-blocking rows both gain a disposition and
+  both stay LIVE: **R319(d) is ADJUDICATED BY MEASUREMENT** — geometry frozen, the lever is the
+  landed-unarmed `concurrency` kwarg raised to `eval.concurrency`, and the VALUE is picked on the
+  box by a rule with a stated bar (`0.66 × 3600 = 2 376 s`) and an explicit ENV-row branch; and
+  **`F-816-37` becomes an INSTRUMENT** — 1-in-1 on the eval path, DUMP-ON-FIRE, one bounded 2 h
+  structural diff, zero-firings-across-the-shakedown as the bound run6 starts under. §4 gains
+  **R339(d)'s two tooling laws**, each promoted from memory to a check after missing twice.
+  **TWO THINGS THIS CURATION DETERMINED RATHER THAN CARRIED, both load-bearing.** (1) **The original
+  `F-816-37` firing was under G = 1** — `diagnostics/acceptance_witness.py:272` passes no
+  `concurrency` and the token appears nowhere in that file — so R339(c)'s HALT-the-arming condition
+  does NOT fire and R339(b) may arm. It was read from the code rather than assumed, because the
+  clause makes it a gate. (2) **"1-in-64" is a DERIVED rate, not a literal**:
+  `inference_server.py:792` sets `canary_period = int(self._batch_size)` against run6's
+  `inference.inference_batch_size: 64`, and the eval and self-play paths reach the SAME
+  `semantic="canary"` collate through one `LocalInferenceEngine` — which is why (c) is a threading
+  change and not a constant edit.
+  **ONE DISCLOSED DEVIATION, ruled by the operator at the sitting.** The forwarded §2 Leg 1 said
+  *"at the battery site only; the other five call sites keep the kwarg default"*; `play_paired_match`
+  has SIX invocations in `src/`, so every single-invocation choice leaves five others and the
+  numeral disambiguates nothing. The measured decomposition does: the gate block is 93 % of the
+  round, the rung "battery" is 176 s of it, so arming the ladder alone leaves ≥ 2 742 s serial and
+  §1(b)'s rule fails BY CONSTRUCTION. The key is wired to the GATE BLOCK's two invocations. The
+  floor probe (a **LAW-07** input) and the rung block (**LAW-04**'s Elo channel) stay serial and
+  deterministic, which is the second reason and not only the arithmetic.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R319(d) at `:7380` — MATCHES,
+  *"RUN6 DOES NOT START until this adjudication lands — a promotion gate that cannot complete
+  inside its own budget is the defect class this era exists to end"*, which is what the amended §5
+  row rests on. R319(b) at `:7357-7358` — MATCHES, *"round_timeout_sec 3600 cannot hold that
+  geometry on this card class under ANY implementation"*, and the sentence spans two register lines,
+  so a single-line grep for it returns nothing — recorded because this entry's own first search did.
+  R335(e) Leg 3 at `:8170` — MATCHES, *"capability with a diagnostic override, UNARMED, serial
+  default byte-exact"*, and it still does NOT contain the `index_add_` CUDA disclosure (v3.47's
+  correction stands). R313(b) at `:7086` — MATCHES, *"this makes mirror generation main-tree-only by
+  construction"*, which is the half R339(d)'s mirror law extends rather than repeats. R314(c) at
+  `:7125` — MATCHES, *"against git show dev:docs/governance/<name>, never the working tree"* — the
+  READ side, so R339(d)'s WRITE-side refusal is a companion and not a duplicate.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no value (the G row is picked on the box, not here),
+  lands no code, and lifts neither blocker. **RUN6 REMAINS HELD.**
+
+- 2026-09-06 — **v3.49** curated by the RUN6 PRE-START session AFTER legs 1, 2, 3 and 5, AMENDING
+  v3.48 rather than superseding it: v3.48 was written at the landing step before any leg ran, and
+  said so. **No register append**: census unchanged at `R23–R339 — 310 / 310 / 0, excluded 53`,
+  re-run this curation; **`STAMP OK: v3.49`**; `--self-test` all four controls fire.
+  **THE HEADLINE IS A HALT, AND IT IS THE INSTRUMENT WORKING.** `F-816-37` FIRED on the eval path
+  under R339(c)'s 1-in-1 check and the dump caught the batch — its first capture ever. Both
+  occurrences are **bit-23** corruption of the float32 exponent LSB (Hamming 1 from the nearest
+  legal one-hot for the original, 2 for this one, every differing bit at position 23), with one
+  edge of 796 788 wrong and its own neighbouring columns intact. That refutes the race family
+  from a second direction and names a testable one. **RUN6 DOES NOT START; leg 4's shakedown was
+  NOT launched.** Full record `R339_EVIDENCE/F816_37_HALT.md`; artifact preserved off-box.
+  **R339(b) CANNOT BE APPLIED AS WRITTEN, because its premise measured FALSE.** On the BC
+  checkpoint of record the FULL minted round completes in **1 031 s at G = 1** — 0.434× the
+  2 376 s bar — so the smallest G in {4, 8} that "fits" (4) would be armed on a round that needed
+  no arming. Measured: G=1 1 031.1 s, G=4 430.6 s (3.56×), G=8 388.8 s (4.39×). The cause is game
+  LENGTH: every gate game ends in a win at 16–17 median plies, where the round R319(d) priced ran
+  at 33.9 s/game. **And in a long-game regime concurrency buys NOTHING** — 8 cap-length games cost
+  2 356 s at G=4 and 2 331 s at G=8, within 1 %, because the card is throughput-bound rather than
+  latency-bound. So concurrency would not have rescued the round that blocked.
+  **A THIRD READING, unlooked-for:** a seeded fresh net fails the floor probe (every probe game a
+  ply-cap draw, `decisive_rate` 0.0) and `eval.strength_floor` **REFUSES the round in ~310 s** —
+  the F-R-P2B-5 defence capping the catastrophic regime at ~310 s rather than ~7 000 s.
+  **Also measured and clean:** `eval_child` peak 0.47 GiB against the 1.857 GiB partition budget;
+  card peaks 0.54 / 0.80 GiB at G = 1 / 4; LAW-04 `eff_n` equals games played at every block
+  (gate 208/208, `sealbot_d5` 32/32).
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R339(c)'s own halt clause —
+  MATCHES, *"one firing halts with the artifact, and that halt is the instrument working"* — and
+  it is what this entry executes. R339(b)'s rule — MATCHES, *"the smallest G whose round completes
+  within 0.66 × the existing minimum timeout"*, which is the sentence whose premise failed.
+  R319(b) at `:7357-7358` — MATCHES, *"round_timeout_sec 3600 cannot hold that geometry on this
+  card class under ANY implementation"*, and leg 2 now shows that is true of the LONG-GAME regime
+  and false of the BC one. R335(e) Leg 3 at `:8170` — MATCHES, *"capability with a diagnostic
+  override, UNARMED, serial default byte-exact"*; the serial default is still what ships. R313(c)
+  the pipe-exit law — MATCHES, and this session tripped it once (a gate's rc masked by `| tail`)
+  and repaired it.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no G, mints no row, starts no run, and proposes no
+  repair for `F-816-37`. **RUN6 REMAINS HELD.**
+- 2026-09-06 — **v3.50** curated by the F-816-37 DISCRIMINATION session at its landing step
+  (ROUTE: *land, census, ACTIVE next; discrimination; verdict*), folding in **R340** (canonical
+  home `PACKET_R340_F816_37_DISCRIMINATION.md` §1, created by this session because the operator
+  forwarded the text in-prompt rather than as a file; pre-existence grep for `R340` returned **no
+  match in BOTH repositories**). Register APPENDED: census moves `R23–R339 — 310 / 310 / 0` →
+  **`R23–R340 — 311 / 311 / 0, excluded 53`**, re-run after the append; **`STAMP OK: v3.50`**;
+  `--self-test` all four controls fire. The register block was `awk`-extracted under `set -o
+  pipefail` and diffed against the twice-transcribed substituted block — **EMPTY**, 46 lines /
+  3 183 chars, sha256 `89150c0e…`.
+  **THE Δ12-STYLE PRE-STEP PASSED**: `run6-mint` and `origin/run6-mint` both at
+  `f15935afc35c4ce7fd0c4c63cbac84bc083ff404`, `git status --porcelain` empty.
+  **§1'S CENSUS SENTENCE WAS STALE BY TWO AND IS REPAIRED IN PLACE (R311(c)), A SECOND TIME.** It
+  read `R23–R338 — 309` at v3.48 AND v3.49 while the register already carried R339 — the identical
+  failure its own parenthesis records for v3.0–v3.35, recurring because those curations ran the
+  script and left the sentence. `range(23, 339)` → `range(23, 341)` in the same edit. The clause
+  now says plainly that the script is the authority and the sentence is the thing that drifts.
+  **CLAUSE (f) IS ANSWERED AT THE LANDING, NOT DEFERRED TO THE EXIT, AND IT IS NOT A FINDING.**
+  `tools/ci_gates/run_all.sh` makes **19 unconditional `run_gate` calls**; gate 1 (fresh-clone `uv
+  sync`) is guarded by `WITH_FRESH_SYNC` at `:105-107`. So **19 = the default invocation, 20 = the
+  same invocation with `--with-fresh-sync`**, and the gate absent at a 19-count exit is **gate 1**
+  — the one check CLAUDE.md already names as irreproducible locally. The slow tier is deliberately
+  unnumbered (`:127-128`) and belongs to neither count. A flag difference, not a discrepancy.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R340(c)'s verdict branches at
+  `:8638` — MATCHES, *"HARDWARE POSITIVE → the box is CONDEMNED"*. R339(c)'s halt at `:8556` —
+  MATCHES, *"one firing halts with the artifact"*, and it is the halt this packet answers.
+  R302(c) at `:6057` — MATCHES, *"INSTANCE RECREATION VOIDS THEM"*, which is the cost R340(c)'s
+  condemnation branch actually carries. R311(c) at `:8142` — MATCHES, *"a NON-canonical working
+  doc is repaired in place by whoever finds it"*, the authority used on the census sentence above.
+  R313(c) at `:7089-7090` — MATCHES, *"an exit code never dies in a pipe"*; every extraction in
+  this landing ran under `set -o pipefail`.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no G, starts no run, condemns no box and proposes no
+  repair. The discrimination's verdict is NOT in this entry — it lands in the next one.
+  **RUN6 REMAINS HELD.**
+- 2026-09-06 — **v3.51** curated by the F-816-37 DISCRIMINATION session AFTER leg 1, AMENDING
+  v3.50 rather than superseding it: v3.50 was written at the landing step before the
+  discrimination ran, and said so. **No register append**: census unchanged at `R23–R340 — 311 /
+  311 / 0, excluded 53`, re-run this curation; **`STAMP OK: v3.51`**; `--self-test` all four
+  controls fire.
+  **THE HEADLINE IS A VERDICT: `BOTH NEGATIVE`.** The box is NOT condemned, nothing is armed, and
+  R340(c)'s both-negative branch is what executes — the class stays open and the shakedown is
+  admitted. Leg 1 ran **1 h 53 min** against a 3 h box.
+  **THE TWO ARMS ARE NOT EQUALLY STRONG AND THE §5 ROW NOW SAYS SO.** SOFTWARE is the strong half
+  and it CLOSES the window rather than merely failing to find a hit: the producer writes a literal
+  and `verify_contract` passes an EXACT-EQUALITY one-hot test on those bytes **before the graph is
+  emitted**, so everything between proof and failure is memcpy. HARDWARE is negative only by the
+  ruling's own test (*"a single reported error is POSITIVE"*) over **2.85 TiB / 102 min / 81
+  cycles / two page sets, 0 errors** — and its limits are structural: **the ECC/MCE channel
+  registers ZERO controllers and returned NO VERDICT** (recorded UNAVAILABLE, not clean — a zero
+  from a producerless channel is the phantom-gate class), and coverage is 32/42 GiB against 60.53
+  GiB of host DRAM. **UN-CONVICTED, NOT CLEARED**, and the entry says it in those words.
+  **TWO THINGS THE RULING DID NOT ASK FOR WERE ADDED AND ARE DISCLOSED AS ADDITIONS**: the probe
+  ran under **GPU load** (100 %, 69–70 °C, 306–313 W) for 64 of 81 cycles because the firings
+  occurred in that state and an idle test cannot see a thermally-marginal cell; and a SECOND run
+  re-`mmap`ed its buffer every cycle, because the failing workload allocates fresh large buffers
+  continuously and a static buffer can be out-sampled on COVERAGE by a workload it beats on
+  throughput. `memtester` itself was **unusable** (`RLIMIT_MEMLOCK` hard 64 KB, no
+  `CAP_IPC_LOCK`/`CAP_SYS_RESOURCE`); R340 §2's *"or equivalent"* was taken and the equivalent is
+  LAW-07-proven to fire.
+  **AND THE POSITIVE EVIDENCE STILL POINTS AT HARDWARE**, recomputed from the artifact rather than
+  carried: bit 23 in every corrupted word across both firings **with no selection effect**, and
+  **all three corrupted words at byte offset ≡ 4 (mod 8)** — the same 64-bit bus half — with the
+  triple's other-parity word intact.
+  **CLAUSE (f) ANSWERED TWICE AND IS NOT A FINDING**: predicted from `run_all.sh` (19 unconditional
+  `run_gate` calls, gate 1 behind `WITH_FRESH_SYNC`) and then CONFIRMED by running the set —
+  `green: 19`, ALL GREEN, rc 0, the runner naming gate 1 absent in its own voice. The slow tier
+  was NOT run (R333(b) reserves it for a packet exit; this is a leg checkpoint) and that is stated.
+  **TWO PREMISES OF R340 MEASURED DIFFERENTLY** (`R340_EVIDENCE/LEG1_FINDINGS_FOR_THE_OPERATOR.md`,
+  both OPERATOR-OWED): (i) the trainer is **already** at 1-in-1 (`semantic="full"` every batch and
+  every part), so (d)'s 47 %-idle cost argument buys nothing — while **self-play, the dominant
+  exposure in a 4 h shakedown, sits at 1-in-64** (`selfplay/worker.py:148` passes `None`
+  EXPLICITLY) and (d) does not name it, which makes the shakedown's firing-count bound **64×
+  weaker on the dominant path** than R340(c)'s sentence reads; (ii) the escalation envelope's G=4
+  row **breaches `eval_child_fits_budget` by 1.375 GiB (74 %)** in the cap-length regime — the ONLY
+  regime whose `ratio_to_timeout` (0.655 / 0.648) can approach the 0.66 trigger — while buying
+  **1.06 %** over G=8.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R340(c)(i) at `:8633` — MATCHES,
+  *"a single reported error is POSITIVE"*, and no error was reported. R340(c)'s both-negative
+  branch at `:8643-8644` — MATCHES, *"the class stays open, the shakedown runs at 1-in-1 on both"*,
+  which is the branch this entry executes. R340(f) at `:8659` — MATCHES, *"names which gate is
+  absent and why"*, done twice. R340(d)'s 47 % referent at `:8606` — MATCHES its
+  `SESSION_HANDOFF_v5.md:130` provenance, and finding (i) is about what that cost buys, not about
+  the figure. R339(c)'s halt — MATCHES and is now DISCHARGED: the halt it ordered has been
+  answered by discrimination rather than by a green run.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no G, arms no collate rate, starts no run, condemns
+  no box and proposes no repair. **RUN6 REMAINS HELD.**
+- 2026-09-06 — **v3.52** curated by the F-816-37 DISCRIMINATION session AFTER leg 3, AMENDING
+  v3.51: v3.51 recorded a `BOTH NEGATIVE` verdict reached before the shakedown ran, and said so.
+  **No register append**: census unchanged at `R23–R340 — 311 / 311 / 0, excluded 53`, re-run this
+  curation; **`STAMP OK: v3.52`**; `--self-test` all four controls fire.
+  **THE HEADLINE IS THE SECOND HALT IN ONE PACKET, AND IT INVERTS THE READING OF THE FIRST.**
+  `F-816-37` fired **38 minutes** into the shakedown, **on the TRAINING path**, at step 54. R340
+  leg 3's HALT condition (*"any collate firing"*) is met, R340(c) makes the firing count *"the
+  bound run6 starts under"*, and that bound is **not zero**. **RUN6 DOES NOT START.**
+  **LEG 1's `BOTH NEGATIVE` IS NOT WITHDRAWN — IT IS RE-WEIGHTED, AND THE ASYMMETRY IT RECORDED IS
+  WHY.** That entry said the hardware negative was *"un-convicted, not cleared"*, bounded by
+  coverage, with the ECC channel structurally absent. Leg 3 supplies what 2.85 TiB of clean probing
+  could not: **path-independence**. The trainer rebuilds graphs through the same
+  `build_axis_graph`/`verify_contract` pair and fired anyway, which kills R339's last
+  software-specific candidate (live boards vs stored records) and leaves a signature that is now
+  **5-for-5 at bit 23 AND 5-for-5 at byte offset ≡ 4 (mod 8)** across three firings and two code
+  paths. **The memory probe did not clear the box; it failed to convict it, and leg 3 is the
+  evidence the probe's coverage could not reach.**
+  **AN INSTRUMENT GAP FOUND BY BEING BITTEN BY IT**: R340(c) requires *"a firing halts with the
+  artifact"* and this one halted with none, because dump-on-fire was armed only where the class had
+  previously been seen. The trainer now has its own dump with a LAW-07 mutation self-test whose
+  mutation was verified to fire; the call site cannot let a dump replace the contract error; the
+  docstring asserting the class *"has only ever fired on eval"* is corrected rather than left.
+  **THREE OF THIS SESSION'S OWN INSTRUMENTS WERE DEFECTIVE AND ALL THREE ARE ON THE RECORD**: the
+  halt watcher's `pgrep -f "mantis.run"` **matched its own command line** and missed the exit for 12
+  minutes (R302 already adopted the exclude-the-grepping-process convention; it was not applied);
+  the leg-1 orphan sweep matched only what that leg launched and reported "none (clean)" while a
+  stray `memtester` filled the disk to 96 %; and the replacement `run_shakedown.sh` dropped R339's
+  `PYTORCH_CUDA_ALLOC_CONF` export and died on the posture guard in 20 s. **All three are the same
+  failure — a check written to match what was expected rather than what was there** — and the
+  replacement script's preflight now asserts interface, disk, tree, warm-start, CUDA and allocator
+  posture, with a deliberately WIDE orphan sweep.
+  **BOX DISPOSITION, OPERATOR-DECIDED AT THE LAUNCH GATE**: recreate the instance (a different
+  physical host is the decisive hardware test) with the trainer dump wired first, so a firing on the
+  NEW box lands with evidence. **This session has no `vastai` CLI**, so recreation is operator
+  action; the procedure, what recreation destroys, and the **torch-select hazard** (`pyproject.toml`
+  pins the CPU wheel, so every `uv sync` downgrades cu128 → cpu and a CPU wheel voids every number
+  rather than failing loudly) are in `R340_EVIDENCE/BOX_REBUILD_HANDOVER.md`. **Nothing
+  mint-critical remains box-only**: the gitignored warm-start checkpoint is backed up and verified
+  byte-identical (`sha256 f16d34ee…`), and losing it would have invalidated run6's minted
+  `identity.warm_start`.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R340 §2 leg 3's halt list —
+  MATCHES, *"HALT on … any collate firing"*, which is what fired. R340(c)'s bound — MATCHES, *"its
+  firing count is the bound run6 starts under"*, and it is not zero. R340(c)'s artifact clause —
+  MATCHES, *"a firing halts with the artifact"*, and it is the clause leg 3 could not satisfy.
+  R340(d)'s *"gate round at its end"* — MATCHES, and it was NOT reached: the run died at step 54
+  against `eval_interval: 1000`. R302(c) — MATCHES, *"INSTANCE RECREATION VOIDS THEM"*, which is
+  the cost the chosen disposition carries and why a re-mint sitting precedes run6 either way.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no G, arms no collate rate, condemns no box by
+  ruling, and proposes no repair for the cause. **RUN6 REMAINS HELD.**
+- 2026-09-06 — **v3.53** curated by the F-816-37 DISCRIMINATION session after shakedown RUN 2,
+  AMENDING v3.52. **No register append**: census unchanged at `R23–R340 — 311 / 311 / 0, excluded
+  53`; **`STAMP OK: v3.53`**; `--self-test` all four controls fire.
+  **THE HEADLINE IS NOT F-816-37 THIS TIME. IT IS THAT R340(a)'s CLOSURE OF R319(d) IS REFUTED BY
+  MEASUREMENT, AND run6 AS MINTED CANNOT EVALUATE DURING A RUN.** Run 2's step-1000 gate round ran
+  **3 600.11 s**, was SIGTERM'd (`eval_broken`, `reason: round_timeout`, `exit_code −15`) and
+  returned **`wr_sealbot: null`, `promoted: false`** after 139 games at **25.9 s/game**. R340(a)'s
+  ground is *"the round fits its timeout at G=1 with 2.3× headroom"* — that headroom is
+  `2376 / 1031.1` from leg 2, and **every leg-2 round was STANDALONE on an idle box**. Under
+  contention with 16 self-play workers and the trainer the same round is **~7× slower per game**
+  (4.0 → 25.9 s/game) and does not fit. **The candidate was the warm-started BC net at a 31-ply
+  median — R340(a)'s OWN "16–17 median plies" regime, not the cap-length one — so "weak-net
+  artifact" is not the explanation.** R319(d)'s original failing round (93 games, 3 022 s,
+  **32.5 s/game**) agrees with this one to within 11 %, which is what lifts it above n = 1.
+  **CONSEQUENCES, none of which involve F-816-37:** `eval_interval: 1000` against a round needing
+  > 3 600 s means **every round breaks**; `eval_round_skipped_busy` already fired at step 2 000
+  because the step-1 000 round still held the slot; a broken round **terminates the run**
+  (`eval_broken` and `terminal_eval` in the same second); and **R340(e)'s required exit number is
+  not producible** — *"the gate reading at hour 4 … with the round time"* is a 3 600 s round and a
+  `null` reading. **This is MINT-BLOCKING independently of F-816-37.**
+  **THE ESCALATION TRIGGER R340 §0.2 PRE-REGISTERED HAS FIRED** (round > `0.66 × 3600 = 2 376 s`,
+  crossed at 2 475 s). **But the value it arms was never measured in the regime that fires it**:
+  every G=4 reading on record is standalone (430.6 s) or cap-length (2 357.5 s with
+  `eval_child_fits_budget: false`, 74 % over). **There is no G=4 measurement under contention**, so
+  arming it would arm an unmeasured value on a measured trigger — the shape R340(b) itself rejected.
+  **F-816-37 DID NOT REPRODUCE in run 2**: ~2 004 steps, ~2 495 games, **zero** firings and zero
+  dumps. With run 1's single firing that makes the rate **low and unmeasured**, and v3.52's
+  withdrawal of the "~38 minute" reading is reinforced rather than revised. **RUN 1 IS NOW KNOWN TO
+  HAVE BEEN ANOMALOUS**: its round was `r000001_54_**terminal**` — the full SIX-rung ladder at step
+  54 — which is what filled 36 of its 38 minutes. **Why it went terminal at step 54 remains
+  unexplained** and is an open finding; run 2 trained past step 2 000 before any terminal round.
+  Run 2's **≈ 1 200 steps/h** is the usable throughput figure; run 1's is not.
+  **THE ONLY STRENGTH SIGNAL OBTAINED, and it is NOT a promotion verdict**: the gate SCREEN
+  completed 80/80 with the candidate ahead **35–15** (incl. 4 floor-probe games), median 31 plies,
+  against the step-0 baseline of 17/32. The confirm phase was cut off at 55 of ~128 games and the
+  round produced no verdict, so this is a hint the warm-started net is improving and nothing more.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R340(a) — MATCHES, *"fits its
+  timeout at G=1 with 2.3× headroom"*, the sentence this entry refutes. R340 §0.2's trigger —
+  MATCHES, *"exceeds 0.66 × its timeout"*, and it did. R340(e) — MATCHES, *"the gate reading at
+  hour 4 … with the round time"*, which is `null`. R319(b) at `:7357-7358` — MATCHES,
+  *"`round_timeout_sec 3600` cannot hold that geometry on this card class under ANY
+  implementation"*, and **that sentence is now the better description of HEAD than R340(a) is**.
+  R340(c)'s bound — MATCHES and is unchanged: run 1's firing stands, so the bound is non-zero.
+  **WHAT THIS CURATION DOES NOT DO:** it arms no G, mints nothing, and proposes no geometry change.
+  **RUN6 REMAINS HELD**, now against F-816-37 AND a gate round that cannot finish.
+- 2026-09-06 — **v3.54** curated by the F-816-37 DISCRIMINATION session at **LEG 4, the packet's
+  EXIT**. **No register append**: census unchanged at `R23–R340 — 311 / 311 / 0, excluded 53`;
+  **`STAMP OK: v3.54`**; `--self-test` all four controls fire. Canonical exit screen:
+  `R340_EVIDENCE/LEG4_EXIT.md`.
+  **R340(e)'s THREE NUMBERS, from run 2 (run 1 is not used — it was anomalous):** self-play
+  **1 505 games/h**; trainer **1 209 steps/h overall**, decomposing to **1 521 uncontended** and
+  **1 004 while an eval round runs** (an eval round costs the trainer **34 %**, and since rounds
+  occupy their full timeout at `eval_interval: 1000` the contended figure is the planning one);
+  and the gate reading is **`null`** — the round ran its full **3 600.11 s** and was SIGTERM'd.
+  **TWO OF THE THREE ARE SHORT, AND ONE SHORTFALL IS THIS SESSION'S OWN FAULT.** `plies/game` is
+  OWED because **run 2's driver log was destroyed with the box before it was copied off** — run
+  1's logs were preserved and run 2's were not, with a rebuild known to be coming. The gate
+  reading is unobtainable for a different reason: the instrument returns `null`.
+  **THE TIME-TO-SIGNAL IS MEASURED, NOT ESTIMATED, which is what R340(e) wanted**: a strength
+  signal appeared **by step 1 000 (~40 min)** — 53.1 % → 72.5 % → 78.8 % on an 80-game screen vs
+  `sealbot_d5` across steps 0 / 1 000 / 2 004, monotone, one config, one box, one opponent. **But
+  the "signal" is the SCREEN, not the instrument run6 promotes on**, and that gap is the finding.
+  **THE `run length` RECORD ROW GETS ITS CONVERSION** (`RUN6_MINT_PREREG.md:54`, deferred to
+  *"once the shakedown measures steps/hour"*): at the planning rate, 12 h = 12 048 steps, 24 h =
+  24 096, 48 h = 48 192. **The VALUE stays OPERATOR-OWED.**
+  **AND THE FIRST-THIRD DENOMINATOR EXPOSES A NEW BLOCKER: witness (iii) CANNOT FIRE.** `slope
+  bar` needs *"≥ 5 rounds"* of Elo in the first third; at `eval_interval: 1000` a 12 h run yields
+  4 and a 24 h run 8 — but **every round returns `null`, so there are no Elo points to fit at ANY
+  run length**. The gate-round failure is therefore not merely a throughput cost: **it disarms one
+  of run6's three success witnesses.**
+  **R340(f) ANSWERED AND CLOSED: 19, absent gate is gate 1** (fresh-clone `uv sync`, behind
+  `--with-fresh-sync`); predicted from the source and confirmed by running the set TWICE, plus the
+  slow tier separately (7 passed). **Not a finding.**
+  **PACKET STATE AT EXIT:** legs 1–4 all executed. Engine `run6-mint = origin/run6-mint =
+  **d3ba75e**` (trainer dump-on-fire landed, 19/19 gates + slow tier green). The box was recreated
+  and **fully re-provisioned** (`plan/BOX_SETUP.md`, `plan/box_scripts/box_setup.sh`, proven end to
+  end) — **but it is on the SAME PHYSICAL HOST** (uptime delta exact, `MemTotal` identical to the
+  kB, same CPU and kernel), so **the F-816-37 hardware arm remains untested.**
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R340(e)'s three numbers —
+  MATCHES, *"games/hour and plies/game … trainer steps/hour; and the gate reading at hour 4"*, and
+  the exit says which two are short and why. R340(e)'s gate on estimating — MATCHES, *"Before them,
+  any estimate is a guess and is not given"*, honoured: the signal is stated as measured. R340(f) —
+  MATCHES, *"names which gate is absent and why"*, done. R340(c)'s bound — MATCHES and is
+  unchanged: non-zero. R302(c) — MATCHES, *"INSTANCE RECREATION VOIDS THEM"*, so a re-mint precedes
+  run6 regardless of which host it lands on.
+  **WHAT THIS CURATION DOES NOT DO:** it fills no prereg VALUE, arms nothing, and starts no run.
+  **RUN6 REMAINS HELD** — by `F-816-37` (bound non-zero, hardware arm untested) and, independently
+  and host-agnostically, by a gate round that cannot finish and a witness (iii) that cannot fire.
+
+- 2026-09-06 — **v3.55** curated by the RELOCATE + RE-MINT + SHAKEDOWN-2 session at its
+  **LANDING**, folding in **R341** (appended to the register this act; canonical home
+  `plan/PACKET_R341_RELOCATE_REMINT_SHAKEDOWN2.md` §1). Census re-run after the append:
+  **`R23–R341 — 312 / 312 / 0, excluded 53`**, missing-in-range `{24, 29, 32, 33, 227, 228, 267}`
+  unchanged; **`STAMP OK: v3.55`**; `--self-test` all four controls fire. R306(a) byte-diff on
+  append: two independent transcriptions **IDENTICAL** (46 lines / 3 212 chars), substituted
+  mechanically and re-diffed **EMPTY** (3 209 chars, sha256 `5c6a2b97…`), and the register's
+  `awk`-extracted block diffed against the canonical home's **EMPTY**.
+  **LEG 0 IS HALTED, AND THE HALT IS THE HEADLINE.** R341's own text carries the alias cell
+  **BLANK** (`________` in the forwarded packet), and the standing alias resolves to the
+  **CONDEMNED HOST** on four independent identity lines read live at this landing:
+  `uptime -s` = **2026-08-12 06:45:13**, byte-identical to `SHAKEDOWN_BURN_FINAL_READOUT.md:21`'s
+  recorded box boot — i.e. **continuous host uptime across the entire period**, now 3 w 4 d;
+  `MemTotal` **63 469 212 kB** to the kB; **AMD Ryzen 9 9900X**, 24 CPUs; kernel
+  **5.15.0-153-generic**; and the container is `f9fc672f0753`, **the same container** the
+  2026-09-06 rebuild produced (`BOX_SETUP.md:126`). R341 §2 leg 0 says *"HALT if any matches the
+  condemned host"*; **all four match**, so legs 0, 1 and 2 are UNEXECUTABLE and nothing was run on
+  that host. **The new instance has not been provisioned** — this is an operator-owed cell, not a
+  dispatcher failure and not a finding against the packet.
+  **R341(f)(i) APPLIED IMMEDIATELY, because it is the one law with a deadline** (the packet says
+  the operator kills the old host at will): the condemned host was swept before condemnation —
+  no live processes, no `reports/` `logs/` `benchmarks/` or stray `*.jsonl`, tree clean at
+  `d3ba75e`, and its one artifact verified **`sha256 f16d34ee…` / 3 695 909 bytes byte-identical
+  to the off-box backup**. **Nothing is owed off that host; teardown is CLEARED.** Note that
+  `/workspace/r340/` no longer exists — R340 leg 3's out-dir went with the earlier recreate, which
+  is exactly the loss (f)(i) is written to prevent and is now prevented going forward.
+  **R341(b) IS THE BLOCKER THAT SURVIVES RELOCATION** and is filed §5 MINT-BLOCKING: it is
+  host-independent by construction, so provisioning a new box does not touch it.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R341(a)'s *"three firings, five
+  words, two code paths"* — MATCHES `LEG3_HALT.md:67-68` verbatim, and the §5 row claims no more.
+  R341(b)'s *"mint-blocking and host-independent"* — MATCHES; the §5 row's added sentence
+  ("the one blocker relocation cannot touch") is a restatement, not an extension. R341(f)(ii)'s
+  *"third self-match on record"* — the §4 row **declares the undercount rather than repeating it**,
+  per the never-claim-more-than-the-ruling protocol. R302(e) — re-read in full; the §4 row's claim
+  that only its process-grep half is hardened MATCHES (its untrusted-box-files half is untouched).
+  R337(a) — MATCHES: unedited forwarding arms a proposal, which is why (e) is filed LIVE-armed
+  rather than OWED.
+  **WHAT THIS CURATION DOES NOT DO:** it provisions nothing, mints nothing, arms no memory cap,
+  and starts no run. **RUN6 REMAINS HELD** — by `F-816-37` (open, and now with the decisive test
+  named but not yet runnable), by R341(b)'s null gate round, and by R302(c)'s voided caps.
+
+- 2026-09-07 — **v3.56** curated by the STAY-OF-CONDEMNATION session at its **LANDING**, folding in
+  **R342** (appended to the register this act; canonical home
+  `plan/PACKET_R342_STAY_AND_RESUME.md` §1) **together with an APPEND-ONLY annotation under R341's
+  foot** — R341(a) is STAYED, not patched, per R9's correct-only-by-annotation rule. Census re-run
+  after the append: **`R23–R342 — 313 / 313 / 0, excluded 53`**, missing-in-range
+  `{24, 29, 32, 33, 227, 228, 267}` unchanged; **`STAMP OK: v3.56`**; `--self-test` all four
+  controls fire. The annotation's header is `**ANNOTATION under R341's foot …**`, which the
+  `R<digits> —` pattern does not match, so R341 still carries exactly one numbered header.
+  R306(a) byte-diff on append: two independent transcriptions **IDENTICAL** (33 lines / 2 143
+  chars), substituted and re-diffed **EMPTY** (2 140 chars, sha256 `5dddf1ce…`), register block vs
+  canonical home **EMPTY**.
+  **THE OVERRIDE IS THE OPERATOR'S AND IS RECORDED AS SUCH.** R341(a) condemned on signature;
+  R342(a) stays that on price/performance grounds and reclassifies the host SUSPECT. The
+  architect's own reasoning is folded in beside it — the condemnation OVERSHOT, because at the
+  measured rate with 1-in-1 on both paths every firing is caught, dumped and halts, making a lane
+  fault an uptime cost; and relocation was OVERSTATED as decisive, since a quiet 4 h elsewhere
+  proves little while only a firing elsewhere convicts software.
+  **CLAUSE (b) WAS SURVEYED AGAINST HEAD AT THE LANDING RATHER THAN AT EXECUTION**, because
+  (b)(iii) makes its own disposition conditional on what exists there. Two of the five conditions
+  need no new mechanism — (ii) is implemented and owes only a planted break, and (i) is already
+  true on the trainer and eval paths. The work is self-play's 1-in-64, (iii)'s automatic relaunch,
+  (iv)'s bar and (v)'s dashboard lines. Citations are in the register entry, not here.
+  **ONE REFERENT CORRECTED AT THE LANDING, and it is a live ambiguity rather than a typo:**
+  (a)'s *"check 14"* is `verify_edge_geometry`, the collate-layer structural check, **NOT CI gate
+  14**, which is the lint/type gate. A reader following the wrong one would conclude the safety
+  argument rests on a linter.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R342(a)'s *"UPTIME cost, not a
+  correctness breach"* — MATCHES, and the §5 row claims no more. R342(b)(iv)'s *"with no further
+  ruling needed"* — MATCHES; the row states it as armed-to-condemn. R342(c)'s *"a reading, not an
+  input"* — MATCHES. R341(a) — re-read in full before annotating; the annotation withdraws the
+  consequence and leaves the signature reading intact, which is what a stay is. R302(c) — MATCHES,
+  and is the reason (c) can say the re-mint is owed *regardless* of the override.
+  **WHAT THIS CURATION DOES NOT DO:** it mints nothing, arms no memory cap, and starts no run.
+  **RUN6 REMAINS HELD.**
+
+- 2026-09-08 — **v3.57** curated by the STAY-OF-CONDEMNATION session at **R342's EXIT** (its
+  landing entry is v3.56). **No register append**: census unchanged at `R23–R342 — 313 / 313 / 0,
+  excluded 53`, re-run this act; `STAMP OK: v3.57`; `--self-test` all four controls fire.
+  **THE RE-MINT IS COMPLETE AND NO TERM IS CARRIED.** STEP 1a re-measured on this container —
+  `cuda_context` **0.309875** against the carried 0.261047, **18.7 % larger on the same card**
+  (total matches to five decimals) — which flipped the partition computed with carried terms from
+  **PASS +0.029570 to REFUSE −0.026582**. STEP 1b/1c then measured the trainer MAX at **8.450555**
+  against sitting 9's 8.638102 and recovered it. **Conjunct 2 PASS +0.009505, conjunct 3 PASS at
+  `1373143 / 56645`, conjunct 1 PASS** (burst card peak 12.4521 ≤ declared 14.809684). **Carrying
+  the two STEP 1a terms would have minted a cap that does not fit** — the class `CARD-RUN5-GPU-OOM`
+  names. STEP 3 landed at `0bb4798`, and re-minting from the config's own recorded `# delta:`
+  header reproduced every other row **byte-for-byte**.
+  **R341(c)'s G TABLE RAN AND G=8 ARMED ON THE OPERATOR'S FORWARD** (`65ef46f`): G=1 **53.33
+  s/game** and G=4 **13.99** both consumed the full 3 600 s timeout returning `null`; **G=8 7.09
+  s/game, a fully escalated 264-game round in 1 872.8 s = 78.8 % of the bar with a REAL
+  `wr_sealbot`.** The arming also made `eval.concurrency` explicit in the minted config for the
+  first time, and `train.checkpoint_interval` **re-derived** to 750 with the armed cadence because
+  the prereg states that row as a RELATION.
+  **THE 4 h SHAKEDOWN IS CLEAN.** `RC=124`, 6 321 steps · 6 504 games · **7 completed rounds**.
+  **Zero F-816-37 firings — and this is the FIRST bound at 1-in-1 on ALL THREE collate paths**,
+  every prior reading having had self-play at 1-in-64. **Seven real winrates, ZERO nulls, ZERO
+  skips** (the burst skipped 191 of 193), two promotions, `strength_floor` passing every round at
+  `decisive_rate 1.0`. Steady-state wall **900.6 s = 37.9 % of bar**, no growth trend over 4 500
+  steps. **steps/h 1 581 and games/h 1 627, both ABOVE R340's 1 209 / 1 505 despite the strictly
+  higher check rate** — R342(b)(i)'s feared cost did not materialise. **`plies/game` = 54.5 mean /
+  49 median / 223 max, OWED since R340 leg 4 and now measured.**
+  **TWO DISPATCHER ERRORS ON THE LEDGER, both self-caught and both the same class.** A duty-cycle
+  figure of **90.7 % reported from n = 1** (round 2 made it 44.9 %), and a growth slope of **1.13×
+  per 1 500 steps fitted from n = 3** and extrapolated to 2.66× (round 5 came in faster than all
+  three). Caveats were stated both times, which is not the same as not making the claim.
+  **A LAW-03 UNIT ERROR CORRECTED IN THIS SESSION'S OWN RECORD** (`a891812`): the event's `moves`
+  IS the ply count while the log's `game_length` is TURNS — the opposite of what both names
+  suggest, verified by identical distributions over 6 504 games. The G table had labelled turns as
+  plies; the 256 cap is a PLY cap, so the real margin is 223/256.
+  **FIVE INDEX LINES SPOT-CHECKED against the verbatim register.** R342(a)'s *"UPTIME cost, not a
+  correctness breach"* — MATCHES, and the zero-firing shakedown is consistent with it without
+  proving it. R342(b)(i)'s *"the 1-in-64 sample does not return"* — MATCHES, armed and measured.
+  R342(b)(iv)'s bar — MATCHES, armed and NOT tripped (zero firings). R342(c)'s *"a reading, not an
+  input"* — MATCHES; the fragmentation figure reproduced to the last digit and was used as a
+  reading. R341(c)'s *"arms by the operator's forward"* — MATCHES; the dispatcher produced the
+  table and stopped.
+  **WHAT THIS CURATION DOES NOT DO: it does not start run6.** Two items are DECLARED INCOMPLETE
+  rather than quietly closed — **R341 leg 1's STEP 4c witness was NOT run** (grounds: the net is
+  unchanged and its launch pin verifies on the box, so it would re-verify an unmoved artifact), and
+  **nothing is pushed** (`hexo-mantis` is 3 commits ahead of `origin/run6-mint`; CLAUDE.md says
+  push only when asked). Round CIs are also absent from the exit screen, which R341 §3 asks for —
+  the per-round bootstrap CI is not on `eval_round_complete` and recovering it needs the ladder
+  state file. **RUN6 REMAINS HELD on the operator's word**, with the open decisions in
+  `plan/R342_EVIDENCE/REAL_RUN_OPEN_DECISIONS.md`.
+
+- 2026-09-08 — **v3.58** curated by the PRE-RUN6 EVAL-DESIGN + RESUME-1 session at **R343's
+  LANDING**, in the same act as the header stamp (R284(f)). **R343 appended** [INLINE], verbatim —
+  verified by script, not by eye. Census PRE-append `R23–R342 — 313 / 313 / 0, excluded 53`;
+  POST-append **`R23–R343 — 314 / 314 / 0, excluded 53`** — seventh consecutive curation with the
+  excluded set unchanged. Missing-in-range `{24, 29, 32, 33, 227, 228, 267}`, unmoved.
+  **THE TEXT WAS TRANSCRIBED TWICE AND NEVER RETYPED AFTER.** The forwarded prompt carried the
+  `R{next}` placeholder in two positions, exactly one of them inside the ruling text. Two
+  independent transcriptions diffed BEFORE substitution — **identical, 61 lines / 4 156 chars**;
+  `sed` substitution applied to both and re-diffed — **empty**; the canonical home's `awk`-extracted
+  block diffed against the substituted transcription — **empty**; and the LANDED register text
+  diffed against both — **empty**, 61 lines / 4 153 chars, sha256 `78f5fe88…` on all three. The
+  pre-existence grep returned **NO MATCH in both repositories**. `R343` carries exactly one
+  numbered header.
+  **THE PREMISE SURVEY IS THE SUBSTANCE OF THIS LANDING, because two clauses make their own
+  disposition conditional on HEAD.** Eight findings, all in the register section: **(b)'s two
+  channels ALREADY EXIST as two channels** — the promotion gate has a real cadence term
+  (`round_idx % gate.stride`, `pipeline.py:698`) while the external rung has **none at all**, its
+  games coming from `LadderState.allocate_games` — so (b)(v)'s escape hatch does not trip on
+  "the round spec bundles channels" but, if at all, on the rung side lacking a stride, which is
+  narrower and repairable. **(c) IS `CARD-RESUME` BEING CALLED**, not new scope: R178(c) opened it
+  POST-MINT owning the same four pieces, and the mint is complete. **The ring's persistence
+  primitives exist with zero production callers** (`mixing_cfg={}`, nothing in `src/` sets
+  `buffer_persist`, and R178(a) deleted the shutdown-save arm on that measurement); **eval history
+  already survives a restart** via `LadderState.save/load` while `_round_counter` and `_last_p_hat`
+  reset to zero every launch; and **the v2 envelope carries no RNG state at all**, so (c)'s
+  determinism-seam witness is new work rather than wiring. **(d)'s halt has its exact site**
+  (`anchor.py:611-621`) and **(e)'s alert is one `logger.warning`** whose event is already emitted
+  unconditionally — so the demotion removes a false instrument rather than building a metric.
+  **(b)(v)'s TWO RUNGS ARE IN OPPOSITE STATES**: `strix` is already MINTED as two rungs in
+  `run6.yaml` and refused per-round with R139's operator-authorized grounds, while **`shrimp` does
+  not exist anywhere in the repository** — zero hits across `src/`, `crates/`, `tools/`. Leg 4 is
+  therefore two jobs wearing one name, and it is recorded before the leg is written rather than
+  discovered inside it.
+  **AN ARMED VALUE IS SUPERSEDED, AND IT IS ANNOTATED RATHER THAN EDITED.** R341(e) armed
+  `train.eval_interval: 750`; R343(b) sets both channels at 1000. R341(e)'s arithmetic was right on
+  its own evidence (at 1 209 steps/h, 1000 yields **4** rounds in the first third and fails witness
+  (iii)); what moved is the RATE — the shakedown measured **1 581 steps/h**, and 1 581 × 4 ÷ 1000 =
+  **6**. `train.checkpoint_interval` **re-derives** 750 → 1000 rather than being re-authored,
+  which is the entire reason R242 required that row be stated as a relation and which
+  `RUN6_MINT_PREREG.md:135` names in advance. **A relation row earning its keep on its first test
+  is worth recording as such.**
+  **AN OPERATOR PRE-STEP NAMED THE WRONG BRANCH AND IS CORRECTED OF RECORD, NOT QUIETLY RE-AIMED.**
+  §0 item 6 says `git push origin dev`; `dev` is **b135332 and equals `origin/dev` exactly**, so
+  that command is a no-op, while the named commit `65ef46f` and the three unpushed commits sit on
+  **`run6-mint`**. Pushing `dev` would have reported success while leaving the whole re-mint
+  unpushed.
+  **NINE INDEX LINES SPOT-CHECKED against the verbatim register (≥ 5 required): nine, nine clean,
+  no re-runs.** Mechanism per R69: whitespace-normalized substring match by script against the
+  R343 register section, blockquote markers stripped first — R343(a)'s *"no partition term is ever
+  carried"*, (b)(iii)'s *"answer to the next rung, not to a saturated one"*, (b)(iv)'s
+  *"WARN-ONLY for run6 (G-3 stands)"*, (b)(v)'s conditional escape, (c)'s *"never refilled from
+  empty"* and its out-of-time-box tightening, (d)'s *"a self-seeded anchor is a pre-flight HALT"*,
+  (e)'s alert-fatigue ground, and (f)'s *"decided on readings, not pre-committed"*.
+  **NO INDEX LINE WAS FOUND OVERCLAIMING, and the row most able to is R341(b)'s discharge.** It is
+  written against that risk: the row records the discharge as **G=8 ONLY**, names the two readings
+  that earn it (escalated 1 872.8 s against the 2 376 s bar; steady 900.6 s, no growth over 4 h),
+  and states explicitly that G=1 and G=4 still return `null` — so the row cannot be read as "the
+  gate geometry is safe", which the evidence does not support. It is discharged **by the armed
+  value**, not by the problem going away.
+  **WHAT THIS CURATION DOES NOT DO: it does not start run6, and it does not yet execute (b) or
+  (c).** R343's ROUTE puts RESUME-1 and the eval wiring after this landing; both are pending at the
+  time of this entry, and the run6 START is a separate operator forward naming the block and the
+  anchor hash.
+
+- 2026-09-08 — **v3.59** curated by the PRE-RUN6 session at **R343's EXIT** (its landing entry is
+  v3.58). **No register append**: census unchanged at `R23–R343 — 314 / 314 / 0, excluded 53`,
+  re-run this act; `STAMP OK: v3.59`; `--self-test` all four controls fire.
+  **RESUME-1 DELIVERED FOUR OF FIVE PRE-REGISTERED WITNESSES, AND THE FIFTH IS HALTED WITH ITS
+  REASON MEASURED.** Witness 4 — *"the same sampled batch ids an uninterrupted run would"* — is
+  UNREACHABLE at HEAD: the replay ring's sampler is `StdRng::from_rng(&mut rand::rng())` at
+  construction (`replay/hexg/mod.rs:337`) with **no Python surface**, so batch ids do not
+  reproduce across a resume **and never reproduced across two launches of the same config
+  either**. The witness's counterfactual was never true. Closing it is Rust/PyO3 on the hot
+  sample path, i.e. a LAW-09 perf-host act — `CARD-RING-SAMPLER-SEED`. The python/numpy/torch
+  half IS delivered, and its scope is disclosed IN THE CODE rather than only here.
+  **THE BOX TEST EARNED ITS PLACE ON THE FIRST ATTEMPT.** A signal stop has TWO save legs — the
+  coordinator's O3 arm and `loop.py`'s `_final_save()` — and the first cut wired the sidecar to
+  O3 only. The box stopped a run whose `step()` did not return, and produced **a checkpoint with
+  no sidecar**: the silent empty-ring resume R343(c) exists to forbid. **No unit test could have
+  found it**, and two harness fakes had to become real enough to exercise the leg. Fixed; both
+  legs now call one guarded write.
+  **THE SECOND BOX RUN READS CLEAN:** `EXITED cleanly`; ring **403 791 B / 1 024 positions**;
+  **`WITNESS-RING-HASH: MATCH`**; `resume_state_restored step=7 ring_positions=1024
+  rng=numpy,python,torch,torch_cuda` — **the cuda RNG arm ran for the first time**; post-resume
+  `buffer=1024` immediately against pre-stop `1024`, **not 0**; and the anchor byte-identical
+  (`b100270a…ffaa3` on both sides) with `best_model_loaded` rather than a fresh init.
+  **`terminal_eval_skipped_on_signal_stop` appears in the run's own log**, so the four-hour stop
+  R343(c) implicitly ordered away is measured gone, not asserted gone.
+  **TWO THINGS ARE DECLARED INCOMPLETE RATHER THAN QUIETLY CLOSED.** (1) **No eval round ran**,
+  so leg 3's *"one full round completes"* and the exit-screen ROUND CIs are both still OWED —
+  `eval_interval` 1000 puts the first round hours out, and the first box run **wedged at step
+  12** (F-10), a wedge scoped away from run6's identity because run6 mints `gnn_axis_r8` and R342
+  measured `run6.yaml` clean for 4 h on this same container. (2) **R343(b)(v)'s conditional
+  FIRED**: the rung channel has no cadence term at HEAD, so both channels run uniformly at 1000
+  and the split is `CARD-EVAL-CHANNEL-SPLIT` — the ruling's own instruction, taken explicitly.
+  **R343(d) NEEDED NO CODE, AND THAT IS THE FINDING.** The anchor pin is already armed off
+  `identity.warm_start.net_hash`, fails closed, and is witnessed by eight existing rows. The
+  residual is general rather than run6's, and it REPRODUCED live: the box config has no
+  `warm_start` row and logged `anchor_fresh_init_no_bootstrap` on cue.
+  **A SECURITY FINDING WAS ACCEPTED RATHER THAN ARGUED WITH.** The first sidecar carried RNG
+  state as base64 `pickle`. The sidecar is UNAUTHENTICATED — unlike the checkpoint beside it,
+  which re-derives a `content_sha8` and refuses a mismatch — so that handed code execution to
+  anyone able to write one file into the checkpoint directory. Every stream is now typed JSON
+  plus base64 bytes, and a STRUCTURAL row keeps `pickle` out, because a behavioural test cannot
+  see a call it has not reached.
+  **A GREEN WAS MISREAD ONCE AND IS CORRECTED OF RECORD.** An early "full tier exit 0" was read
+  from a `tail`-terminated pipeline, whose rc is `tail`'s; the tier actually carried two
+  failures. Every later reading is pytest's own `PYTEST_RC` / cargo's own rc. Final: **tier 4900
+  passed / 6 skipped / 0 failed**, `cargo test --workspace --locked` **CARGO_RC=0**, clippy
+  **CLIPPY_RC=0**, `check.wasm` **WASM_RC=0**, gate 14 GREEN, gate 17 clean, floor **4924 → 4963**.
+  **FIVE INDEX LINES SPOT-CHECKED** against the verbatim register: R343(a)'s *"no partition term
+  is ever carried"*, (b)(iii)'s *"answer to the next rung"*, (c)'s *"never refilled from empty"*,
+  (d)'s *"a self-seeded anchor is a pre-flight HALT"*, (f)'s *"decided on readings"* — nine run at
+  the landing, nine clean, re-verified here by the same script.
+  **WHAT THIS CURATION DOES NOT DO: it does not start run6.** The START remains a separate
+  operator forward naming the block and the anchor hash, as R343's ROUTE says.
