@@ -263,16 +263,23 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
 # ── the round-result builder (§c.2) ─────────────────────────────────────────────────────
 def _first_sealbot_wr(
     rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
-) -> tuple[float | None, str | None, int | None]:
-    """`(wr, rung_name, games)` for the FIRST sealbot-kind rung (ladder order) with >=1 game
-    this round; `(None, None, None)` if no sealbot rung recorded a game (skip-counted at the
-    coordinator, G-2).
+) -> tuple[float | None, str | None, int | None, float | None, float | None]:
+    """`(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung (ladder
+    order) with >=1 game this round; all-`None` if no sealbot rung recorded a game
+    (skip-counted at the coordinator, G-2).
 
     AUDIT-1 F-14, producer half, completed under R332(b) — the R118/A-1 freeze on this file
     is LIFTED. The WR alone is not a series: once `sealbot_d5` saturates it draws 0 games
     off-cadence and the reported number silently becomes `sealbot_d6`'s, so a trajectory rule
     testing `wr < peak * ratio` compares two opponents. The identity travels with the value
     out of the SAME walk that selects it, so the two cannot drift.
+
+    THE CI JOINED THE TUPLE FOR THAT SAME REASON (R341 §3, closed at R343). The round CI was
+    already computed — `aggregate_rung` bootstraps it and the worker publishes it per rung — but
+    it stopped at the round RESULT and never reached the round EVENT, so an exit screen had a
+    win rate with no interval beside it. It is taken from THIS walk rather than by a second
+    lookup, because a CI fetched independently could be the CI of a DIFFERENT rung than the
+    `wr` it is printed next to, which is exactly the drift this function exists to prevent.
     """
     for rung in rungs_config:
         if getattr(rung, "bot", None) != "sealbot":
@@ -283,8 +290,9 @@ def _first_sealbot_wr(
         games = int(info.get("games", 0))
         if games <= 0:
             continue
-        return info.get("wr"), rung.name, games
-    return None, None, None
+        return (info.get("wr"), rung.name, games,
+                info.get("wr_ci_lower"), info.get("wr_ci_upper"))
+    return None, None, None, None, None
 
 
 def _gate_result_to_mapping(gate_result: Any) -> dict[str, Any] | None:
@@ -351,6 +359,11 @@ def build_round_result(
         "wr_sealbot": _sealbot_reading[0],
         "wr_sealbot_rung": _sealbot_reading[1],
         "wr_sealbot_games": _sealbot_reading[2],
+        # R341 §3 / R343: the ROUND CI, beside the win rate it belongs to and out of the same
+        # walk that selected both. A bare win rate on an exit screen invites a reader to treat
+        # a 32-game reading as a point estimate.
+        "wr_sealbot_ci_lower": _sealbot_reading[3],
+        "wr_sealbot_ci_upper": _sealbot_reading[4],
         "wr_random": random_wr,
         "eval_round_wall_sec": eval_round_wall_sec,
         "eval_broken_reason": reason,

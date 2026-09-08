@@ -211,3 +211,61 @@ def test_a_round_the_instrument_did_not_play_is_absent_not_a_loss() -> None:
 
     assert emitted == [], "a round the instrument did not play publishes nothing"
     assert fake._external_history == [], "and it does not enter the series as a loss"
+
+
+def test_the_round_CI_travels_with_the_win_rate_out_of_ONE_walk() -> None:
+    """R341 §3, closed at R343 — the ROUND CI reaches the round EVENT.
+
+    v3.57 recorded this absent and said recovering it *"needs the ladder state file"*. It did
+    not: `aggregate_rung` already bootstraps the interval and the worker already publishes it
+    per rung (`worker.py`), so the CI simply stopped at the round RESULT and never reached the
+    event an exit screen reads. A win rate printed with no interval invites a reader to treat a
+    32-game reading as a point estimate.
+
+    THE CI COMES FROM THE SAME WALK AS THE WIN RATE, which is AUDIT-1 F-14's rule applied once
+    more: a CI fetched by an independent lookup could belong to a DIFFERENT rung than the `wr`
+    beside it. This row drives `build_round_result` with TWO sealbot rungs where only the
+    second has games, and asserts the published quartet is internally consistent.
+    """
+    from types import SimpleNamespace
+
+    from mantis.eval.rounds import build_round_result
+
+    rungs_config = [
+        SimpleNamespace(name="sealbot_d5", bot="sealbot"),
+        SimpleNamespace(name="sealbot_d6", bot="sealbot"),
+    ]
+    rung_results = {
+        "sealbot_d5": {"games": 0, "wr": None, "wr_ci_lower": None, "wr_ci_upper": None},
+        "sealbot_d6": {"games": 32, "wr": 0.75, "wr_ci_lower": 0.58, "wr_ci_upper": 0.89},
+    }
+    result = build_round_result(
+        step=2000, round_id="r000002_2000", rungs_config=rungs_config,
+        rung_results=rung_results, gate_result=None, skipped_rungs=[],
+        bt={}, schedule_next={}, eval_round_wall_sec=1.0, reason=None, detail=None,
+        random_wr=None, worker_pid=None,
+    )
+
+    assert result["wr_sealbot"] == 0.75
+    assert result["wr_sealbot_rung"] == "sealbot_d6", "the walk skips the rung with no games"
+    assert result["wr_sealbot_ci_lower"] == 0.58 and result["wr_sealbot_ci_upper"] == 0.89, (
+        "the CI must be d6's — the rung whose win rate was published — never d5's"
+    )
+
+
+def test_a_round_with_no_sealbot_games_publishes_no_CI_rather_than_a_zero() -> None:
+    """The planted break: an absent interval is None, never a manufactured 0.0 — a CI of
+    [0, 0] would read as a perfectly-measured total loss."""
+    from types import SimpleNamespace
+
+    from mantis.eval.rounds import build_round_result
+
+    result = build_round_result(
+        step=1000, round_id="r000001_1000",
+        rungs_config=[SimpleNamespace(name="sealbot_d5", bot="sealbot")],
+        rung_results={"sealbot_d5": {"games": 0, "wr": None}},
+        gate_result=None, skipped_rungs=[], bt={}, schedule_next={},
+        eval_round_wall_sec=1.0, reason=None, detail=None, random_wr=None, worker_pid=None,
+    )
+    assert result["wr_sealbot"] is None
+    assert result["wr_sealbot_ci_lower"] is None and result["wr_sealbot_ci_upper"] is None

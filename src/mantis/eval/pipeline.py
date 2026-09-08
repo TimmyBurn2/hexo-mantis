@@ -148,6 +148,7 @@ def emit_round_started(
 def emit_round_complete(
     sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int | None,
     promoted: bool | None, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
+    wr_sealbot_ci_lower: float | None = None, wr_sealbot_ci_upper: float | None = None,
 ) -> dict[str, Any]:
     """R319(e)(i): `games_total` is `int | None`, and `None` is the BROKEN-round value.
 
@@ -169,6 +170,8 @@ def emit_round_complete(
         "event": "eval_round_complete", "round_id": round_id, "step": step,
         "wall_sec": wall_sec, "games_total": games_total, "promoted": promoted,
         "wr_sealbot": wr_sealbot, "progress": progress,
+        "wr_sealbot_ci_lower": wr_sealbot_ci_lower,
+        "wr_sealbot_ci_upper": wr_sealbot_ci_upper,
     }
     _emit(sink, payload)
     return payload
@@ -1223,6 +1226,12 @@ class EvalPipeline:
             # constraint, and moving it would be re-opening a ratified row.
             promoted=(result["promoted"] if gate_raw else None),
             wr_sealbot=result["wr_sealbot"],
+            # R341 §3, closed at R343: the ROUND CI travels with the win rate it belongs to.
+            # v3.57 recorded this absent and said recovering it needed the ladder state file;
+            # it did not — `aggregate_rung` already bootstrapped it and the worker already
+            # published it per rung, and it simply stopped at the round RESULT.
+            wr_sealbot_ci_lower=result.get("wr_sealbot_ci_lower"),
+            wr_sealbot_ci_upper=result.get("wr_sealbot_ci_upper"),
             progress=read_progress(inflight.get("spec")),
         )
         self._assess_external_channel(result, round_id=inflight["round_id"],
