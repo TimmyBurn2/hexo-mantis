@@ -34,6 +34,7 @@
 //!   ownership    : Vec<u8>  — [capacity × spec.aux_stride()] (0=P2, 1=empty, 2=P1)
 //!   winning_line : Vec<u8>  — [capacity × spec.aux_stride()] binary mask
 
+pub mod atomic;
 mod storage;
 mod push;
 pub mod push_config;

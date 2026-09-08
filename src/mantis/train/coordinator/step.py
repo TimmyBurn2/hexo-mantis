@@ -34,6 +34,7 @@ watchdog exists to kill. Completed eval ROUNDS reach the sealbot-WR gate only th
 """
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
 import os
@@ -44,6 +45,7 @@ from typing import Any, cast
 import mantis.data.loss_counters as _data_loss
 import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
 import mantis.train.buffer_persist as _buffer_persist
+import mantis.train.bundle as _bundle
 import mantis.train.resume_state as _resume_state
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
@@ -77,6 +79,13 @@ from mantis.train.events import (
 )
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
+
+#: How many COMPLETE resume bundles the run keeps (R345(b)(3)). Two, not one: pruning to one
+#: means the moment a new bundle's manifest commits, the only other resume point is already
+#: gone, so a bundle that turns out to be unreadable leaves nothing behind it. Not a config
+#: key — the operator has no decision to make here and a knob would be a third authority over
+#: a disk budget `monitor.disk_guard` already owns.
+_BUNDLES_RETAINED = 2
 
 _LOG = logging.getLogger(__name__)
 
@@ -283,6 +292,20 @@ class StepCoordinator:
         # wiring is unconditional at the ONE composition root, pinned by
         # tests/train/test_actor_sync_isolation.py.
         self.actor_sync = actor_sync
+        # R345(b)(3): every PERIODIC checkpoint becomes a full resume bundle. The cadence stays
+        # the trainer's (R173 — `_maybe_periodic_checkpoint` is the one reader of
+        # `train.checkpoint_interval`); the ring and the sidecar come from here, because the
+        # trainer holds neither the buffer nor the round counter. Installed at construction so
+        # the two signal-stop legs and the periodic leg share ONE publisher and cannot drift on
+        # what a bundle contains — the exact drift `persist_resume_state`'s own docstring
+        # records having hit when only one of two stop legs was wired.
+        # `trainer=None` is a unit-test affordance (the same one `eval_pipeline=None` is), so
+        # the install is guarded rather than assumed; production wiring is unconditional
+        # because production always has a trainer.
+        if self.trainer is not None:
+            self.trainer.bundle_publisher = (
+                lambda path, _step: self.persist_resume_state(path)
+            )
 
         # Per-step mutable bookkeeping.
         self._train_step = int(getattr(trainer, "step", 0))
@@ -413,19 +436,17 @@ class StepCoordinator:
         """
         if self.shutdown.abort_rule is not None or self._disk_critical():
             return None
-        ring_path = _buffer_persist.canonical_buffer_path(self.trainer.checkpoint_dir)
-        self.buffer.save_to_path(str(ring_path))
-        ring = _resume_state.RingRef(
-            path=str(ring_path), sha256=_resume_state.sha256_file(ring_path),
-            positions=int(self.buffer.size),
-        )
+        # R345(b)(3): the ring is named for ITS OWN checkpoint rather than written to one
+        # canonical `replay_buffer.bin` every save overwrote. That single path made "keep the
+        # previous bundle" impossible in principle — the previous ring was gone the moment the
+        # next save began — so retention had nothing to retain.
+        ring_path = _bundle.ring_path_for(checkpoint_path)
         pipeline = self.eval_pipeline
         state = _resume_state.ResumeState(
             version=_resume_state.SIDECAR_VERSION,
             run_id=str(self.full_config.get("run_id", "")),
             step=int(self._train_step),
             checkpoint_filename=Path(checkpoint_path).name,
-            ring=ring,
             # The counters with no HEAD mechanism (`pipeline.py` resets both every launch).
             # Read through the pipeline's own accessor so this site never reaches into its
             # private state — a second authority for "which round is next" is exactly what
@@ -433,17 +454,49 @@ class StepCoordinator:
             round_counter=(0 if pipeline is None else int(pipeline.round_counter)),
             last_p_hat=({} if pipeline is None else dict(pipeline.last_p_hat)),
             anchor_sha256=_anchor_sha256(self.anchor_state),
+            # A placeholder the publisher replaces: the ring's hash cannot be known until it
+            # is written, and the sidecar records it. `_publish` closes over `state`.
+            ring=None,
             rng=_resume_state.capture_rng_streams(),
         )
-        side = _resume_state.write_resume_state(state, checkpoint_path)
+
+        def _write_ring(path: Path) -> None:
+            self.buffer.save_to_path(str(path))
+
+        def _write_sidecar(path: Path) -> None:
+            ring = _resume_state.RingRef(
+                path=str(ring_path), sha256=_bundle.sha256_file(ring_path),
+                positions=int(self.buffer.size),
+            )
+            _resume_state.write_resume_state(
+                dataclasses.replace(state, ring=ring), checkpoint_path,
+            )
+            del path  # the sidecar's own path authority is `sidecar_path_for` (R345(b)(3))
+
+        manifest = _bundle.publish_bundle(
+            checkpoint_path=checkpoint_path,
+            run_id=str(self.full_config.get("run_id", "")),
+            step=int(self._train_step),
+            write_ring=_write_ring, ring_path=ring_path,
+            write_sidecar=_write_sidecar,
+            sidecar_path=_resume_state.sidecar_path_for(checkpoint_path),
+        )
+        # Retention runs AFTER the manifest commits, never before: pruning first would leave a
+        # window in which the run holds fewer complete bundles than its own policy promises.
+        pruned = _bundle.prune_bundles(self.trainer.checkpoint_dir, keep=_BUNDLES_RETAINED)
+        side = _resume_state.sidecar_path_for(checkpoint_path)
+        loaded = _bundle.read_manifest(manifest)
         _LOG.info(
-            "resume_state_persisted sidecar=%s ring=%s positions=%d round_counter=%d",
-            side, ring.path, ring.positions, state.round_counter,
+            "resume_bundle_published manifest=%s ring=%s positions=%d round_counter=%d pruned=%d",
+            manifest.name, ring_path.name, int(self.buffer.size), state.round_counter,
+            len(pruned),
         )
         emit_via(self._sink, {
             "event": "resume_state_persisted", "step": state.step, "sidecar": str(side),
-            "ring_positions": ring.positions, "ring_sha256": ring.sha256,
+            "ring_positions": int(self.buffer.size),
+            "ring_sha256": "" if loaded.ring is None else loaded.ring.sha256,
             "round_counter": state.round_counter,
+            "manifest": str(manifest), "pruned_members": len(pruned),
         })
         return side
 
@@ -656,6 +709,20 @@ class StepCoordinator:
             #      run5 mints disarmed "knowingly and in writing" — an armed-value change.
             # The other two item-6 paths (the trainer's non-finite guard, and the alert rules)
             # DID land, so a NaN is caught and reported; only this backstop stays gated.
+            #
+            # R345(b)(1) ANNOTATION — WHAT A NaN REACHING THIS LINE NOW MEANS. It used to mean
+            # the weights were ALREADY gone: `clip_and_step` had scaled by a non-finite clip
+            # coefficient and stepped, and this comparison was reading the epitaph. It now
+            # means the opposite — the trainer REFUSED the step, the weights are intact, and
+            # `self.step` did not advance. The pinned comparison below is UNCHANGED, character
+            # for character, and the R56 scan is untouched: the guard sits in
+            # `train/losses.py::clip_and_step` and the two trainer tails, never here. Nothing
+            # about the DEFERRED row's posture moves either — `train.hard_gn_threshold` is
+            # still the unauthored 1e9, still knowingly disarmed, and this line still resets
+            # `_consec_high_gn` on a NaN. That reset is now correct rather than a hedge: a
+            # refused step contributed no gradient, so it is not evidence of a sustained high
+            # norm, and counting it as a consecutive high-norm step would fire the abort on
+            # the run's own safety mechanism working.
             if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
                 self._consec_high_gn += 1
                 if self._consec_high_gn >= cfg.hard_gn_min_steps:

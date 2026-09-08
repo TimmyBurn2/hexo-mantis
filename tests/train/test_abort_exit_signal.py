@@ -360,7 +360,16 @@ def test_the_O3_shutdown_save_is_a_clean_stop() -> None:
         "R343(c) forbids the resume that would follow"
     )
     state = json.loads(side.read_text(encoding="utf-8"))
-    assert state["ring"]["path"].endswith("replay_buffer.bin")
+    # R345(b)(3): the ring is named for ITS OWN checkpoint, not the single canonical
+    # `replay_buffer.bin` every save used to overwrite. That one path is what made retaining
+    # a previous bundle impossible — the older ring was destroyed by the newer save — so the
+    # per-bundle name is the change, and this assertion moves with it.
+    assert state["ring"]["path"].endswith(ckpt.name + ".ring.bin"), state["ring"]["path"]
+    manifest = Path(str(ckpt) + ".bundle.json")
+    assert manifest.exists(), (
+        "the stop wrote a sidecar and a ring but no manifest, so nothing commits the set and "
+        "a resume cannot tell a complete bundle from a torn one"
+    )
     assert state["ring"]["sha256"] == hashlib.sha256(b"fake-ring" * 8).hexdigest(), (
         "the sidecar must hash the ring it actually persisted, not record a placeholder"
     )

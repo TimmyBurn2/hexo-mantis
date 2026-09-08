@@ -16,6 +16,7 @@ The negative-step accounting (`self.step` counts up from `-total_pretrain_steps`
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -175,6 +176,18 @@ class BootstrapTrainer:
                 continue
 
             grad_norm = fp16_backward_step(loss, self.optimizer, self.scaler, self.model, self.fp16)
+            # R345(b)(1): `clip_and_step` now REFUSES the optimizer step on a non-finite
+            # gradient — a different quantity from the non-finite LOSS the branch above
+            # catches, and one a finite loss can still produce. The refusal must not be
+            # silent. The clock convention is this loop's own and is unchanged: the
+            # non-finite-loss branch above deliberately burns a step and a scheduler tick so
+            # the step budget stays the budget, and a refused gradient is treated the same.
+            if not math.isfinite(grad_norm):
+                self.skipped_nonfinite_steps = getattr(self, "skipped_nonfinite_steps", 0) + 1
+                _LOG.warning(
+                    "skipped_nonfinite_gradient step=%s n_skipped=%s grad_norm=%s",
+                    self.step + 1, self.skipped_nonfinite_steps, grad_norm,
+                )
 
             self.scheduler.step()
             self.step += 1

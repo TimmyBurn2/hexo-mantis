@@ -48,6 +48,11 @@ class TrainerLike(Protocol):
     #: derivation (item 4(c)): the path used to be a CWD-relative code-side default, and
     #: the trainer is the collaborator that actually knows where this run's artifacts live.
     checkpoint_dir: Any
+    #: R345(b)(3) — the resume-bundle publisher the coordinator INSTALLS on the trainer so a
+    #: periodic checkpoint publishes its ring and sidecar too. Declared on the seam because the
+    #: coordinator writes it: an undeclared write is the same class of hidden coupling as an
+    #: undeclared read, and this gate is what makes that a fact rather than a habit.
+    bundle_publisher: Any
 
     def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]: ...
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...

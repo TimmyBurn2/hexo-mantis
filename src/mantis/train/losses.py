@@ -17,6 +17,7 @@ Architecture spec (docs/01_architecture.md §2):
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import torch
@@ -389,11 +390,25 @@ def clip_and_step(
     """
     if fp16:
         scaler.unscale_(optimizer)
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
+    if not math.isfinite(grad_norm):
+        # R345(b)(1). The pre-clip norm is a COMPLETE detector for a non-finite gradient:
+        # it is `sqrt(sum of squares)`, so a NaN or +/-inf in any entry propagates into it,
+        # and a finite norm therefore means every entry is finite. `clip_grad_norm_` has
+        # already multiplied the gradients by a non-finite clip coefficient by the time we
+        # read it, which is why the refusal must be here and not one call further out: those
+        # gradients are discarded, and `optimizer.step()` — the operation that would write
+        # them into the weights — is the one thing that does not run.
+        optimizer.zero_grad(set_to_none=True)
+        if fp16:
+            # The scaler still gets its update, so its own inf-driven backoff keeps working;
+            # `scaler.step` is what is skipped, not the scaler's bookkeeping.
+            scaler.update()
+        return grad_norm
+    if fp16:
         scaler.step(optimizer)
         scaler.update()
     else:
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm).item()
         optimizer.step()
     return grad_norm
 

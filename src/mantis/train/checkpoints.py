@@ -39,6 +39,7 @@ from mantis.model import (
     declared_arch_kind,
     select_arch,
 )
+from mantis.train.bundle import atomic_write
 from mantis.train.emit import emit_via
 
 _LOG = logging.getLogger(__name__)
@@ -68,6 +69,19 @@ class CheckpointStampError(RuntimeError):
 
 class DeclaredEncodingMismatchError(ValueError):
     """A caller-declared encoding disagrees with the checkpoint's own trusted stamp."""
+
+
+class ResumeIdentityMismatchError(ValueError):
+    """A resume's EFFECTIVE identity block differs from the checkpoint's (R345(b)(3)).
+
+    Distinct from `DeclaredEncodingMismatchError`, which compares a checkpoint's stamp against
+    its own baked config — an internal-consistency check on one artifact. This one compares
+    the artifact against the RUN about to continue from it, after `config_overrides` have been
+    applied, and it covers the whole identity triple rather than the encoding alone. A resume
+    that moves `representation` or `arch_kind` gets a net rebuilt from the checkpoint's stamped
+    arch and a config that claims another; nothing downstream can tell, because every later
+    save re-stamps the arch it was handed.
+    """
 
 
 # ── Envelope dataclasses (the in-memory view of a loaded envelope) ─────────────────────
@@ -405,7 +419,13 @@ def _write_v2_payload(
     cdir.mkdir(parents=True, exist_ok=True)
     path = cdir / checkpoint_filename(metadata["run_id"], step, sha8)
     try:
-        torch.save(payload, path)
+        # R345(b)(3): temp file → fsync → rename → fsync(dir). A bare `torch.save(payload,
+        # path)` opens the FINAL path for writing, so a kill mid-write leaves a `.ckpt` that
+        # exists, is named for a content hash it does not carry, and fails to load — and it
+        # has already destroyed nothing only because each checkpoint has its own name. The
+        # rename is what makes the artefact appear whole or not at all, which is the property
+        # the bundle manifest then certifies.
+        atomic_write(path, lambda handle: torch.save(payload, handle))
     except Exception:
         persist_errors_total += 1  # LAW-14: count + abort, never `except: pass`.
         raise
@@ -445,7 +465,7 @@ def _write_quarantine(
     cdir = Path(checkpoint_dir)
     cdir.mkdir(parents=True, exist_ok=True)
     qpath = cdir / (checkpoint_filename(q_meta["run_id"], step, sha8) + ".quarantine")
-    torch.save(payload, qpath)
+    atomic_write(qpath, lambda handle: torch.save(payload, handle))
     quarantine_writes_total += 1
     return qpath
 
@@ -1083,6 +1103,60 @@ def resolve_lr_provenance(
 
 
 # ── Resume path (builds a Trainer — Slice 2 consumer; lazy `cls`) ──────────────────────
+#: The identity leaves a resume may not move (LAW-11). `arch_kind` is OPTIONAL in the schema,
+#: so its absence on both sides is agreement and its absence on ONE side is a move — which is
+#: why the comparison below is over the union of the two key sets rather than over a fixed list.
+_IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
+
+
+def _refuse_identity_drift(
+    path: Path,
+    baked_config: Mapping[str, Any] | None,
+    effective_config: Mapping[str, Any],
+    arch: ModelArch,
+) -> None:
+    """HALT when the resuming run's EFFECTIVE identity differs from the checkpoint's.
+
+    Compared AFTER `config_overrides` are applied, because that is the only point at which the
+    run's own identity exists — before it, there is a baked block and a set of overrides, and
+    neither is what the run will use. The checkpoint's side is its baked config where it has
+    one, falling back to the STAMPED arch for `arch_kind` and `representation`, which are facts
+    about the artifact rather than about the config that produced it.
+
+    Raises:
+        ResumeIdentityMismatchError: any identity leaf differs, naming the leaf and both values.
+    """
+    baked_identity = (baked_config or {}).get("identity")
+    effective_identity = effective_config.get("identity")
+    if not isinstance(baked_identity, dict) or not isinstance(effective_identity, dict):
+        # Nothing to compare: a legacy or synthetic artifact with no identity block. The
+        # ENCODING half is still covered by `load_checkpoint`'s stamp-vs-config check, which
+        # runs whatever this one can see.
+        return
+    # The artifact's own side, read off the DECLARED dataclass rather than off any config:
+    # `type(arch).__name__` is exactly the discriminator `_arch_to_dict` serialises, so the
+    # two cannot drift. `declared_arch_kind` is deliberately NOT used here — it reads a config
+    # mapping's `identity.arch_kind` row, which is the other side of this comparison.
+    stamped = {
+        "representation": arch.representation,
+        "arch_kind": type(arch).__name__,
+    }
+    drift: list[str] = []
+    for leaf in _IDENTITY_LEAVES:
+        want = baked_identity.get(leaf, stamped.get(leaf))
+        got = effective_identity.get(leaf, stamped.get(leaf))
+        if _stamp_name(want) != _stamp_name(got):
+            drift.append(f"identity.{leaf}: checkpoint={want!r}, resume={got!r}")
+    if drift:
+        raise ResumeIdentityMismatchError(
+            f"{path.name}: the resuming run's effective identity differs from the "
+            f"checkpoint's — " + "; ".join(drift) + ". The net is rebuilt from the "
+            "checkpoint's STAMPED arch, so a moved identity key produces a model that is not "
+            "what the config claims and every later save re-stamps the disagreement (LAW-11). "
+            "Resume with the checkpoint's identity, or start a new run."
+        )
+
+
 def resume_trainer(
     cls: type,
     path: str | Path,
@@ -1109,11 +1183,23 @@ def resume_trainer(
     if arch is None:
         raise CheckpointStampError(f"{path.name}: no arch on the loaded metadata — cannot rebuild the net.")
     model = build_net(arch)
-    # Dev#2 net-load parity: the OLD resume path (`trainer_ckpt_load.load_checkpoint` →
-    # `_load_state_dict_strict`, lenient `strict=False`) loads a subset anchor leniently — a
-    # real bare anchor is a strict SUBSET of the build_net key set (T-CK-25), so `strict=True`
-    # would spuriously reject it. `strict=False` reproduces the old resume load mode exactly.
-    model.load_state_dict(ck.model_state, strict=False)
+    # STRICTNESS IS KEYED ON THE KIND (R345(b)(3)), and T-CK-25's reason is why it has to be.
+    # A bare ANCHOR is a genuine SUBSET of the `build_net` key set, so `strict=True` would
+    # reject a healthy one — that argument is sound and is preserved for `kind == "weights"`.
+    # It never covered a FULL checkpoint, where a missing or unexpected key means the stamped
+    # arch and the rebuilt net disagree: under the old blanket `strict=False` the run then
+    # trained a partly randomly-initialised model while its optimizer state, scheduler and step
+    # counter all reported a continuation. Discarding learned weights is the one failure that
+    # looks exactly like training.
+    strict = ck.kind == "full"
+    incompatible = model.load_state_dict(ck.model_state, strict=strict)
+    if not strict and (incompatible.missing_keys or incompatible.unexpected_keys):
+        # Lenient does not mean unreported: a subset anchor is expected to be missing keys,
+        # and an anchor carrying keys this arch does not have is NOT expected at all.
+        _LOG.info(
+            "anchor_load_lenient path=%s missing=%d unexpected=%s",
+            path.name, len(incompatible.missing_keys), sorted(incompatible.unexpected_keys),
+        )
 
     # CONFRES F1(A)/E0 (S-2, DESIGN_P2.md §6): actually APPLY config_overrides onto the
     # checkpoint-baked config instead of dropping it on the floor. `baked_config` is the
@@ -1135,6 +1221,7 @@ def resume_trainer(
     # consumers read `config_overrides` directly (e.g. `allow_fresh_scheduler` below), never
     # the carried config; anything else non-schema still reaches the writer and raises there.
     config = {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS}
+    _refuse_identity_drift(path, baked_config, config, arch)
     # Pass the DECLARED arch (metadata.arch) so the Trainer stamps the same arch on re-save
     # (never re-derives it); the sink threads through for resume-time events (T-CK-18).
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)

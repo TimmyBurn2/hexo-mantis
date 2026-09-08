@@ -272,6 +272,20 @@ class Trainer:
         #: rather than after it had written NaN into every weight.
         self.nonfinite_loss_microbatches = 0
         self.nonfinite_grad_steps = 0
+        #: Training steps on which NO optimizer step was taken (R345(b)(1)) — the gradient
+        #: was non-finite, or every micro-batch was skipped so there was no gradient at all.
+        #: Distinct from `nonfinite_grad_steps`, which used to count the same condition AFTER
+        #: the weights had already been overwritten; this one counts a step that did not
+        #: happen, and `self.step` does not advance with it.
+        self.skipped_steps = 0
+        #: R345(b)(3) — the injected resume-bundle publisher, called with
+        #: `(checkpoint_path, step)` AFTER a periodic checkpoint is written. `None` means this
+        #: trainer publishes no bundle, which is a bench/fixture posture and is RECORDED on the
+        #: `periodic_checkpoint_save` event as `bundle: false` rather than left to be inferred.
+        #: The trainer holds neither the replay ring nor the coordinator's per-stop facts, so
+        #: it cannot write the other two members itself; the cadence stays here (R173) and the
+        #: members come from whoever owns them.
+        self.bundle_publisher: Callable[[Path, int], Any] | None = None
         # CONFRES F1(A) back-prop: keys the resume F1 defer preserved (empty on a fresh run).
         self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
@@ -484,12 +498,29 @@ class Trainer:
 
         grad_norm = fp16_backward_step(loss, self.optimizer, self.scaler, self.model,
                                        self._scaler_enabled, max_grad_norm=float(hp.grad_clip))
-        self.step += 1
-        if self.scheduler is not None and math.isfinite(grad_norm):
-            self.scheduler.step()
-        if (self.ema_model is not None and math.isfinite(grad_norm)
-                and self.step % self.ema_update_every == 0):
-            self.ema_model.update_parameters(self._base_model())
+        # R345(b)(1) on the dense tail. `clip_and_step` refuses the optimizer step on a
+        # non-finite gradient; the clock must be refused with it, or the run reports a step
+        # whose update it declined to make. The scheduler and EMA guards were already written
+        # as `math.isfinite(grad_norm)` — this makes the condition they were testing for
+        # actually true, rather than a hedge applied after the weights had gone.
+        stepped = math.isfinite(grad_norm)
+        if stepped:
+            self.step += 1
+            if self.scheduler is not None:
+                self.scheduler.step()
+            if self.ema_model is not None and self.step % self.ema_update_every == 0:
+                self.ema_model.update_parameters(self._base_model())
+        else:
+            self.nonfinite_grad_steps += 1
+            self.skipped_steps += 1
+            _LOG.warning("skipped_step step=%s reason=nonfinite_gradient n_skipped=%s "
+                         "grad_norm=%s", self.step, self.skipped_steps, grad_norm)
+            emit_via(self._sink, {
+                "event": "trainer_step_skipped", "step": self.step,
+                "reason": "nonfinite_gradient", "representation": "grid",
+                "skipped_steps": self.skipped_steps,
+                "nonfinite_grad_steps": self.nonfinite_grad_steps,
+            })
 
         with torch.no_grad():
             pred_win = (v_logit.squeeze(1) > 0).float()
@@ -509,10 +540,13 @@ class Trainer:
         # in production since F-R-P2B-2's sink threading — and one literal = one shape, so
         # it emits under its own name (F-P4 review blocker: a second, non-conforming,
         # ungated producer of the canonical literal at ~log_interval:1 volume).
-        emit_via(self._sink, {"event": "trainer_step", "step": self.step,
-                              "representation": "grid", **result})
-
-        self._maybe_periodic_checkpoint(result)
+        # A refused step emitted `trainer_step_skipped` above and emits nothing here: the
+        # step counter did not move, so a `trainer_step` row would name a step twice and
+        # `_maybe_periodic_checkpoint` would re-cross a cadence boundary it already crossed.
+        if stepped:
+            emit_via(self._sink, {"event": "trainer_step", "step": self.step,
+                                  "representation": "grid", **result})
+            self._maybe_periodic_checkpoint(result)
         return result
 
     # ── graph (GNN) training step — the numeric core, bench + injected-buffer driver ──────
@@ -656,6 +690,7 @@ class Trainer:
         loss_total = 0.0
         policy_total = 0.0
         value_total = 0.0
+        contributing = 0
         for make in parts:
             inputs = make()
             with autocast(device_type=self.device.type, dtype=self.amp_dtype,
@@ -705,28 +740,54 @@ class Trainer:
                 del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
                 continue
             backward_accumulate(loss, self.scaler, self._scaler_enabled)
+            contributing += 1
             loss_total += loss.item()
             policy_total += policy_loss.item()
             value_total += value_loss.item()
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
 
-        grad_norm = clip_and_step(self.optimizer, self.scaler, self.model,
-                                  self._scaler_enabled, float(self.hp.grad_clip))
-        self.step += 1
-        if self.scheduler is not None and math.isfinite(grad_norm):
-            self.scheduler.step()
-        if (self.ema_model is not None and math.isfinite(grad_norm)
-                and self.step % self.ema_update_every == 0):
-            self.ema_model.update_parameters(self._base_model())
-        if not math.isfinite(grad_norm):
-            # A non-finite grad norm means `clip_and_step` scaled by a NaN/inf coefficient.
-            # Counted for the same reason as above, and carried in the payload so the monitor
-            # rules can SEE it — before item 6 every NaN was filtered out of the alerts and
-            # out of the hard abort, so the one condition that destroys a model outright was
-            # the one condition nothing reported.
+        # R345(b)(1) — THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH.
+        # Two ways there is not, and both used to advance the clock anyway:
+        #   * every micro-batch skipped. `.grad` stays zeroed, so `clip_and_step` returns a
+        #     perfectly finite `0.0` and the step, the scheduler and the EMA all fired on a
+        #     gradient that was never computed. On a FRESH optimizer the weight delta is
+        #     numerically zero and nothing shows; with momentum accumulated Adam applies the
+        #     decayed `exp_avg` and the weights genuinely move.
+        #   * a non-finite gradient from a FINITE loss — a different quantity from the
+        #     micro-batch guard above, reached by a different route (a `sqrt(0)` derivative,
+        #     an fp32 overflow). `clip_and_step` now refuses the step itself; here we refuse
+        #     the clock that would have gone with it.
+        if contributing == 0:
+            grad_norm = float("nan")
+            self.optimizer.zero_grad(set_to_none=True)
+        else:
+            grad_norm = clip_and_step(self.optimizer, self.scaler, self.model,
+                                      self._scaler_enabled, float(self.hp.grad_clip))
+        stepped = math.isfinite(grad_norm)
+        if stepped:
+            self.step += 1
+            if self.scheduler is not None:
+                self.scheduler.step()
+            if self.ema_model is not None and self.step % self.ema_update_every == 0:
+                self.ema_model.update_parameters(self._base_model())
+        else:
+            # `nonfinite_grad_steps` is KEPT and still counted: the monitor rules and the
+            # event manifest read it, and the condition it names did occur. What changed is
+            # what it means — it is now "a step was refused", not "a step destroyed the
+            # model". `skipped_steps` is the count of steps that did not happen, which is the
+            # quantity a reader needs to reconcile `self.step` against wall-clock progress.
             self.nonfinite_grad_steps += 1
-            _LOG.warning("nonfinite_grad_norm step=%s n=%s grad_norm=%s",
-                         self.step, self.nonfinite_grad_steps, grad_norm)
+            self.skipped_steps += 1
+            reason = "no_contributing_microbatch" if contributing == 0 else "nonfinite_gradient"
+            _LOG.warning("skipped_step step=%s reason=%s n_skipped=%s grad_norm=%s",
+                         self.step, reason, self.skipped_steps, grad_norm)
+            emit_via(self._sink, {
+                "event": "trainer_step_skipped", "step": self.step, "reason": reason,
+                "representation": "graph", "skipped_steps": self.skipped_steps,
+                "microbatches": len(parts), "contributing_microbatches": contributing,
+                "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
+                "nonfinite_grad_steps": self.nonfinite_grad_steps,
+            })
         lr = self.optimizer.param_groups[0]["lr"]
         # `result` stays the FIVE-key loss_info contract (OF2-9: one tail, five keys). The
         # non-finite counters ride the EVENT, not the return: `loss_info` is consumed by the
@@ -736,15 +797,21 @@ class Trainer:
         result = {"loss": loss_total, "policy_loss": policy_total,
                   "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
         # `trainer_step`, not `training_step` — same reason as the dense tail's emit above.
-        emit_via(self._sink, {"event": "trainer_step", "step": self.step,
-                              "representation": "graph", **result,
-                              "microbatches": len(parts), "edges": int(total_edges),
-                              "nodes": int(total_nodes),
-                              "caps_max_edges": int(caps_max_edges),
-                              "caps_max_nodes": int(caps_max_nodes),
-                              "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
-                              "nonfinite_grad_steps": self.nonfinite_grad_steps})
-        self._maybe_periodic_checkpoint(result)
+        # A REFUSED step emits `trainer_step_skipped` INSTEAD, above: emitting both would put
+        # a step in the stream that the step counter does not carry, and `periodic_checkpoint`
+        # must not fire either — `self.step` did not move, so the cadence boundary it already
+        # crossed would be crossed a second time and write a duplicate artefact.
+        if stepped:
+            emit_via(self._sink, {"event": "trainer_step", "step": self.step,
+                                  "representation": "graph", **result,
+                                  "microbatches": len(parts), "edges": int(total_edges),
+                                  "nodes": int(total_nodes),
+                                  "caps_max_edges": int(caps_max_edges),
+                                  "caps_max_nodes": int(caps_max_nodes),
+                                  "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
+                                  "nonfinite_grad_steps": self.nonfinite_grad_steps,
+                                  "skipped_steps": self.skipped_steps})
+            self._maybe_periodic_checkpoint(result)
         return result
 
     # ── checkpoint IO ─────────────────────────────────────────────────────────────────────
@@ -793,12 +860,26 @@ class Trainer:
         if interval <= 0 or self.step % interval != 0:
             return None
         path = self.save_checkpoint(loss_info)
+        # R345(b)(3): the ring and the sidecar go NEXT, and the manifest that commits all three
+        # goes last. A failure here is NOT caught, for the same LAW-14 reason the write above
+        # is not: a bundle that failed to publish must not be announced as one that did, and
+        # the event below is what announces it.
+        # The publisher returns the manifest path when it published, or `None` when it
+        # declined — the disk-guard posture declines, because persisting a large ring on the
+        # one abort that fires BECAUSE THE DISK IS FULL deepens the condition that fired. A
+        # decline is reported as `bundle: false`, which is the truth, not an error.
+        bundled = False
+        if self.bundle_publisher is not None:
+            bundled = self.bundle_publisher(path, self.step) is not None
         emit_via(self._sink, {
             "event": "periodic_checkpoint_save",
             "step": self.step,
             "interval": interval,
             "representation": self.arch.representation,
             "path": None if path is None else str(path),
+            # A checkpoint that is not a continuation point and a checkpoint that is must be
+            # distinguishable in the stream. Before this field they were not.
+            "bundle": bundled,
         })
         return path
 
