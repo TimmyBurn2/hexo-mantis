@@ -103,6 +103,44 @@ def test_a_periodic_save_with_no_publisher_says_so(tmp_path: Path) -> None:
     )
 
 
+def test_the_manifest_step_is_the_checkpoints_own_step(tmp_path: Path) -> None:
+    """A bundle certifies a checkpoint, so its step must come FROM that checkpoint.
+
+    The coordinator refreshes `_train_step` AFTER `_run_training_step` returns, while the
+    periodic seam fires INSIDE it — so a manifest built from that counter is one step behind
+    the artefact it names. Ordering would still be monotone and nothing would fail; the
+    manifest would simply disagree with its own checkpoint about which step it is, which is
+    the two-authorities-over-one-number class, and a resume would re-enter at the wrong step.
+    """
+    sink = H.SpySink()
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=2)
+    seen: list[tuple[str, int]] = []
+
+    def _publish(checkpoint_path: Path, step: int) -> Path:
+        seen.append((Path(checkpoint_path).name, step))
+        return B.publish_bundle(
+            checkpoint_path=checkpoint_path, run_id="t",
+            # THE POINT: the step is read off the checkpoint, exactly as the coordinator does.
+            step=B.step_of(checkpoint_path) or -1,
+            write_ring=lambda p: Path(p).write_bytes(b"ring"),
+            ring_path=B.ring_path_for(checkpoint_path),
+            write_sidecar=lambda p: Path(p).write_text("{}", encoding="utf-8"),
+            sidecar_path=Path(str(checkpoint_path) + ".resume.json"),
+        )
+
+    trainer.bundle_publisher = _publish
+    _drive(trainer, H.uniform_graph_buffer(), 2)
+
+    manifest = B.newest_complete_bundle(trainer.checkpoint_dir)
+    assert manifest is not None
+    assert manifest.step == 2, f"the manifest names step {manifest.step}, the checkpoint is 2"
+    assert manifest.checkpoint.name == f"{seen[-1][0]}"
+    assert B.step_of(manifest.checkpoint.name) == manifest.step, (
+        "the manifest's step and its checkpoint's filename disagree — two authorities over "
+        "one number, which is what deriving it from the filename makes impossible"
+    )
+
+
 def test_a_publisher_failure_is_run_fatal_and_not_swallowed(tmp_path: Path) -> None:
     """LAW-14. A bundle that failed to publish must not be reported as one that did."""
     import pytest

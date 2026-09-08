@@ -441,11 +441,21 @@ class StepCoordinator:
         # previous bundle" impossible in principle — the previous ring was gone the moment the
         # next save began — so retention had nothing to retain.
         ring_path = _bundle.ring_path_for(checkpoint_path)
+        # THE STEP COMES FROM THE CHECKPOINT, not from `self._train_step` (R345(b)(3)). The
+        # coordinator's counter is refreshed AFTER `_run_training_step` returns, while the
+        # periodic seam fires INSIDE it — so at a periodic publication `_train_step` is one
+        # behind, and a manifest built from it would disagree with the very checkpoint it
+        # certifies. The filename is the artefact of record and carries the step
+        # (`checkpoint_filename`), so reading it there makes the two unable to diverge; the
+        # counter is the fallback for a name that does not parse (a quarantine write).
+        bundle_step = _bundle.step_of(checkpoint_path)
+        if bundle_step is None:
+            bundle_step = int(self._train_step)
         pipeline = self.eval_pipeline
         state = _resume_state.ResumeState(
             version=_resume_state.SIDECAR_VERSION,
             run_id=str(self.full_config.get("run_id", "")),
-            step=int(self._train_step),
+            step=bundle_step,
             checkpoint_filename=Path(checkpoint_path).name,
             # The counters with no HEAD mechanism (`pipeline.py` resets both every launch).
             # Read through the pipeline's own accessor so this site never reaches into its
@@ -476,7 +486,7 @@ class StepCoordinator:
         manifest = _bundle.publish_bundle(
             checkpoint_path=checkpoint_path,
             run_id=str(self.full_config.get("run_id", "")),
-            step=int(self._train_step),
+            step=bundle_step,
             write_ring=_write_ring, ring_path=ring_path,
             write_sidecar=_write_sidecar,
             sidecar_path=_resume_state.sidecar_path_for(checkpoint_path),
