@@ -1,10 +1,10 @@
-REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ 5fb4084, regenerated 2026-09-08.
+REDACTED DERIVATIVE — 5 fragment(s) replaced by stable placeholders under rule 7. Canonical: mantis-migration/plan/RULINGS_ACTIVE.md @ eb63331, regenerated 2026-09-08.
 NOT the authoritative text; never edit here; edits land in mantis-migration.
 <!-- END MIRROR HEADER -->
 
 # RULINGS ACTIVE — derived working index
 # Place: mantis-migration/plan/RULINGS_ACTIVE.md
-# v3.66, 2026-09-09. Created under R271 (register hygiene: archive/index split);
+# v3.67, 2026-09-09. Created under R271 (register hygiene: archive/index split);
 # v1.1 = landed to disk by the R271 dispatcher after verification against the repo
 # and the register; v1.2 = R272 ratification folded in; v1.3 = R274-R277 folded in by
 # the R277 dispatcher (F-816-9 packet close-out); v1.4 = R278 folded in, R274 FILLED
@@ -7678,3 +7678,45 @@ Verbatim text in the register; one-liners here are index only.
   class — a forwarding precondition the packet could not itself carry — and it is on the
   architect's ledger beside clause (c)'s own self-recorded `gate.stride` finding.
   **RUN6 IS STILL HELD.** It is held BY THIS RULING now, not merely un-started.
+
+- 2026-09-09 — **v3.67** curated at the **R345 / REPAIR-A2 EXIT**. Census unchanged at
+  `R23–R345 — 316 / 316 / 0, excluded 53`; no new ruling header. `dev` = `origin/dev` =
+  **`7561169`** (was `16f2e6b`), nine commits, **`make gates` 19/19 GREEN rc=0** — default tier
+  5 008 passed / 0 failed, integration 48 / 0, cargo workspace green, gate 14 (ruff + pyright)
+  at ZERO.
+  **SEVEN OF EIGHT LEGS LANDED; LEG 5's CAP IS HALTED TO THE ARCHITECT WITH NUMBERS.** The
+  telemetry the clause asks for is live and pinned; the cap did not move. Grounds, all measured:
+  the cap discards a mean **88 % of the policy's prior mass on 99.97 % of expansions**, but
+  *"the r8 legal maximum"* is not a constant (355 median / 489 max clustered, up to 8 142
+  sprawling) and the witness *"omitted mass reads 0"* is unreachable at any feasible K —
+  K = 2 048 still drops 25 % and halves `MAX_ARMED_SIMS` to 122. **The tree memory delta is
+  EXACTLY ZERO** (the pool is preallocated at `MAX_NODES`); what K costs is the armed-sims
+  ceiling, which GATES CONFIGS, and it moves run6's search when R345(d) makes run6 the control
+  arm. Full record in `R345_LEG5_ROOT_CAP_MEASUREMENT.md`.
+  **ALL SEVEN AUDIT LINES VERIFIED LIVE AT HEAD; NONE WAS ALREADY FALSE** — recorded because
+  AUDIT-1's comparable sweep had ~6 of 52 wrong at contact and this packet budgeted for the
+  same class.
+  **FIVE DEFECTS THE EXECUTION FOUND THAT THE PACKET DID NOT NAME.** (1) `book_v1` is minted at
+  radius 6 and 292 of its 512 openings need radius ≥ 6, so `sustained_kcluster.yaml` has been
+  replaying **57.03 %** illegal openings — run6 is radius 8 and clean; pinned as an EXACT
+  inventory that reds when closed. (2) Retention deleted `.ckpt` files, which would have
+  destroyed the frozen checkpoints **R345(d) itself** measures the strength frontier on — the
+  ruling's later clause defeated by its earlier one. (3) A source-text re-anchor red on rustfmt
+  rather than on behaviour. (4) `ReplayFacade` has no `__getattr__` and did not forward
+  `next_game_id`, so the self-play write path would have raised on its first drained game with a
+  green suite behind it. (5) **The worst: leg 4's first cut made round 2's confirm block replay
+  ALL FORTY of the screen's openings** — an index offset over two different-width windows of one
+  permutation — so `eff_n` would have COLLAPSED rather than grown at a promotion decision.
+  **THE BOX WITNESS CONFIRMS LEGS 3 AND 6 ON HARDWARE.** run6 to 1 001 steps on the RTX 5080:
+  both save legs published complete, hash-verifying bundles (ring 16.8 MB / 66 715 positions,
+  ~25 MB at full `replay_capacity`), and `untagged_rows: 0` with `distinct_games: 256` at batch
+  256 and `max_rows_per_game: 1` — every sampled position from a different game, the dedupe
+  doing real work for the first time. **DISCLOSED: the final teardown is NOT witnessed** — two
+  observer processes of my own left running each sent SIGTERM and the second hit the
+  force-teardown path 54 s into the drain. The SAVE is verified; the exit path is recorded as
+  unobserved rather than assumed clean.
+  **OWED, and named so it is not mistaken for done:** the leg-5 cap value; `AUDIT_2026-09-09.md`
+  (the analysis TEXT was never forwarded — R337 class); and the `supervisor_kill_grace_sec`
+  reading, armed on the interpretation that §0.3's *"only if the supervisor is used"* describes
+  when the value takes effect rather than conditioning the change — **a one-line re-mint if the
+  operator reads it the other way.** **RUN6 REMAINS HELD**, by this ruling, on the leg-5 cap.
