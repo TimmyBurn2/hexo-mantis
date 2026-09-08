@@ -225,7 +225,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     as a raw mapping, which would silently give the worker attribute errors)."""
     import json
 
-    from mantis.eval.rounds import GateSpec
+    from mantis.eval.rounds import GameRecordTarget, GateSpec
 
     base = dict(
         round_id="r1", step=1, candidate_snapshot="c.pt", best_snapshot=None, best_step=None,
@@ -266,6 +266,25 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back_armed == armed
     assert isinstance(back_armed.strength_floor, StrengthFloorSpec)
     assert isinstance(back_armed.ply_cap_adjudication, PlyCapAdjudicationSpec)
+
+    # R344(b): `game_record` is the fourth field in that shape, and it is the one the CHILD
+    # dereferences by ATTRIBUTE the moment a round starts. Left as a raw mapping it would raise
+    # `AttributeError: 'dict' object has no attribute 'record_dir'` in a subprocess whose
+    # stderr nobody is reading — which is the exact failure `_REHYDRATED_SPEC_FIELDS`' own
+    # docstring says the table exists to prevent, so it is pinned rather than assumed.
+    targeted = RoundSpec(
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128,
+        leaf_build_threads=1, concurrency=1,
+        **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
+        ply_cap_adjudication=None, strength_floor=None,
+        fused_graph_caps=None, inference_batching=None,
+    )
+    back_target = RoundSpec.from_dict(json.loads(json.dumps(targeted.to_dict())))
+    assert back_target == targeted
+    assert isinstance(back_target.game_record, GameRecordTarget), (
+        "the target came back as a raw mapping; the child would die on its first attribute read"
+    )
+    assert back_target.game_record.record_dir == "/tmp/games"
 
 
 # ── 4. the sidecar result JSON ─────────────────────────────────────────────────────────
