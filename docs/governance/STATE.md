@@ -13,9 +13,15 @@ numbers** and is what run6 is held on: the cap discards a mean 88% of the policy
 99.97% of expansions, the tree-memory delta is exactly zero (the pool is preallocated at
 MAX_NODES), and what a larger K costs is the armed-sims ceiling — which gates configs.
 
+A second row is mint-blocking and has no close recorded: **`F-816-24`** — `monitor/supervise.py`
+constructs a bare `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix
+packet was ordered at R291(b); no merge or close appears in the frozen record.
+
 Owed, named so it is not mistaken for done:
 
 - the leg-5 cap value — the thing the hold is on;
+- the `AUDIT_2026-09-09.md` analysis text, never forwarded, so the label AUDIT-2 points at an
+  absent document;
 - the `supervisor_kill_grace_sec: 600.0` reading. It was armed on the interpretation that
   "only if the supervisor is used" describes when the value takes effect rather than
   conditioning the change. A one-line re-mint if the operator reads it the other way.
