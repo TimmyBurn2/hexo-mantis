@@ -39,117 +39,213 @@ not because a ruling carded them.
   they lived in the migration workspace, and R346 deleted that class of tooling. The argument the
   comment makes is sound; only its two witnesses are phantom.
 
+
+## Reading the identifiers
+
+Cites below are `A:` for `docs/governance/archive/RULINGS_ACTIVE.md` and `R:` for
+`docs/governance/archive/rulings_register.md`. Line numbers are unchanged by the R346 move, and
+they are a starting point, not evidence — derive at point of use.
+
+Four traps, each of which has already misled a reader:
+
+1. **`F-<number>` is five namespaces, not one.** The graves in `docs/governance/falsified.md`
+   (`F-01`..`F-43`) · AUDIT-1's 52 findings · the session ledger's · a perf-ledger `F-10`
+   corrected by R320 · R246's cross-language-parity `F-01`/`F-02`. **Three distinct `F-10`s
+   exist.** Unpadded `F-1`..`F-6` are ADJ-13 / RED-TEAM findings closed as a class by R71/R72 and
+   never mean `F-01`..`F-06`. Every `F-NN` here names its register. Graves are never cards.
+2. **`CARD-LEVEL` is not an identifier.** Every hit is the phrase "CARD-LEVEL FACT" — a fact about
+   the GPU card. There is no such card.
+3. **`CARD-ANCHOR-WIRING` was DECLINED** — R55 ruled it "is therefore not created". It is not a card.
+4. **Two ADJ number-spaces collide** (WPUF/WPAX-era against WP12-R-era) at ADJ-19 through ADJ-26
+   and ADJ-29. Qualify by era or by the enclosing ruling.
+
 ## What holds run6
 
-run6 is minted and has never started. Two things hold it, and one open class rides with it.
+run6 is minted and has never started.
 
-- **REPAIR-A2 leg 5 — the MCTS root child cap. BLOCKING, the architect's.** Seven of eight
-  REPAIR-A2 legs landed; leg 5 halted with numbers rather than moving the cap. Measured: the cap
-  discards a mean 88% of the policy's prior mass on 99.97% of expansions; "the r8 legal maximum" is
-  not a constant (355 median, 489 max clustered, up to 8142 sprawling); the witness "omitted mass
-  reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
+- **REPAIR-A2 leg 5 — the MCTS root child cap. BLOCKING, the architect's.** Seven of eight legs
+  landed; leg 5 halted with numbers rather than moving `MAX_CHILDREN_PER_NODE = 192`. Measured: the
+  cap discards a mean 88% of the policy's prior mass on 99.97% of expansions; "the r8 legal
+  maximum" is not a constant (355 median, 489 max clustered, up to 8142 sprawling); the witness
+  "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
-  `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs and moves run6's
-  search. Last moved by R345.
-- **`F-816-37` — a run-fatal `EdgeAttrGeometryMismatch` that is still not root-caused. OPEN, and
-  it rides run6 rather than holding it.** Its R339(c)/R340 halt was raised on the host that R341
-  condemned on signature and R342 then downgraded to SUSPECT on the operator's override; the work
-  moved to a different box and the re-mint completed there. Every firing on record is on the old
-  host, so the halt is spent — but the CLASS is not closed and nothing has root-caused it.
-  Converted from a hunt into an instrument by R339(c): 1-in-1 on the eval path with dump-on-fire
-  proven by a planted corruption, self-play deliberately left at the derived 1-in-64. It has fired
-  three times. The signature is a single float32 exponent-LSB flip — **bit 23 in every corrupted
-  word across every firing**, with all three corrupted words at byte offset congruent to 4 mod 8,
-  the same half of the 64-bit bus. R340(c) discriminated software vs hardware and returned **BOTH
-  NEGATIVE**: the software arm is the strong half (the mask appears in no spelling anywhere, no
-  site views wire floats as integers, and `verify_contract` passes an exact-equality one-hot test
-  on those bytes before the graph is emitted, leaving a memcpy-only corruption window); the
-  hardware arm is weak, because 2.85 TiB over 81 cycles found zero errors but covered 32-42 GiB of
-  60.53 GiB, and the ECC/MCE channel **returned no verdict and could not** — EDAC registers zero
-  memory controllers, so that zero is a phantom gate, not a clean read. The host is un-convicted,
-  not cleared. Two candidates are dead by measurement: the parallel leaf build (the firing driver
-  passes no `leaf_build_threads`, so the engine took the fully serial arm) and the concurrency
-  family generally (a race produces whole wrong values, not the same lone exponent bit three
-  times). `F-816-37 dump-on-fire` is in the protected set. Last moved by R341/R342 on the host.
-- **The `supervisor_kill_grace_sec` reading. OWED, one line.** `600.0` was armed on the reading
-  that "only if the supervisor is used" describes when the value takes effect rather than
-  conditioning the change. A one-line re-mint if the operator reads it the other way.
+  `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
+- **`F-816-24` — MINT-BLOCKING, LIVE, no close recorded.** `monitor/supervise.py` constructs a bare
+  `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix packet was
+  ordered; no merge or close is recorded. R291(b); A:2662.
+- **The `supervisor_kill_grace_sec` reading. OWED, one line.** `600.0` was armed on the reading that
+  "only if the supervisor is used" describes when the value takes effect rather than conditioning
+  the change. A one-line re-mint if the operator reads it the other way. A:7718.
 
-`R319(d)` — the gate round that could not finish inside `round_timeout_sec` — is no longer an
-open question. R339(b) adjudicated it BY MEASUREMENT: the geometry does not move, the lever is
-`eval.concurrency`, and the value is picked by a rule run on the box. run6 mints `concurrency: 8`.
+Riding the run rather than holding it: **`F-816-37`**, below.
+
+`R319(d)` — the gate round that could not finish inside `round_timeout_sec` — is no longer open.
+R339(b) adjudicated it BY MEASUREMENT: the geometry does not move, the lever is `eval.concurrency`,
+and the value is picked by a rule run on the box. run6 mints `concurrency: 8`.
+
+## F-816-* findings
+
+| id | subject | status | last moved | cite |
+|---|---|---|---|---|
+| F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) | A:1926 |
+| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | MINT-BLOCKING, LIVE; fix packet ordered, no close | R291(b) | A:2662 |
+| F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) | A:3498 |
+| F-816-34 | vacuous knee band — PICK = 2 from a band widened below every rung | FILED 2026-09-04, never adjudicated | none | A:6739 |
+| F-816-35 | r8 trainer need is a DISTRIBUTION exceeding `_SIZING_BUDGET_GIB` and R330(b)'s 3% | FILED, never adjudicated | none | A:6741 |
+| F-816-36 | an unplayable rung sets every ring's composed visit capacity | FILED, never adjudicated | none | A:6745 |
+| F-816-15 | `freeze_verify.py` red on 39 of 64 paths; audit-before-rebaseline | ORDERED as its own packet, never dispatched | R285(g)/R286(c) | A:3582 |
+| F-816-19 | the run's own process is spawned unparented (PDEATHSIG class) | ORDERED PRE-MINT, no close | R285(h) | A:2533 |
+| F-816-21 | test de-triplication — one stub in three files across two registers | RE-SEQUENCED behind RQ-1; owed inside the freeze packet | R288(d) | R:5058 |
+| F-816-26 | parent/child config binding; a mismatch is a NAMED REFUSAL | RULED, queued behind Q3/Q4 | R306(d) | A:4048 |
+| F-816-28 | preserve BOTH invariants or the primitive does not move | RULED BY PRINCIPLE, queued behind Q3/Q4 | R306(d) | A:4049 |
+| F-816-30 | a skip guard must detect the MECHANISM, never a proxy | RULED; carried by PACKET_CI_RUNTIME, which forwards first | R306(d) | A:4042 |
+| F-816-11 | arena/eval ply cap as an unconfigurable literal | LIVE precondition, discharged IN FACT at HEAD but never closed | R338(d) | A:3444 |
+| F-816-14 | the eval child survives its parent's SIGTERM holding 458 MiB | HALF-OPEN — the SIGKILL leg closed, the SIGTERM leg re-worded as F-Q6-8 | R300(d) | A:2716 |
+| F-816-17 | dead `legal_mask` build | routing RATIFIED AS FILED, no close | R286(f) | A:2592 |
+| F-816-1 | run5 death was a host event with no software error line | no close ever recorded | R268 | A:2287 |
+| F-816-2 | independent card riding the VisitSlotsExceeded packet | CARDED, no close recorded | R274(e) | R:4309 |
+| F-816-4 | thread-leak / process-global-state hazard class | no status ever recorded | R289(s) | R:5034 |
+| F-816-6 | degenerate ply-cap flood, draw_rate 1.000 at bootstrap | MINT-CRITICAL headline, no close recorded | R269 | A:2288 |
+| F-816-8 | `wppre-scratch` branch containment ground | no status recorded | R277(c) | R:4270 |
+| F-R302-1 | trainer-forward OOM; allocator-reservation fragmentation | EXPLAINED, NOT CLOSED — "closes at a standing mint" | R315(a) | A:1827 |
+| F-B1 | parent/child same-file config binding (`config_identity_sha256`) | LIVE as DESIGN input to the F-816-24 packet | R292(c) | A:2683 |
+| F-Q6-1 | the flamegraph tool's own 12.4 GiB orphan (PDEATHSIG family, instrument side) | routed to the carry-over queue, "live until their rows close", not seen since | R300(d) | A:2722 |
+| F-Q6-8 | save-then-exit did not hold under OOM (LAW-16) — the re-worded F-816-14 SIGTERM leg | OPEN; the close-out measurement is filed beside it | R302(d) | A:2718 |
+
+## Named work items
+
+| item | subject | status | last moved |
+|---|---|---|---|
+| STRENGTH-FRONTIER-1 | measures the sims question (50 vs 96) at block end on run6's own frozen checkpoints | ORDERED, waits on block end | R345(d) |
+| GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | ORDERED — lands, stays UNARMED. run6 mints `gumbel_mcts: false` | R345(d) |
+| GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | ORDERED BEFORE THE START — a run that does not write its games cannot be viewed, replayed or mined | R344 |
+| DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge | R344(d) |
+| RUNG-2 | new external rungs — strix first, shrimp second | ORDERED as mid-run work, deferrable but not optional, sequenced AFTER DASH-2; shrimp HELD for an architect read on the R257 radius fence | R344(e) |
+| INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
+| HOT-14 | cross-core ownership explains x1.66 of x6.84 | RE-OPENED when S-PREFUSE was refuted | R336(a) |
+| S-BATTERY-G | eval battery concurrency capability | landed UNARMED; the CUDA arm is OWED at the mint's battery | R336(a) |
+| S-CHECK17 | trainer-step check-17 bar | bar MISSED and BANKED at x1.18 — banked, not tuned toward | R336(a) |
+| PERF-TRANCHE-1 residual | the 7.2% pre-control/ledger disagreement | OPEN as instrument hygiene; ledger absolute levels are not quotable without re-measurement | R320 |
+| PERF-TRANCHE-2 | six items T2-1..T2-6 | EXECUTED — its findings are cited as landed evidence by R335 — but NO ratifying clause exists in either archive file | R334(e) |
+| WP-AXIS2 | Phase 2 axis-graph arch, then a shakedown | LAST ORDERED, NEVER CONFIRMED. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so completion would be an inference, not a record | R335(g) |
+| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | OWED — never forwarded, so the label points at an absent document. R337-class forwarding gap, on the architect's ledger | R345 landing |
+| DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED with no producer at HEAD; drawn as stated gaps, never as zeros | R334(a) |
+| R317(c)(ii) diagnostic | move-sequence-hash diagnostic | accepted as NON-BLOCKING DEBT, never shipped | R318 |
+| AUDIT-1 P10 | lane-C design input, explicitly "not a packet" | still the architect's, undispatched | R331(d) |
 
 ## Owed texts and values
 
-- **R267 — TEXT OWED.** No register section exists. The only surviving record is a STATE digest
-  line ("eval posture mechanism inert, values operator"). Deliberately NOT reconstructed: a digest
-  line is not the ruling. It is to be filled from the exported transcript, and it sits on the
-  operator's residue list.
-- **R147 / `eval.random_floor_games` on run5 — VALUE OPERATOR-OWED, BLOCKING until valued.**
-  `configs/run5.yaml` still carries `random_floor_games: 0`. It is an armed value, therefore
-  mint-prereg only, so no dispatcher may touch it — the config being "wrong" and staying untouched
-  is correct behaviour, on the record. run6 is unaffected: it mints `20`.
+- **R227, R228, R267 — TEXTS OWED, operator residue.** ADJ-D2 covers R227/R228 and directs that
+  they are NOT filled agent-side; it is load-bearing because it discharges R56/R133/R138. R267 has
+  no section at all — the only record is a STATE digest line, deliberately not reconstructed
+  because a digest line is not the ruling. A:1367, A:3732.
+- **run5 prereg values — OPERATOR-OWED, BLOCKING until valued.** R137 leg (b)
+  `checkpoint_interval`, and R147 `eval.random_floor_games`, which `configs/run5.yaml` still mints
+  at `0`. Both are armed values, therefore mint-prereg only — no dispatcher may touch them, and the
+  config staying untouched is correct behaviour on the record. run6 is unaffected: it mints `20`.
 - **R226 / R229 / R243 — prereg rows owed:** two flagged at dispatch 8C, three 8B findings.
 - **R245(c) — the LAW-18 augmentation-group counter is OWED.** The per-record losslessness gate
   landed; the in-run fire-rate counter beside it did not.
 
-## Carded work with no date
+## CARD-* named in governance
 
-- **STRENGTH-FRONTIER-1** — measures the sims question at block end on run6's own frozen
-  checkpoints. Ordered by R345, sequenced after the block.
-- **GUMBEL-REPAIR-1** — lands to Mctx invariants during the block but is **enabled in no run**
-  until the frontier compares it at equal NN work. run6 mints `gumbel_mcts: false`. Ordered by R345.
-- **GAME-RECORD-1** — every game written from step 0, one record per game with the move list in
-  axial coordinates, append-only length-delimited msgpack shards, no new hard dependency. Ordered
-  by R344 BEFORE the start, on the ground that a run which does not write its games cannot be
-  viewed, replayed or mined.
-- **DASH-2** — `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the
-  game viewer, loopback by default. Ordered by R344, design decided in the packet.
-- **RUNG-2** — sequenced behind DASH-2; strix first, shrimp held for an architect read on R257's
-  radius fence.
-- **The promotion-interval split** — R344 confirmed 1000 on both channels and R345 re-ruled the
-  cadence on arithmetic (`eval_interval` 1000, `gate.stride` 3). The split itself stays carded.
-- **INCR-GRAPH** — incremental axis-graph construction from the parent position. A CANDIDATE, not a
-  plan: registered as the neighbour F-19's grave explicitly does NOT cover, gated on a Rust-criterion
-  box measurement, with its falsifier pre-registered as F-19's own inequality
-  (`delta_cost x depth < build_cost`). See `docs/governance/falsified.md`, F-19's scope annotation.
-- **The rest of AUDIT-2** — R345 carded everything it did not rule, each item with its priority,
-  rather than adopting the audit wholesale. KLENT's search-free Shrimp target was REFUSED BY NAME,
-  because it trusts an action-Q head this repo does not train.
+| card | subject | status |
+|---|---|---|
+| CARD-RUN5-GPU-OOM | GPU-OOM defect CLASS; the site set now includes the GNN training forward | OPEN as a class. Instance F-816-12 closed at the joint mint; the class row never closed. ANNOTATION 4 / R302(c) rider |
+| CARD-CLEANSTOP-SAVE leg (b) | the `checkpoint_interval` prereg row (leg (a) discharged) | LIVE, pinned to the operator's prereg batch. AMBIGUOUS: run6 mints `checkpoint_interval: 1000` and the derived index was never updated |
+| CARD-RESUME-LAUNCHER-FLAG | supervisor auto-resume / `--resume-from` launcher surface | OPEN — declared NOT BUILT on a CONTRACT, not a time-box; three admissible shapes carded |
+| CARD-EVAL-CHANNEL-SPLIT | split the promotion and external eval cadences | OPEN, narrowed. R343(b)(v)'s conditional FIRED; R345(c) moved `gate.stride` to 3 and ledgered "the split that was already a key" |
+| CARD-PROTOCOL-COMPLETE | complete protocol declarations, widen the AST conformance gate, LAW-16 sink/watchdog row | OPEN, pre-cutover, NOT mint-blocking |
+| CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | OPEN — pre-Stage-0 BLOCKING, not mint-blocking |
+| CARD-LINT-TYPE | ruff/pyright advisory type-debt backlog | OPEN debt row, deliberately kept out of the gate by R98 |
+| CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker at `pyproject.toml:92` |
+| CARD-MAXPLIES | `_DEFAULT_MAX_PLIES` schema promotion | OPEN in governance, CLOSED IN CODE — the symbol is gone and `max_plies` derives from `selfplay.max_game_moves` |
+| CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
+| CARD-THREAT-PROBE | the LAW-10 threat probe is absent | OPEN — owed pre-Stage-0, not mint-blocking. Reinforced by LAW-10's R345(e) annotation: this lineage has no threat head |
+| CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
+| CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
+| CARD-SEALBOT-BRANCHES | evaluate ramora0 branches (nnue) as a higher ladder rung | DEFERRED, not mint-relevant |
+| CARD-MINPIN | the K-cluster min/max asymmetry, pending the matched-FLOP dense arm | PARTIAL — the parity pin landed; the asymmetry stays a flagged defect. See falsified.md F-04 |
+| CARD-CHECK14-EDGE-GEOMETRY | the `verify_edge_geometry` collate check ("check 14", NOT CI gate 14) | NO STATUS EVER RULED. R336(e) separately CARDS check 14's 41.4 ms/part, not ordered |
+| CARD-FRESHSYNC | gate 1 fresh-clone sync broken since WP7 | OPEN in governance, REPAIRED IN CODE — the gate pins `registry_sha_hex()` and describes the failure in the past tense |
 
-## Audit findings still open
+## CARD-* that exist only as in-source markers
 
-`F-<number>` is NOT one namespace. **Five different registers use it**, so every citation must
-name which: the graves in `docs/governance/falsified.md` (`F-01`..`F-43`, which are graves and
-never cards); AUDIT-1's 52 findings; the session ledger's; a perf-ledger `F-10` corrected by R320;
-and R246's cross-language-parity `F-01`/`F-02`. Three distinct `F-10`s exist, and unpadded
-`F-1`..`F-6` are ADJ-13 / RED-TEAM findings closed as a class by R71/R72 — they do NOT mean
-`F-01`..`F-06`.
+Zero governance mentions; their status comes from the code, not from a ruling.
 
-- **F-39 (AUDIT-1) — REGISTERED, not banked.** 34 bridge-signature defaults shadow config keys;
-  what shipped is an enumerated `REGISTERED_DEBT` that reds in both directions. Accepted R333(a).
-- **F-11 (AUDIT-1) — disk-guard arming. STATUS UNCONFIRMED.** R334(b) armed shape A and ordered it
-  to LAND BEFORE THE MINT. run6 was minted at R339 and no record says it landed. The row needs a
-  reading against the tree before anyone treats it as done.
-- **F-51 (AUDIT-1) — never disposed.** Cited as evidence for the per-tranche candidate mechanism
-  (HOT-04 / HOT-11 / HOT-14) in R334(e)'s landing note; no clause ever rules on it.
-- **F-42 (AUDIT-1) — banked at the REPAIR-2 exit, bank accepted, no movement since.**
-- **F-10 / F-10b (session ledger) — a box run wedged at step 12. OPEN but scoped away from run6:**
+- `CARD-BUDGET-AUTHORITY-CONSOLIDATION` — the second `_SIZING_BUDGET_*` authority; filed as debt by
+  R327(d). `tests/train/test_graph_microbatch_authority.py`
+- `CARD-GAME-RECORD-SELFPLAY-STATS` — per-position self-play stats are un-associable to a game
+  without a hot-drain engine act (LAW-09). `src/mantis/monitor/game_record.py`
+- `CARD-CONFIG-DISCOVERY-ROOT` — config discovery root for every `--config` route.
+  `src/mantis/config/loader.py`
+- `CARD-EXEMPT-CONFIGS-OPERATOR-CONFIRM` — awaits a ruling. `src/mantis/config/armed_aborts.py`
+- `CARD-MINT-RESOLVE-PARENT-CONJUNCT` — the `max(learners) >= 1` mint-resolve conjunct.
+  `tests/config/test_mint_and_diff.py`
+- `CARD-PREFLIGHT-ORACLE-OUTDIR-CLEANUP` — oracle out-dir cleanup. `tests/tools/conftest.py`
+- `CARD-DESIGN-P-3.4-ORDERING` — status unknown. `tools/ci_gates/preflight_mint.py`
+
+## RQ-*
+
+- **RQ-5** — an independent cross-model review of the `freeze_verify` mission diff. ORDERED
+  findings-only, unexecuted. R289(c).
+- **RQ-7** — `supervisor_kill_grace_sec`. SPLIT; the VALUE is a prereg row and is operator-owed.
+- **RQ-8** — `MonitorConfig` schema-resident defaults. ESCALATED into F-816-24, above.
+- **RQ-16** — dead-transfer field removals (`node_coords` plus four TEST-ONLY LAW-08 rows).
+  DISPOSITIONED PER FIELD, one commit per field, execution pending on the hygiene packet.
+- **RQ-18** — the compiled-arm parity criterion, four legs with `k` pre-registered. Criterion
+  RULED; the MEASUREMENT is open and is an architect/box item.
+- **RQ-21** — `freeze_verify` becomes CI GATE 18. MINTED and RULED; **the wiring is OPEN — no
+  gate-18 script exists in `tools/ci_gates/`.**
+- **RQ-22** — whether freeze row 30 should be frozen at all. MINTED; evaluation open.
+- **RQ-2, RQ-14** — UNDETERMINED. Their dispositions live in an off-repo batch document; RQ-2
+  appears only inside the string "RQ-2..19" and RQ-14 has zero occurrences.
+
+## ADJ-*
+
+- **ADJ-D2** — the missing R227/R228 texts. OWED, operator, do NOT fill agent-side.
+- **ADJ-12** — no disposition anywhere; cited only as "the ADJ-12/13 lesson made law".
+- **ADJ-WP12R-18** — the requeue of ADJ-WP12R-11's contradicting oracle evidence. NO RECORDED
+  RESOLUTION; exactly one occurrence in the whole corpus.
+
+Every other ADJ row resolves to a numbered ruling.
+
+## AUDIT-1 and session-ledger findings still open
+
+- **F-39 (AUDIT-1)** — 34 bridge-signature defaults shadow config keys. REGISTERED, not banked:
+  what shipped is an enumerated `REGISTERED_DEBT` that reds in both directions. R333(a).
+- **F-11 (AUDIT-1)** — disk-guard arming, shape A plus `poll_once` age. Armed and ordered to LAND
+  BEFORE THE MINT; run6 was minted at R339 and **neither archive file records that it landed.**
+  This needs a reading against the tree before anyone treats it as done. R334(b).
+- **F-51 (AUDIT-1)** — supplies the candidate mechanism per tranche item (HOT-04 / HOT-11 /
+  HOT-14). Cited as evidence only; no clause ever disposes it. R334(e).
+- **F-42 (AUDIT-1)** — the one-owner axis table. BANKED at the REPAIR-2 exit, bank accepted, no
+  movement since. R333(a).
+- **F-10 / F-10b (session ledger)** — a box run wedged at step 12. OPEN, but SCOPED AWAY from run6:
   the wedge is on `gnn_axis_v1` and run6 mints `gnn_axis_r8`. No ruling has closed it.
-- **F-Q6-1 — the flamegraph tool's own 12.4 GiB orphan.** Marked live until its row closes, routed
-  to the carry-over queue by R300(d), and not seen since.
-- **WP-AXIS2 — last ordered, never confirmed.** It appears last at R335(g) as the step between the
-  mint launcher and run6. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so
-  "absorbed" would be an inference. Recorded as unconfirmed rather than closed.
 
-## How this list was derived, and its one known limit
+## Q-C*
 
-Built at R346 from the archive's LIVE-marked rows, the last two curation entries, and the ruling
-entries in `docs/governance/RULINGS.md`, then checked against the tree for every value it names.
+**None open.** Q-C0 through Q-C10 are all ruled or closed, and Q-C6/Q-C7/Q-C8 never existed. One
+stale line survives in the archive at A:3901, still reading "Q-C1..Q-C4 are OPEN at the queue
+foot" — superseded by R304 and never stamped the way the archive's §7 stamps its superseded rows.
+It is recorded here so nobody re-opens four closed questions from it.
 
-**The limit, stated rather than hidden:** the archive's live-force section was never extended past
-R337 — R338, R339, R340, R344 and R345 have no row there, and R341(e) and R343(f) still sit in it
-marked LIVE carrying terms (a 750-step cadence, a 12 h block) that R343(b) and R344 have already
-superseded. So a card list built by walking that section alone would miss the newest holds and
-carry two dead ones. The cards above for R338 onward come from the ruling entries instead. Anyone
-extending this file should do the same, and should not treat the frozen archive as a live queue.
+## How this list was derived, and what it cannot cover
+
+Built at R346 from the archive's live-marked rows, its curation log, the ruling entries in
+`docs/governance/RULINGS.md`, and an in-source sweep for `CARD-` markers, then checked against the
+tree for every value it names.
+
+Two limits, stated rather than hidden:
+
+1. **The archive's live-force section was never extended past R337.** R338, R339, R340, R344 and
+   R345 have no row there, and R341(e) and R343(f) still sit in it marked LIVE carrying terms (a
+   750-step cadence, a 12 h block) that R343(b) and R344 have already superseded. A card list built
+   by walking that section alone would miss the newest holds and carry two dead ones. Everything
+   above from R338 onward came from the ruling entries instead.
+2. **AUDIT-2's own card list is not in this repository.** R345 says "everything else in AUDIT-2 is
+   CARDED with its priority", but that list travelled in the packet and the analysis text was never
+   forwarded — the `AUDIT-2 filing` row above is exactly that gap. **An unknown number of AUDIT-2
+   cards therefore cannot be enumerated from these sources.** This file is not complete, and it
+   will not be until that text lands.
