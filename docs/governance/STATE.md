@@ -120,6 +120,29 @@ The tree won every one of these. They are recorded so a reader of
 - Gate/test figures: the archive's last entry records `dev` at `7561169` with a 5 008-test default
   tier. The floor file at HEAD reads `5081`, and `dev` has moved past that commit.
 
+## Exit facts — R346 (CLEANUP ERA), 2026-09-09
+
+- Governance moved to `docs/governance/`: `LAWS.md`, `STATE.md`, `RULINGS.md`, `CARDS.md`,
+  `falsified.md`. `docs/registers/` is dissolved.
+- The old register, the ACTIVE index and the pre-R346 `laws.md` are frozen under
+  `docs/governance/archive/` behind one README, with no tooling. `git mv` was used, so history
+  follows all four files.
+- Census, stamp, mirror and sync tooling: **nothing to delete.** None of it was ever in this
+  repository — it lived in the migration workspace. The only trace is a comment in
+  `tools/ci_gates/tier_census.py` naming two tools that do not exist here (carded).
+- Sitting records and `plan/`: never tracked here. Nothing moved, nothing is missing.
+- `falsified.md` de-duplication: no repeated entry existed, so no row was removed.
+- `RULINGS.md` carries 322 entries over 321 numbers, R23 to R345, plus 20 register annotations.
+  R227 and R228 have no entry, both on operator direction.
+- The CLEANUP ERA ruling is **R346**, derived as max + 1 from the archive's own census
+  (`R23-R345, 316 sections, 316 distinct numbers`) and confirmed by a whole-tree grep: `R346`
+  appeared nowhere before this branch.
+- Gate set: **unchanged.** No gate was added, renumbered or repurposed. Gate 17 in this repo is
+  `tools/ci_gates/rule7_gate.py` (rule-7 host content), not a governance gate, and it stays.
+- Gates run on this branch: 6 (artifact) green, 17 (rule 7) green, **10 (tracked refs) RED** on
+  five CLAUDE.md lines that still name `docs/registers/`. See CARDS.md — this is the one
+  blocking item and only the operator can clear it.
+
 ## Provenance
 
 Derived 2026-09-09 on branch `gov-1`, from `configs/run6.yaml`,
