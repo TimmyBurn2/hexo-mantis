@@ -937,9 +937,10 @@ class.** Recorded here rather than left as silent drift (R9).
 
 ## 12. Strength-claim + eval discipline
 
-- Deploy-matched eval (PUCT with transformed-Q root selection — R345(e); the tree is PUCT
-  and no Sequential Halving runs) is the DEFAULT promotion bar; a
-  missing deploy decision blocks promotion, never falls back to a proxy regime.
+- Deploy-matched eval is the DEFAULT promotion bar; a missing deploy decision blocks
+  promotion, never falls back to a proxy regime. **The bar runs the RUN'S OWN SEARCH** —
+  see the `search.kind` amendment at the foot of this file; the PUCT-with-transformed-Q-root
+  hybrid this row used to describe is deleted.
 - Strength claims ship protocol + n + eff_n (distinct games by trajectory hash) +
   per-side compute. Opening books are versioned, sha-pinned, paired; CI on pairs is a
   bootstrap percentile.
@@ -1017,3 +1018,50 @@ it, rather than as an eleventh doc nobody's index names (R9).
 5. **§1's "deliberately absent" list does NOT move.** No display surface is admitted here. The
    game VIEWER R344(d) orders is a separate act that owes its own amendment, and this one does
    not pre-authorise it.
+
+---
+
+### AMENDMENT — `search.kind`: ONE search regime, read by ONE selector
+
+**GUMBEL-2, wave 1.** §2's Rust DAG row for `mantis-search` says *"MCTS (PUCT + Gumbel)"* and
+§12 described the promotion bar as *"PUCT with transformed-Q root selection … the tree is
+PUCT and no Sequential Halving runs"*. Both moved. Under R9 that lands as an amendment in the
+commit that moves them, rather than as drift.
+
+1. **The regime is one key in its own top-level section.** `search.kind ∈ {puct, gumbel}`
+   REPLACES four leaves, all deleted: `selfplay.gumbel_mcts`, `selfplay.gumbel_variant`,
+   `selfplay.completed_q_values` and `train.completed_q_values`. A fifth,
+   `selfplay.gumbel_root_counts`, is deleted without replacement — the root's own evaluation
+   is charged against `n_simulations` on both arms, structurally, so `N` means `N leaves` and
+   no config can falsify a fixed-node claim. In Rust the key is ONE closed `SearchKind` enum
+   with no `Default`. Contract #5 moves v17 → v18; `docs/contracts/run_config_schema.md`
+   carries the row, and unlike this file's two earlier bumps the doc half is NOT deferred.
+
+2. **`search` is TOP-LEVEL and not a `selfplay` key**, for `eval_enabled`'s recorded grounds:
+   it is a root-composition fact spanning more than one section's surface. Self-play searches
+   with it and `mantis.arena.deploy_head` searches with it, and LAW-15's deploy-matched claim
+   is precisely that the two are the SAME search.
+
+3. **The deploy hybrid is deleted.** `DeployHeadPlayer` ran a PUCT tree whose ROOT pick was
+   the Gumbel scoring function with its noise term set to zero — a third algorithm that
+   appeared in no config, so the bar was matched to nothing. It now takes `search_kind` as a
+   REQUIRED argument, hands it to the SAME `MCTSTree::configure_search` the worker calls, and
+   plays each kind's own move rule: the most-visited child under `puct`, Sequential Halving's
+   answer under `gumbel`. Its Gumbel draw is SEEDED, so the bar stays a reproducible
+   instrument (LAW-15). `mantis.config.resolve.resolve_search_kind` is the ONE selector both
+   sides read, and `tests/eval/test_search_kind_is_one_selector.py` is the source census that
+   a second reader cannot pass.
+
+4. **§2's DAG row reads the same and means something narrower.** `mantis-search` still
+   carries PUCT and Gumbel; what is gone is the third arm and the lattice of flags. No crate
+   moves, no import edge changes, and `pyo3` still lives only in the bridge.
+
+5. **STANDING BLOCKER, recorded here because it is the reason a clause of the ruling could
+   not land.** `search.kind: gumbel` on the GRAPH representation is refused at MINT and at
+   BOOT by `replay::hexg::derived_visit_capacity`: that kind exports the completed-Q improved
+   policy over the FULL legal set, so a row's support is the legal set — which is NOT a
+   constant (355 median, 8 142 maximum at radius 8) and which no sims regime bounds, while
+   the HEXG record's visit slot is derived from the sims regime. The graph lineage therefore
+   cannot record a completed-Q target today. Closing it needs a MINTED visit-slot bound and a
+   ruling on what a row that overruns it does; the ring cost is the subject (at 8 bytes a
+   slot, 8 192 slots is ~65 KB per row against today's ~252 B).
