@@ -25,6 +25,7 @@ pub mod dirichlet;
 pub mod gumbel;
 pub mod node;
 pub mod policy;
+pub mod seq_halving;
 mod selection;
 
 pub use backup::{

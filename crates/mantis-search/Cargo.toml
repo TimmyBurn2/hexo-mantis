@@ -25,6 +25,9 @@ rand_distr = "0.6"
 # OFF for `cargo build -p mantis-search` (the lib never references from_stones).
 mantis-core = { path = "../mantis-core", features = ["test-fixtures"] }
 criterion = { workspace = true }
+# Reads the frozen Mctx parity fixture. TEST-ONLY: the shipped crate has no JSON
+# surface and this edge never reaches the wasm target or the bridge.
+serde_json = "1"
 
 [[bench]]
 name = "mcts_bench"

@@ -422,3 +422,10 @@ added_by = "SEAM-B2"
 path = "value_targets/lambda_return_golden_v1.json"
 sha256 = "f3b26261fad685c253799f653eea03c54bcf30ca04c515cbe90a0fca02f3925f"
 added_by = "SEAM-B2"
+
+[[required]]
+# Minted by running google-deepmind/mctx itself (tools/gen_mctx_parity_fixtures.py).
+# jax/mctx are deliberately not repo dependencies — the fixture is the artefact.
+path = "mctx_parity/mctx_parity_v1.json"
+sha256 = "7359118514a079fa0cc0f8c7886c60fb0f182eaed745b7163b0e54f9d23120fb"
+added_by = "GUMBEL-REPAIR-1"
