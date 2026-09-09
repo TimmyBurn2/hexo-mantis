@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis._engine import SelfPlayRunnerConfig
+from mantis.config.resolve.search import resolve_search_kind
 from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
 
@@ -261,7 +262,10 @@ class SelfPlayHParams:
             inference_pool_size=(
                 int(sp["inference_pool_size"]) if sp["inference_pool_size"] is not None else None
             ),
-            search_kind=str(config["search"]["kind"]),
+            # THE ONE SELECTOR (R1/LAW-15). `mantis.run` hands the SAME function's answer
+            # to `build_eval_pipeline`, so the deploy-matched bar and the workers cannot
+            # be reading two call sites that happen to agree.
+            search_kind=resolve_search_kind(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
             gumbel_m=int(sp["gumbel_m"]),

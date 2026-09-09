@@ -29,6 +29,7 @@ import pytest
 
 from mantis import _engine
 from mantis.encoding import lookup
+from mantis.config.resolve.search import MissingSearchKindError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.hparams import (
@@ -334,9 +335,11 @@ def test_search_kind_property_reads_live_config() -> None:
 
     # NO FALLBACK. A pool that cannot say which search it ran must raise rather than
     # answer "puct" — the emitter gates PUCT-only diagnostics on this, and a default
-    # would publish descent-rule statistics for a descent that never happened.
+    # would publish descent-rule statistics for a descent that never happened. The refusal
+    # is the RESOLVER's, which is the point: the pool reads the one selector rather than
+    # the mapping, so it cannot grow a fallback of its own.
     holder.config = {}
-    with pytest.raises(KeyError):
+    with pytest.raises(MissingSearchKindError):
         _ = holder.search_kind
 
     hp = SelfPlayHParams.from_config(cfg(search={"kind": "gumbel"}))

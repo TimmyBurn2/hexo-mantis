@@ -151,6 +151,12 @@ fn a_gumbel_round_is_one_round_trip_and_its_width_is_the_halving_phase() {
     );
 
     let mean = leaves as f64 / rounds as f64;
+    // Printed, not merely asserted: the QUANTITY is what a re-mint reads, and a witness that
+    // only says "in band" cannot be quoted (LAW-01, measurement mandatory).
+    println!(
+        "gumbel round width at {N_SIMS}/{GUMBEL_M}: {leaves} leaves over {rounds} round \
+         trips = {mean:.3} leaves per round trip"
+    );
 
     // THE HARD CEILING is structural: no round can be wider than the candidate set.
     assert!(

@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
+from mantis.config.resolve.search import resolve_search_kind
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
     SelfPlayHParams,
@@ -296,10 +297,11 @@ class WorkerPool:
         flipped after construction.
 
         Raises:
-            KeyError: the config carries no `search.kind`. NOT defaulted (R1/LAW-11): a
-                pool that cannot say which search it ran must not answer "puct".
+            MissingSearchKindError: the config carries no `search.kind`, or carries one this
+                build does not implement. NOT defaulted (R1/LAW-11): a pool that cannot say
+                which search it ran must not answer "puct".
         """
-        return str(self.config["search"]["kind"])
+        return resolve_search_kind(self.config)
 
     @property
     def avg_game_length(self) -> float | None:

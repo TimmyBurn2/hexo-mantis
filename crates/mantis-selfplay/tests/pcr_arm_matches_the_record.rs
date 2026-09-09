@@ -143,6 +143,12 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
 
 fn assert_pcr(kind: SearchKind) {
     let d = drive(kind, 8);
+    // Printed, not merely asserted: the QUANTITIES are what a re-mint reads, and a witness
+    // that only says "consistent" cannot be quoted (LAW-01, measurement mandatory).
+    println!(
+        "{kind:?}: drew full={} quick={}; recorded full={} quick={} (max sims/search {})",
+        d.pcr_full, d.pcr_quick, d.full_rows, d.quick_rows, d.max_sims
+    );
 
     // (0) THE DRIVE IS ONE ROW PER MOVE, derived rather than assumed: at this ply cap every
     // recorded position expands into exactly ONE cluster view, so a row IS a move and the
