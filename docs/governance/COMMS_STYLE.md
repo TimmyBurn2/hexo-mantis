@@ -1,8 +1,10 @@
-MIRROR — no redaction was needed. Canonical: mantis-migration/plan/COMMS_STYLE.md @ eb63331, regenerated 2026-09-08.
-NOT the authoritative text; never edit here; edits land in mantis-migration.
-<!-- END MIRROR HEADER -->
-
 # COMMS_STYLE — how we report and write (R311(e))
+
+Repaired in place under R311(c): the mirror header this file used to carry said the
+authoritative text lived in `mantis-migration` and must never be edited here. R346 ended the
+mirror — this repo is the one repo — so this file is now the authoritative COMMS_STYLE and is
+edited here like any other governance doc.
+
 1. Reports to the operator: one screen, plain language, short sentences. Say what
    happened, what it means, what is needed. No jargon unless the jargon IS the fact.
 2. Full detail lives on disk next to the work. Point to it; never paste it.
