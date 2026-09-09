@@ -23,6 +23,7 @@ mod backup;
 mod completed_q;
 pub mod dirichlet;
 pub mod gumbel;
+pub mod gumbel_mctx;
 pub mod node;
 pub mod policy;
 pub mod seq_halving;
@@ -31,6 +32,8 @@ mod selection;
 pub use backup::{
     omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
 };
+pub use gumbel::GumbelVariant;
+pub use gumbel_mctx::MctxRootState;
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use selection::{ForcedChildOutOfRange, SelectionDesync};
 
@@ -118,6 +121,18 @@ pub struct MCTSTree {
     /// Atomic (not Cell) because the FFI layer wraps MCTSTree in a Send+Sync
     /// handle in the bridge crate; Cell is `!Sync` and would break that bound.
     pub quiescence_fire_count: AtomicU64,
+    /// Which Gumbel dialect this tree's completed-Q surfaces follow. Set once per
+    /// worker (`configure_gumbel`), never per search. `Legacy` leaves every
+    /// completed-Q surface byte-identical to the shipped arm.
+    pub(crate) gumbel_variant: GumbelVariant,
+    /// The value BACKED UP at root expansion — Mctx's `tree.raw_values[root]`,
+    /// the network's own estimate for the root before any child statistic entered
+    /// it. Held apart from `w_value / n_visits`, which is the running mean.
+    ///
+    /// Post-quiescence, i.e. the value the search actually started from: the
+    /// children's Q are built from quiescence-corrected values too, so completing
+    /// them against an uncorrected root would mix two scales.
+    pub(crate) root_raw_value: f32,
 }
 
 impl MCTSTree {
@@ -146,6 +161,8 @@ impl MCTSTree {
             quiescence_blend_2: 0.3,
             forced_root_child: None,
             quiescence_fire_count: AtomicU64::new(0),
+            gumbel_variant: GumbelVariant::Legacy,
+            root_raw_value: 0.0,
         }
     }
 
@@ -164,6 +181,7 @@ impl MCTSTree {
         self.sim_count = 0;
         self.quiescence_fire_count.store(0, Ordering::Relaxed);
         self.forced_root_child = None;
+        self.root_raw_value = 0.0;
         // Clear TT between games — positions don't repeat across games and
         // Vec<f32> policy entries accumulate unboundedly without this.
         self.transposition_table.clear();
@@ -218,6 +236,25 @@ impl MCTSTree {
     pub fn configure_quiescence(&mut self, enabled: bool, blend_2: f32) {
         self.quiescence_enabled = enabled;
         self.quiescence_blend_2 = blend_2;
+    }
+
+    /// Select the Gumbel dialect once per worker. Pure state set — no search logic.
+    /// Survives `new_game`, which resets per-game state and not per-worker config.
+    pub fn configure_gumbel(&mut self, variant: GumbelVariant) {
+        self.gumbel_variant = variant;
+    }
+
+    /// The dialect this tree runs.
+    #[must_use]
+    pub fn gumbel_variant(&self) -> GumbelVariant {
+        self.gumbel_variant
+    }
+
+    /// The value backed up at root expansion (Mctx's `raw_values[root]`), or 0.0
+    /// when the root has not been expanded this game.
+    #[must_use]
+    pub fn root_raw_value(&self) -> f32 {
+        self.root_raw_value
     }
 
     pub fn reset(&mut self) {
@@ -325,3 +362,7 @@ mod tests;
 // Completed-Q golden byte-identity harness (completed-Q sites S1/S2/S3/S4).
 #[cfg(test)]
 mod golden_tests;
+
+// Mctx parity for the completed-Q math (GUMBEL-REPAIR-1).
+#[cfg(test)]
+mod parity_tests;

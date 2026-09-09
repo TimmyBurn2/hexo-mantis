@@ -17,6 +17,7 @@
 //!      assert Default's values are "the" defaults; it asserts the opposite — a
 //!      bare `Default` is not a usable config authority (LAW-11).
 
+use mantis_search::GumbelVariant;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 /// f32 approx-equality (dodges `clippy::float_cmp`; exact for a literal round-trip).
@@ -53,6 +54,8 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         gumbel_mcts: true,
         gumbel_m: 12,
         gumbel_explore_moves: 7,
+        gumbel_variant: GumbelVariant::Mctx,
+        gumbel_root_counts: false,
         dirichlet_alpha: 0.4,
         dirichlet_epsilon: 0.3,
         dirichlet_enabled: false,
@@ -112,6 +115,8 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         gumbel_mcts,
         gumbel_m,
         gumbel_explore_moves,
+        gumbel_variant,
+        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         dirichlet_enabled,
@@ -159,6 +164,8 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert!(gumbel_mcts);
     assert_eq!(gumbel_m, 12);
     assert_eq!(gumbel_explore_moves, 7);
+    assert_eq!(gumbel_variant, GumbelVariant::Mctx);
+    assert!(!gumbel_root_counts);
     assert!(feq(dirichlet_alpha, 0.4));
     assert!(feq(dirichlet_epsilon, 0.3));
     assert!(!dirichlet_enabled);

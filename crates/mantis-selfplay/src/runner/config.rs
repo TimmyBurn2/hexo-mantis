@@ -22,6 +22,8 @@
 //! defaults are forbidden). P-01 pins that no field is dropped/mismerged and
 //! that the radius-jitter field is absent.
 
+use mantis_search::GumbelVariant;
+
 /// Configuration for [`super::SelfPlayRunner`] — native (pyo3-free) fold of the
 /// pre-cycle-3 kwarg constructor surface, MINUS the killed knobs (D7/D10) and the
 /// caller-supplied shape overrides (C-1).
@@ -61,6 +63,11 @@ pub struct SelfPlayRunnerConfig {
     pub gumbel_mcts: bool,
     pub gumbel_m: usize,
     pub gumbel_explore_moves: usize,
+    /// Which Gumbel dialect the workers run (`selfplay.gumbel_variant`).
+    pub gumbel_variant: GumbelVariant,
+    /// Whether the root's own evaluation is charged against `n_simulations`
+    /// (`selfplay.gumbel_root_counts`). `true` is the shipped behaviour.
+    pub gumbel_root_counts: bool,
     pub dirichlet_alpha: f32,
     pub dirichlet_epsilon: f32,
     pub dirichlet_enabled: bool,
@@ -130,6 +137,8 @@ impl Default for SelfPlayRunnerConfig {
             gumbel_mcts: false,
             gumbel_m: 16,
             gumbel_explore_moves: 10,
+            gumbel_variant: GumbelVariant::Legacy,
+            gumbel_root_counts: true,
             dirichlet_alpha: 0.3,
             dirichlet_epsilon: 0.25,
             dirichlet_enabled: true,

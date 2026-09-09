@@ -268,6 +268,14 @@ CONSUMER_REGISTRY = {
     "selfplay.gumbel_mcts": "SelfPlayHParams.from_config -> runner gumbel_mcts + WorkerPool.gumbel_mcts",
     "selfplay.gumbel_m": "SelfPlayHParams.from_config -> runner gumbel_m",
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
+    "selfplay.gumbel_variant": (
+        "SelfPlayHParams.from_config -> cfg.gumbel_variant setter -> SearchFlags.gumbel_variant "
+        "-> MCTSTree::configure_gumbel"
+    ),
+    "selfplay.gumbel_root_counts": (
+        "SelfPlayHParams.from_config -> cfg.gumbel_root_counts setter -> "
+        "MovePlayContext.gumbel_root_counts -> run_mcts_search root charge"
+    ),
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
     "selfplay.rotation_enabled": "SelfPlayHParams.from_config -> runner selfplay_rotation_enabled",

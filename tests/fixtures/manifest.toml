@@ -302,7 +302,12 @@ added_by = "WP-SP"
 
 [[required]]
 path = "selfplay/pool/runner_config_goldens.json"
-sha256 = "da140cfea28b50405f2a02603427ecc29cc6d4078897422a0ce9d12c6e28fb0d"
+# Re-cut by GUMBEL-REPAIR-1: `selfplay.gumbel_variant` / `gumbel_root_counts` are REQUIRED
+# schema leaves, so the captured input config must carry them or `from_config` cannot read
+# it. The precedent is this file's own history — the selfplay-schema landing amended it the
+# same way. `full_config` carries the NON-shipped values ("mctx", false) so the golden proves
+# the wire carries the VALUE rather than that a default coincided.
+sha256 = "3a5913050815540838f151539579921d7c04387f52bdced4014ef8d54f546da1"
 added_by = "WP-SP"
 
 [[required]]

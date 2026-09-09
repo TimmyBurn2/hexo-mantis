@@ -198,6 +198,8 @@ impl SelfPlayRunner {
                 quiescence_enabled: c.quiescence_enabled,
                 completed_q_values: c.completed_q_values,
                 gumbel_mcts: c.gumbel_mcts,
+                gumbel_variant: c.gumbel_variant,
+                gumbel_root_counts: c.gumbel_root_counts,
             },
             exploration_flags: ExplorationFlags {
                 dirichlet_enabled: c.dirichlet_enabled,

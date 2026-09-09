@@ -1,3 +1,9 @@
+// R8 justify: one claim — "a search serves the budget its config states" — measured
+// through ONE real `SelfPlayRunner` drive. The PUCT arms, the legacy Gumbel arm's pinned
+// undershoot and the corrected arm's exact consumption are the same property read on
+// three dialects, and they share the counting producer that is the measurement itself:
+// split them and the numbers stop being comparable, which is the whole point of keeping
+// the legacy 49-of-50 pin beside the corrected 50-of-50.
 //! ⊕ R335(c) — a search serves EXACTLY `n_simulations` leaves, never more.
 //!
 //! THE FINDING THIS EXISTS FOR. `PERF_TRANCHE2_RESULTS.md` §7/§20 measured **53.46 served
@@ -49,6 +55,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
+use mantis_search::GumbelVariant;
 use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
@@ -74,7 +81,12 @@ fn spawn_counting_producer(
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
@@ -98,6 +110,29 @@ fn drive(
     want_records: usize,
     gumbel_mcts: bool,
 ) -> (usize, usize, u64) {
+    drive_dialect(
+        encoding,
+        n_simulations,
+        ply_cap,
+        want_records,
+        gumbel_mcts,
+        GumbelVariant::Legacy,
+        true,
+    )
+}
+
+/// `drive`, with the Gumbel dialect and the root charge stated. The legacy arms above
+/// pass the SHIPPED pair so every pre-existing pin measures what it always measured.
+#[allow(clippy::fn_params_excessive_bools)]
+fn drive_dialect(
+    encoding: &str,
+    n_simulations: usize,
+    ply_cap: usize,
+    want_records: usize,
+    gumbel_mcts: bool,
+    gumbel_variant: GumbelVariant,
+    gumbel_root_counts: bool,
+) -> (usize, usize, u64) {
     let spec = lookup_or_panic(encoding);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
@@ -107,6 +142,8 @@ fn drive(
         random_opening_plies: 0,
         dirichlet_enabled: true,
         gumbel_mcts,
+        gumbel_variant,
+        gumbel_root_counts,
         solver_enabled: false,
         forced_win_policy_enabled: false,
         encoding_name: Some(encoding.to_string()),
@@ -115,8 +152,11 @@ fn drive(
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer =
-        spawn_counting_producer(runner.graph_producer(), spec.policy_logit_count, served.clone());
+    let producer = spawn_counting_producer(
+        runner.graph_producer(),
+        spec.policy_logit_count,
+        served.clone(),
+    );
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
@@ -137,14 +177,21 @@ fn drive(
     producer.join().expect("producer exits");
     records.extend(runner.drain_graph_records());
 
-    assert!(defect.is_none(), "{encoding} @ {n_simulations} latched a fatal defect: {defect:?}");
+    assert!(
+        defect.is_none(),
+        "{encoding} @ {n_simulations} latched a fatal defect: {defect:?}"
+    );
     assert!(
         records.len() >= want_records,
         "{encoding} @ {n_simulations}: only {} searched plies inside the budget — a drive that \
          records nothing cannot speak about served sims at all",
         records.len()
     );
-    (served.load(Ordering::Relaxed), records.len(), snap.max_sims_per_search)
+    (
+        served.load(Ordering::Relaxed),
+        records.len(),
+        snap.max_sims_per_search,
+    )
 }
 
 fn assert_exact(encoding: &str, n_simulations: usize, ply_cap: usize, want_records: usize) {
@@ -258,4 +305,79 @@ fn gumbel_r6_at_fifty_sims_never_exceeds_the_budget() {
 #[test]
 fn gumbel_r8_at_six_hundred_sims_never_exceeds_the_budget() {
     assert_no_overshoot_and_pin_undershoot("gnn_axis_r8", 600, 2, 2, 599);
+}
+
+// ── GUMBEL-REPAIR-1 item 5: the corrected arm consumes its budget EXACTLY ────────
+//
+// The legacy pins above record the defect as measured — 49 of 50, 599 of 600 — and
+// leave it, because Gumbel was out of that tranche. These arms are the repair, and
+// they are asserted against the SAME drive so the two numbers are comparable rather
+// than merely both present.
+
+/// THE ITEM-5 WITNESS. Mctx's schedule has one entry per simulation, so the halving
+/// consumes the whole budget instead of dropping the integer-division remainder.
+///
+/// Killer / PLANTED BREAK: truncate the schedule by one in
+/// `mcts::seq_halving::considered_visits_sequence` and this reds at 49.
+#[test]
+fn the_mctx_dialect_serves_exactly_its_budget() {
+    for (encoding, n_simulations, ply_cap, want) in [
+        ("gnn_axis_v1", 50usize, 4usize, 8usize),
+        ("gnn_axis_r8", 96, 3, 4),
+    ] {
+        let (_served, _records, max_sims) = drive_dialect(
+            encoding,
+            n_simulations,
+            ply_cap,
+            want,
+            true,
+            GumbelVariant::Mctx,
+            true,
+        );
+        assert_eq!(
+            max_sims, n_simulations as u64,
+            "mctx {encoding} @ {n_simulations}: the widest search served {max_sims}. The \
+             corrected arm must spend the WHOLE budget and no more — the legacy arm's \
+             pinned 49-of-50 above is the defect this replaces, and an overshoot would \
+             be R335(c)'s original finding coming back."
+        );
+    }
+}
+
+/// An UNCHARGED root serves one leaf MORE, and says so.
+///
+/// `gumbel_root_counts: false` is Mctx's own accounting — `num_simulations` counts the
+/// simulations that descend from an already-evaluated root. The search then does N+1
+/// leaves of network work, and the reported figure is N+1 rather than N, because
+/// R335(c) is about the served count matching the work done and a silently uncounted
+/// root would break that in the other direction.
+#[test]
+fn an_uncharged_root_is_reported_as_the_extra_leaf_it_is() {
+    let n_simulations = 50usize;
+    let (_s, _r, charged) = drive_dialect(
+        "gnn_axis_v1",
+        n_simulations,
+        4,
+        8,
+        true,
+        GumbelVariant::Mctx,
+        true,
+    );
+    let (_s2, _r2, uncharged) = drive_dialect(
+        "gnn_axis_v1",
+        n_simulations,
+        4,
+        8,
+        true,
+        GumbelVariant::Mctx,
+        false,
+    );
+    assert_eq!(charged, n_simulations as u64);
+    assert_eq!(
+        uncharged,
+        n_simulations as u64 + 1,
+        "with the root uncharged the search evaluates the root AND spends N on the \
+         schedule, so it serves N+1 leaves. Reporting N here would hide one leaf of \
+         network work per move from every fixed-node comparison."
+    );
 }

@@ -1,5 +1,7 @@
-// Exceeds the 300-line soft cap (barely): the Gumbel state + all its in-src unit
-// tests port together (the tests drive the state against a live MCTSTree).
+// Exceeds the 300-line soft cap: the legacy Gumbel state, the dialect selector that
+// says which arm a tree runs, and all the in-src unit tests are one unit — the tests
+// drive the state against a live MCTSTree, and the selector has to sit beside the arm
+// it names or a reader meets `GumbelVariant::Legacy` with no legacy in sight.
 //! Gumbel MCTS Sequential-Halving search state.
 //!
 //! Per-search state for Gumbel-Top-k root sampling with Sequential Halving
@@ -10,6 +12,45 @@
 //! are `pub` so the (self-play) search driver can construct and drive it.
 
 use rand::RngExt;
+
+/// Which Gumbel dialect a search runs (GUMBEL-REPAIR-1).
+///
+/// `Legacy` is the shipped arm and is byte-preserved: every existing pin, golden
+/// and served-sims measurement was taken against it. `Mctx` is the corrected arm,
+/// matching `google-deepmind/mctx`'s `gumbel_muzero_policy` on the points the
+/// repair verified as live deviations.
+///
+/// ONE enum rather than a bag of booleans: the corrections are not independently
+/// meaningful. R345(d) compares "corrected Gumbel" against PUCT as a single arm,
+/// and separate switches would mint a lattice of dialects nobody has measured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GumbelVariant {
+    #[default]
+    Legacy,
+    Mctx,
+}
+
+impl GumbelVariant {
+    /// Parse the config spelling. `None` for anything else — the caller decides
+    /// whether an unknown dialect is a boot error or a test typo.
+    #[must_use]
+    pub fn from_config_str(s: &str) -> Option<Self> {
+        match s {
+            "legacy" => Some(GumbelVariant::Legacy),
+            "mctx" => Some(GumbelVariant::Mctx),
+            _ => None,
+        }
+    }
+
+    /// The config spelling, so a caller never re-types the literal.
+    #[must_use]
+    pub fn as_config_str(self) -> &'static str {
+        match self {
+            GumbelVariant::Legacy => "legacy",
+            GumbelVariant::Mctx => "mctx",
+        }
+    }
+}
 
 /// Per-search state for Gumbel-Top-k + Sequential Halving.
 pub struct GumbelSearchState {
@@ -68,7 +109,11 @@ impl GumbelSearchState {
         scored.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         let candidates: Vec<usize> = scored.iter().take(effective_m).map(|(i, _)| *i).collect();
 
-        let num_phases = if effective_m <= 1 { 1 } else { (effective_m as f64).log2().ceil() as usize };
+        let num_phases = if effective_m <= 1 {
+            1
+        } else {
+            (effective_m as f64).log2().ceil() as usize
+        };
 
         let first_child = tree.pool[0].first_child;
         let root_mr = tree.pool[0].moves_remaining;
@@ -104,7 +149,11 @@ impl GumbelSearchState {
 
     /// Max visit count across all root children (from cache).
     pub fn max_n(&self) -> u32 {
-        self.cached_children.iter().map(|(n, _)| *n).max().unwrap_or(0)
+        self.cached_children
+            .iter()
+            .map(|(n, _)| *n)
+            .max()
+            .unwrap_or(0)
     }
 
     /// Compute the Gumbel + log_prior + sigma(Q) score for a candidate.
@@ -141,7 +190,8 @@ impl GumbelSearchState {
         let max_n = self.max_n();
         // Sort by descending Gumbel+log_prior+sigma(Q) score.
         // Pre-compute into scored pairs to avoid self-borrow in sort closure.
-        let mut scored: Vec<(usize, f32)> = self.candidates
+        let mut scored: Vec<(usize, f32)> = self
+            .candidates
             .iter()
             .map(|&c| (c, self.score(c, max_n)))
             .collect();
@@ -155,7 +205,8 @@ impl GumbelSearchState {
     pub fn best_action_pool_idx(&mut self, tree: &crate::mcts::MCTSTree) -> u32 {
         self.refresh_cache(tree);
         let max_n = self.max_n();
-        let best_offset = self.candidates
+        let best_offset = self
+            .candidates
             .iter()
             .max_by(|&&a, &&b| {
                 let sa = self.score(a, max_n);
@@ -178,15 +229,18 @@ mod tests {
         // Use mr=2 (start of compound turn) so child w_values are already in
         // root's perspective and score() applies no Q negation.
         let mut board = Board::new();
-        board.apply_move(0, 0).expect("(0,0) must be legal on fresh board");
+        board
+            .apply_move(0, 0)
+            .expect("(0,0) must be legal on fresh board");
         assert_eq!(board.moves_remaining, 2);
         tree.new_game(board);
 
         // Expand root with uniform priors.
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
         let policy = vec![1.0 / n_actions as f32; n_actions];
-        let _leaves = tree.select_leaves(1)
-        .expect("select_leaves: no desync in this fixture");
+        let _leaves = tree
+            .select_leaves(1)
+            .expect("select_leaves: no desync in this fixture");
         tree.expand_and_backup(&[policy], &[0.0]);
         tree
     }
@@ -221,8 +275,12 @@ mod tests {
 
         // Request m = 1000, but there are only n_children legal moves.
         let gs = GumbelSearchState::new(&tree, 1000, 50.0, 1.0, &mut rng);
-        assert_eq!(gs.candidates.len(), n_children,
-            "with m > legal moves, all {} moves should be candidates", n_children);
+        assert_eq!(
+            gs.candidates.len(),
+            n_children,
+            "with m > legal moves, all {} moves should be candidates",
+            n_children
+        );
     }
 
     #[test]
@@ -304,7 +362,10 @@ mod tests {
         tree.pool[(first as usize) + best_cand].w_value = 90.0; // Q = 0.9
 
         let best_pool = gs.best_action_pool_idx(&tree);
-        assert_eq!(best_pool, first + best_cand as u32,
-            "best action should be the high-Q candidate");
+        assert_eq!(
+            best_pool,
+            first + best_cand as u32,
+            "best action should be the high-Q candidate"
+        );
     }
 }

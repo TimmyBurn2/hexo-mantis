@@ -41,7 +41,7 @@ from mantis.selfplay.hparams import (
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
     "inference_pool_size": 1536, "completed_q_values": True, "c_visit": 40.0, "c_scale": 2.0,
-    "gumbel_mcts": True, "gumbel_m": 24, "gumbel_explore_moves": 14,
+    "gumbel_mcts": True, "gumbel_m": 24, "gumbel_explore_moves": 14, "gumbel_variant": "legacy", "gumbel_root_counts": True,
     "results_queue_cap": 5000, "random_opening_plies": 3, "rotation_enabled": False,
     "forced_win_policy_enabled": True, "forced_win_policy_depth": 4,
     "forced_win_policy_weight": 0.75, "solver_enabled": True, "solver_depth": 20,

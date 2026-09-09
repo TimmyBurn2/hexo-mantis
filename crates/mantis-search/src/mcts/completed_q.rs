@@ -37,6 +37,9 @@ pub(super) struct CqAgg {
     pub policy_weighted_q: f32,
     /// Root value estimate W/N (`root.w_value / root.n_visits`).
     pub v_hat: f32,
+    /// The value BACKED UP at root expansion — Mctx's `tree.raw_values[root]`.
+    /// Read only by the Mctx arm; the legacy arm's `v_mix` uses `v_hat`.
+    pub raw_value: f32,
 }
 
 /// v_mix: mixed value estimate for unvisited actions (paper Eq. 33).
@@ -154,4 +157,123 @@ pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
         }
     }
     masses
+}
+
+// ── Mctx arm (GUMBEL-REPAIR-1) ───────────────────────────────────────────────
+//
+// `qtransform_completed_by_mix_value` from `mctx/_src/qtransforms.py`, kept
+// APART from the legacy functions above rather than folded into them. Two
+// reasons, both load-bearing: the legacy path is byte-pinned by
+// `golden_tests.rs` and a shared body would put a branch inside frozen
+// arithmetic; and the two arms disagree about their own aggregates — Mctx floors
+// every prior at the dtype's tiny value before summing, which the legacy
+// accumulation deliberately does not do. Recomputing here from `children` keeps
+// each arm's guards its own.
+
+/// Mctx's completed Q-values: mixed-value completion off the RAW root value,
+/// min-max rescaled, then scaled by `(c_visit + max_visits) * c_scale`.
+///
+/// `c_visit` is Mctx's `maxvisit_init` and `c_scale` is its `value_scale` — the
+/// same slot, not a second knob (see `SelfplayConfig`'s docstring).
+///
+/// THE DEVIATION THIS FUNCTION EXISTS FOR is `raw_value`. The legacy `v_mix`
+/// takes the root's BACKED-UP mean `W/N`; Mctx takes `tree.raw_values[root]`,
+/// the value the network produced for the root before any child statistic
+/// entered it. Every other term of the mixed value already agreed.
+///
+/// All-unvisited is not special-cased: every completed value is then `v_mix`,
+/// the rescale maps a constant vector to zeros, and the caller's
+/// `softmax(log_prior + 0)` is the prior. Verified against Mctx's own output for
+/// that case rather than reasoned about.
+pub(super) fn mctx_completed_qvalues(
+    children: &[CqChild],
+    raw_value: f32,
+    c_visit: f32,
+    c_scale: f32,
+) -> Vec<f32> {
+    /// Mctx's `epsilon` for the rescale denominator.
+    const EPSILON: f32 = 1e-8;
+
+    if children.is_empty() {
+        return Vec::new();
+    }
+
+    let mut sum_n: u32 = 0;
+    let mut max_n: u32 = 0;
+    let mut sum_probs = 0.0f32;
+    let mut prior_weighted_q = 0.0f32;
+    for ch in children {
+        sum_n += ch.visits;
+        max_n = max_n.max(ch.visits);
+        if ch.visits > 0 {
+            // Mctx: `prior_probs = maximum(finfo.tiny, prior_probs)` BEFORE the sum,
+            // so a visited child with a zero prior cannot make the denominator zero.
+            let p = ch.prior.max(f32::MIN_POSITIVE);
+            sum_probs += p;
+            prior_weighted_q += p * ch.q_val;
+        }
+    }
+
+    let sum_n_f = sum_n as f32;
+    let weighted_q = if sum_probs > 0.0 {
+        prior_weighted_q / sum_probs
+    } else {
+        0.0
+    };
+    let v_mix = sum_n_f.mul_add(weighted_q, raw_value) / (sum_n_f + 1.0);
+
+    let mut completed: Vec<f32> = children
+        .iter()
+        .map(|ch| if ch.visits > 0 { ch.q_val } else { v_mix })
+        .collect();
+
+    // Rescale over the COMPLETED vector — Mctx's `_rescale_qvalues` takes min/max
+    // across all actions AFTER completion, not across the visited ones only.
+    let mut min_v = f32::INFINITY;
+    let mut max_v = f32::NEG_INFINITY;
+    for &v in &completed {
+        min_v = min_v.min(v);
+        max_v = max_v.max(v);
+    }
+    let span = (max_v - min_v).max(EPSILON);
+    let visit_scale = (c_visit + max_n as f32) * c_scale;
+    for v in &mut completed {
+        *v = (*v - min_v) / span * visit_scale;
+    }
+    completed
+}
+
+/// `softmax(log_prior + completed_q)` — Mctx's `action_weights`, one mass per
+/// `CqChild` in input order. Empty in for empty out.
+pub(super) fn mctx_improved_policy_masses(
+    children: &[CqChild],
+    raw_value: f32,
+    c_visit: f32,
+    c_scale: f32,
+) -> Vec<f32> {
+    let completed = mctx_completed_qvalues(children, raw_value, c_visit, c_scale);
+    if completed.is_empty() {
+        return Vec::new();
+    }
+    let mut logits: Vec<f32> = children
+        .iter()
+        .zip(&completed)
+        .map(|(ch, &q)| (ch.prior.max(1e-8)).ln() + q)
+        .collect();
+    let max_logit = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    if !max_logit.is_finite() {
+        return Vec::new();
+    }
+    let mut sum_exp = 0.0f32;
+    for l in &mut logits {
+        *l = (*l - max_logit).exp();
+        sum_exp += *l;
+    }
+    if sum_exp <= 0.0 {
+        return Vec::new();
+    }
+    for l in &mut logits {
+        *l /= sum_exp;
+    }
+    logits
 }

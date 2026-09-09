@@ -25,6 +25,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_encoding::RegistrySpec;
+use mantis_search::GumbelVariant;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
 use mantis_selfplay::runner::{GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
@@ -253,6 +254,39 @@ impl PySelfPlayRunnerConfig {
                 ..Default::default()
             },
         }
+    }
+
+    // ── Gumbel dialect knobs (get/set) ─────────────────────────────────────────
+    //
+    // Get/set rather than two more constructor positionals: `new` already carries
+    // 35, and its own comment records that later knobs arrive this way.
+
+    #[getter]
+    pub fn gumbel_variant(&self) -> &'static str {
+        self.inner.gumbel_variant.as_config_str()
+    }
+    /// # Errors
+    /// `ValueError` — `v` is not a dialect this build knows. REFUSED rather than
+    /// defaulted: a typo'd dialect silently falling back to `legacy` is exactly
+    /// the silent-fallback class LAW-11 closes.
+    #[setter]
+    pub fn set_gumbel_variant(&mut self, v: &str) -> PyResult<()> {
+        let parsed = GumbelVariant::from_config_str(v).ok_or_else(|| {
+            PyValueError::new_err(format!(
+                "selfplay.gumbel_variant={v:?} is not a known Gumbel dialect \
+                 (expected \"legacy\" or \"mctx\")"
+            ))
+        })?;
+        self.inner.gumbel_variant = parsed;
+        Ok(())
+    }
+    #[getter]
+    pub fn gumbel_root_counts(&self) -> bool {
+        self.inner.gumbel_root_counts
+    }
+    #[setter]
+    pub fn set_gumbel_root_counts(&mut self, v: bool) {
+        self.inner.gumbel_root_counts = v;
     }
 
     // ── O1 forced-win one-hot POLICY target knobs (get/set) ────────────────────

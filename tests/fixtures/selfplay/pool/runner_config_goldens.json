@@ -62,7 +62,9 @@
                         "zoi_margin": 7,
                         "temperature_threshold_compound_moves": 12,
                         "temp_min": 0.35
-                    }
+                    },
+                    "gumbel_variant": "mctx",
+                    "gumbel_root_counts": false
                 },
                 "train": {
                     "draw_reward": -0.4,
@@ -113,6 +115,8 @@
                 "forced_win_policy_depth": 4,
                 "forced_win_policy_enabled": true,
                 "forced_win_policy_weight": 0.75,
+                "gumbel_root_counts": false,
+                "gumbel_variant": "mctx",
                 "seed_fraction": 0.0,
                 "solver_depth": 20,
                 "solver_enabled": true,
@@ -190,7 +194,9 @@
                         "zoi_margin": 5,
                         "temperature_threshold_compound_moves": 0,
                         "temp_min": 0.5
-                    }
+                    },
+                    "gumbel_variant": "legacy",
+                    "gumbel_root_counts": true
                 },
                 "train": {
                     "draw_reward": -0.5,
@@ -241,6 +247,8 @@
                 "forced_win_policy_depth": 2,
                 "forced_win_policy_enabled": false,
                 "forced_win_policy_weight": 1.0,
+                "gumbel_root_counts": true,
+                "gumbel_variant": "legacy",
                 "seed_fraction": 0.0,
                 "solver_depth": 16,
                 "solver_enabled": false,

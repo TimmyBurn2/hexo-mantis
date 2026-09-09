@@ -86,6 +86,7 @@ struct WorkerMoveCfg {
     c_scale: f32,
     gumbel_m: usize,
     gumbel_explore_moves: usize,
+    gumbel_root_counts: bool,
     dirichlet_alpha: f32,
     dirichlet_epsilon: f32,
     full_search_prob: f32,
@@ -222,6 +223,8 @@ pub(crate) fn run_worker_thread(
                 quiescence_enabled,
                 completed_q_values,
                 gumbel_mcts,
+                gumbel_variant,
+                gumbel_root_counts,
             },
         exploration_flags:
             ExplorationFlags {
@@ -253,6 +256,9 @@ pub(crate) fn run_worker_thread(
     // Configure quiescence once per worker (the amended setter; D10 — NO
     // interior_selector, WP4 killed it).
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
+    // Same posture as quiescence: per-WORKER configuration, set once, survives
+    // `new_game`. `Legacy` leaves every completed-Q surface byte-identical.
+    tree.configure_gumbel(gumbel_variant);
     let mut rng = rng();
     // Per-move model-version snapshot (frozen `inner.rs:1214`): each `play_one_move`
     // dedup-pushes `model_version` (default 0 until WP7 wires the NN setter), so a
@@ -329,6 +335,7 @@ pub(crate) fn run_worker_thread(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
+        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
@@ -450,6 +457,7 @@ fn run_one_game(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
+        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
@@ -511,6 +519,7 @@ fn run_one_game(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
+        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,

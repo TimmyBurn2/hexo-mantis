@@ -1,3 +1,9 @@
+// R8 justify: one claim — "the three rotation sites are wired and the graph path is
+// rotation-free" — proved two ways that must not be separated. The numeric half drives
+// real rotations through the real scatters; the source-presence half proves the sites
+// are still CALLED, because a scatter that is correct and unreached passes the numeric
+// half alone. The comment stripper and the call-argument reader are the second half's
+// instruments and are meaningless apart from it.
 //! P-06 — rotation parity: the per-game D6 `sym_idx` at the 3 sites keeps the MCTS
 //! tree in the CANONICAL frame while the recorded frame is rotated; the graph path
 //! is rotation-free at inference (⊕ NEW).
@@ -141,6 +147,58 @@ fn graph_build_is_rotation_free_and_deterministic() {
     assert_eq!(g1.window_center, g2.window_center, "graph window centre must be rotation-free");
 }
 
+/// The argument tokens of the first CALL to `name` in `src`, comma-split at paren
+/// depth 0 with whitespace collapsed. `None` when `name` is never called.
+///
+/// A call is distinguished from the `use` import and from a string literal mentioning
+/// the name by requiring the `(` and by taking the LAST occurrence — the import sits
+/// above every call site. Nested calls and tuples inside an argument are handled by
+/// the depth counter; the pinned call has neither, and a future one that did would
+/// still split correctly.
+fn call_args(src: &str, name: &str) -> Option<Vec<String>> {
+    let open = src.rfind(&format!("{name}("))? + name.len() + 1;
+    let bytes: Vec<char> = src[open..].chars().collect();
+    let mut depth = 0i32;
+    let mut end = None;
+    for (i, &c) in bytes.iter().enumerate() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' if depth == 0 => {
+                end = Some(i);
+                break;
+            }
+            ')' | ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    let inner: String = bytes[..end?].iter().collect();
+    let mut args = Vec::new();
+    let mut depth = 0i32;
+    let mut cur = String::new();
+    for c in inner.chars() {
+        match c {
+            '(' | '[' | '{' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' | ']' | '}' => {
+                depth -= 1;
+                cur.push(c);
+            }
+            ',' if depth == 0 => {
+                args.push(cur.split_whitespace().collect::<Vec<_>>().join(" "));
+                cur.clear();
+            }
+            _ => cur.push(c),
+        }
+    }
+    let tail = cur.split_whitespace().collect::<Vec<_>>().join(" ");
+    if !tail.is_empty() {
+        args.push(tail);
+    }
+    Some(args)
+}
+
 // ── source-presence of the 3 rotation sites + graph rotation-free ───────────────
 const SEARCH: &str = include_str!("../src/runner/search_drive.rs");
 const RECORD: &str = include_str!("../src/runner/record.rs");
@@ -225,10 +283,24 @@ fn three_rotation_sites_wired_and_graph_is_rotation_free_at_inference() {
         "site 3 (aux forward-scatter at finalize) removed from finalize.rs",
     );
     // Graph rotation-free at inference: builder called with NO sym argument.
-    assert!(
-        search.contains(
-            "build_leaf_graph(&stones, current_player, moves_remaining, win_length, radius, agg_trunk_sz)"
-        ),
+    //
+    // Read as an ARGUMENT LIST, not as a source line. The literal one-line form this
+    // used to `contains` was a hostage to rustfmt: GUMBEL-REPAIR-1 touched this file,
+    // rustfmt split the call across seven lines, and the pin reported the rotation-free
+    // property BROKEN while the call was unchanged — the same false red R345 §4d.2
+    // recorded on `inv_dws3_reanchor.rs`. `call_args` is insensitive to exactly what
+    // formatting moves (whitespace between argument tokens) and to nothing else: a
+    // seventh argument, a renamed argument or a reordering all still red.
+    assert_eq!(
+        call_args(&search, "build_leaf_graph"),
+        Some(vec![
+            "&stones".to_string(),
+            "current_player".to_string(),
+            "moves_remaining".to_string(),
+            "win_length".to_string(),
+            "radius".to_string(),
+            "agg_trunk_sz".to_string(),
+        ]),
         "graph build call must pass NO sym_idx (rotation-free at inference)",
     );
     // Doc-marker (English phrase, never a code token) — matched on RAW source, since

@@ -177,6 +177,14 @@ _ADDED_LEAVES = {
     # non-binding values are each asserted on their own terms.
     "inference.fused_graph_caps.max_fused_edges",
     "inference.fused_graph_caps.max_fused_nodes",
+    # GUMBEL-REPAIR-1: two REQUIRED schema leaves, so every config gains both and the
+    # re-mint stays purely ADDITIVE. The VALUES are the SHIPPED behaviour restated —
+    # `legacy` is the dialect every config already ran and `true` is the root-charge it
+    # already applied — so nothing minted moves and no run changes. That is the point:
+    # the corrected Gumbel arm reaches no config until R345(d)'s frontier has compared
+    # it, and this instrument is what would catch an arming that arrived without one.
+    "selfplay.gumbel_variant",
+    "selfplay.gumbel_root_counts",
 }
 
 #: The subset of `_ADDED_LEAVES` that is ARCH-SCOPED (R322(d)) — added only to the configs

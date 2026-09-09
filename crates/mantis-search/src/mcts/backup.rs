@@ -433,6 +433,13 @@ impl MCTSTree {
         }
 
         let corrected = self.apply_quiescence(board, value);
+        if leaf_idx == 0 {
+            // Mctx's `raw_values[root]`: captured HERE, at the one point the root's
+            // own network value is in hand, because `backup` immediately folds it
+            // into the running mean and it is unrecoverable from `w_value` after
+            // the first child backs up.
+            self.root_raw_value = corrected;
+        }
         self.backup(leaf_idx, corrected);
     }
 

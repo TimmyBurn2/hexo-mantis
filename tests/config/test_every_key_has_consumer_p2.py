@@ -230,6 +230,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.gumbel_mcts": "SelfPlayHParams.gumbel_mcts -> runner gumbel_mcts ctor kwarg (R23)",
     "selfplay.gumbel_m": "SelfPlayHParams.gumbel_m -> runner gumbel_m ctor kwarg (R23)",
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.gumbel_explore_moves -> runner ctor kwarg (R23)",
+    "selfplay.gumbel_variant": "SelfPlayHParams.gumbel_variant -> cfg.gumbel_variant attr -> tree dialect",
+    "selfplay.gumbel_root_counts": "SelfPlayHParams.gumbel_root_counts -> cfg attr -> root sim charge",
     "selfplay.results_queue_cap": "SelfPlayHParams.results_queue_cap -> runner results_queue_cap ctor kwarg",
     "selfplay.random_opening_plies": "SelfPlayHParams.random_opening_plies -> runner ctor kwarg",
     "selfplay.rotation_enabled": "SelfPlayHParams.rotation_enabled -> runner selfplay_rotation_enabled ctor kwarg",

@@ -9,6 +9,8 @@ retired by a later chunk (SC-A4); dropping the field from this class is forced n
 `SelfplayConfig` reshape cannot carry it AND satisfy `extra="forbid"` simultaneously with the
 old key.
 """
+from typing import Literal
+
 from pydantic import Field, model_validator
 
 from mantis._engine import mcts_max_armed_sims
@@ -101,7 +103,34 @@ class PlayoutCapConfig(StrictModel):
 
 class SelfplayConfig(StrictModel):
     """Self-play worker/search knobs (`# selfplay ns` + monitoring/instrumentation in
-    `hparams.py`). See the module docstring for why no radius field exists here."""
+    `hparams.py`). See the module docstring for why no radius field exists here.
+
+    ``gumbel_variant`` SELECTS A DIALECT, not a feature (GUMBEL-REPAIR-1). ``legacy`` is
+    the arm every shipped config carries and reproduces the shipped behaviour exactly;
+    ``mctx`` is the corrected arm, matching `google-deepmind/mctx`'s
+    ``gumbel_muzero_policy`` on the points the repair verified as deviations — root
+    sampling over the FULL legal set, the mixed-value completion taken off the root's RAW
+    network value, min-max rescaled Q with Mctx's ``value_scale`` transform, completed-Q
+    interior selection, and a Sequential-Halving schedule that consumes the budget
+    exactly. It is ONE key rather than five because the corrections are what corrected
+    Gumbel IS: R345(d) compares "corrected Gumbel" against PUCT as a single arm, and five
+    independent booleans would mint 32 dialects nobody has measured.
+
+    ``c_scale`` IS Mctx's ``value_scale`` under the ``mctx`` variant — the same slot in
+    ``(c_visit + max_visits) * scale * q``, where ``c_visit`` is Mctx's ``maxvisit_init``.
+    A second key for the same slot would be the duplicate-authority class R1 exists to
+    kill. Their defaults differ by an order of magnitude and the difference is REAL: Mctx
+    ships ``value_scale=0.1`` against rescaled Q in [0, 1], the legacy arm ships
+    ``c_scale=1.0`` against raw Q in [-1, 1], so a mint that moves the variant without
+    moving the scale changes how peaked every target is. The mint states the value; the
+    schema will not guess it.
+
+    ``gumbel_root_counts`` decides whether the root's own evaluation is charged against
+    ``mcts.n_simulations``. ``true`` is the shipped behaviour (the root eval spends one of
+    N, so the halving schedule gets N-1). It is a key and not a constant because it is
+    exactly the term that makes "equal NN work" stateable when corrected Gumbel is
+    compared against PUCT at a fixed leaf budget.
+    """
 
     n_workers: int = Field(ge=1)
     leaf_batch_size: int = Field(ge=1)
@@ -113,6 +142,8 @@ class SelfplayConfig(StrictModel):
     gumbel_mcts: bool
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
+    gumbel_variant: Literal["legacy", "mctx"]
+    gumbel_root_counts: bool
     results_queue_cap: int = Field(ge=1)
     random_opening_plies: int = Field(ge=0)
     rotation_enabled: bool
