@@ -3,9 +3,13 @@
 AlphaZero-style self-play bot for Hex Tac Toe (6-in-a-row, unbounded hex grid, 2-stone
 compound turns). Rust engine (cargo workspace) + Python training/eval (uv, src-layout),
 PyO3 bridge. GNN-first, representation-extensible. This document is the structural
-contract of the repository; CLAUDE.md carries the operating laws; docs/registers/ carries
-law text and the falsified register. Deviations from this document require an amendment
-commit to this file — never a silent drift.
+contract of the repository; CLAUDE.md carries the operating laws; docs/governance/ carries
+law text, ruling texts, live state and the falsified register. Deviations from this document
+require an amendment commit to this file — never a silent drift.
+
+AMENDMENT (R346, 2026-09-09): `docs/registers/` is dissolved. `laws.md` and the two rulings
+registers are frozen under `docs/governance/archive/`; the live governance files are
+`docs/governance/{LAWS,STATE,RULINGS,CARDS,falsified}.md`.
 
 Design provenance: every structural rule below exists to make a named, previously
 observed bug class unrepresentable. The bug-class evidence lives in the private
@@ -54,7 +58,8 @@ hexo-mantis/
 ├── docs/
 │   ├── design/                 # this file + subsystem designs
 │   ├── contracts/              # versioned seam contracts (see §4)
-│   └── registers/              # laws, falsified register (curated)
+│   └── governance/             # LAWS, STATE, RULINGS, CARDS, falsified register
+│       └── archive/            # FROZEN pre-R346 registers; never edited, never current
 ├── tools/                      # dev-only: mint_config, hardcode_scan, bench floors data
 ├── vendor/                     # pins.toml (url+sha+patch) + `make vendor` fetcher; no
 │                               #   submodules, no loose weights

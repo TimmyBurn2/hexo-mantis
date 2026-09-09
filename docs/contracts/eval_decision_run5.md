@@ -62,7 +62,7 @@ absent.
 ## The gate is not evidence of external strength (S-7)
 
 The gate is anchor-relative by construction and says nothing about strength outside the
-family it compares within. `docs/registers/falsified.md` row F-30 records a promotion at step
+family it compares within. `docs/governance/falsified.md` row F-30 records a promotion at step
 45k while the external win rate collapsed to 2%, and row F-27 records a gate staying green
 for 46k steps across a 33% → 5% external collapse. The external instrument is the ladder plus
 the RandomBot floor, and it is separate from the gate on purpose.

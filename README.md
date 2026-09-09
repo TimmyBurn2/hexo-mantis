@@ -29,10 +29,11 @@ make check.wasm  # mantis-graph stays wasm32-clean
 | src/mantis/ | the one Python package (src-layout) |
 | tests/ | single test-collection root + fixtures manifest |
 | configs/ | complete, schema-validated configs, minted via tools/mint_config.py |
-| docs/ | design contract, seam contracts, registers |
+| docs/ | design contract, seam contracts, governance |
 | tools/ | dev-only tooling + locally runnable CI gate scripts |
 | vendor/ | pins.toml + `make vendor` fetcher (no submodules) |
 
 Pointers: docs/design/repo_design.md (structural contract), CLAUDE.md (operating
-rules), docs/registers/ (laws + falsified register). Every CI gate is locally runnable
+rules), docs/governance/ (LAWS, STATE, RULINGS, CARDS, falsified register; R346 froze
+the old registers into docs/governance/archive/). Every CI gate is locally runnable
 (tools/ci_gates/).
