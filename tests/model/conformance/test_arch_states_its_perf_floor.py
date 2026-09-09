@@ -22,6 +22,9 @@ TWO CLAIMS, and only the first one gates.
   2. **THE MEASUREMENT** (`slow`) — floor µs and serving overhead per arch, as a TABLE. It
      asserts no magnitude, exactly as T6 does not, and for the same reason: a µs figure is
      host-attested or it is mechanism evidence, and nothing here is written into a tracked path.
+     What it DOES assert is the NESTING — that the served arm did not read faster than the
+     forward it contains — and that assertion is noise-aware, which is argued at
+     `nesting_verdict` and is the one thing in this tier that can go red on a measurement.
 
 WHAT "FLOOR" AND "OVERHEAD" MEAN HERE, because both words are already loaded in this repo.
 FLOOR is the arch's own forward, alone: input construction outside the timed region, no seam, no
@@ -46,6 +49,7 @@ from __future__ import annotations
 
 import ast
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,7 +62,11 @@ from mantis.model.arch import CnnArch, GnnArch, GnnArchV2
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, build_board, roster
-from test_leaf_forward_throughput_harness import Measurement, measure_forward
+from test_leaf_forward_throughput_harness import (
+    Measurement,
+    measure_forward,
+    measure_forward_paired,
+)
 
 BUILD_SOURCE = Path(build_module.__file__)
 
@@ -172,6 +180,78 @@ def serving_overhead(floor: Measurement, served: Measurement) -> float:
             "arm times; a served arm that is faster is timing a different, smaller thing."
         )
     return served.median_ns / max(floor.median_ns, 1.0)
+
+
+#: The three readings of one floor/served pair. Names, not booleans, because the third one is
+#: not "not inverted": it is the measurement declining to answer.
+NESTING_ORDERED = "ordered"
+NESTING_INVERTED = "inverted"
+NESTING_UNRESOLVED = "unresolved"
+
+#: Instrument parameters for the paired reading — NOT thresholds on any subject, in T6's own
+#: sense of that distinction. They stand where `repeats=5, warmup=2` did: a five-sample median
+#: of a wall-clock CPU timing is decided by whichever repeat the scheduler preempted, and the
+#: median of twenty-five is not.
+_NESTING_REPEATS = 25
+_NESTING_WARMUP = 5
+#: The sleep the mutation self-tests plant to make a REAL inversion, on the same footing as
+#: T6's `_DIFFERENTIAL_SLEEP_S`. It is an instrument parameter and no subject's threshold.
+#: Larger than T6's for headroom, and the headroom was measured: at 0.005 s under load ~20 the
+#: planted deficit cleared the bar by a factor of 2.9 at worst, and a self-test that proves the
+#: gate can bite must not itself be the flaky thing.
+_INVERSION_PLANT_S = 0.02
+
+
+class ServingNestingUnresolved(UserWarning):
+    """The two arms differ by less than the noise the measurement itself carries.
+
+    A WARNING and not a refusal, and not a skip either: `test_NO_MODULE_of_the_conformance_
+    suite_DISARMS_a_TEST` refuses every skip spelling in this suite, and it is right to — a
+    silent skip is this suite's headline failure mode. So an inconclusive reading is REPORTED,
+    on the test record and in pytest's warnings summary, and the run continues.
+    """
+
+
+def nesting_noise_ns(floor: Measurement, served: Measurement) -> float:
+    """The spread the two readings JOINTLY carry, in ns — the bar an inversion must clear.
+
+    The sum of the two IQRs, undivided, and the undivided part was measured rather than
+    chosen. The textbook move is `IQR / sqrt(repeats)`, the shape of a median's standard error
+    (asymptotically 1.253·sigma/sqrt(n) against an IQR of 1.349·sigma on a normal). It assumes
+    the samples are independent draws. Under host contention they are not: the load arrives in
+    bursts, consecutive repeats land inside the same burst, and the effective sample count is
+    a small fraction of the nominal one — LAW-04's own argument, in the time domain instead of
+    the game domain. Driven on this box at load ~20 the sqrt form left the bar at 29.18 ms
+    against a 31.58 ms deficit and red the tier, on a pair whose two arms are nested by
+    construction. So the reduction is not taken, and `repeats` earns its keep by steadying the
+    MEDIAN rather than by shrinking the bar.
+
+    A NOISE BAR, not a p-value, and it commits no magnitude: both terms are measured in this
+    process, exactly like the ratio they qualify.
+    """
+    return floor.iqr_ns + served.iqr_ns
+
+
+def nesting_verdict(floor: Measurement, served: Measurement) -> str:
+    """ORDERED / INVERTED / UNRESOLVED for one pair — and the ASYMMETRY is the whole design.
+
+    `served` containing `floor` is STRUCTURAL: for the graph arches the floor arm times `run`
+    while the served arm times `collate` + `run` + the ragged softmax, and for the grid arch
+    the floor arm times `net.forward` while the served arm times the plane assembly plus that
+    same forward. A reading that AGREES with the structure therefore needs no margin at all —
+    any `served >= floor` is ORDERED, and the strict guard is what reports its ratio.
+
+    Only a reading that CONTRADICTS the structure has to clear the noise bar before it is
+    treated as evidence, and the reason is what the guard is FOR: a served arm that stopped
+    containing the forward misses by the whole of a collate, never by a hairline. A hairline
+    deficit is the scheduler. Calling the scheduler a defect is how this tier became a coin
+    flip — it sits in the gate set every merge must pass, and on this box at load ~19 it read
+    a 500-fold spread on identical work and inverted a different row on every ordering.
+    """
+    deficit = floor.median_ns - served.median_ns
+    if deficit <= 0.0:
+        return NESTING_ORDERED
+    return NESTING_INVERTED if deficit > nesting_noise_ns(floor, served) else NESTING_UNRESOLVED
 
 
 # --------------------------------------------------------------------------------------- #
@@ -451,6 +531,79 @@ def test_a_SERVED_arm_BENEATH_the_floor_is_refused():
         serving_overhead(dear, cheap)
 
 
+def test_the_NOISE_AWARE_verdict_STILL_REDS_on_a_GENUINELY_inverted_arm(derived):
+    """THE MUTATION SELF-TEST for the loosened comparison (LAW-07). A gate that cannot go red
+    is worse than no gate, so the loosening is only admissible with this beside it.
+
+    The plant is a REAL measurement, not two hand-built Measurements: the floor arm sleeps and
+    the served arm does not, which is precisely the shape `ServedBeneathTheFloor` names — a
+    served arm timing a different, smaller thing. It must survive the noise bar and reach the
+    strict refusal, on whatever host runs it."""
+    floor, served = measure_forward_paired(
+        lambda: None, lambda payload: time.sleep(_INVERSION_PLANT_S),
+        lambda: None, lambda payload: None,
+        repeats=5, warmup=1, device_type="cpu",
+    )
+    derived("t7.mutation.inverted_floor_ns", floor.median_ns)
+    derived("t7.mutation.inverted_served_ns", served.median_ns)
+    derived("t7.mutation.inverted_noise_ns", nesting_noise_ns(floor, served))
+    assert nesting_verdict(floor, served) == NESTING_INVERTED, (
+        "a served arm measurably faster than the floor arm read as anything but INVERTED — "
+        "the noise bar has swallowed the defect it is supposed to let through"
+    )
+    with pytest.raises(ServedBeneathTheFloor, match="timing a different, smaller thing"):
+        serving_overhead(floor, served)
+
+
+def test_the_NOISE_AWARE_verdict_RESOLVES_a_GENUINELY_nested_pair(derived):
+    """Non-vacuity control, and the half that stops the loosening becoming an off switch. A
+    verdict that answered UNRESOLVED to everything would never red, never be seen to have
+    stopped asserting, and would pass every mutation test above — vacuous green in its newest
+    costume. So the ordered direction must RESOLVE, not merely fail to be inverted."""
+    floor, served = measure_forward_paired(
+        lambda: None, lambda payload: None,
+        lambda: None, lambda payload: time.sleep(_INVERSION_PLANT_S),
+        repeats=5, warmup=1, device_type="cpu",
+    )
+    derived("t7.mutation.nested_ratio", served.median_ns / max(floor.median_ns, 1.0))
+    assert nesting_verdict(floor, served) == NESTING_ORDERED
+    assert serving_overhead(floor, served) > 1.0
+
+
+def test_a_HAIRLINE_inversion_reads_UNRESOLVED_where_the_STRICT_form_reds(derived):
+    """The loosening, shown to be REAL and shown to be a bar rather than a switch. Both pairs
+    carry the SAME spread; only the deficit differs. If the first pair still red, nothing here
+    changed and the coin flip is intact; if the second pair did not, the bar is an off switch.
+    """
+    spread = Measurement(median_ns=1000.0, iqr_ns=200.0, sync_calls=0, repeats=25)
+    hairline = Measurement(median_ns=990.0, iqr_ns=200.0, sync_calls=0, repeats=25)
+    gross = Measurement(median_ns=10.0, iqr_ns=200.0, sync_calls=0, repeats=25)
+    derived("t7.hairline.noise_ns", nesting_noise_ns(spread, hairline))
+    assert nesting_verdict(spread, hairline) == NESTING_UNRESOLVED
+    assert nesting_verdict(spread, gross) == NESTING_INVERTED
+    with pytest.raises(ServedBeneathTheFloor):
+        serving_overhead(spread, hairline)
+
+
+def test_the_NOISE_BAR_FOLLOWS_the_SPREAD_of_the_readings_it_qualifies(derived):
+    """The bar's one moving part, and the property that keeps it honest in BOTH directions: a
+    steady reading demands a small gap before it will call an inversion, a jittery one demands
+    a large gap. A constant bar would be a magnitude committed in a tier that commits none."""
+    steady = Measurement(median_ns=1000.0, iqr_ns=10.0, sync_calls=0, repeats=25)
+    jittery = Measurement(median_ns=1000.0, iqr_ns=900.0, sync_calls=0, repeats=25)
+    derived("t7.noise.steady_ns", nesting_noise_ns(steady, steady))
+    derived("t7.noise.jittery_ns", nesting_noise_ns(jittery, jittery))
+    assert nesting_noise_ns(steady, steady) < nesting_noise_ns(jittery, jittery)
+    beneath = Measurement(median_ns=600.0, iqr_ns=10.0, sync_calls=0, repeats=25)
+    assert nesting_verdict(steady, beneath) == NESTING_INVERTED, (
+        "a 400 ns deficit between two readings that each wobble by 10 ns read as noise"
+    )
+    wobbly_beneath = Measurement(median_ns=600.0, iqr_ns=900.0, sync_calls=0, repeats=25)
+    assert nesting_verdict(jittery, wobbly_beneath) == NESTING_UNRESOLVED, (
+        "the same 400 ns deficit resolved between two readings that each wobble by 900 ns"
+    )
+
+
 def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(derived):
     """The derivation control, the half a manifest cannot give. A probe whose constructed input
     does not move when the arch's declared width moves is a fixed fixture wearing an arch."""
@@ -490,23 +643,31 @@ def test_report_the_per_arch_floor_and_serving_overhead(derived):
     production width, in bf16.
     """
     rows: list[dict] = []
+    readings: dict[tuple[str, str], tuple[Measurement, Measurement]] = {}
     for kind, probe in sorted(registered_probes().items()):
         for spec in specs_for(kind):
             floor_build, floor_forward = probe.floor_arm(spec)
             served_build, served_forward = probe.served_arm(spec)
-            floor = measure_forward(
-                floor_build, floor_forward, repeats=5, warmup=2, device_type="cpu"
+            floor, served = measure_forward_paired(
+                floor_build, floor_forward, served_build, served_forward,
+                repeats=_NESTING_REPEATS, warmup=_NESTING_WARMUP, device_type="cpu",
             )
-            served = measure_forward(
-                served_build, served_forward, repeats=5, warmup=2, device_type="cpu"
-            )
+            verdict = nesting_verdict(floor, served)
+            readings[(kind, spec.name)] = (floor, served)
             rows.append(
                 {
                     "arch_kind": kind,
                     "encoding": spec.name,
                     "floor_median_ns": floor.median_ns,
                     "served_median_ns": served.median_ns,
-                    "serving_overhead": serving_overhead(floor, served),
+                    "floor_iqr_ns": floor.iqr_ns,
+                    "served_iqr_ns": served.iqr_ns,
+                    "noise_ns": nesting_noise_ns(floor, served),
+                    "nesting": verdict,
+                    "serving_overhead": (
+                        serving_overhead(floor, served) if verdict == NESTING_ORDERED
+                        else served.median_ns / max(floor.median_ns, 1.0)
+                    ),
                     "repeats": floor.repeats,
                     "device": "cpu",
                 }
@@ -519,3 +680,20 @@ def test_report_the_per_arch_floor_and_serving_overhead(derived):
         "serves, so an arch could state a floor in the manifest and never be measured against "
         "it — or be measured on only one of the encodings it ships for (AUDIT-1 F-41)"
     )
+    # THE TABLE LANDS BEFORE THE REFUSAL, deliberately: a refusal that takes the evidence with
+    # it leaves whoever reads the run with a row name and no numbers to act on.
+    unresolved = [row for row in rows if row["nesting"] == NESTING_UNRESOLVED]
+    derived("t7.measurement.unresolved", [(r["arch_kind"], r["encoding"]) for r in unresolved])
+    if unresolved:
+        warnings.warn(
+            "the floor/served nesting is UNRESOLVED on "
+            f"{[(r['arch_kind'], r['encoding']) for r in unresolved]}: each median deficit is "
+            "smaller than the noise the reading carries, so the measurement supports neither "
+            f"ordering. Rows: {unresolved}. This is a host too busy to measure on, not a "
+            "verdict on the arms — re-run it on a quiet box before reading anything into it.",
+            ServingNestingUnresolved,
+            stacklevel=2,
+        )
+    for row in rows:
+        if row["nesting"] == NESTING_INVERTED:
+            serving_overhead(*readings[(row["arch_kind"], row["encoding"])])

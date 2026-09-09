@@ -47,8 +47,10 @@ from __future__ import annotations
 
 import ast
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -148,14 +150,50 @@ def require_no_magnitude_lands(path: Path) -> Path:
     return path
 
 
+def _timed_once(
+    build_input: Callable[[], Any],
+    forward: Callable[[Any], Any],
+    device_type: str,
+    sync: Callable[[], None] | None,
+) -> tuple[int, int]:
+    """One `(elapsed_ns, sync_calls)` sample, `build_input` OUTSIDE the timed region.
+
+    THE one timing primitive: both public timers below drive this, so "the timed region
+    excludes input construction" is a property of a single function rather than a coincidence
+    holding between two copies of a loop.
+    """
+    payload = build_input()
+    syncs = 0
+    if device_type == "cuda" and sync is not None:
+        sync()
+        syncs += 1
+    start = time.perf_counter_ns()
+    forward(payload)
+    if device_type == "cuda" and sync is not None:
+        sync()
+        syncs += 1
+    return time.perf_counter_ns() - start, syncs
+
+
+def _summarise(samples: list[int], syncs: int) -> Measurement:
+    """Median and IQR over one arm's samples. No verdict, no comparison."""
+    ordered = sorted(samples)
+    mid = len(ordered) // 2
+    median = float(ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2)
+    lower = ordered[: len(ordered) // 2]
+    upper = ordered[(len(ordered) + 1) // 2 :]
+    iqr = float((upper[len(upper) // 2] if upper else 0) - (lower[len(lower) // 2] if lower else 0))
+    return Measurement(median_ns=median, iqr_ns=iqr, sync_calls=syncs, repeats=len(ordered))
+
+
 def measure_forward(
-    build_input,
-    forward,
+    build_input: Callable[[], Any],
+    forward: Callable[[Any], Any],
     *,
     repeats: int,
     warmup: int,
     device_type: str,
-    sync=None,
+    sync: Callable[[], None] | None = None,
 ) -> Measurement:
     """Time `forward` only. `build_input` runs OUTSIDE the timed region, every repeat.
 
@@ -165,25 +203,51 @@ def measure_forward(
     samples: list[int] = []
     syncs = 0
     for index in range(warmup + repeats):
-        payload = build_input()
-        if device_type == "cuda" and sync is not None:
-            sync()
-            syncs += 1
-        start = time.perf_counter_ns()
-        forward(payload)
-        if device_type == "cuda" and sync is not None:
-            sync()
-            syncs += 1
-        elapsed = time.perf_counter_ns() - start
+        elapsed, sync_calls = _timed_once(build_input, forward, device_type, sync)
+        syncs += sync_calls
         if index >= warmup:
             samples.append(elapsed)
-    samples.sort()
-    mid = len(samples) // 2
-    median = float(samples[mid] if len(samples) % 2 else (samples[mid - 1] + samples[mid]) / 2)
-    lower = samples[: len(samples) // 2]
-    upper = samples[(len(samples) + 1) // 2 :]
-    iqr = float((upper[len(upper) // 2] if upper else 0) - (lower[len(lower) // 2] if lower else 0))
-    return Measurement(median_ns=median, iqr_ns=iqr, sync_calls=syncs, repeats=len(samples))
+    return _summarise(samples, syncs)
+
+
+def measure_forward_paired(
+    first_build: Callable[[], Any],
+    first_forward: Callable[[Any], Any],
+    second_build: Callable[[], Any],
+    second_forward: Callable[[Any], Any],
+    *,
+    repeats: int,
+    warmup: int,
+    device_type: str,
+    sync: Callable[[], None] | None = None,
+) -> tuple[Measurement, Measurement]:
+    """The same timer, over TWO arms ALTERNATELY, so both meet the same machine state.
+
+    `measure_forward` called twice hands each arm its own window of whatever else the host is
+    doing, and those are not the same window. When the host is busy the difference between the
+    two windows exceeds the difference between the two arms, and the CALL ORDER — not the work
+    — decides which arm reads faster: measured on this tree at load ~19 on 16 cores, the same
+    (arch, encoding) pair read 163.588 ms and 0.309 ms for the SAME arm, and reversing the
+    order of the two calls moved rows in and out of inversion. Alternating within one loop
+    makes host contention COMMON-MODE to both arms, which is the only part of it an instrument
+    can do anything about; what remains is reported as IQR and judged by the caller.
+
+    Each arm gets its own sample list and its own sync count, so the two Measurements are
+    separate readings and never a sum — asserted by this module's own paired self-tests.
+    """
+    first: list[int] = []
+    second: list[int] = []
+    first_syncs = 0
+    second_syncs = 0
+    for index in range(warmup + repeats):
+        first_elapsed, first_calls = _timed_once(first_build, first_forward, device_type, sync)
+        second_elapsed, second_calls = _timed_once(second_build, second_forward, device_type, sync)
+        first_syncs += first_calls
+        second_syncs += second_calls
+        if index >= warmup:
+            first.append(first_elapsed)
+            second.append(second_elapsed)
+    return _summarise(first, first_syncs), _summarise(second, second_syncs)
 
 
 # --------------------------------------------------------------------------------------- #
@@ -217,6 +281,52 @@ def test_the_timer_EXCLUDES_input_construction_and_INCLUDES_the_forward(derived)
     assert inside.median_ns >= sleep_ns, (
         "a sleep moved INSIDE the timed region did NOT move the reported median — the timer is "
         "not measuring the forward at all"
+    )
+
+
+def test_the_PAIRED_timer_reads_its_two_arms_SEPARATELY_and_never_as_a_sum(derived):
+    """Self-test 1b — the differential again, through the paired timer. A paired timer that
+    returned one reading twice, or the SUM of the two arms in both slots, would satisfy every
+    caller's type and silently make `second / first` a constant. The sleep is in the second
+    arm alone, so the relation is the same one self-test 1 asserts and commits no number."""
+    sleep_ns = int(_DIFFERENTIAL_SLEEP_S * 1e9)
+
+    first, second = measure_forward_paired(
+        lambda: None, lambda payload: None,
+        lambda: None, lambda payload: time.sleep(_DIFFERENTIAL_SLEEP_S),
+        repeats=3, warmup=1, device_type="cpu",
+    )
+    derived("t6.paired.first_median_ns", first.median_ns)
+    derived("t6.paired.second_median_ns", second.median_ns)
+    assert second.median_ns - first.median_ns >= sleep_ns, (
+        "the sleep in the SECOND arm alone did not separate the two readings — the paired "
+        "timer is returning one measurement for both arms, or the sum of them"
+    )
+    assert first.median_ns < sleep_ns, (
+        "the first arm's reading carries the second arm's sleep, so the paired timer is "
+        "timing the pair rather than each arm"
+    )
+
+
+def test_the_PAIRED_timer_ALTERNATES_rather_than_running_one_arm_to_COMPLETION(derived):
+    """Self-test 1c — the interleave itself, COUNTED, in the style self-test 2 uses for sync.
+
+    Alternation is the whole reason this timer exists and it is not observable in a duration:
+    a paired timer that ran arm one to completion and then arm two would return two readings
+    of two different moments, which is exactly the sequential shape it replaces. Recording
+    stubs make the order observable with no host assumption at all.
+    """
+    order: list[str] = []
+    repeats, warmup = 3, 1
+    measure_forward_paired(
+        lambda: None, lambda payload: order.append("first"),
+        lambda: None, lambda payload: order.append("second"),
+        repeats=repeats, warmup=warmup, device_type="cpu",
+    )
+    derived("t6.paired.call_order", order)
+    assert order == ["first", "second"] * (repeats + warmup), (
+        f"the paired timer did not alternate its arms: {order}. One arm run to completion "
+        "before the other is the sequential measurement this timer exists to replace"
     )
 
 
