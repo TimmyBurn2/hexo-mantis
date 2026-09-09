@@ -30,6 +30,7 @@ import torch
 import _microbatch_harness as H
 from mantis.train.checkpoints import (
     ResumeIdentityMismatchError,
+    ResumeTargetSemanticsError,
     checkpoint_filename,
     content_sha8,
     load_checkpoint,
@@ -162,4 +163,89 @@ def test_the_halt_names_both_sides(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "grid" in message and "graph" in message, (
         f"the halt does not name the effective value and the checkpoint's: {message}"
+    )
+
+
+# ── target semantics ────────────────────────────────────────────────────────────────────
+#
+# ⊕ GUMBEL-REPAIR-1 follow-on. These leaves build no net, so every identity check above
+# passes them. What they decide is whether a stored replay row is a visit-count distribution
+# or a completed improved policy — and, through the same one decision, which loss the trainer
+# applies. Since R345(b)(3) a resume RESTORES the ring, so moving one continues training on
+# rows built under the other meaning, with no provenance on a row to tell them apart.
+@pytest.mark.parametrize("section,leaf,value", [
+    ("train", "policy_target", "completed_improved_policy"),
+    ("train", "completed_q_values", True),
+    ("selfplay", "completed_q_values", True),
+])
+def test_a_resume_that_moves_a_target_semantics_key_halts(
+    tmp_path: Path, section: str, leaf: str, value: Any
+) -> None:
+    """Each leaf separately, so one parametrised row cannot pass by covering another."""
+    path = _write_full(tmp_path)
+    baked = load_checkpoint(path).config
+    block = dict(baked[section])
+    assert block.get(leaf) != value, "the fixture no longer moves the leaf it names"
+    block[leaf] = value
+
+    with pytest.raises(ResumeTargetSemanticsError, match=leaf):
+        resume_trainer(
+            Trainer, path, device=torch.device("cpu"),
+            config_overrides={section: block},
+            declared_keys=frozenset({section}),
+        )
+
+
+def test_a_resume_that_leaves_the_target_semantics_alone_proceeds(tmp_path: Path) -> None:
+    """Mutation half: a guard that fires on every resume blocks every resume."""
+    path = _write_full(tmp_path)
+    baked = load_checkpoint(path).config
+    trainer = resume_trainer(
+        Trainer, path, device=torch.device("cpu"),
+        config_overrides={"train": dict(baked["train"])},
+        declared_keys=frozenset({"train"}),
+    )
+    assert trainer.loaded_from_full_checkpoint
+
+
+def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
+    """An operator reading the halt must not have to diff two files to act on it."""
+    path = _write_full(tmp_path)
+    train_block = dict(load_checkpoint(path).config["train"])
+    train_block["policy_target"] = "completed_improved_policy"
+    with pytest.raises(ResumeTargetSemanticsError) as excinfo:
+        resume_trainer(
+            Trainer, path, device=torch.device("cpu"),
+            config_overrides={"train": train_block},
+            declared_keys=frozenset({"train"}),
+        )
+    message = str(excinfo.value)
+    assert "completed_improved_policy" in message and "raw_visit_distribution" in message, (
+        f"the halt does not name the effective value and the checkpoint's: {message}"
+    )
+
+
+def test_the_gumbel_dialect_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
+    """The considered OMISSION, pinned so it cannot be closed by accident.
+
+    `selfplay.gumbel_variant` changes a target's QUALITY, not its meaning — a visit
+    distribution from a corrected search is still a visit distribution — which puts it with
+    `mcts.n_simulations`, `c_puct` and the playout-cap knobs, none of which are resume-guarded
+    and some of which a run legitimately varies mid-flight. Guarding one search knob and not
+    its siblings would assert a distinction that does not exist. That the corrected dialect
+    cannot widen a stored row's support is measured on the Rust side
+    (`crates/mantis-selfplay/tests/target_support_is_sims_bounded.rs`).
+    """
+    path = _write_full(tmp_path)
+    selfplay = dict(load_checkpoint(path).config["selfplay"])
+    assert selfplay["gumbel_variant"] == "legacy", "the fixture no longer ships the shipped dialect"
+    selfplay["gumbel_variant"] = "mctx"
+    trainer = resume_trainer(
+        Trainer, path, device=torch.device("cpu"),
+        config_overrides={"selfplay": selfplay},
+        declared_keys=frozenset({"selfplay"}),
+    )
+    assert trainer.loaded_from_full_checkpoint, (
+        "a dialect change must NOT halt a resume — if this starts failing, the guard has "
+        "widened past what it can justify"
     )

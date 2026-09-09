@@ -84,6 +84,24 @@ class ResumeIdentityMismatchError(ValueError):
     """
 
 
+class ResumeTargetSemanticsError(ValueError):
+    """A resume changes what a STORED replay row MEANS (GUMBEL-REPAIR-1 follow-on).
+
+    Distinct from `ResumeIdentityMismatchError`, which is about what NET gets built. These
+    leaves build no net and pass its checks; what they decide is whether a recorded row is a
+    visit-count distribution or a completed improved policy, and — through the same one
+    decision — which loss the trainer applies to it.
+
+    A resume is the one moment the two can disagree. `RunConfig` already forces the three
+    flags to move together at MINT (`_policy_target_completed_q_consistency`), so no single
+    config can hold a mixed opinion; nothing carried that decision ACROSS a resume. Since
+    R345(b)(3) a resume restores the replay ring, so moving one of these continues training on
+    a ring full of rows built under the old meaning while producing rows under the new one,
+    and applies the new loss to both. Nothing downstream can notice: a row records no
+    provenance, and both kinds are well-formed distributions over legal moves.
+    """
+
+
 # ── Envelope dataclasses (the in-memory view of a loaded envelope) ─────────────────────
 @dataclass(frozen=True)
 class CheckpointMetadata:
@@ -1110,6 +1128,73 @@ def resolve_lr_provenance(
 _IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
 
 
+#: The leaves that decide what a STORED replay row MEANS, as `(section, leaf)` pairs.
+#:
+#: NOT identity keys — they change no net — which is why they need their own guard rather
+#: than a widened `_IDENTITY_LEAVES`: that tuple is compared against the artifact's STAMP for
+#: the two leaves a stamp carries, and these three have no stamp to fall back on.
+#:
+#: `selfplay.gumbel_variant` is DELIBERATELY ABSENT, and the omission is the considered half
+#: of this guard. It changes a target's QUALITY, not its meaning — a visit distribution from a
+#: corrected search is still a visit distribution — which puts it with `mcts.n_simulations`,
+#: `c_puct`, `dirichlet_alpha` and the playout-cap knobs, none of which are resume-guarded and
+#: some of which a run legitimately varies mid-flight. Guarding one search knob and not its
+#: siblings would assert a distinction that does not exist. What the corrected dialect CANNOT
+#: do is widen a stored row's support: that is measured in
+#: `crates/mantis-selfplay/tests/target_support_is_sims_bounded.rs`.
+_TARGET_SEMANTICS_LEAVES: tuple[tuple[str, str], ...] = (
+    ("train", "policy_target"),
+    ("train", "completed_q_values"),
+    ("selfplay", "completed_q_values"),
+)
+
+
+def _refuse_target_semantics_drift(
+    path: Path,
+    baked_config: Mapping[str, Any] | None,
+    effective_config: Mapping[str, Any],
+) -> None:
+    """HALT when a resume changes what the replay ring's rows mean.
+
+    Compared AFTER `config_overrides`, for `_refuse_identity_drift`'s reason: before them the
+    run's own configuration does not yet exist. A leaf ABSENT from one side and present on the
+    other is a move, so the comparison is over the union — the same shape the identity guard
+    uses for its optional leaf.
+
+    Returns silently when the checkpoint carries no baked config at all (a weights-only or
+    legacy artifact): there is nothing to compare, and the identity guard takes the same
+    posture in the same situation.
+
+    Raises:
+        ResumeTargetSemanticsError: any target-semantics leaf differs, naming leaf and values.
+    """
+    if not baked_config:
+        return
+    drift: list[str] = []
+    for section, leaf in _TARGET_SEMANTICS_LEAVES:
+        baked_section = baked_config.get(section)
+        effective_section = effective_config.get(section)
+        if not isinstance(baked_section, Mapping) or not isinstance(effective_section, Mapping):
+            # One side does not carry the section — a shape this guard cannot read, and a
+            # shape it must not GUESS at. The mint-time validator is what covers a config
+            # that is merely incomplete.
+            continue
+        want, got = baked_section.get(leaf), effective_section.get(leaf)
+        if want != got:
+            drift.append(f"{section}.{leaf}: checkpoint={want!r}, resume={got!r}")
+    if drift:
+        raise ResumeTargetSemanticsError(
+            f"{path.name}: the resuming run builds its policy targets differently from the "
+            "run that filled this checkpoint's replay ring — "
+            + "; ".join(drift)
+            + ". A resume restores the ring (R345(b)(3)), so the old rows and the new ones "
+            "would carry different meanings under one loss, and a row records no provenance "
+            "that could tell them apart. These three leaves are ONE decision at mint "
+            "(`_policy_target_completed_q_consistency`); a resume is not a place to re-take "
+            "it. Resume with the checkpoint's target semantics, or start a new run."
+        )
+
+
 def _refuse_identity_drift(
     path: Path,
     baked_config: Mapping[str, Any] | None,
@@ -1223,6 +1308,7 @@ def resume_trainer(
     # the carried config; anything else non-schema still reaches the writer and raises there.
     config = {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS}
     _refuse_identity_drift(path, baked_config, config, arch)
+    _refuse_target_semantics_drift(path, baked_config, config)
     # Pass the DECLARED arch (metadata.arch) so the Trainer stamps the same arch on re-save
     # (never re-derives it); the sink threads through for resume-time events (T-CK-18).
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)
