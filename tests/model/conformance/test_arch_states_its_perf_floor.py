@@ -48,6 +48,7 @@ they are the fence that temptation clears first.
 from __future__ import annotations
 
 import ast
+import os
 import time
 import warnings
 from collections.abc import Callable
@@ -689,8 +690,10 @@ def test_report_the_per_arch_floor_and_serving_overhead(derived):
             "the floor/served nesting is UNRESOLVED on "
             f"{[(r['arch_kind'], r['encoding']) for r in unresolved]}: each median deficit is "
             "smaller than the noise the reading carries, so the measurement supports neither "
-            f"ordering. Rows: {unresolved}. This is a host too busy to measure on, not a "
-            "verdict on the arms — re-run it on a quiet box before reading anything into it.",
+            f"ordering. Rows: {unresolved}. Load average {os.getloadavg()} over "
+            f"{os.cpu_count()} CPU(s) — the number that explains it, reported rather than "
+            "guessed at. This is a host too busy to measure on and not a verdict on the arms; "
+            "re-run it on a quiet box before reading anything into it.",
             ServingNestingUnresolved,
             stacklevel=2,
         )
