@@ -6,6 +6,8 @@ the re-validation protocol (LAW-02): falsifications are objective- and regime-sp
 cite the row, state its context, test transfer, only then keep/drop. Dates are original
 falsification dates.
 
+Moved here from docs/registers/ by R346. The de-duplication that move ordered found nothing to remove: F-01 through F-43 each appear exactly once and no line repeats, so every row below is the row that was there before, unedited. No distinct falsification was dropped, because none was a duplicate.
+
 | id | hypothesis | falsified by | mechanism (curated) |
 |---|---|---|---|
 | F-01 | Hex-native trunk variant closes the self-play gap (2026-05-05) | MCTS-matched eval | Probe gates passed but selfplay dropped to 0–1% SealBot WR. Static probes cannot validate dynamic equivariance — only MCTS-matched eval can. |
