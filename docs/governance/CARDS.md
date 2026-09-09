@@ -70,18 +70,6 @@ run6 is minted and has never started.
   "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
   `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
-- **`R319(d)` — the gate round cannot finish inside `round_timeout_sec` under load. LIVE,
-  MINT-BLOCKING, HOST-INDEPENDENT.** R339(b) adjudicated it by measurement (geometry frozen, the
-  lever is `eval.concurrency`, the value picked by a rule on the box — run6 mints `8`) and R340(a)
-  then CLOSED it by re-reading the failing round as a weak-net artifact. **R341(b) withdrew that
-  closure and refuted it by measurement:** run 2's step-1000 round ran 3600.11 s, was SIGTERM'd
-  (`eval_broken`, `round_timeout`, exit -15) and returned `wr_sealbot: null`, `promoted: false`
-  after 139 games. R340(a)'s 2.3x headroom came from STANDALONE rounds on an idle box; under
-  contention with 16 self-play workers and the trainer the round is ~7x slower per game
-  (4.0 -> 25.9 s/game). The candidate was the warm-started BC net at a 31-ply median — R340(a)'s
-  own regime — so "weak-net artifact" is not the explanation, and R319(d)'s original failing round
-  agrees to within 11%. **run6 as minted cannot evaluate during a run.** No clause in R342-R345
-  touches R319. R341(b); A:1927, A:2054, A:7075.
 - **`F-816-24` — MINT-BLOCKING, LIVE, no close recorded.** `monitor/supervise.py` constructs a bare
   `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix packet was
   ordered; no merge or close is recorded. R291(b); A:2662.
@@ -90,6 +78,18 @@ run6 is minted and has never started.
   the change. A one-line re-mint if the operator reads it the other way. A:7718.
 
 Riding the run rather than holding it: **`F-816-37`**, below.
+
+**`R341(b)` / `R319(d)` — DISCHARGED AT G=8 ONLY (R343(a)). Not a hold on run6; still LIVE below
+G=8.** R341(b) withdrew R340(a)'s closure because the round that must finish is the CONTENDED one.
+R341(c)'s G table then ran and G=8 was armed on the operator's forward: **G=1 at 53.33 s/game and
+G=4 at 13.99 s/game both consume the full 3600 s `round_timeout_sec` and return
+`wr_sealbot: null`; G=8 at 7.09 s/game completed a fully escalated 264-game round in 1872.8 s,
+78.8% of the 2376 s bar, with a real `wr_sealbot`**, and the 4 h shakedown held a steady 900.6 s
+wall with no growth over seven completed rounds, zero nulls, two promotions. run6 mints
+`eval.concurrency = 8`. **The row is discharged by the ARMED VALUE, not by the geometry becoming
+safe** — lowering concurrency to 4 walks straight back into a timeout, and a null is not a slow
+reading: witness (iii) fits an Elo slope over at least 5 rounds and cannot fit nulls, so a geometry
+failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7249, A:7341.
 
 ## F-816-* findings
 
@@ -136,7 +136,7 @@ Riding the run rather than holding it: **`F-816-37`**, below.
 | PERF-TRANCHE-1 residual | the 7.2% pre-control/ledger disagreement | OPEN as instrument hygiene; ledger absolute levels are not quotable without re-measurement | R320 |
 | PERF-TRANCHE-2 | six items T2-1..T2-6 | EXECUTED — its findings are cited as landed evidence by R335 — but NO ratifying clause exists in either archive file | R334(e) |
 | WP-AXIS2 | Phase 2 axis-graph arch, then a shakedown | LAST ORDERED, NEVER CONFIRMED. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so completion would be an inference, not a record | R335(g) |
-| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | OWED — never forwarded, so the label points at an absent document. R337-class forwarding gap, on the architect's ledger | R345 landing |
+| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | **CLOSED.** Filed to `dev` at `428f3c8` as `docs/audits/AUDIT_2026-09-09.md`, 1661 lines. Read it with its own header caveat: the audit was taken at `97e814e3`, 29 commits behind `fb3725f`, so REPAIR-A2 and GUMBEL-REPAIR-1 both post-date it and its findings are not a statement about HEAD | R346 era |
 | DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED with no producer at HEAD; drawn as stated gaps, never as zeros | R334(a) |
 | R317(c)(ii) diagnostic | move-sequence-hash diagnostic | accepted as NON-BLOCKING DEBT, never shipped | R318 |
 | AUDIT-1 P10 | lane-C design input, explicitly "not a packet" | still the architect's, undispatched | R331(d) |
@@ -252,8 +252,13 @@ Two limits, stated rather than hidden:
    750-step cadence, a 12 h block) that R343(b) and R344 have already superseded. A card list built
    by walking that section alone would miss the newest holds and carry two dead ones. Everything
    above from R338 onward came from the ruling entries instead.
-2. **AUDIT-2's own card list is not in this repository.** R345 says "everything else in AUDIT-2 is
-   CARDED with its priority", but that list travelled in the packet and the analysis text was never
-   forwarded — the `AUDIT-2 filing` row above is exactly that gap. **An unknown number of AUDIT-2
-   cards therefore cannot be enumerated from these sources.** This file is not complete, and it
-   will not be until that text lands.
+2. **Read the whole row, not its headline.** A row's bolded verdict is where it STARTED. R341(b)'s
+   headline still reads "LIVE, MINT-BLOCKING, and HOST-INDEPENDENT"; its discharge is nine lines
+   below, in the same row. This file got that row wrong once by stopping at the bold, and so did
+   the ruling that closed it prematurely before that. The discharge, the scope and the superseding
+   annotation all live at the FOOT of a row, never in its title.
+3. **AUDIT-2's own card list is still not enumerable here.** The analysis text is now filed at
+   `docs/audits/AUDIT_2026-09-09.md`, but R345's "everything else in AUDIT-2 is CARDED with its
+   priority" refers to a card list that travelled in the packet, not in the audit document. An
+   unknown number of AUDIT-2 cards therefore remain outside this file, and it should not be read as
+   complete.

@@ -13,30 +13,27 @@ numbers** and is what run6 is held on: the cap discards a mean 88% of the policy
 99.97% of expansions, the tree-memory delta is exactly zero (the pool is preallocated at
 MAX_NODES), and what a larger K costs is the armed-sims ceiling — which gates configs.
 
-**`R319(d)` is LIVE and MINT-BLOCKING, and it is the heaviest of these.** R339(b) adjudicated it by
-measurement and R340(a) closed it by re-reading the failing round as a weak-net artifact; **R341(b)
-WITHDREW that closure and refuted it by measurement.** Run 2's step-1000 gate round ran 3600.11 s,
-was SIGTERM'd (`eval_broken`, `reason: round_timeout`, exit -15) and returned `wr_sealbot: null`,
-`promoted: false` after 139 games. R340(a)'s 2.3x headroom came from STANDALONE rounds on an idle
-box; under contention with 16 self-play workers and the trainer the same round is ~7x slower per
-game (4.0 -> 25.9 s/game) and does not fit. The candidate was the warm-started BC net at a 31-ply
-median — R340(a)'s own regime — so "weak-net artifact" is not the explanation, and R319(d)'s
-original failing round agrees with this one to within 11%, which lifts it above n = 1. The archive
-states the consequence outright: **run6 as minted CANNOT EVALUATE DURING A RUN.** The withdrawal is
-HOST-INDEPENDENT, and **no clause in R342, R343, R344 or R345 touches R319** — nothing re-closes it.
-
-A third row is mint-blocking with no close recorded: **`F-816-24`** — `monitor/supervise.py`
+A second row is mint-blocking with no close recorded: **`F-816-24`** — `monitor/supervise.py`
 constructs a bare `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix
 packet was ordered at R291(b); no merge or close appears in the frozen record.
 
 Owed, named so it is not mistaken for done:
 
 - the leg-5 cap value — the thing the hold is on;
-- the `AUDIT_2026-09-09.md` analysis text, never forwarded, so the label AUDIT-2 points at an
-  absent document;
 - the `supervisor_kill_grace_sec: 600.0` reading. It was armed on the interpretation that
   "only if the supervisor is used" describes when the value takes effect rather than
   conditioning the change. A one-line re-mint if the operator reads it the other way.
+
+**`R341(b)` / `R319(d)` is DISCHARGED AT G=8 ONLY (R343(a)), and the scope is the load-bearing
+part.** run6 mints `eval.concurrency = 8`, so it is NOT a hold on run6. It stays LIVE at lower
+concurrency: measured, **G=1 is 53.33 s/game and G=4 is 13.99 s/game, and both consume the full
+3600 s `round_timeout_sec` and return `wr_sealbot: null`**, while G=8 is 7.09 s/game and completed
+a fully escalated 264-game round in 1872.8 s against the 2376 s bar with a real `wr_sealbot`; the
+4 h shakedown's steady wall held 900.6 s with no growth. The row is discharged **by the armed
+value, not by the geometry becoming safe** — a future session that lowers `eval.concurrency` to 4
+walks straight back into a timeout, and a null is not a slow reading: witness (iii) fits an Elo
+slope over at least 5 rounds and cannot fit nulls, so a geometry failure disarms one of run6's
+three success witnesses.
 
 Riding the run rather than holding it: **`F-816-37` is open and not root-caused.** Every firing on
 record is on the host R341 condemned and R342 downgraded to suspect, and the work moved to a
