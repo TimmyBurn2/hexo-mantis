@@ -909,6 +909,10 @@ mod seam_roundtrip {
         r.mcts_stat_count.store(9, Ordering::Relaxed);
         r.mcts_quiescence_fires.store(10, Ordering::Relaxed);
         r.max_sims_per_search.store(50, Ordering::Relaxed);
+        r.pcr_full_moves.store(37, Ordering::Relaxed);
+        r.pcr_quick_moves.store(38, Ordering::Relaxed);
+        r.gumbel_round_leaves.store(39, Ordering::Relaxed);
+        r.gumbel_rounds.store(40, Ordering::Relaxed);
         r.cluster_value_std_accum.store(11, Ordering::Relaxed);
         r.cluster_policy_disagreement_accum
             .store(12, Ordering::Relaxed);
@@ -945,10 +949,10 @@ mod seam_roundtrip {
             mcts_stat_count: 9,
             mcts_quiescence_fires: 10,
             max_sims_per_search: 50,
-            pcr_full_moves: 21,
-            pcr_quick_moves: 22,
-            gumbel_round_leaves: 23,
-            gumbel_rounds: 24,
+            pcr_full_moves: 37,
+            pcr_quick_moves: 38,
+            gumbel_round_leaves: 39,
+            gumbel_rounds: 40,
             cluster_value_std_accum: 11,
             cluster_policy_disagreement_accum: 12,
             cluster_variance_samples: 13,
