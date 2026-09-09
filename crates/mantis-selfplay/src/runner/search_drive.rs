@@ -1493,3 +1493,54 @@ fn select_move(
     };
     Some(move_idx)
 }
+
+#[cfg(test)]
+mod explore_gate_tests {
+    use super::relative_explore_gate;
+
+    /// ⊕ GUMBEL-REPAIR-1 item 7 — the first-N-ply visit sampling IS a config switch, and
+    /// `selfplay.gumbel_explore_moves` is it. No second key is needed and none was added.
+    ///
+    /// The paper's action selection is the Sequential-Halving winner and the exploration
+    /// comes from the Gumbel draw itself, so "visit sampling off" is `explore_moves: 0` —
+    /// the gate then opens at the game's own first ply and every move is the winner. A
+    /// second boolean would be a second authority over one behaviour (R1).
+    #[test]
+    fn zero_explore_moves_takes_the_winner_from_the_first_ply() {
+        for ply in 0..4 {
+            assert!(
+                relative_explore_gate(ply, 0, 0),
+                "at explore_moves 0 the gate is open at ply {ply}"
+            );
+        }
+    }
+
+    /// The shipped value samples for the first ten plies and takes the winner after.
+    #[test]
+    fn the_shipped_value_samples_for_exactly_its_span() {
+        for ply in 0..10 {
+            assert!(
+                !relative_explore_gate(ply, 0, 10),
+                "ply {ply} still samples"
+            );
+        }
+        assert!(
+            relative_explore_gate(10, 0, 10),
+            "the gate opens AT the span, not past it"
+        );
+    }
+
+    /// D-WS3V3: the span is RELATIVE to the game's own start, so a seeded game that begins
+    /// deep in a replayed prefix explores for its own first `explore_moves` moves rather
+    /// than opening the gate immediately because the absolute ply is already large.
+    #[test]
+    fn the_span_is_relative_to_the_games_start() {
+        assert!(
+            !relative_explore_gate(40, 35, 10),
+            "5 moves into a game started at ply 35"
+        );
+        assert!(relative_explore_gate(45, 35, 10), "and open 10 moves in");
+        // A start AFTER the ply saturates rather than wrapping.
+        assert!(!relative_explore_gate(3, 35, 1));
+    }
+}
