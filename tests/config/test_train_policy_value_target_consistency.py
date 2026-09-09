@@ -66,18 +66,19 @@ def _train_block(**over: object) -> dict:
     return dict(_MINTED_TRAIN, **over)
 
 
-def _selfplay_block(*, completed_q_values: bool = False) -> dict:
+def _selfplay_block(*, completed_q_values: bool = False, n_simulations: int = 50) -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "inference_pool_size": None, "completed_q_values": completed_q_values,
         "c_visit": 50.0, "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16,
-        "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True, "results_queue_cap": 10_000, "random_opening_plies": 0,
+        "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+        "results_queue_cap": 10_000, "random_opening_plies": 0,
         "rotation_enabled": True, "forced_win_policy_enabled": False,
         "forced_win_policy_depth": 2, "forced_win_policy_weight": 1.0, "solver_enabled": False,
         "solver_depth": 16, "solver_node_budget": 50_000, "solver_neighbor_dist": 2,
         "solver_visit_weight": 0.3, "seed_fraction": 0.0, "seed_corpus_path": None,
         "log_investigation_metrics": True, "instrumentation_enabled": False,
-        "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
+        "mcts": {"n_simulations": n_simulations, "c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
         "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
@@ -126,7 +127,12 @@ def _monitor_block() -> dict:
     }
 
 
-def _payload(*, train_over: dict | None = None, selfplay_completed_q: bool = False) -> dict:
+def _payload(
+    *,
+    train_over: dict | None = None,
+    selfplay_completed_q: bool = False,
+    n_simulations: int = 50,
+) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
@@ -139,7 +145,9 @@ def _payload(*, train_over: dict | None = None, selfplay_completed_q: bool = Fal
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _eval_block(),
         "train": _train_block(**(train_over or {})),
-        "selfplay": _selfplay_block(completed_q_values=selfplay_completed_q),
+        "selfplay": _selfplay_block(
+            completed_q_values=selfplay_completed_q, n_simulations=n_simulations
+        ),
         "inference": _inference_block(),
         "monitor": _monitor_block(),
     }
@@ -163,12 +171,60 @@ def test_selfplay_completed_q_values_true_disagrees_with_train_raises():
 
 
 def test_train_and_selfplay_both_flipped_still_disagrees_with_policy_target_raises():
-    # policy_target is a single-variant Literal ("raw_visit_distribution" only) — flipping
-    # BOTH completed_q_values flags still disagrees with the pinned policy_target.
+    # Flipping BOTH completed_q_values flags while `policy_target` stays on the raw-visit
+    # member still disagrees. GUMBEL-REPAIR-1 gave the Literal a second member, so this is no
+    # longer true BY CONSTRUCTION — the combination is now expressible and the validator is
+    # what refuses it, which is a stronger statement than the one this test used to make.
     with pytest.raises(ValidationError):
         RunConfig.model_validate(
             _payload(train_over={"completed_q_values": True}, selfplay_completed_q=True)
         )
+
+
+def test_the_completed_target_member_requires_both_completed_q_flags():
+    """⊕ GUMBEL-REPAIR-1 item 6 — the widened Literal's own consistency.
+
+    `completed_improved_policy` is the target the corrected Gumbel arm exports, and it is
+    only coherent with the completed-Q producer and the completed-Q loss BOTH on. The three
+    still move together; there is simply a second combination they can move to."""
+    # AT 50 SIMS THIS IS REFUSED, and by the OTHER guard: a graph run's HEXG visit slot is
+    # derived from the sims regime (57 at 50) and the completed target's support is
+    # child-count-wide, so the record format cannot carry it. That refusal is item 6's
+    # subject and is asserted on its own terms below; here the regime is raised until the
+    # slot fits, so what is being tested is the cross-section rule and not the capacity one.
+    both_on = RunConfig.model_validate(
+        _payload(
+            train_over={"policy_target": "completed_improved_policy", "completed_q_values": True},
+            selfplay_completed_q=True,
+            n_simulations=192,
+        )
+    )
+    assert both_on.train.policy_target == "completed_improved_policy"
+
+    with pytest.raises(ValidationError, match="visit capacity"):
+        RunConfig.model_validate(
+            _payload(
+                train_over={
+                    "policy_target": "completed_improved_policy",
+                    "completed_q_values": True,
+                },
+                selfplay_completed_q=True,
+            )
+        )
+
+    for train_over, selfplay_completed_q in (
+        ({"policy_target": "completed_improved_policy"}, False),
+        ({"policy_target": "completed_improved_policy", "completed_q_values": True}, False),
+        ({"policy_target": "completed_improved_policy"}, True),
+    ):
+        with pytest.raises(ValidationError, match="policy_target"):
+            RunConfig.model_validate(
+                _payload(
+                    train_over=train_over,
+                    selfplay_completed_q=selfplay_completed_q,
+                    n_simulations=192,
+                )
+            )
 
 
 def test_out_of_enum_value_target_rejected_by_literal_before_cross_section_validator():

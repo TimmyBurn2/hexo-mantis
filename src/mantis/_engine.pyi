@@ -395,6 +395,14 @@ class SelfPlayRunnerConfig:
         inference_pool_size: int | None = None,
     ) -> None: ...
     @property
+    def gumbel_variant(self) -> str: ...
+    @gumbel_variant.setter
+    def gumbel_variant(self, v: str) -> None: ...
+    @property
+    def gumbel_root_counts(self) -> bool: ...
+    @gumbel_root_counts.setter
+    def gumbel_root_counts(self, v: bool) -> None: ...
+    @property
     def forced_win_policy_enabled(self) -> bool: ...
     @forced_win_policy_enabled.setter
     def forced_win_policy_enabled(self, v: bool) -> None: ...
@@ -724,6 +732,16 @@ def mcts_max_armed_sims() -> int:
     reads it across the bridge rather than re-typing the number, so the bound cannot go stale
     when either constant moves.
     """
+def mcts_max_armed_sims_mctx() -> int:
+    """The same bound for the CORRECTED Gumbel dialect (GUMBEL-REPAIR-1).
+
+    `(MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)`. That arm expands its
+    root over the full legal set, so it spends `MAX_ROOT_CHILDREN` slots on the root instead
+    of `MAX_CHILDREN_PER_NODE` and its ceiling is the lower of the two. Read across the
+    bridge for the same reason as its sibling: the schema refuses an over-budget config at
+    MINT, and it cannot do that against a number it does not have.
+    """
+
 def take_mcts_pool_overflow_count() -> int: ...
 def mcts_omitted_prior_stats() -> tuple[int, int, int]: ...
 def take_mcts_omitted_prior_stats() -> tuple[int, int, int]: ...
@@ -753,6 +771,8 @@ def derived_hexg_visit_capacity(
     n_sims_full: int,
     leaf_batch_size: int,
     completed_q_values: bool,
+    gumbel_mcts: bool,
+    gumbel_variant: str,
 ) -> int: ...
 
 

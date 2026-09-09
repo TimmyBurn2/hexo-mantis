@@ -26,6 +26,11 @@ def _derive(**over):
         n_sims_full=0,
         leaf_batch_size=8,
         completed_q_values=False,
+        # The SHIPPED dialect. GUMBEL-REPAIR-1 made the completed-target refusal a
+        # DENSITY check whose support bound depends on the dialect, so a derivation
+        # that did not state one would be measuring an unstated regime.
+        gumbel_mcts=False,
+        gumbel_variant="legacy",
     )
     args.update(over)
     return _engine.derived_hexg_visit_capacity(**args)

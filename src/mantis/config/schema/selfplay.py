@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from mantis._engine import mcts_max_armed_sims
+from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_mctx
 from mantis.config.schema._base import StrictModel
 
 #: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (AUDIT-1 F-21).
@@ -26,6 +26,14 @@ from mantis.config.schema._base import StrictModel
 #: the bridge rather than re-typed — a literal here would be a second authority for a bound
 #: only the pool knows, and it would go stale the day either constant moves.
 MAX_ARMED_SIMS: int = mcts_max_armed_sims()
+
+#: The same bound under the CORRECTED Gumbel dialect, which spends `MAX_ROOT_CHILDREN` pool
+#: slots on its root instead of `MAX_CHILDREN_PER_NODE` (GUMBEL-REPAIR-1). It is LOWER, and
+#: it is a second constant rather than a smaller shared one so the ceiling every existing
+#: config validates against does not move for a dialect nothing arms. Field bounds below
+#: keep the LOOSE value — a `Field(le=...)` cannot see a sibling key — and the tighter one
+#: is applied by `_gumbel_dialect_fits_the_node_pool`.
+MAX_ARMED_SIMS_MCTX: int = mcts_max_armed_sims_mctx()
 
 
 class MctsConfig(StrictModel):
@@ -161,6 +169,46 @@ class SelfplayConfig(StrictModel):
     instrumentation_enabled: bool
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
+
+    @model_validator(mode="after")
+    def _gumbel_dialect_fits_the_node_pool(self) -> "SelfplayConfig":
+        """The CORRECTED Gumbel dialect's sim ceiling, refused at MINT and not at boot.
+
+        The corrected arm expands its root over the full legal set, so it spends
+        ``MAX_ROOT_CHILDREN`` pool slots on the root instead of ``MAX_CHILDREN_PER_NODE``
+        and its ceiling is ``MAX_ARMED_SIMS_MCTX``, below the ``MAX_ARMED_SIMS`` the field
+        bounds carry. A `Field(le=...)` cannot express this — the applicable ceiling depends
+        on two sibling keys — so without this validator a config in the gap between the two
+        bounds would validate clean and be refused by ``SelfPlayRunner::new`` at boot.
+
+        That inversion is the one R255/ADJ-D34 closed for the HEXG visit capacity, in this
+        same class, and re-opening it a section away would be the same defect wearing a
+        different key's name. INERT while ``gumbel_mcts`` is false, which is every committed
+        config.
+
+        Raises:
+            ValueError: an armed sims knob exceeds the corrected dialect's ceiling.
+        """
+        if not (self.gumbel_mcts and self.gumbel_variant == "mctx"):
+            return self
+        armed = {
+            "selfplay.mcts.n_simulations": self.mcts.n_simulations,
+            "selfplay.playout_cap.standard_sims": self.playout_cap.standard_sims,
+            "selfplay.playout_cap.fast_sims": self.playout_cap.fast_sims,
+            "selfplay.playout_cap.n_sims_quick": self.playout_cap.n_sims_quick,
+            "selfplay.playout_cap.n_sims_full": self.playout_cap.n_sims_full,
+        }
+        over = {k: v for k, v in armed.items() if v > MAX_ARMED_SIMS_MCTX}
+        if over:
+            raise ValueError(
+                "selfplay.gumbel_variant='mctx' lowers the node-pool sim ceiling to "
+                f"{MAX_ARMED_SIMS_MCTX} (from {MAX_ARMED_SIMS}), because that dialect "
+                "expands the root over its FULL legal set and spends MAX_ROOT_CHILDREN pool "
+                "slots on it instead of MAX_CHILDREN_PER_NODE. Over the ceiling: "
+                + ", ".join(f"{k}={v}" for k, v in sorted(over.items()))
+                + " — lower the budget, or mint the legacy dialect."
+            )
+        return self
 
 
 class FusedGraphCapsConfig(StrictModel):

@@ -470,6 +470,8 @@ def _select_buffer(config: Any, capacity: int) -> Any:
             n_sims_full=pc.n_sims_full,
             leaf_batch_size=sp.leaf_batch_size,
             completed_q_values=sp.completed_q_values,
+            gumbel_mcts=sp.gumbel_mcts,
+            gumbel_variant=sp.gumbel_variant,
         )
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
         buffer.seed_sampler(config.seed)

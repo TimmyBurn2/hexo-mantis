@@ -577,8 +577,11 @@ class RunConfig(StrictModel):
         # decision also selects the train-side loss (`train.completed_q_values`). One
         # decision, two consumers across two seams — this cross-section validator keeps
         # them from becoming two independently-editable knobs kept in sync only by
-        # convention. Inert at mint time (all three sides pin to the single live combo);
-        # fires the day one flag flips without the others.
+        # convention. Inert at mint time — every committed config mints the raw/off/off
+        # combo — and it fires the day one flag flips without the others. GUMBEL-REPAIR-1
+        # widened `policy_target` to a second member, so the check is no longer inert BY
+        # CONSTRUCTION: `completed_improved_policy` with either `completed_q_values` still
+        # false is now an expressible mint, and this is what refuses it.
         raw = self.train.policy_target == "raw_visit_distribution"
         train_off = not self.train.completed_q_values
         selfplay_off = not self.selfplay.completed_q_values
@@ -677,10 +680,11 @@ class RunConfig(StrictModel):
         not constrain grid configs (R250's absence principle, mint-side). The
         completed-Q leg of the derivation (child-count-wide support vs
         ``MAX_CHILDREN_PER_NODE``) is unreachable from a validated ``RunConfig`` today —
-        ``train.policy_target`` is the single-member Literal ``"raw_visit_distribution"``,
-        so ``_policy_target_completed_q_consistency`` already forbids
-        ``selfplay.completed_q_values=true`` — but it rides the same call so the day
-        that Literal widens, the mint check is already standing.
+        ``train.policy_target`` gained its second member ``"completed_improved_policy"`` at
+        GUMBEL-REPAIR-1, so this leg is REACHABLE: a config pairing that target with
+        ``completed_q_values=true`` on a graph run is exactly what the engine's
+        support-vs-capacity check now refuses, and it refuses at MINT rather than at boot.
+        The check was written before the member existed, against the day it would.
 
         The function-scope import mirrors ``mantis.run._select_buffer``'s stated
         posture: ``mantis._engine`` is already a transitive dependency of this module
@@ -703,6 +707,8 @@ class RunConfig(StrictModel):
                 n_sims_full=pc.n_sims_full,
                 leaf_batch_size=sp.leaf_batch_size,
                 completed_q_values=sp.completed_q_values,
+                gumbel_mcts=sp.gumbel_mcts,
+                gumbel_variant=sp.gumbel_variant,
             )
         except ValueError as exc:
             raise ValueError(
@@ -710,7 +716,8 @@ class RunConfig(StrictModel):
                 f"format: {exc} [derived from selfplay.mcts.n_simulations, "
                 "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
                 "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
-                "selfplay.completed_q_values — R255/ADJ-D34: refused at mint, "
+                "selfplay.completed_q_values, selfplay.gumbel_mcts, "
+                "selfplay.gumbel_variant — R255/ADJ-D34: refused at mint, "
                 "never at boot]"
             ) from exc
         return self

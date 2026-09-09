@@ -169,6 +169,8 @@ def _assert_policy_target_consistency(train: dict[str, Any], selfplay: dict[str,
     time; this is the defensive runtime assertion at the actual `.from_config` consumer for
     a caller that hands `TrainHParams.from_config` a dict never routed through
     `RunConfig.model_validate`."""
+    # `policy_target` has TWO members since GUMBEL-REPAIR-1; `raw` is the raw-visit one and
+    # every other member means the completed target, so this stays a two-way test.
     raw = train["policy_target"] == "raw_visit_distribution"
     train_off = not train["completed_q_values"]
     if raw != train_off:

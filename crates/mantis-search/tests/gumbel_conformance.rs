@@ -251,8 +251,12 @@ fn the_dialect_states_its_pool_envelope() {
         MAX_ARMED_SIMS_MCTX,
         (MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)
     );
+    // Compared through locals so clippy does not fold two consts into a literal truth: the
+    // assertion is about the RELATION surviving a change to either constant, which is
+    // exactly what a const-folded check would stop noticing.
+    let (mctx_ceiling, legacy_ceiling) = (MAX_ARMED_SIMS_MCTX, MAX_ARMED_SIMS);
     assert!(
-        MAX_ARMED_SIMS_MCTX < MAX_ARMED_SIMS,
+        mctx_ceiling < legacy_ceiling,
         "the Mctx dialect spends up to MAX_ROOT_CHILDREN slots on its root, so its ceiling \
          MUST be the lower of the two"
     );
@@ -307,7 +311,7 @@ fn the_interior_selector_changes_where_the_visits_land() {
             .collect();
         let leaves = tree.select_leaves(1).expect("root selects itself");
         assert_eq!(leaves.len(), 1);
-        tree.expand_and_backup(&[policy.clone()], &[0.1]);
+        tree.expand_and_backup(std::slice::from_ref(&policy), &[0.1]);
 
         let forced = tree.pool[0].first_child;
         tree.set_forced_root_child(Some(forced))
@@ -322,7 +326,7 @@ fn the_interior_selector_changes_where_the_visits_land() {
             // Values that vary per simulation, so completed-Q has something to complete
             // with and the two selectors have a reason to disagree.
             let value = 0.4 - 0.05 * (i % 5) as f32;
-            tree.expand_and_backup(&[policy.clone()], &[value]);
+            tree.expand_and_backup(std::slice::from_ref(&policy), &[value]);
         }
         let node = &tree.pool[forced as usize];
         let first = node.first_child as usize;

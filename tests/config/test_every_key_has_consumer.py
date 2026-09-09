@@ -270,7 +270,8 @@ CONSUMER_REGISTRY = {
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
     "selfplay.gumbel_variant": (
         "SelfPlayHParams.from_config -> cfg.gumbel_variant setter -> SearchFlags.gumbel_variant "
-        "-> MCTSTree::configure_gumbel"
+        "-> MCTSTree::configure_gumbel; and RunConfig._graph_sims_regime_fits_the_hexg_record_"
+        "format -> derived_hexg_visit_capacity (the target's support bound)"
     ),
     "selfplay.gumbel_root_counts": (
         "SelfPlayHParams.from_config -> cfg.gumbel_root_counts setter -> "

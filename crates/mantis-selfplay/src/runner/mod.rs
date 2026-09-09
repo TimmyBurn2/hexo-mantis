@@ -387,6 +387,8 @@ impl SelfPlayRunner {
                 config.n_sims_full,
                 config.leaf_batch_size,
                 config.completed_q_values,
+                config.gumbel_mcts,
+                config.gumbel_variant.as_config_str(),
             )
             .map_err(|e| format!("SelfPlayRunner: {e}"))?;
             Some(cap)

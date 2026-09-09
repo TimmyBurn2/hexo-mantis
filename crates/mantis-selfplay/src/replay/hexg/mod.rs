@@ -108,12 +108,21 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 /// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`] — no slot sizing
 ///   can honor the regime; the schema twin makes this a MINT-time error, and
 ///   the boot-side call is defense-in-depth for un-minted constructions;
+/// * `gumbel_variant` is not a dialect this build knows;
+/// * `completed_q_values` on the graph path under the CORRECTED Gumbel dialect, at any
+///   capacity — that arm's root holds the full legal set, so the target's support is the
+///   legal set, which no sims regime bounds (GUMBEL-REPAIR-1 item 6);
 /// * `completed_q_values` on the graph path while
 ///   `mantis_search::MAX_CHILDREN_PER_NODE` exceeds the derived capacity — the
 ///   completed-Q exporter places positive mass on EVERY root child, so its
 ///   support is child-count-wide, not sims-bounded (WP12-R Phase T guard 2,
 ///   generalized: the refusal retires per-regime exactly when the derived
 ///   slots genuinely cover that support).
+///
+/// THE CHECK IS A DENSITY CHECK, NOT A VISIT CHECK, and the two guards above are the two
+/// support bounds it has: `MAX_CHILDREN_PER_NODE` under the legacy dialect, the legal set
+/// under the corrected one. The sims regime bounds how many visits a row records; it says
+/// nothing about how many cells the exported distribution puts mass on.
 #[allow(clippy::too_many_arguments)]
 pub fn derived_visit_capacity(
     n_simulations: usize,
@@ -125,6 +134,8 @@ pub fn derived_visit_capacity(
     n_sims_full: usize,
     leaf_batch_size: usize,
     completed_q_values: bool,
+    gumbel_mcts: bool,
+    gumbel_variant: &str,
 ) -> Result<usize, String> {
     let effective_standard = effective_standard_sims(n_simulations, standard_sims);
     let mut max_armed = effective_standard;
@@ -144,6 +155,33 @@ pub fn derived_visit_capacity(
              unsupported regime is a mint-time config error, never a boot surprise \
              (R255/ADJ-D34; keys: selfplay.mcts.n_simulations, selfplay.playout_cap.*, \
              selfplay.leaf_batch_size)"
+        ));
+    }
+    // GUMBEL-REPAIR-1 item 6: the bound is the exported target's SUPPORT, and WHICH support
+    // that is depends on the search dialect. The dialect is parsed here rather than passed as
+    // a derived boolean so the two enforcement surfaces cannot drift onto second formulas —
+    // the same reason this whole function has two callers and no second copy.
+    let variant =
+        mantis_search::GumbelVariant::from_config_str(gumbel_variant).ok_or_else(|| {
+            format!(
+                "selfplay.gumbel_variant = {gumbel_variant:?} is not a known Gumbel dialect \
+                 (expected \"legacy\" or \"mctx\")"
+            )
+        })?;
+    if completed_q_values && gumbel_mcts && variant == mantis_search::GumbelVariant::Mctx {
+        return Err(format!(
+            "representation==graph with completed_q_values=true is refused under the \
+             corrected Gumbel dialect at ANY derived capacity ({capacity} here): that arm \
+             expands the root over its FULL legal set, so the exported target's support is \
+             the legal set itself, which the config bounds nowhere. The legal set is the \
+             union of radius-r balls around every stone minus the occupied cells and GROWS \
+             with the stone count — measured to 489 at radius 8 under clustered play and \
+             8142 under sprawling play — so no sims regime can derive a slot count that \
+             covers it. A run wanting the completed target under this dialect needs a MINTED \
+             visit-slot bound, not a derived one, and the ring cost is its subject: at 8 \
+             bytes a slot, 8192 slots is ~65 KB per row against today's ~252 B \
+             (GUMBEL-REPAIR-1 item 6; keys: selfplay.gumbel_variant, selfplay.gumbel_mcts, \
+             train.policy_target)"
         ));
     }
     if completed_q_values && mantis_search::MAX_CHILDREN_PER_NODE > capacity {

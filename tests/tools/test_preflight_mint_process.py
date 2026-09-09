@@ -1783,6 +1783,8 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
         selfplay=SimpleNamespace(
             leaf_batch_size=8,
             completed_q_values=False,
+            gumbel_mcts=False,
+            gumbel_variant="legacy",
             mcts=SimpleNamespace(n_simulations=50),
             playout_cap=SimpleNamespace(
                 standard_sims=0,

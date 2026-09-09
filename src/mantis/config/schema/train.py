@@ -537,7 +537,7 @@ class TrainConfig(StrictModel):
     # loss selection + targets
     completed_q_values: bool
     value_target: Literal["pure_outcome_z"]
-    policy_target: Literal["raw_visit_distribution"]
+    policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     draw_reward: float
     ply_cap_value: float
     policy_prune_frac: float = Field(ge=0, lt=1)

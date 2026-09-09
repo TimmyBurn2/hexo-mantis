@@ -1,3 +1,7 @@
+// R8 justify: ONE derivation — the HEXG visit-slot capacity — and every refusal it can
+// make, in the file that also drives the BOOT guard against the same numbers. The mint
+// surface and the boot surface must agree, and a test that measured only one of them
+// could not say so; the two dialects' support bounds are the same claim read twice.
 //! ⊕ WP12-R Phase T (TARGET INTEGRITY) — boot-guard oracles, RE-RULED by
 //! R255/ADJ-D34 (the previous byte-frozen S2b suite pinned the `MAX_VISITS = 128`
 //! literal this ruling deletes; rewriting these oracles is the ruling's own act).
@@ -59,22 +63,37 @@ fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
 #[test]
 fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
     // standard-only: 50 + 8 - 1 = 57.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false), Ok(57));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false, false, "legacy"),
+        Ok(57)
+    );
     // standard_sims wins over n_simulations when set: 40 + 8 - 1 = 47.
-    assert_eq!(derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, false), Ok(47));
+    assert_eq!(
+        derived_visit_capacity(50, 40, 0.0, 50, 0.0, 0, 0, 8, false, false, "legacy"),
+        Ok(47)
+    );
     // PCR-armed: max(50, 75, 600) + 8 - 1 = 607.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, false), Ok(607));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 600, 8, false, false, "legacy"),
+        Ok(607)
+    );
     // fast-armed: max(50, 500) + 8 - 1 = 507.
-    assert_eq!(derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, false), Ok(507));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.5, 500, 0.0, 0, 0, 8, false, false, "legacy"),
+        Ok(507)
+    );
 }
 
 #[test]
 fn derivation_ignores_a_defined_but_unarmed_arm() {
     // [M-O] `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
-    assert_eq!(derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, false), Ok(57));
+    assert_eq!(
+        derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, false, false, "legacy"),
+        Ok(57)
+    );
     // Quick/full carrying huge values while full_search_prob == 0.0: still 57.
     assert_eq!(
-        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 70_000, 70_000, 8, false),
+        derived_visit_capacity(50, 0, 0.0, 50, 0.0, 70_000, 70_000, 8, false, false, "legacy"),
         Ok(57)
     );
 }
@@ -83,7 +102,7 @@ fn derivation_ignores_a_defined_but_unarmed_arm() {
 fn derivation_refuses_a_regime_over_the_format_ceiling() {
     // 70_000 + 8 - 1 = 70_007 > u16::MAX (65_535): the record format's `n_visits`
     // count is u16 — no capacity can honor this regime, whatever the config asks.
-    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 70_000, 8, false)
+    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.10, 75, 70_000, 8, false, false, "legacy")
         .expect_err("a regime past the u16 count ceiling cannot be honored");
     assert!(
         err.contains(&HEXG_VISIT_COUNT_CEILING.to_string()),
@@ -101,11 +120,13 @@ fn the_ceiling_is_the_u16_count_type_not_a_tunable() {
     assert_eq!(HEXG_VISIT_COUNT_CEILING, usize::from(u16::MAX));
     // Admit at the exact ceiling: max_armed + lb - 1 == 65_535 → Ok.
     assert_eq!(
-        derived_visit_capacity(65_528, 0, 0.0, 50, 0.0, 0, 0, 8, false),
+        derived_visit_capacity(65_528, 0, 0.0, 50, 0.0, 0, 0, 8, false, false, "legacy"),
         Ok(HEXG_VISIT_COUNT_CEILING)
     );
     // One past → refuse.
-    assert!(derived_visit_capacity(65_529, 0, 0.0, 50, 0.0, 0, 0, 8, false).is_err());
+    assert!(
+        derived_visit_capacity(65_529, 0, 0.0, 50, 0.0, 0, 0, 8, false, false, "legacy").is_err()
+    );
 }
 
 // ── boot behavior (the dispatch's pin: 600/75 boots) ────────────────────────────────
@@ -172,7 +193,10 @@ fn boot_refuses_a_sim_budget_the_node_pool_cannot_serve() {
         .err()
         .expect("a sim budget past the pool bound must not boot");
     assert!(err.contains("MAX_ARMED_SIMS"), "{err}");
-    assert!(err.contains("n_sims_full"), "the refusal must name the knob: {err}");
+    assert!(
+        err.contains("n_sims_full"),
+        "the refusal must name the knob: {err}"
+    );
 }
 
 // ── completed-Q (old guard 2, generalized against the DERIVED capacity) ─────────────
@@ -181,13 +205,25 @@ fn boot_refuses_a_sim_budget_the_node_pool_cannot_serve() {
 fn completed_q_graph_refused_while_derived_capacity_below_child_cap() {
     // 50 + 8 - 1 = 57 < MAX_CHILDREN_PER_NODE (192): child-count-wide support
     // cannot fit — refuse, naming both values and the offending key.
-    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..graph_cfg() };
+    let cfg = SelfPlayRunnerConfig {
+        completed_q_values: true,
+        ..graph_cfg()
+    };
     let err = SelfPlayRunner::new(cfg)
         .err()
         .expect("completed-Q on graph must refuse while derived capacity < 192");
-    assert!(err.contains("192"), "must name MAX_CHILDREN_PER_NODE=192: {err}");
-    assert!(err.contains("57"), "must name the derived capacity 57: {err}");
-    assert!(err.contains("completed_q"), "must name the offending key: {err}");
+    assert!(
+        err.contains("192"),
+        "must name MAX_CHILDREN_PER_NODE=192: {err}"
+    );
+    assert!(
+        err.contains("57"),
+        "must name the derived capacity 57: {err}"
+    );
+    assert!(
+        err.contains("completed_q"),
+        "must name the offending key: {err}"
+    );
 }
 
 #[test]
@@ -196,7 +232,10 @@ fn completed_q_graph_admitted_once_derived_capacity_covers_child_cap() {
     // covers MAX_CHILDREN_PER_NODE (192) — the record physically holds
     // child-count-wide support, so the refusal would be vacuous and must not fire
     // (the old guard's own "retirement-until-raised" condition, realized).
-    let cfg = SelfPlayRunnerConfig { completed_q_values: true, ..pcr_600_75_cfg() };
+    let cfg = SelfPlayRunnerConfig {
+        completed_q_values: true,
+        ..pcr_600_75_cfg()
+    };
     assert!(
         SelfPlayRunner::new(cfg).is_ok(),
         "completed-Q on graph must ADMIT once the derived capacity covers \
@@ -219,4 +258,60 @@ fn completed_q_grid_is_untouched() {
         SelfPlayRunner::new(cfg).is_ok(),
         "a GRID encoding with completed_q_values=true is outside this guard"
     );
+}
+
+// ── GUMBEL-REPAIR-1 item 6: the check is a DENSITY check, not a visit check ──────
+
+/// The corrected dialect's completed target is refused at ANY capacity, and the legacy
+/// dialect's is refused only until the derived slots cover its support.
+///
+/// The distinction is the item's whole content. A visit check would be satisfied by raising
+/// the sims regime; a density check asks how many CELLS the exported distribution puts mass
+/// on, and under the corrected dialect that is the legal set — which grows with the stone
+/// count and which no sims regime bounds.
+#[test]
+fn the_corrected_dialect_is_refused_at_every_capacity_and_the_legacy_one_is_not() {
+    // Legacy, completed-Q, 50 sims: capacity 57 < 192, refused for the ORIGINAL reason.
+    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, true, false, "legacy")
+        .expect_err("192 children cannot fit 57 slots");
+    assert!(err.contains("MAX_CHILDREN_PER_NODE"), "{err}");
+
+    // Legacy, completed-Q, 192 sims: capacity 199 >= 192, and the refusal RETIRES. This is
+    // the sentence the original guard's docstring promised, checked rather than asserted.
+    assert!(
+        derived_visit_capacity(192, 0, 0.0, 192, 0.0, 0, 0, 8, true, false, "legacy").is_ok(),
+        "the legacy refusal must retire once the derived slots cover the child cap"
+    );
+
+    // The corrected dialect at the SAME regime: still refused, and for a different reason.
+    let err = derived_visit_capacity(192, 0, 0.0, 192, 0.0, 0, 0, 8, true, true, "mctx")
+        .expect_err("the corrected dialect's support is the legal set");
+    assert!(
+        err.contains("FULL legal set") && err.contains("MINTED"),
+        "the refusal must name the support and say the bound has to be minted: {err}"
+    );
+
+    // And at a regime whose capacity is enormous — the point of "at ANY capacity".
+    assert!(
+        derived_visit_capacity(60_000, 0, 0.0, 60_000, 0.0, 0, 0, 8, true, true, "mctx").is_err(),
+        "no sims regime can derive a slot count that covers an unbounded support"
+    );
+}
+
+/// The dialect is INERT while `gumbel_mcts` is false, here as everywhere else.
+#[test]
+fn the_dialect_does_not_constrain_the_record_format_while_gumbel_is_off() {
+    assert!(
+        derived_visit_capacity(192, 0, 0.0, 192, 0.0, 0, 0, 8, true, false, "mctx").is_ok(),
+        "a dialect that cannot run cannot widen the target's support"
+    );
+}
+
+/// An unknown dialect is REFUSED here too, not defaulted — the mint surface and the runner
+/// surface must agree about what a dialect name means.
+#[test]
+fn an_unknown_dialect_is_refused_by_the_capacity_derivation() {
+    let err = derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, false, true, "MCTX")
+        .expect_err("an unknown dialect must not resolve");
+    assert!(err.contains("gumbel_variant"), "{err}");
 }
