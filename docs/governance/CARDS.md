@@ -70,6 +70,18 @@ run6 is minted and has never started.
   "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
   `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
+- **`R319(d)` — the gate round cannot finish inside `round_timeout_sec` under load. LIVE,
+  MINT-BLOCKING, HOST-INDEPENDENT.** R339(b) adjudicated it by measurement (geometry frozen, the
+  lever is `eval.concurrency`, the value picked by a rule on the box — run6 mints `8`) and R340(a)
+  then CLOSED it by re-reading the failing round as a weak-net artifact. **R341(b) withdrew that
+  closure and refuted it by measurement:** run 2's step-1000 round ran 3600.11 s, was SIGTERM'd
+  (`eval_broken`, `round_timeout`, exit -15) and returned `wr_sealbot: null`, `promoted: false`
+  after 139 games. R340(a)'s 2.3x headroom came from STANDALONE rounds on an idle box; under
+  contention with 16 self-play workers and the trainer the round is ~7x slower per game
+  (4.0 -> 25.9 s/game). The candidate was the warm-started BC net at a 31-ply median — R340(a)'s
+  own regime — so "weak-net artifact" is not the explanation, and R319(d)'s original failing round
+  agrees to within 11%. **run6 as minted cannot evaluate during a run.** No clause in R342-R345
+  touches R319. R341(b); A:1927, A:2054, A:7075.
 - **`F-816-24` — MINT-BLOCKING, LIVE, no close recorded.** `monitor/supervise.py` constructs a bare
   `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix packet was
   ordered; no merge or close is recorded. R291(b); A:2662.
@@ -78,10 +90,6 @@ run6 is minted and has never started.
   the change. A one-line re-mint if the operator reads it the other way. A:7718.
 
 Riding the run rather than holding it: **`F-816-37`**, below.
-
-`R319(d)` — the gate round that could not finish inside `round_timeout_sec` — is no longer open.
-R339(b) adjudicated it BY MEASUREMENT: the geometry does not move, the lever is `eval.concurrency`,
-and the value is picked by a rule run on the box. run6 mints `concurrency: 8`.
 
 ## F-816-* findings
 

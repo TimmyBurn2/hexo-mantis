@@ -13,7 +13,19 @@ numbers** and is what run6 is held on: the cap discards a mean 88% of the policy
 99.97% of expansions, the tree-memory delta is exactly zero (the pool is preallocated at
 MAX_NODES), and what a larger K costs is the armed-sims ceiling — which gates configs.
 
-A second row is mint-blocking and has no close recorded: **`F-816-24`** — `monitor/supervise.py`
+**`R319(d)` is LIVE and MINT-BLOCKING, and it is the heaviest of these.** R339(b) adjudicated it by
+measurement and R340(a) closed it by re-reading the failing round as a weak-net artifact; **R341(b)
+WITHDREW that closure and refuted it by measurement.** Run 2's step-1000 gate round ran 3600.11 s,
+was SIGTERM'd (`eval_broken`, `reason: round_timeout`, exit -15) and returned `wr_sealbot: null`,
+`promoted: false` after 139 games. R340(a)'s 2.3x headroom came from STANDALONE rounds on an idle
+box; under contention with 16 self-play workers and the trainer the same round is ~7x slower per
+game (4.0 -> 25.9 s/game) and does not fit. The candidate was the warm-started BC net at a 31-ply
+median — R340(a)'s own regime — so "weak-net artifact" is not the explanation, and R319(d)'s
+original failing round agrees with this one to within 11%, which lifts it above n = 1. The archive
+states the consequence outright: **run6 as minted CANNOT EVALUATE DURING A RUN.** The withdrawal is
+HOST-INDEPENDENT, and **no clause in R342, R343, R344 or R345 touches R319** — nothing re-closes it.
+
+A third row is mint-blocking with no close recorded: **`F-816-24`** — `monitor/supervise.py`
 constructs a bare `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix
 packet was ordered at R291(b); no merge or close appears in the frozen record.
 
