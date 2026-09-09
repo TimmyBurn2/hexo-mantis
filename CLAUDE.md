@@ -3,8 +3,8 @@
 mantis is an AlphaZero-style self-play bot for Hex Tac Toe: hex grid, 6-in-a-row to win,
 compound 2-stone turns, unbounded board. Rust engine (cargo workspace) + Python
 training/eval (uv, src-layout), PyO3 bridge, GNN-first. Read docs/design/repo_design.md
-(the structural contract) before structural work. Read docs/registers/falsified.md
-before proposing ANY optimization or experiment. Law text: docs/registers/laws.md.
+(the structural contract) before structural work. Read docs/governance/falsified.md
+before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.md.
 
 ## Map
 
@@ -27,7 +27,7 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
   (RESERVED, empty until post-cutover).
 - tests/ — SINGLE collection root, mirrors src/mantis + crates; tests/fixtures carries
   the fixtures manifest. configs/ — minted, complete, schema-validated. docs/ — design +
-  contracts + registers. tools/ — dev-only tooling + CI gate scripts. vendor/ —
+  contracts + governance. tools/ — dev-only tooling + CI gate scripts. vendor/ —
   pins.toml + `make vendor` fetcher.
 
 ## Hard rules
@@ -65,14 +65,14 @@ before proposing ANY optimization or experiment. Law text: docs/registers/laws.m
    derive-or-delete). Sizes are derived by `wc -l`, never asserted. Gate 15 enforces both
    halves — the justification is present, and it states no count.
    Reason: keeps the audit greppable; unjustified growth hides structure drift.
-9. **R9 registers.** docs/registers/falsified.md is read-before-optimizing;
-   docs/registers/laws.md governs; deviations from docs/design/repo_design.md require an
+9. **R9 registers.** docs/governance/falsified.md is read-before-optimizing;
+   docs/governance/LAWS.md governs; deviations from docs/design/repo_design.md require an
    amendment commit, never silent drift. A NON-canonical working doc that disagrees with
    verified repo state is repaired in place by whoever finds it, noted in one line, no loop
    (R311(c)); register text still corrects only by annotation.
    Reason: re-litigating falsified work and silent contract drift burned weeks before.
 
-## Laws digest (full text: docs/registers/laws.md)
+## Laws digest (full text: docs/governance/archive/laws.md)
 
 - LAW-01 prime directive — context first, measurement mandatory.
 - LAW-02 re-validation discipline — never drop a driver on an un-re-validated prior.

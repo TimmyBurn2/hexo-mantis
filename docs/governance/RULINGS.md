@@ -35,7 +35,90 @@ repository), **R33** is superseded in full by R37, and **R267** is a documented 
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
 
-<!-- R346: CLEANUP ERA ruling text supplied by orchestrator -->
+### R346 — the CLEANUP ERA
+Decision: verbatim below. This entry breaks the <= 10-line convention deliberately: the packet
+made its own §1 the canonical home and directed that it be copied verbatim as the first entry
+here, so condensing it would destroy the authority it was given. Every later entry keeps the cap.
+
+> R346 — (a) The CLEANUP ERA is opened by operator direction. Its
+> object: one search kind per name, one config a person can read, one
+> home for governance, comments that say why and nothing else, and a
+> tree small enough to audit. Deletion is the default for anything
+> unarmed, unmeasured and unreferenced by a standing law; the burden is
+> on keeping, not on removing.
+> (b) run6 SEARCH: Gumbel, mctx dialect, no Dirichlet, playout-cap
+> randomization. PROPOSED rows (operator's, armed at the re-mint):
+> full 320 sims / m 16 at p = 0.25; fast 64 sims / m 8 at p = 0.75
+> (mean 128 — the operator's number; 400/37 was rejected because a
+> 37-sim fast arm is thinner than the paper's own low-sim regime);
+> completed-Q improved policy is the target on every row, is_full_search
+> recorded; value_scale 0.1, c_visit 50; eval deploy Gumbel 160 / m 16,
+> candidate and anchor matched. Throughput is predicted, not promised:
+> serving-bound at ~4.4M leaves/h the mean-128 regime yields ~640
+> games/h; PERF-3 measures it and the candidate-parallel batching in (c)
+> is what keeps "fast" true.
+> (c) GUMBEL-2 (wave 1): the legacy dialect and the PUCT-root hybrid are
+> DELETED; `search.kind ∈ {puct, gumbel}` replaces gumbel_mcts,
+> gumbel_variant and both completed_q flags; the root samples and
+> completes over the FULL legal prior vector WITHOUT materializing every
+> child (children exist only for sampled/visited candidates); interior
+> cap K = 1024 with omitted-mass telemetry; within a halving phase the
+> surviving candidates' descents are issued as ONE leaf batch (m, m/2,
+> … leaves per round trip — the Gumbel analogue of leaf_batch_size,
+> with no virtual loss needed across candidates); PCR under Gumbel; the
+> deploy head runs the same kind as self-play; served-sims witness
+> holds under both kinds, root evaluation charged, N means N leaves.
+> (d) INVARIANTS every deletion is proven against: net-param hash on the
+> warm-start; served-sims exactness; the suite's conformance sections;
+> 1-in-1 collate checks; arena legality; finite-gradient guard; resume
+> bundle round-trip; gate pair statistics; F-816-37 dump-on-fire;
+> strength_floor; draw-rate abort. These are the PROTECTED SET; it is
+> listed in LAWS.md and is the whole of what "ruling-protected code"
+> means from now on.
+> (e) GOVERNANCE moves to hexo-mantis/docs/governance/: LAWS.md (the
+> standing laws, ≤ 60 lines), STATE.md (minted values, armed rows,
+> protected set, open cards, current phase — rewritten in place),
+> RULINGS.md (one entry per ruling, ≤ 10 lines, canonical), falsified.md
+> (kept, deduplicated), CARDS.md. The old register, ACTIVE, sitting
+> records and plan/ are FROZEN into docs/governance/archive/ (one
+> directory, one README, no tooling). Census, stamp, mirror and
+> sync tooling are DELETED — one repo needs no mirror. Numbering
+> continues; canonical texts live in RULINGS.md; packets are not
+> committed; exit facts go into STATE.md.
+> (f) CODE AND CONFIG (wave 2): the grid/dense path is deleted (tagged
+> `archive/grid-path` first); parked, unmeasured features are deleted
+> with their keys (solver, forced-win, ZOI, seed corpus, mixing, bot
+> buffers, aux/entropy weights, dense rotation, trace/compile/perf
+> fields, dead keys named by AUDIT-2); operational constants get schema
+> defaults and leave the YAML; the run YAML shrinks to what a run
+> decides (identity, search, train, eval, the measured caps); the
+> resolved complete config is still written to the run dir and is still
+> strict. configs/ keeps run6 and one smoke profile. Comments: ≤ 2 lines
+> unless stating a non-obvious invariant; no narrative, no ruling
+> numbers, no banners; one-line docstrings on public APIs; a comment-
+> length lint ratchets the count down and never up.
+> (g) PERF-3 (wave 1, box, measure only): profile end to end at PUCT-50
+> and at the (b) regime on a throwaway config — leaves/s, batch fill,
+> queue wait, server thread share, per-row insertion, eval tree
+> allocation, cache release per eval move — falsified.md read first;
+> output is a ranked ledger with the Amdahl bound per item, no code.
+> (h) Wave 3: AUDIT-3 (fresh deep audit on the cleaned tree, the
+> AUDIT-2 method) → REPAIR-A3 → re-mint on the rehearsed procedure
+> (rows: (b), K, sealbot-only rungs, supervisor grace reverted) →
+> shakedown → START. STRENGTH-FRONTIER-1 stands as designed, at block
+> end, with Gumbel cells now the live arm and PUCT-50 the comparison.
+> (i) Ledger: leg 5's "r8 legal maximum" was written as if a constant;
+> it is not (355 median, 8,142 max) — architect's error, the K decision
+> above is its correction. The AUDIT-2 file the packets cited never
+> existed in either repo; the operator files it.
+> ROUTE: land in both homes; wave 1 (4 agents, worktrees); wave 2 (2
+> agents, sequential); wave 3; one exit screen per agent, one STATE.md.
+
+Grounds: operator direction. The era's object is stated in (a); the burden of proof moves from
+removal to retention.
+Status: standing — (i)'s AUDIT-2 filing is DISCHARGED (`docs/audits/AUDIT_2026-09-09.md`,
+`428f3c8`), and (e)'s census/stamp/mirror/sync deletion is a verified NO-OP: that tooling never
+existed in this repository.
 
 ---
 
