@@ -633,8 +633,17 @@ def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(derived):
 @pytest.mark.slow
 def test_report_the_per_arch_floor_and_serving_overhead(derived):
     """The measurement. One row per registered arch kind: floor median, served median, the
-    dimensionless overhead, repeats and device. NOTHING here is compared to a threshold and
-    nothing is written to a tracked path.
+    dimensionless overhead, repeats and device. NO MAGNITUDE is compared to a threshold and
+    nothing is written to a tracked path. The one comparison made is the NESTING, and its bar
+    is not a threshold either: it is the spread the reading itself carries, so a steadier
+    measurement demands a smaller gap and no number is committed from any host.
+
+    THE TWO ARMS ARE TIMED ALTERNATELY, and that is not a detail. Run in sequence they occupy
+    two different windows of whatever else the box is doing, and at load ~19 on 16 cores the
+    difference between the windows swamped the difference between the arms: the same arm read
+    163.588 ms and 0.309 ms on two runs of the same pair, and which row inverted depended on
+    which arm was measured first. That is what made this tier a coin flip in a gate set every
+    merge must pass.
 
     COVERAGE, STATED, because a table is read as its own scope: CPU only, at the smallest net
     each arch admits, on EVERY registered encoding the arch serves (AUDIT-1 F-41 — it was one,
