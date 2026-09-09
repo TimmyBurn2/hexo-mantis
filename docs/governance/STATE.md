@@ -20,6 +20,11 @@ Owed, named so it is not mistaken for done:
   "only if the supervisor is used" describes when the value takes effect rather than
   conditioning the change. A one-line re-mint if the operator reads it the other way.
 
+Riding the run rather than holding it: **`F-816-37` is open and not root-caused.** Every firing on
+record is on the host R341 condemned and R342 downgraded to suspect, and the work moved to a
+different box — so the halt is spent, the class is not. Its 1-in-1 eval-path instrument with
+dump-on-fire is in the protected set. See `docs/governance/CARDS.md`.
+
 ## Minted values — `configs/run6.yaml`, verified at HEAD
 
 The config carries 19 `# delta:` lines and all 19 are applied in the body.

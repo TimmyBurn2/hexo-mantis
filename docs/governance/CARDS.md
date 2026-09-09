@@ -41,7 +41,7 @@ not because a ruling carded them.
 
 ## What holds run6
 
-run6 is minted and has never started. Three things hold it.
+run6 is minted and has never started. Two things hold it, and one open class rides with it.
 
 - **REPAIR-A2 leg 5 — the MCTS root child cap. BLOCKING, the architect's.** Seven of eight
   REPAIR-A2 legs landed; leg 5 halted with numbers rather than moving the cap. Measured: the cap
@@ -51,7 +51,11 @@ run6 is minted and has never started. Three things hold it.
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
   `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs and moves run6's
   search. Last moved by R345.
-- **`F-816-37` — a run-fatal `EdgeAttrGeometryMismatch` that is still not root-caused. OPEN.**
+- **`F-816-37` — a run-fatal `EdgeAttrGeometryMismatch` that is still not root-caused. OPEN, and
+  it rides run6 rather than holding it.** Its R339(c)/R340 halt was raised on the host that R341
+  condemned on signature and R342 then downgraded to SUSPECT on the operator's override; the work
+  moved to a different box and the re-mint completed there. Every firing on record is on the old
+  host, so the halt is spent — but the CLASS is not closed and nothing has root-caused it.
   Converted from a hunt into an instrument by R339(c): 1-in-1 on the eval path with dump-on-fire
   proven by a planted corruption, self-play deliberately left at the derived 1-in-64. It has fired
   three times. The signature is a single float32 exponent-LSB flip — **bit 23 in every corrupted
