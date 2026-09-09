@@ -1894,7 +1894,7 @@ Decision: Both STOP reports are ACCEPTED — the agents were right to stop, and 
 Three corrections: (1) the on-disk floor is 2690, not the 2701 written in both dispatches, which confused the
 collected count with the floor file — an R98 violation, corrected in both; (2) the 8C dispatch operates in
 the migration workspace, not hexo-mantis; (3) the R-numbered register is the migration workspace's
-`plan/rulings_register.md`, not `docs/registers/falsified.md`, which is the F-numbered falsified ledger.
+`plan/rulings_register.md`, not the falsified ledger (F-numbered, now `docs/governance/falsified.md`).
 Grounds: a number taken from memory rather than derived from the file at point of use.
 Status: standing [INLINE]
 
