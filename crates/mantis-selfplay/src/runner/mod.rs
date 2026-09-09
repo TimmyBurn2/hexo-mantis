@@ -285,6 +285,28 @@ impl SelfPlayRunner {
         if effective_standard == 0 {
             return Err("SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string());
         }
+        // GUMBEL-REPAIR-1: the Mctx dialect expands the root over its FULL legal set, so it
+        // spends up to `MAX_ROOT_CHILDREN` slots on the root instead of
+        // `MAX_CHILDREN_PER_NODE`, and its ceiling is correspondingly lower. The legacy bound
+        // is left exactly where it was — tightening the ceiling every existing config
+        // validates against, for a dialect nothing arms, would be a mint-surface change made
+        // by the wrong packet. Gated on `gumbel_mcts` as well as the dialect, matching
+        // `MCTSTree::configure_gumbel`: a dialect that is inert cannot spend the slots.
+        let (armed_ceiling, ceiling_name, ceiling_derivation) = if config.gumbel_mcts
+            && config.gumbel_variant == mantis_search::GumbelVariant::Mctx
+        {
+            (
+                mantis_search::MAX_ARMED_SIMS_MCTX,
+                "MAX_ARMED_SIMS_MCTX",
+                "(MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)",
+            )
+        } else {
+            (
+                mantis_search::MAX_ARMED_SIMS,
+                "MAX_ARMED_SIMS",
+                "MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)",
+            )
+        };
         // AUDIT-1 F-21: the pool bound, checked at BOOT rather than at the first move that
         // crosses it. Every sims knob the search can be driven at is checked, not only the
         // standard one, because a `fast_sims` or `n_sims_full` above the bound overflows the
@@ -296,15 +318,14 @@ impl SelfPlayRunner {
             ("n_sims_quick", config.n_sims_quick),
             ("n_sims_full", config.n_sims_full),
         ] {
-            if sims > mantis_search::MAX_ARMED_SIMS {
+            if sims > armed_ceiling {
                 return Err(format!(
-                    "SelfPlayRunner: {name} = {sims} exceeds MAX_ARMED_SIMS \
-                     ({}), derived as MAX_NODES / (4 * MAX_CHILDREN_PER_NODE). \
+                    "SelfPlayRunner: {name} = {sims} exceeds {ceiling_name} \
+                     ({armed_ceiling}), derived as {ceiling_derivation}. \
                      `select_leaves` expands TT-hit leaves without counting them against the \
                      batch (bounded by max_attempts = 4n), so each move can add up to \
                      4 * sims * {} children and `finish_expansion` panics on pool overflow \
                      at the first move that crosses it",
-                    mantis_search::MAX_ARMED_SIMS,
                     mantis_search::MAX_CHILDREN_PER_NODE,
                 ));
             }

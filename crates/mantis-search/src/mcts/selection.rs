@@ -5,9 +5,9 @@
 //! raises it.
 //! PUCT selection and tree traversal.
 
-use mantis_core::board::{Board, MoveDiff};
-use fxhash::FxHashSet;
 use super::{CachedPolicy, MCTSTree};
+use fxhash::FxHashSet;
+use mantis_core::board::{Board, MoveDiff};
 
 /// The selected child's stored `action_idx` decoded to a cell the board cannot play.
 ///
@@ -105,7 +105,9 @@ fn pick_best_puct(
         let score = tree.puct_score(i as u32, parent_idx, sqrt_parent_n, fpu_value);
         // Strict `>` matches `max_by` Greater semantics: first equal score
         // wins, NaN comparisons preserve the running best (Equal fallback).
-        if score.partial_cmp(&best_score).unwrap_or(std::cmp::Ordering::Equal)
+        if score
+            .partial_cmp(&best_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
             == std::cmp::Ordering::Greater
         {
             best_idx = i as u32;
@@ -125,8 +127,14 @@ impl MCTSTree {
     /// passed through `sqrt`. §P1 hoists this loop-invariant out of the
     /// per-child caller loop so it is computed once per descent level.
     #[inline]
-    pub(crate) fn puct_score(&self, child_idx: u32, parent_idx: u32, sqrt_parent_n: f32, fpu_value: f32) -> f32 {
-        let child  = &self.pool[child_idx  as usize];
+    pub(crate) fn puct_score(
+        &self,
+        child_idx: u32,
+        parent_idx: u32,
+        sqrt_parent_n: f32,
+        fpu_value: f32,
+    ) -> f32 {
+        let child = &self.pool[child_idx as usize];
         let parent = &self.pool[parent_idx as usize];
 
         let q = if child.n_visits == 0 && child.virtual_loss_count == 0 {
@@ -177,8 +185,8 @@ impl MCTSTree {
             }
 
             let parent_n = (node.n_visits + node.virtual_loss_count) as f32;
-            let first    = node.first_child as usize;
-            let n_ch     = node.n_children  as usize;
+            let first = node.first_child as usize;
+            let n_ch = node.n_children as usize;
 
             // KataGo-style dynamic FPU: value estimate for unvisited children.
             // explored_mass = sum of priors for all children that have been visited.
@@ -215,6 +223,14 @@ impl MCTSTree {
                 } else {
                     pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value)
                 }
+            } else if self.gumbel_variant == crate::mcts::GumbelVariant::Mctx {
+                // GUMBEL-REPAIR-1 item 4: below the root the Mctx dialect selects by the
+                // improved policy with the visit-count correction, not by PUCT. `None`
+                // only when the node has no children, which the loop above already
+                // excluded, so the PUCT fallback is unreachable rather than a silent
+                // second policy.
+                self.pick_best_mctx_interior(cur)
+                    .unwrap_or_else(|| pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value))
             } else {
                 pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value)
             };
@@ -231,6 +247,41 @@ impl MCTSTree {
             cur = best;
             depth += 1;
         }
+    }
+
+    /// Mctx `gumbel_muzero_interior_action_selection`: pick the child maximising
+    /// `softmax(log_prior + completed_q) - visits / (1 + sum_visits)`.
+    ///
+    /// The subtracted term is what makes repeated argmaxes APPROXIMATE the improved
+    /// policy's visitation frequencies rather than pile every visit on one child — the
+    /// paper's §5 "planning at non-root nodes". Without it the selector is a greedy argmax
+    /// and the interior of the tree stops sampling.
+    ///
+    /// Returns `None` when the node has no children. The `completed_q` vector is allocated
+    /// per call: one per descent level per simulation, sized by the node's child count. It
+    /// is not pooled, and that is stated rather than optimised — the Mctx dialect is armed
+    /// in no config and LAW-09 wants a measurement before a perf change, not a guess.
+    #[allow(clippy::cast_possible_truncation)] // j indexes children, itself a u16 count
+    pub(crate) fn pick_best_mctx_interior(&self, node_idx: u32) -> Option<u32> {
+        let completed = self.node_completed_qvalues(node_idx, self.q_c_visit, self.q_c_scale);
+        if completed.is_empty() {
+            return None;
+        }
+        let node = &self.pool[node_idx as usize];
+        let first = node.first_child as usize;
+        let n = completed.len();
+        let priors: Vec<f32> = (0..n).map(|j| self.pool[first + j].prior).collect();
+        let visits: Vec<u32> = (0..n).map(|j| self.pool[first + j].n_visits).collect();
+        let scores = super::completed_q::mctx_interior_argmax_input(&priors, &completed, &visits);
+
+        let mut best: Option<(usize, f32)> = None;
+        for (j, &score) in scores.iter().enumerate() {
+            // Strict `>` — the first of equal scores wins, matching `argmax`.
+            if best.is_none_or(|(_, b)| score > b) {
+                best = Some((j, score));
+            }
+        }
+        best.map(|(j, _)| (first + j) as u32)
     }
 
     /// Select up to `n` distinct leaves for evaluation.
@@ -302,8 +353,12 @@ impl MCTSTree {
                 .map(|e| (e.policy.clone(), e.value));
             if let Some((policy, value)) = cached {
                 match policy {
-                    CachedPolicy::Dense(p) => self.expand_and_backup_single(leaf_idx, &board, &p, value),
-                    CachedPolicy::Ls(ls) => self.expand_and_backup_single_ls(leaf_idx, &board, &ls, value),
+                    CachedPolicy::Dense(p) => {
+                        self.expand_and_backup_single(leaf_idx, &board, &p, value)
+                    }
+                    CachedPolicy::Ls(ls) => {
+                        self.expand_and_backup_single_ls(leaf_idx, &board, &ls, value)
+                    }
                 }
                 while let Some(diff) = diffs.pop() {
                     board.undo_move(diff);

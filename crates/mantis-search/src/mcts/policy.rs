@@ -103,7 +103,7 @@ impl MCTSTree {
             visited_prior_sum: 0.0,
             policy_weighted_q: 0.0,
             v_hat: 0.0,
-            raw_value: self.root_raw_value,
+            raw_value: self.root_raw_value(),
         };
 
         for j in 0..n_ch {
@@ -148,7 +148,7 @@ impl MCTSTree {
         let masses = if self.gumbel_variant == GumbelVariant::Mctx {
             completed_q::mctx_improved_policy_masses(
                 &children,
-                self.root_raw_value,
+                self.root_raw_value(),
                 c_visit,
                 c_scale,
             )
@@ -298,7 +298,7 @@ impl MCTSTree {
             visited_prior_sum: 0.0,
             policy_weighted_q: 0.0,
             v_hat: 0.0,
-            raw_value: self.root_raw_value,
+            raw_value: self.root_raw_value(),
         };
 
         for j in 0..n_ch {
@@ -337,7 +337,7 @@ impl MCTSTree {
         let masses = if self.gumbel_variant == GumbelVariant::Mctx {
             completed_q::mctx_improved_policy_masses(
                 &children,
-                self.root_raw_value,
+                self.root_raw_value(),
                 c_visit,
                 c_scale,
             )
@@ -372,13 +372,20 @@ impl MCTSTree {
     /// Empty when the root is unexpanded.
     #[must_use]
     pub fn root_completed_qvalues(&self, c_visit: f32, c_scale: f32) -> Vec<f32> {
-        let root = &self.pool[0];
-        if !root.is_expanded() {
+        self.node_completed_qvalues(0, c_visit, c_scale)
+    }
+
+    /// `root_completed_qvalues` for ANY node. Mctx completes Q-values at every node it
+    /// selects from, root and interior alike, off that node's own raw value.
+    #[must_use]
+    pub fn node_completed_qvalues(&self, node_idx: u32, c_visit: f32, c_scale: f32) -> Vec<f32> {
+        let node = &self.pool[node_idx as usize];
+        if !node.is_expanded() {
             return Vec::new();
         }
-        let first = root.first_child as usize;
-        let n_ch = root.n_children as usize;
-        let q_sign: f32 = if root.moves_remaining == 1 { -1.0 } else { 1.0 };
+        let first = node.first_child as usize;
+        let n_ch = node.n_children as usize;
+        let q_sign: f32 = if node.moves_remaining == 1 { -1.0 } else { 1.0 };
         let children: Vec<completed_q::CqChild> = (first..first + n_ch)
             .map(|i| {
                 let child = &self.pool[i];
@@ -394,7 +401,12 @@ impl MCTSTree {
                 }
             })
             .collect();
-        completed_q::mctx_completed_qvalues(&children, self.root_raw_value, c_visit, c_scale)
+        let raw = self
+            .raw_values
+            .get(node_idx as usize)
+            .copied()
+            .unwrap_or(0.0);
+        completed_q::mctx_completed_qvalues(&children, raw, c_visit, c_scale)
     }
 
     /// Returns (child_pool_index, prior) for each root child.

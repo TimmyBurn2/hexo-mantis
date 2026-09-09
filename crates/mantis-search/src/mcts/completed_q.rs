@@ -1,3 +1,8 @@
+// R8 justify: the completed-Q math is ONE subject with two dialects, and the file exists
+// so both live in one place rather than being duplicated into each caller — which is the
+// defect it was created to close. Splitting the arms would put the byte-frozen legacy
+// forms and the Mctx forms that must differ from them in different files, where the next
+// reader cannot see that the difference is deliberate.
 //! Shared Gumbel completed-Q math (Danihelka et al., ICLR 2022 §4, Eq. 33).
 //!
 //! The completed-Q improved-policy computation was duplicated byte-for-byte
@@ -276,4 +281,37 @@ pub(super) fn mctx_improved_policy_masses(
         *l /= sum_exp;
     }
     logits
+}
+
+/// Mctx `_prepare_argmax_input`: `softmax(log_prior + completed_q) - visits / (1 + Σvisits)`,
+/// one score per child in input order. The caller argmaxes it.
+///
+/// A PURE FUNCTION over three slices rather than a method on the tree, so the parity test
+/// can pin it against Mctx's own `interior_argmax_input` without building a synthetic tree
+/// — the alternative was pinning only the argmax, which many wrong score vectors share.
+///
+/// Empty in, empty out. Empty also on a degenerate softmax (no finite logit, or a sum-exp
+/// that underflows to zero), so the caller can tell "no answer" from "answer 0".
+pub(super) fn mctx_interior_argmax_input(
+    priors: &[f32],
+    completed: &[f32],
+    visits: &[u32],
+) -> Vec<f32> {
+    let n = priors.len().min(completed.len()).min(visits.len());
+    if n == 0 {
+        return Vec::new();
+    }
+    let logit = |j: usize| priors[j].max(1e-8).ln() + completed[j];
+    let max_logit = (0..n).map(logit).fold(f32::NEG_INFINITY, f32::max);
+    if !max_logit.is_finite() {
+        return Vec::new();
+    }
+    let sum_exp: f32 = (0..n).map(|j| (logit(j) - max_logit).exp()).sum();
+    if sum_exp <= 0.0 {
+        return Vec::new();
+    }
+    let denom = 1.0 + visits[..n].iter().sum::<u32>() as f32;
+    (0..n)
+        .map(|j| (logit(j) - max_logit).exp() / sum_exp - visits[j] as f32 / denom)
+        .collect()
 }

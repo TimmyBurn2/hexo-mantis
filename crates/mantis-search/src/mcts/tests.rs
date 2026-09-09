@@ -937,7 +937,15 @@ fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
     let policy = vec![p; n_actions];
 
     take_omitted_prior_stats();
-    let (chosen, truncated) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen, truncated) = pick_topk_children(
+        &cells,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
     let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
 
     assert!(
@@ -979,7 +987,15 @@ fn an_untruncated_expansion_records_no_omitted_mass() {
     let policy = vec![1.0f32 / n_actions as f32; n_actions];
 
     take_omitted_prior_stats();
-    let (_chosen, truncated) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (_chosen, truncated) = pick_topk_children(
+        &cells,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
     let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
 
     assert!(!truncated);
@@ -1032,7 +1048,15 @@ fn test_topk_truncates_at_max_children() {
         .map(|i| (i + 1) as f32 / n_actions as f32)
         .collect();
 
-    let (chosen, sort_used) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen, sort_used) = pick_topk_children(
+        &cells,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
     assert!(sort_used, "600 > K must take sort path");
     assert_eq!(
         chosen.len(),
@@ -1094,8 +1118,15 @@ fn test_topk_tie_break_by_flat_idx() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform_high = vec![0.5_f32; n_actions];
 
-    let (chosen, sort_used) =
-        pick_topk_children(&cells, 0, 0, &uniform_high, BOARD_SIZE as i32, HALF);
+    let (chosen, sort_used) = pick_topk_children(
+        &cells,
+        0,
+        0,
+        &uniform_high,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
     assert!(sort_used);
     assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE);
 
@@ -1134,7 +1165,15 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy = vec![1.0 / n_actions as f32; n_actions];
 
-    let (chosen, sort_used) = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen, sort_used) = pick_topk_children(
+        &cells,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
     assert!(!sort_used, "fast path expected when n_legal <= K");
     assert_eq!(chosen.len(), 50);
 
@@ -1185,8 +1224,24 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         *p = ((i % 17) as f32) * 0.013;
     }
 
-    let (chosen_small, _) = pick_topk_children(&set_small, 0, 0, &policy, BOARD_SIZE as i32, HALF);
-    let (chosen_large, _) = pick_topk_children(&set_large, 0, 0, &policy, BOARD_SIZE as i32, HALF);
+    let (chosen_small, _) = pick_topk_children(
+        &set_small,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
+    let (chosen_large, _) = pick_topk_children(
+        &set_large,
+        0,
+        0,
+        &policy,
+        BOARD_SIZE as i32,
+        HALF,
+        MAX_CHILDREN_PER_NODE,
+    );
 
     assert_eq!(
         chosen_small, chosen_large,

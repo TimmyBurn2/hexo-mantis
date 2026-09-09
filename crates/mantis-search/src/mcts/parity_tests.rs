@@ -9,7 +9,9 @@
 
 use serde_json::Value;
 
-use super::completed_q::{mctx_completed_qvalues, mctx_improved_policy_masses, CqChild};
+use super::completed_q::{
+    mctx_completed_qvalues, mctx_improved_policy_masses, mctx_interior_argmax_input, CqChild,
+};
 
 const REL_TOL: f32 = 2e-5;
 const ABS_TOL: f32 = 2e-6;
@@ -175,5 +177,64 @@ fn the_mctx_arm_and_the_legacy_arm_disagree() {
         "the two arms produced the same target (max gap {max_gap}) — then either the \
          Mctx arm is not doing anything or the legacy arm was already Mctx, and the \
          parity above proves nothing about which one a config selects"
+    );
+}
+
+/// THE DEVIATION-4 WITNESS. Interior selection is the improved policy with the
+/// visit-count correction, pinned elementwise against Mctx's `_prepare_argmax_input`
+/// rather than only at its argmax — many wrong score vectors share an argmax.
+#[test]
+fn the_interior_selection_score_matches_mctx() {
+    let doc = fixture();
+    let c_visit = doc["maxvisit_init"].as_f64().expect("maxvisit_init") as f32;
+    let c_scale = doc["value_scale"].as_f64().expect("value_scale") as f32;
+    let cases = doc["qtransform"].as_array().expect("qtransform section");
+    assert!(!cases.is_empty(), "an empty parity section proves nothing");
+    for case in cases {
+        let name = case["name"].as_str().expect("case name");
+        let (children, raw_value) = children_of(case);
+        let completed = mctx_completed_qvalues(&children, raw_value, c_visit, c_scale);
+        let priors: Vec<f32> = children.iter().map(|c| c.prior).collect();
+        let visits: Vec<u32> = children.iter().map(|c| c.visits).collect();
+        let got = mctx_interior_argmax_input(&priors, &completed, &visits);
+        assert_close(
+            name,
+            "interior_argmax_input",
+            &got,
+            &f32s(case, "interior_argmax_input"),
+        );
+    }
+}
+
+/// The visit-count correction is what stops the interior selector piling every visit on
+/// one child (the paper's §5). Without it the score IS the improved policy and the argmax
+/// never moves however many times a child is visited.
+#[test]
+fn the_interior_score_moves_off_a_child_as_its_visits_accumulate() {
+    let priors = vec![0.5f32, 0.3, 0.2];
+    let completed = vec![1.0f32, 0.9, 0.8];
+    let fresh = mctx_interior_argmax_input(&priors, &completed, &[0, 0, 0]);
+    let argmax = |v: &[f32]| {
+        v.iter()
+            .enumerate()
+            .fold((0usize, f32::NEG_INFINITY), |(bi, bv), (i, &x)| {
+                if x > bv {
+                    (i, x)
+                } else {
+                    (bi, bv)
+                }
+            })
+            .0
+    };
+    let leader = argmax(&fresh);
+    let mut visits = [0u32; 3];
+    visits[leader] = 40;
+    let after = mctx_interior_argmax_input(&priors, &completed, &visits);
+    assert_ne!(
+        argmax(&after),
+        leader,
+        "forty visits on the leading child left it still leading — the \
+         `- visits / (1 + sum_visits)` correction is not being applied, and a selector \
+         without it visits one child forever"
     );
 }

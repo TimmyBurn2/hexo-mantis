@@ -258,7 +258,7 @@ pub(crate) fn run_worker_thread(
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
     // Same posture as quiescence: per-WORKER configuration, set once, survives
     // `new_game`. `Legacy` leaves every completed-Q surface byte-identical.
-    tree.configure_gumbel(gumbel_variant);
+    tree.configure_gumbel(gumbel_variant, gumbel_mcts, c_visit, c_scale);
     let mut rng = rng();
     // Per-move model-version snapshot (frozen `inner.rs:1214`): each `play_one_move`
     // dedup-pushes `model_version` (default 0 until WP7 wires the NN setter), so a

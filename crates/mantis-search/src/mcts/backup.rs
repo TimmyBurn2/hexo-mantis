@@ -122,9 +122,10 @@ pub(crate) fn pick_topk_children(
     policy: &[f32],
     trunk_sz: i32,
     half: i32,
+    cap: usize,
 ) -> TopKChildren {
     let n_legal = legal_moves.len();
-    let n_ch = n_legal.min(MAX_CHILDREN_PER_NODE);
+    let n_ch = n_legal.min(cap);
 
     // Single canonical path for every node size. Collect `((q,r), sort_prior,
     // flat)` triples, sort by `(prior desc, flat asc)`, truncate to the Top-K
@@ -155,11 +156,11 @@ pub(crate) fn pick_topk_children(
     });
     let dropped_mass: f32 = all
         .iter()
-        .skip(MAX_CHILDREN_PER_NODE)
+        .skip(cap)
         .map(|&(_, sort_prior, _)| sort_prior)
         .sum();
     record_omitted_prior(dropped_mass);
-    all.truncate(MAX_CHILDREN_PER_NODE);
+    all.truncate(cap);
 
     let mut chosen: Vec<((i32, i32), f32)> = Vec::with_capacity(all.len());
     for ((q, r), _sort_prior, flat) in all {
@@ -171,7 +172,7 @@ pub(crate) fn pick_topk_children(
         chosen.push(((q, r), prior));
     }
 
-    (chosen, n_legal > MAX_CHILDREN_PER_NODE)
+    (chosen, n_legal > cap)
 }
 
 /// Legal-set counterpart of `pick_topk_children`: reads each child's prior from
@@ -190,9 +191,10 @@ pub(crate) fn pick_topk_children_ls(
     ls: &LegalSetPolicy,
     trunk_sz: i32,
     half: i32,
+    cap: usize,
 ) -> TopKChildren {
     let n_legal = legal_moves.len();
-    let n_ch = n_legal.min(MAX_CHILDREN_PER_NODE);
+    let n_ch = n_legal.min(cap);
     let floor = 1.0 / n_ch as f32;
 
     let mut all: Vec<((i32, i32), f32, u32)> = legal_moves
@@ -210,19 +212,15 @@ pub(crate) fn pick_topk_children_ls(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.2.cmp(&b.2))
     });
-    let dropped_mass: f32 = all
-        .iter()
-        .skip(MAX_CHILDREN_PER_NODE)
-        .map(|&(_, prior, _)| prior)
-        .sum();
+    let dropped_mass: f32 = all.iter().skip(cap).map(|&(_, prior, _)| prior).sum();
     record_omitted_prior(dropped_mass);
-    all.truncate(MAX_CHILDREN_PER_NODE);
+    all.truncate(cap);
 
     let chosen: Vec<((i32, i32), f32)> = all
         .into_iter()
         .map(|((q, r), prior, _)| ((q, r), prior))
         .collect();
-    (chosen, n_legal > MAX_CHILDREN_PER_NODE)
+    (chosen, n_legal > cap)
 }
 
 impl MCTSTree {
@@ -314,6 +312,17 @@ impl MCTSTree {
         result
     }
 
+    /// Children `leaf_idx` may expand: the dialect's root cap at the root, the per-node
+    /// cap everywhere else.
+    #[inline]
+    fn expansion_cap(&self, leaf_idx: u32) -> usize {
+        if leaf_idx == 0 {
+            self.root_children_cap
+        } else {
+            MAX_CHILDREN_PER_NODE
+        }
+    }
+
     /// Expand a single leaf node and backup its value.
     pub(crate) fn expand_and_backup_single(
         &mut self,
@@ -369,7 +378,12 @@ impl MCTSTree {
         let (cq, cr) = board.window_center();
         let trunk_sz = board.cluster_window_size() as i32;
         let half = (trunk_sz - 1) / 2;
-        let (chosen, _sort_used) = pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half);
+        // The ROOT's cap is the dialect's (`MAX_CHILDREN_PER_NODE` under legacy, the full
+        // legal set under Mctx); every other node keeps the per-node cap. `leaf_idx == 0`
+        // IS the root by the pool's own convention — slot 0 is never reallocated.
+        let cap = self.expansion_cap(leaf_idx);
+        let (chosen, _sort_used) =
+            pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap);
         self.finish_expansion(leaf_idx, board, chosen, value);
     }
 
@@ -433,12 +447,12 @@ impl MCTSTree {
         }
 
         let corrected = self.apply_quiescence(board, value);
-        if leaf_idx == 0 {
-            // Mctx's `raw_values[root]`: captured HERE, at the one point the root's
-            // own network value is in hand, because `backup` immediately folds it
-            // into the running mean and it is unrecoverable from `w_value` after
-            // the first child backs up.
-            self.root_raw_value = corrected;
+        // Mctx's `raw_values[node]`: captured HERE, at the one point this node's own
+        // network value is in hand, because `backup` immediately folds it into the
+        // running mean and it is unrecoverable from `w_value` afterwards. Empty vec
+        // under the legacy dialect, which reads the mean instead.
+        if let Some(slot) = self.raw_values.get_mut(leaf_idx as usize) {
+            *slot = corrected;
         }
         self.backup(leaf_idx, corrected);
     }
@@ -515,7 +529,9 @@ impl MCTSTree {
             return;
         }
         let half = (trunk_sz - 1) / 2;
-        let (chosen, _sort_used) = pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half);
+        let cap = self.expansion_cap(leaf_idx);
+        let (chosen, _sort_used) =
+            pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap);
         self.finish_expansion(leaf_idx, board, chosen, value);
     }
 
@@ -680,7 +696,8 @@ mod ls_prior_tests {
         overflow.insert((28, 0), 0.5);
         let ls = LegalSetPolicy { dense, overflow };
 
-        let (chosen, truncated) = pick_topk_children_ls(&legal, 0, 0, &ls, 19, 9);
+        let (chosen, truncated) =
+            pick_topk_children_ls(&legal, 0, 0, &ls, 19, 9, MAX_CHILDREN_PER_NODE);
         assert!(!truncated);
         assert_eq!(chosen.len(), 3);
         // sorted by prior desc: (28,0)=0.5 (overflow), (1,0)=0.3, (0,0)=0.2 (dense)
