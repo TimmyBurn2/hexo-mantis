@@ -65,7 +65,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
         bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
     )
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=24,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=24,
         leaf_build_threads=1, concurrency=1,
         round_index=0, round_id="f816_37_instrument", step=7, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",

@@ -1,4 +1,5 @@
-//! mantis-search: MCTS (PUCT + Gumbel), completed-Q, tactics solver.
+//! mantis-search: MCTS (PUCT or Gumbel — one closed `SearchKind`), completed-Q,
+//! tactics solver.
 //!
 //! Depends on `mantis-core` (board, geometry, rules, Ply) and `mantis-encoding`
 //! only (repo DAG). The MCTS takes `n_actions` as a caller parameter and the
@@ -15,11 +16,11 @@ pub mod tactics;
 pub mod temperature;
 
 pub use legal_set::{is_covered, LegalSetPolicy};
-pub use mcts::gumbel::{GumbelSearchState, GumbelVariant};
 pub use mcts::gumbel_mctx::MctxRootState;
+pub use mcts::kind::SearchKind;
 pub use mcts::{
     omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
-    CachedPolicy, MCTSTree, Node, TTEntry, MAX_ARMED_SIMS, MAX_ARMED_SIMS_MCTX,
+    CachedPolicy, MCTSTree, Node, TTEntry, MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL,
     MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN, VIRTUAL_LOSS_PENALTY,
 };
 pub use tactics::{Budget, Outcome, ProofResult, TacticalConfig, TacticalSolver};

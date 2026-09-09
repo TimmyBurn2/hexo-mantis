@@ -223,12 +223,11 @@ impl MCTSTree {
                 } else {
                     pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value)
                 }
-            } else if self.gumbel_variant == crate::mcts::GumbelVariant::Mctx {
-                // GUMBEL-REPAIR-1 item 4: below the root the Mctx dialect selects by the
-                // improved policy with the visit-count correction, not by PUCT. `None`
-                // only when the node has no children, which the loop above already
-                // excluded, so the PUCT fallback is unreachable rather than a silent
-                // second policy.
+            } else if self.kind == crate::mcts::SearchKind::Gumbel {
+                // Below the root the Gumbel kind selects by the improved policy with the
+                // visit-count correction, not by PUCT. `None` only when the node has no
+                // children, which the loop above already excluded, so the PUCT fallback
+                // is unreachable rather than a silent second policy.
                 self.pick_best_mctx_interior(cur)
                     .unwrap_or_else(|| pick_best_puct(self, first, n_ch, cur, parent_n, fpu_value))
             } else {
@@ -259,8 +258,8 @@ impl MCTSTree {
     ///
     /// Returns `None` when the node has no children. The `completed_q` vector is allocated
     /// per call: one per descent level per simulation, sized by the node's child count. It
-    /// is not pooled, and that is stated rather than optimised — the Mctx dialect is armed
-    /// in no config and LAW-09 wants a measurement before a perf change, not a guess.
+    /// is not pooled, and that is stated rather than optimised — LAW-09 wants a measurement
+    /// before a perf change, not a guess.
     #[allow(clippy::cast_possible_truncation)] // j indexes children, itself a u16 count
     pub(crate) fn pick_best_mctx_interior(&self, node_idx: u32) -> Option<u32> {
         let completed = self.node_completed_qvalues(node_idx, self.q_c_visit, self.q_c_scale);
@@ -383,6 +382,95 @@ impl MCTSTree {
             }
             i += 1;
         }
+
+        debug_assert_eq!(board.zobrist_hash, self.root_board.zobrist_hash);
+        debug_assert_eq!(board.ply, self.root_board.ply);
+
+        Ok(boards)
+    }
+
+    /// Select ONE leaf under each of `forced` root children, in one call.
+    ///
+    /// THE GUMBEL ANALOGUE OF `leaf_batch_size`. Sequential Halving's schedule visits every
+    /// candidate at the current considered level before the level advances, so the SET of
+    /// root children a round touches is fixed the moment the round starts — which means
+    /// issuing their descents together visits exactly the children Mctx's one-at-a-time loop
+    /// would have visited, in the same round, and leaves the root visit counts identical.
+    /// What batching gives up is only that a later descent in a round cannot see the earlier
+    /// descents' backups; what it buys is one inference round trip per round instead of one
+    /// per simulation.
+    ///
+    /// NO VIRTUAL LOSS IS NEEDED ACROSS CANDIDATES, and that is a property of the set rather
+    /// than a choice: each forced child roots a DISJOINT subtree, so two descents in one
+    /// batch cannot collide at any node below the root. (Virtual loss is still applied and
+    /// unwound along each individual path by `select_one_leaf`/`backup`, which is what keeps
+    /// a single descent's own bookkeeping correct.)
+    ///
+    /// A forced child that yields a leaf already pending in this batch is SKIPPED and
+    /// counted as an overlap, the same way `select_leaves` treats a duplicate: two candidates
+    /// reaching one node can only happen through a transposition, and expanding it twice in
+    /// one batch would back the same value up twice.
+    ///
+    /// Leaves the tree's `forced_root_child` CLEARED on every exit, including the error one.
+    ///
+    /// # Errors
+    /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board
+    /// refuses. `ForcedChildOutOfRange` cannot be returned here: the caller's indices come
+    /// from the root state, and one outside the root's range is a bookkeeping defect the
+    /// caller must catch through `set_forced_root_child` before it gets here — so this fn
+    /// takes the same validation rather than assuming it.
+    pub fn select_leaves_forced(&mut self, forced: &[u32]) -> Result<Vec<Board>, SelectionDesync> {
+        self.pending.clear();
+        let mut boards = Vec::with_capacity(forced.len());
+        let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
+        pending_ids.reserve(forced.len());
+        let mut board = self.root_board.clone();
+        let mut diffs: Vec<MoveDiff> = Vec::with_capacity(32);
+
+        for &child in forced {
+            self.forced_root_child = Some(child);
+            diffs.clear();
+            let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
+                Ok(pair) => pair,
+                Err(desync) => {
+                    // Unwind this descent before propagating, exactly as `select_leaves`
+                    // does: the nodes on the path already took their virtual loss, and
+                    // leaving it applied would permanently penalise them for a walk that
+                    // never produced a leaf.
+                    self.undo_virtual_loss(desync.node);
+                    while let Some(diff) = diffs.pop() {
+                        board.undo_move(diff);
+                    }
+                    self.forced_root_child = None;
+                    return Err(desync);
+                }
+            };
+            self.depth_accum += leaf_depth as u64;
+            self.sim_count += 1;
+
+            if pending_ids.contains(&leaf_idx) {
+                self.undo_virtual_loss(leaf_idx);
+                self.selection_overlap_count += 1;
+                while let Some(diff) = diffs.pop() {
+                    board.undo_move(diff);
+                }
+                continue;
+            }
+
+            // The TT fast path is DELIBERATELY absent here. `select_leaves` expands a
+            // TT-hit leaf inline and does not count it against the batch, which is what
+            // makes its worst case `4n` expansions; a Gumbel round has an exact leaf count
+            // per round trip and that is the quantity this call exists to make measurable.
+            // A TT hit is simply evaluated again by the producer.
+            boards.push(board.clone());
+            self.pending.push((leaf_idx, board.clone()));
+            pending_ids.insert(leaf_idx);
+
+            while let Some(diff) = diffs.pop() {
+                board.undo_move(diff);
+            }
+        }
+        self.forced_root_child = None;
 
         debug_assert_eq!(board.zobrist_hash, self.root_board.zobrist_hash);
         debug_assert_eq!(board.ply, self.root_board.ply);

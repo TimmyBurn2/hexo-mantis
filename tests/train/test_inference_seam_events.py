@@ -75,7 +75,7 @@ def _stats(*, positions: int, seam: int, defects: int) -> RunnerStats:
 
 
 class _Pool:
-    gumbel_mcts = True
+    search_kind = "gumbel"
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45

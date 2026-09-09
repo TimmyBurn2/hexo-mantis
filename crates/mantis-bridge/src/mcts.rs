@@ -18,12 +18,12 @@
 //!   matching the tree's internal reset).
 
 use numpy::{IntoPyArray, PyArray1};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
-use mantis_search::{LegalSetPolicy, MCTSTree};
+use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, SearchKind};
 use mantis_selfplay::records;
 
 use crate::board::PyBoard;
@@ -66,6 +66,13 @@ pub struct PyMCTSTree {
     /// Bridge mirror of the tree's `pub(crate)` `forced_root_child` (pub setter,
     /// no pub getter). Kept in lockstep on set / new_game / reset.
     forced_root_child: Option<u32>,
+    /// The Gumbel root state of the search in progress, under `SearchKind::Gumbel`.
+    ///
+    /// HELD BY THE TREE rather than returned to Python as a handle, and that is the point:
+    /// the state is only meaningful against the tree it was drawn over, and a Python-side
+    /// handle could outlive a `new_game` and be driven against a different root. Cleared
+    /// by `new_game`/`reset` for exactly that reason.
+    gumbel_root: Option<MctxRootState>,
 }
 
 #[pymethods]
@@ -94,7 +101,91 @@ impl PyMCTSTree {
             board_size: BOARD_SIZE,
             pending_boards: Vec::new(),
             forced_root_child: None,
+            gumbel_root: None,
         }
+    }
+
+    /// Select the search kind once per player, exactly as the self-play worker does.
+    ///
+    /// THE DEPLOY HEAD AND THE SELF-PLAY WORKER CALL THE SAME SETTER, which is what makes
+    /// "the bar searches the way the run searched" a construction rather than a
+    /// coincidence. `c_visit`/`c_scale` are the config's own required keys, threaded from
+    /// the same section; nothing here defaults them.
+    ///
+    /// # Errors
+    /// `ValueError` — `kind` is not a search kind this build knows. REFUSED, never
+    /// defaulted (LAW-11).
+    pub fn configure_search(&mut self, kind: &str, c_visit: f32, c_scale: f32) -> PyResult<()> {
+        let parsed = SearchKind::from_config_str(kind).ok_or_else(|| {
+            PyValueError::new_err(format!(
+                "search.kind={kind:?} is not a known search kind (expected \"puct\" or \
+                 \"gumbel\")"
+            ))
+        })?;
+        self.inner.configure_search(parsed, c_visit, c_scale);
+        self.gumbel_root = None;
+        Ok(())
+    }
+
+    /// The search kind this tree runs, as its config spelling.
+    #[getter]
+    pub fn search_kind(&self) -> &'static str {
+        self.inner.search_kind().as_config_str()
+    }
+
+    /// Draw this search's Gumbel root state over the EXPANDED root, from an explicit seed.
+    ///
+    /// THE SEED IS REQUIRED AND EXPLICIT, not a thread RNG. A promotion bar has to be a
+    /// reproducible instrument (LAW-15), and the Gumbel draw is the one stochastic term in
+    /// the Gumbel head; a caller that seeds it per (game, ply) gets a bar that replays.
+    ///
+    /// `m` is Mctx's `max_num_considered_actions`, `budget` the simulations that will
+    /// descend from the already-evaluated root.
+    ///
+    /// # Errors
+    /// `RuntimeError` — the root is not expanded, so there is nothing to draw over.
+    pub fn gumbel_root_begin(&mut self, m: usize, budget: usize, seed: u64) -> PyResult<()> {
+        if self.inner.root_n_children() == 0 {
+            return Err(PyRuntimeError::new_err(
+                "gumbel_root_begin: the root is not expanded — evaluate the root leaf first \
+                 (the root's own evaluation is charged against the budget)",
+            ));
+        }
+        self.gumbel_root = Some(MctxRootState::new_seeded(&self.inner, m, budget, seed));
+        Ok(())
+    }
+
+    /// The root child this simulation must descend into, as a pool index, or `None` when
+    /// the schedule is exhausted.
+    ///
+    /// # Errors
+    /// `RuntimeError` — no root state has been drawn for this search.
+    pub fn gumbel_root_select(&self, c_visit: f32, c_scale: f32) -> PyResult<Option<u32>> {
+        let state = self.gumbel_root.as_ref().ok_or_else(|| {
+            PyRuntimeError::new_err("gumbel_root_select: call gumbel_root_begin first")
+        })?;
+        Ok(state.select(&self.inner, c_visit, c_scale))
+    }
+
+    /// Sequential Halving's answer: the highest-scoring of the MOST-VISITED root children,
+    /// as an axial `(q, r)`. `None` when the root has no children.
+    ///
+    /// # Errors
+    /// `RuntimeError` — no root state has been drawn for this search.
+    pub fn gumbel_root_best_move(
+        &self,
+        c_visit: f32,
+        c_scale: f32,
+    ) -> PyResult<Option<(i32, i32)>> {
+        let state = self.gumbel_root.as_ref().ok_or_else(|| {
+            PyRuntimeError::new_err("gumbel_root_best_move: call gumbel_root_begin first")
+        })?;
+        Ok(state
+            .best_action(&self.inner, c_visit, c_scale)
+            .map(|pool_idx| {
+                let val = self.inner.pool[pool_idx as usize].action_idx;
+                ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
+            }))
     }
 
     /// Total quiescence value overrides/blends since last `new_game()`.
@@ -123,6 +214,7 @@ impl PyMCTSTree {
         self.board_size = BOARD_SIZE;
         self.pending_boards.clear();
         self.forced_root_child = None;
+        self.gumbel_root = None;
         self.inner.new_game(board.inner_ref().clone());
     }
 
@@ -566,8 +658,10 @@ mod tests {
         // round-trip needs a root that HAS children and an index that is one of them.
         let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, true, 0.3);
         assert_eq!(t.forced_root_child(), None);
-        assert!(t.set_forced_root_child(Some(7)).is_err(),
-            "an unexpanded root owns no child 7");
+        assert!(
+            t.set_forced_root_child(Some(7)).is_err(),
+            "an unexpanded root owns no child 7"
+        );
 
         let seed = PyBoard::new();
         t.new_game(&seed);
@@ -578,7 +672,8 @@ mod tests {
                 .expect("one policy for one leaf");
         });
         let first = t.inner.pool[0].first_child;
-        t.set_forced_root_child(Some(first)).expect("the root's own first child");
+        t.set_forced_root_child(Some(first))
+            .expect("the root's own first child");
         assert_eq!(t.forced_root_child(), Some(first));
         // new_game resets the mirror (matches the tree's internal reset).
         let board = PyBoard::new();

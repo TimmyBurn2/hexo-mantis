@@ -25,12 +25,10 @@ def _derive(**over):
         n_sims_quick=0,
         n_sims_full=0,
         leaf_batch_size=8,
-        completed_q_values=False,
-        # The SHIPPED dialect. GUMBEL-REPAIR-1 made the completed-target refusal a
-        # DENSITY check whose support bound depends on the dialect, so a derivation
-        # that did not state one would be measuring an unstated regime.
-        gumbel_mcts=False,
-        gumbel_variant="legacy",
+        # The completed-target refusal is a DENSITY check whose support bound depends on
+        # the SEARCH KIND, so a derivation that did not state one would be measuring an
+        # unstated regime.
+        search_kind="puct",
     )
     args.update(over)
     return _engine.derived_hexg_visit_capacity(**args)
@@ -53,15 +51,26 @@ def test_a_regime_over_the_ceiling_raises_naming_it() -> None:
         _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=70_000)
 
 
-def test_completed_q_refusal_tracks_the_derived_capacity() -> None:
-    # Below MAX_CHILDREN_PER_NODE (192): child-count-wide support cannot fit.
-    with pytest.raises(ValueError, match="192"):
-        _derive(completed_q_values=True)
-    # A 600/75 regime derives 607 >= 192: the refusal would be vacuous — admits.
-    assert (
-        _derive(completed_q_values=True, full_search_prob=0.10, n_sims_quick=75, n_sims_full=600)
-        == 607
-    )
+def test_the_gumbel_kind_is_refused_at_every_capacity() -> None:
+    """The DENSITY check: the refusal is about the exported target's SUPPORT, not its
+    visit count, so no sims regime retires it.
+
+    Under `puct` the exported target is the visit distribution and the sims regime bounds
+    its support. Under `gumbel` the target covers the LEGAL SET, which is not a constant —
+    355 median and 8142 maximum at radius 8 — and which the config bounds nowhere.
+    """
+    with pytest.raises(ValueError, match="FULL legal set"):
+        _derive(search_kind="gumbel")
+    # A regime with an enormous derived capacity: still refused. That is "at ANY capacity".
+    with pytest.raises(ValueError, match="MINTED"):
+        _derive(search_kind="gumbel", full_search_prob=0.10, n_sims_quick=75, n_sims_full=600)
+    # And PUCT at the same shapes is fine.
+    assert _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=600) == 607
+
+
+def test_an_unknown_kind_is_refused_rather_than_defaulted() -> None:
+    with pytest.raises(ValueError, match="search.kind"):
+        _derive(search_kind="mctx")
 
 
 # ── the composed buffer's slots ARE the derived capacity ────────────────────────

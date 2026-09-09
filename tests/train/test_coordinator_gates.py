@@ -77,7 +77,7 @@ class _RunnerStats:
 class FakePool:
     def __init__(self, *, stride5=1, draw_counts=(0, 0)) -> None:
         self.games_completed = 0
-        self.gumbel_mcts = True                 # → iteration_complete cluster stats are None
+        self.search_kind = "gumbel"                 # → iteration_complete cluster stats are None
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

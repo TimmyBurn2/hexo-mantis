@@ -168,15 +168,18 @@ def test_the_halt_names_both_sides(tmp_path: Path) -> None:
 
 # ── target semantics ────────────────────────────────────────────────────────────────────
 #
-# ⊕ GUMBEL-REPAIR-1 follow-on. These leaves build no net, so every identity check above
-# passes them. What they decide is whether a stored replay row is a visit-count distribution
-# or a completed improved policy — and, through the same one decision, which loss the trainer
-# applies. Since R345(b)(3) a resume RESTORES the ring, so moving one continues training on
-# rows built under the other meaning, with no provenance on a row to tell them apart.
+# These leaves build no net, so every identity check above passes them. What they decide is
+# whether a stored replay row is a visit-count distribution or a completed improved policy —
+# and, through the same one decision, which loss the trainer applies. Since R345(b)(3) a
+# resume RESTORES the ring, so moving one continues training on rows built under the other
+# meaning, with no provenance on a row to tell them apart.
+#
+# `search.kind` IS one of them now, and it is the one that DECIDES the other: it is the
+# search that builds the target. `train.policy_target` stays beside it because it is the
+# leaf the checkpoint STAMP carries — the artifact's own record of what its rows mean.
 @pytest.mark.parametrize("section,leaf,value", [
     ("train", "policy_target", "completed_improved_policy"),
-    ("train", "completed_q_values", True),
-    ("selfplay", "completed_q_values", True),
+    ("search", "kind", "gumbel"),
 ])
 def test_a_resume_that_moves_a_target_semantics_key_halts(
     tmp_path: Path, section: str, leaf: str, value: Any
@@ -225,27 +228,30 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
     )
 
 
-def test_the_gumbel_dialect_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
+def test_the_search_regime_knobs_are_deliberately_not_target_semantics_keys(
+    tmp_path: Path,
+) -> None:
     """The considered OMISSION, pinned so it cannot be closed by accident.
 
-    `selfplay.gumbel_variant` changes a target's QUALITY, not its meaning — a visit
-    distribution from a corrected search is still a visit distribution — which puts it with
-    `mcts.n_simulations`, `c_puct` and the playout-cap knobs, none of which are resume-guarded
-    and some of which a run legitimately varies mid-flight. Guarding one search knob and not
-    its siblings would assert a distinction that does not exist. That the corrected dialect
-    cannot widen a stored row's support is measured on the Rust side
-    (`crates/mantis-selfplay/tests/target_support_is_sims_bounded.rs`).
+    `selfplay.gumbel_m` changes a target's QUALITY, not its meaning — a completed-Q policy
+    from a wider candidate set is still a completed-Q policy — which puts it with
+    `mcts.n_simulations`, `c_puct` and the playout-cap knobs, none of which are
+    resume-guarded and some of which a run legitimately varies mid-flight. Guarding one
+    search knob and not its siblings would assert a distinction that does not exist. What
+    the guarded leaves have that this one does not is that they change what a STORED ROW
+    IS.
     """
     path = _write_full(tmp_path)
     selfplay = dict(load_checkpoint(path).config["selfplay"])
-    assert selfplay["gumbel_variant"] == "legacy", "the fixture no longer ships the shipped dialect"
-    selfplay["gumbel_variant"] = "mctx"
+    selfplay["gumbel_m"] = selfplay["gumbel_m"] + 8
     trainer = resume_trainer(
         Trainer, path, device=torch.device("cpu"),
         config_overrides={"selfplay": selfplay},
         declared_keys=frozenset({"selfplay"}),
     )
     assert trainer.loaded_from_full_checkpoint, (
-        "a dialect change must NOT halt a resume — if this starts failing, the guard has "
-        "widened past what it can justify"
+        "a candidate-count change must NOT halt a resume — if this starts failing, the "
+        "guard has widened past what it can justify"
     )
+
+

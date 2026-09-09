@@ -133,7 +133,7 @@ class _Pool:
 
     WP12R Step 3 narration: gained the `PoolTelemetryLike` surface `iteration_complete`
     reads (`runner_stats`, `avg_game_length`, `x_winrate`, `o_winrate`, `draws`,
-    `sims_per_sec`, `batch_fill_pct`, `gumbel_mcts`) because `iteration_complete` now emits
+    `sims_per_sec`, `batch_fill_pct`, `search_kind`) because `iteration_complete` now emits
     per-burst (every O6 return) instead of only at `log_interval` boundaries, so this stub
     must satisfy `emit_iteration_complete_event` on every `step()` call.
     """
@@ -141,7 +141,7 @@ class _Pool:
     def __init__(self, games_completed: int = 3) -> None:
         self.games_completed = games_completed
         self.n_workers = 1
-        self.gumbel_mcts = True
+        self.search_kind = "gumbel"
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

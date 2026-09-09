@@ -30,6 +30,7 @@ import pytest
 from mantis import _engine
 from mantis.encoding import lookup
 from mantis.selfplay import hparams as hparams_mod
+from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.hparams import (
     PoolDims,
     SelfPlayHParams,
@@ -40,8 +41,8 @@ from mantis.selfplay.hparams import (
 
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
-    "inference_pool_size": 1536, "completed_q_values": True, "c_visit": 40.0, "c_scale": 2.0,
-    "gumbel_mcts": True, "gumbel_m": 24, "gumbel_explore_moves": 14, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+    "inference_pool_size": 1536, "c_visit": 40.0, "c_scale": 2.0,
+    "gumbel_m": 24, "gumbel_explore_moves": 14,
     "results_queue_cap": 5000, "random_opening_plies": 3, "rotation_enabled": False,
     "forced_win_policy_enabled": True, "forced_win_policy_depth": 4,
     "forced_win_policy_weight": 0.75, "solver_enabled": True, "solver_depth": 20,
@@ -69,7 +70,7 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-    "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0, "completed_q_values": False,
+    "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
     "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
     "draw_reward": -0.4, "ply_cap_value": -0.7, "policy_prune_frac": 0.0,
     "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
@@ -81,6 +82,7 @@ BASE_TRAIN: dict[str, Any] = {
 def cfg(
     *, encoding: str = "v6", selfplay: dict | None = None, mcts: dict | None = None,
     playout_cap: dict | None = None, train: dict | None = None,
+    search: dict | None = None,
 ) -> dict[str, Any]:
     """A nested, schema-shaped config: BASE_* plus per-section overrides. `encoding` stays a
     top-level flat key — `resolve_pool_encoding`/`resolve_from_config` read it independently
@@ -92,6 +94,7 @@ def cfg(
     sp["playout_cap"] = dict(BASE_PLAYOUT_CAP, **(playout_cap or {}))
     return {
         "encoding": encoding,
+        "search": dict({"kind": "puct"}, **(search or {})),
         "selfplay": sp,
         "train": dict(BASE_TRAIN, **(train or {})),
     }
@@ -314,32 +317,31 @@ def test_inference_pool_size_threading(assemble, selfplay_over, expected) -> Non
     assert assemble(config).recorded_kwargs["inference_pool_size"] == expected
 
 
-# ═══ D-14 — `gumbel_mcts` re-reads the LIVE config ═══════════════════════════════
-def test_gumbel_mcts_property_reads_live_config() -> None:
-    """D-14 — PASS iff the `gumbel_mcts` property reflects a config mutated AFTER
-    construction, in both directions, while the frozen ctor-time hparams do not move.
+# ═══ D-14 — `search_kind` re-reads the LIVE config ═══════════════════════════════
+def test_search_kind_property_reads_live_config() -> None:
+    """D-14 — PASS iff the `search_kind` property reflects a config mutated AFTER
+    construction, and REFUSES a config that declares no search at all.
 
-    Deliberate asymmetry: nearly every knob is resolved once at construction, but this one
-    re-reads because the event emitter uses it to decide whether the PUCT-only diagnostics
-    are meaningful, and that decision must follow the live config. Exercised through a
-    bare object carrying only `config` so no runner is needed. `WorkerPool.gumbel_mcts`
-    itself is untouched by SC-A2 (its own flat-fallback read is a separate, pre-existing
-    mechanism DESIGN_P2.md does not scope in). FAIL = the regime guard freezes at
-    construction and the emitter reports PUCT diagnostics for a Gumbel run."""
-    from mantis.selfplay.pool import WorkerPool
+    Driven through a bare object carrying only `config` so no runner is needed:
+    `WorkerPool.search_kind` reads `self.config` and nothing else.
+    """
+    holder = type("H", (), {"search_kind": WorkerPool.search_kind})()
+    holder.config = {"search": {"kind": "puct"}}
+    assert holder.search_kind == "puct"
 
-    holder = object.__new__(WorkerPool)
-    holder.config = {"selfplay": {"gumbel_mcts": False}}
-    assert holder.gumbel_mcts is False
+    holder.config["search"]["kind"] = "gumbel"
+    assert holder.search_kind == "gumbel", "the property must re-read the live config"
 
-    holder.config["selfplay"]["gumbel_mcts"] = True
-    assert holder.gumbel_mcts is True, "the property must re-read the live config"
-
+    # NO FALLBACK. A pool that cannot say which search it ran must raise rather than
+    # answer "puct" — the emitter gates PUCT-only diagnostics on this, and a default
+    # would publish descent-rule statistics for a descent that never happened.
     holder.config = {}
-    assert holder.gumbel_mcts is False, "absent key ⇒ False, with the namespace fallback"
+    with pytest.raises(KeyError):
+        _ = holder.search_kind
 
-    hp = SelfPlayHParams.from_config(cfg(selfplay={"gumbel_mcts": True}))
-    assert hp.gumbel_mcts is True, "the frozen ctor-time snapshot still records the knob"
+    hp = SelfPlayHParams.from_config(cfg(search={"kind": "gumbel"}))
+    assert hp.search_kind == "gumbel", "the frozen ctor-time snapshot still records the kind"
+
 
 
 # ═══ D-18 — the derived dense dims, and the FFI agreement ════════════════════════

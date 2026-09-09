@@ -130,7 +130,9 @@ def _readout(seed: int) -> dict:
             _derived_opening(),
         ]
         records = play_arm(
-            build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0),
+            build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0,
+                                   c_scale=1.0, search_kind="puct", gumbel_m=16,
+                                   gumbel_seed=seed),
             resolve_bot("random", depth=None, opponent_sims=2)(seed=7),
             openings,
             regime_key=witness_regime(encoding_name=_ENCODING, model_sims=2,

@@ -124,7 +124,6 @@ class TrainHParams:
     eta_min: float
     min_lr: float | None
     checkpoint_interval: int
-    completed_q_values: bool
     policy_prune_frac: float
     entropy_reg_weight: float
     aux_opp_reply_weight: float
@@ -143,9 +142,7 @@ class TrainHParams:
     def from_config(cls, config: Any) -> TrainHParams:
         """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No
         flat-key fallback: `config['train']` (a `TrainConfig.model_dump()`-shaped, no-terminal-
-        default dict — every field present) is REQUIRED. `value_target`/`policy_target`'s
-        single-variant Literals are asserted here (V-NOOP-eligible reads, T-D/T-B/R34) and
-        `policy_target` is cross-validated against `completed_q_values` on both sides."""
+        default dict — every field present) is REQUIRED."""
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
         if not isinstance(train, dict):
@@ -155,38 +152,39 @@ class TrainHParams:
             )
         if train["value_target"] != "pure_outcome_z":
             raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
-        _assert_policy_target_consistency(train, cfg.get("selfplay") or {})
+        _assert_policy_target_consistency(train, cfg.get("search") or {})
         fields = {f for f in cls.__dataclass_fields__}
         kwargs = {k: train[k] for k in fields}
         return cls(**kwargs)
 
 
-def _assert_policy_target_consistency(train: dict[str, Any], selfplay: dict[str, Any]) -> None:
-    """T-B/R34 cross-check: `train.policy_target` must agree with `train.completed_q_values`
-    and (once `selfplay` carries the field — SC-A2) `selfplay.completed_q_values`. One
-    decision, not two independently-editable knobs (ADJUDICATION_QUEUE closing note). The
-    `RunConfig`-level `model_validator` (schema/core.py) enforces this at schema-validate
-    time; this is the defensive runtime assertion at the actual `.from_config` consumer for
-    a caller that hands `TrainHParams.from_config` a dict never routed through
-    `RunConfig.model_validate`."""
-    # `policy_target` has TWO members since GUMBEL-REPAIR-1; `raw` is the raw-visit one and
-    # every other member means the completed target, so this stays a two-way test.
-    raw = train["policy_target"] == "raw_visit_distribution"
-    train_off = not train["completed_q_values"]
-    if raw != train_off:
+def _assert_policy_target_consistency(train: dict[str, Any], search: dict[str, Any]) -> None:
+    """`train.policy_target` must name the target the SEARCH built.
+
+    The `RunConfig`-level `model_validator` (schema/core.py) enforces this at
+    schema-validate time; this is the defensive runtime assertion at the actual
+    `.from_config` consumer, for a caller that hands `TrainHParams.from_config` a dict
+    never routed through `RunConfig.model_validate`.
+
+    A mapping carrying no `search` section is not checked here — a bare `train`-only dict
+    is a legacy/resume shape with no search to disagree with, and inventing a default kind
+    to compare against would be the code-side default R1 forbids.
+
+    Raises:
+        ValueError: the declared target is not the one `search.kind` produces.
+    """
+    kind = search.get("kind")
+    if kind is None:
+        return
+    expected = (
+        "completed_improved_policy" if kind == "gumbel" else "raw_visit_distribution"
+    )
+    if train["policy_target"] != expected:
         raise ValueError(
-            "train.policy_target disagrees with train.completed_q_values — "
-            f"policy_target={train['policy_target']!r}, "
-            f"completed_q_values={train['completed_q_values']!r}."
+            "train.policy_target disagrees with search.kind — "
+            f"policy_target={train['policy_target']!r}, search.kind={kind!r} "
+            f"produces {expected!r}."
         )
-    if "completed_q_values" in selfplay:
-        selfplay_off = not selfplay["completed_q_values"]
-        if raw != selfplay_off:
-            raise ValueError(
-                "train.policy_target disagrees with selfplay.completed_q_values — "
-                f"policy_target={train['policy_target']!r}, "
-                f"selfplay.completed_q_values={selfplay['completed_q_values']!r}."
-            )
 
 
 class Trainer:
@@ -433,7 +431,12 @@ class Trainer:
             ply_pred = fwd[_idx] if use_ply_index else None
 
             policy_valid = policies_t.sum(dim=1) > 1e-6
-            if bool(hp.completed_q_values):
+            # The completed-Q target is a DISTRIBUTION over the legal set, so its loss is
+            # a KL against the full target; the raw visit distribution is scored by the
+            # cross-entropy form. `policy_target` is the one authority (it is pinned to
+            # `search.kind` at mint and carried on the checkpoint stamp), so there is no
+            # second boolean that can disagree with the rows the ring holds.
+            if hp.policy_target == "completed_improved_policy":
                 policy_loss = compute_kl_policy_loss(log_policy, policies_t, policy_valid,
                                                      self.device, full_search_mask=full_search_mask_t)
             else:

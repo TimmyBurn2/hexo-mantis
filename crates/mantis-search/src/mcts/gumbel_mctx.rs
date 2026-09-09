@@ -1,26 +1,24 @@
-//! Mctx-dialect Gumbel root state (`GumbelVariant::Mctx`).
+//! Gumbel root state (`SearchKind::Gumbel`).
 //!
-//! HELD APART FROM `gumbel.rs` ON PURPOSE. The legacy `GumbelSearchState::score`
-//! is golden site S3 and its bits are frozen (`golden_tests.rs`: *"the completed-Q
-//! refactor must NOT touch S3"*). The two dialects also do genuinely different
-//! things: legacy draws a top-m candidate SET once and then allocates a phase
-//! budget across it, while Mctx keeps no candidate set at all — eligibility is
-//! recomputed every simulation from the schedule's considered visit count, and
-//! halving is what that eligibility does rather than a step the driver takes.
+//! NO CANDIDATE SET IS KEPT. Eligibility is recomputed every simulation from the
+//! schedule's considered visit count, and halving is what that eligibility DOES rather
+//! than a step the driver takes. The deleted legacy dialect drew a top-m candidate set
+//! once and then allocated a phase budget across it, which is a different algorithm.
 //!
 //! WHAT IT FOLLOWS: `mctx/_src/action_selection.py::gumbel_muzero_root_action_selection`
 //! and `policies.py::gumbel_muzero_policy`'s final action. Both are pinned against
 //! Mctx's own outputs — see `tests/fixtures/mctx_parity/`.
 //!
-//! ONE SIMULATION AT A TIME, and it is not an oversight. Mctx re-derives the root
-//! choice after every backup, and consecutive simulations at one considered level
-//! deliberately land on DIFFERENT children (a child leaves the eligible set the
-//! moment its visit count passes the level). Forcing a whole leaf batch into one
-//! child would be a different algorithm. Per-worker batching is what is given up,
-//! not device batching: N workers each submitting one leaf still hand the
-//! inference server N leaves to fuse.
+//! BATCHED BY ROUND, not one simulation at a time, and the equivalence is exact at the
+//! root. Consecutive simulations at one considered level land on DIFFERENT children — a
+//! child leaves the eligible set the moment its visit count passes the level — and the
+//! schedule spends exactly `num_considered` entries at each level, so a ROUND visits every
+//! eligible candidate once. `round_batch` returns that set, and issuing its descents
+//! together produces the same root visit counts Mctx's sequential loop would, one round
+//! trip instead of `num_considered` of them. Forcing a whole batch into ONE child would be
+//! a different algorithm; this is not that.
 
-use rand::RngExt;
+use rand::{RngExt, SeedableRng};
 
 use super::seq_halving::{considered_visits_sequence, score_considered};
 use super::MCTSTree;
@@ -81,6 +79,20 @@ impl MctxRootState {
         }
     }
 
+    /// `new`, from an explicit seed rather than a caller-held RNG.
+    ///
+    /// EXISTS FOR THE DEPLOY HEAD, and the seed is the reason. A promotion bar has to be a
+    /// reproducible instrument (LAW-15) and the Gumbel draw is the head's one stochastic
+    /// term; a caller that seeds per (game, ply) gets a bar that replays exactly. It lives
+    /// HERE rather than in the bridge so the RNG choice stays one authority — a
+    /// bridge-side `StdRng` would be a second stream nobody could compare against this
+    /// one.
+    #[must_use]
+    pub fn new_seeded(tree: &MCTSTree, m: usize, num_simulations: usize, seed: u64) -> Self {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        MctxRootState::new(tree, m, num_simulations, &mut rng)
+    }
+
     /// Mctx's `simulation_index`: the sum of the root children's visit counts.
     ///
     /// Read from the TREE rather than counted by the driver, because that is what
@@ -106,6 +118,61 @@ impl MctxRootState {
         let considered = *self.schedule.get(sim)?;
         let completed = tree.root_completed_qvalues(c_visit, c_scale);
         self.argmax_at(tree, considered, &completed)
+    }
+
+    /// EVERY root child this halving round must descend into, as pool indices.
+    ///
+    /// THE UNIT IS THE ROUND, and the round is read off the schedule rather than counted by
+    /// the driver: from the current simulation index, the run of consecutive entries at the
+    /// SAME considered visit level is exactly one pass over the candidates alive at that
+    /// level. So the batch is `m` leaves in the first phase, `m/2` in the next, and so on —
+    /// the Gumbel analogue of `leaf_batch_size`, sized by the algorithm instead of by a knob.
+    ///
+    /// Ordered by SCORE, descending, so a run that is truncated by the end of the schedule
+    /// spends its last entries on the candidates Sequential Halving would have kept.
+    ///
+    /// EMPTY when the schedule is exhausted, or when no child sits at the considered level —
+    /// the second is a desynchronised search rather than a legal state, and the caller stops
+    /// rather than descending somewhere arbitrary.
+    #[allow(clippy::cast_possible_truncation)] // j < n_children, itself a u16
+    #[must_use]
+    pub fn round_batch(&self, tree: &MCTSTree, c_visit: f32, c_scale: f32) -> Vec<u32> {
+        let sim = self.simulation_index(tree);
+        let Some(&considered) = self.schedule.get(sim) else {
+            return Vec::new();
+        };
+        // The round's own length: how many consecutive entries stay at this level. Capped
+        // by what the schedule has left, so the LAST round of a truncated schedule is short
+        // and the budget is still consumed exactly.
+        let run = self.schedule[sim..]
+            .iter()
+            .take_while(|&&v| v == considered)
+            .count();
+
+        let completed = tree.root_completed_qvalues(c_visit, c_scale);
+        let mut scored: Vec<(u32, f32)> = Vec::new();
+        for (j, ((&q, &gumbel), &log_prior)) in completed
+            .iter()
+            .zip(&self.gumbel_values)
+            .zip(&self.log_priors)
+            .enumerate()
+        {
+            let visits = tree.pool[self.first_child as usize + j].n_visits;
+            if let Some(score) =
+                score_considered(considered, visits, gumbel, log_prior, self.max_logit, q)
+            {
+                scored.push((self.first_child + j as u32, score));
+            }
+        }
+        // Descending by score, ties broken by pool index so the order is deterministic —
+        // the same tie-break `argmax_at`'s strict `>` gives.
+        scored.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.0.cmp(&b.0))
+        });
+        scored.truncate(run);
+        scored.into_iter().map(|(idx, _)| idx).collect()
     }
 
     /// Mctx's final action: `considered_visit = max(visit_counts)`, then the same

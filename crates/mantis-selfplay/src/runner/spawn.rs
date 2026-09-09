@@ -135,6 +135,10 @@ impl SelfPlayRunner {
             mcts_stat_count: self.mcts_stat_count.clone(),
             mcts_quiescence_fires: self.mcts_quiescence_fires.clone(),
             max_sims_per_search: self.max_sims_per_search.clone(),
+            pcr_full_moves: self.pcr_full_moves.clone(),
+            pcr_quick_moves: self.pcr_quick_moves.clone(),
+            gumbel_round_leaves: self.gumbel_round_leaves.clone(),
+            gumbel_rounds: self.gumbel_rounds.clone(),
             cluster_value_std_accum: self.cluster_value_std_accum.clone(),
             cluster_policy_disagreement_accum: self.cluster_policy_disagreement_accum.clone(),
             cluster_variance_samples: self.cluster_variance_samples.clone(),
@@ -196,10 +200,7 @@ impl SelfPlayRunner {
             registry_spec: self.spec,
             search_flags: SearchFlags {
                 quiescence_enabled: c.quiescence_enabled,
-                completed_q_values: c.completed_q_values,
-                gumbel_mcts: c.gumbel_mcts,
-                gumbel_variant: c.gumbel_variant,
-                gumbel_root_counts: c.gumbel_root_counts,
+                search_kind: c.search_kind,
             },
             exploration_flags: ExplorationFlags {
                 dirichlet_enabled: c.dirichlet_enabled,

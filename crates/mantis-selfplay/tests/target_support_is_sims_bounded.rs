@@ -1,10 +1,10 @@
 // R8 justify: ONE claim — "what bounds an exported HEXG row's support" — measured on a real
-// runner under both dialects, plus the two structural facts that make the measurement
-// conclusive (the zero-mass filter, and the refusal that kills the one child-count-wide
-// exporter arm). The drive and the two facts are the same argument at two altitudes; split
-// them and the numbers stop being evidence for the claim they were taken for.
-//! ⊕ GUMBEL-REPAIR-1 follow-on — the exported target's support is bounded by the SIM BUDGET,
-//! not by the root's child count.
+// runner, plus the two structural facts that make the measurement conclusive (the zero-mass
+// filter, and the refusal that kills the one child-count-wide exporter arm). The drive and
+// the two facts are the same argument at two altitudes; split them and the numbers stop
+// being evidence for the claim they were taken for.
+//! ⊕ the exported target's support is bounded by the SIM BUDGET, not by the root's child
+//! count.
 //!
 //! WHY THIS FILE EXISTS. `GUMBEL_REPAIR_1_EXIT.md` §4(a) claimed that raising the root cap
 //! under the corrected Gumbel dialect could put two ROW KINDS in one replay ring — a
@@ -12,9 +12,10 @@
 //! change was the way they would mix. **That claim was wrong**, and this file is the
 //! measurement that retires it rather than a note saying so.
 //!
-//! THE DERIVATION, which the drive below confirms end to end. With `completed_q_values:
-//! false` — every shipped config — the exported target is `get_policy_ls`, the visit-count
-//! distribution. It has three arms and only one is reachable while recording:
+//! THE DERIVATION, which the drive below confirms end to end. Under `search.kind: puct` —
+//! the ONLY kind a graph run can boot (see below) — the exported target is `get_policy_ls`,
+//! the visit-count distribution. It has three arms and only one is reachable while
+//! recording:
 //!
 //!  * `temperature == 0.0` → one-hot on the most-visited child. Support 1.
 //!  * `total > 0.0` → `visits^(1/T) / total` per child. An UNVISITED child contributes
@@ -31,12 +32,12 @@
 //! only the visited ones are stored.
 //!
 //! AND THE COMPLETED TARGET, the other row kind, CANNOT BOOT ALONGSIDE IT.
-//! `completed_q_values: true` on a graph run is refused by `derived_visit_capacity`: under
-//! the corrected dialect at ANY capacity (its support is the legal set, bounded nowhere),
-//! and under the legacy dialect until the derived slots cover `MAX_CHILDREN_PER_NODE`. The
-//! grid path records fixed-width dense rows and has no variable-length visit vec at all, so
-//! the row-kind question does not arise there. There is therefore no bootable configuration
-//! in which two row kinds exist to be mixed.
+//! `search.kind: gumbel` on a graph run is refused by `derived_visit_capacity` at ANY
+//! capacity — its support is the legal set, which the config bounds nowhere. The grid path
+//! records fixed-width dense rows and has no variable-length visit vec at all, so the
+//! row-kind question does not arise there. There is therefore no bootable configuration in
+//! which two row kinds exist to be mixed. THIS IS ALSO THE BLOCKER on the completed-Q
+//! target regime: the refusal is what a minted visit-slot bound would have to replace.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -46,7 +47,7 @@ use std::time::{Duration, Instant};
 use mantis_core::board::Cell;
 use mantis_core::{Board, Player};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{GumbelVariant, MAX_CHILDREN_PER_NODE};
+use mantis_search::{SearchKind, MAX_CHILDREN_PER_NODE};
 use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::GraphRecord;
@@ -92,8 +93,8 @@ fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>)
     })
 }
 
-/// Drive one worker under `variant` until `want` graph records are drained.
-fn drive(variant: GumbelVariant, want: usize) -> Vec<GraphRecord> {
+/// Drive one worker under `kind` until `want` graph records are drained.
+fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
     let encoding = "gnn_axis_r8";
     let spec = lookup_or_panic(encoding);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
@@ -103,9 +104,7 @@ fn drive(variant: GumbelVariant, want: usize) -> Vec<GraphRecord> {
         leaf_batch_size: LEAF_BATCH,
         random_opening_plies: 0,
         dirichlet_enabled: true,
-        gumbel_mcts: true,
-        gumbel_variant: variant,
-        gumbel_root_counts: true,
+        search_kind: kind,
         solver_enabled: false,
         forced_win_policy_enabled: false,
         encoding_name: Some(encoding.to_string()),
@@ -132,65 +131,50 @@ fn drive(variant: GumbelVariant, want: usize) -> Vec<GraphRecord> {
 
     assert!(
         defect.is_none(),
-        "{variant:?} latched a fatal defect: {defect:?}"
+        "{kind:?} latched a fatal defect: {defect:?}"
     );
     assert!(
         rows.len() >= want,
-        "{variant:?}: only {} rows inside the budget — a drive that records nothing cannot \
+        "{kind:?}: only {} rows inside the budget — a drive that records nothing cannot \
          speak about row support",
         rows.len()
     );
     rows
 }
 
-/// THE MEASUREMENT. Both dialects, same budget, same encoding: the corrected root holds far
-/// more children, and the exported rows are the same width.
+/// THE MEASUREMENT. A real driven r8 game: every exported row's support is at most the sim
+/// budget, however wide the root's legal set is.
 #[test]
-fn the_corrected_dialect_does_not_widen_an_exported_rows_support() {
-    let legacy = drive(GumbelVariant::Legacy, 6);
-    let mctx = drive(GumbelVariant::Mctx, 6);
-
-    let widest = |rows: &[GraphRecord]| rows.iter().map(|r| r.visits.len()).max().unwrap_or(0);
-    let legacy_widest = widest(&legacy);
-    let mctx_widest = widest(&mctx);
+fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
+    let rows = drive(SearchKind::Puct, 6);
 
     // The bound the derivation predicts: one stored entry per VISITED child, and a search
     // spends at most `SIMS` visits across the root's children.
-    for (name, rows) in [("legacy", &legacy), ("mctx", &mctx)] {
-        for row in rows.iter() {
-            assert!(
-                !row.visits.is_empty(),
-                "{name}: an empty visit target is a non-distribution and should have been \
-                 refused upstream"
-            );
-            assert!(
-                row.visits.len() <= SIMS,
-                "{name}: a row stored {} entries against a {SIMS}-sim budget. Support is \
-                 supposed to be the VISITED children — if this fires, unvisited children are \
-                 reaching the record and the row width is child-count-wide after all, which \
-                 is exactly the hazard EXIT §4(a) claimed and this test denies",
-                row.visits.len()
-            );
-            assert!(
-                row.visits.iter().all(|&(_, _, p)| p > 0.0),
-                "{name}: a zero-mass entry reached the record — the `p > 0.0` filter in \
-                 `record_position_graph` is what makes support visit-bounded"
-            );
-        }
+    for row in &rows {
+        assert!(
+            !row.visits.is_empty(),
+            "an empty visit target is a non-distribution and should have been refused \
+             upstream"
+        );
+        assert!(
+            row.visits.len() <= SIMS,
+            "a row stored {} entries against a {SIMS}-sim budget. Support is supposed to be \
+             the VISITED children — if this fires, unvisited children are reaching the \
+             record and the row width is child-count-wide after all",
+            row.visits.len()
+        );
+        assert!(
+            row.visits.iter().all(|&(_, _, p)| p > 0.0),
+            "a zero-mass entry reached the record — the `p > 0.0` filter in \
+             `record_position_graph` is what makes support visit-bounded"
+        );
     }
 
-    assert!(
-        mctx_widest <= SIMS && legacy_widest <= SIMS,
-        "both dialects must stay inside the sim budget (legacy {legacy_widest}, mctx \
-         {mctx_widest})"
-    );
-
-    // THE DRIVE MUST REACH THE REGIME WHERE THE TWO DIALECTS DIVERGE, or everything above is
-    // vacuous: if every recorded root held fewer children than the per-node cap, NEITHER
-    // dialect truncated and the rows would match for a reason that has nothing to do with
-    // what is being claimed. Rebuild each recorded position and count its legal set — the
-    // corrected root expands all of it, the legacy root stops at the cap.
-    let widest_legal = mctx
+    // THE DRIVE MUST REACH THE REGIME WHERE THE TWO BOUNDS DIVERGE, or everything above is
+    // vacuous: if every recorded root held fewer legal moves than the per-node cap, nothing
+    // truncated and the row widths would be small for a reason that has nothing to do with
+    // what is being claimed. Rebuild each recorded position and count its legal set.
+    let widest_legal = rows
         .iter()
         .map(|row| {
             let stones: Vec<((i32, i32), Cell)> = row
@@ -212,8 +196,8 @@ fn the_corrected_dialect_does_not_widen_an_exported_rows_support() {
     assert!(
         widest_legal > MAX_CHILDREN_PER_NODE,
         "no recorded position had more legal moves ({widest_legal}) than the per-node cap \
-         ({MAX_CHILDREN_PER_NODE}), so neither dialect truncated and the equal row widths \
-         above prove nothing about the corrected root's extra children"
+         ({MAX_CHILDREN_PER_NODE}), so nothing truncated and the row widths above prove \
+         nothing"
     );
     // Through locals so clippy does not fold two consts into a literal truth: the point is
     // that the RELATION survives a change to either, which a const-folded check stops seeing.
@@ -245,7 +229,7 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
 
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
-    tree.configure_gumbel(GumbelVariant::Mctx, true, 50.0, 0.1);
+    tree.configure_search(SearchKind::Gumbel, 50.0, 0.1);
     tree.new_game(board);
     let leaves = tree.select_leaves(1).expect("a fresh root selects itself");
     assert_eq!(leaves.len(), 1);
@@ -256,7 +240,7 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
     // the state the prior-fallback arm exists for.
     assert!(
         tree.root_n_children() > MAX_CHILDREN_PER_NODE,
-        "the corrected root must be wider than the per-node cap for this to be the \
+        "the Gumbel root must be wider than the per-node cap for this to be the \
          interesting state"
     );
     assert!(

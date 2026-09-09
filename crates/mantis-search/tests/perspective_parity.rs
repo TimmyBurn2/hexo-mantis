@@ -1,5 +1,5 @@
 //! Regression tests for the child-Q perspective flip in get_improved_policy,
-//! GumbelSearchState::score, and get_top_visits.
+//! root_completed_qvalues, and get_top_visits.
 //!
 //! Each node stores w_value in its own player-to-move perspective (backup.rs
 //! negamax). When root has moves_remaining==1, children belong to the opponent,
@@ -8,7 +8,6 @@
 //! training targets at ~50% of positions.
 
 use mantis_core::board::{Board, BOARD_SIZE};
-use mantis_search::GumbelSearchState;
 use mantis_search::MCTSTree;
 
 /// Build a tree with one visited child (n_visits=1, w_value=child_value).
@@ -22,12 +21,14 @@ fn build_tree_visit_one_child(board: Board, child_value: f32) -> (MCTSTree, usiz
     tree.new_game(board);
 
     // Sim 1: expand root (leaf = root itself; value 0.0 so root.w_value starts neutral)
-    let _leaves = tree.select_leaves(1)
+    let _leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(std::slice::from_ref(&uniform), &[0.0]);
 
     // Sim 2: descend to one child, expand it, backup child_value
-    let _leaves = tree.select_leaves(1)
+    let _leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
     tree.expand_and_backup(std::slice::from_ref(&uniform), &[child_value]);
 
@@ -55,7 +56,9 @@ mod perspective_parity {
     fn test_improved_policy_flips_q_at_intermediate_ply() {
         // mr=2: apply one move to Board::new() (moves_remaining 1→2)
         let mut board_mr2 = Board::new();
-        board_mr2.apply_move(0, 0).expect("(0,0) must be legal on fresh board");
+        board_mr2
+            .apply_move(0, 0)
+            .expect("(0,0) must be legal on fresh board");
         assert_eq!(board_mr2.moves_remaining, 2);
 
         let board_mr1 = Board::new(); // moves_remaining==1
@@ -86,44 +89,61 @@ mod perspective_parity {
         );
     }
 
-    /// GumbelSearchState::score must negate q_hat when root_mr==1.
-    /// Directly constructs state (no tree) to isolate the score function.
+    /// `root_completed_qvalues` must negate the child Q when root_mr==1.
+    ///
+    /// REPLACES the deleted `GumbelSearchState::score` arm of this file. The legacy
+    /// dialect's per-candidate score is gone; the surviving surface that reads a child's
+    /// `w_value` and has to put it in ROOT perspective is the completion, which both the
+    /// root selector and the exported target run through. Same property, live subject.
     #[test]
-    fn test_gumbel_score_flips_at_intermediate_ply() {
-        let c_visit = 50.0_f32;
-        let c_scale = 1.0_f32;
+    fn test_completed_qvalues_flip_at_intermediate_ply() {
+        // mr==2: the children are the root's own, no negation.
+        let mut board_mr2 = Board::new();
+        board_mr2
+            .apply_move(0, 0)
+            .expect("(0,0) must be legal on fresh board");
+        assert_eq!(board_mr2.moves_remaining, 2);
+        let (tree_mr2, _flat2) = build_tree_visit_one_child(board_mr2, 0.8);
 
-        // visited child at offset 0: n_visits=1, w_value=+0.8
-        let make_state = |root_mr: u8| GumbelSearchState {
-            gumbel_values: vec![0.0, 0.0],
-            log_priors: vec![f32::ln(0.5), f32::ln(0.5)],
-            candidates: vec![0, 1],
-            num_phases: 1,
-            c_visit,
-            c_scale,
-            first_child: 0,
-            root_mr,
-            cached_children: vec![(1, 0.8_f32), (0, 0.0_f32)],
+        // mr==1: the children belong to the opponent, so +0.8 must read as −0.8.
+        let board_mr1 = Board::new();
+        assert_eq!(board_mr1.moves_remaining, 1);
+        let (tree_mr1, _flat1) = build_tree_visit_one_child(board_mr1, 0.8);
+
+        // The completion min-max rescales, so compare the VISITED child's rank rather
+        // than its raw value: at mr==2 the visited child holds the max completed value,
+        // at mr==1 the minimum. A missing flip puts it at the same end of both.
+        let rank = |tree: &MCTSTree| -> (usize, usize) {
+            let completed = tree.root_completed_qvalues(50.0, 0.1);
+            let visited = tree
+                .get_top_visits(1)
+                .first()
+                .map(|&(coord, _, _, _)| coord)
+                .expect("one visited child");
+            let info = tree.get_root_children_info();
+            let idx = info
+                .iter()
+                .position(|&(pool_idx, _)| {
+                    let val = tree.pool[pool_idx as usize].action_idx;
+                    let q = (val >> 16) as i32 - 32768;
+                    let r = (val & 0xFFFF) as i32 - 32768;
+                    (q, r) == visited
+                })
+                .expect("the visited child is one of the root children");
+            let strictly_above = completed.iter().filter(|&&v| v > completed[idx]).count();
+            (strictly_above, completed.len())
         };
 
-        let state_mr2 = make_state(2);
-        let state_mr1 = make_state(1);
-
-        let score_mr2 = state_mr2.score(0, 1);
-        let score_mr1 = state_mr1.score(0, 1);
-
-        // mr=2: sigma_contrib = (50+1)*1*0.8 = +40.8
-        // mr=1: sigma_contrib = (50+1)*1*(-0.8) = -40.8
-        assert!(
-            score_mr2 > score_mr1,
-            "Gumbel score at mr=2 ({score_mr2:.4}) should exceed score at mr=1 ({score_mr1:.4})"
+        let (above_mr2, n2) = rank(&tree_mr2);
+        let (above_mr1, n1) = rank(&tree_mr1);
+        assert_eq!(
+            above_mr2, 0,
+            "at mr=2 the +0.8 child must top the completion"
         );
-        let sigma = (c_visit + 1.0) * c_scale;
-        let expected_diff = 2.0 * 0.8 * sigma;
-        let actual_diff = score_mr2 - score_mr1;
         assert!(
-            (actual_diff - expected_diff).abs() < 1e-3,
-            "Gumbel score diff {actual_diff:.4} should equal 2*q*sigma={expected_diff:.4}"
+            above_mr1 > 0,
+            "at mr=1 the +0.8 child belongs to the OPPONENT and must NOT top the \
+             completion ({above_mr1} of {n1} above it; mr=2 had {above_mr2} of {n2})"
         );
     }
 

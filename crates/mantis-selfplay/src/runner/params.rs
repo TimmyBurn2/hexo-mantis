@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use mantis_encoding::{PolicyPool, RegistrySpec, Representation};
-use mantis_search::GumbelVariant;
+use mantis_search::SearchKind;
 
 use crate::queues::{DenseQueue, GraphQueue};
 use crate::replay::hexg::GraphRecord;
@@ -85,12 +85,9 @@ pub fn resolve_geometry(spec: &'static RegistrySpec) -> WorkerGeometry {
 #[derive(Clone)]
 pub(crate) struct SearchFlags {
     pub(crate) quiescence_enabled: bool,
-    pub(crate) completed_q_values: bool,
-    pub(crate) gumbel_mcts: bool,
-    /// Set on the tree ONCE per worker (`configure_gumbel`), like quiescence —
-    /// it is per-worker configuration, not per-move state.
-    pub(crate) gumbel_variant: GumbelVariant,
-    pub(crate) gumbel_root_counts: bool,
+    /// Set on the tree ONCE per worker (`configure_search`), like quiescence — it is
+    /// per-worker configuration, not per-move state.
+    pub(crate) search_kind: SearchKind,
 }
 
 #[derive(Clone)]

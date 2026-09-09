@@ -90,7 +90,7 @@ class _EvalPipelineWall(RuntimeError):
 class _Pool:
     """Drivable stand-in for `WorkerPool` at the injected seam."""
 
-    gumbel_mcts = True
+    search_kind = "gumbel"
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45

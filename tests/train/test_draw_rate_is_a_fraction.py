@@ -73,7 +73,7 @@ class _StraddlingPool:
     that was actually observed, so it is what this double models.
     """
 
-    gumbel_mcts = False
+    search_kind = "puct"
     avg_game_length = 128.0
     sims_per_sec = 100.0
     batch_fill_pct = 0.9

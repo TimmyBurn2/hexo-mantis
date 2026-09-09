@@ -349,16 +349,14 @@ impl PyHexgBuffer {
 ///
 /// Delegates VERBATIM to `mantis_selfplay::replay::hexg::derived_visit_capacity`
 /// (one formula, two surfaces): returns the derived HEXG visit-slot capacity
-/// `max(armed effective sim budgets) + leaf_batch_size − 1`, and raises
-/// `ValueError` for a regime the record format cannot honor (the u16 count ceiling;
-/// completed-Q below `MAX_CHILDREN_PER_NODE`; completed-Q under the corrected Gumbel
-/// dialect, whose target support is the legal set and is bounded nowhere). Live consumers:
-/// the
-/// `RunConfig` schema validator (mint-time refusal) and `mantis.run`'s buffer
-/// composition.
+/// `max(armed effective sim budgets) + leaf_batch_size − 1`, and raises `ValueError` for a
+/// regime the record format cannot honor (the u16 count ceiling; `search.kind: gumbel`,
+/// whose exported target's support is the legal set and is bounded nowhere). Live
+/// consumers: the `RunConfig` schema validator (mint-time refusal) and `mantis.run`'s
+/// buffer composition.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, completed_q_values, gumbel_mcts, gumbel_variant))]
+#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, search_kind))]
 pub fn derived_hexg_visit_capacity(
     n_simulations: usize,
     standard_sims: usize,
@@ -368,9 +366,7 @@ pub fn derived_hexg_visit_capacity(
     n_sims_quick: usize,
     n_sims_full: usize,
     leaf_batch_size: usize,
-    completed_q_values: bool,
-    gumbel_mcts: bool,
-    gumbel_variant: &str,
+    search_kind: &str,
 ) -> PyResult<usize> {
     derived_visit_capacity_impl(
         n_simulations,
@@ -381,9 +377,7 @@ pub fn derived_hexg_visit_capacity(
         n_sims_quick,
         n_sims_full,
         leaf_batch_size,
-        completed_q_values,
-        gumbel_mcts,
-        gumbel_variant,
+        search_kind,
     )
     .map_err(PyValueError::new_err)
 }

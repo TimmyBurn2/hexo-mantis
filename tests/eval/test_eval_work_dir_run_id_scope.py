@@ -45,7 +45,7 @@ def _pipeline(tmp_path: Path, run_id: str, spool_name: str = "spool") -> Any:
     return EvalPipeline(
         leaf_batch_size=1,
         max_plies=128,
-        c_visit=50.0, c_scale=1.0, amp_dtype="bf16",
+        c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16",
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),

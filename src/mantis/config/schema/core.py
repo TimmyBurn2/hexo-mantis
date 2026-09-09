@@ -18,7 +18,13 @@ from pydantic import Field, field_validator, model_serializer, model_validator
 
 from mantis.config.schema._base import StrictModel
 from mantis.config.schema.monitor import MonitorSchemaConfig
-from mantis.config.schema.selfplay import InferenceConfig, SelfplayConfig
+from mantis.config.schema.search import SearchConfig
+from mantis.config.schema.selfplay import (
+    MAX_ARMED_SIMS,
+    MAX_ARMED_SIMS_GUMBEL,
+    InferenceConfig,
+    SelfplayConfig,
+)
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
 from mantis.util.constants import DRAW_RATE_WINDOW
@@ -478,6 +484,13 @@ class RunConfig(StrictModel):
     # nobody measured, and no `Literal` member may be minted by anything but that sitting.
     allocator_posture: Literal["default", "expandable_segments"] | None
     identity: IdentityConfig
+    # The SEARCH REGIME, top-level for `eval_enabled`'s own recorded grounds: it is a
+    # root-composition fact spanning more than one section's surface. Self-play searches
+    # with it and `arena.deploy_head` searches with it, and LAW-15's deploy-matched claim
+    # is precisely that the two are the SAME search — a key under `selfplay` would make
+    # the eval head a reader of another surface's section, which is how the deploy head
+    # came to run a regime the run never declared.
+    search: SearchConfig
     eval: EvalConfig
     train: TrainConfig
     selfplay: SelfplayConfig
@@ -571,28 +584,73 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _policy_target_completed_q_consistency(self) -> "RunConfig":
-        # ADJUDICATION_QUEUE closing note / DESIGN_P2.md §2: `train.policy_target` is
-        # produced in self-play (gated by `selfplay.completed_q_values`) and the SAME
-        # decision also selects the train-side loss (`train.completed_q_values`). One
-        # decision, two consumers across two seams — this cross-section validator keeps
-        # them from becoming two independently-editable knobs kept in sync only by
-        # convention. Inert at mint time — every committed config mints the raw/off/off
-        # combo — and it fires the day one flag flips without the others. GUMBEL-REPAIR-1
-        # widened `policy_target` to a second member, so the check is no longer inert BY
-        # CONSTRUCTION: `completed_improved_policy` with either `completed_q_values` still
-        # false is now an expressible mint, and this is what refuses it.
-        raw = self.train.policy_target == "raw_visit_distribution"
-        train_off = not self.train.completed_q_values
-        selfplay_off = not self.selfplay.completed_q_values
-        if not (raw == train_off == selfplay_off):
+    def _policy_target_matches_the_search_kind(self) -> "RunConfig":
+        """`train.policy_target` states what the SEARCH produced, so it follows the kind.
+
+        The exported target is built by the search itself: `search.kind: gumbel` exports
+        the completed-Q improved policy and `puct` exports the temperature-annealed visit
+        distribution. `train.policy_target` names which of those the LOSS is applied to,
+        and a config in which the two disagree trains one target's loss on the other
+        target's rows — the exact class the resume guard closed on a checkpoint boundary
+        (`train.checkpoints`) and which is closed here at mint.
+
+        `policy_target` is not deleted in favour of derivation, and that is deliberate: it
+        is the key the CHECKPOINT stamp carries, so it is the record of what a stored
+        ring's rows MEAN. Deriving it would leave a resume with nothing to compare against.
+
+        Raises:
+            ValueError: the target and the search kind disagree.
+        """
+        expected = (
+            "completed_improved_policy"
+            if self.search.kind == "gumbel"
+            else "raw_visit_distribution"
+        )
+        if self.train.policy_target != expected:
             raise ValueError(
-                "policy_target/completed_q_values disagree across sections: "
-                f"train.policy_target={self.train.policy_target!r}, "
-                f"train.completed_q_values={self.train.completed_q_values!r}, "
-                f"selfplay.completed_q_values={self.selfplay.completed_q_values!r} — "
-                "all three must agree (one decision, not three independently-editable "
-                "knobs)."
+                f"train.policy_target={self.train.policy_target!r} disagrees with "
+                f"search.kind={self.search.kind!r}, which produces {expected!r}. The search "
+                "builds the target; a config that trains one target's loss on the other "
+                "target's rows is the defect this pairing exists to make unmintable."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _search_kind_fits_the_node_pool(self) -> "RunConfig":
+        """The Gumbel kind's sim ceiling, refused at MINT and not at boot.
+
+        That kind reaches its root's full legal set, so it spends ``MAX_ROOT_CHILDREN``
+        pool slots on the root instead of ``MAX_CHILDREN_PER_NODE`` and its ceiling is
+        ``MAX_ARMED_SIMS_GUMBEL``, below the ``MAX_ARMED_SIMS`` the field bounds carry. A
+        `Field(le=...)` cannot express this — the applicable ceiling depends on a key in
+        ANOTHER SECTION — so without this validator a config in the gap between the two
+        bounds would validate clean and be refused by ``SelfPlayRunner::new`` at boot.
+
+        That inversion is the one R255/ADJ-D34 closed for the HEXG visit capacity, in this
+        same class, and re-opening it a section away would be the same defect wearing a
+        different key's name.
+
+        Raises:
+            ValueError: an armed sims knob exceeds the Gumbel kind's ceiling.
+        """
+        if self.search.kind != "gumbel":
+            return self
+        armed = {
+            "selfplay.mcts.n_simulations": self.selfplay.mcts.n_simulations,
+            "selfplay.playout_cap.standard_sims": self.selfplay.playout_cap.standard_sims,
+            "selfplay.playout_cap.fast_sims": self.selfplay.playout_cap.fast_sims,
+            "selfplay.playout_cap.n_sims_quick": self.selfplay.playout_cap.n_sims_quick,
+            "selfplay.playout_cap.n_sims_full": self.selfplay.playout_cap.n_sims_full,
+        }
+        over = {k: v for k, v in armed.items() if v > MAX_ARMED_SIMS_GUMBEL}
+        if over:
+            raise ValueError(
+                f"search.kind='gumbel' lowers the node-pool sim ceiling to "
+                f"{MAX_ARMED_SIMS_GUMBEL} (from {MAX_ARMED_SIMS}), because that kind "
+                "reaches the root's FULL legal set and spends MAX_ROOT_CHILDREN pool slots "
+                "on it instead of MAX_CHILDREN_PER_NODE. Over the ceiling: "
+                + ", ".join(f"{k}={v}" for k, v in sorted(over.items()))
+                + " — lower the budget, or mint search.kind='puct'."
             )
         return self
 
@@ -679,12 +737,13 @@ class RunConfig(StrictModel):
         Graph-scoped: dense-362 records carry no HEXG visit slot, so the relation does
         not constrain grid configs (R250's absence principle, mint-side). The
         completed-Q leg of the derivation (child-count-wide support vs
-        ``MAX_CHILDREN_PER_NODE``) is unreachable from a validated ``RunConfig`` today —
-        ``train.policy_target`` gained its second member ``"completed_improved_policy"`` at
-        GUMBEL-REPAIR-1, so this leg is REACHABLE: a config pairing that target with
-        ``completed_q_values=true`` on a graph run is exactly what the engine's
-        support-vs-capacity check now refuses, and it refuses at MINT rather than at boot.
-        The check was written before the member existed, against the day it would.
+        The DENSITY leg is REACHABLE and it BINDS: ``search.kind: gumbel`` on a graph run
+        is refused outright, because that kind's exported target puts mass on the whole
+        legal set and the legal set is not a constant (355 median, 8142 maximum at radius
+        8). It refuses at MINT rather than at boot. THIS IS THE STANDING BLOCKER on a
+        completed-Q target regime for the graph lineage: the HEXG record's visit slot is
+        derived from the sims regime, and nothing derived can cover that support — a
+        MINTED slot bound is what the refusal is waiting for.
 
         The function-scope import mirrors ``mantis.run._select_buffer``'s stated
         posture: ``mantis._engine`` is already a transitive dependency of this module
@@ -706,9 +765,7 @@ class RunConfig(StrictModel):
                 n_sims_quick=pc.n_sims_quick,
                 n_sims_full=pc.n_sims_full,
                 leaf_batch_size=sp.leaf_batch_size,
-                completed_q_values=sp.completed_q_values,
-                gumbel_mcts=sp.gumbel_mcts,
-                gumbel_variant=sp.gumbel_variant,
+                search_kind=self.search.kind,
             )
         except ValueError as exc:
             raise ValueError(
@@ -716,9 +773,7 @@ class RunConfig(StrictModel):
                 f"format: {exc} [derived from selfplay.mcts.n_simulations, "
                 "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
                 "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
-                "selfplay.completed_q_values, selfplay.gumbel_mcts, "
-                "selfplay.gumbel_variant — R255/ADJ-D34: refused at mint, "
-                "never at boot]"
+                "search.kind — R255/ADJ-D34: refused at mint, never at boot]"
             ) from exc
         return self
 

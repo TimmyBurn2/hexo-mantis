@@ -19,23 +19,9 @@ import pytest
 from pydantic import ValidationError
 
 from mantis.config.schema import ARCH_SCOPED_KEYS, InferenceConfig, SelfplayConfig
-from mantis.config.schema.selfplay import MAX_ARMED_SIMS, MAX_ARMED_SIMS_MCTX
+from mantis.config.schema.selfplay import MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL
 
 
-def _payload(
-    *,
-    gumbel_mcts: bool = False,
-    gumbel_variant: str = "legacy",
-    mcts_over: dict | None = None,
-    playout_cap_over: dict | None = None,
-) -> dict:
-    """A valid `SelfplayConfig` payload with the Gumbel dialect and sims knobs overridable."""
-    payload = dict(VALID_SELFPLAY)
-    payload["gumbel_mcts"] = gumbel_mcts
-    payload["gumbel_variant"] = gumbel_variant
-    payload["mcts"] = {**VALID_MCTS, **(mcts_over or {})}
-    payload["playout_cap"] = {**VALID_PLAYOUT_CAP, **(playout_cap_over or {})}
-    return payload
 
 VALID_MCTS: dict = {
     "n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25, "quiescence_enabled": True,
@@ -49,9 +35,8 @@ VALID_PLAYOUT_CAP: dict = {
 }
 VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-    "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
-    "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10,
-    "gumbel_variant": "legacy", "gumbel_root_counts": True,
+    "inference_pool_size": None, "c_visit": 50.0,
+    "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
     "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
     "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
     "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
@@ -218,58 +203,57 @@ def test_inference_has_no_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
         assert field.is_required(), f"InferenceConfig.{name} has a code-side default"
 
 
-def test_the_corrected_gumbel_dialect_lowers_the_sim_ceiling_at_mint():
-    """⊕ GUMBEL-REPAIR-1 — the corrected dialect's pool ceiling is a MINT refusal.
+def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
+    """The Gumbel kind's pool ceiling is a MINT refusal.
 
-    The corrected arm expands its root over the full legal set, so it spends
-    `MAX_ROOT_CHILDREN` pool slots on the root and its ceiling is `MAX_ARMED_SIMS_MCTX`,
-    below the `MAX_ARMED_SIMS` the field bounds carry. Without this the gap between the two
-    validates clean and is refused by `SelfPlayRunner::new` at BOOT — the exact inversion
-    R255/ADJ-D34 closed for the HEXG visit capacity.
+    That kind reaches the root's full legal set, so it spends `MAX_ROOT_CHILDREN` pool slots
+    on the root and its ceiling is `MAX_ARMED_SIMS_GUMBEL`, below the `MAX_ARMED_SIMS` the
+    field bounds carry. Without this the gap between the two validates clean and is refused
+    by `SelfPlayRunner::new` at BOOT — the exact inversion R255/ADJ-D34 closed for the HEXG
+    visit capacity, one section away.
+
+    THE VALIDATOR LIVES ON `RunConfig`, not on `SelfplayConfig`, and it had to move: the
+    applicable ceiling now depends on `search.kind`, which is a different SECTION, and a
+    sectional validator cannot see it. So this suite validates a whole config here.
+
+    THE ORDER IS LOAD-BEARING and is why the config below still validates far enough to
+    reach this refusal: the pool-ceiling validator is declared BEFORE the HEXG
+    record-format one, which refuses `gumbel` on a graph run outright. If the two ever
+    swap, this test reds with the other message rather than passing on the wrong ground.
 
     The gap is checked to be NON-EMPTY first: if the two ceilings ever coincided this test
     would pass vacuously while proving nothing.
     """
-    assert MAX_ARMED_SIMS_MCTX < MAX_ARMED_SIMS, (
+    assert MAX_ARMED_SIMS_GUMBEL < MAX_ARMED_SIMS, (
         "the two ceilings must differ or the refusal below has no domain to fire in"
     )
-    in_gap = MAX_ARMED_SIMS_MCTX + 1
+    in_gap = MAX_ARMED_SIMS_GUMBEL + 1
     assert in_gap <= MAX_ARMED_SIMS, "the probe value must still satisfy the field bound"
 
-    # Legacy at the same budget: accepted, and that is the control.
-    ok = SelfplayConfig.model_validate(
-        _payload(gumbel_mcts=True, mcts_over={"n_simulations": in_gap})
+    # PUCT at the same budget: accepted, and that is the control.
+    ok = smoke_run_config(
+        "dev_example.yaml", selfplay={"mcts": {"n_simulations": in_gap}}
     )
-    assert ok.mcts.n_simulations == in_gap
+    assert ok.selfplay.mcts.n_simulations == in_gap
 
-    with pytest.raises(ValidationError, match="gumbel_variant"):
-        SelfplayConfig.model_validate(
-            _payload(
-                gumbel_mcts=True,
-                gumbel_variant="mctx",
-                mcts_over={"n_simulations": in_gap},
-            )
+    with pytest.raises(ValidationError, match="MAX_ROOT_CHILDREN"):
+        smoke_run_config(
+            "dev_example.yaml",
+            search={"kind": "gumbel"},
+            train={"policy_target": "completed_improved_policy"},
+            selfplay={"mcts": {"n_simulations": in_gap}},
         )
 
-    # INERT while the dialect cannot run — the same seam every other Gumbel term keeps.
-    inert = SelfplayConfig.model_validate(
-        _payload(
-            gumbel_mcts=False, gumbel_variant="mctx", mcts_over={"n_simulations": in_gap}
-        )
-    )
-    assert inert.gumbel_variant == "mctx"
 
-
-def test_every_armed_sims_knob_is_checked_against_the_dialect_ceiling():
+def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_config):
     """Not only `n_simulations`. A `fast_sims` or `n_sims_full` over the ceiling overflows
     the same pool, which is why the boot guard checks all five and why this one does too."""
-    over = MAX_ARMED_SIMS_MCTX + 1
+    over = MAX_ARMED_SIMS_GUMBEL + 1
     for key in ("fast_sims", "n_sims_quick", "n_sims_full"):
         with pytest.raises(ValidationError, match=key):
-            SelfplayConfig.model_validate(
-                _payload(
-                    gumbel_mcts=True,
-                    gumbel_variant="mctx",
-                    playout_cap_over={key: over},
-                )
+            smoke_run_config(
+                "dev_example.yaml",
+                search={"kind": "gumbel"},
+                train={"policy_target": "completed_improved_policy"},
+                selfplay={"playout_cap": {key: over}},
             )

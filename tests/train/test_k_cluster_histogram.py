@@ -94,7 +94,7 @@ class _Sink:
 class _Pool:
     """The narrow `PoolTelemetryLike` surface, in run5's PUCT regime."""
 
-    gumbel_mcts = False
+    search_kind = "puct"
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4
@@ -107,7 +107,7 @@ class _Pool:
 
 
 class _GumbelPool(_Pool):
-    gumbel_mcts = True
+    search_kind = "gumbel"
 
 
 class _Buffer:
@@ -281,7 +281,7 @@ class _RunnerStats:
 class _CoordPool:
     def __init__(self) -> None:
         self.games_completed = 5
-        self.gumbel_mcts = False
+        self.search_kind = "puct"
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

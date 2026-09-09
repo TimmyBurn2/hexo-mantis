@@ -535,7 +535,11 @@ class TrainConfig(StrictModel):
     selfplay_stall_timeout_sec: float = Field(gt=0, allow_inf_nan=False)
 
     # loss selection + targets
-    completed_q_values: bool
+    #
+    # `completed_q_values` is DELETED here and on `selfplay`: which loss the trainer applies
+    # is a consequence of `policy_target`, which is itself pinned to `search.kind` by
+    # `RunConfig._policy_target_matches_the_search_kind`. Two booleans that had to agree
+    # with a Literal that had to agree with the search were three authorities over one fact.
     value_target: Literal["pure_outcome_z"]
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     draw_reward: float

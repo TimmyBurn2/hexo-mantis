@@ -13,7 +13,7 @@ of training data, so its death is fatal and reported through `check_producer_hea
 
 Every knob is resolved ONCE at construction through `hparams` (there is no config read in
 the hot loop), with two deliberate exceptions that re-read the LIVE config because the old
-behaviour did and callers depend on it: the `gumbel_mcts` property and
+behaviour did and callers depend on it: the `search_kind` property and
 `buffer_composition`'s independent draw/ply-cap resolution.
 """
 from __future__ import annotations
@@ -287,16 +287,19 @@ class WorkerPool:
         return self._sims_per_sec
 
     @property
-    def gumbel_mcts(self) -> bool:
-        """Whether Gumbel-root MCTS is active.
+    def search_kind(self) -> str:
+        """The run's `search.kind`, as its config spelling.
 
         Read from the LIVE config, not from the frozen ctor-time hparams: the PUCT-only
         diagnostics are descent-rule-specific and meaningless under Gumbel-root sampling,
-        so the event emitter suppresses them when this is True — and it must see a config
+        so the event emitter suppresses them under `gumbel` — and it must see a config
         flipped after construction.
+
+        Raises:
+            KeyError: the config carries no `search.kind`. NOT defaulted (R1/LAW-11): a
+                pool that cannot say which search it ran must not answer "puct".
         """
-        sp = self.config.get("selfplay", self.config)
-        return bool(sp.get("gumbel_mcts", False))
+        return str(self.config["search"]["kind"])
 
     @property
     def avg_game_length(self) -> float | None:

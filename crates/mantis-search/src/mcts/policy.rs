@@ -4,7 +4,7 @@
 //! Gumbel completed-Q improved policy, root children info,
 //! Dirichlet noise application at root, top-visits selection.
 
-use super::{completed_q, GumbelVariant, MCTSTree};
+use super::{completed_q, MCTSTree};
 use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashMap;
 
@@ -91,20 +91,12 @@ impl MCTSTree {
             1.0
         };
 
-        // The completed-Q math lives in `super::completed_q`. The ONE S1↔S2
+        // The completed-Q math lives in `super::completed_q`. The ONE dense↔ragged
         // divergence (off-window handling + output container) stays here in the
-        // scatter: S1 drops `action >= n_actions`, scatters into a dense
+        // scatter: the dense form drops `action >= n_actions` and scatters into a
         // `Vec<f32>`. `actions[i]` is the flat index for `children[i]`.
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut actions: Vec<usize> = Vec::with_capacity(n_ch);
-        let mut agg = completed_q::CqAgg {
-            sum_n: 0,
-            max_n: 0,
-            visited_prior_sum: 0.0,
-            policy_weighted_q: 0.0,
-            v_hat: 0.0,
-            raw_value: self.root_raw_value(),
-        };
 
         for j in 0..n_ch {
             let child = &self.pool[first + j];
@@ -117,51 +109,28 @@ impl MCTSTree {
             }
 
             let visits = child.n_visits;
-            let prior = child.prior;
-            let q_val = if visits > 0 {
-                q_sign * child.w_value / visits as f32
-            } else {
-                0.0
-            };
-
-            agg.sum_n += visits;
-            if visits > agg.max_n {
-                agg.max_n = visits;
-            }
-            if visits > 0 {
-                agg.visited_prior_sum += prior;
-                agg.policy_weighted_q += prior * q_val;
-            }
-
             children.push(completed_q::CqChild {
                 visits,
-                prior,
-                q_val,
+                prior: child.prior,
+                q_val: if visits > 0 {
+                    q_sign * child.w_value / visits as f32
+                } else {
+                    0.0
+                },
             });
             actions.push(action);
         }
 
-        // The Mctx arm has NO zero-visit special case and does not need one: every
-        // completed value is then `v_mix`, the rescale maps a constant vector to
-        // zeros, and `softmax(log_prior + 0)` is the normalized prior — the same
-        // answer `prior_fallback_masses` gives, reached by the arm's own arithmetic.
-        let masses = if self.gumbel_variant == GumbelVariant::Mctx {
-            completed_q::mctx_improved_policy_masses(
-                &children,
-                self.root_raw_value(),
-                c_visit,
-                c_scale,
-            )
-        } else if agg.sum_n == 0 {
-            // Edge case: no visits at all — return prior distribution.
-            completed_q::prior_fallback_masses(&children)
-        } else {
-            // v_hat: root value estimate (W/N from root node).
-            agg.v_hat = root.w_value / root.n_visits as f32;
-            // Shared softmax(log_prior + sigma(completedQ)); empty ⇒ degenerate
-            // guard fired (byte-identical to the old early `return policy`).
-            completed_q::improved_policy_masses(&children, &agg, c_visit, c_scale)
-        };
+        // NO zero-visit special case, and none is needed: every completed value is then
+        // `v_mix`, the rescale maps a constant vector to zeros, and
+        // `softmax(log_prior + 0)` is the normalized prior — the same answer a prior
+        // fallback would give, reached by the completion's own arithmetic.
+        let masses = completed_q::mctx_improved_policy_masses(
+            &children,
+            self.root_raw_value(),
+            c_visit,
+            c_scale,
+        );
         for (action, mass) in actions.iter().zip(masses) {
             policy[*action] = mass;
         }
@@ -286,20 +255,12 @@ impl MCTSTree {
             1.0
         };
 
-        // The completed-Q math is shared with S1 via `super::completed_q`. The
-        // ONE S1↔S2 divergence stays here: the ragged scatter (every child kept;
-        // no coverage read). `coords[i] = (q, r, flat)` for `children[i]`;
+        // The completed-Q math is shared with the dense exporter via
+        // `super::completed_q`. The ONE divergence stays here: the ragged scatter (every
+        // child kept; no coverage read). `coords[i] = (q, r, flat)` for `children[i]`;
         // flat >= n_actions ⇒ off-window (→ overflow).
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
-        let mut agg = completed_q::CqAgg {
-            sum_n: 0,
-            max_n: 0,
-            visited_prior_sum: 0.0,
-            policy_weighted_q: 0.0,
-            v_hat: 0.0,
-            raw_value: self.root_raw_value(),
-        };
 
         for j in 0..n_ch {
             let child = &self.pool[first + j];
@@ -309,47 +270,25 @@ impl MCTSTree {
             let flat = self.root_board.window_flat_idx(q, r);
 
             let visits = child.n_visits;
-            let prior = child.prior;
-            let q_val = if visits > 0 {
-                q_sign * child.w_value / visits as f32
-            } else {
-                0.0
-            };
-
-            agg.sum_n += visits;
-            if visits > agg.max_n {
-                agg.max_n = visits;
-            }
-            if visits > 0 {
-                agg.visited_prior_sum += prior;
-                agg.policy_weighted_q += prior * q_val;
-            }
-
             children.push(completed_q::CqChild {
                 visits,
-                prior,
-                q_val,
+                prior: child.prior,
+                q_val: if visits > 0 {
+                    q_sign * child.w_value / visits as f32
+                } else {
+                    0.0
+                },
             });
             coords.push((q, r, flat));
         }
 
-        // See `get_improved_policy` for why the Mctx arm needs no zero-visit branch.
-        let masses = if self.gumbel_variant == GumbelVariant::Mctx {
-            completed_q::mctx_improved_policy_masses(
-                &children,
-                self.root_raw_value(),
-                c_visit,
-                c_scale,
-            )
-        } else if agg.sum_n == 0 {
-            // Edge case: no visits — prior distribution (all children included).
-            completed_q::prior_fallback_masses(&children)
-        } else {
-            agg.v_hat = root.w_value / root.n_visits as f32;
-            // Shared softmax(log_prior + sigma(completedQ)); empty ⇒ degenerate
-            // guard fired (byte-identical to the old early returns).
-            completed_q::improved_policy_masses(&children, &agg, c_visit, c_scale)
-        };
+        // See `get_improved_policy` for why no zero-visit branch is needed.
+        let masses = completed_q::mctx_improved_policy_masses(
+            &children,
+            self.root_raw_value(),
+            c_visit,
+            c_scale,
+        );
         for (&(q, r, flat), mass) in coords.iter().zip(masses) {
             if flat < n_actions {
                 dense[flat] = mass;

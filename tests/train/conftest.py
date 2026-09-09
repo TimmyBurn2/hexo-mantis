@@ -180,8 +180,8 @@ def _make_train_block(**over: Any) -> dict[str, Any]:
 def _make_selfplay_block(**over: Any) -> dict[str, Any]:
     base = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
-        "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+        "inference_pool_size": None, "c_visit": 50.0,
+        "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
         "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
         "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
@@ -269,6 +269,7 @@ def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
         "run_id": run_id,
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},
+        "search": {"kind": "puct"},
         "eval": _make_eval_block(),
         "train": _make_train_block(),
         "selfplay": _make_selfplay_block(),
@@ -291,7 +292,7 @@ def make_full_train_hparams(**over: Any):
     base = dict(
         lr=1e-3, weight_decay=1e-4, grad_clip=1.0, fp16=True, lr_schedule="cosine",
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4, min_lr=None,
-        checkpoint_interval=0, completed_q_values=False, policy_prune_frac=0.0,
+        checkpoint_interval=0, policy_prune_frac=0.0,
         entropy_reg_weight=0.0, aux_opp_reply_weight=0.0, uncertainty_weight=0.0,
         ownership_weight=0.0, threat_weight=0.0, aux_chain_weight=0.0, ply_index_weight=0.0,
         threat_pos_weight=1.0, value_target="pure_outcome_z",

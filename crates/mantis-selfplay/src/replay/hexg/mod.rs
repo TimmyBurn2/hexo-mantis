@@ -98,31 +98,21 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 ///
 /// SCOPE (R275(a)): this formula is derived from the CURRENT visit-limited target
 /// construction, and so are the two F-816-9 pins that sit downstream of it
-/// (`records::refuse_zero_visit_export` and `search_drive::InferenceSeamFailure`). If
-/// completed-Q-on-graph is adopted at prereg, the capacity AND both pins re-derive from
-/// the new construction — a completed-Q export is child-count-wide, not sims-bounded, which
-/// is exactly what the second error arm below refuses today (LAW-02: re-derive, never carry
-/// the prior across a regime change).
+/// (`records::refuse_zero_visit_export` and `search_drive::InferenceSeamFailure`).
 ///
 /// # Errors
 /// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`] — no slot sizing
 ///   can honor the regime; the schema twin makes this a MINT-time error, and
 ///   the boot-side call is defense-in-depth for un-minted constructions;
-/// * `gumbel_variant` is not a dialect this build knows;
-/// * `completed_q_values` on the graph path under the CORRECTED Gumbel dialect, at any
-///   capacity — that arm's root holds the full legal set, so the target's support is the
-///   legal set, which no sims regime bounds (GUMBEL-REPAIR-1 item 6);
-/// * `completed_q_values` on the graph path while
-///   `mantis_search::MAX_CHILDREN_PER_NODE` exceeds the derived capacity — the
-///   completed-Q exporter places positive mass on EVERY root child, so its
-///   support is child-count-wide, not sims-bounded (WP12-R Phase T guard 2,
-///   generalized: the refusal retires per-regime exactly when the derived
-///   slots genuinely cover that support).
+/// * `search_kind` is not a kind this build knows;
+/// * `search.kind: gumbel` on the graph path, at ANY capacity — that kind's root reaches
+///   the full legal set, so the exported target's support IS the legal set, which no sims
+///   regime bounds.
 ///
-/// THE CHECK IS A DENSITY CHECK, NOT A VISIT CHECK, and the two guards above are the two
-/// support bounds it has: `MAX_CHILDREN_PER_NODE` under the legacy dialect, the legal set
-/// under the corrected one. The sims regime bounds how many visits a row records; it says
-/// nothing about how many cells the exported distribution puts mass on.
+/// THE CHECK IS A DENSITY CHECK, NOT A VISIT CHECK. The sims regime bounds how many visits
+/// a row RECORDS; it says nothing about how many cells the exported distribution puts mass
+/// on. Under `puct` the exported target is the visit distribution and the two coincide;
+/// under `gumbel` they do not, and the second is unbounded by the config.
 #[allow(clippy::too_many_arguments)]
 pub fn derived_visit_capacity(
     n_simulations: usize,
@@ -133,9 +123,7 @@ pub fn derived_visit_capacity(
     n_sims_quick: usize,
     n_sims_full: usize,
     leaf_batch_size: usize,
-    completed_q_values: bool,
-    gumbel_mcts: bool,
-    gumbel_variant: &str,
+    search_kind: &str,
 ) -> Result<usize, String> {
     let effective_standard = effective_standard_sims(n_simulations, standard_sims);
     let mut max_armed = effective_standard;
@@ -157,43 +145,29 @@ pub fn derived_visit_capacity(
              selfplay.leaf_batch_size)"
         ));
     }
-    // GUMBEL-REPAIR-1 item 6: the bound is the exported target's SUPPORT, and WHICH support
-    // that is depends on the search dialect. The dialect is parsed here rather than passed as
-    // a derived boolean so the two enforcement surfaces cannot drift onto second formulas —
-    // the same reason this whole function has two callers and no second copy.
-    let variant =
-        mantis_search::GumbelVariant::from_config_str(gumbel_variant).ok_or_else(|| {
-            format!(
-                "selfplay.gumbel_variant = {gumbel_variant:?} is not a known Gumbel dialect \
-                 (expected \"legacy\" or \"mctx\")"
-            )
-        })?;
-    if completed_q_values && gumbel_mcts && variant == mantis_search::GumbelVariant::Mctx {
+    // The bound is the exported target's SUPPORT, and which support that is depends on the
+    // search kind. The kind is parsed here rather than passed as a derived boolean so the
+    // two enforcement surfaces cannot drift onto second formulas — the same reason this
+    // whole function has two callers and no second copy.
+    let kind = mantis_search::SearchKind::from_config_str(search_kind).ok_or_else(|| {
+        format!(
+            "search.kind = {search_kind:?} is not a known search kind \
+             (expected \"puct\" or \"gumbel\")"
+        )
+    })?;
+    if kind == mantis_search::SearchKind::Gumbel {
         return Err(format!(
-            "representation==graph with completed_q_values=true is refused under the \
-             corrected Gumbel dialect at ANY derived capacity ({capacity} here): that arm \
-             expands the root over its FULL legal set, so the exported target's support is \
-             the legal set itself, which the config bounds nowhere. The legal set is the \
-             union of radius-r balls around every stone minus the occupied cells and GROWS \
-             with the stone count — measured to 489 at radius 8 under clustered play and \
-             8142 under sprawling play — so no sims regime can derive a slot count that \
-             covers it. A run wanting the completed target under this dialect needs a MINTED \
+            "representation==graph with search.kind=gumbel is refused at ANY derived \
+             capacity ({capacity} here): that kind's root reaches its FULL legal set and \
+             exports the completed-Q improved policy over it, so the target's support is \
+             the legal set itself, which the config bounds nowhere. THE LEGAL SET IS NOT A \
+             CONSTANT — it is the union of radius-r balls around every stone minus the \
+             occupied cells and GROWS with the stone count, measured at radius 8 to a \
+             MEDIAN of 355 and a MAXIMUM of 8142 — so no sims regime can derive a slot \
+             count that covers it. A run wanting this kind on the graph path needs a MINTED \
              visit-slot bound, not a derived one, and the ring cost is its subject: at 8 \
              bytes a slot, 8192 slots is ~65 KB per row against today's ~252 B \
-             (GUMBEL-REPAIR-1 item 6; keys: selfplay.gumbel_variant, selfplay.gumbel_mcts, \
-             train.policy_target)"
-        ));
-    }
-    if completed_q_values && mantis_search::MAX_CHILDREN_PER_NODE > capacity {
-        return Err(format!(
-            "representation==graph with completed_q_values=true is refused while \
-             MAX_CHILDREN_PER_NODE ({}) exceeds the derived visit capacity ({capacity}): \
-             the completed-Q exporter places positive mass on every root child, so a \
-             record's support is child-count-wide and cannot fit the derived HEXG visit \
-             slot (WP12-R Phase T, DESIGN_T §3.4; R255) — set completed_q_values=false \
-             for graph runs, or raise the armed sim regime until the derived capacity \
-             covers it",
-            mantis_search::MAX_CHILDREN_PER_NODE,
+             (keys: search.kind, identity.representation)"
         ));
     }
     Ok(capacity)

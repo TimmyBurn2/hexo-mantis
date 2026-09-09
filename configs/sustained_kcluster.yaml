@@ -12,6 +12,8 @@ allocator_posture: expandable_segments
 identity:
   encoding: v6_live2_ls
   representation: grid
+search:
+  kind: puct
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128
@@ -133,7 +135,6 @@ train:
   terminal_eval_enabled: true
   bot_batch_share: 0.0
   selfplay_stall_timeout_sec: 1800.0
-  completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution
   draw_reward: -0.5
@@ -152,14 +153,10 @@ selfplay:
   leaf_batch_size: 8
   max_game_moves: 128
   inference_pool_size: null
-  completed_q_values: false
   c_visit: 50.0
   c_scale: 1.0
-  gumbel_mcts: false
   gumbel_m: 16
   gumbel_explore_moves: 10
-  gumbel_variant: legacy
-  gumbel_root_counts: true
   results_queue_cap: 10000
   random_opening_plies: 0
   rotation_enabled: true

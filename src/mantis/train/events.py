@@ -57,7 +57,7 @@ class PoolTelemetryLike(Protocol):
     members into the control-flow protocol.
     """
 
-    gumbel_mcts: bool
+    search_kind: str
     avg_game_length: float
     x_winrate: float
     o_winrate: float
@@ -519,7 +519,7 @@ def emit_iteration_complete_event(
     gph = games_per_hour_fn()
     avg_gl = getattr(pool, "avg_game_length", None)
     pph = (gph * avg_gl) if (gph is not None and avg_gl is not None and avg_gl > 0) else None
-    _puct_regime = not pool.gumbel_mcts
+    _puct_regime = pool.search_kind == "puct"
     iteration_complete_event: dict[str, Any] = {
         "event": "iteration_complete",
         "step": train_step,

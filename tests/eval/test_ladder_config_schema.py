@@ -101,8 +101,8 @@ def _train_block() -> dict:
 def _selfplay_block() -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
-        "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+        "inference_pool_size": None, "c_visit": 50.0,
+        "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
         "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
         "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
@@ -181,6 +181,7 @@ def _payload(**eval_overrides) -> dict:
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": eval_block,
         "train": _train_block(),
+        "search": {"kind": "puct"},
         "selfplay": _selfplay_block(),
         "inference": _inference_block(),
         "monitor": _monitor_block(),

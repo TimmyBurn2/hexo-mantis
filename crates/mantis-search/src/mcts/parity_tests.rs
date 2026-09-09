@@ -134,52 +134,6 @@ fn the_completion_reads_the_raw_root_value_and_not_the_backed_up_mean() {
     );
 }
 
-/// The two arms must be DISTINGUISHABLE, or a dispatch wired to the wrong one
-/// would pass every parity test above by accident.
-#[test]
-fn the_mctx_arm_and_the_legacy_arm_disagree() {
-    let doc = fixture();
-    let case = doc["qtransform"]
-        .as_array()
-        .expect("qtransform section")
-        .iter()
-        .find(|c| c["name"] == "n50_concentrated")
-        .expect("the n50_concentrated case");
-    let (children, raw_value) = children_of(case);
-
-    let mut agg = super::completed_q::CqAgg {
-        sum_n: 0,
-        max_n: 0,
-        visited_prior_sum: 0.0,
-        policy_weighted_q: 0.0,
-        v_hat: raw_value,
-        raw_value,
-    };
-    for ch in &children {
-        agg.sum_n += ch.visits;
-        agg.max_n = agg.max_n.max(ch.visits);
-        if ch.visits > 0 {
-            agg.visited_prior_sum += ch.prior;
-            agg.policy_weighted_q += ch.prior * ch.q_val;
-        }
-    }
-    // The legacy arm at its own shipped scale (`c_scale: 1.0`), which is the
-    // comparison that matters: this is what every minted config computes today.
-    let legacy = super::completed_q::improved_policy_masses(&children, &agg, 50.0, 1.0);
-    let mctx = mctx_improved_policy_masses(&children, raw_value, 50.0, 0.1);
-    let max_gap = legacy
-        .iter()
-        .zip(&mctx)
-        .map(|(a, b)| (a - b).abs())
-        .fold(0.0f32, f32::max);
-    assert!(
-        max_gap > 1e-3,
-        "the two arms produced the same target (max gap {max_gap}) — then either the \
-         Mctx arm is not doing anything or the legacy arm was already Mctx, and the \
-         parity above proves nothing about which one a config selects"
-    );
-}
-
 /// THE DEVIATION-4 WITNESS. Interior selection is the improved policy with the
 /// visit-count correction, pinned elementwise against Mctx's `_prepare_argmax_input`
 /// rather than only at its argmax — many wrong score vectors share an argmax.

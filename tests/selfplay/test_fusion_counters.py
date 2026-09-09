@@ -333,7 +333,7 @@ class _TelemetryPool:
     """The narrow telemetry surface over a REAL inference server — the batching member goes
     through the REAL `pool_hooks` function, so this drives the production producer."""
 
-    gumbel_mcts = True
+    search_kind = "gumbel"
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4

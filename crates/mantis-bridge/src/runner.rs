@@ -25,7 +25,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_encoding::RegistrySpec;
-use mantis_search::GumbelVariant;
+use mantis_search::SearchKind;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
 use mantis_selfplay::runner::{GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
@@ -157,10 +157,8 @@ impl PySelfPlayRunnerConfig {
         zoi_enabled = false,
         zoi_lookback = 16,
         zoi_margin = 5,
-        completed_q_values = false,
         c_visit = 50.0,
         c_scale = 1.0,
-        gumbel_mcts = false,
         gumbel_m = 16,
         gumbel_explore_moves = 10,
         dirichlet_alpha = 0.3,
@@ -194,10 +192,8 @@ impl PySelfPlayRunnerConfig {
         zoi_enabled: bool,
         zoi_lookback: usize,
         zoi_margin: i32,
-        completed_q_values: bool,
         c_visit: f32,
         c_scale: f32,
-        gumbel_mcts: bool,
         gumbel_m: usize,
         gumbel_explore_moves: usize,
         dirichlet_alpha: f32,
@@ -234,10 +230,8 @@ impl PySelfPlayRunnerConfig {
                 zoi_enabled,
                 zoi_lookback,
                 zoi_margin,
-                completed_q_values,
                 c_visit,
                 c_scale,
-                gumbel_mcts,
                 gumbel_m,
                 gumbel_explore_moves,
                 dirichlet_alpha,
@@ -256,37 +250,32 @@ impl PySelfPlayRunnerConfig {
         }
     }
 
-    // ── Gumbel dialect knobs (get/set) ─────────────────────────────────────────
+    // ── The search kind (get/set) ──────────────────────────────────────────────
     //
-    // Get/set rather than two more constructor positionals: `new` already carries
-    // 35, and its own comment records that later knobs arrive this way.
+    // Get/set rather than another constructor positional: `new` already carries 33, and
+    // its own comment records that later knobs arrive this way. NO CONSTRUCTOR DEFAULT for
+    // the kind is exposed through the setter — the `Default` the ctor folds in is Rust
+    // test scaffolding, and `SelfPlayHParams` always writes this attribute from the
+    // required `search.kind` config key (R1/LAW-11).
 
     #[getter]
-    pub fn gumbel_variant(&self) -> &'static str {
-        self.inner.gumbel_variant.as_config_str()
+    pub fn search_kind(&self) -> &'static str {
+        self.inner.search_kind.as_config_str()
     }
     /// # Errors
-    /// `ValueError` — `v` is not a dialect this build knows. REFUSED rather than
-    /// defaulted: a typo'd dialect silently falling back to `legacy` is exactly
-    /// the silent-fallback class LAW-11 closes.
+    /// `ValueError` — `v` is not a search kind this build knows. REFUSED rather than
+    /// defaulted: a typo'd kind silently falling back to `puct` is exactly the
+    /// silent-fallback class LAW-11 closes.
     #[setter]
-    pub fn set_gumbel_variant(&mut self, v: &str) -> PyResult<()> {
-        let parsed = GumbelVariant::from_config_str(v).ok_or_else(|| {
+    pub fn set_search_kind(&mut self, v: &str) -> PyResult<()> {
+        let parsed = SearchKind::from_config_str(v).ok_or_else(|| {
             PyValueError::new_err(format!(
-                "selfplay.gumbel_variant={v:?} is not a known Gumbel dialect \
-                 (expected \"legacy\" or \"mctx\")"
+                "search.kind={v:?} is not a known search kind \
+                 (expected \"puct\" or \"gumbel\")"
             ))
         })?;
-        self.inner.gumbel_variant = parsed;
+        self.inner.search_kind = parsed;
         Ok(())
-    }
-    #[getter]
-    pub fn gumbel_root_counts(&self) -> bool {
-        self.inner.gumbel_root_counts
-    }
-    #[setter]
-    pub fn set_gumbel_root_counts(&mut self, v: bool) {
-        self.inner.gumbel_root_counts = v;
     }
 
     // ── O1 forced-win one-hot POLICY target knobs (get/set) ────────────────────
@@ -834,10 +823,8 @@ mod tests {
             false,
             16,
             5,
-            false,
             50.0,
             1.0,
-            false,
             16,
             10,
             0.3,
@@ -900,9 +887,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5,
-            false, 50.0, 1.0, false, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false, None,
-            None,
+            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5, 50.0,
+            1.0, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false, None, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

@@ -102,6 +102,16 @@ pub struct RunnerStatsSnapshot {
     /// R335(c) — the largest leaf count ANY one search served. Must never exceed the
     /// search budget; `search_drive::run_mcts_search` `fetch_max`es it per search.
     pub max_sims_per_search: u64,
+    /// LAW-18 — playout-cap randomization's fire rate, counted at the DRAW. `full + quick`
+    /// is every searched move; a run with `full_search_prob == 0` counts every move `full`,
+    /// because the un-randomized arm searches the game budget.
+    pub pcr_full_moves: u64,
+    pub pcr_quick_moves: u64,
+    /// LAW-18 — the Gumbel halving round's WIDTH, as the two terms of a mean:
+    /// `gumbel_round_leaves / gumbel_rounds` is leaves per inference round trip. BOTH zero
+    /// on a PUCT run, which issues no rounds — a reader publishes the ABSENCE, never a 0/0.
+    pub gumbel_round_leaves: u64,
+    pub gumbel_rounds: u64,
     // `cluster_value_std_accum` / `cluster_policy_disagreement_accum` are ×1e6;
     // `cluster_variance_samples` is the shared divisor count for both means.
     pub cluster_value_std_accum: u64,
@@ -206,6 +216,10 @@ pub struct SelfPlayRunner {
     mcts_stat_count: Arc<AtomicU64>,
     mcts_quiescence_fires: Arc<AtomicU64>,
     max_sims_per_search: Arc<AtomicU64>,
+    pcr_full_moves: Arc<AtomicU64>,
+    pcr_quick_moves: Arc<AtomicU64>,
+    gumbel_round_leaves: Arc<AtomicU64>,
+    gumbel_rounds: Arc<AtomicU64>,
     cluster_value_std_accum: Arc<AtomicU64>,
     cluster_policy_disagreement_accum: Arc<AtomicU64>,
     cluster_variance_samples: Arc<AtomicU64>,
@@ -285,27 +299,21 @@ impl SelfPlayRunner {
         if effective_standard == 0 {
             return Err("SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string());
         }
-        // GUMBEL-REPAIR-1: the Mctx dialect expands the root over its FULL legal set, so it
-        // spends up to `MAX_ROOT_CHILDREN` slots on the root instead of
-        // `MAX_CHILDREN_PER_NODE`, and its ceiling is correspondingly lower. The legacy bound
-        // is left exactly where it was — tightening the ceiling every existing config
-        // validates against, for a dialect nothing arms, would be a mint-surface change made
-        // by the wrong packet. Gated on `gumbel_mcts` as well as the dialect, matching
-        // `MCTSTree::configure_gumbel`: a dialect that is inert cannot spend the slots.
-        let (armed_ceiling, ceiling_name, ceiling_derivation) = if config.gumbel_mcts
-            && config.gumbel_variant == mantis_search::GumbelVariant::Mctx
-        {
-            (
-                mantis_search::MAX_ARMED_SIMS_MCTX,
-                "MAX_ARMED_SIMS_MCTX",
+        // The Gumbel kind reaches the root's FULL legal set, so it spends up to
+        // `MAX_ROOT_CHILDREN` slots on the root instead of `MAX_CHILDREN_PER_NODE`, and its
+        // ceiling is correspondingly lower. The PUCT bound is unchanged: a PUCT root is an
+        // ordinary node and the original derivation is exact for it.
+        let (armed_ceiling, ceiling_name, ceiling_derivation) = match config.search_kind {
+            mantis_search::SearchKind::Gumbel => (
+                mantis_search::MAX_ARMED_SIMS_GUMBEL,
+                "MAX_ARMED_SIMS_GUMBEL",
                 "(MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)",
-            )
-        } else {
-            (
+            ),
+            mantis_search::SearchKind::Puct => (
                 mantis_search::MAX_ARMED_SIMS,
                 "MAX_ARMED_SIMS",
                 "MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)",
-            )
+            ),
         };
         // AUDIT-1 F-21: the pool bound, checked at BOOT rather than at the first move that
         // crosses it. Every sims knob the search can be driven at is checked, not only the
@@ -386,9 +394,7 @@ impl SelfPlayRunner {
                 config.n_sims_quick,
                 config.n_sims_full,
                 config.leaf_batch_size,
-                config.completed_q_values,
-                config.gumbel_mcts,
-                config.gumbel_variant.as_config_str(),
+                config.search_kind.as_config_str(),
             )
             .map_err(|e| format!("SelfPlayRunner: {e}"))?;
             Some(cap)
@@ -446,6 +452,10 @@ impl SelfPlayRunner {
             mcts_stat_count: Arc::new(AtomicU64::new(0)),
             mcts_quiescence_fires: Arc::new(AtomicU64::new(0)),
             max_sims_per_search: Arc::new(AtomicU64::new(0)),
+            pcr_full_moves: Arc::new(AtomicU64::new(0)),
+            pcr_quick_moves: Arc::new(AtomicU64::new(0)),
+            gumbel_round_leaves: Arc::new(AtomicU64::new(0)),
+            gumbel_rounds: Arc::new(AtomicU64::new(0)),
             cluster_value_std_accum: Arc::new(AtomicU64::new(0)),
             cluster_policy_disagreement_accum: Arc::new(AtomicU64::new(0)),
             cluster_variance_samples: Arc::new(AtomicU64::new(0)),
@@ -604,6 +614,10 @@ impl SelfPlayRunner {
             mcts_stat_count: self.mcts_stat_count.load(Ordering::Relaxed),
             mcts_quiescence_fires: self.mcts_quiescence_fires.load(Ordering::Relaxed),
             max_sims_per_search: self.max_sims_per_search.load(Ordering::Relaxed),
+            pcr_full_moves: self.pcr_full_moves.load(Ordering::Relaxed),
+            pcr_quick_moves: self.pcr_quick_moves.load(Ordering::Relaxed),
+            gumbel_round_leaves: self.gumbel_round_leaves.load(Ordering::Relaxed),
+            gumbel_rounds: self.gumbel_rounds.load(Ordering::Relaxed),
             cluster_value_std_accum: self.cluster_value_std_accum.load(Ordering::Relaxed),
             cluster_policy_disagreement_accum: self
                 .cluster_policy_disagreement_accum
@@ -931,6 +945,10 @@ mod seam_roundtrip {
             mcts_stat_count: 9,
             mcts_quiescence_fires: 10,
             max_sims_per_search: 50,
+            pcr_full_moves: 21,
+            pcr_quick_moves: 22,
+            gumbel_round_leaves: 23,
+            gumbel_rounds: 24,
             cluster_value_std_accum: 11,
             cluster_policy_disagreement_accum: 12,
             cluster_variance_samples: 13,

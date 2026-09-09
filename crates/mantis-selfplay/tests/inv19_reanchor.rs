@@ -10,14 +10,14 @@
 //!      fails to COMPILE, and distinct per-field sentinels catch any cross-wire;
 //!   2. **NO per-game radius-jitter field** (D7 KILL) and **NO
 //!      `feature_len`/`policy_len` override fields** (C-1) — the exhaustive
-//!      binding set names exactly the 45 live fields, so a resurrected jitter knob
+//!      binding set names exactly the live fields, so a resurrected jitter knob
 //!      (or a caller-supplied shape) would break this test loudly;
 //!   3. the `Default` impl is TEST-SCAFFOLDING, NOT the config authority (R1 — the
 //!      authoritative defaults live in the WP8 Python schema). This file does NOT
 //!      assert Default's values are "the" defaults; it asserts the opposite — a
 //!      bare `Default` is not a usable config authority (LAW-11).
 
-use mantis_search::GumbelVariant;
+use mantis_search::SearchKind;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 /// f32 approx-equality (dodges `clippy::float_cmp`; exact for a literal round-trip).
@@ -48,14 +48,11 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         zoi_enabled: true,
         zoi_lookback: 24,
         zoi_margin: 9,
-        completed_q_values: true,
         c_visit: 37.5,
         c_scale: 1.25,
-        gumbel_mcts: true,
+        search_kind: SearchKind::Gumbel,
         gumbel_m: 12,
         gumbel_explore_moves: 7,
-        gumbel_variant: GumbelVariant::Mctx,
-        gumbel_root_counts: false,
         dirichlet_alpha: 0.4,
         dirichlet_epsilon: 0.3,
         dirichlet_enabled: false,
@@ -109,14 +106,11 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         zoi_enabled,
         zoi_lookback,
         zoi_margin,
-        completed_q_values,
         c_visit,
         c_scale,
-        gumbel_mcts,
+        search_kind,
         gumbel_m,
         gumbel_explore_moves,
-        gumbel_variant,
-        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         dirichlet_enabled,
@@ -158,14 +152,11 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert!(zoi_enabled);
     assert_eq!(zoi_lookback, 24);
     assert_eq!(zoi_margin, 9);
-    assert!(completed_q_values);
     assert!(feq(c_visit, 37.5));
     assert!(feq(c_scale, 1.25));
-    assert!(gumbel_mcts);
+    assert_eq!(search_kind, SearchKind::Gumbel);
     assert_eq!(gumbel_m, 12);
     assert_eq!(gumbel_explore_moves, 7);
-    assert_eq!(gumbel_variant, GumbelVariant::Mctx);
-    assert!(!gumbel_root_counts);
     assert!(feq(dirichlet_alpha, 0.4));
     assert!(feq(dirichlet_epsilon, 0.3));
     assert!(!dirichlet_enabled);

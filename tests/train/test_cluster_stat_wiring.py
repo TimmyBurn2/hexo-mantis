@@ -83,7 +83,7 @@ class _RunnerStats:
 class _Pool:
     def __init__(self) -> None:
         self.games_completed = 5
-        self.gumbel_mcts = False        # PUCT — run5's arm, where the zeros were observed
+        self.search_kind = "puct"        # PUCT — run5's arm, where the zeros were observed
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

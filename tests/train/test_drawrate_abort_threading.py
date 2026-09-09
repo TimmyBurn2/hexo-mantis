@@ -101,7 +101,7 @@ class _Pool:
                  fresh_game_per_read: bool = True) -> None:
         self._games = 0
         self._fresh = fresh_game_per_read
-        self.gumbel_mcts = True
+        self.search_kind = "gumbel"
         self.avg_game_length = 20.0
         self.x_winrate, self.o_winrate, self.draws = 0.5, 0.45, 1
         self.draw_rate = 0.05  # F-816-2: the third outcome share.

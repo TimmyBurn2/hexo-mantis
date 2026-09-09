@@ -71,10 +71,10 @@ class _Sink:
 
 
 class _Pool:
-    """The narrow `PoolTelemetryLike` surface, in run5's PUCT regime (`gumbel_mcts: false`
+    """The narrow `PoolTelemetryLike` surface, in run5's PUCT regime (`search.kind: puct`
     at `configs/run5.yaml:160`) — the arm on which the fabricated zeros were observed."""
 
-    gumbel_mcts = False
+    search_kind = "puct"
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4
@@ -87,7 +87,7 @@ class _Pool:
 
 
 class _GumbelPool(_Pool):
-    gumbel_mcts = True
+    search_kind = "gumbel"
 
 
 class _Buffer:

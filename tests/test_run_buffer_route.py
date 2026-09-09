@@ -66,9 +66,7 @@ def _derived(config) -> int:
         n_sims_quick=pc.n_sims_quick,
         n_sims_full=pc.n_sims_full,
         leaf_batch_size=sp.leaf_batch_size,
-        completed_q_values=sp.completed_q_values,
-        gumbel_mcts=sp.gumbel_mcts,
-        gumbel_variant=sp.gumbel_variant,
+        search_kind=config.search.kind,
     )
 
 

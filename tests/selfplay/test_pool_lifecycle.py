@@ -43,8 +43,8 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     # `selfplay` (its historical target — no call site in this file uses it today).
     selfplay: dict[str, Any] = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
-        "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+        "inference_pool_size": None, "c_visit": 50.0,
+        "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
         "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
         "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
@@ -72,7 +72,8 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     # WPSC Phase 3 SC-B3: InferenceServer (via WorkerPool) now hard-reads
     # config["train"]["amp_dtype"] unconditionally (R30b, no fallback).
     train = {"draw_reward": -0.5, "ply_cap_value": -0.5, "amp_dtype": "fp16"}
-    return {"encoding": encoding, "selfplay": selfplay, "inference": inference, "train": train}
+    return {"encoding": encoding, "search": {"kind": "puct"}, "selfplay": selfplay,
+            "inference": inference, "train": train}
 
 
 def _grid_pool(encoding: str = "v6", **kw: Any) -> WorkerPool:

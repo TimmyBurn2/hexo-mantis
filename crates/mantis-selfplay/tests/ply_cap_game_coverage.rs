@@ -52,6 +52,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
+use mantis_search::SearchKind;
 use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::derived_visit_capacity;
@@ -122,9 +123,7 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         0,
         0,
         PROD_LEAF_BATCH,
-        false,
-        false,
-        "legacy",
+        "puct",
     )
     .expect("the production sims regime must have a derivable capacity");
 
@@ -140,8 +139,7 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         dirichlet_enabled: true,
         dirichlet_alpha: PROD_DIRICHLET_ALPHA,
         dirichlet_epsilon: PROD_DIRICHLET_EPSILON,
-        completed_q_values: false,
-        gumbel_mcts: false,
+        search_kind: SearchKind::Puct,
         solver_enabled: false,
         forced_win_policy_enabled: false,
         random_opening_plies: RANDOM_OPENING_PLIES,

@@ -168,6 +168,19 @@ class MCTSTree:
         quiescence_enabled: bool = True,
         quiescence_blend_2: float = 0.3,
     ) -> None: ...
+    def configure_search(self, kind: str, c_visit: float, c_scale: float) -> None:
+        """Select the search kind. Raises ValueError on an unknown kind (never defaults)."""
+    @property
+    def search_kind(self) -> str: ...
+    def gumbel_root_begin(self, m: int, budget: int, seed: int) -> None:
+        """Draw this search's Gumbel root state over the expanded root, from an explicit
+        seed. Raises RuntimeError when the root is not expanded."""
+    def gumbel_root_select(self, c_visit: float, c_scale: float) -> int | None:
+        """Raises RuntimeError when no root state has been drawn."""
+    def gumbel_root_best_move(
+        self, c_visit: float, c_scale: float
+    ) -> tuple[int, int] | None:
+        """Raises RuntimeError when no root state has been drawn."""
     @property
     def quiescence_fire_count(self) -> int: ...
     def last_search_stats(self) -> tuple[float, float]: ...
@@ -375,10 +388,8 @@ class SelfPlayRunnerConfig:
         zoi_enabled: bool = False,
         zoi_lookback: int = 16,
         zoi_margin: int = 5,
-        completed_q_values: bool = False,
         c_visit: float = 50.0,
         c_scale: float = 1.0,
-        gumbel_mcts: bool = False,
         gumbel_m: int = 16,
         gumbel_explore_moves: int = 10,
         dirichlet_alpha: float = 0.3,
@@ -394,13 +405,9 @@ class SelfPlayRunnerConfig:
         inference_pool_size: int | None = None,
     ) -> None: ...
     @property
-    def gumbel_variant(self) -> str: ...
-    @gumbel_variant.setter
-    def gumbel_variant(self, v: str) -> None: ...
-    @property
-    def gumbel_root_counts(self) -> bool: ...
-    @gumbel_root_counts.setter
-    def gumbel_root_counts(self, v: bool) -> None: ...
+    def search_kind(self) -> str: ...
+    @search_kind.setter
+    def search_kind(self, v: str) -> None: ...
     @property
     def forced_win_policy_enabled(self) -> bool: ...
     @forced_win_policy_enabled.setter
@@ -731,14 +738,14 @@ def mcts_max_armed_sims() -> int:
     reads it across the bridge rather than re-typing the number, so the bound cannot go stale
     when either constant moves.
     """
-def mcts_max_armed_sims_mctx() -> int:
-    """The same bound for the CORRECTED Gumbel dialect (GUMBEL-REPAIR-1).
+def mcts_max_armed_sims_gumbel() -> int:
+    """The same bound under `search.kind: gumbel`.
 
-    `(MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)`. That arm expands its
-    root over the full legal set, so it spends `MAX_ROOT_CHILDREN` slots on the root instead
-    of `MAX_CHILDREN_PER_NODE` and its ceiling is the lower of the two. Read across the
-    bridge for the same reason as its sibling: the schema refuses an over-budget config at
-    MINT, and it cannot do that against a number it does not have.
+    `(MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)`. That kind reaches the
+    root's full legal set, so it spends `MAX_ROOT_CHILDREN` slots on the root instead of
+    `MAX_CHILDREN_PER_NODE` and its ceiling is the lower of the two. Read across the bridge
+    for the same reason as its sibling: the schema refuses an over-budget config at MINT,
+    and it cannot do that against a number it does not have.
     """
 
 def take_mcts_pool_overflow_count() -> int: ...
@@ -769,9 +776,7 @@ def derived_hexg_visit_capacity(
     n_sims_quick: int,
     n_sims_full: int,
     leaf_batch_size: int,
-    completed_q_values: bool,
-    gumbel_mcts: bool,
-    gumbel_variant: str,
+    search_kind: str,
 ) -> int: ...
 
 

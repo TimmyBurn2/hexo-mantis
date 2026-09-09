@@ -240,9 +240,12 @@ CONSUMER_REGISTRY = {
     "train.selfplay_stall_timeout_sec":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
-    "train.completed_q_values": "TrainHParams.from_config -> CE-vs-KL policy loss switch",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
-    "train.policy_target": "TrainHParams.from_config cross-validated vs completed_q_values (T-B)",
+    "train.policy_target": (
+        "TrainHParams.from_config -> the CE-vs-KL policy-loss switch; cross-validated "
+        "against search.kind by RunConfig._policy_target_matches_the_search_kind and by "
+        "_assert_policy_target_consistency, and carried on the checkpoint stamp"
+    ),
     "train.draw_reward": "SelfPlayHParams.from_config cross-section read (SC-A2)",
     "train.ply_cap_value": "SelfPlayHParams.from_config cross-section read (SC-A2)",
     "train.policy_prune_frac": "TrainHParams.from_config -> _prune_policy_targets",
@@ -262,21 +265,21 @@ CONSUMER_REGISTRY = {
     "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
     "selfplay.inference_pool_size": "SelfPlayHParams.from_config -> runner inference_pool_size",
-    "selfplay.completed_q_values": "SelfPlayHParams.from_config -> runner completed_q_values",
     "selfplay.c_visit": "SelfPlayHParams.from_config -> runner c_visit",
     "selfplay.c_scale": "SelfPlayHParams.from_config -> runner c_scale",
-    "selfplay.gumbel_mcts": "SelfPlayHParams.from_config -> runner gumbel_mcts + WorkerPool.gumbel_mcts",
-    "selfplay.gumbel_m": "SelfPlayHParams.from_config -> runner gumbel_m",
+    "search.kind": (
+        "mantis.config.resolve.resolve_search_kind -> SelfPlayHParams.from_config -> the "
+        "bridge search_kind setter -> SearchFlags.search_kind -> MCTSTree::configure_search; "
+        "the SAME resolver -> build_eval_pipeline -> RoundSpec -> build_candidate_player -> "
+        "DeployHeadPlayer -> the same configure_search; and "
+        "RunConfig._graph_sims_regime_fits_the_hexg_record_format -> "
+        "derived_hexg_visit_capacity's density refusal"
+    ),
+    "selfplay.gumbel_m": (
+        "SelfPlayHParams.from_config -> runner gumbel_m; and RoundSpec.gumbel_m -> "
+        "DeployHeadPlayer, so the bar considers the same number of root actions the run did"
+    ),
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
-    "selfplay.gumbel_variant": (
-        "SelfPlayHParams.from_config -> cfg.gumbel_variant setter -> SearchFlags.gumbel_variant "
-        "-> MCTSTree::configure_gumbel; and RunConfig._graph_sims_regime_fits_the_hexg_record_"
-        "format -> derived_hexg_visit_capacity (the target's support bound)"
-    ),
-    "selfplay.gumbel_root_counts": (
-        "SelfPlayHParams.from_config -> cfg.gumbel_root_counts setter -> "
-        "MovePlayContext.gumbel_root_counts -> run_mcts_search root charge"
-    ),
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
     "selfplay.rotation_enabled": "SelfPlayHParams.from_config -> runner selfplay_rotation_enabled",

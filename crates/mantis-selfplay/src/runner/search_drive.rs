@@ -31,8 +31,8 @@ use mantis_core::board::hex_distance;
 use mantis_core::Board;
 use mantis_encoding::{encode_state_to_buffer_channels, RegistrySpec};
 use mantis_search::{
-    compute_move_temperature, ply_to_compound_move, GumbelSearchState, GumbelVariant,
-    LegalSetPolicy, MCTSTree, MctxRootState, Outcome, TacticalConfig, TacticalSolver,
+    compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
+    Outcome, SearchKind, TacticalConfig, TacticalSolver,
 };
 
 use crate::queues::{build_leaf_graph, DenseQueue, GraphQueue};
@@ -116,6 +116,15 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
     /// R335(c) — `fetch_max`ed with each search's served-leaf count.
     pub(crate) max_sims_per_search: &'a AtomicU64,
+    /// LAW-18 — the playout-cap arm as DRAWN, counted at the draw itself. The recorded
+    /// row's `is_full_search` is an OR with the forced-win and solver hooks, so a census of
+    /// the flag alone cannot say whether the draw fired or a hook did; these two can.
+    pub(crate) pcr_full_moves: &'a AtomicU64,
+    pub(crate) pcr_quick_moves: &'a AtomicU64,
+    /// LAW-18 — the Gumbel round's width (see [`GumbelRoundCounters`]). Zero on a PUCT run,
+    /// which issues no rounds; the reader omits the mean rather than publishing a 0/0.
+    pub(crate) gumbel_round_leaves: &'a AtomicU64,
+    pub(crate) gumbel_rounds: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
     pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
@@ -201,8 +210,6 @@ pub(crate) struct MovePlayContext {
     pub(crate) c_scale: f32,
     pub(crate) gumbel_m: usize,
     pub(crate) gumbel_explore_moves: usize,
-    /// Whether the root's own evaluation is charged against `n_simulations`.
-    pub(crate) gumbel_root_counts: bool,
     pub(crate) dirichlet_alpha: f32,
     pub(crate) dirichlet_epsilon: f32,
     pub(crate) full_search_prob: f32,
@@ -211,8 +218,9 @@ pub(crate) struct MovePlayContext {
     pub(crate) game_sims: usize,
     pub(crate) is_fast_game: bool,
     pub(crate) sym_idx: usize,
-    pub(crate) completed_q_values: bool,
-    pub(crate) gumbel_mcts: bool,
+    /// THE search authority: the root mechanism, the interior selector and the exported
+    /// target's semantics all read this one field.
+    pub(crate) search_kind: SearchKind,
     pub(crate) dirichlet_enabled: bool,
     pub(crate) zoi_enabled: bool,
     pub(crate) forced_win_enabled: bool,
@@ -261,19 +269,36 @@ pub(crate) enum MoveOutcome {
     Continue,
 }
 
-/// The root state a Gumbel search leaves behind, from which the played move is
-/// read. The two dialects keep different state and neither can answer the other's
-/// question, so this is an enum rather than a widened struct.
-enum RootSelection {
-    Legacy(GumbelSearchState),
-    Mctx(MctxRootState),
+/// LAW-18 — the Gumbel round's WIDTH, in the two terms a mean is taken over.
+///
+/// `round_leaves / rounds` is leaves per inference round trip. At `m` candidates the first
+/// round is `m` wide and each halving takes it down, so the mean over a search is well below
+/// `m` and well above 1 — and 1 is exactly what a batching lever that had silently stopped
+/// batching would read.
+#[derive(Clone, Copy)]
+pub(crate) struct GumbelRoundCounters<'a> {
+    pub(crate) round_leaves: &'a AtomicU64,
+    pub(crate) rounds: &'a AtomicU64,
+}
+
+/// How one inference round trip picks its leaves.
+///
+/// `Batch(n)` is PUCT's: `select_leaves(n)` descends `n` times from an unconstrained root,
+/// spread by virtual loss. `Round(&[..])` is Gumbel's: one descent under EACH of the round's
+/// surviving candidates, which is the halving phase's own width — `m` leaves, then `m/2`,
+/// and so on — and needs no virtual loss across candidates because their subtrees are
+/// disjoint.
+#[derive(Clone, Copy)]
+enum LeafSelection<'a> {
+    Batch(usize),
+    Round(&'a [u32]),
 }
 
 /// Result of `run_mcts_search`.
 enum McTSSearchResult {
     /// The Gumbel root state (PUCT: `None`) and the leaves this search actually
     /// served — R335(c)'s per-search visit count, `fetch_max`ed by the caller.
-    Completed(Option<RootSelection>, usize),
+    Completed(Option<MctxRootState>, usize),
     RootExpansionFailed,
     /// R275(b) SEAM conjunct: a leaf inference FAILED. The search is abandoned
     /// here and never reports `Completed` — see [`InferenceSeamFailure`].
@@ -365,6 +390,18 @@ fn seam_or_shutdown(
 
 // ── Inference + expansion (HOT path) ────────────────────────────────────────
 
+/// One leaf-selection call, in whichever mode this round trip runs.
+#[inline]
+fn select_for(
+    tree: &mut MCTSTree,
+    selection: LeafSelection<'_>,
+) -> Result<Vec<Board>, mantis_search::mcts::SelectionDesync> {
+    match selection {
+        LeafSelection::Batch(n) => tree.select_leaves(n),
+        LeafSelection::Round(children) => tree.select_leaves_forced(children),
+    }
+}
+
 /// Selects leaves, encodes per-cluster state, submits to the dense inference
 /// queue, forward/inverse-scatters under the per-game symmetry, accumulates I2
 /// cluster-variance metrics, aggregates per-leaf policies, and runs
@@ -379,7 +416,7 @@ fn seam_or_shutdown(
 #[allow(clippy::too_many_arguments)]
 fn infer_and_expand(
     tree: &mut MCTSTree,
-    batch_size: usize,
+    selection: LeafSelection<'_>,
     kept_planes: &'static [usize],
     n_cells: usize,
     policy_stride: usize,
@@ -392,15 +429,14 @@ fn infer_and_expand(
     // Graph-seam dispatch hoisted at the worker boundary (NOT per-sim). The graph
     // fn is `#[cold]`/`#[inline(never)]` so it never bloats the inlined dense path.
     if infer.is_graph {
-        return infer_and_expand_graph(tree, batch_size, agg_trunk_sz, infer);
+        return infer_and_expand_graph(tree, selection, agg_trunk_sz, infer);
     }
 
     // AUDIT-1 F-02: a tree/board desync is a NAMED run-fatal seam failure, not a panic that
     // `guard_worker` converts into `running = false` with no reason latched. It routes through
     // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
     // it and `store_fatal_defect` names it.
-    let leaves = tree
-        .select_leaves(batch_size)
+    let leaves = select_for(tree, selection)
         .map_err(|desync| InferenceSeamFailure::new("dense", "selection", desync.to_string()))?;
     if leaves.is_empty() {
         return Ok(0);
@@ -578,7 +614,7 @@ fn infer_and_expand(
 #[inline(never)]
 fn infer_and_expand_graph(
     tree: &mut MCTSTree,
-    batch_size: usize,
+    selection: LeafSelection<'_>,
     agg_trunk_sz: i32,
     infer: InferContext,
 ) -> Result<usize, InferenceSeamFailure> {
@@ -586,8 +622,7 @@ fn infer_and_expand_graph(
     // `guard_worker` converts into `running = false` with no reason latched. It routes through
     // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
     // it and `store_fatal_defect` names it.
-    let leaves = tree
-        .select_leaves(batch_size)
+    let leaves = select_for(tree, selection)
         .map_err(|desync| InferenceSeamFailure::new("graph", "selection", desync.to_string()))?;
     if leaves.is_empty() {
         return Ok(0);
@@ -701,22 +736,25 @@ fn infer_and_expand_graph(
 
 // ── MCTS search dispatch (HOT path) ─────────────────────────────────────────
 
-/// Two-branch dispatcher: Gumbel sequential-halving (`gumbel_mcts=true`) steered
-/// via `set_forced_root_child` (per candidate: force → expand → clear), or
-/// standard PUCT with Dirichlet root noise. Dirichlet is PUCT-only (Gumbel-Top-k
-/// IS the Gumbel root exploration). Frozen `inner.rs:970`.
+/// Two-branch dispatcher on the ONE search kind: Gumbel (Gumbel-Top-k root sampling +
+/// Sequential Halving, no Dirichlet — the Gumbel draw IS the root exploration) or PUCT
+/// (Dirichlet root noise, PUCT descent).
+///
+/// THE ROOT'S OWN EVALUATION IS CHARGED under both kinds, and that is what makes `N`
+/// mean `N leaves`. The deleted `gumbel_root_counts` key made the charge a config
+/// choice, so "equal NN work at a fixed budget" was a claim a config could quietly
+/// falsify; now the served count is the leaf count on both arms by construction.
 #[allow(clippy::too_many_arguments)]
 fn run_mcts_search(
     tree: &mut MCTSTree,
     board: &Board,
     move_sims: usize,
     leaf_batch_size: usize,
-    gumbel_mcts: bool,
+    search_kind: SearchKind,
     dirichlet_enabled: bool,
     dirichlet_alpha: f32,
     dirichlet_epsilon: f32,
     gumbel_m: usize,
-    gumbel_root_counts: bool,
     c_visit: f32,
     c_scale: f32,
     running: &AtomicBool,
@@ -729,75 +767,68 @@ fn run_mcts_search(
     legal_set: bool,
     infer: InferContext,
     variance: ClusterVarianceAtomics,
+    rounds: GumbelRoundCounters,
 ) -> McTSSearchResult {
-    let mut gumbel_state: Option<RootSelection> = None;
-    // Assigned exactly once on each of the four completion paths (Gumbel fallback,
-    // Gumbel sequential-halving, Mctx sequential-halving, PUCT); every other path
-    // returns a non-`Completed` arm.
-    let sims_served: usize;
+    // Both kinds open the same way: ONE leaf, which is the root itself, evaluated and
+    // backed up. It is charged against the budget on both arms.
+    let root_sims = match infer_and_expand(
+        tree,
+        LeafSelection::Batch(1),
+        kept_planes,
+        n_cells,
+        policy_stride,
+        has_pass_slot,
+        agg_trunk_sz,
+        legal_set,
+        infer,
+        variance,
+    ) {
+        Ok(n) => n,
+        Err(e) => return McTSSearchResult::InferenceFailed(e),
+    };
+    if root_sims == 0 || !tree.pool[0].is_expanded() {
+        return McTSSearchResult::RootExpansionFailed;
+    }
 
-    if gumbel_mcts {
-        // ── Gumbel MCTS with Sequential Halving ──
-        let root_sims = match infer_and_expand(
-            tree,
-            1,
-            kept_planes,
-            n_cells,
-            policy_stride,
-            has_pass_slot,
-            agg_trunk_sz,
-            legal_set,
-            infer,
-            variance,
-        ) {
-            Ok(n) => n,
-            Err(e) => return McTSSearchResult::InferenceFailed(e),
-        };
-        if root_sims == 0 || !tree.pool[0].is_expanded() {
-            return McTSSearchResult::RootExpansionFailed;
-        }
-        // `gumbel_root_counts` decides whether the root's OWN evaluation is one of
-        // the N. Mctx does not charge it — `num_simulations` counts the simulations
-        // that descend from an already-evaluated root — and the shipped arm does,
-        // which is half of why the halving schedule was one short of its budget.
-        //
-        // TWO COUNTERS, and the split is R335(c)'s. `sims_used` is what the BUDGET
-        // is spent against; `uncharged` is the leaf the root ate without paying for
-        // it. The reported figure below is always `sims_used + uncharged`, i.e. the
-        // leaves this search actually served — because R335(c) exists to stop the
-        // served-node figure drifting from the work done, and an uncharged root that
-        // went unreported would reintroduce exactly that drift on the other side.
-        let uncharged = if gumbel_root_counts { 0 } else { root_sims };
-        let mut sims_used = root_sims - uncharged;
-
-        // NO Dirichlet root noise under Gumbel (Gumbel-Top-k IS the mechanism).
-        if tree.gumbel_variant() == GumbelVariant::Mctx {
-            let budget = move_sims.saturating_sub(sims_used);
+    match search_kind {
+        SearchKind::Gumbel => {
+            let budget = move_sims.saturating_sub(root_sims);
             let state = MctxRootState::new(tree, gumbel_m, budget, rng);
             let mut spent = 0usize;
             while spent < budget {
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                // The root choice is re-derived EVERY simulation from the tree's own
-                // visit counts — that re-derivation is what makes the halving Mctx's
-                // and not a phase allocation.
-                let Some(child) = state.select(tree, c_visit, c_scale) else {
+                // THE ROUND, not the simulation, is the unit. Every candidate alive at the
+                // current considered visit level is descended into ONCE, and the whole set
+                // goes to the producer as one batch — `m` leaves, then `m/2`, and so on.
+                // The batch is re-derived from the tree's own visit counts each round, which
+                // is what makes the halving Mctx's and not a phase allocation.
+                let mut round = state.round_batch(tree, c_visit, c_scale);
+                if round.is_empty() {
                     break;
-                };
-                if let Err(err) = tree.set_forced_root_child(Some(child)) {
-                    let _ = tree.set_forced_root_child(None);
-                    return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
-                        "gumbel_mctx",
-                        "forced_root_child",
-                        err.to_string(),
-                    ));
                 }
-                // ONE leaf: consecutive simulations at a considered level land on
-                // DIFFERENT children by construction (see `gumbel_mctx`'s header).
+                // The budget is the last word: a round is never allowed to overspend it.
+                round.truncate(budget - spent);
+                // The indices come from the root state, but the range check is the SAME one
+                // every other forced descent takes — a candidate the root does not own is a
+                // bookkeeping defect and takes the run-fatal exit, not a silent descent into
+                // a subtree belonging to nothing (AUDIT-1 F-02).
+                for &child in &round {
+                    if let Err(err) = tree.set_forced_root_child(Some(child)) {
+                        let _ = tree.set_forced_root_child(None);
+                        return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
+                            "gumbel",
+                            "forced_root_child",
+                            err.to_string(),
+                        ));
+                    }
+                }
+                let _ = tree.set_forced_root_child(None);
+
                 let n = match infer_and_expand(
                     tree,
-                    1,
+                    LeafSelection::Round(&round),
                     kept_planes,
                     n_cells,
                     policy_stride,
@@ -808,40 +839,48 @@ fn run_mcts_search(
                     variance,
                 ) {
                     Ok(n) => n,
-                    Err(e) => {
-                        let _ = tree.set_forced_root_child(None);
-                        return McTSSearchResult::InferenceFailed(e);
-                    }
+                    Err(e) => return McTSSearchResult::InferenceFailed(e),
                 };
-                let _ = tree.set_forced_root_child(None);
                 if n == 0 {
                     break;
                 }
+                // LAW-18: the round's own width, logged where it is decided. A batching
+                // lever whose fire rate is not in the run cannot be told from a lever that
+                // is issuing one leaf per round trip.
+                rounds.round_leaves.fetch_add(n as u64, Ordering::Relaxed);
+                rounds.rounds.fetch_add(1, Ordering::Relaxed);
                 spent += n;
-                sims_used += n;
             }
-            return McTSSearchResult::Completed(
-                Some(RootSelection::Mctx(state)),
-                sims_used + uncharged,
-            );
+            McTSSearchResult::Completed(Some(state), root_sims + spent)
         }
+        SearchKind::Puct => {
+            let mut sims_done = root_sims;
 
-        let effective_m = gumbel_m.min(move_sims).min(tree.root_n_children());
-        if effective_m == 0 {
-            let mut sims_done = sims_used;
+            let is_intermediate_ply = board.moves_remaining == 1 && board.ply.index() > 0;
+            if dirichlet_enabled && !is_intermediate_ply && tree.pool[0].is_expanded() {
+                let n_ch = tree.pool[0].n_children as usize;
+                if n_ch > 0 {
+                    let noise = mantis_search::mcts::dirichlet::sample_dirichlet(
+                        dirichlet_alpha,
+                        n_ch,
+                        rng,
+                    );
+                    tree.apply_dirichlet_to_root(&noise, dirichlet_epsilon);
+                }
+            }
+
             while sims_done < move_sims {
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                // R335(c), by SYMMETRY with the PUCT loop below, not by measurement: this
-                // is the `effective_m == 0` degenerate fallback, which needs a root that is
-                // expanded with zero children, and no tier drive reaches it. Leaving one of
-                // two structurally identical loops unclamped is the exact divergence that
-                // produced this defect — the two Python heads clamped and Rust did not.
+                // R335(c): the last batch is sized to the REMAINING budget. Unclamped, this
+                // loop served 53-56 sims against a configured 50, which is what made the
+                // ledger's served-sims line disagree with the config and every "fixed nodes"
+                // claim unstatable.
                 let batch = leaf_batch_size.min(move_sims - sims_done);
                 let n = match infer_and_expand(
                     tree,
-                    batch,
+                    LeafSelection::Batch(batch),
                     kept_planes,
                     n_cells,
                     policy_stride,
@@ -859,160 +898,9 @@ fn run_mcts_search(
                 }
                 sims_done += n;
             }
-            sims_served = sims_done + uncharged;
-            gumbel_state = None;
-        } else {
-            let mut gs = GumbelSearchState::new(tree, effective_m, c_visit, c_scale, rng);
-
-            // Phase 3: Sequential Halving — allocate budget across phases.
-            let num_phases = gs.num_phases;
-            for phase in 0..num_phases {
-                if sims_used >= move_sims {
-                    break;
-                }
-                let remaining_budget = move_sims.saturating_sub(sims_used);
-                let remaining_phases = num_phases - phase;
-                let sims_per = (remaining_budget / (remaining_phases * gs.candidates.len())).max(1);
-
-                let cands = gs.candidates.clone();
-                for &cand_offset in &cands {
-                    if sims_used >= move_sims {
-                        break;
-                    }
-                    if !running.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    let child_pool_idx = gs.first_child + cand_offset as u32;
-                    // AUDIT-1 F-02: the setter validates against the root's child range now.
-                    // A candidate index the root does not own is a Gumbel bookkeeping defect,
-                    // and it takes the SAME run-fatal exit as an inference failure rather than
-                    // descending into a slot belonging to nothing.
-                    if let Err(err) = tree.set_forced_root_child(Some(child_pool_idx)) {
-                        let _ = tree.set_forced_root_child(None);
-                        return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
-                            "gumbel",
-                            "forced_root_child",
-                            err.to_string(),
-                        ));
-                    }
-
-                    let mut cand_sims = 0;
-                    while cand_sims < sims_per && sims_used < move_sims {
-                        if !running.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        // Cap batch to this candidate's remaining budget so we don't
-                        // overshoot `sims_per`. R335(c) added a second `move_sims` clamp here
-                        // and then REMOVED it as provably dead: `n <= batch <= sims_per -
-                        // cand_sims` makes each candidate spend at most `sims_per`, and
-                        // `sims_per` is `remaining_budget / (remaining_phases * candidates)`,
-                        // so the phase cannot allocate past the budget; the `.max(1)` floor
-                        // is caught by the two `sims_used >= move_sims` breaks. Measured:
-                        // identical served counts with and without it.
-                        let batch = leaf_batch_size.min(sims_per.saturating_sub(cand_sims));
-                        let n = match infer_and_expand(
-                            tree,
-                            batch.max(1),
-                            kept_planes,
-                            n_cells,
-                            policy_stride,
-                            has_pass_slot,
-                            agg_trunk_sz,
-                            legal_set,
-                            infer,
-                            variance,
-                        ) {
-                            Ok(n) => n,
-                            Err(e) => {
-                                let _ = tree.set_forced_root_child(None);
-                                return McTSSearchResult::InferenceFailed(e);
-                            }
-                        };
-                        if n == 0 {
-                            break;
-                        }
-                        cand_sims += n;
-                        sims_used += n;
-                    }
-                    let _ = tree.set_forced_root_child(None);
-                }
-
-                if gs.candidates.len() <= 1 {
-                    break;
-                }
-                gs.halve_candidates(tree);
-            }
-            let _ = tree.set_forced_root_child(None);
-            sims_served = sims_used + uncharged;
-            gumbel_state = Some(RootSelection::Legacy(gs));
+            McTSSearchResult::Completed(None, sims_done)
         }
-    } else {
-        // ── Standard PUCT search with Dirichlet root noise ──
-        let root_n = match infer_and_expand(
-            tree,
-            1,
-            kept_planes,
-            n_cells,
-            policy_stride,
-            has_pass_slot,
-            agg_trunk_sz,
-            legal_set,
-            infer,
-            variance,
-        ) {
-            Ok(n) => n,
-            Err(e) => return McTSSearchResult::InferenceFailed(e),
-        };
-        if root_n == 0 {
-            return McTSSearchResult::RootExpansionFailed;
-        }
-        let mut sims_done = root_n;
-
-        let is_intermediate_ply = board.moves_remaining == 1 && board.ply.index() > 0;
-        if dirichlet_enabled && !is_intermediate_ply && tree.pool[0].is_expanded() {
-            let n_ch = tree.pool[0].n_children as usize;
-            if n_ch > 0 {
-                let noise =
-                    mantis_search::mcts::dirichlet::sample_dirichlet(dirichlet_alpha, n_ch, rng);
-                tree.apply_dirichlet_to_root(&noise, dirichlet_epsilon);
-            }
-        }
-
-        while sims_done < move_sims {
-            if !running.load(Ordering::Relaxed) {
-                break;
-            }
-            // R335(c): the last batch is sized to the REMAINING budget. Unclamped, this
-            // loop served 53-56 sims against a configured 50, which is what made the
-            // ledger's served-sims line disagree with the config and every "fixed nodes"
-            // claim unstatable. `arena/deploy_head.py` and `selfplay/worker.py` already
-            // clamped; this was the one loop that did not.
-            let batch = leaf_batch_size.min(move_sims - sims_done);
-            let n = match infer_and_expand(
-                tree,
-                batch,
-                kept_planes,
-                n_cells,
-                policy_stride,
-                has_pass_slot,
-                agg_trunk_sz,
-                legal_set,
-                infer,
-                variance,
-            ) {
-                Ok(n) => n,
-                Err(e) => return McTSSearchResult::InferenceFailed(e),
-            };
-            if n == 0 {
-                break;
-            }
-            sims_done += n;
-        }
-        sims_served = sims_done;
     }
-
-    McTSSearchResult::Completed(gumbel_state, sims_served)
 }
 
 // ── Per-move dispatcher (warm/HOT path) ─────────────────────────────────────
@@ -1059,6 +947,12 @@ pub(crate) fn play_one_move(
     } else {
         (true, ctx.game_sims)
     };
+    // LAW-18, counted HERE — at the draw, before anything else can move the flag.
+    if move_is_full_search {
+        accumulators.pcr_full_moves.fetch_add(1, Ordering::Relaxed);
+    } else {
+        accumulators.pcr_quick_moves.fetch_add(1, Ordering::Relaxed);
+    }
 
     // ── MCTS Search ──
     tree.new_game(board.clone());
@@ -1068,12 +962,11 @@ pub(crate) fn play_one_move(
         board,
         move_sims,
         ctx.leaf_batch_size,
-        ctx.gumbel_mcts,
+        ctx.search_kind,
         ctx.dirichlet_enabled,
         ctx.dirichlet_alpha,
         ctx.dirichlet_epsilon,
         ctx.gumbel_m,
-        ctx.gumbel_root_counts,
         ctx.c_visit,
         ctx.c_scale,
         running,
@@ -1086,6 +979,10 @@ pub(crate) fn play_one_move(
         legal_set,
         infer,
         variance,
+        GumbelRoundCounters {
+            round_leaves: accumulators.gumbel_round_leaves,
+            rounds: accumulators.gumbel_rounds,
+        },
     ) {
         McTSSearchResult::Completed(gs, sims_served) => {
             // R335(c): the per-search visit count, as a MAX rather than a mean — a mean
@@ -1160,8 +1057,9 @@ pub(crate) fn play_one_move(
         }
     }
 
-    // Completed Q-values: compute improved policy for the training target.
-    let mut target_policy = if ctx.completed_q_values {
+    // The training target's semantics are the search kind's own answer — there is no
+    // second flag that can disagree with the search that produced the tree.
+    let mut target_policy = if ctx.search_kind.completed_q_target() {
         if legal_set {
             MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.c_visit, ctx.c_scale))
         } else {
@@ -1268,7 +1166,7 @@ pub(crate) fn play_one_move(
             n_cells,
             agg_trunk_sz,
             ctx.is_fast_game,
-            ctx.completed_q_values,
+            ctx.search_kind.completed_q_target(),
             policy_stride,
             has_pass_slot,
             &target_policy,
@@ -1416,7 +1314,7 @@ fn select_move(
     board: &Board,
     move_history: &[(i32, i32)],
     policy: &MovePolicy,
-    gumbel_state: Option<RootSelection>,
+    gumbel_state: Option<MctxRootState>,
     ctx: MovePlayContext,
     agg_trunk_sz: i32,
     tree: &MCTSTree,
@@ -1464,14 +1362,10 @@ fn select_move(
             ctx.game_start_ply,
             ctx.gumbel_explore_moves,
         );
+    // Mctx's final action: the highest-scoring of the MOST-VISITED children, which is
+    // Sequential Halving's answer rather than a visit-count sample.
     let winner_pool = if use_gumbel_winner {
-        match gumbel_state {
-            Some(RootSelection::Legacy(mut gs)) => Some(gs.best_action_pool_idx(tree)),
-            // Mctx's final action: the highest-scoring of the MOST-VISITED
-            // children, which is Sequential Halving's answer rather than a sample.
-            Some(RootSelection::Mctx(state)) => state.best_action(tree, ctx.c_visit, ctx.c_scale),
-            None => None,
-        }
+        gumbel_state.and_then(|state| state.best_action(tree, ctx.c_visit, ctx.c_scale))
     } else {
         None
     };

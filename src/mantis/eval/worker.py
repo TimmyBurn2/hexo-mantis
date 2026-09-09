@@ -358,7 +358,7 @@ def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
 
 def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int,
-    c_visit: float, c_scale: float,
+    c_visit: float, c_scale: float, search_kind: str, gumbel_m: int, gumbel_seed: int,
 ) -> DeployHeadPlayer:
     """CLOSED match on the DECLARED representation — never on a model attribute, and
     never with a dense arm as the fallthrough. An unregistered representation is the
@@ -371,11 +371,15 @@ def build_candidate_player(
     if spec.representation == "graph":
         return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims,
                                 leaf_batch_size=leaf_batch_size,
-                                c_visit=c_visit, c_scale=c_scale)
+                                c_visit=c_visit, c_scale=c_scale,
+                                search_kind=search_kind, gumbel_m=gumbel_m,
+                                gumbel_seed=gumbel_seed)
     if spec.representation == "grid":
         return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims,
                                 c_visit=c_visit, c_scale=c_scale,
-                                leaf_batch_size=leaf_batch_size)
+                                leaf_batch_size=leaf_batch_size,
+                                search_kind=search_kind, gumbel_m=gumbel_m,
+                                gumbel_seed=gumbel_seed)
     raise EvalDecodeUnsupportedError(
         f"encoding {spec.name!r} declares representation={spec.representation!r}, which "
         f"this eval worker's decode entrance does not implement. The implemented arms are "
@@ -451,6 +455,7 @@ def _play_floor_probe(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
         c_visit=spec.c_visit, c_scale=spec.c_scale,
+        search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(
         bot="random", variant=FLOOR_PROBE_VARIANT, model_sims=spec.random_model_sims,
@@ -529,11 +534,15 @@ def _play_gate_block(
                     candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
                     leaf_batch_size=spec.leaf_batch_size,
                     c_visit=spec.c_visit, c_scale=spec.c_scale,
+                    search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
+                    gumbel_seed=spec.seed_base,
                 ),
                 build_candidate_player(
                     best_engine, spec.gate.deploy_sims, spec=encoding_spec,
                     leaf_batch_size=spec.leaf_batch_size,
                     c_visit=spec.c_visit, c_scale=spec.c_scale,
+                    search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
+                    gumbel_seed=spec.seed_base,
                 ),
             )
 
@@ -617,6 +626,7 @@ def _play_rung_block(
         candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
         c_visit=spec.c_visit, c_scale=spec.c_scale,
+        search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
@@ -650,6 +660,7 @@ def _play_random_floor(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
         c_visit=spec.c_visit, c_scale=spec.c_scale,
+        search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(
         bot="random", variant="raw", model_sims=spec.random_model_sims,

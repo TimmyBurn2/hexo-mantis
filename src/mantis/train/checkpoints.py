@@ -858,6 +858,11 @@ def strip_and_restamp(
         # payload was never measured under, which is the one thing R308(g)(i) reserves.
         "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
+        # `search.kind` is REQUIRED and has no default, so the synthetic payload states one.
+        # `puct` is the value that agrees with this payload's own
+        # `train.policy_target: raw_visit_distribution` — the two are one decision, and a
+        # strip artifact that declared a search it did not run would be a stamp that lies.
+        "search": {"kind": "puct"},
         # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
         # This synthetic config exists only to satisfy the schema-validate-on-write gate
         # for a strip/restamp utility payload — placeholder values, same posture as the
@@ -928,7 +933,6 @@ def strip_and_restamp(
             "mixing_min_w": 0.0, "mixing_decay_steps": 1.0, "hard_gn_threshold": 1e9,
             "hard_gn_min_steps": 3, "terminal_eval_enabled": True, "bot_batch_share": 0.0,
             "selfplay_stall_timeout_sec": 1800.0,
-            "completed_q_values": False,
             "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
             "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
             "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
@@ -942,9 +946,8 @@ def strip_and_restamp(
         # section. Placeholder values, same posture as the eval block above.
         "selfplay": {
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-            "inference_pool_size": None, "completed_q_values": False, "c_visit": 50.0,
-            "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16, "gumbel_explore_moves": 10,
-            "gumbel_variant": "legacy", "gumbel_root_counts": True,
+            "inference_pool_size": None, "c_visit": 50.0,
+            "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
             "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
             "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
             "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
@@ -1134,18 +1137,15 @@ _IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
 #: than a widened `_IDENTITY_LEAVES`: that tuple is compared against the artifact's STAMP for
 #: the two leaves a stamp carries, and these three have no stamp to fall back on.
 #:
-#: `selfplay.gumbel_variant` is DELIBERATELY ABSENT, and the omission is the considered half
-#: of this guard. It changes a target's QUALITY, not its meaning — a visit distribution from a
-#: corrected search is still a visit distribution — which puts it with `mcts.n_simulations`,
-#: `c_puct`, `dirichlet_alpha` and the playout-cap knobs, none of which are resume-guarded and
-#: some of which a run legitimately varies mid-flight. Guarding one search knob and not its
-#: siblings would assert a distinction that does not exist. What the corrected dialect CANNOT
-#: do is widen a stored row's support: that is measured in
-#: `crates/mantis-selfplay/tests/target_support_is_sims_bounded.rs`.
+#: `search.kind` IS one of them, and it is the one that decides the other. A run that
+#: resumes a ring filled under `puct` while itself searching `gumbel` restores rows that are
+#: visit distributions and applies the completed-Q loss to them; the reverse restores
+#: completed-Q rows and scores them as visit counts. `train.policy_target` is the leaf a
+#: checkpoint STAMP carries, so both are compared: the stamp is the artifact's own record,
+#: and the kind is what produced it.
 _TARGET_SEMANTICS_LEAVES: tuple[tuple[str, str], ...] = (
     ("train", "policy_target"),
-    ("train", "completed_q_values"),
-    ("selfplay", "completed_q_values"),
+    ("search", "kind"),
 )
 
 
@@ -1189,8 +1189,8 @@ def _refuse_target_semantics_drift(
             + "; ".join(drift)
             + ". A resume restores the ring (R345(b)(3)), so the old rows and the new ones "
             "would carry different meanings under one loss, and a row records no provenance "
-            "that could tell them apart. These three leaves are ONE decision at mint "
-            "(`_policy_target_completed_q_consistency`); a resume is not a place to re-take "
+            "that could tell them apart. These leaves are ONE decision at mint "
+            "(`_policy_target_matches_the_search_kind`); a resume is not a place to re-take "
             "it. Resume with the checkpoint's target semantics, or start a new run."
         )
 

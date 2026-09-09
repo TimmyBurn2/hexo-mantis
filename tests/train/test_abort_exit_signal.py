@@ -106,7 +106,7 @@ class _Pool:
 
     def __init__(self, *, draws: int = 0, completed: int = 0) -> None:
         self.games_completed = 0
-        self.gumbel_mcts = True
+        self.search_kind = "gumbel"
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

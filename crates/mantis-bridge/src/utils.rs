@@ -192,21 +192,21 @@ pub fn mcts_max_armed_sims() -> usize {
     mantis_search::MAX_ARMED_SIMS
 }
 
-/// The same bound for the CORRECTED Gumbel dialect, which spends `MAX_ROOT_CHILDREN` slots
-/// on its root instead of `MAX_CHILDREN_PER_NODE` and therefore has a lower ceiling.
+/// The same bound under `search.kind: gumbel`, which spends `MAX_ROOT_CHILDREN` slots on
+/// its root instead of `MAX_CHILDREN_PER_NODE` and therefore has a lower ceiling.
 ///
 /// Exported for the same reason as its sibling: the schema must be able to refuse an
 /// over-budget Gumbel config at MINT rather than at boot (R255/ADJ-D34's inversion), and it
 /// cannot do that against a number it does not have.
 #[pyfunction]
-pub fn mcts_max_armed_sims_mctx() -> usize {
-    mantis_search::MAX_ARMED_SIMS_MCTX
+pub fn mcts_max_armed_sims_gumbel() -> usize {
+    mantis_search::MAX_ARMED_SIMS_GUMBEL
 }
 
 /// Register the utility free fns into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mcts_max_armed_sims, m)?)?;
-    m.add_function(wrap_pyfunction!(mcts_max_armed_sims_mctx, m)?)?;
+    m.add_function(wrap_pyfunction!(mcts_max_armed_sims_gumbel, m)?)?;
     m.add_function(wrap_pyfunction!(apply_symmetries_batch, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;

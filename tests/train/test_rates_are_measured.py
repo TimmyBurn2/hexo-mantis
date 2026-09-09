@@ -149,7 +149,7 @@ class _StubPool:
 
     sims_per_sec = None
     avg_game_length = None
-    gumbel_mcts = False
+    search_kind = "puct"
     x_winrate = 0.0
     o_winrate = 0.0
     draw_rate = 0.0

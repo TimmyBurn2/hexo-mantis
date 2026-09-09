@@ -1,19 +1,18 @@
-"""SC-A1 oracle — RunConfig cross-section validator: `train.policy_target` /
-`train.completed_q_values` / `selfplay.completed_q_values` must agree (DESIGN_P2.md §2 /
-PREREG_P2.md suite #3).
+"""RunConfig cross-section validator: `train.policy_target` must name the target
+`search.kind` produces.
 
 DEVIATION FROM PREREG PATH (logged in ORACLE_NOTES_P2.md): PREREG names this suite's home
 as `tests/config/test_schema.py` (an existing file). ORACLE-WRITE's writable surface is
 NEW files only — this suite therefore lives in its own new file rather than being folded
 into the existing one; IMPL may merge it in at port time.
 
-RED-at-import until IMPL lands `TrainConfig`/the expanded `SelfplayConfig` and the
-`RunConfig`-level cross-section `model_validator`. The invariant (§2):
-`(train.policy_target == "raw_visit_distribution") == (not train.completed_q_values) ==
-(not selfplay.completed_q_values)` — today all three sides pin to the single live combo
-(`raw_visit_distribution` / `False` / `False`), so the validator is inert at mint time and
-only fires the day one flag flips without the others (the exact "two knobs that must agree,
-kept in sync only by convention" defect this validator exists to kill).
+THE INVARIANT MOVED, and it got stronger. It used to be a three-way agreement between
+`train.policy_target` and a `completed_q_values` boolean on each of two sections — three
+independently-editable knobs kept in step by a validator. Both booleans are DELETED; the
+producer is now `search.kind`, and the rule is `policy_target == the target that kind
+builds`. Two things follow. The disagreement is now expressible in exactly one shape
+instead of seven, and the surviving key is the one a CHECKPOINT STAMP carries, so a resume
+still has something to compare a restored ring against.
 """
 from __future__ import annotations
 
@@ -66,12 +65,12 @@ def _train_block(**over: object) -> dict:
     return dict(_MINTED_TRAIN, **over)
 
 
-def _selfplay_block(*, completed_q_values: bool = False, n_simulations: int = 50) -> dict:
+def _selfplay_block(*, n_simulations: int = 50) -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "completed_q_values": completed_q_values,
-        "c_visit": 50.0, "c_scale": 1.0, "gumbel_mcts": False, "gumbel_m": 16,
-        "gumbel_explore_moves": 10, "gumbel_variant": "legacy", "gumbel_root_counts": True,
+        "inference_pool_size": None,
+        "c_visit": 50.0, "c_scale": 1.0, "gumbel_m": 16,
+        "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
         "rotation_enabled": True, "forced_win_policy_enabled": False,
         "forced_win_policy_depth": 2, "forced_win_policy_weight": 1.0, "solver_enabled": False,
@@ -130,7 +129,7 @@ def _monitor_block() -> dict:
 def _payload(
     *,
     train_over: dict | None = None,
-    selfplay_completed_q: bool = False,
+    search_kind: str = "puct",
     n_simulations: int = 50,
 ) -> dict:
     return {
@@ -143,88 +142,74 @@ def _payload(
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+        "search": {"kind": search_kind},
         "eval": _eval_block(),
         "train": _train_block(**(train_over or {})),
-        "selfplay": _selfplay_block(
-            completed_q_values=selfplay_completed_q, n_simulations=n_simulations
-        ),
+        "selfplay": _selfplay_block(n_simulations=n_simulations),
         "inference": _inference_block(),
         "monitor": _monitor_block(),
     }
 
 
-def test_pinned_single_variant_combo_constructs_cleanly():
+def test_the_shipped_combo_constructs_cleanly():
     cfg = RunConfig.model_validate(_payload())
+    assert cfg.search.kind == "puct"
     assert cfg.train.policy_target == "raw_visit_distribution"
-    assert cfg.train.completed_q_values is False
-    assert cfg.selfplay.completed_q_values is False
 
 
-def test_train_completed_q_values_true_disagrees_with_policy_target_raises():
-    with pytest.raises(ValidationError):
-        RunConfig.model_validate(_payload(train_over={"completed_q_values": True}))
-
-
-def test_selfplay_completed_q_values_true_disagrees_with_train_raises():
-    with pytest.raises(ValidationError):
-        RunConfig.model_validate(_payload(selfplay_completed_q=True))
-
-
-def test_train_and_selfplay_both_flipped_still_disagrees_with_policy_target_raises():
-    # Flipping BOTH completed_q_values flags while `policy_target` stays on the raw-visit
-    # member still disagrees. GUMBEL-REPAIR-1 gave the Literal a second member, so this is no
-    # longer true BY CONSTRUCTION — the combination is now expressible and the validator is
-    # what refuses it, which is a stronger statement than the one this test used to make.
-    with pytest.raises(ValidationError):
+def test_the_completed_target_under_puct_is_refused():
+    """A PUCT search exports the visit distribution; declaring the completed target trains
+    the KL loss on visit-count rows."""
+    with pytest.raises(ValidationError, match="policy_target"):
         RunConfig.model_validate(
-            _payload(train_over={"completed_q_values": True}, selfplay_completed_q=True)
+            _payload(train_over={"policy_target": "completed_improved_policy"})
         )
 
 
-def test_the_completed_target_member_requires_both_completed_q_flags():
-    """⊕ GUMBEL-REPAIR-1 item 6 — the widened Literal's own consistency.
+def test_the_raw_target_under_gumbel_is_refused():
+    """The reverse, and it is the one the deleted booleans could never express cleanly: a
+    Gumbel search exports the completed-Q improved policy, and scoring it as a visit
+    distribution applies the wrong loss to every row."""
+    # A GRAPH config under `gumbel` is refused EARLIER, by the record-format density check
+    # (see below), so the pairing rule is exercised on the GRID lineage where no HEXG visit
+    # slot exists to constrain the target's support.
+    payload = _payload(search_kind="gumbel")
+    payload["identity"] = {"encoding": "v6", "representation": "grid"}
+    payload["inference"].pop("fused_graph_caps", None)
+    payload["train"].pop("microbatch_caps", None)
+    with pytest.raises(ValidationError, match="policy_target"):
+        RunConfig.model_validate(payload)
 
-    `completed_improved_policy` is the target the corrected Gumbel arm exports, and it is
-    only coherent with the completed-Q producer and the completed-Q loss BOTH on. The three
-    still move together; there is simply a second combination they can move to."""
-    # AT 50 SIMS THIS IS REFUSED, and by the OTHER guard: a graph run's HEXG visit slot is
-    # derived from the sims regime (57 at 50) and the completed target's support is
-    # child-count-wide, so the record format cannot carry it. That refusal is item 6's
-    # subject and is asserted on its own terms below; here the regime is raised until the
-    # slot fits, so what is being tested is the cross-section rule and not the capacity one.
-    both_on = RunConfig.model_validate(
-        _payload(
-            train_over={"policy_target": "completed_improved_policy", "completed_q_values": True},
-            selfplay_completed_q=True,
-            n_simulations=192,
-        )
+
+def test_the_gumbel_kind_and_the_completed_target_agree_on_grid():
+    payload = _payload(
+        search_kind="gumbel",
+        train_over={"policy_target": "completed_improved_policy"},
     )
-    assert both_on.train.policy_target == "completed_improved_policy"
+    payload["identity"] = {"encoding": "v6", "representation": "grid"}
+    payload["inference"].pop("fused_graph_caps", None)
+    payload["train"].pop("microbatch_caps", None)
+    cfg = RunConfig.model_validate(payload)
+    assert cfg.search.kind == "gumbel"
+    assert cfg.train.policy_target == "completed_improved_policy"
 
-    with pytest.raises(ValidationError, match="visit capacity"):
+
+def test_the_gumbel_kind_on_a_graph_run_is_refused_by_the_record_format():
+    """THE STANDING BLOCKER, pinned so it is a stated gap rather than a surprise.
+
+    A graph run under `gumbel` exports a target whose support is the LEGAL SET, and the
+    HEXG record's visit slot is derived from the sims regime — which bounds visits, not
+    cells. No sims regime retires the refusal, which is what makes this a MINT decision
+    (a minted slot bound) rather than a config a bigger budget could reach.
+    """
+    with pytest.raises(ValidationError, match="FULL legal set"):
         RunConfig.model_validate(
             _payload(
-                train_over={
-                    "policy_target": "completed_improved_policy",
-                    "completed_q_values": True,
-                },
-                selfplay_completed_q=True,
+                search_kind="gumbel",
+                train_over={"policy_target": "completed_improved_policy"},
+                n_simulations=192,
             )
         )
-
-    for train_over, selfplay_completed_q in (
-        ({"policy_target": "completed_improved_policy"}, False),
-        ({"policy_target": "completed_improved_policy", "completed_q_values": True}, False),
-        ({"policy_target": "completed_improved_policy"}, True),
-    ):
-        with pytest.raises(ValidationError, match="policy_target"):
-            RunConfig.model_validate(
-                _payload(
-                    train_over=train_over,
-                    selfplay_completed_q=selfplay_completed_q,
-                    n_simulations=192,
-                )
-            )
 
 
 def test_out_of_enum_value_target_rejected_by_literal_before_cross_section_validator():

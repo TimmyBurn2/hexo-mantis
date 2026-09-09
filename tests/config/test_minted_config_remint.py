@@ -177,14 +177,13 @@ _ADDED_LEAVES = {
     # non-binding values are each asserted on their own terms.
     "inference.fused_graph_caps.max_fused_edges",
     "inference.fused_graph_caps.max_fused_nodes",
-    # GUMBEL-REPAIR-1: two REQUIRED schema leaves, so every config gains both and the
-    # re-mint stays purely ADDITIVE. The VALUES are the SHIPPED behaviour restated —
-    # `legacy` is the dialect every config already ran and `true` is the root-charge it
-    # already applied — so nothing minted moves and no run changes. That is the point:
-    # the corrected Gumbel arm reaches no config until R345(d)'s frontier has compared
-    # it, and this instrument is what would catch an arming that arrived without one.
-    "selfplay.gumbel_variant",
-    "selfplay.gumbel_root_counts",
+    # GUMBEL-2: ONE required leaf in a NEW top-level section, `search.kind`, minted `puct`
+    # in every config — the search every one of them already ran. It REPLACES four leaves
+    # that are deleted with it (see `_REMOVED_LEAVES`), so this is the first re-mint that
+    # is not purely additive on the KEY axis. The value is the shipped behaviour restated,
+    # so nothing minted moves and no run changes; arming `gumbel` is a mint-prereg row and
+    # this instrument is what would catch an arming that arrived without one.
+    "search.kind",
 }
 
 #: The subset of `_ADDED_LEAVES` that is ARCH-SCOPED (R322(d)) — added only to the configs
@@ -249,13 +248,35 @@ def _added_leaves_for(name: str) -> frozenset[str]:
 #: (WP12-R, assigned to its dispatcher by R183(a); grounds R116/LAW-08 + the F-CS-2
 #: measurement that the replay-buffer save is production-dead on every leg). A closed set of
 #: one. Widening it is a ruling, not an edit.
-_REMOVED_LEAVES = {"train.buffer_save_interval"}
+_REMOVED_LEAVES = {
+    "train.buffer_save_interval",
+    # GUMBEL-2: three of the four leaves `search.kind` REPLACES. The fourth
+    # (`selfplay.gumbel_variant`) and the separately-deleted `selfplay.gumbel_root_counts`
+    # arrived AFTER the `b482243` baseline, so against THIS baseline they are not removals
+    # at all — they are additions that no longer happen, the same shape as the arch-scoped
+    # narrowing below. Three ruled deletions here, and the set stays CLOSED: a fourth is a
+    # ruling, not an edit.
+    "train.completed_q_values",
+    "selfplay.completed_q_values",
+    "selfplay.gumbel_mcts",
+}
 
 #: The one deleted LINE, byte-exact, that the textual half will tolerate. Every minted config
 #: writes this leaf identically (`yaml.safe_dump`, two-space indent, value `0`), so pinning
 #: the text costs nothing and buys the guarantee that the tolerated deletion is the ruled one
 #: and not merely a deletion of the same SIZE somewhere else in the file.
-_REMOVED_LINES = ["  buffer_save_interval: 0"]
+_REMOVED_LINES = [
+    "  buffer_save_interval: 0",
+    # Each written identically by `yaml.safe_dump` at two-space indent in every config, so
+    # pinning the text costs nothing and buys the guarantee that the tolerated deletions are
+    # the ruled ones and not deletions of the same SIZE somewhere else in the file.
+    # `completed_q_values: false` is ONE spelling for TWO deleted leaves (`train` and
+    # `selfplay` carry the same key name), so it appears TWICE — this is a multiset in
+    # BASELINE ORDER, and the count is part of what is pinned.
+    "  completed_q_values: false",
+    "  completed_q_values: false",
+    "  gumbel_mcts: false",
+]
 
 
 #: Exactly which BODY leaves a re-mint may MOVE, by (config, dotted key). A closed set of one,
@@ -540,9 +561,12 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
     is the provenance a mint record is reconstructed from. A value map cannot see a lost
     header line, a reordered section, or a rewritten comment.
 
-    A `delete` is tolerated only when its removed lines are EXACTLY `_REMOVED_LINES` — same
-    text, same count — so a second dropped line, a dropped header line, or a different line
-    of the same length all still red.
+    A `delete` is tolerated only when every line it removes is one of `_REMOVED_LINES`, AND
+    the run's total deleted multiset is EXACTLY `_REMOVED_LINES` — same text, same count, in
+    baseline order — so a second dropped line, a dropped header line, or a different line of
+    the same length all still red. The per-op test is a membership rather than an equality
+    because the ruled deletions no longer sit in one contiguous block: they are spread across
+    the `train` and `selfplay` sections, which `difflib` reports as separate ops.
 
     `replace` was forbidden outright until R187, and it is not open now: it is tolerated only
     where every replaced line satisfies `_is_ruled_reheader`, which requires a named
@@ -562,7 +586,7 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
         (tag, baseline[i1:i2], live[j1:j2])
         for tag, i1, i2, j1, j2 in ops
         if not (tag in ("equal", "insert")
-                or (tag == "delete" and baseline[i1:i2] == _REMOVED_LINES)
+                or (tag == "delete" and all(line in _REMOVED_LINES for line in baseline[i1:i2]))
                 or (tag == "replace"
                     and _replace_is_reheaders_plus_insertions(
                         name, baseline[i1:i2], live[j1:j2])))
@@ -574,7 +598,8 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
     )
     deleted = [line for tag, i1, i2, _, _ in ops if tag == "delete" for line in baseline[i1:i2]]
     assert deleted == _REMOVED_LINES, (
-        f"{name}: exactly one line may be deleted, once — R178(a)'s; got {deleted}"
+        f"{name}: exactly the ruled lines may be deleted, each exactly once and in baseline "
+        f"order; got {deleted}"
     )
 
 
@@ -583,15 +608,25 @@ def test_the_permitted_deletion_is_exactly_one_named_line() -> None:
     ORDERED one, and the tolerance must never become "deletions are fine".
 
     MUTATION THAT REDS IT: a later phase that needs its own key gone and widens
-    `_REMOVED_LEAVES` / `_REMOVED_LINES` instead of getting a ruling. The sets are closed at
-    one element each and the leaf and the line must name the SAME key, so a widened allowance
-    cannot pass as a maintenance edit."""
-    assert _REMOVED_LEAVES == {"train.buffer_save_interval"}, (
-        "the ruled deletion set is R178(a)'s and is closed at one leaf; widening it is a "
-        "ruling (R183(a) assigned this one deletion, not a deletion policy)"
+    `_REMOVED_LEAVES` / `_REMOVED_LINES` instead of getting a ruling. Both sets are CLOSED
+    and every leaf must have its own minted line in the other, so a widened allowance cannot
+    pass as a maintenance edit."""
+    assert _REMOVED_LEAVES == {
+        "train.buffer_save_interval",       # R178(a)
+        "train.completed_q_values",         # GUMBEL-2
+        "selfplay.completed_q_values",      # GUMBEL-2
+        "selfplay.gumbel_mcts",             # GUMBEL-2
+    }, (
+        "the ruled deletion set is R178(a)'s one leaf plus GUMBEL-2's three; widening it is "
+        "a ruling, not an edit"
     )
-    assert _REMOVED_LINES == ["  buffer_save_interval: 0"], (
-        "the tolerated line must be the ruled leaf's own minted line"
+    # DERIVED from the leaves rather than transcribed: every ruled leaf's own key must have a
+    # tolerated line, and no tolerated line may name a key nobody ruled.
+    ruled_keys = {leaf.split(".")[-1] for leaf in _REMOVED_LEAVES}
+    line_keys = {line.strip().split(":")[0] for line in _REMOVED_LINES}
+    assert line_keys == ruled_keys, (
+        f"the tolerated lines must name exactly the ruled leaves; lines={sorted(line_keys)} "
+        f"leaves={sorted(ruled_keys)}"
     )
     assert not (_REMOVED_LEAVES & _ADDED_LEAVES), (
         "a leaf cannot be both added and removed by one re-mint"
@@ -624,9 +659,10 @@ def test_the_arch_scoped_narrowing_is_exactly_the_schema_partition() -> None:
         "the narrowing names leaves the re-mint never added; it can only subtract from "
         f"`_ADDED_LEAVES`, and {sorted(narrowed - _ADDED_LEAVES)} is outside it"
     )
-    assert _REMOVED_LEAVES == {"train.buffer_save_interval"}, (
-        "R322(d) is a NARROWING of an addition, not a deletion — it must not have widened the "
-        "ruled-deletion set on its way through"
+    assert not (narrowed & _REMOVED_LEAVES), (
+        "R322(d) is a NARROWING of an addition, not a deletion — an arch-scoped block must "
+        "not be reaching into the ruled-deletion set on its way through; "
+        f"{sorted(narrowed & _REMOVED_LEAVES)} appears in both"
     )
     graph = {n for n in _CONFIGS if load_config(_LIVE / n).identity.representation == "graph"}
     assert graph and graph != set(_CONFIGS), (

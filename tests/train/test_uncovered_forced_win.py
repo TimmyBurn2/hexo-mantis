@@ -52,7 +52,7 @@ class _Sink:
 
 
 class _Pool:
-    gumbel_mcts = False
+    search_kind = "puct"
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4

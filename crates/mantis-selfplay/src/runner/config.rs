@@ -22,7 +22,7 @@
 //! defaults are forbidden). P-01 pins that no field is dropped/mismerged and
 //! that the radius-jitter field is absent.
 
-use mantis_search::GumbelVariant;
+use mantis_search::SearchKind;
 
 /// Configuration for [`super::SelfPlayRunner`] — native (pyo3-free) fold of the
 /// pre-cycle-3 kwarg constructor surface, MINUS the killed knobs (D7/D10) and the
@@ -57,17 +57,14 @@ pub struct SelfPlayRunnerConfig {
     pub zoi_enabled: bool,
     pub zoi_lookback: usize,
     pub zoi_margin: i32,
-    pub completed_q_values: bool,
     pub c_visit: f32,
     pub c_scale: f32,
-    pub gumbel_mcts: bool,
+    /// Which search the workers run (`search.kind`). THE one key: it selects the root
+    /// mechanism, the interior selector AND the exported target's semantics, which used
+    /// to be four independently-editable flags that could disagree about what ran.
+    pub search_kind: SearchKind,
     pub gumbel_m: usize,
     pub gumbel_explore_moves: usize,
-    /// Which Gumbel dialect the workers run (`selfplay.gumbel_variant`).
-    pub gumbel_variant: GumbelVariant,
-    /// Whether the root's own evaluation is charged against `n_simulations`
-    /// (`selfplay.gumbel_root_counts`). `true` is the shipped behaviour.
-    pub gumbel_root_counts: bool,
     pub dirichlet_alpha: f32,
     pub dirichlet_epsilon: f32,
     pub dirichlet_enabled: bool,
@@ -131,14 +128,11 @@ impl Default for SelfPlayRunnerConfig {
             zoi_enabled: false,
             zoi_lookback: 16,
             zoi_margin: 5,
-            completed_q_values: false,
             c_visit: 50.0,
             c_scale: 1.0,
-            gumbel_mcts: false,
+            search_kind: SearchKind::Puct,
             gumbel_m: 16,
             gumbel_explore_moves: 10,
-            gumbel_variant: GumbelVariant::Legacy,
-            gumbel_root_counts: true,
             dirichlet_alpha: 0.3,
             dirichlet_epsilon: 0.25,
             dirichlet_enabled: true,

@@ -22,18 +22,18 @@
 mod backup;
 mod completed_q;
 pub mod dirichlet;
-pub mod gumbel;
 pub mod gumbel_mctx;
+pub mod kind;
 pub mod node;
 pub mod policy;
-pub mod seq_halving;
 mod selection;
+pub mod seq_halving;
 
 pub use backup::{
     omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
 };
-pub use gumbel::GumbelVariant;
 pub use gumbel_mctx::MctxRootState;
+pub use kind::SearchKind;
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
 pub use selection::{ForcedChildOutOfRange, SelectionDesync};
 
@@ -72,39 +72,29 @@ pub const MAX_CHILDREN_PER_NODE: usize = 192;
 /// own indices and must not continue. This constant is what stops a config reaching it.
 pub const MAX_ARMED_SIMS: usize = MAX_NODES / (4 * MAX_CHILDREN_PER_NODE);
 
-/// Root-only child cap under the Mctx dialect: the root expands its FULL legal set.
+/// Root-only child cap under `SearchKind::Gumbel`: the root expands its FULL legal set.
 ///
-/// GUMBEL-REPAIR-1 item 1. Gumbel-Top-k is a SAMPLER over the policy — Mctx perturbs
-/// every legal action's logit and takes the top m — so drawing it over the top-192-prior
-/// children instead is not an approximation of that sampler, it is a different one: an
-/// action outside the prior's top 192 can never be sampled however large its Gumbel draw.
-///
-/// WHY THIS IS SEPARABLE FROM THE HALTED GLOBAL CAP, and it is the whole reason this
-/// constant exists rather than a change to `MAX_CHILDREN_PER_NODE`. R345(b)(5) halted the
-/// global raise on three grounds (`R345_LEG5_ROOT_CAP_MEASUREMENT.md`), and the ROOT is
-/// outside all three. The root is expanded ONCE per search, not once per leaf, so it
-/// spends its children once rather than `4 x sims` times; the omitted-prior witness the
-/// clause asks for is achievable at a root and provably not at every leaf; and gated on
-/// the Mctx dialect it moves no shipped search, because `gumbel_mcts` is false in every
-/// config. `MAX_CHILDREN_PER_NODE` is untouched and its decision stays the architect's.
+/// Gumbel-Top-k is a SAMPLER over the policy — every legal action's logit is perturbed and
+/// the top m taken — so drawing it over the top-`MAX_CHILDREN_PER_NODE`-prior children
+/// instead is not an approximation of that sampler, it is a different one: an action
+/// outside the prior's top K can never be sampled however large its Gumbel draw.
 ///
 /// THE BOUND IS `u16`, not a tuning choice: `Node::n_children` is a `u16`, so a root with
 /// more legal moves than this could not record its own child count. The legal set is the
 /// union of radius-r balls around every stone minus the occupied cells and grows with the
-/// stone count — measured to 489 under clustered play and 8 142 under sprawling play, both
-/// far below this — so the cap binds only in a regime no measured game reaches, and when
-/// it does bind the omitted-prior telemetry says so rather than the count wrapping.
+/// stone count — it is NOT a constant: measured at 355 median and 8 142 maximum at radius
+/// 8 — so the cap binds only in a regime no measured game reaches, and when it does bind
+/// the omitted-prior telemetry says so rather than the count wrapping.
 pub const MAX_ROOT_CHILDREN: usize = u16::MAX as usize;
 
-/// `MAX_ARMED_SIMS` for the Mctx dialect, which spends up to `MAX_ROOT_CHILDREN` on its
-/// root instead of `MAX_CHILDREN_PER_NODE`.
+/// `MAX_ARMED_SIMS` under `SearchKind::Gumbel`, which spends up to `MAX_ROOT_CHILDREN` on
+/// its root instead of `MAX_CHILDREN_PER_NODE`.
 ///
-/// A SECOND bound rather than a smaller shared one, deliberately. Folding the root's
-/// slots into `MAX_ARMED_SIMS` would tighten the ceiling every EXISTING config is
-/// validated against (1302 -> 1216) — a change to the mint surface, made by a repair
-/// packet, for a dialect nothing arms. Under the legacy dialect the root spends
-/// `MAX_CHILDREN_PER_NODE` like any other node and the original bound is exact.
-pub const MAX_ARMED_SIMS_MCTX: usize =
+/// A SECOND bound rather than a smaller shared one: folding the root's slots into
+/// `MAX_ARMED_SIMS` would tighten the ceiling every PUCT config is validated against, and
+/// a PUCT root spends `MAX_CHILDREN_PER_NODE` like any other node, where the original
+/// bound is exact.
+pub const MAX_ARMED_SIMS_GUMBEL: usize =
     (MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE);
 
 use fxhash::FxHashMap;
@@ -156,10 +146,9 @@ pub struct MCTSTree {
     /// Atomic (not Cell) because the FFI layer wraps MCTSTree in a Send+Sync
     /// handle in the bridge crate; Cell is `!Sync` and would break that bound.
     pub quiescence_fire_count: AtomicU64,
-    /// Which Gumbel dialect this tree's completed-Q surfaces follow. Set once per
-    /// worker (`configure_gumbel`), never per search. `Legacy` leaves every
-    /// completed-Q surface byte-identical to the shipped arm.
-    pub(crate) gumbel_variant: GumbelVariant,
+    /// Which search this tree runs. Set once per worker (`configure_search`), never
+    /// per search.
+    pub(crate) kind: SearchKind,
     /// Per-node backed-up-at-expansion value — Mctx's `tree.raw_values`, the network's
     /// own estimate for a node before any child statistic entered it. Held apart from
     /// `w_value / n_visits`, which is the running mean.
@@ -168,10 +157,10 @@ pub struct MCTSTree {
     /// Q are built from quiescence-corrected values too, so completing them against an
     /// uncorrected node would mix two scales.
     ///
-    /// EMPTY under the legacy dialect, and that is the point — a per-`Node` field would
-    /// widen every one of the pool's million slots for both dialects and add ~4 MB per
-    /// worker to run6's control arm, which R345(d) exists to keep still. Allocated by
-    /// `configure_gumbel` only when the Mctx dialect selects it.
+    /// EMPTY under `SearchKind::Puct`, and that is the point — a per-`Node` field would
+    /// widen every one of the pool's slots for both kinds and add ~4 MB per worker to the
+    /// PUCT arm, which reads no raw value at all. Allocated by `configure_search` only
+    /// when the Gumbel kind selects it.
     ///
     /// NOT cleared by `new_game`: `finish_expansion` writes a node's entry as it expands
     /// it, and a completed-Q read only ever reaches an EXPANDED node, so every read is
@@ -184,8 +173,8 @@ pub struct MCTSTree {
     pub(crate) q_c_visit: f32,
     pub(crate) q_c_scale: f32,
     /// Children the ROOT may expand, as distinct from every other node's
-    /// `MAX_CHILDREN_PER_NODE`. Set by `configure_gumbel`; `MAX_CHILDREN_PER_NODE`
-    /// under the legacy dialect, so a legacy tree expands its root exactly as before.
+    /// `MAX_CHILDREN_PER_NODE`. Set by `configure_search`; `MAX_CHILDREN_PER_NODE`
+    /// under `SearchKind::Puct`, whose root is an ordinary PUCT node.
     pub(crate) root_children_cap: usize,
 }
 
@@ -215,7 +204,7 @@ impl MCTSTree {
             quiescence_blend_2: 0.3,
             forced_root_child: None,
             quiescence_fire_count: AtomicU64::new(0),
-            gumbel_variant: GumbelVariant::Legacy,
+            kind: SearchKind::Puct,
             raw_values: Vec::new(),
             q_c_visit: 50.0,
             q_c_scale: 1.0,
@@ -297,55 +286,41 @@ impl MCTSTree {
         self.quiescence_blend_2 = blend_2;
     }
 
-    /// Select the Gumbel dialect once per worker. Pure state set — no search logic.
+    /// Select the search kind once per worker. Pure state set — no search logic.
     /// Survives `new_game`, which resets per-game state and not per-worker config.
-    /// `gumbel_on` is `selfplay.gumbel_mcts`, and the dialect is INERT without it.
     ///
-    /// The repair is *"behind `selfplay.gumbel_mcts` … the PUCT path is untouched"*, and
-    /// this is where that is enforced rather than left to every caller. A config carrying
-    /// `gumbel_variant: mctx` with `gumbel_mcts: false` would otherwise expand its PUCT root
-    /// over the full legal set and complete its targets on Mctx's scale — a changed PUCT arm
-    /// reached by a key whose name says it changes Gumbel.
-    pub fn configure_gumbel(
-        &mut self,
-        variant: GumbelVariant,
-        gumbel_on: bool,
-        c_visit: f32,
-        c_scale: f32,
-    ) {
-        let effective = if gumbel_on {
-            variant
-        } else {
-            GumbelVariant::Legacy
-        };
-        self.gumbel_variant = effective;
+    /// ONE setter and ONE stored kind: every surface that used to branch on a
+    /// `gumbel_mcts` bool AND a dialect name AND a `completed_q_values` flag now reads
+    /// this field, so the four cannot disagree about which search ran.
+    pub fn configure_search(&mut self, kind: SearchKind, c_visit: f32, c_scale: f32) {
+        self.kind = kind;
         self.q_c_visit = c_visit;
         self.q_c_scale = c_scale;
-        self.root_children_cap = match effective {
-            GumbelVariant::Legacy => MAX_CHILDREN_PER_NODE,
-            GumbelVariant::Mctx => MAX_ROOT_CHILDREN,
+        self.root_children_cap = match kind {
+            SearchKind::Puct => MAX_CHILDREN_PER_NODE,
+            SearchKind::Gumbel => MAX_ROOT_CHILDREN,
         };
-        // The per-node raw values exist only for the dialect that reads them.
-        self.raw_values = match effective {
-            GumbelVariant::Legacy => Vec::new(),
-            GumbelVariant::Mctx => vec![0.0; MAX_NODES],
+        // The per-node raw values exist only for the kind that reads them.
+        self.raw_values = match kind {
+            SearchKind::Puct => Vec::new(),
+            SearchKind::Gumbel => vec![0.0; MAX_NODES],
         };
     }
 
-    /// Children the ROOT may expand under this tree's dialect.
+    /// Children the ROOT may expand under this tree's kind.
     #[must_use]
     pub fn root_children_cap(&self) -> usize {
         self.root_children_cap
     }
 
-    /// The dialect this tree runs.
+    /// The search this tree runs.
     #[must_use]
-    pub fn gumbel_variant(&self) -> GumbelVariant {
-        self.gumbel_variant
+    pub fn search_kind(&self) -> SearchKind {
+        self.kind
     }
 
     /// The value backed up at root expansion (Mctx's `raw_values[root]`), or 0.0 under a
-    /// dialect that keeps none.
+    /// kind that keeps none.
     #[must_use]
     pub fn root_raw_value(&self) -> f32 {
         self.raw_values.first().copied().unwrap_or(0.0)

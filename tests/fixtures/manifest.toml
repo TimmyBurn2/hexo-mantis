@@ -302,12 +302,12 @@ added_by = "WP-SP"
 
 [[required]]
 path = "selfplay/pool/runner_config_goldens.json"
-# Re-cut by GUMBEL-REPAIR-1: `selfplay.gumbel_variant` / `gumbel_root_counts` are REQUIRED
-# schema leaves, so the captured input config must carry them or `from_config` cannot read
-# it. The precedent is this file's own history — the selfplay-schema landing amended it the
-# same way. `full_config` carries the NON-shipped values ("mctx", false) so the golden proves
-# the wire carries the VALUE rather than that a default coincided.
-sha256 = "3a5913050815540838f151539579921d7c04387f52bdced4014ef8d54f546da1"
+# Re-cut by GUMBEL-2: `search.kind` is a REQUIRED schema leaf and REPLACES the four keys the
+# previous re-cut added to this capture, so the captured input must carry it or `from_config`
+# cannot read it. The precedent is this file's own history — both the selfplay-schema landing
+# and GUMBEL-REPAIR-1 amended it the same way. `full_config` carries `gumbel`, the NON-shipped
+# kind, so the golden proves the wire carries the VALUE rather than that a default coincided.
+sha256 = "59d0f89a5c0c1e86d90b6ab9c788a04e3657df71b41bfb7b9bff3dd31bf7f349"
 added_by = "WP-SP"
 
 [[required]]

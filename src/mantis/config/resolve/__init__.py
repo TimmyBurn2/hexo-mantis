@@ -67,8 +67,16 @@ from mantis.config.resolve.sample_threads import (
     MissingSampleThreadsInputError,
     resolve_sample_threads,
 )
+from mantis.config.resolve.search import (
+    SEARCH_KINDS,
+    MissingSearchKindError,
+    resolve_search_kind,
+)
 
 __all__ = [
+    "SEARCH_KINDS",
+    "MissingSearchKindError",
+    "resolve_search_kind",
     "UNSPECIFIED",
     "AbsentEncodingError",
     "AllocatorPosture",
@@ -98,6 +106,9 @@ __all__ = [
     "reconcile_encoding",
     "require_run_config",
     "resolve_allocator_posture",
+    "SEARCH_KINDS",
+    "MissingSearchKindError",
+    "resolve_search_kind",
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
     "resolve_bootstrap",

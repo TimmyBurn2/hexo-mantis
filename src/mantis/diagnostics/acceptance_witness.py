@@ -66,6 +66,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.eval_posture import resolve_strength_floor
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
+from mantis.config.resolve.search import resolve_search_kind
 from mantis.encoding import lookup
 from mantis.eval.floor_gate import evaluate_strength_floor, probe_measurements
 from mantis.eval.worker import build_candidate_player
@@ -359,7 +360,13 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        # AUDIT-1 F-39: the deploy head's sigma terms are the
                                        # config's, not the player's signature defaults.
                                        c_visit=cfg.selfplay.c_visit,
-                                       c_scale=cfg.selfplay.c_scale),
+                                       c_scale=cfg.selfplay.c_scale,
+                                       # The RUN'S OWN search, through the one resolver the
+                                       # self-play pool reads — the witness must play the
+                                       # game the run plays.
+                                       search_kind=resolve_search_kind(cfg),
+                                       gumbel_m=cfg.selfplay.gumbel_m,
+                                       gumbel_seed=cfg.seed),
                 resolve_bot("random", depth=None, opponent_sims=sims)(
                     seed=cfg.eval.gate.seed_base),
                 paired_openings(cfg.eval.gate.opening_book, n_pairs=max(games // 2, 1),

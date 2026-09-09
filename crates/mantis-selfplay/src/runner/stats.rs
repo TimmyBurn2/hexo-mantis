@@ -7,8 +7,8 @@
 //! under the `solver_enabled` / seeded branches, so an OFF (default) run leaves
 //! the bench-gated hot path byte-identical.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::Arc;
 
 use super::record::K_CLUSTER_HISTOGRAM_BUCKETS;
 
@@ -29,6 +29,17 @@ pub(crate) struct WorkerStats {
     /// it; before the batch clamp it read `n_simulations + leaf_batch_size - 1`
     /// and the run served ~7 % more sims than the config named.
     pub(crate) max_sims_per_search: Arc<AtomicU64>,
+    /// LAW-18 — playout-cap randomization's own fire rate, counted where the ARM IS DRAWN.
+    /// The recorded row's `is_full_search` flag is the only other place the arm is visible,
+    /// and it is an OR with the forced-win and solver hooks, so a flag census alone cannot
+    /// say whether the draw fired or a hook did. These two count the DRAW.
+    pub(crate) pcr_full_moves: Arc<AtomicU64>,
+    pub(crate) pcr_quick_moves: Arc<AtomicU64>,
+    /// LAW-18 — the Gumbel halving round's WIDTH: leaves issued per inference round trip,
+    /// as the two terms of a mean. A batching lever whose fire rate is not in the run
+    /// cannot be told from one that has silently gone back to a leaf per round trip.
+    pub(crate) gumbel_round_leaves: Arc<AtomicU64>,
+    pub(crate) gumbel_rounds: Arc<AtomicU64>,
     pub(crate) cluster_value_std_accum: Arc<AtomicU64>,
     pub(crate) cluster_policy_disagreement_accum: Arc<AtomicU64>,
     pub(crate) cluster_variance_samples: Arc<AtomicU64>,

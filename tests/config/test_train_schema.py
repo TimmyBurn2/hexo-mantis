@@ -78,7 +78,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "terminal_eval_enabled": True,
     "bot_batch_share": 0.0,
     "selfplay_stall_timeout_sec": 1800.0,
-    "completed_q_values": False,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",
     "draw_reward": -0.5,

@@ -184,7 +184,7 @@ def graph_hparams(**over: Any) -> TrainHParams:
     base: dict[str, Any] = dict(
         lr=1e-3, weight_decay=1e-4, grad_clip=1.0, fp16=False, lr_schedule="cosine",
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4, min_lr=None,
-        checkpoint_interval=0, completed_q_values=False, policy_prune_frac=0.0,
+        checkpoint_interval=0, policy_prune_frac=0.0,
         entropy_reg_weight=0.0, aux_opp_reply_weight=0.0, uncertainty_weight=0.0,
         ownership_weight=0.0, threat_weight=0.0, aux_chain_weight=0.0, ply_index_weight=0.0,
         threat_pos_weight=1.0, value_target="pure_outcome_z",

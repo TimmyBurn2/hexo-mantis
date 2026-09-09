@@ -83,7 +83,7 @@ class _RunnerStats:
 class _Pool:
     def __init__(self) -> None:
         self._games = 0
-        self.gumbel_mcts = True
+        self.search_kind = "gumbel"
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45

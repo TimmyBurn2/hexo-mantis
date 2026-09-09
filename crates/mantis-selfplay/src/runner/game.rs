@@ -32,7 +32,7 @@ use rand::{rng, RngExt};
 use mantis_core::board::DEFAULT_CLUSTER_THRESHOLD;
 use mantis_core::{Board, BoardGeometry};
 use mantis_encoding::RegistrySpec;
-use mantis_search::{MCTSTree, VIRTUAL_LOSS_PENALTY};
+use mantis_search::{MCTSTree, SearchKind, VIRTUAL_LOSS_PENALTY};
 
 use crate::replay::hexg::GraphRecord;
 use crate::replay::sym::{draw_window_preserving_sym, SymTables};
@@ -86,14 +86,12 @@ struct WorkerMoveCfg {
     c_scale: f32,
     gumbel_m: usize,
     gumbel_explore_moves: usize,
-    gumbel_root_counts: bool,
     dirichlet_alpha: f32,
     dirichlet_epsilon: f32,
     full_search_prob: f32,
     n_sims_quick: usize,
     n_sims_full: usize,
-    completed_q_values: bool,
-    gumbel_mcts: bool,
+    search_kind: SearchKind,
     dirichlet_enabled: bool,
     zoi_enabled: bool,
     forced_win_enabled: bool,
@@ -159,6 +157,10 @@ pub(crate) fn run_worker_thread(
         mcts_stat_count,
         mcts_quiescence_fires,
         max_sims_per_search,
+        pcr_full_moves,
+        pcr_quick_moves,
+        gumbel_round_leaves,
+        gumbel_rounds,
         cluster_value_std_accum,
         cluster_policy_disagreement_accum,
         cluster_variance_samples,
@@ -221,10 +223,7 @@ pub(crate) fn run_worker_thread(
         search_flags:
             SearchFlags {
                 quiescence_enabled,
-                completed_q_values,
-                gumbel_mcts,
-                gumbel_variant,
-                gumbel_root_counts,
+                search_kind,
             },
         exploration_flags:
             ExplorationFlags {
@@ -257,8 +256,8 @@ pub(crate) fn run_worker_thread(
     // interior_selector, WP4 killed it).
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
     // Same posture as quiescence: per-WORKER configuration, set once, survives
-    // `new_game`. `Legacy` leaves every completed-Q surface byte-identical.
-    tree.configure_gumbel(gumbel_variant, gumbel_mcts, c_visit, c_scale);
+    // `new_game`.
+    tree.configure_search(search_kind, c_visit, c_scale);
     let mut rng = rng();
     // Per-move model-version snapshot (frozen `inner.rs:1214`): each `play_one_move`
     // dedup-pushes `model_version` (default 0 until WP7 wires the NN setter), so a
@@ -288,6 +287,10 @@ pub(crate) fn run_worker_thread(
         mcts_stat_count: &mcts_stat_count,
         mcts_quiescence_fires: &mcts_quiescence_fires,
         max_sims_per_search: &max_sims_per_search,
+        pcr_full_moves: &pcr_full_moves,
+        pcr_quick_moves: &pcr_quick_moves,
+        gumbel_round_leaves: &gumbel_round_leaves,
+        gumbel_rounds: &gumbel_rounds,
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
         gridls_zero_policy_rows: &gridls_zero_policy_rows,
@@ -335,14 +338,12 @@ pub(crate) fn run_worker_thread(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
-        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
         n_sims_quick,
         n_sims_full,
-        completed_q_values,
-        gumbel_mcts,
+        search_kind,
         dirichlet_enabled,
         zoi_enabled,
         forced_win_enabled: forced_win_policy_enabled,
@@ -457,14 +458,12 @@ fn run_one_game(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
-        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
         n_sims_quick,
         n_sims_full,
-        completed_q_values,
-        gumbel_mcts,
+        search_kind,
         dirichlet_enabled,
         zoi_enabled,
         forced_win_enabled,
@@ -519,7 +518,6 @@ fn run_one_game(
         c_scale,
         gumbel_m,
         gumbel_explore_moves,
-        gumbel_root_counts,
         dirichlet_alpha,
         dirichlet_epsilon,
         full_search_prob,
@@ -528,8 +526,7 @@ fn run_one_game(
         game_sims,
         is_fast_game,
         sym_idx,
-        completed_q_values,
-        gumbel_mcts,
+        search_kind,
         dirichlet_enabled,
         zoi_enabled,
         forced_win_enabled,

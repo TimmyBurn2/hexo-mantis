@@ -161,7 +161,7 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=_CAPS,
-        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
     )
     back = RoundSpec.from_dict(json.loads(json.dumps(dataclasses.asdict(spec))))
     assert isinstance(back.inference_batching, InferenceBatchingSpec), (

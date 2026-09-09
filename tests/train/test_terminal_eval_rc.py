@@ -163,7 +163,7 @@ class _RunnerStats:
 
 
 class _Pool:
-    gumbel_mcts = True
+    search_kind = "gumbel"
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
@@ -553,7 +553,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, amp_dtype="bf16",
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16",
         max_plies=128,
         eval_cfg=eval_cfg,
         coordinator_cfg_caps=DrainCaps(final_eval_drain_timeout_sec=0.05,

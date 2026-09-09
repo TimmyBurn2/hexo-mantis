@@ -1,93 +1,155 @@
-"""⊕ WP11-A arena — deploy-matched head, g=0 completed-Q argmax (design §a.2 deploy_head.py,
-§b arena/test_deploy_head.py).
+"""⊕ the deploy-matched head runs THE RUN'S OWN SEARCH.
 
-RED-at-import until IMPL writes `mantis.arena.deploy_head`. Frozen mechanics ported from
-hexo_rl/hexo_rl/eval/deploy_strength_eval.py:109-207 (`DeployHeadBot`) driven through
-hexo_rl/hexo_rl/eval/gumbel_search_py.py:178-227 (`run_gumbel_on_board`, gumbel_scale=0.0):
-with g=0 every Gumbel(0,1) root-noise term is exactly 0, so the SH-winner score collapses
-to `log(max(prior_i, 1e-8)) + sigma_i` with
-`sigma_i = (c_visit + max_n_all) * c_scale * clamp(q_i, -1.0, 1.0)` and `max_n_all` = the max
-visit count over ALL root children (gumbel_search_py.py:190-192,220-223). No candidate
-elimination is exercised here (single-phase final-score argmax is what the oracle pins);
-`get_root_children_info()` shape (bridge stub _engine.pyi): list of
-`(coord: tuple[int,int], pool_idx: int, prior: float, visits: int, q: float)`.
+WHAT THIS FILE USED TO PIN, AND WHY IT DOES NOT ANY MORE. `select_argmax_child` was the
+"g=0 completed-Q argmax": a PUCT tree whose ROOT pick was the Gumbel scoring function with
+its noise term set to zero. That is a THIRD algorithm — the tree descended by PUCT, no
+Sequential Halving ran anywhere, and the move was chosen by a rule no self-play worker has
+ever used — so the bar it produced was matched to nothing. The hybrid is deleted with its
+oracle. What replaces it is the property the hybrid was standing in for: the head searches
+with the run's `search.kind`, and each kind's move rule is that kind's own.
 
-ORACLE-CHOSEN SEAM: `mantis.arena.deploy_head.select_argmax_child(children_info, *,
-c_visit: float, c_scale: float) -> tuple[int,int]` is the minimal pure surface implementing
-that frozen formula (cited above) that this suite can hand-check with a calculator — it is
-not a redesign, just the smallest testable unit of `DeployHeadPlayer`'s internal decision.
+ORACLE: `DeployHeadPlayer(search_kind=...)` -> `MCTSTree.configure_search`, the SAME setter
+`runner::game::run_worker_thread` calls. The kind is READ BACK off the head and off the
+tree, so "the bar searched the way the run searched" is checkable rather than asserted.
 """
 from __future__ import annotations
 
 import inspect
-import math
 
-from mantis.arena.deploy_head import DeployHeadPlayer, select_argmax_child
+import pytest
 
-# c_visit/c_scale defaults mirror MCTSTree.get_improved_policy's own defaults
-# (bridge stub _engine.pyi: c_visit: float = 50.0, c_scale: float = 1.0).
+from mantis._engine import Board
+from mantis.arena.deploy_head import DeployHeadPlayer
+
+#: `selfplay.c_visit` / `selfplay.c_scale` as the committed configs mint them. STATED here
+#: rather than imported so this file does not silently re-anchor when the keys are re-minted
+#: — these are the head's inputs, not its subject.
 _C_VISIT = 50.0
 _C_SCALE = 1.0
+#: v6_live2_ls's `policy_logit_count` (19x19 + pass).
+_STRIDE = 362
 
 
-def test_gumbel_greedy_argmax_selection_on_synthetic_stats():
-    # Deliberately constructed so the highest-VISIT child does NOT win — pinning that the
-    # deploy head is a completed-Q sigma argmax, never a PUCT visit-count argmax.
-    children_info = [
-        ((0, 0), 0, 0.1, 100, 0.01),   # most-visited, low prior, low q
-        ((1, 1), 1, 0.6, 5, 0.9),      # least-visited, high prior + q — must win
-        ((2, 2), 2, 0.3, 50, 0.3),
-    ]
-    max_n_all = 100  # max visits over ALL children
-
-    def _score(prior: float, q: float) -> float:
-        sigma = (_C_VISIT + max_n_all) * _C_SCALE * max(-1.0, min(1.0, q))
-        return math.log(max(prior, 1e-8)) + sigma
-
-    score_a = _score(0.1, 0.01)   # log(0.1) + 150*0.01   =  -2.302585 +   1.5  =  -0.802585
-    score_b = _score(0.6, 0.9)    # log(0.6) + 150*0.9    =  -0.510826 + 135.0  = 134.489174
-    score_c = _score(0.3, 0.3)    # log(0.3) + 150*0.3    =  -1.203973 +  45.0  =  43.796027
-    assert score_b > score_a and score_b > score_c, "sanity: hand-computed scores"
-
-    winner = select_argmax_child(children_info, c_visit=_C_VISIT, c_scale=_C_SCALE)
-    assert winner == (1, 1)
+def _uniform_infer(_board):
+    """Fixed dummy policy+value: uniform logits over the action space, value 0.0 — a stub
+    good enough to exercise search determinism without a real net."""
+    return [0.0] * _STRIDE, 0.0
 
 
-def test_argmax_ties_broken_by_score_not_input_order():
-    # A second synthetic case with a different winner, guarding against an implementation
-    # that always returns the first/last tuple regardless of score.
-    children_info = [
-        ((3, 3), 0, 0.9, 40, -0.5),
-        ((4, 4), 1, 0.2, 40, 0.8),
-    ]
-    winner = select_argmax_child(children_info, c_visit=_C_VISIT, c_scale=_C_SCALE)
-    assert winner == (4, 4)
+def _head(kind: str, **over):
+    kwargs = dict(
+        infer_fn=_uniform_infer,
+        n_sims=8,
+        leaf_batch_size=1,
+        c_visit=_C_VISIT,
+        c_scale=_C_SCALE,
+        search_kind=kind,
+        gumbel_m=4,
+        gumbel_seed=20260909,
+    )
+    kwargs.update(over)
+    return DeployHeadPlayer(**kwargs)
+
+
+def _board():
+    return Board.with_encoding_name("v6_live2_ls")
+
+
+@pytest.mark.parametrize("kind", ["puct", "gumbel"])
+def test_the_head_reports_and_configures_the_kind_it_was_given(kind: str):
+    player = _head(kind)
+    assert player.search_kind == kind
+    player.new_game()
+    # The TREE is the thing that has to be configured — a head that merely remembered the
+    # string while its tree ran PUCT is exactly the coincidence this replaces.
+    assert player._tree is not None
+    assert player._tree.search_kind == kind
+
+
+def test_an_unknown_kind_is_refused_by_the_engine_rather_than_defaulted():
+    player = _head("mctx")
+    with pytest.raises(ValueError, match="search.kind"):
+        player.new_game()
 
 
 def test_no_dirichlet_no_temperature_parameters_exist():
     sig = inspect.signature(DeployHeadPlayer.__init__)
     forbidden = {"temperature", "dirichlet", "epsilon", "gumbel_scale", "alpha"}
     present = forbidden & set(sig.parameters)
-    assert not present, f"DeployHeadPlayer must not expose {present} — g=0 is structural, not a knob"
+    assert not present, f"DeployHeadPlayer must not expose {present} — these are not knobs"
 
 
-def test_deploy_head_is_deterministic_given_fixed_inference():
-    from mantis._engine import Board
+def test_the_search_regime_keys_are_required_and_have_no_defaults():
+    """Every knob that decides the SEARCH is required — a default is a regime nobody minted.
 
-    def infer_fn(_board):
-        # Fixed dummy policy+value: uniform logits over the 19x19+pass=362 action space
-        # (registry.toml policy_logit_count for v6_live2_ls), value 0.0 — a stub good
-        # enough to exercise search determinism without a real net.
-        return [0.0] * 362, 0.0
+    `c_visit`/`c_scale` carry AUDIT-1 F-39's history: they were defaulted on this
+    signature, so the deploy-matched bar searched at numbers no config authored. The same
+    reasoning covers `search_kind` and `gumbel_m`.
+    """
+    sig = inspect.signature(DeployHeadPlayer.__init__)
+    for name in ("n_sims", "leaf_batch_size", "c_visit", "c_scale", "search_kind",
+                 "gumbel_m", "gumbel_seed"):
+        assert sig.parameters[name].default is inspect.Parameter.empty, (
+            f"{name} must be REQUIRED — a default here is a search-regime constant nobody "
+            f"minted, and LAW-15's deploy-matched claim stops being true with no config "
+            f"diff to show for it"
+        )
 
-    player_a = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE, leaf_batch_size=1)
-    player_b = DeployHeadPlayer(infer_fn=infer_fn, n_sims=8, c_visit=_C_VISIT, c_scale=_C_SCALE, leaf_batch_size=1)
 
-    board_a = Board.with_encoding_name("v6_live2_ls")
-    board_b = Board.with_encoding_name("v6_live2_ls")
+@pytest.mark.parametrize("kind", ["puct", "gumbel"])
+def test_the_head_is_deterministic_given_fixed_inference(kind: str):
+    """Both kinds replay. The Gumbel draw is SEEDED (LAW-15: a bar is a reproducible
+    instrument), so two heads at one seed pick one move."""
+    player_a, player_b = _head(kind), _head(kind)
     player_a.new_game()
     player_b.new_game()
+    assert player_a.select_move(_board()) == player_b.select_move(_board())
 
-    move_a = player_a.select_move(board_a)
-    move_b = player_b.select_move(board_b)
-    assert move_a == move_b, "identical fixed inference must yield an identical deploy move"
+
+def test_the_gumbel_seed_is_load_bearing():
+    """A different seed is allowed to move the answer — otherwise the draw is not reaching
+    the search and the `gumbel` arm is PUCT wearing another name."""
+    moves = set()
+    for seed in range(24):
+        player = _head("gumbel", gumbel_seed=seed, n_sims=8, gumbel_m=8)
+        player.new_game()
+        moves.add(player.select_move(_board()))
+    assert len(moves) > 1, (
+        "24 seeds produced ONE move — the Gumbel noise is not reaching the root sampler"
+    )
+
+
+def test_the_puct_arm_plays_the_most_visited_child():
+    """PUCT's deploy move is the most-visited root child — self-play's own deploy pick.
+
+    Read off the tree the head just searched, so this pins the RULE rather than re-deriving
+    it from the same numbers the head used.
+    """
+    player = _head("puct", n_sims=16)
+    player.new_game()
+    move = player.select_move(_board())
+    top = player._tree.get_top_visits(1)
+    assert top, "a searched root must have visited children"
+    assert move == top[0][0]
+
+
+def test_the_budget_is_leaves_and_the_root_is_one_of_them():
+    """`n_sims` means N LEAVES of network work on both arms, root included.
+
+    The stub counts its own calls, which is the only place the leaf count is observable
+    from outside the engine.
+    """
+    for kind in ("puct", "gumbel"):
+        calls = []
+
+        def counting(board, _calls=calls):
+            _calls.append(1)
+            return _uniform_infer(board)
+
+        player = _head(kind, infer_fn=counting, n_sims=12, leaf_batch_size=1)
+        player.new_game()
+        player.select_move(_board())
+        assert len(calls) == 12, (
+            f"{kind}: served {len(calls)} leaves against a budget of 12. The root's own "
+            f"evaluation is charged on both arms — N means N leaves."
+        )

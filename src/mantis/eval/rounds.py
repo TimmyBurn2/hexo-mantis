@@ -228,6 +228,15 @@ class RoundSpec:
     #: quietly stops being true. Threaded here for `leaf_batch_size`' reason exactly.
     c_visit: float
     c_scale: float
+    #: The run's `search.kind` and `selfplay.gumbel_m`, carried across the process seam for
+    #: `c_visit`'s reason and closing the same hole one layer deeper. `DeployHeadPlayer`
+    #: used to run a search regime that appeared in NO config at all — a PUCT tree with a
+    #: Gumbel-scored root pick — so the deploy-matched bar was matched to nothing. The kind
+    #: is resolved ONCE in the parent by `mantis.config.resolve.resolve_search_kind`, the
+    #: SAME authority `SelfPlayHParams.from_config` reads. NOT defaulted, for
+    #: `leaf_batch_size`' reason exactly.
+    search_kind: str
+    gumbel_m: int
     #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
     #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
     #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph

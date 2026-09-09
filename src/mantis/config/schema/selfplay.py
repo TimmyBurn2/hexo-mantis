@@ -9,11 +9,10 @@ retired by a later chunk (SC-A4); dropping the field from this class is forced n
 `SelfplayConfig` reshape cannot carry it AND satisfy `extra="forbid"` simultaneously with the
 old key.
 """
-from typing import Literal
 
 from pydantic import Field, model_validator
 
-from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_mctx
+from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_gumbel
 from mantis.config.schema._base import StrictModel
 
 #: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (AUDIT-1 F-21).
@@ -27,13 +26,13 @@ from mantis.config.schema._base import StrictModel
 #: only the pool knows, and it would go stale the day either constant moves.
 MAX_ARMED_SIMS: int = mcts_max_armed_sims()
 
-#: The same bound under the CORRECTED Gumbel dialect, which spends `MAX_ROOT_CHILDREN` pool
-#: slots on its root instead of `MAX_CHILDREN_PER_NODE` (GUMBEL-REPAIR-1). It is LOWER, and
-#: it is a second constant rather than a smaller shared one so the ceiling every existing
-#: config validates against does not move for a dialect nothing arms. Field bounds below
-#: keep the LOOSE value — a `Field(le=...)` cannot see a sibling key — and the tighter one
-#: is applied by `_gumbel_dialect_fits_the_node_pool`.
-MAX_ARMED_SIMS_MCTX: int = mcts_max_armed_sims_mctx()
+#: The same bound under `search.kind: gumbel`, which spends `MAX_ROOT_CHILDREN` pool slots
+#: on its root instead of `MAX_CHILDREN_PER_NODE`. It is LOWER, and it is a second constant
+#: rather than a smaller shared one so the ceiling a PUCT config validates against does not
+#: move. Field bounds below keep the LOOSE value — a `Field(le=...)` cannot see a key in
+#: another SECTION — and the tighter one is applied by
+#: `RunConfig._search_kind_fits_the_node_pool`.
+MAX_ARMED_SIMS_GUMBEL: int = mcts_max_armed_sims_gumbel()
 
 
 class MctsConfig(StrictModel):
@@ -113,45 +112,28 @@ class SelfplayConfig(StrictModel):
     """Self-play worker/search knobs (`# selfplay ns` + monitoring/instrumentation in
     `hparams.py`). See the module docstring for why no radius field exists here.
 
-    ``gumbel_variant`` SELECTS A DIALECT, not a feature (GUMBEL-REPAIR-1). ``legacy`` is
-    the arm every shipped config carries and reproduces the shipped behaviour exactly;
-    ``mctx`` is the corrected arm, matching `google-deepmind/mctx`'s
-    ``gumbel_muzero_policy`` on the points the repair verified as deviations — root
-    sampling over the FULL legal set, the mixed-value completion taken off the root's RAW
-    network value, min-max rescaled Q with Mctx's ``value_scale`` transform, completed-Q
-    interior selection, and a Sequential-Halving schedule that consumes the budget
-    exactly. It is ONE key rather than five because the corrections are what corrected
-    Gumbel IS: R345(d) compares "corrected Gumbel" against PUCT as a single arm, and five
-    independent booleans would mint 32 dialects nobody has measured.
-
-    ``c_scale`` IS Mctx's ``value_scale`` under the ``mctx`` variant — the same slot in
+    ``c_scale`` IS Mctx's ``value_scale`` under ``search.kind: gumbel`` — the same slot in
     ``(c_visit + max_visits) * scale * q``, where ``c_visit`` is Mctx's ``maxvisit_init``.
     A second key for the same slot would be the duplicate-authority class R1 exists to
-    kill. Their defaults differ by an order of magnitude and the difference is REAL: Mctx
-    ships ``value_scale=0.1`` against rescaled Q in [0, 1], the legacy arm ships
-    ``c_scale=1.0`` against raw Q in [-1, 1], so a mint that moves the variant without
-    moving the scale changes how peaked every target is. The mint states the value; the
-    schema will not guess it.
+    kill. BOTH ARE REQUIRED WITH NO DEFAULT and the schema will not guess either: the
+    published board-game setting (Danihelka et al. App. F: "In all Go and chess
+    experiments, Gumbel MuZero scales the Q-values by cvisit = 50 and cscale = 1.0") and
+    the mctx library's own Atari default (0.1) differ by an order of magnitude, and which
+    one a run arms changes how peaked every exported target is. The mint states the value.
 
-    ``gumbel_root_counts`` decides whether the root's own evaluation is charged against
-    ``mcts.n_simulations``. ``true`` is the shipped behaviour (the root eval spends one of
-    N, so the halving schedule gets N-1). It is a key and not a constant because it is
-    exactly the term that makes "equal NN work" stateable when corrected Gumbel is
-    compared against PUCT at a fixed leaf budget.
+    ``gumbel_m`` is Mctx's ``max_num_considered_actions`` and ``gumbel_explore_moves`` the
+    span of opening plies that sample from the visit distribution instead of taking the
+    Sequential-Halving winner; both are inert under ``search.kind: puct``.
     """
 
     n_workers: int = Field(ge=1)
     leaf_batch_size: int = Field(ge=1)
     max_game_moves: int = Field(ge=1)
     inference_pool_size: int | None = Field(ge=1)
-    completed_q_values: bool
     c_visit: float = Field(gt=0)
     c_scale: float = Field(gt=0)
-    gumbel_mcts: bool
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
-    gumbel_variant: Literal["legacy", "mctx"]
-    gumbel_root_counts: bool
     results_queue_cap: int = Field(ge=1)
     random_opening_plies: int = Field(ge=0)
     rotation_enabled: bool
@@ -169,46 +151,6 @@ class SelfplayConfig(StrictModel):
     instrumentation_enabled: bool
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
-
-    @model_validator(mode="after")
-    def _gumbel_dialect_fits_the_node_pool(self) -> "SelfplayConfig":
-        """The CORRECTED Gumbel dialect's sim ceiling, refused at MINT and not at boot.
-
-        The corrected arm expands its root over the full legal set, so it spends
-        ``MAX_ROOT_CHILDREN`` pool slots on the root instead of ``MAX_CHILDREN_PER_NODE``
-        and its ceiling is ``MAX_ARMED_SIMS_MCTX``, below the ``MAX_ARMED_SIMS`` the field
-        bounds carry. A `Field(le=...)` cannot express this — the applicable ceiling depends
-        on two sibling keys — so without this validator a config in the gap between the two
-        bounds would validate clean and be refused by ``SelfPlayRunner::new`` at boot.
-
-        That inversion is the one R255/ADJ-D34 closed for the HEXG visit capacity, in this
-        same class, and re-opening it a section away would be the same defect wearing a
-        different key's name. INERT while ``gumbel_mcts`` is false, which is every committed
-        config.
-
-        Raises:
-            ValueError: an armed sims knob exceeds the corrected dialect's ceiling.
-        """
-        if not (self.gumbel_mcts and self.gumbel_variant == "mctx"):
-            return self
-        armed = {
-            "selfplay.mcts.n_simulations": self.mcts.n_simulations,
-            "selfplay.playout_cap.standard_sims": self.playout_cap.standard_sims,
-            "selfplay.playout_cap.fast_sims": self.playout_cap.fast_sims,
-            "selfplay.playout_cap.n_sims_quick": self.playout_cap.n_sims_quick,
-            "selfplay.playout_cap.n_sims_full": self.playout_cap.n_sims_full,
-        }
-        over = {k: v for k, v in armed.items() if v > MAX_ARMED_SIMS_MCTX}
-        if over:
-            raise ValueError(
-                "selfplay.gumbel_variant='mctx' lowers the node-pool sim ceiling to "
-                f"{MAX_ARMED_SIMS_MCTX} (from {MAX_ARMED_SIMS}), because that dialect "
-                "expands the root over its FULL legal set and spends MAX_ROOT_CHILDREN pool "
-                "slots on it instead of MAX_CHILDREN_PER_NODE. Over the ceiling: "
-                + ", ".join(f"{k}={v}" for k, v in sorted(over.items()))
-                + " — lower the budget, or mint the legacy dialect."
-            )
-        return self
 
 
 class FusedGraphCapsConfig(StrictModel):

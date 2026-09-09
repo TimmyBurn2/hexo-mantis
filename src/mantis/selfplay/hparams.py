@@ -171,14 +171,14 @@ class SelfPlayHParams:
     leaf_batch_size: int = 8
     max_moves_per_game: int = 128
     inference_pool_size: int | None = None
-    completed_q_values: bool = False
+    #: `search.kind`, REQUIRED with no default (R1/LAW-11): it selects the root mechanism,
+    #: the interior selector AND the exported target's semantics, and a code-side default
+    #: here would let a config that never declared its search regime still boot one.
+    search_kind: str
     c_visit: float = 50.0
     c_scale: float = 1.0
-    gumbel_mcts: bool = False
     gumbel_m: int = 16
     gumbel_explore_moves: int = 10
-    gumbel_variant: str = "legacy"
-    gumbel_root_counts: bool = True
     results_queue_cap: int = 10_000
     random_opening_plies: int = 0
     rotation_enabled: bool = True
@@ -261,14 +261,11 @@ class SelfPlayHParams:
             inference_pool_size=(
                 int(sp["inference_pool_size"]) if sp["inference_pool_size"] is not None else None
             ),
-            completed_q_values=bool(sp["completed_q_values"]),
+            search_kind=str(config["search"]["kind"]),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
-            gumbel_mcts=bool(sp["gumbel_mcts"]),
             gumbel_m=int(sp["gumbel_m"]),
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
-            gumbel_variant=str(sp["gumbel_variant"]),
-            gumbel_root_counts=bool(sp["gumbel_root_counts"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
             rotation_enabled=bool(sp["rotation_enabled"]),
@@ -417,10 +414,8 @@ def build_runner_config(
         zoi_enabled=hp.zoi_enabled,
         zoi_lookback=hp.zoi_lookback,
         zoi_margin=hp.zoi_margin,
-        completed_q_values=hp.completed_q_values,
         c_visit=hp.c_visit,
         c_scale=hp.c_scale,
-        gumbel_mcts=hp.gumbel_mcts,
         gumbel_m=hp.gumbel_m,
         gumbel_explore_moves=hp.gumbel_explore_moves,
         dirichlet_alpha=hp.dirichlet_alpha,
@@ -435,11 +430,10 @@ def build_runner_config(
         encoding_name=encoding_name,
         inference_pool_size=hp.inference_pool_size,
     )
-    # Gumbel dialect. Same posture as the knobs below — config attributes, not ctor
-    # kwargs. The Rust setter REFUSES an unknown dialect rather than defaulting, so a
-    # typo reaches the operator as a boot error instead of a silently legacy search.
-    cfg.gumbel_variant = hp.gumbel_variant
-    cfg.gumbel_root_counts = hp.gumbel_root_counts
+    # The search kind. Same posture as the knobs below — a config attribute, not a ctor
+    # kwarg. The Rust setter REFUSES an unknown kind rather than defaulting, so a typo
+    # reaches the operator as a boot error instead of a silently PUCT search.
+    cfg.search_kind = hp.search_kind
     # Forced-win → one-hot POLICY target. Set as config attributes rather than ctor kwargs
     # so the positional Rust ctor surface stays untouched. Default OFF.
     cfg.forced_win_policy_enabled = hp.forced_win_policy_enabled

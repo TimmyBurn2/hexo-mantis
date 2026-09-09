@@ -31,6 +31,8 @@ identity:
   warm_start:
     checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt
     net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65
+search:
+  kind: puct
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128
@@ -163,7 +165,6 @@ train:
   terminal_eval_enabled: true
   bot_batch_share: 0.0
   selfplay_stall_timeout_sec: 1800.0
-  completed_q_values: false
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution
   draw_reward: -0.5
@@ -182,14 +183,10 @@ selfplay:
   leaf_batch_size: 8
   max_game_moves: 256
   inference_pool_size: null
-  completed_q_values: false
   c_visit: 50.0
   c_scale: 1.0
-  gumbel_mcts: false
   gumbel_m: 16
   gumbel_explore_moves: 10
-  gumbel_variant: legacy
-  gumbel_root_counts: true
   results_queue_cap: 10000
   random_opening_plies: 0
   rotation_enabled: true

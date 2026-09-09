@@ -350,7 +350,7 @@ class _TelemetryPool:
     batching members go through the REAL `pool_hooks` functions, so this drives the
     production producer and not a restatement of it."""
 
-    gumbel_mcts = True          # suppresses the PUCT-only cluster block
+    search_kind = "gumbel"          # suppresses the PUCT-only cluster block
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4
@@ -485,7 +485,7 @@ def test_a_telemetry_source_without_the_producer_publishes_none_never_zero() -> 
         """A telemetry source with NO batching producer — declares no such member at all
         (not a member that raises: `getattr`'s default would swallow that)."""
 
-        gumbel_mcts = True
+        search_kind = "gumbel"
         avg_game_length = 12.0
         x_winrate = 0.5
         o_winrate = 0.4

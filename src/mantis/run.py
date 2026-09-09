@@ -113,6 +113,7 @@ from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
 from mantis.config.resolve.run_length import resolve_max_train_steps
+from mantis.config.resolve.search import resolve_search_kind
 from mantis.config.schema import RunConfig
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
@@ -469,9 +470,7 @@ def _select_buffer(config: Any, capacity: int) -> Any:
             n_sims_quick=pc.n_sims_quick,
             n_sims_full=pc.n_sims_full,
             leaf_batch_size=sp.leaf_batch_size,
-            completed_q_values=sp.completed_q_values,
-            gumbel_mcts=sp.gumbel_mcts,
-            gumbel_variant=sp.gumbel_variant,
+            search_kind=config.search.kind,
         )
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
         buffer.seed_sampler(config.seed)
@@ -1145,6 +1144,13 @@ def compose_run(
                     # AUDIT-1 F-39: the deploy head's sigma terms are the RUN's minted keys,
                     # not the player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
+                    # The deploy head searches with the RUN'S OWN KIND, read through the
+                    # SAME resolver `SelfPlayHParams.from_config` reads. LAW-15's
+                    # deploy-matched bar is a construction here, not a coincidence between
+                    # two call sites — before this the eval head's regime came from
+                    # `DeployHeadPlayer`'s own body and appeared in no config at all.
+                    search_kind=resolve_search_kind(config),
+                    gumbel_m=config.selfplay.gumbel_m,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     # R344(b): the SAME directory the self-play recorder writes into, named
                     # once here. The eval child claims its own shard segment inside it, so
