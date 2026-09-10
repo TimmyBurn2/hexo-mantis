@@ -255,7 +255,7 @@ def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
-def _bounded(name: str = "dev_example.yaml", factory=None, steps: int = _DRIVE_STEPS,
+def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,
              eval_enabled: bool = False):
     """A real minted config, bounded so a drive terminates. The three step-clock knobs are
     co-overridden together because the reachability validator spans them: overriding
@@ -718,15 +718,16 @@ def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
     )
 
 
-@pytest.mark.parametrize("name", ("dev_example.yaml", "run6.yaml"))
-def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
+@pytest.mark.parametrize("name", ("smoke_preflight_armed.yaml",))
+def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representation(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, name: str
 ):
-    """Point 2 — the bounded drive, on two REAL minted configs. It used to be "on BOTH
-    representations", one from each template; R346(f) left one representation, so the axis is
-    two configs of the surviving one and the row's name keeps its history. This is the
-    behavioural half of the axis: point 1 proves every minted config resolves, this proves two
-    of them DRIVE.
+    """Point 2 — the bounded drive on a REAL minted config. It used to run "on BOTH
+    representations", one config from each template; R346(f) left one representation and cut
+    the committed set to three, of which `smoke_preflight_armed.yaml` is the only CPU one — a
+    drive on a `device: cuda` config does not terminate on a CPU box. This is the behavioural
+    half of the axis: point 1 proves every minted config RESOLVES, this proves one of them
+    DRIVES.
 
     No `_default_step_coordinator_config` monkeypatch: the production builder runs, because
     S-4 makes the config author `stop_step`. That retires the C-6 harness patch for every

@@ -76,33 +76,24 @@ FROZEN_METHODS = (
     "model_version_summary", "terminal_reason_counts",
 )
 
+#: R346(f) took FIFTEEN of these: the two cluster means and their sample count, the seven
+#: solver counters, `seeded_games_started`, the K histogram, the uncovered-forced-win count
+#: and `gridls_zero_policy_rows`. The engine exposes a getter for none of them, so each would
+#: have snapshotted its wheel-compat default forever — a fabricated reading with no producer,
+#: which is the phantom-input class LAW-07 refuses. The set below is what a live engine still
+#: answers, and it is asserted EXACTLY, so a field that comes back without a getter reds here.
 RUNNER_STATS_FIELDS = {
     "games_completed", "positions_generated", "x_wins", "o_wins", "draws",
     "model_version", "mcts_quiescence_fires", "mcts_mean_depth",
-    "mcts_mean_root_concentration", "cluster_value_std_mean",
-    "cluster_policy_disagreement_mean", "cluster_variance_sample_count",
-    "solver_moves_eligible", "solver_win_proven", "solver_injected",
-    "solver_injected_offwindow", "solver_budget_exhausted",
-    "solver_moves_eligible_seeded", "solver_injected_seeded", "seeded_games_started",
+    "mcts_mean_root_concentration",
     # WP12-R Phase T target-integrity counters (LAW-18; the byte-frozen oracle
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
-    "export_offwindow_mass_moves", "gridls_zero_policy_rows",
-    "target_integrity_defects",
-    # R275(b): the SEAM conjunct of the same class the three above guard — a leaf
+    "export_offwindow_mass_moves", "target_integrity_defects",
+    # R275(b): the SEAM conjunct of the same class the two above guard — a leaf
     # inference that FAILED, counted separately from the record-dispatch refusals so the
     # two conjuncts stay distinguishable. Pin: tests/selfplay/test_inference_seam_counter.py.
     "inference_failures_total",
-    # Item 10(b) / R250: the DENSE record path's K distribution — the LAW-18 fire-rate
-    # log for the K-cluster lever. A THIRD family again: not a Phase-T latch and not a
-    # lifecycle counter but a per-encoding instrument, `None` where no producer exists
-    # and dropped entirely from the event stream on a graph run.
-    "k_cluster_histogram",
-    # R256/ADJ-D37: the forced-win coverage-clip counter — the same per-encoding
-    # instrument family as the histogram, gated the INVERSE way (present on graph,
-    # dropped on dense; `None` where no producer exists). Pins:
-    # tests/train/test_uncovered_forced_win.py.
-    "uncovered_forced_win",
-    # Worker threads that died by panic (item 3). A DIFFERENT family from the three
+    # Worker threads that died by panic (item 3). A DIFFERENT family from the ones
     # above despite sitting beside them: those are Phase-T target-integrity latches,
     # this is a lifecycle counter. Kept out of `_TARGET_INTEGRITY_COUNTERS` for that
     # reason — see the queue's ADJ-D9.
@@ -215,29 +206,18 @@ def test_snapshot_dataclass_field_sets_are_frozen(device) -> None:
     pool = _graph_pool(device)
     rstats = pool.runner_stats()
     assert isinstance(rstats, RunnerStats)
-    # The trainer's regime-gated cluster block reads these four by name.
+    # The trainer's regime-gated block reads these two by name.
     for name in ("mcts_mean_depth", "mcts_mean_root_concentration"):
         assert isinstance(getattr(rstats, name), float)
-    # ADJ-D32 / R249: the two CLUSTER means are `float | None`, and on a pool that has
-    # played nothing they are None — no samples, so no measurement. This assertion used
-    # to demand a `float`, which is how a fabricated 0.0 travelled the whole seam
-    # unchallenged; the snapshot must carry the absence, not paper over it.
-    assert rstats.cluster_variance_sample_count == 0
-    for name in ("cluster_value_std_mean", "cluster_policy_disagreement_mean"):
-        assert getattr(rstats, name) is None, (
-            f"{name} must be None at zero cluster-variance samples (R249), got "
-            f"{getattr(rstats, name)!r}"
+    # The other side of the deletion above, driven rather than declared: the engine answers
+    # none of the fifteen, so a snapshot that carried one would be carrying a fabrication.
+    for gone in ("cluster_value_std_mean", "cluster_variance_sample_count",
+                 "k_cluster_histogram", "uncovered_forced_win", "gridls_zero_policy_rows",
+                 "solver_injected", "seeded_games_started"):
+        assert not hasattr(rstats, gone), (
+            f"{gone} is back on the snapshot; the engine exposes no getter for it, so its "
+            "value can only be a wheel-compat default reading as a measurement"
         )
-    assert isinstance(rstats.cluster_variance_sample_count, int)
-    # Item 10(b), INVERTED by R346(f). K — how many cluster views a recorded position
-    # expands into — was knowable only at the dense record path, and that path is gone, so
-    # the engine no longer exposes the getter and the field reads as the no-producer `None`
-    # on every pool. Pinned as ABSENT rather than deleted: a fabricated tuple here would be
-    # a phantom instrument, which is the one thing the field must never become.
-    assert rstats.k_cluster_histogram is None, (
-        "K is a dense-record-path quantity and the dense record path is deleted; a value "
-        "here means something is fabricating one"
-    )
 
     istats = pool.inference_stats()
     assert isinstance(istats, InferenceStats)

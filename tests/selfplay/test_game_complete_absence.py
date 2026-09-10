@@ -141,10 +141,20 @@ def test_an_ARMED_watchdog_with_nothing_to_report_still_reports_an_empty_mapping
 
 
 def test_the_data_loss_counters_sibling_is_deliberately_UNCHANGED() -> None:
-    """Stated so the asymmetry is a decision, not an oversight. `REPLAY_COUNTERS` is a
+    """Stated so the asymmetry is a decision, not an oversight. `PIPELINE_COUNTERS` is a
     module-level registry that always exists and is always counting, so `{}` from it is a
-    true "nothing was lost" — not the absence C05 is about."""
+    true "nothing was lost" — not the absence C05 is about.
+
+    Re-pointed off `REPLAY_COUNTERS`, which R346(f) deleted with the dense replayers that fed
+    it: a registry no producer feeds publishes an always-empty mapping, which is the phantom
+    input LAW-07 refuses and the opposite of what this row asserts. `PIPELINE_COUNTERS` keeps
+    the property because it keeps its producers.
+    """
     from mantis.data import loss_counters
 
-    assert loss_counters.REPLAY_COUNTERS.snapshot() is not None
-    assert isinstance(loss_counters.REPLAY_COUNTERS.snapshot(), dict)
+    assert loss_counters.PIPELINE_COUNTERS.snapshot() is not None
+    assert isinstance(loss_counters.PIPELINE_COUNTERS.snapshot(), dict)
+    assert not hasattr(loss_counters, "REPLAY_COUNTERS"), (
+        "the deleted registry came back without its producers — an always-empty snapshot "
+        "reading as 'nothing was lost' is precisely the absence C05 is about"
+    )

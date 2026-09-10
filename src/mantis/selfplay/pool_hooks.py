@@ -156,27 +156,9 @@ class RunnerStats:
     mcts_quiescence_fires: int
     mcts_mean_depth: float
     mcts_mean_root_concentration: float
-    # ADJ-D32 / R249: `None` = no samples, NOT "measured zero". The bridge getters
-    # return `None` at `cluster_variance_sample_count == 0`, and this snapshot carries
-    # that through unchanged — the count beside them says why. Coercing to 0.0 here
-    # would restore the fabrication one layer up from where it was removed.
-    cluster_value_std_mean: float | None
-    cluster_policy_disagreement_mean: float | None
-    cluster_variance_sample_count: int
-    # In-run solver fire-rate counters (cumulative since pool start). The `getattr`
-    # defaults below cover engine builds that pre-date an individual counter (all 0).
-    solver_moves_eligible: int = 0
-    solver_win_proven: int = 0
-    solver_injected: int = 0
-    solver_injected_offwindow: int = 0
-    solver_budget_exhausted: int = 0
-    solver_moves_eligible_seeded: int = 0
-    solver_injected_seeded: int = 0
-    seeded_games_started: int = 0
     # WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6): an idle
     # lever stays VISIBLE at 0 (the chain_loss_with_fire_rate posture).
     export_offwindow_mass_moves: int = 0
-    gridls_zero_policy_rows: int = 0
     target_integrity_defects: int = 0
     # R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and halted the
     # run. Same family and same posture as `target_integrity_defects`: run-fatal, so it
@@ -186,21 +168,6 @@ class RunnerStats:
     # `_snapshot_counter` docstring's "the None arm cannot fire in production" claim
     # depends on every counter in that block being declared this way.
     inference_failures_total: int = 0
-    # Item 10(b) / R250: the DENSE record path's K histogram, bucket `i` counting
-    # recorded positions with `K == i + 1` and the LAST bucket guarding every K outside
-    # that range. `None` = NO PRODUCER, and it is the wheel-compat default for the same
-    # reason R249 gave the cluster means theirs: an engine build without the getter has
-    # measured nothing, and an all-zero tuple would read as "K was never anything",
-    # which is a distribution. On a graph run the buckets are genuinely all zero and the
-    # EMITTER drops the field — absence is decided there, on `is_graph_run`, not here.
-    k_cluster_histogram: tuple[int, ...] | None = None
-    # R256/ADJ-D37: proven forced wins swallowed by the LS coverage gate while the
-    # injecting lever was armed. `None` = NO PRODUCER (an engine build predating the
-    # getter), the k_cluster_histogram wheel-compat posture — NOT the Phase-T zeros:
-    # an old wheel has measured nothing, and a fabricated produced-0 here would be
-    # the exact reading R256 exists to kill. On dense runs the EMITTER omits the
-    # field; absence is decided there, on `is_graph_run`, not here.
-    uncovered_forced_win: int | None = None
     # Worker threads that died by panic. Reads 0 in a healthy run; non-zero means
     # self-play HALTED on a worker death rather than merely slowing down, which is the
     # distinction the old silent-swallow made impossible to draw.
@@ -220,33 +187,20 @@ class InferenceStats:
     encoding_spec: Any
 
 
-def _optional_mean(value: Any) -> float | None:
-    """Carry a derived mean through as `float`, or `None` when the producer has no
-    samples (R249). `float(None)` raises and a `getattr(..., 0.0)` default would
-    manufacture the very zero ADJ-D32 removed, so the absence is preserved explicitly."""
-    return None if value is None else float(value)
-
-
-def _k_histogram(value: Any) -> tuple[int, ...] | None:
-    """Freeze the bridge's K-histogram list into a tuple, or carry `None` through when
-    the engine build has no such getter (item 10(b)).
-
-    Frozen because `RunnerStats` is a frozen dataclass and a list field would hand every
-    consumer a mutable alias of one snapshot. `None` is preserved rather than defaulted to
-    zeros for the R249 reason: zeros here are a DISTRIBUTION claim, and an absent producer
-    has not measured one. An EMPTY list from a live getter is likewise not zeros — it is
-    kept as an empty tuple, so the emitter can tell "no buckets" from "no producer"."""
-    return None if value is None else tuple(int(v) for v in value)
-
-
 def runner_stats(pool: Any) -> RunnerStats:
     """Snapshot the runner's counters / scalars.
 
     Defaults via `getattr` cover engine builds that pre-date an individual counter —
     they reproduce the legacy per-field `getattr(runner, name, 0.0)` reaches this
-    dataclass replaced, so a counter added later cannot break an older wheel. The two
-    cluster means default to `None`, not 0.0: their absence is a REAL state (zero
-    samples), so the wheel-compat default and the live zero-count reading agree.
+    dataclass replaced, so a counter added later cannot break an older wheel.
+
+    FIFTEEN FIELDS LEFT WITH R346(f) and are not merely unread here: the engine exposes no
+    getter for any of them, so every one would have snapshotted its wheel-compat default
+    forever — the two cluster means and their sample count, the K histogram, the
+    uncovered-forced-win count, the seven solver counters, `seeded_games_started`, and
+    `gridls_zero_policy_rows`. A snapshot field whose producer is gone publishes a
+    fabricated reading, which is the phantom-input class LAW-07 refuses; the last of them
+    was still riding the LAW-18 target-integrity channel as a permanent 0.
     """
     r = pool._runner
     return RunnerStats(
@@ -261,35 +215,9 @@ def runner_stats(pool: Any) -> RunnerStats:
         mcts_mean_root_concentration=float(
             getattr(r, "mcts_mean_root_concentration", 0.0)
         ),
-        cluster_value_std_mean=_optional_mean(
-            getattr(r, "cluster_value_std_mean", None)
-        ),
-        cluster_policy_disagreement_mean=_optional_mean(
-            getattr(r, "cluster_policy_disagreement_mean", None)
-        ),
-        cluster_variance_sample_count=int(
-            getattr(r, "cluster_variance_sample_count", 0)
-        ),
-        solver_moves_eligible=int(getattr(r, "solver_moves_eligible", 0)),
-        solver_win_proven=int(getattr(r, "solver_win_proven", 0)),
-        solver_injected=int(getattr(r, "solver_injected", 0)),
-        solver_injected_offwindow=int(getattr(r, "solver_injected_offwindow", 0)),
-        solver_budget_exhausted=int(getattr(r, "solver_budget_exhausted", 0)),
-        solver_moves_eligible_seeded=int(
-            getattr(r, "solver_moves_eligible_seeded", 0)
-        ),
-        solver_injected_seeded=int(getattr(r, "solver_injected_seeded", 0)),
-        seeded_games_started=int(getattr(r, "seeded_games_started", 0)),
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
-        gridls_zero_policy_rows=int(getattr(r, "gridls_zero_policy_rows", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
-        k_cluster_histogram=_k_histogram(getattr(r, "k_cluster_histogram", None)),
-        uncovered_forced_win=(
-            None
-            if getattr(r, "uncovered_forced_win", None) is None
-            else int(r.uncovered_forced_win)
-        ),
         worker_panics=int(getattr(r, "worker_panics", 0)),
     )
 

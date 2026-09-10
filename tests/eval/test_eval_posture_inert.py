@@ -131,11 +131,13 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #: The configs a RULING has armed `eval.strength_floor` on. CLOSED, NAMED, and widened only by
 #: a mint act with a ruling behind it — R326 / the RECAL-SITTING-5 forwarding §0.3, values
 #: R324(d) (`probe_games 4`, `min_decisive_rate 0.25`, `min_winrate 0.0`), scope Δ10.5 (the
-#: production pair only, because no armed-abort row exists for `strength_floor`).
+#: production configs only, because no armed-abort row exists for `strength_floor`). R346(f)
+#: left one of those, so the "pair" is now a single name — a NARROWING by deletion, which is
+#: the one way this set may shrink without a new ruling.
 #:
 #: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
 #: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
-_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run6.yaml", "run6.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml"})
 
 
 def _armed_config():

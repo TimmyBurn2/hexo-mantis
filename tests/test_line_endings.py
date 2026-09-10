@@ -146,7 +146,9 @@ def test_gitattributes_marks_every_byte_significant_path() -> None:
     rather than silently inheriting the text default.
     """
     paths = byte_significant_paths()
-    assert len(paths) >= 60, (
+    # A FLOOR against a broken derivation, not a tally of the manifest: it moves DOWN only when
+    # fixture rows are deleted, and R346(f) took the dense encode/replay/augment banks.
+    assert len(paths) >= 40, (
         f"census collapsed to {len(paths)} paths: the derivation is broken and this pin "
         "would be vacuous"
     )

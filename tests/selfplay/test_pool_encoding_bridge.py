@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import pytest
 
 from mantis.config import load_config
+from mantis.encoding import all_specs
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.hparams import resolve_pool_encoding
@@ -35,7 +36,10 @@ def _run5_dump() -> dict[str, Any]:
 def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
     """THE TD-4 oracle. RED at HEAD with `MissingEncodingError`."""
     resolved = resolve_pool_encoding(_run5_dump(), arch=None)
-    assert resolved.encoding_name == "gnn_axis_v1"
+    # Against the REGISTRY, not a literal: the identity moved from `gnn_axis_v1` to
+    # `gnn_axis_r8` at run6's mint, and this row's claim is that the pool resolves a REAL
+    # registered encoding — the row below is the one that says WHICH.
+    assert resolved.encoding_name in {spec.name for spec in all_specs()}
     assert resolved.registry_spec.representation == "graph"
     assert resolved.board_size > 0
     assert resolved.trunk_size > 0

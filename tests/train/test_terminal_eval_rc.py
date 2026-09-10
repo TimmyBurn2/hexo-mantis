@@ -411,13 +411,19 @@ def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     train = dict(base["train"])
     train.update({"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                   "batch_size": 8, "log_interval": 1})
+    # The armed draw-rate floor is rescaled with the run for the same reason the lag threshold
+    # and the gate interval are below: this drive is 3 steps long and the base config's minted
+    # floor is 10, which the cross-field validator rightly refuses as an abort that can never
+    # fire. R346(f) left one smoke profile and it is an ARMED one.
+    if train["draw_rate_abort"] is not None:
+        train["draw_rate_abort"] = {**train["draw_rate_abort"], "min_step": 1}
     train.update(train_overrides)
     base["train"] = train
     monitor = dict(base["monitor"])
     # R242 (ADJ-D12): the ARMING cadence is `monitor.gate_interval` now, not
     # `train.log_interval`. This drive sets `log_interval: 1` above so the draw-rate abort can
     # take an observation on every step of a 3-step burst; that is an ARMING requirement, so
-    # it is the gate knob that has to carry it. Left at smoke_gnn's minted 1000 the gate would
+    # it is the gate knob that has to carry it. Left at the config's own minted interval the gate would
     # never run and O-09 arm (b) would measure a run that stopped for a different reason.
     monitor.update({"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                     "gate_interval": 1,

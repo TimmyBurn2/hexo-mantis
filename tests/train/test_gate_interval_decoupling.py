@@ -437,14 +437,15 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     below ratchets 6 -> 7 so a further config cannot slip past the equality sweep unseen —
     and 7 -> 8 at run6's mint (R338), which mints NEITHER knob: `RUN6_MINT_PREREG.md` proposes
     no cadence row, so run6 carries the dev template's equal pair and the sweep still bites.
-    R346(f) DELETED the two grid configs with the dense path, so the count is 6 — a DOWN-ratchet
-    against a deletion, which keeps the "cannot slip past unseen" property in both directions.
+    R346(f) cut `configs/` to run6, one smoke profile and dev_example, so the count is 3 — a
+    DOWN-ratchet against a deletion, which keeps the "cannot slip past unseen" property in
+    both directions.
     Enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7 and 12
     consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape (legal per
     ADJ-13 F-1) could escape (N4, F-P2B/N4).
     """
     configs = discover_configs(_REPO / "configs")
-    assert len(configs) == 6, f"expected the six committed configs, found {configs}"
+    assert len(configs) == 3, f"expected the three committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
         assert cfg.monitor.gate_interval == cfg.train.log_interval, (

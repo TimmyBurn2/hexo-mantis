@@ -8,14 +8,17 @@ not the encoding's. Six Python sites constructed one: both `data/replay.py` repl
 radius-5 constrained regardless of the identity they feed, and cluster counts on a `v6w25`
 corpus — registry threshold 8 — were computed under a rule that corpus never played by.
 
-THE WORST OF THEM IS DELETED. `_game_winner_from_replay` wrapped every `apply_move` in
-`except Exception: break` on top of the blind board, so a game whose moves are illegal at
-radius 5 truncated SILENTLY and it returned a winner read off the truncated position. At
-radius 6 that refusal is 34.76 % of the bootstrap corpus (R327) — the exact measurement it
-would have hidden. It was exported and had no caller anywhere.
+THE THREADED FORM (`Board.with_encoding_name`) is what the surviving sites use; the census
+below is the standing guard that no new site reverts to the blind one.
 
-The threaded form already existed (`Board.with_encoding_name`, used by `bootstrap_encode`,
-`eval/worker` and `acceptance_witness`); these sites simply were not using it.
+FOUR OF THE SIX SITES ARE NOW DELETED OUTRIGHT (R346(f)): `data/replay.py`'s two replayers,
+`data/corpus_metrics.py` and `train/pretrain/dataset.py` went with the grid path, and the
+three grid encodings this file used to measure geometry against (`v6`, `v6w25`,
+`v6_live2_ls`) left the registry with them. The per-replayer rows and the
+`_game_winner_from_replay` grave are retired for the same reason — a grave over a module
+that no longer exists is not a guard, it is an import error waiting for a reader. What
+remains is the property that outlived the subject: the census, its self-test, and the
+positive half re-pointed onto the geometry the graph encodings DO carry.
 """
 from __future__ import annotations
 
@@ -64,41 +67,24 @@ def test_the_census_can_see_a_planted_one(tmp_path: Path) -> None:
     assert len(hits) == 1, "the finder's own predicate does not match a planted no-arg Board()"
 
 
-def test_the_truncating_winner_helper_stays_deleted() -> None:
-    """A grave (R-graves discipline): the symbol is gone from the module AND from the package
-    export, so re-adding it is a visible act rather than a re-import."""
-    from mantis.train import pretrain
-    from mantis.train.pretrain import dataset
-
-    assert not hasattr(dataset, "_game_winner_from_replay")
-    assert not hasattr(pretrain, "_game_winner_from_replay")
-    assert "_game_winner_from_replay" not in pretrain.__all__
-
-
 def test_an_identity_bound_board_carries_the_encodings_geometry() -> None:
     """The positive half: the threaded form actually differs from the blind one, so the repair
-    is not cosmetic. `v6_live2_ls` mints radius 5 / threshold 5; `v6w25` mints threshold 8."""
+    is not cosmetic.
+
+    Measured on the RADIUS now rather than the cluster threshold: the graph encodings mint
+    `cluster_threshold = "none"`, so the field the grid rows differed in no longer exists to
+    differ. `gnn_axis_r8` mints radius 8 and `gnn_axis_v1` mints 6, both against the engine's
+    default 5 — one identity-bound board, one blind one, and the two disagree.
+    """
     from mantis._engine import Board
     from mantis.encoding import lookup
 
-    w25 = Board.with_encoding_name("v6w25")
-    assert w25.cluster_threshold() == lookup("v6w25").cluster_threshold == 8, (
-        "the identity-bound board does not carry the encoding's cluster threshold — the "
+    r8 = Board.with_encoding_name("gnn_axis_r8")
+    assert r8.legal_move_radius() == lookup("gnn_axis_r8").legal_move_radius == 8, (
+        "the identity-bound board does not carry the encoding's legal-move radius — the "
         "repair would be a no-op and this row would prove nothing"
     )
-
-
-@pytest.mark.parametrize("name", ["v6", "v6_live2_ls"])
-def test_each_replayer_binds_the_encoding_it_is_named_for(name: str) -> None:
-    """`replay.py`'s two replayers are per-encoding by construction, so each names its own
-    identity rather than taking whatever `Board()` hands back."""
-    import inspect
-
-    from mantis.data import replay
-
-    fn = {"v6": replay.replay_game_to_triples_v6,
-          "v6_live2_ls": replay.replay_game_to_triples_ls}[name]
-    src = inspect.getsource(fn)
-    assert f'Board.with_encoding_name("{name}")' in src, (
-        f"the {name} replayer no longer binds its own encoding"
+    assert Board().legal_move_radius() != r8.legal_move_radius(), (
+        "the blind board and the identity-bound one agree, so the whole census above is "
+        "measuring a distinction with no difference"
     )

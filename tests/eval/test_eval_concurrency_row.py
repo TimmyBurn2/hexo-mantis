@@ -50,11 +50,14 @@ _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run6.yaml"
+#: run6 MINTS the row now — R339(b) said the value is picked on the box, and it was — so the
+#: absent-row parity arm needs a file that still omits it. The smoke profile is that file.
+_UNMINTED_CONFIG = _CONFIG.with_name("smoke_preflight_armed.yaml")
 
 
 # ── 1. the schema row ──────────────────────────────────────────────────────────────────
-def _raw() -> dict[str, Any]:
-    return yaml.safe_load(_CONFIG.read_text(encoding="utf-8"))
+def _raw(source: Path | None = None) -> dict[str, Any]:
+    return yaml.safe_load((source or _CONFIG).read_text(encoding="utf-8"))
 
 
 def test_the_row_name_is_the_key_path_the_schema_actually_carries() -> None:
@@ -68,13 +71,16 @@ def test_the_row_name_is_the_key_path_the_schema_actually_carries() -> None:
 def test_an_absent_row_and_a_minted_one_are_the_SAME_config() -> None:
     """The parity witness at the config layer: byte-identical dumps, not merely both valid.
 
-    Every committed config omits the key today, so this is the state run6 inherits; a default
-    that produced a DIFFERENT config from the minted `1` would make the row's arrival a silent
-    behaviour change on every config that never mentions it.
+    Every config that does not mint the row inherits the default, and a default that produced
+    a DIFFERENT config from the minted `1` would make the row's arrival a silent behaviour
+    change on every file that never mentions it. run6 has since minted its own value, so the
+    subject here is the config that has not — the arm is about the DEFAULT, and a file
+    carrying an armed 8 cannot witness it.
     """
-    raw = _raw()
+    raw = _raw(_UNMINTED_CONFIG)
     assert "concurrency" not in raw["eval"], (
-        "run6.yaml has grown the key — this test's premise is that it is absent there"
+        f"{_UNMINTED_CONFIG.name} has grown the key — this row's premise is that some "
+        "committed config still omits it, so the default has a live subject"
     )
     minted = copy.deepcopy(raw)
     minted["eval"]["concurrency"] = 1

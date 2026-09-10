@@ -120,8 +120,8 @@ GATE_NAMES: tuple[str, ...] = (
 )
 
 #: The WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
-#: `IMPL_NOTES_T §3.6` names them, and the RECORDED-POSITION counter their fire rate is
-#: taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
+#: `IMPL_NOTES_T §3.6` names them, minus the one R346(f) took, and the RECORDED-POSITION
+#: counter their fire rate is taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
 #: once per `iteration_complete`, so nothing here opens a second reader of the pool.
 #:
 #: `inference_failures_total` joins them at R275(b) and is NOT a fourth Phase-T counter:
@@ -131,9 +131,11 @@ GATE_NAMES: tuple[str, ...] = (
 #: `target_integrity_defects` at 0 was killed at the seam BEFORE any target was built; the
 #: reverse ordering says the seam held and the exporter caught something else. Splitting
 #: them across two blocks would make that read a join across events.
+#: `gridls_zero_policy_rows` LEFT with R346(f): it counted zero-policy rows on the dense
+#: grid/LS record path, whose engine getter is gone, so it would have published a permanent 0
+#: reading as "measured, none found" — the phantom input LAW-07 refuses.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
-    "export_offwindow_mass_moves", "gridls_zero_policy_rows", "target_integrity_defects",
-    "inference_failures_total",
+    "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
 )
 _POSITIONS_COUNTER = "positions_generated"
 

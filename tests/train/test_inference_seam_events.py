@@ -93,9 +93,8 @@ def _stats(*, positions: int, seam: int, defects: int) -> RunnerStats:
     return RunnerStats(
         games_completed=0, positions_generated=positions, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
-        mcts_mean_root_concentration=0.1, cluster_value_std_mean=0.0,
-        cluster_policy_disagreement_mean=0.0, cluster_variance_sample_count=0,
-        export_offwindow_mass_moves=0, gridls_zero_policy_rows=0,
+        mcts_mean_root_concentration=0.1,
+        export_offwindow_mass_moves=0,
         target_integrity_defects=defects, inference_failures_total=seam,
     )
 

@@ -215,18 +215,22 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   to discard; `main` returns the number. Residual, disclosed: an exception raised BEFORE or
   DURING the terminal eval leaves the latch unset and exits rc 1 — loud, but indistinguishable
   from a composition wall (`Q-RT-RC1-COLLISION`).
-- `iteration_complete.target_integrity` carries the three WP12-R Phase-T target-integrity
-  counters IN-RUN (R164 / LAW-18): `export_offwindow_mass_moves`, `gridls_zero_policy_rows`
-  and `target_integrity_defects` — plus, from R275(b), `inference_failures_total` — each
-  `{total, delta, per_position}`, beside the `positions_delta` denominator. `PREREG_T §0b` names the first as THE in-run witness
+- `iteration_complete.target_integrity` carries the WP12-R Phase-T target-integrity
+  counters IN-RUN (R164 / LAW-18): `export_offwindow_mass_moves` and
+  `target_integrity_defects` — plus, from R275(b), `inference_failures_total` — each
+  `{total, delta, per_position}`, beside the `positions_delta` denominator.
+  `gridls_zero_policy_rows` was the third and is DELETED by R346(f): it counted §3.5 zero-row
+  fills per recorded CLUSTER row, the engine getter went with the dense record path, and the
+  `getattr(..., 0)` snapshot default would have left it published at a permanent 0 — a rate of
+  zero reading as "measured, none found" is the phantom input LAW-07 refuses.
+  `PREREG_T §0b` names the first as THE in-run witness
   attributing the expected game-shape drift, and until Phase O it was readable only by a test
   calling `runner_stats(pool)` — a witness a live run cannot read is not a witness, and
   LAW-18's own text is that a post-hoc offline probe cannot distinguish "starved" from
   "ineffective". LAW-03, stated because the unit is not obvious: `per_position` is fires per
-  RECORDED POSITION — not per game and not per ply — so `gridls_zero_policy_rows` can
-  legitimately exceed 1.0 (one position contributes many cluster rows) and it is a RATE, never
-  a fraction; no per-MOVE denominator is published, so a per-move rate is NOT re-derivable
-  from this payload. `per_position` is `None`, never a fabricated `0.0`, when no position was
+  RECORDED POSITION — not per game and not per ply — so a counter here can legitimately
+  exceed 1.0 and it is a RATE, never a fraction; no per-MOVE denominator is published, so a
+  per-move rate is NOT re-derivable from this payload. `per_position` is `None`, never a fabricated `0.0`, when no position was
   recorded in the interval (the convention below, applied). An IDLE lever stays VISIBLE at 0:
   `target_integrity_defects` reads 0 in every run that survives to emit, because its latch is
   run-fatal — that permanent zero is the posture, not an unproduced field.

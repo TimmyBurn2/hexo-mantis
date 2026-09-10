@@ -498,13 +498,13 @@ def test_of2_9_leg2_no_tail_statement_lives_inside_the_accumulation_loop() -> No
                 "times per training step (MB-8)")
 
 
-# ═══ OF2-14 — the five smoke configs do not bind ═════════════════════════════════════════
-_NON_RUN5 = ("dev_example.yaml", "smoke_preflight_armed.yaml", "smoke_preflight_armed.yaml")
+# ═══ OF2-14 — the non-production configs do not bind ═════════════════════════════════════
+_NON_RUN5 = ("dev_example.yaml", "smoke_preflight_armed.yaml")
 
 
 @pytest.mark.parametrize("name", _NON_RUN5)
 def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
-    """OF2-14 — DESIGN_DFIX §7.4 claims the five non-run5 configs are "non-binding by
+    """OF2-14 — DESIGN_DFIX §7.4 claims the non-production configs are "non-binding by
     construction". Rev-1 asserted that and tested nothing; this row is its producer.
 
     A smoke config whose cap BOUND would make CI exercise a split BY ACCIDENT, with no count
@@ -512,8 +512,9 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     deliberate and its M is asserted. The probe batch is built at the config's OWN
     `train.batch_size`.
 
-    The two grid configs that used to sit beside these are DELETED with the grid path
-    (R346(f)), so `_NON_RUN5` is the graph sweep outright and needs no arch split."""
+    The grid configs that used to sit beside these are DELETED with the grid path (R346(f)),
+    which also took three of the five smoke profiles; `_NON_RUN5` is the graph sweep outright
+    and needs no arch split."""
     cfg = load_config(_CONFIGS / name)
     caps = resolve_microbatch_caps(cfg.model_dump())
     batch_size = int(cfg.train.batch_size)
@@ -531,19 +532,15 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
 
 
 def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:
-    """OF2-14 premise — the five above plus the production configs are ALL the configs.
+    """OF2-14 premise — the two above plus the production config are ALL the configs.
     Enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7
     and 12 consume — a second flat `configs/*.yaml` glob here would be exactly the
     divergence ADJ-13 F-1 was: a subdirectory/`.yml` shape both gates make legal would
     slip out of this sweep silently while staying invisible to nobody else (N4, F-P2B/N4).
 
-    F-P2B (R259): `run6.yaml` joins run5 on the EXCLUDED side, on run5's own
-    grounds — it mints run5's CARD-RUN5-GPU-OOM caps (4500000/170000) at run5's batch_size
-    256, and those caps exist BECAUSE they bind on the production GPU. Putting it through
-    the "caps do not bind" sweep would assert the opposite of the caps' purpose.
-
-    R338 (the run6 mint): `run6.yaml` joins the EXCLUDED side for the SAME reason, and it is
-    the strongest instance of it — its `train.microbatch_caps` are fitted at the box against a
-    measured partition, so they bind by construction."""
+    `run6.yaml` is the EXCLUDED side, and R346(f) left it as the whole of that side: its
+    `train.microbatch_caps` are fitted at the box against a measured partition, so they bind
+    by construction, and putting it through the "caps do not bind" sweep would assert the
+    opposite of the caps' purpose."""
     live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
-    assert live == sorted((*_NON_RUN5, "run6.yaml", "run6.yaml", "run6.yaml"))
+    assert live == sorted((*_NON_RUN5, "run6.yaml"))

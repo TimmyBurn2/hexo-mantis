@@ -67,21 +67,18 @@ class TrainerLike(Protocol):
 class ReplayBufferLike(Protocol):
     size: int
     capacity: int
-    # R266/F-P1/N1 (LAW-18): the R245(c) compact/spread symmetry-draw counters,
-    # read by `mantis.train.events.symmetry_draw_block` via `getattr(buffer, …, None)`
-    # (a defensive wheel-compat probe for an engine build predating the getters, the
-    # k_cluster_histogram/uncovered_forced_win posture) — declared here as plain `int`
-    # because the concrete `ReplayBuffer` this protocol describes always carries them.
-    compact_draws: int
-    spread_draws: int
+    # The R245(c) compact/spread symmetry-draw counters stood here and LEFT with R346(f):
+    # their reader (`symmetry_draw_block`), their producer (the window-preserving symmetry
+    # gate) and the dense `ReplayBuffer` that carried them are all deleted, so a
+    # `runtime_checkable` protocol still demanding them would refuse every live ring.
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
     #: R345(b)(6) — the last sampled batch's rows-per-game and age quantiles. Declared on the
     #: SHARED protocol rather than the graph route key because it is a fact about a ring, not
-    #: about which sampler it carries; the dense ring simply does not implement it yet, and
-    #: `_batch_composition` probes with `getattr` and publishes nothing when it is absent —
-    #: which is why the absence is a gap and not a route mismatch.
+    #: about which sampler it carries. The second ring that made "shared" mean something is
+    #: deleted (R346(f)); the placement is kept because the reason still holds and moving it
+    #: would say a ring's batch composition is a property of its sampler, which it is not.
     def last_batch_composition(self) -> dict[str, int]: ...
 
 

@@ -1,11 +1,8 @@
-# >300 justify (R8): one seam, four holes, and one production `StepCoordinator` that costs
-# most of the file. The coordinator fakes below (pool / trainer / buffer / eval-pipeline /
-# sink) exist to drive the REAL `_emit_iteration_complete`, which is the only way to pin the
-# caller half of this seam; the getter-crosswiring, wheel-compat-default and stub-type pins
-# are the other end of the SAME payload's journey and share the constants and the fixture
-# vocabulary. Splitting them would fork the coordinator harness for one test and leave the
-# remaining three homeless, and the four holes were found together for the same reason —
-# every one of them is a place the cluster block travels where nothing was watching.
+# The R8 justification this file carried is RETIRED with two of its four holes (R346(f)): it
+# argued that four seam pins plus one production `StepCoordinator` were one unit, and the
+# file is now under the cap. The coordinator fakes below (pool / trainer / buffer /
+# eval-pipeline / sink) still exist to drive the REAL `_emit_iteration_complete`, which is
+# the only way to pin the caller half of this seam.
 """ADJ-D32 / R249 + R250 — the WIRING the payload pins cannot see.
 
 `tests/train/test_cluster_stat_absence.py` drives the real `emit_iteration_complete_event`
@@ -20,20 +17,12 @@ and this file closes those ends:
        arm. The payload pins cannot see it — they choose the config themselves. Nor does
        `test_full_config_carries_the_real_config_not_an_empty_dict` (O-S1b): it asserts on
        `coordinator.full_config`, the ATTRIBUTE, and says nothing about what is passed on.
-  H-2  the PRODUCER. `pool_hooks.runner_stats` reads the two cluster getters by name.
-       Swapping them transposes two live telemetry series permanently and invisibly — in
-       aggregate they simply trade places for the whole run, and nothing recovers them
-       post-hoc. Every other pin in this card's set drives both means `None`, and a swap of
-       `None` for `None` passes them all. DISTINCT values are the only instrument that sees
-       it. `test_winrates_are_computed_from_the_right_counters` makes exactly this argument
-       for the winrate pair; the cluster pair got the shape change without the instrument.
+  H-2  the PRODUCER — RETIRED with the getters (R346(f)); see the block below.
   H-3  the TYPE AUTHORITY. Both `_engine.pyi` twins are the only thing pyright reads for the
        FFI getters — never the compiled module — so a stub still saying `-> float` lets a
        consumer write `runner.cluster_value_std_mean + 1.0` with gate 14 at ZERO and fail at
        runtime on precisely the arm this card is about.
-  H-4  the WHEEL-COMPAT DEFAULT. R249 changed `getattr(r, <mean>, 0.0)` to
-       `getattr(..., None)` so an engine build predating the getter reports absence rather
-       than the fabricated zero the card removes. Reverting it reds nothing today.
+  H-4  the WHEEL-COMPAT DEFAULT — RETIRED with the fields (R346(f)); see the block below.
 
 The snapshot→getter half of the same crosswiring question is pinned in Rust
 (`runner.rs::tests::cluster_means_read_their_own_accumulators`) — it is unreachable from
@@ -247,53 +236,17 @@ def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
     )
 
 
-# ═══ H-2 — the two cluster means are not crosswired at the snapshot layer ═══
-def test_runner_stats_reads_each_cluster_mean_from_its_own_getter() -> None:
-    """DISTINCT values threaded getter → snapshot field, because that is the only shape of
-    test a transposition cannot survive.
-
-    FALSIFYING MUTATION: swap the two `getattr(r, ...)` names in `pool_hooks.runner_stats`.
-    """
-    runner = SimpleNamespace(
-        cluster_value_std_mean=0.125,
-        cluster_policy_disagreement_mean=0.875,
-        cluster_variance_sample_count=4,
-        mcts_mean_depth=3.0,
-        mcts_mean_root_concentration=0.25,
-    )
-
-    rstats = runner_stats(SimpleNamespace(_runner=runner))
-
-    assert rstats.cluster_value_std_mean == 0.125, (
-        "cluster_value_std_mean must read the value-spread getter, not the disagreement one "
-        "— a swap is permanent, silent, and unrecoverable after the run"
-    )
-    assert rstats.cluster_policy_disagreement_mean == 0.875, (
-        "cluster_policy_disagreement_mean must read the disagreement getter"
-    )
-    assert rstats.cluster_variance_sample_count == 4
-
-
-# ═══ H-4 — the wheel-compat default is ABSENCE, not a fabricated zero ═══
-def test_the_wheel_compat_default_for_a_missing_cluster_getter_is_absence() -> None:
-    """`runner_stats`'s `getattr` defaults exist for an engine build that predates a counter.
-    R249 changed the two cluster means' default from `0.0` to `None` so such a build reports
-    "no reading" instead of the very fabrication the card removes, one layer up.
-
-    FALSIFYING MUTATION: restore either default to `0.0`.
-    """
-    old_wheel = SimpleNamespace(
-        cluster_variance_sample_count=0,
-        mcts_mean_depth=3.0,
-        mcts_mean_root_concentration=0.25,
-    )  # NO cluster-mean getters at all
-
-    rstats = runner_stats(SimpleNamespace(_runner=old_wheel))
-
-    assert rstats.cluster_value_std_mean is None, (
-        "an engine build without the getter must report absence, not a fabricated 0.0"
-    )
-    assert rstats.cluster_policy_disagreement_mean is None
+# ═══ H-2 and H-4 — RETIRED WITH THE FIELDS THEY GUARDED (R346(f)) ═══
+# H-2 threaded two DISTINCT values through the snapshot so a transposition of the two
+# `getattr` names could not survive; H-4 pinned that a wheel without the getters reported
+# absence rather than a fabricated 0.0. Both measured `RunnerStats.cluster_value_std_mean` /
+# `cluster_policy_disagreement_mean` / `cluster_variance_sample_count`, which are DELETED:
+# the engine exposes no getter, so the snapshot would have carried the wheel-compat default
+# forever and the "absence" H-4 asserted would have been the only reading it could ever
+# produce — a pin on a constant. The surviving claim is that the fields do not come back
+# without their producers, and it is asserted where the snapshot's field set is asserted
+# exactly (`tests/selfplay/test_pool_surface.py`). H-3 below is untouched: it is about the
+# TYPE STUBS, and a stub re-declaring a getter the engine lacks is still a live hazard.
 
 
 # ═══ H-3 — the shipped type stubs must not re-declare the retired cluster getters ═══

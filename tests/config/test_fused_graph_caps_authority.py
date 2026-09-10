@@ -127,23 +127,11 @@ def test_fg5_01_every_GRAPH_config_mints_the_block_through_the_real_loader(name:
         assert value is None or value >= 1, f"{name}: {member}={value} is below the range"
 
 
-@pytest.mark.parametrize("name", _GRID_CONFIGS)
-def test_fg5_01b_no_GRID_config_carries_the_block_at_all(name: str) -> None:
-    """The complement of FG5-01, and the half R322(d) added.
-
-    Before B2 a grid config was REQUIRED to carry this graph-only cap and the mint had to
-    invent a number for a quantity a grid run has none of. Now the schema refuses the block on
-    a grid config, so "absent" is the only legal state — and this row is what notices if one
-    comes back. Both directions matter: the row above would stay green on a tree where every
-    config carried it.
-    """
-    cfg = load_config(_CONFIGS / name)
-    assert cfg.inference.fused_graph_caps is None, (
-        f"{name} selects representation='grid' and carries `inference.fused_graph_caps`; the "
-        "block is ARCH-SCOPED to graph (R322(d))")
-    assert "fused_graph_caps" not in cfg.inference.model_fields_set, (
-        f"{name} carries the key explicitly (as null); absence and an explicit null are "
-        "different facts and both are refused on a foreign arch")
+# FG5-01b — RETIRED with the grid representation (R346(f)). It parametrized over
+# `_GRID_CONFIGS`, which is empty by ruling, so pytest collected it as a permanent empty
+# parameter set: a SKIP that reads like coverage. The claim it carried — no shipped config
+# may select grid and carry this graph-only block — is asserted directly by
+# `test_fg5_01c_the_arch_split_covers_every_shipped_config` below, over the same derived list.
 
 
 def test_fg5_01c_the_arch_split_covers_every_shipped_config(name=None) -> None:
