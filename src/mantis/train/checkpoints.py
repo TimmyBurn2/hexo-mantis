@@ -938,6 +938,7 @@ def strip_and_restamp(
             "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
             "uncertainty_weight": 0.0, "ownership_weight": 0.0, "threat_weight": 0.0,
             "aux_chain_weight": 0.0, "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+            "fast_policy_weight": 0.0,
         },
         # WPSC Phase 2 SC-A2: `selfplay:` gains mcts:/playout_cap: sub-blocks + many new
         # required scalars; `legal_move_radius_schedule` is GONE (DESIGN_P2.md §5); the

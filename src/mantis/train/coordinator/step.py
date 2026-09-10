@@ -47,6 +47,7 @@ import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
 import mantis.train.buffer_persist as _buffer_persist
 import mantis.train.bundle as _bundle
 import mantis.train.resume_state as _resume_state
+from mantis.config.resolve.fast_policy_weight import resolve_fast_policy_weight
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.monitor.config import MonitorConfig
@@ -1502,7 +1503,16 @@ class StepCoordinator:
             recency_weight=cfg.recency_weight, recent_buffer=self.recent_buffer,
             caps_provider=self._microbatch_caps,
             sample_threads_provider=self._sample_threads,
+            fast_policy_weight_provider=self._fast_policy_weight,
         )
+
+    def _fast_policy_weight(self) -> float:
+        """R347(b) — the graph route's fast-arm policy weight, resolved lazily.
+
+        Not memoised, unlike the caps: it is one dict lookup and a float, and a memo would be
+        a second place the value lives.
+        """
+        return resolve_fast_policy_weight(self.full_config)
 
     def _step_spec(self) -> Any:
         """The resolved encoding spec, lazily resolved ONCE from the declared config this

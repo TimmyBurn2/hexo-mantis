@@ -243,7 +243,8 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
                                 recency_weight=0.0, recent_buffer=None,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
 
 
 def _drive_dense(trainer: Trainer, n_steps: int) -> None:
@@ -251,7 +252,8 @@ def _drive_dense(trainer: Trainer, n_steps: int) -> None:
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, _DSPEC, batch_size=4, augment=False,
                                 recency_weight=0.0, recent_buffer=None,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
 
 
 # ── OP-1 ⊕ — R173 arm 1: interval N → checkpoints at N and 2N (the GRAPH route) ──────────

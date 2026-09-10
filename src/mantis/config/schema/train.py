@@ -558,6 +558,19 @@ class TrainConfig(StrictModel):
     aux_chain_weight: float = Field(ge=0)
     ply_index_weight: float = Field(ge=0)
     threat_pos_weight: float = Field(gt=0)
+    #: R347(b) — the POLICY weight a fast-arm (`is_full_search == 0`) row carries. Value is
+    #: always supervised on those rows; the policy was gated off them entirely, and this is
+    #: the declared weight that replaces the gate. `0.0` reproduces the gate exactly, which
+    #: is what run6 mints: three independent engines discard the fast arm's policy, and
+    #: Gumbel's low-N guarantee makes training it an ablation rather than a default. The
+    #: bound is `ge=0` and not `gt=0` BECAUSE 0.0 is the shipped value: a positive-only bound
+    #: would make the ruling's own default unmintable. Read by
+    #: `mantis.config.resolve.fast_policy_weight.resolve_fast_policy_weight`, handed to
+    #: `run_declared_train_step` as `fast_policy_weight_provider` and invoked ONCE per step in
+    #: `_build_graph_parts` -> `losses.graph_policy_row_weights`, which is the single place
+    #: the rule is evaluated — the same provider shape `train.microbatch_caps` carries, and
+    #: for the same reason: a grid `full_config` has no `train` section at all.
+    fast_policy_weight: float = Field(ge=0)
 
     @model_validator(mode="after")
     def _entropy_sign(self) -> "TrainConfig":

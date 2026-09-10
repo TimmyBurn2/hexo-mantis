@@ -143,6 +143,7 @@ train:
   aux_chain_weight: 0.0
   ply_index_weight: 0.0
   threat_pos_weight: 1.0
+  fast_policy_weight: 0.0
 selfplay:
   n_workers: 14
   leaf_batch_size: 8

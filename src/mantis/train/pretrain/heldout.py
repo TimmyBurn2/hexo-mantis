@@ -84,6 +84,7 @@ class HeldOutMonitor:
     stop: PatienceStop
     caps_provider: Any
     sample_threads_provider: Any
+    fast_policy_weight_provider: Any
     eval_batches: int = 0
     plies: int = 0
     history: list[tuple[int, float]] = field(default_factory=list)
@@ -91,7 +92,8 @@ class HeldOutMonitor:
     @classmethod
     def build(cls, *, ring: Any, spec: Any, plies: int, batch_size: int, eval_every: int,
               patience: int, min_delta: float, caps_provider: Any,
-              sample_threads_provider: Any) -> HeldOutMonitor:
+              sample_threads_provider: Any,
+              fast_policy_weight_provider: Any) -> HeldOutMonitor:
         """Construct with `eval_batches` derived from the held-out ring's own ply count.
 
         Raises:
@@ -111,6 +113,7 @@ class HeldOutMonitor:
             ring=ring, spec=spec, batch_size=batch_size, eval_every=eval_every,
             stop=PatienceStop(patience=patience, min_delta=min_delta),
             caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+            fast_policy_weight_provider=fast_policy_weight_provider,
             eval_batches=max(1, math.ceil(plies / batch_size)), plies=plies,
         )
 
@@ -124,6 +127,7 @@ class HeldOutMonitor:
                 trainer, self.ring, self.spec, batch_size=self.batch_size,
                 caps_provider=self.caps_provider,
                 sample_threads_provider=self.sample_threads_provider,
+                fast_policy_weight_provider=self.fast_policy_weight_provider,
             )
             total += float(info["policy_loss"])
         return total / self.eval_batches

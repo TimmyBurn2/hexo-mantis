@@ -91,6 +91,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "aux_chain_weight": 0.0,
     "ply_index_weight": 0.0,
     "threat_pos_weight": 1.0,
+    "fast_policy_weight": 0.0,
     # AUDIT-1 F-06 / R332(d): `train.ema` is a REQUIRED block. `enabled: false` is what every
     # committed config mints — the posture stated, not inherited from a code-side default.
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
@@ -120,6 +121,7 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("aux_chain_weight", -0.1),
     ("ply_index_weight", -0.1),
     ("threat_pos_weight", 0.0),
+    ("fast_policy_weight", -0.1),
     # WPMINT Phase K-B — one violation per knob whose bound makes a real defect
     # inexpressible, named at the value that defect is actually written as.
     ("eval_interval", 0),               # the entire eval/promotion pipeline, silently off

@@ -172,8 +172,10 @@ def encode_game(
             int(board.moves_remaining),
             ply,
             # TRUE, and the flag's ROLE decides this rather than its NAME. Its ONLY semantic
-            # consumer is `ragged_policy_ce`'s `full_search_mask`, where FALSE means "this row
-            # contributes VALUE ONLY" — the quick-search exception; `recency_buffer` defaults
+            # consumer is `losses.graph_policy_row_weights`, which turns it into the row's
+            # POLICY WEIGHT — 1 here, `train.fast_policy_weight` on a fast-arm row (R347(b),
+            # minted 0.0, which is the value-only quick-search exception this comment was
+            # written against); `recency_buffer` defaults
             # it to 1, so TRUE is the neutral value. A BC row's one-hot IS a policy target
             # worth learning from, so FALSE here zeroed the policy loss and its denominator on
             # EVERY row: measured at 2 000 steps over 511 145 human positions, held-out policy

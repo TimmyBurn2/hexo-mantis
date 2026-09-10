@@ -184,6 +184,12 @@ _ADDED_LEAVES = {
     # so nothing minted moves and no run changes; arming `gumbel` is a mint-prereg row and
     # this instrument is what would catch an arming that arrived without one.
     "search.kind",
+    # GUMBEL-3 (R347(b)): ONE required leaf, `train.fast_policy_weight`, minted 0.0 in every
+    # config. 0.0 IS the shipped behaviour — the fast arm's policy was gated off by a binary
+    # mask — so nothing minted moves and no run changes; the key exists so the ablation has a
+    # lever, and this instrument is what would catch a non-zero arming arriving without a
+    # mint-prereg row.
+    "train.fast_policy_weight",
 }
 
 #: The subset of `_ADDED_LEAVES` that is ARCH-SCOPED (R322(d)) — added only to the configs

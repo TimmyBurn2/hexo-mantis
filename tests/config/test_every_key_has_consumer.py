@@ -257,6 +257,7 @@ CONSUMER_REGISTRY = {
     "train.aux_chain_weight": "TrainHParams.from_config -> chain loss weight",
     "train.ply_index_weight": "TrainHParams.from_config -> ply-index loss weight",
     "train.threat_pos_weight": "TrainHParams.from_config -> threat pos_weight tensor",
+    "train.fast_policy_weight": "resolve_fast_policy_weight -> run_declared_train_step fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure): every SelfplayConfig/MctsConfig/
     # PlayoutCapConfig/InferenceConfig leaf's live consumer is SelfPlayHParams.from_config /
     # InferenceHParams.from_config (mantis.selfplay.hparams), which read the nested

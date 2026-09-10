@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+from mantis.config.resolve.fast_policy_weight import resolve_fast_policy_weight
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.encoding import lookup as _lookup_encoding
@@ -293,6 +294,9 @@ def run_graph_pretrain(
     def _threads() -> int:
         return resolve_sample_threads(full_config)
 
+    def _fast_policy_weight() -> float:
+        return resolve_fast_policy_weight(full_config)
+
     _LOG.info(
         "bc_graph_pretrain_start steps=%d batch_size=%d augment=%s ring_records=%s",
         total_steps, knobs.batch_size, knobs.augment, prov["plies"],
@@ -319,6 +323,7 @@ def run_graph_pretrain(
             batch_size=knobs.batch_size, augment=knobs.augment,
             recency_weight=BC_RECENCY_WEIGHT, recent_buffer=None,
             caps_provider=_caps, sample_threads_provider=_threads,
+            fast_policy_weight_provider=_fast_policy_weight,
         )
         steps_run += 1
         if monitor is not None:
