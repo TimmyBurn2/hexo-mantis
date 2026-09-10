@@ -103,8 +103,10 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
     ("segment_softmax / stone_mask_from_batch",
      [("graph_collate.py", "segment_softmax"),
       ("graph_collate.py", "stone_mask_from_batch")], (0, 0, 0)),
-    ("InferenceServer.run (dense loop)",
-     [("inference_server.py", "InferenceServer.run")], (0, 1, 0)),
+    # R346(f): `run()` was the DENSE loop and is now a one-line delegation to the graph
+    # loop, so its own `while` moved to `_run_graph_loop`'s row below rather than vanishing.
+    ("InferenceServer.run",
+     [("inference_server.py", "InferenceServer.run")], (0, 0, 0)),
     # F-816-10 (R276(f)) moves this row's `for` count 0 -> 1, and the movement is RULED, not
     # absorbed. The R43 frozen-table edit was DISCLOSED and queued the same event as
     # ADJUDICATION_QUEUE F-816-13, and GRANTED by R281(e) on the reasoning below — the
@@ -129,8 +131,12 @@ _Q6_TABLE: list[tuple[str, list[tuple[str, str]], tuple[int, int, int]]] = [
      [("pool_drain.py", "run_stats_loop"),
       ("pool_push.py", "push_dense"),
       ("pool_push.py", "push_graph")], (3, 1, 2)),
+    # R346(f) DOWN-RATCHET: the four `for`s were the K-cluster dense decode (window loop,
+    # legal-move scatter, per-cluster value pool). `infer_batch` now delegates to
+    # `_infer_batch_graph`, whose own row below is unchanged. A NO-NEW-LOOPS contract, so
+    # lowering it tightens the gate.
     ("LocalInferenceEngine.infer_batch",
-     [("inference_local.py", "LocalInferenceEngine.infer_batch")], (4, 0, 0)),
+     [("inference_local.py", "LocalInferenceEngine.infer_batch")], (0, 0, 0)),
     ("LocalInferenceEngine._infer_batch_graph",
      [("inference_local.py", "LocalInferenceEngine._infer_batch_graph")], (0, 0, 3)),
 ]

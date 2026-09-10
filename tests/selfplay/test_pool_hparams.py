@@ -74,10 +74,9 @@ def record_runner_config(monkeypatch):
         before = len(built)
         hp = SelfPlayHParams.from_config(config)
         enc = resolve_pool_encoding(config, arch=None)
-        # DESIGN §a.1 names these four parameters; the oracle calls them by KEYWORD and hands
-        # the ResolvedPoolEncoding as `spec_dims` (ORACLE_NOTES §J3 — fixed here, before IMPL).
-        build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name,
-                            seed_prefixes=None)
+        # DESIGN §a.1 names these parameters; the oracle calls them by KEYWORD and hands the
+        # ResolvedPoolEncoding as `spec_dims` (ORACLE_NOTES §J3 — fixed here, before IMPL).
+        build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
         assert len(built) == before + 1, (
             "expected exactly ONE SelfPlayRunnerConfig construction per assembly"
         )

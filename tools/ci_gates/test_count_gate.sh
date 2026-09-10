@@ -67,6 +67,14 @@
 set -euo pipefail
 
 FLOOR_FILE="tools/ci_gates/test_count_floor.txt"
+# The ONE sanctioned way the floor goes DOWN. Absent on a normal tree; when present it holds
+# exactly one record, `<from> -> <to> <grounds>`, and it authorises a decrease only when BOTH
+# numbers match the two floors actually in play AND the tree collects exactly `<to>`. It is
+# self-expiring by construction: the next commit moves the ref floor, so a record left behind
+# stops matching and the gate reds on the stale record BY NAME. It cannot launder a real
+# regression — a decrease with slack (`collected > to`) is refused, so the record can only
+# ever ratify a deletion whose new count is exactly stated.
+RATCHET_FILE="tools/ci_gates/test_count_ratchet_down.txt"
 MAIN_BRANCH="dev"
 PYTEST_CMD="uv run pytest"
 # The interpreter the tier census runs under. `uv run` so it sees the project env, the
@@ -85,6 +93,36 @@ is_uint() { [[ $1 =~ ^[0-9]+$ ]]; }
 # ---------------------------------------------------------------------------------------
 verdict() {
   local count=$1 ref_floor=$2 tree_floor=$3 ref=$4 rc=0
+  local sanctioned=${RATCHET_RECORD:-}
+  if [ -n "$sanctioned" ]; then
+    local r_from r_to
+    r_from=${sanctioned%%->*}; r_from=${r_from//[[:space:]]/}
+    r_to=${sanctioned#*->}; r_to=${r_to%%[!0-9 ]*}; r_to=${r_to//[[:space:]]/}
+    if ! is_uint "$r_from" || ! is_uint "$r_to"; then
+      printf 'gate 3c FAIL (ratchet-down): %s is not a `<from> -> <to> <grounds>` record: %s\n' \
+        "$RATCHET_FILE" "$sanctioned"
+      return 1
+    fi
+    if [ "$r_from" != "$ref_floor" ] || [ "$r_to" != "$tree_floor" ] \
+       || [ "$count" != "$tree_floor" ] || [ "$tree_floor" -ge "$ref_floor" ]; then
+      printf 'gate 3c FAIL (ratchet-down): STALE record %s -> %s in %s.\n' \
+        "$r_from" "$r_to" "$RATCHET_FILE"
+      printf '  This run has ref_floor=%s tree_floor=%s collected=%s. A ratchet-down record\n' \
+        "$ref_floor" "$tree_floor" "$count"
+      printf '  authorises exactly ONE decrease, states both of its numbers, and is deleted in\n'
+      printf '  the commit after it lands. Delete it, or make it name this decrease.\n'
+      return 1
+    fi
+    printf 'gate 3c: SANCTIONED RATCHET-DOWN %s -> %s (%s). The non-decreasing property is\n' \
+      "$r_from" "$r_to" "${sanctioned#*->}"
+    printf '  DELIBERATELY waived for this one decrease and is enforced again on the next run.\n'
+    if [ "$tree_floor" -gt "$count" ]; then
+      printf 'gate 3c FAIL (over-ratchet): %s is %s but only %s test(s) collected.\n' \
+        "$FLOOR_FILE" "$tree_floor" "$count"
+      rc=1
+    fi
+    return "$rc"
+  fi
   if [ "$count" -lt "$ref_floor" ]; then
     printf 'gate 3c FAIL (count): collected %s test(s), floor is %s at %s.\n' \
       "$count" "$ref_floor" "$ref"
@@ -181,6 +219,18 @@ self_test() {
   _expect_fail  "7b floor above the collection" 95 90 100 "FAIL (over-ratchet)"
   _expect_clean "7c floor equal to the collection" 95 90 95
 
+  # Arms 7d-7g drive the SANCTIONED RATCHET-DOWN. Each is a shape the record must or must
+  # not authorise, and 7e/7f are the two ways a record could otherwise launder a regression.
+  RATCHET_RECORD="90 -> 80  R346(f) self-test" _expect_clean "7d sanctioned decrease" 80 90 80
+  RATCHET_RECORD="90 -> 80  R346(f) self-test" _expect_fail \
+    "7e record with slack (a real regression under a true record)" 75 90 80 "FAIL (ratchet-down)"
+  RATCHET_RECORD="95 -> 80  R346(f) self-test" _expect_fail \
+    "7f record naming another decrease" 80 90 80 "STALE record"
+  RATCHET_RECORD="90 -> 91  R346(f) self-test" _expect_fail \
+    "7g record claiming an increase" 91 90 91 "STALE record"
+  RATCHET_RECORD="not a record" _expect_fail \
+    "7h malformed record" 80 90 80 "is not a"
+
   # Arms 8-11 drive `collection_verdict`. Arm 9 is F-816-33 VERBATIM: the summary line this
   # tree actually printed under a planted import break, beside the status pytest actually
   # exited with.
@@ -266,6 +316,13 @@ main() {
   local tree_floor
   tree_floor=$(tr -d '[:space:]' < "$FLOOR_FILE")
   is_uint "$tree_floor" || die "$FLOOR_FILE in this tree is not a count: '$tree_floor'"
+
+  RATCHET_RECORD=""
+  if [ -f "$RATCHET_FILE" ]; then
+    RATCHET_RECORD=$(grep -v '^[[:space:]]*#' "$RATCHET_FILE" | grep -v '^[[:space:]]*$' | head -1)
+    [ -n "$RATCHET_RECORD" ] || die "$RATCHET_FILE exists but holds no record"
+  fi
+  export RATCHET_RECORD
 
   local ref ref_floor
   ref=$(resolve_ref) || ref=""
