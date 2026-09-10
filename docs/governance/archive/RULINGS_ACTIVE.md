@@ -3661,7 +3661,7 @@ Verbatim text in the register; one-liners here are index only.
   `git var GIT_COMMITTER_IDENT` did not resolve in this repo at all and any commit or
   annotated tag would have failed at the point of writing. **EXECUTED and verified**:
   `git var GIT_COMMITTER_IDENT` now resolves to `Tom S
-  <148332956+[REDACTED:ssh-userhost:a6cfdea1]>` inside `hexo-mantis`; global config still
+  <[REDACTED:local:rule7_local_terms.txt:50:2a97df59]+[REDACTED:ssh-userhost:a6cfdea1]>` inside `hexo-mantis`; global config still
   carries `user.name` ONLY and was not written. Visibility re-derived the same day by
   unauthenticated API: `[REDACTED:local:rule7_local_terms.txt:25:292d8813]/[REDACTED:local:rule7_local_terms.txt:27:591f6616]` **404 = PRIVATE** (rule-7 satisfied for
   the R279(f) push), `[REDACTED:local:rule7_local_terms.txt:26:8f2fd2d5]/hexo-mantis` **200 = PUBLIC**. The asymmetry is the design —
