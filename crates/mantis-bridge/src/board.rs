@@ -21,10 +21,6 @@ use mantis_core::board::{BOARD_SIZE, DEFAULT_CLUSTER_THRESHOLD, HALF};
 use mantis_core::{Board as RustBoard, BoardGeometry, Cell, Player};
 use mantis_encoding::RegistrySpec;
 
-/// Return tuple of `get_cluster_views`: a list of `(2, S, S)` view arrays
-/// (current-player + opponent stones) paired with the axial (q, r) centre
-/// of each cluster window.
-
 /// Map a Python player id (1 = P1, -1 = P2) to the Rust `Player` enum.
 /// Used by the forcing-move primitive bindings. `ValueError` on any other value.
 fn player_from_i8(player: i8) -> PyResult<Player> {
@@ -271,34 +267,15 @@ impl PyBoard {
     /// Encode the board as a flat list of floats for the 18 tensor planes
     /// (shape conceptually [18, board_size, board_size] where board_size comes
     /// from the bound encoding — default v6 wire geometry, 19 → flat 18×361=6498).
-    ///   plane 0: current player's stones
-    ///   plane 8: opponent's stones
-    ///   plane 16: moves_remaining == 2 ? 1.0 : 0.0
-    ///   plane 17: ply % 2
-    ///   (chain-length planes moved to the replay-buffer aux sub-buffer.)
-    ///
-    /// Panics for multi-window encodings (v6w25 etc.) — with `panic = "unwind"`
-    /// that panic crosses the FFI as a catchable `PanicException`; use
-    /// `get_cluster_views()` for those encodings.
-    ///
-    /// Zero-copy return via `IntoPyArray`: the returned array is a NumPy view
-    /// over the Vec the encode kernel just allocated. Python callers spell:
-    ///   `board.to_tensor().reshape(18, board.size, board.size)`.
-    ///
-    /// Raises:
-    ///     ValueError: the board carries no encoding (`Board.new()`) — no v6 default
-    ///         (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
-    ///
     /// Window-relative flat index for axial (q, r).
     /// Used by selfplay workers to convert legal-move coords to policy indices.
     pub fn to_flat(&self, q: i32, r: i32) -> usize {
         self.inner.window_flat_idx(q, r)
     }
 
-    /// Board size (cells per axis). Default 19 (v6 wire format); honors the
-    /// encoding bound at construction via `with_encoding_name` (e.g. 25 for
-    /// v6w25). A raw geometry default on a deliberately encoding-less board —
-    /// NOT the identity-resolution path (that hard-errors on an unknown name).
+    /// Board size (cells per axis). Default 19; honors the encoding bound at construction
+    /// via `with_encoding_name`. A raw geometry default on a deliberately encoding-less
+    /// board — NOT the identity-resolution path (that hard-errors on an unknown name).
     #[getter]
     pub fn size(&self) -> usize {
         self.encoding.map_or(BOARD_SIZE, |s| s.board_size)
@@ -826,7 +803,11 @@ mod tests {
         let b = PyBoard::with_encoding_name("gnn_axis_r8").expect("registered");
         let c = b.clone();
         assert_eq!(c.size(), b.size());
-        assert_eq!(c.legal_move_radius(), 8, "the r8 row's radius survives the clone");
+        assert_eq!(
+            c.legal_move_radius(),
+            8,
+            "the r8 row's radius survives the clone"
+        );
         assert!(c.encoding.is_some());
     }
 

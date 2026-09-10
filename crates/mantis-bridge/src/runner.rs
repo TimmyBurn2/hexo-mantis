@@ -125,9 +125,6 @@ impl PySelfPlayRunnerConfig {
         quiescence_enabled = true,
         quiescence_blend_2 = 0.3,
         temp_min = 0.5,
-        zoi_enabled = false,
-        zoi_lookback = 16,
-        zoi_margin = 5,
         c_visit = 50.0,
         c_scale = 1.0,
         gumbel_m = 16,
@@ -141,7 +138,6 @@ impl PySelfPlayRunnerConfig {
         n_sims_full = 0,
         random_opening_plies = 0,
         encoding_name = None,
-        inference_pool_size = None
     ))]
     pub fn new(
         n_workers: usize,
@@ -159,9 +155,6 @@ impl PySelfPlayRunnerConfig {
         quiescence_enabled: bool,
         quiescence_blend_2: f32,
         temp_min: f32,
-        zoi_enabled: bool,
-        zoi_lookback: usize,
-        zoi_margin: i32,
         c_visit: f32,
         c_scale: f32,
         gumbel_m: usize,
@@ -175,7 +168,6 @@ impl PySelfPlayRunnerConfig {
         n_sims_full: usize,
         random_opening_plies: u32,
         encoding_name: Option<String>,
-        inference_pool_size: Option<usize>,
     ) -> Self {
         // The 10 O1/solver/seed knobs come from Default (frozen `..Default::default()`);
         // Python sets the operative values as the get/set attributes below.
@@ -196,9 +188,6 @@ impl PySelfPlayRunnerConfig {
                 quiescence_enabled,
                 quiescence_blend_2,
                 temp_min,
-                zoi_enabled,
-                zoi_lookback,
-                zoi_margin,
                 c_visit,
                 c_scale,
                 gumbel_m,
@@ -212,7 +201,6 @@ impl PySelfPlayRunnerConfig {
                 n_sims_full,
                 random_opening_plies,
                 encoding_name,
-                inference_pool_size,
                 ..Default::default()
             },
         }
@@ -558,7 +546,6 @@ mod tests {
         assert!((rust.solver_visit_weight - 0.3).abs() < 1e-6);
     }
 
-
     #[test]
     fn runner_constructs_and_lifecycle() {
         let r = PySelfPlayRunner::new(&graph_config()).expect("a graph runner constructs");
@@ -635,7 +622,6 @@ mod tests {
         // measurement and must still be published.
         assert_eq!(derived_mean_f64(0, 4), Some(0.0));
     }
-
 
     /// A fresh runner's graph-record drain is empty (numpy-free — no numpy is
     /// built for `collect_graph_data`). The `collect_data` 10-numpy-array marshal

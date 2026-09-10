@@ -297,11 +297,9 @@ impl RegistrySpec {
     /// rows for the replay-buffer format. The wire layout depends on
     /// `(n_planes, board_size, policy_logit_count, has_pass_slot, sym_table_id)`
     /// — every other registry field affects training semantics but not stored
-    /// bytes. Registered families:
-    ///   - v6           → (8, 19, 362, true, "size_19")
-    ///   - v6w25        → (8, 25, 626, true, "size_25")
-    ///   - v6_live2_ls  → (4, 19, 362, true, "size_19")
-    ///   - gnn_axis_v1  → (0, 19, 362, true, "size_19")  (graph; no dense rows)
+    /// bytes. Both registered encodings are graph and store no dense rows:
+    ///   - gnn_axis_v1  → (0, 19, 362, true, "size_19")
+    ///   - gnn_axis_r8  → (0, 19, 362, true, "size_19")
     ///
     /// Derived from existing fields — the TOML source of truth is untouched.
     #[inline]

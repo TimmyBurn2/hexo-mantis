@@ -373,6 +373,17 @@ impl PyInferenceBatcher {
         ))
     }
 
+    /// How many times the in-flight-graph lock was found poisoned and recovered.
+    ///
+    /// STAYS ZERO in a healthy run. Non-zero is a real defect report: a panic occurred under
+    /// the guard, the seam recovered and kept serving, and the in-flight map may be missing an
+    /// entry. Surfaced so a run can alert on it (LAW-18) rather than have it show up as
+    /// unexplained missing-id skips much later.
+    #[getter]
+    pub fn lock_recoveries(&self) -> usize {
+        self.lock_recoveries.load(Ordering::SeqCst)
+    }
+
     /// Close the queue and wake all blocked waiters.
     pub fn close(&self) {
         self.graph.close();

@@ -12,9 +12,10 @@
 //! reliance on the unseeded worker RNG avoiding a lucky win.
 //!
 //! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`, so the
-//! §178 VALUE branch (`outcome == ply_cap_value`) is pinned by the focused
-//! `finalize_game` unit test IN-SRC (`runner/finalize.rs`, mod
-//! `inv26_finalize_outcome_tests`) — the branch this drain-tuple oracle cannot see.
+//! §178 VALUE branch (`outcome == ply_cap_value`) is not visible here. Its in-src pin was
+//! `runner/finalize.rs`'s `inv26_finalize_outcome_tests`, which went with `finalize_game`
+//! at R346(f); `finalize_game_graph` is the surviving finalizer and
+//! `worker_output_pin.rs`'s g7 arm drives its outcome table.
 
 use std::time::{Duration, Instant};
 

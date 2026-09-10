@@ -276,31 +276,18 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Legal-set (multi-window no-drop) counterpart of `expand_and_backup`.
-    /// Productionizes the off-window decoding fix: the deploy Gumbel-SH head
-    /// expands children over the FULL legal set (off-global-window cells COVERED
-    /// by a cluster get a child), the action space the net already trains under
-    /// in self-play.
-    ///
-    /// Mirrors the self-play worker aggregation EXACTLY: for each pending leaf,
-    /// slice its `K` RAW per-cluster prob vectors + values, **recompute the
-    /// cluster centers in Rust** via `get_cluster_views()` (the self-play
-    /// center-order contract — never trust a Python-supplied order), **min-pool
-    /// the values** (parity with selfplay `min_v`), build the ragged
-    /// `LegalSetPolicy` via `records::aggregate_policy_ls`, then expand+backup via
-    /// the inner `expand_and_backup_ls`.
+    /// Graph counterpart of `expand_and_backup`: the deploy Gumbel-SH head expands children
+    /// over the FULL legal set — the action space the net already trains under in self-play.
     ///
     /// Args:
-    ///     policies: FLAT list of per-cluster prob vectors (one per cluster, each
-    ///               length `policy_stride`, = exp(log_policy); NO scatter-max, NO
-    ///               drop, NO min-pool — Rust pools). Total len == sum(leaf_k).
-    ///     values:   FLAT list of per-cluster scalar values, same leaf-major order.
-    ///     leaf_k:   `K` (cluster count) per leaf; order aligned with the boards
-    ///               returned by the preceding `select_leaves` (== pending order).
-    ///     policy_stride:  action-space size (= encoding `policy_logit_count`).
-    ///     has_pass_slot:  whether the last slot is the (dead) pass slot.
-    ///     trunk_sz:       cluster window side length; cross-checked against each
-    /// `debug_assert_eq!` inert in the release `.so` production actually runs.
+    ///     policies: per-leaf dense prob vectors (each `policy_stride` long).
+    ///     overflows: per-leaf off-window `((q, r), p)` entries the dense half cannot carry.
+    ///     values:   per-leaf scalar values.
+    ///     centers:  the BUILDER's own `(cq, cr)` window centre per leaf, threaded from the
+    ///               Python decode rather than recomputed here — the builder is the one
+    ///               authority for the frame the policy was decoded in.
+    ///     policy_stride: action-space size (= encoding `policy_logit_count`).
+    ///     trunk_sz: window side length used to frame the dense half.
     #[pyo3(signature = (policies, overflows, values, centers, policy_stride, trunk_sz))]
     #[allow(clippy::too_many_arguments)] // Python-facing signature (7 params incl. py)
     #[allow(clippy::type_complexity)]
@@ -334,8 +321,8 @@ impl PyMCTSTree {
 
         let mut ls_vec: Vec<LegalSetPolicy> = Vec::with_capacity(n_pending);
         for (i, board) in self.pending_boards.iter().enumerate() {
-            // C-4: a dense half of the wrong width is the v6w25 class of silent
-            // wrong-width decode, and it must be loud on the graph seam too.
+            // C-4: a dense half of the wrong width is a silent wrong-width decode, and it
+            // must be loud on the graph seam.
             if policies[i].len() != policy_stride {
                 return Err(PyValueError::new_err(format!(
                     "expand_and_backup_ls_graph leaf {i}: dense half has {} slots != \

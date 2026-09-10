@@ -2,11 +2,9 @@
 //! frozen `worker_loop/mod.rs`.
 //!
 //! Resolves the per-worker `WorkerGeometry` ONCE via the closed
-//! [`super::params::resolve_geometry`] match (D2 — no `None → v6` fallback, no
-//! `_ =>` arm), selects the spec-keyed `SymTables` singleton via
-//! `sym_tables_for(spec)` (absent spec is an error caught at `new()`, LAW-11),
-//! Arc-clones the SHARED accumulators (never fresh-per-worker), gives each worker
-//! its dense/graph inference-queue producer handles, and spawns a thread running
+//! [`super::params::resolve_geometry`] match (D2 — no default fallback, no `_ =>` arm),
+//! Arc-clones the SHARED accumulators (never fresh-per-worker), gives each worker its
+//! graph inference-queue producer handle, and spawns a thread running
 //! [`super::game::run_worker_thread`].
 
 use std::sync::atomic::Ordering;
@@ -70,16 +68,6 @@ impl SelfPlayRunner {
             self.config.fast_prob,
             self.config.full_search_prob,
         );
-
-        // §130/§173: the spec-keyed 12-fold dihedral scatter tables (shared
-        // `&'static SymTables`). No `None → v6` fallback — an absent spec is an
-        // error at `new()` (LAW-11).
-        // UNREAD ON THE GRAPH PATH (R28 rider, labeled at WPCLEAN): under `gnn_axis_v1`
-        // this binding still materializes the size_19 dense scatter singleton, but the
-        // graph record dispatch takes no tables and HEXG D6 augmentation rotates via the
-        // shared `rotate_axial` primitive (`replay/sym.rs`), not these scatters. The
-        // binding is kept unconditional because it is spec-keyed, cheap (shared static),
-        // and the dense arms of the same worker loop do read it.
 
         // D2: resolve the per-worker geometry ONCE via the closed-match resolver
         // (`Copy`, ~32 B; copied into each spawned worker).
