@@ -1065,3 +1065,16 @@ commit that moves them, rather than as drift.
    cannot record a completed-Q target today. Closing it needs a MINTED visit-slot bound and a
    ruling on what a row that overruns it does; the ring cost is the subject (at 8 bytes a
    slot, 8 192 slots is ~65 KB per row against today's ~252 B).
+
+6. **SECOND STANDING BLOCKER, raised in review and NOT fixed here.** `load_checkpoint`
+   schema-validates the checkpoint's EMBEDDED config through the LIVE `RunConfig`, so every
+   required-with-no-default field addition breaks every artifact written before it. This
+   branch makes that WORSE by one error class: a pre-branch config now both carries keys
+   `extra="forbid"` rejects and lacks `search.kind`, so it fails on both halves. **A
+   pre-`search.kind` checkpoint therefore REFUSES to load, and the sanctioned recovery
+   HOLDS** — `strip_and_restamp` (LAW-12's one weights-only path) never reads the embedded
+   config, re-synthesises one from the live schema, and its output loads clean carrying
+   `search: {kind: puct}`. `tests/train/test_pre_search_kind_checkpoint.py` asserts both
+   halves. The ROOT defect — validating a HISTORICAL RECORD against today's schema — is not
+   fixed here: it moves §6's *"schema-validated on write AND read"* and retires T-CK-04,
+   which is a checkpoint-contract change (contract #4, LAW-12) belonging to a ruling.
