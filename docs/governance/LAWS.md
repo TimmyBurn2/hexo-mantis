@@ -4,7 +4,7 @@ Read this first. Each law was bought by a measured failure; the earned mechanism
 pre-R346 wording are in docs/governance/archive/laws.md. Changing or dropping a law takes an
 amendment commit and operator sign-off.
 
-## The eighteen
+## The seventeen
 
 - LAW-01 Prime directive. Context first, measurement mandatory: no architectural change
   without reading the design docs and the source, no perf-sensitive change without a bench.
@@ -21,10 +21,8 @@ amendment commit and operator sign-off.
 - LAW-08 Live-consumer. Every config key and every registered encoding has a live consumer; a dead knob dies with its freeze-tests in one commit.
 - LAW-09 Bench discipline. Pre-registered hotspots + expected-gain bracket + abort threshold;
   one change = one commit = one IQR-gated bench; profile first; a measured floor is a finding.
-- LAW-10 Threat-probe criterion. C1-C3 gate each checkpoint, against the run's OWN warm-start
-  anchor, never a generic bootstrap baseline. ANNOTATION (R345(e)): GnnNet ships no threat head,
-  so on run6's lineage this law has no producer and gates nothing — structure stands, numbers are
-  grid history.
+- LAW-10 DELETED by R347(d) — grid-era, no producer, gating nothing. The number is retired, not
+  reused: every other law keeps the number it was cited by.
 - LAW-11 Identity-keys. No dense-by-default anywhere. An absent encoding/representation is an
   error, never a default; representation is a closed enum on both sides of the FFI.
 - LAW-12 Checkpoint-stamp. Stamps are written once and immutable, never re-stamped from a

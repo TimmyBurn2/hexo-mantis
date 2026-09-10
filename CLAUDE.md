@@ -83,7 +83,6 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - LAW-07 producer-test — every gate/monitor input cites a live producer + mutation self-test.
 - LAW-08 live-consumer — every config key / registered encoding has a live consumer.
 - LAW-09 bench discipline — prereg hotspots, one change = one commit = one IQR-gated bench.
-- LAW-10 threat-probe criterion — C1–C3 gate checkpoints; anchor-matched baselines.
 - LAW-11 identity-keys — no dense-by-default; absent encoding/representation = error.
 - LAW-12 checkpoint-stamp — stamps immutable; one loader; weights-only strip is the one path.
 - LAW-13 FFI/build — panic="unwind" across FFI; no target-cpu in committed config.

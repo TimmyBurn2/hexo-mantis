@@ -10,34 +10,20 @@ with no date; **OWED** is a text or a value someone must supply.
 
 ## Opened by R346 itself
 
-These four came out of the CLEANUP ERA move and are recorded here because the move made them,
-not because a ruling carded them.
+All four came out of the CLEANUP ERA move and are now CLOSED, by wave 2. Kept as one line each
+because a card leaves this file by being closed, not by going quiet.
 
-- **CARD-CLAUDEMD-REPOINT — BLOCKING (CI gate 10).** `CLAUDE.md` names `docs/registers/falsified.md`
-  (lines 6, 68) and `docs/registers/laws.md` (lines 7, 69, 75). R346 dissolved that directory, so
-  gate 10 (`tools/ci_gates/check_tracked_refs.py`) reds on five lines. The replacements are
-  `docs/governance/falsified.md` and `docs/governance/LAWS.md`, and line 75's "full text" pointer
-  should read `docs/governance/archive/laws.md`, which is where the earned mechanisms went.
-  **Only the operator may edit CLAUDE.md**; GOV-1 left it untouched deliberately.
-- **CARD-GATE10-SCOPE.** Gate 10's own scope is `Makefile, README.md, CLAUDE.md,
-  docs/contracts/*.md, docs/registers/*.md`. It still globs `docs/registers/`, which is now empty,
-  and it does not scan `docs/governance/` at all — so the five new governance docs are outside the
-  gate that exists to catch exactly their failure mode. The glob floor (`MIN_GLOB_FILES = 5`) is
-  still met by `docs/contracts/`'s twelve files, so the gate does not raise; it just quietly checks
-  less than it says it does, which is the AUDIT-1 F-26 class its own comment warns about. A `.py`
-  change, out of a docs-only agent's remit.
-- **CARD-STALE-REGISTER-CITES.** Six source files still cite the dissolved paths in docstrings,
-  comments and one test fixture string. None is an executable dependency, so nothing fails; all six
-  are misinformation a future reader trusts (SF-7). They are
-  `src/mantis/diagnostics/worker_sweep.py:73`, `crates/mantis-graph/src/lib.rs:652`,
-  `tests/model/conformance/test_arch_states_its_perf_floor.py:39`,
-  `tests/model/conformance/test_leaf_forward_throughput_harness.py:38`,
-  `tests/model/test_gine_gather_regime.py:10` (which also carries a `laws.md:37-39` line cite that
-  the 60-line LAWS.md invalidates), and `tests/tools/test_rule7_gate.py:93`.
-- **CARD-PHANTOM-TOOL-COMMENT.** `tools/ci_gates/tier_census.py:110` reasons by analogy to
-  `ruling_census.py` and `sync_governance.py`. Neither tool has ever existed in this repository —
-  they lived in the migration workspace, and R346 deleted that class of tooling. The argument the
-  comment makes is sound; only its two witnesses are phantom.
+- **CARD-CLAUDEMD-REPOINT — CLOSED.** `CLAUDE.md` names `docs/governance/falsified.md`,
+  `docs/governance/LAWS.md` and `docs/governance/archive/laws.md`; gate 10 is green on it.
+- **CARD-GATE10-SCOPE — CLOSED.** `tools/ci_gates/check_tracked_refs.py` globs
+  `docs/governance/` and carries a per-directory floor, so a dissolved directory can no longer be
+  absorbed into a full one's count. `RULINGS.md` is exempt by declaration with grounds in the
+  gate: it corrects only by annotation and ANNOTATION 7 deliberately preserves a wrong path
+  string. `docs/registers/` is whitelisted as DISSOLVED and the entry refuses itself if the path
+  is ever tracked again.
+- **CARD-STALE-REGISTER-CITES — CLOSED.** All six source cites now name `docs/governance/`.
+- **CARD-PHANTOM-TOOL-COMMENT — CLOSED.** `tools/ci_gates/tier_census.py` cites LAW-07 instead of
+  two tools that never existed here.
 
 
 ## Opened by R347 (CLEANUP WAVE 2)
@@ -208,7 +194,6 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 | CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker at `pyproject.toml:92` |
 | CARD-MAXPLIES | `_DEFAULT_MAX_PLIES` schema promotion | OPEN in governance, CLOSED IN CODE — the symbol is gone and `max_plies` derives from `selfplay.max_game_moves` |
 | CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
-| CARD-THREAT-PROBE | the LAW-10 threat probe is absent | OPEN — owed pre-Stage-0, not mint-blocking. Reinforced by LAW-10's R345(e) annotation: this lineage has no threat head |
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
 | CARD-SEALBOT-BRANCHES | evaluate ramora0 branches (nnue) as a higher ladder rung | DEFERRED, not mint-relevant |

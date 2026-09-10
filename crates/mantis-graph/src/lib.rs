@@ -649,7 +649,7 @@ fn legal_moves_from_stones(
 /// Build one axis-graph — the once-per-evaluated-leaf construction. Faithful
 /// port of `build_axis_graph_raw` for the LEGACY relative+threat schema.
 /// Never call the search-time-incremental variant (design ruling: no
-/// search-time-incremental variant exists — see docs/registers/falsified.md
+/// search-time-incremental variant exists — see docs/governance/falsified.md
 /// F-19): one payload per evaluated leaf, no parallelism inside (the caller
 /// parallelizes over leaves).
 #[must_use]

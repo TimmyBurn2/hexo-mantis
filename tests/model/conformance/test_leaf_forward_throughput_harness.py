@@ -35,7 +35,7 @@ first self-test asserts a RELATION BETWEEN TWO MEASUREMENTS TAKEN IN THE SAME PR
 host-independent and is not a µs/leaf figure) and the second COUNTS CALLS. The fixed sleep the
 differential uses is an instrument parameter, not a threshold on any subject.
 
-THE GRAVES THIS TIER IS NOT RE-DIGGING (read at HEAD, `docs/registers/falsified.md`): F-21, a
+THE GRAVES THIS TIER IS NOT RE-DIGGING (read at HEAD, `docs/governance/falsified.md`): F-21, a
 sibling-project CUDA-kernel borrow, falsified and red-teamed, whose stated fallback order is
 torch.compile → smaller net → quantized eval; F-17/F-18/F-19, bench-falsified legal-move-set
 perf ideas, with F-19's build-once-per-leaf corollary as standing doctrine; F-01, static probes

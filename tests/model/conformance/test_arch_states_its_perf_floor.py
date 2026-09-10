@@ -39,7 +39,7 @@ and the self-tests showing it measures what its name says are one unit — so a 
 would be one whose exclusion of input construction nobody asserts. Importing it keeps ONE timer
 authority and lets T6's differential remain the thing that makes both tiers non-vacuous.
 
-THE GRAVES (read at HEAD, `docs/registers/falsified.md`). This tier PROPOSES NO OPTIMIZATION and
+THE GRAVES (read at HEAD, `docs/governance/falsified.md`). This tier PROPOSES NO OPTIMIZATION and
 changes no hot path — F-17/F-18/F-19 (bench-falsified legal-set perf ideas, with F-19's
 build-once-per-leaf corollary standing) and F-21 (the borrowed CUDA kernel, with its stated
 fallback order) are cited because the first thing an overhead number does is tempt someone, and

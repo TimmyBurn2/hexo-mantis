@@ -159,8 +159,7 @@ the missing adapter, tracked as CARD-DENSE-EVAL-ADAPTER.
 Coverage: `not_run` — refused by design, adapter owed. Nothing on the mint path consumes a
 dense eval result: the promotion bar is graph candidate-versus-best and the external
 instrument is the vendored engine plus the uniform floor. The first consumer is the post-mint
-Stage 0 re-baseline, which cannot open until the card lands and the LAW-10 anchors are
-re-measured on it.
+Stage 0 re-baseline, which cannot open until the card lands.
 
 ## Ladder liveness: verified at box preflight (R169)
 

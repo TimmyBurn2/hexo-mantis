@@ -7,7 +7,7 @@ so the one tensor that scales with E is realized at 2x the width the regime impl
 the 8.94 GiB single allocation CARD-RUN5-GPU-OOM died on (MEASUREMENT_D §2/§3).
 
 Why this file exists at all: `tests/model/test_amp_dtype.py` — the "regime-parity test"
-LAW-06 names (`docs/registers/laws.md:37-39`) — is three tests on `amp_dtype_for`'s
+LAW-06 names (`docs/governance/LAWS.md`) — is three tests on `amp_dtype_for`'s
 string->dtype mapping. It instantiates no model, opens no autocast context and pins no
 tensor's dtype. Before this file, NO test in this repository pinned ANY tensor's dtype on
 the graph path. OF1-1 is the first, and it is an ALLOCATION property: no numeric oracle

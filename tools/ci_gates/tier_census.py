@@ -107,7 +107,7 @@ def compare(observed: set[Row], declared: set[Row]) -> tuple[list[Row], list[Row
 
 def self_test() -> int:
     """Both refusals must FIRE. A check never shown to fail is indistinguishable from one that
-    always passes — the same reasoning `ruling_census.py` and `sync_governance.py` carry."""
+    always passes (LAW-07)."""
     base: set[Row] = {("tests/a/test_x.py", "test_one", "slow")}
     cases = [
         ("clean", base, base, ([], [])),
